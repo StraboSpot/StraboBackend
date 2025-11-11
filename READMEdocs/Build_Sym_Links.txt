@@ -1,0 +1,124 @@
+					Sym Link and Folder Generation
+************************************************************************************
+In order to host the StraboBackend repository on Jetstream, it is necessary to
+build several symbolic links to folders outside of the GitHub repo. Alternatively,
+if you wish to run the repo locally, folders must be created to accommodate various
+files. The following describes how to build these requirements.
+************************************************************************************
+
+Find Symbolic Links Recursively: find * -type l -printf "%p -> %l\n"
+
+//Build Symbolic links on Jetstream2
+ln -s /StraboData/bigDriveData/StraboSpotOffline.zip StraboSpotOffline.zip
+ln -s /StraboData/arcfiles/ arcfiles
+ln -s /StraboData/bigDriveData/bkup/ bkup
+ln -s /opt/StraboData/dbimages/ db/dbimages
+ln -s /opt/StraboData/dbimages/ db2/dbimages
+ln -s /StraboData/dbimages/ dbimages
+ln -s /StraboData/bigDriveData/expImages/ devexperimental/expimages
+ln -s /StraboData/bigDriveData/doi/ doi/doiFiles
+ln -s /StraboData/bigDriveData/expImages/ experimental/expimages
+ln -s /StraboData/bigDriveData/fieldZips/ fieldZips
+ln -s /StraboData/GeotiffMaps/ geotiff/upload/maps
+ln -s /StraboData/GeotiffFiles/ geotiff/upload/files
+ln -s /opt/StraboData/dbimages/ jwtdb/dbimages
+ln -s /StraboData/profileimages/ profileimages
+ln -s /StraboData/bigDriveData/serialized/ serialize/serialized
+ln -s /StraboData/bigDriveData/doi/ straboMicroDOI/doiFiles
+ln -s /StraboData/straboMicroFiles straboMicroDOI/smzFiles
+ln -s /StraboData/straboMicroFiles straboMicroFiles
+ln -s /StraboData/straboMicroFiles straboMicroView/smzFiles
+ln -s /StraboData/versions/ versions
+ln -s /StraboData/bigDriveData/tempFiles/ ziptemp
+
+
+
+Replace Sym Links when working locally:
+First, remove:
+
+rm arcfiles
+rm db/dbimages
+rm dbimages
+rm doi/doiFiles
+rm experimental/expimages
+rm fieldZips
+rm geotiff/upload/maps
+rm geotiff/upload/files
+rm jwtdb/dbimages
+rm profileimages
+rm serialize/serialized
+rm straboMicroDOI/doiFiles
+rm straboMicroDOI/smzFiles
+rm straboMicroFiles
+rm straboMicroView/smzFiles
+rm versions
+rm ziptemp
+
+Then, make new dirs:
+
+mkdir arcfiles
+mkdir db/dbimages
+mkdir dbimages
+mkdir doi/doiFiles
+mkdir experimental/expimages
+mkdir fieldZips
+mkdir geotiff/upload/maps
+mkdir geotiff/upload/files
+mkdir jwtdb/dbimages
+mkdir profileimages
+mkdir serialize/serialized
+mkdir straboMicroDOI/doiFiles
+mkdir straboMicroDOI/smzFiles
+mkdir straboMicroFiles
+mkdir straboMicroView/smzFiles
+mkdir versions
+mkdir ziptemp
+
+
+
+To go back, do this:
+
+First, Remove dirs:
+
+rm -rf arcfiles
+rm -rf db/dbimages
+rm -rf dbimages
+rm -rf doi/doiFiles
+rm -rf experimental/expimages
+rm -rf fieldZips
+rm -rf geotiff/upload/maps
+rm -rf geotiff/upload/files
+rm -rf jwtdb/dbimages
+rm -rf profileimages
+rm -rf serialize/serialized
+rm -rf straboMicroDOI/doiFiles
+rm -rf straboMicroDOI/smzFiles
+rm -rf straboMicroFiles
+rm -rf straboMicroView/smzFiles
+rm -rf versions
+rm -rf ziptemp
+
+
+Then, restore links:
+
+ln -s /StraboData/bigDriveData/StraboSpotOffline.zip StraboSpotOffline.zip
+ln -s /StraboData/arcfiles/ arcfiles
+ln -s /StraboData/bigDriveData/bkup/ bkup
+ln -s /opt/StraboData/dbimages/ db/dbimages
+ln -s /opt/StraboData/dbimages/ db2/dbimages
+ln -s /StraboData/dbimages/ dbimages
+ln -s /StraboData/bigDriveData/expImages/ devexperimental/expimages
+ln -s /StraboData/bigDriveData/doi/ doi/doiFiles
+ln -s /StraboData/bigDriveData/expImages/ experimental/expimages
+ln -s /StraboData/bigDriveData/fieldZips/ fieldZips
+ln -s /StraboData/GeotiffMaps/ geotiff/upload/maps
+ln -s /StraboData/GeotiffFiles/ geotiff/upload/files
+ln -s /opt/StraboData/dbimages/ jwtdb/dbimages
+ln -s /StraboData/profileimages/ profileimages
+ln -s /StraboData/bigDriveData/serialized/ serialize/serialized
+ln -s /StraboData/bigDriveData/doi/ straboMicroDOI/doiFiles
+ln -s /StraboData/straboMicroFiles straboMicroDOI/smzFiles
+ln -s /StraboData/straboMicroFiles straboMicroFiles
+ln -s /StraboData/straboMicroFiles straboMicroView/smzFiles
+ln -s /StraboData/versions/ versions
+ln -s /StraboData/bigDriveData/tempFiles/ ziptemp

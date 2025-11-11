@@ -1,0 +1,15 @@
+RewriteEngine on
+
+RewriteRule ^dl/(.*)$ downloadgeotiff.php?hash=$1 [L]
+RewriteRule ^detail/(.*)$ geotiffdetail.php?hash=$1 [L]
+RewriteRule ^delete/(.*)$ deletegeotiff.php?hash=$1 [L]
+RewriteRule ^edit/(.*)$ editgeotiff.php?hash=$1 [L]
+RewriteRule ^setname/(.*)$ setmapname.php?hash=$1 [L]
+RewriteRule ^bbox/(.*)$ getbbox.php?hash=$1 [L]
+
+
+
+RewriteRule ^tiles/(.*)/(.*)/(.*)/(.*).png$ tile.php?hash=$1&z=$2&x=$3&y=$4 [L]
+
+
+
