@@ -28,6 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	const closeModal = document.getElementById('closeModal');
 	const projectInfo = document.getElementById('project_info');
 	const projectSelect = document.getElementById('project_id');
+	const downloadTemplateLink = document.getElementById('downloadTemplateLink');
 	const uploadFileLink = document.getElementById('uploadFileLink');
 	const fileInput = document.getElementById('fileInput');
 	const errorMessage = document.getElementById('errorMessage');
@@ -58,6 +59,61 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (e.target === errorModal) {
 			errorModal.style.display = 'none';
 		}
+	});
+
+	// Download template link click
+	downloadTemplateLink.addEventListener('click', function(e) {
+		e.preventDefault();
+
+		// Get current headers from HandsonTable
+		const headers = hot.getData()[0];
+
+		// Create worksheet with headers only
+		const ws = XLSX.utils.aoa_to_sheet([headers]);
+
+		// Set column widths for better readability
+		ws['!cols'] = headers.map(() => ({ wch: 20 }));
+
+		// Apply cell styling and protection to header row
+		for (let col = 0; col < headers.length; col++) {
+			const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
+			if (!ws[cellRef]) ws[cellRef] = {};
+			if (!ws[cellRef].s) ws[cellRef].s = {};
+
+			// Make header cells bold and locked
+			ws[cellRef].s = {
+				font: { bold: true },
+				protection: { locked: true }
+			};
+		}
+
+		// Enable sheet protection (locks the header row)
+		ws['!protect'] = {
+			sheet: true,
+			selectLockedCells: true,
+			selectUnlockedCells: true,
+			formatRows: false,
+			formatColumns: false,
+			insertRows: true,
+			deleteRows: true
+		};
+
+		// Create workbook and add worksheet
+		const wb = XLSX.utils.book_new();
+		XLSX.utils.book_append_sheet(wb, ws, "Template");
+
+		// Sanitize template name for filename
+		const templateName = templateNameInput.value.trim() || 'Untitled';
+		const sanitizedName = templateName
+			.replace(/[^a-zA-Z0-9_-]/g, '_')  // Replace special chars with underscore
+			.replace(/_+/g, '_')               // Replace multiple underscores with single
+			.replace(/^_|_$/g, '');            // Remove leading/trailing underscores
+
+		// Generate filename
+		const filename = 'StraboSpot_' + sanitizedName + '_template.xlsx';
+
+		// Trigger download
+		XLSX.writeFile(wb, filename);
 	});
 
 	// Upload file link click

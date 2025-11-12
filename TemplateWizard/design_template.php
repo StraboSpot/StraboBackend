@@ -75,7 +75,7 @@ include("../includes/mheader.php");
 										<li><strong>Reorder columns:</strong> Click a column header to select it, then drag the handle that appears to move it</li>
 										<li><strong>Resize columns:</strong> Drag the edge of any column header</li>
 										<li><strong>Enter data:</strong> Click any cell to edit, or paste from Excel/CSV</li>
-										<li><strong>Alternatively:</strong> Click to <a href="#">Download Template</a> and <a href="#" id="uploadFileLink">Upload your completed file</a>.</li>
+										<li><strong>Alternatively:</strong> Click to <a href="#" id="downloadTemplateLink">Download Template</a> and <a href="#" id="uploadFileLink">Upload your completed file</a>.</li>
 									</ul>
 								</div>
 
