@@ -31,8 +31,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	let hasChanges = false;
 
-	// Store the number of original columns for read-only check
-	const originalColumnCount = columns.length;
+	// Store the original column headers (vocabulary-controlled)
+	const originalHeaders = columns.slice();
 
 	// Template name field is always visible in the HTML
 
@@ -78,13 +78,14 @@ document.addEventListener('DOMContentLoaded', function() {
 			const cellProperties = {};
 			if (row === 0) {
 				// First row is header
-				// Only make original columns read-only (vocabulary controlled)
-				// New columns added by user should be editable
-				if (col < originalColumnCount) {
+				// Check if this cell contains an original vocabulary-controlled header
+				const cellValue = this.instance.getDataAtCell(row, col);
+				if (originalHeaders.includes(cellValue)) {
+					// Original vocabulary-controlled header - read-only
 					cellProperties.readOnly = true;
 					cellProperties.className = 'htCenter htMiddle htDimmed';
 				} else {
-					// New columns have editable headers
+					// New custom column header - editable
 					cellProperties.readOnly = false;
 					cellProperties.className = 'htCenter htMiddle';
 				}
