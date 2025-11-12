@@ -79,15 +79,22 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Style header row with dark grey background, white bold text
 		for (let col = 0; col < headers.length; col++) {
 			const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
-			if (!ws[cellRef]) ws[cellRef] = {};
-			if (!ws[cellRef].s) ws[cellRef].s = {};
+			if (!ws[cellRef]) ws[cellRef] = { t: 's', v: headers[col] };
 
 			// Make header cells bold, white text on dark grey background
 			ws[cellRef].s = {
-				font: { bold: true, color: { rgb: "FFFFFF" } },
+				font: {
+					bold: true,
+					color: { rgb: "FFFFFF" }
+				},
 				fill: {
 					patternType: "solid",
-					fgColor: { rgb: "404040" }
+					fgColor: { rgb: "404040" },
+					bgColor: { rgb: "404040" }
+				},
+				alignment: {
+					horizontal: "center",
+					vertical: "center"
 				}
 			};
 		}
@@ -106,8 +113,8 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Generate filename
 		const filename = 'StraboSpot_' + sanitizedName + '_template.xlsx';
 
-		// Trigger download
-		XLSX.writeFile(wb, filename);
+		// Trigger download with cellStyles option enabled
+		XLSX.writeFile(wb, filename, { cellStyles: true });
 	});
 
 	// Upload file link click
