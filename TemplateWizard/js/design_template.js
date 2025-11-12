@@ -81,7 +81,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 		// Style the header row
 		const headerRow = worksheet.getRow(1);
-		headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+		headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
 		headerRow.fill = {
 			type: 'pattern',
 			pattern: 'solid',
