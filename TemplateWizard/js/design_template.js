@@ -33,17 +33,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	// Template name field is always visible in the HTML
 
-	// Show/hide save button when template name changes
+	// Update save button visibility when template name changes
 	templateNameInput.addEventListener('input', function() {
-		const templateName = this.value.trim();
-		if (templateName === '') {
-			// Hide save button if template name is cleared
-			saveSection.style.display = 'none';
-			hasChanges = false;
-		} else {
-			// Show save button if template name has content
-			showSaveSection();
-		}
+		updateSaveButtonVisibility();
+	});
+
+	// Update save button visibility when project select changes
+	projectSelect.addEventListener('change', function() {
+		updateSaveButtonVisibility();
 	});
 
 	// Close modal when clicking OK or outside the modal
@@ -83,37 +80,57 @@ document.addEventListener('DOMContentLoaded', function() {
 		},
 		afterChange: function(changes, source) {
 			if (source !== 'loadData' && changes) {
-				showSaveSection();
 				checkTableData();
+				updateSaveButtonVisibility();
 			}
 		},
 		afterColumnMove: function(movedColumns, finalIndex) {
-			showSaveSection();
+			updateSaveButtonVisibility();
 		}
 	});
 
-	function showSaveSection() {
-		if (!hasChanges) {
-			hasChanges = true;
-			saveSection.style.display = 'block';
-		}
-	}
-
-	function checkTableData() {
+	function hasTableData() {
 		// Get all data from the table
 		const tableData = hot.getData();
 
 		// Check if there's any non-empty data (excluding the header row)
-		let hasData = false;
 		for (let i = 1; i < tableData.length; i++) {
 			for (let j = 0; j < tableData[i].length; j++) {
 				if (tableData[i][j] !== null && tableData[i][j] !== '') {
-					hasData = true;
-					break;
+					return true;
 				}
 			}
-			if (hasData) break;
 		}
+		return false;
+	}
+
+	function updateSaveButtonVisibility() {
+		const templateName = templateNameInput.value.trim();
+		const hasData = hasTableData();
+		const projectId = projectSelect ? projectSelect.value : '';
+
+		// Rule 1: If template name is empty, hide button
+		if (templateName === '') {
+			saveSection.style.display = 'none';
+			return;
+		}
+
+		// Rule 2: If no data and template name is set, show button
+		if (!hasData && templateName !== '') {
+			saveSection.style.display = 'block';
+			return;
+		}
+
+		// Rule 3: If has data, need both template name and project id set
+		if (hasData && templateName !== '' && projectId !== '') {
+			saveSection.style.display = 'block';
+		} else {
+			saveSection.style.display = 'none';
+		}
+	}
+
+	function checkTableData() {
+		const hasData = hasTableData();
 
 		// Show or hide project_info based on whether there's data
 		if (hasData) {
