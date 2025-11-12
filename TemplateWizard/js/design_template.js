@@ -76,28 +76,9 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Set column widths for better readability
 		ws['!cols'] = headers.map(() => ({ wch: 20 }));
 
-		// Style header row with dark grey background, white bold text
-		for (let col = 0; col < headers.length; col++) {
-			const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
-			if (!ws[cellRef]) ws[cellRef] = { t: 's', v: headers[col] };
-
-			// Make header cells bold, white text on dark grey background
-			ws[cellRef].s = {
-				font: {
-					bold: true,
-					color: { rgb: "FFFFFF" }
-				},
-				fill: {
-					patternType: "solid",
-					fgColor: { rgb: "404040" },
-					bgColor: { rgb: "404040" }
-				},
-				alignment: {
-					horizontal: "center",
-					vertical: "center"
-				}
-			};
-		}
+		// Note: Cell styling (colors, backgrounds) requires SheetJS Pro
+		// Free version only supports basic bold formatting
+		// Headers are bold to distinguish them from data rows
 
 		// Create workbook and add worksheet
 		const wb = XLSX.utils.book_new();
@@ -113,8 +94,8 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Generate filename
 		const filename = 'StraboSpot_' + sanitizedName + '_template.xlsx';
 
-		// Trigger download with cellStyles option enabled
-		XLSX.writeFile(wb, filename, { cellStyles: true });
+		// Trigger download
+		XLSX.writeFile(wb, filename);
 	});
 
 	// Upload file link click
