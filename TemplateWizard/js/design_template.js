@@ -62,27 +62,56 @@ document.addEventListener('DOMContentLoaded', function() {
 	});
 
 	// Download template link click
-	downloadTemplateLink.addEventListener('click', function(e) {
+	downloadTemplateLink.addEventListener('click', async function(e) {
 		e.preventDefault();
 
 		// Get current headers from HandsonTable
 		const headers = hot.getData()[0];
 
-		// Create worksheet with headers plus 100 empty rows for data entry
-		const emptyRows = Array(100).fill(null).map(() => new Array(headers.length).fill(''));
-		const sheetData = [headers, ...emptyRows];
-		const ws = XLSX.utils.aoa_to_sheet(sheetData);
+		// Create workbook using ExcelJS
+		const workbook = new ExcelJS.Workbook();
+		const worksheet = workbook.addWorksheet('Template');
 
-		// Set column widths for better readability
-		ws['!cols'] = headers.map(() => ({ wch: 20 }));
+		// Set column widths
+		worksheet.columns = headers.map(header => ({
+			header: header,
+			key: header,
+			width: 20
+		}));
 
-		// Note: Cell styling (colors, backgrounds) requires SheetJS Pro
-		// Free version only supports basic bold formatting
-		// Headers are bold to distinguish them from data rows
+		// Style the header row
+		const headerRow = worksheet.getRow(1);
+		headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+		headerRow.fill = {
+			type: 'pattern',
+			pattern: 'solid',
+			fgColor: { argb: 'FF404040' }
+		};
+		headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
 
-		// Create workbook and add worksheet
-		const wb = XLSX.utils.book_new();
-		XLSX.utils.book_append_sheet(wb, ws, "Template");
+		// Lock header cells
+		headerRow.eachCell((cell) => {
+			cell.protection = { locked: true };
+		});
+
+		// Add 100 empty data rows and unlock them
+		for (let i = 2; i <= 101; i++) {
+			const row = worksheet.addRow(new Array(headers.length).fill(''));
+			row.eachCell((cell) => {
+				cell.protection = { locked: false };
+			});
+		}
+
+		// Protect the sheet (only header row is locked)
+		await worksheet.protect('', {
+			selectLockedCells: true,
+			selectUnlockedCells: true,
+			formatCells: false,
+			formatColumns: false,
+			formatRows: false,
+			insertRows: true,
+			deleteRows: true
+		});
 
 		// Sanitize template name for filename
 		const templateName = templateNameInput.value.trim() || 'Untitled';
@@ -94,8 +123,15 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Generate filename
 		const filename = 'StraboSpot_' + sanitizedName + '_template.xlsx';
 
-		// Trigger download
-		XLSX.writeFile(wb, filename);
+		// Generate Excel file and trigger download
+		const buffer = await workbook.xlsx.writeBuffer();
+		const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+		const url = window.URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = filename;
+		a.click();
+		window.URL.revokeObjectURL(url);
 	});
 
 	// Upload file link click

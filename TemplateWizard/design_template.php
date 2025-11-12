@@ -139,8 +139,11 @@ include("../includes/mheader.php");
 <!-- HandsonTable JS -->
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
 
-<!-- SheetJS for Excel/CSV parsing -->
+<!-- SheetJS for Excel/CSV parsing (file upload) -->
 <script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+<!-- ExcelJS for Excel file generation with styling (file download) -->
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
 
 <script>
 // Pass PHP data to JavaScript
