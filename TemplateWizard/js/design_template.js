@@ -31,9 +31,17 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	// Template name field is always visible in the HTML
 
-	// Show save button when template name changes
+	// Show/hide save button when template name changes
 	templateNameInput.addEventListener('input', function() {
-		showSaveSection();
+		const templateName = this.value.trim();
+		if (templateName === '') {
+			// Hide save button if template name is cleared
+			saveSection.style.display = 'none';
+			hasChanges = false;
+		} else {
+			// Show save button if template name has content
+			showSaveSection();
+		}
 	});
 
 	// Close modal when clicking OK or outside the modal
