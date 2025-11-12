@@ -58,6 +58,11 @@
 
 .handsontable .htDimmed {
 	color: #d8dee9;
+	background-color: #5e2e2e !important;
+}
+
+.handsontable th.htDimmed {
+	background-color: #5e2e2e !important;
 }
 
 #hot-container {
