@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		manualColumnResize: true,
 		copyPaste: true,
 		fillHandle: true,
-		contextMenu: true,
+		contextMenu: ['remove_col'],
 		columns: columns.map(() => ({ type: 'text' })),
 		cells: function(row, col) {
 			const cellProperties = {};
