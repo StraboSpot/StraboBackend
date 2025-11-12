@@ -99,7 +99,7 @@ include("../includes/mheader.php");
 										<div>Strabo Project <span class="highlighted">*</span></div>
 									</div>
 									<div class="col-7 col-12-small gtr-25">
-										<select name="project_select">
+										<select name="project_id" id="project_id">
 											<option value="">Please Select Project...</option>
 											<option value="12345678">My Test Project 1</option>
 											<option value="23456789">My Test Project 2</option>

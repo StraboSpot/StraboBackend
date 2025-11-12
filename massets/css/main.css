@@ -4263,7 +4263,10 @@ h2.lowSpace {
 	vertical-align: baseline;
 }
 
-
+.highlighted {
+	color: #e44c65;
+	font-weight: bold;
+}
 
 
 
