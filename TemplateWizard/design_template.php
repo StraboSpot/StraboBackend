@@ -88,9 +88,9 @@ include("../includes/mheader.php");
 
 								<!-- Error Modal -->
 								<div id="errorModal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center;">
-									<div style="background-color: #fff; padding: 30px; border-radius: 5px; width: 90%; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); position: relative;">
+									<div style="background-color: #2e3440; padding: 30px; border-radius: 5px; width: 90%; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); position: relative;">
 										<h3 style="margin-top: 0; color: #bf616a;">Error</h3>
-										<p id="errorMessage" style="margin-bottom: 20px; color: #333;">Template name is required</p>
+										<p id="errorMessage" style="margin-bottom: 20px; color: #eceff4;">Template name is required</p>
 										<button id="closeModal" class="button primary" style="width: 100%;">OK</button>
 									</div>
 								</div>
