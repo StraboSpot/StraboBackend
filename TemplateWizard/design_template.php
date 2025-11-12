@@ -83,7 +83,7 @@ include("../includes/mheader.php");
 										<span id="nameError" style="color: #bf616a; display: none;">Template name is required</span>
 									</div>
 									<div class="col-3 col-12-small" id="saveSection" style="display: none; align-items: flex-end;">
-										<button id="saveBtn" class="button primary fit" style="margin-bottom: 0;">Save</button>
+										<button id="saveBtn" class="button primary fit" style="margin-bottom: 0;"><?php echo ($template_method === 'existing') ? 'Save Changes' : 'Save'; ?></button>
 									</div>
 								</div>
 
