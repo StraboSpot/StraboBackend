@@ -26,6 +26,8 @@ document.addEventListener('DOMContentLoaded', function() {
 	const saveBtn = document.getElementById('saveBtn');
 	const errorModal = document.getElementById('errorModal');
 	const closeModal = document.getElementById('closeModal');
+	const projectInfo = document.getElementById('project_info');
+	const projectSelect = document.getElementById('project_id');
 
 	let hasChanges = false;
 
@@ -82,6 +84,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		afterChange: function(changes, source) {
 			if (source !== 'loadData' && changes) {
 				showSaveSection();
+				checkTableData();
 			}
 		},
 		afterColumnMove: function(movedColumns, finalIndex) {
@@ -93,6 +96,34 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (!hasChanges) {
 			hasChanges = true;
 			saveSection.style.display = 'block';
+		}
+	}
+
+	function checkTableData() {
+		// Get all data from the table
+		const tableData = hot.getData();
+
+		// Check if there's any non-empty data (excluding the header row)
+		let hasData = false;
+		for (let i = 1; i < tableData.length; i++) {
+			for (let j = 0; j < tableData[i].length; j++) {
+				if (tableData[i][j] !== null && tableData[i][j] !== '') {
+					hasData = true;
+					break;
+				}
+			}
+			if (hasData) break;
+		}
+
+		// Show or hide project_info based on whether there's data
+		if (hasData) {
+			projectInfo.style.display = 'flex';
+		} else {
+			projectInfo.style.display = 'none';
+			// Reset the project select when hiding
+			if (projectSelect) {
+				projectSelect.selectedIndex = 0;
+			}
 		}
 	}
 
