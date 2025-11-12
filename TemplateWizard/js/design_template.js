@@ -85,7 +85,10 @@ document.addEventListener('DOMContentLoaded', function() {
 			// Make header cells bold, white text on dark grey background
 			ws[cellRef].s = {
 				font: { bold: true, color: { rgb: "FFFFFF" } },
-				fill: { fgColor: { rgb: "404040" } }
+				fill: {
+					patternType: "solid",
+					fgColor: { rgb: "404040" }
+				}
 			};
 		}
 
