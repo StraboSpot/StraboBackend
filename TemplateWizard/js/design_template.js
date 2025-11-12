@@ -65,6 +65,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		licenseKey: 'non-commercial-and-evaluation',
 		manualColumnMove: true,
 		manualColumnResize: true,
+		manualColumnRemove: true,
 		copyPaste: true,
 		fillHandle: true,
 		contextMenu: ['remove_col'],
