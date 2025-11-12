@@ -84,9 +84,6 @@ include("../includes/mheader.php");
 										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" value="<?php echo htmlspecialchars($template_name); ?>" />
 									</div>
 									<div class="col-3 col-12-small gtr-25" id="saveSection" style="display: none;">
-										
-										<!--<button id="saveBtn" class="button primary fit"><?php echo ($template_method === 'existing') ? 'Save Changes' : 'Save'; ?></button>-->
-										
 										<ul class="actions fit" style="margin-bottom: 0px;">
 											<li><a id="saveBtn" class="button primary fit"><?php echo ($template_method === 'existing') ? 'Save Changes' : 'Save'; ?></a></li>
 										</ul>
@@ -100,7 +97,7 @@ include("../includes/mheader.php");
 									</div>
 									<div class="col-7 col-12-small gtr-25">
 										<select name="project_id" id="project_id">
-											<option value="">Please Select Project...</option>
+											<option value="">Please Select Project to Save Data...</option>
 											<option value="12345678">My Test Project 1</option>
 											<option value="23456789">My Test Project 2</option>
 											<option value="34567890">My Test Project 3</option>

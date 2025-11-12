@@ -95,7 +95,7 @@ $db->dumpVar($_POST);
 								<div class="row gtr-uniform">
 									<div class="col-12">
 										<ul class="actions">
-											<li><a href="choose_template.php" class="button">Start Over</a></li>
+											<li><a href="./" class="button">Start Over</a></li>
 										</ul>
 									</div>
 								</div>
