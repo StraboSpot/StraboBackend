@@ -94,23 +94,26 @@ document.addEventListener('DOMContentLoaded', function() {
 			cell.protection = { locked: true };
 		});
 
-		// Add 100 empty data rows and unlock them
+		// Add 100 empty data rows with larger font and unlock them
 		for (let i = 2; i <= 101; i++) {
 			const row = worksheet.addRow(new Array(headers.length).fill(''));
+			row.font = { size: 12 };
 			row.eachCell((cell) => {
 				cell.protection = { locked: false };
 			});
 		}
 
-		// Protect the sheet (only header row is locked)
+		// Protect the sheet (only header row is locked, allow most formatting)
 		await worksheet.protect('', {
 			selectLockedCells: true,
 			selectUnlockedCells: true,
-			formatCells: false,
-			formatColumns: false,
-			formatRows: false,
+			formatCells: true,
+			formatColumns: true,
+			formatRows: true,
 			insertRows: true,
-			deleteRows: true
+			deleteRows: true,
+			insertColumns: false,
+			deleteColumns: false
 		});
 
 		// Sanitize template name for filename
