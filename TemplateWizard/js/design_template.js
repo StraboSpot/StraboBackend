@@ -69,6 +69,8 @@ document.addEventListener('DOMContentLoaded', function() {
 		copyPaste: true,
 		fillHandle: true,
 		contextMenu: true,
+		autoWrapRow: false,
+		autoWrapCol: false,
 		cells: function(row, col) {
 			const cellProperties = {};
 			if (row === 0) {

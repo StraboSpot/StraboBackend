@@ -38,6 +38,9 @@
 	background-color: #2e3440;
 	color: #eceff4;
 	border-color: #4c566a;
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }
 
 .handsontable td.area {
