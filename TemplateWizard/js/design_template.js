@@ -14,8 +14,8 @@ document.addEventListener('DOMContentLoaded', function() {
 	// Create initial data with header row
 	const initialData = [columns]; // First row is headers
 
-	// Add a few empty rows for data entry
-	for (let i = 0; i < 10; i++) {
+	// Add empty rows for data entry
+	for (let i = 0; i < 50; i++) {
 		initialData.push(new Array(columns.length).fill(''));
 	}
 
