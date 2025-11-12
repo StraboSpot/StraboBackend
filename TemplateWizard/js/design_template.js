@@ -169,8 +169,24 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Get all table data (preserving column order)
 		const tableData = hot.getData();
 
+		// Identify which columns have headers (header row is index 0)
+		const headerRow = tableData[0];
+		const validColumnIndices = [];
+		for (let i = 0; i < headerRow.length; i++) {
+			if (headerRow[i] !== null && headerRow[i] !== '') {
+				validColumnIndices.push(i);
+			}
+		}
+
+		// Filter out columns without headers from all rows
+		const dataWithValidColumns = tableData.map(function(row) {
+			return validColumnIndices.map(function(colIndex) {
+				return row[colIndex];
+			});
+		});
+
 		// Filter out completely empty rows (keep header row at index 0)
-		const filteredData = tableData.filter(function(row, index) {
+		const filteredData = dataWithValidColumns.filter(function(row, index) {
 			// Always keep the header row (first row)
 			if (index === 0) {
 				return true;
