@@ -54,6 +54,16 @@ include("../includes/mheader.php");
 	background-color: #3b4252;
 	color: #eceff4;
 	font-weight: bold;
+	cursor: move;
+	cursor: grab;
+}
+
+.handsontable th:active {
+	cursor: grabbing;
+}
+
+.handsontable th:hover {
+	background-color: #434c5e;
 }
 
 .handsontable td {
@@ -101,6 +111,16 @@ include("../includes/mheader.php");
 
 						<!-- Content -->
 							<section id="content">
+
+								<!-- Instructions -->
+								<div style="background-color: #3b4252; color: #eceff4; padding: 15px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
+									<strong>Instructions:</strong>
+									<ul style="margin: 10px 0 0 0; padding-left: 20px;">
+										<li><strong>Reorder columns:</strong> Click a column header to select it, then drag the handle that appears to move it</li>
+										<li><strong>Resize columns:</strong> Drag the edge of any column header</li>
+										<li><strong>Enter data:</strong> Click any cell to edit, or paste from Excel/CSV</li>
+									</ul>
+								</div>
 
 								<!-- HandsonTable Container -->
 								<div id="hot-container"></div>
