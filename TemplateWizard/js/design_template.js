@@ -28,7 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	const closeModal = document.getElementById('closeModal');
 	const projectInfo = document.getElementById('project_info');
 	const projectSelect = document.getElementById('project_id');
-	const loadFileBtn = document.getElementById('loadFileBtn');
+	const uploadFileLink = document.getElementById('uploadFileLink');
 	const fileInput = document.getElementById('fileInput');
 	const errorMessage = document.getElementById('errorMessage');
 
@@ -60,8 +60,8 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	});
 
-	// Load from File button click
-	loadFileBtn.addEventListener('click', function(e) {
+	// Upload file link click
+	uploadFileLink.addEventListener('click', function(e) {
 		e.preventDefault();
 		fileInput.click();
 	});

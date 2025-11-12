@@ -65,6 +65,9 @@ include("../includes/mheader.php");
 						<!-- Content -->
 							<section id="content">
 
+								<!-- Hidden file input -->
+								<input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.tsv" style="display: none;" />
+
 								<!-- Instructions -->
 								<div style="background-color: #3b4252; color: #eceff4; padding: 15px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
 									<strong>Instructions:</strong>
@@ -72,6 +75,7 @@ include("../includes/mheader.php");
 										<li><strong>Reorder columns:</strong> Click a column header to select it, then drag the handle that appears to move it</li>
 										<li><strong>Resize columns:</strong> Drag the edge of any column header</li>
 										<li><strong>Enter data:</strong> Click any cell to edit, or paste from Excel/CSV</li>
+										<li><strong>Alternatively:</strong> Click to <a href="#">Download Template</a> and <a href="#" id="uploadFileLink">Upload your completed file</a>.</li>
 									</ul>
 								</div>
 
@@ -87,15 +91,6 @@ include("../includes/mheader.php");
 										<ul class="actions fit" style="margin-bottom: 0px;">
 											<li><a id="saveBtn" class="button primary fit"><?php echo ($template_method === 'existing') ? 'Save Changes' : 'Save'; ?></a></li>
 										</ul>
-									</div>
-								</div>
-
-								<!-- Load from File -->
-								<div class="row" style="margin-bottom: 20px;">
-									<div class="col-12">
-										<input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.tsv" style="display: none;" />
-										<a href="#" id="loadFileBtn" class="button">Load from File</a>
-										<span style="margin-left: 10px; color: #d8dee9; font-size: 0.9em;">Upload a spreadsheet to populate the template (CSV, Excel)</span>
 									</div>
 								</div>
 
