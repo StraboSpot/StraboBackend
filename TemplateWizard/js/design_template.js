@@ -28,8 +28,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	let hasChanges = false;
 
-	// Always show template name field (for both new and existing templates)
-	templateNameSection.style.display = 'block';
+	// Template name field is always visible in the HTML
 
 	// Show save button when template name changes
 	templateNameInput.addEventListener('input', function() {
@@ -74,7 +73,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	function showSaveSection() {
 		if (!hasChanges) {
 			hasChanges = true;
-			saveSection.style.display = 'block';
+			saveSection.style.display = 'flex';
 		}
 	}
 

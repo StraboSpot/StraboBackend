@@ -52,7 +52,7 @@ include("../includes/mheader.php");
 									<hr />
 
 									<!-- Option 2: Create New Template -->
-									<div class="row gtr-uniform">
+									<div class="row gtr-uniform gtr-25">
 										<div class="col-12">
 											<input type="radio" id="method_new" name="template_method" value="new">
 											<label for="method_new">Create New Template</label>
@@ -85,7 +85,7 @@ include("../includes/mheader.php");
 									<hr />
 
 									<!-- Continue Button -->
-									<div class="row gtr-uniform">
+									<div class="row gtr-uniform gtr-25">
 										<div class="col-12">
 											<ul class="actions">
 												<li><input type="submit" id="continueBtn" value="Continue" class="primary" disabled /></li>

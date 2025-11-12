@@ -50,9 +50,9 @@
 }
 
 #saveSection {
-	display: none;
+	display: none !important;
 }
 
 #templateNameSection {
-	display: none;
+	/* Always visible, no need to hide */
 }

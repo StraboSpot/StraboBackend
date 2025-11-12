@@ -75,21 +75,15 @@ include("../includes/mheader.php");
 									</ul>
 								</div>
 
-								<!-- Template Name (always visible) -->
-								<div id="templateNameSection" class="row gtr-uniform" style="margin-bottom: 20px;">
-									<div class="col-12">
+								<!-- Template Name and Save Button -->
+								<div class="row gtr-uniform" style="margin-bottom: 20px;">
+									<div class="col-9 col-12-small" id="templateNameSection">
 										<label for="template_name">Template Name *</label>
 										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" value="<?php echo htmlspecialchars($template_name); ?>" />
 										<span id="nameError" style="color: #bf616a; display: none;">Template name is required</span>
 									</div>
-								</div>
-
-								<!-- Save Button (hidden until changes detected) -->
-								<div id="saveSection" class="row gtr-uniform" style="margin-bottom: 20px;">
-									<div class="col-12">
-										<ul class="actions">
-											<li><button id="saveBtn" class="button primary">Save</button></li>
-										</ul>
+									<div class="col-3 col-12-small" id="saveSection" style="display: flex; align-items: flex-end;">
+										<button id="saveBtn" class="button primary fit" style="margin-bottom: 0;">Save</button>
 									</div>
 								</div>
 
