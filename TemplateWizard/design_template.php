@@ -76,13 +76,35 @@ include("../includes/mheader.php");
 								</div>
 
 								<!-- Template Name and Save Button -->
-								<div class="row gtr-uniform" style="margin-bottom: 20px;">
-									<div class="col-9 col-12-small" id="templateNameSection">
-										<label for="template_name">Template Name *</label>
+								<div class="row" style="margin-bottom: 20px;">
+									<div class="col-2 col-12-small gtr-25">
+										<div>Template Name <span class="highlighted">*</span></div>
+									</div>
+									<div class="col-7 col-12-small gtr-25">
 										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" value="<?php echo htmlspecialchars($template_name); ?>" />
 									</div>
-									<div class="col-3 col-12-small" id="saveSection" style="display: none; align-items: flex-end;">
-										<button id="saveBtn" class="button primary fit" style="margin-bottom: 0;"><?php echo ($template_method === 'existing') ? 'Save Changes' : 'Save'; ?></button>
+									<div class="col-3 col-12-small gtr-25" id="saveSection" style="display: none;">
+										
+										<!--<button id="saveBtn" class="button primary fit"><?php echo ($template_method === 'existing') ? 'Save Changes' : 'Save'; ?></button>-->
+										
+										<ul class="actions fit" style="margin-bottom: 0px;">
+											<li><a id="saveBtn" class="button primary fit"><?php echo ($template_method === 'existing') ? 'Save Changes' : 'Save'; ?></a></li>
+										</ul>
+									</div>
+								</div>
+
+								<!-- Project to Save -->
+								<div id="project_info" class="row" style="margin-bottom: 20px;display: none;">
+									<div class="col-2 col-12-small gtr-25">
+										<div>Strabo Project <span class="highlighted">*</span></div>
+									</div>
+									<div class="col-7 col-12-small gtr-25">
+										<select name="project_select">
+											<option value="">Please Select Project...</option>
+											<option value="12345678">My Test Project 1</option>
+											<option value="23456789">My Test Project 2</option>
+											<option value="34567890">My Test Project 3</option>
+										</select>
 									</div>
 								</div>
 

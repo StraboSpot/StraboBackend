@@ -84,7 +84,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	function showSaveSection() {
 		if (!hasChanges) {
 			hasChanges = true;
-			saveSection.style.display = 'flex';
+			saveSection.style.display = 'block';
 		}
 	}
 
