@@ -51,16 +51,8 @@
 
 #saveSection {
 	display: none;
-	flex-direction: column;
-	justify-content: flex-end;
 }
 
 #templateNameSection {
 	/* Always visible, no need to hide */
-}
-
-#saveBtn {
-	width: 100%;
-	padding-top: 0.825em;
-	padding-bottom: 0.825em;
 }
