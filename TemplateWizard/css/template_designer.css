@@ -25,6 +25,15 @@
 	background-color: #434c5e;
 }
 
+.handsontable th.ht__highlight {
+	background-color: #2e3440;
+}
+
+.handsontable thead th.ht__highlight,
+.handsontable tbody th.ht__highlight {
+	background-color: #2e3440;
+}
+
 .handsontable td {
 	background-color: #2e3440;
 	color: #eceff4;
