@@ -61,20 +61,20 @@ include("../includes/mheader.php");
 										<!-- New Template Section Selection (Hidden Initially) -->
 										<div class="col-12" id="new_section" style="display:none; margin-left: 30px;">
 											<h4>Spot Sections to Include</h4>
-											<div class="row gtr-uniform">
-												<div class="col-6 col-12-xsmall">
+											<div class="row gtr-uniform gtr-25">
+												<div class="col-12">
 													<input type="checkbox" id="section_spot" name="selected_sections[]" value="spot" checked>
 													<label for="section_spot">Spot Data</label>
 												</div>
-												<div class="col-6 col-12-xsmall">
+												<div class="col-12">
 													<input type="checkbox" id="section_orientation" name="selected_sections[]" value="orientation">
 													<label for="section_orientation">Orientation Data</label>
 												</div>
-												<div class="col-6 col-12-xsmall">
+												<div class="col-12">
 													<input type="checkbox" id="section_rockunit" name="selected_sections[]" value="rockunit">
 													<label for="section_rockunit">Rock Units</label>
 												</div>
-												<div class="col-6 col-12-xsmall">
+												<div class="col-12">
 													<input type="checkbox" id="section_sample" name="selected_sections[]" value="sample">
 													<label for="section_sample">Sample Data</label>
 												</div>
