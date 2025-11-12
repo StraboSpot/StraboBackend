@@ -23,11 +23,21 @@ $column_mappings = array(
 	'sample' => array('Sample Type', 'Sample Size', 'Sample Color')
 );
 
-// Build column list based on method
+// Build column list and template name based on method
 $columns = array();
+$template_name = '';
+
 if ($template_method === 'existing') {
 	// Placeholder columns for existing template testing
 	$columns = array('Name', 'Date', 'Strike', 'Dip', 'Notes');
+
+	// Get template name based on ID (placeholder for now)
+	$template_names = array(
+		'1' => 'Field Survey Template',
+		'2' => 'Rock Sample Collection',
+		'3' => 'Quick Entry Template'
+	);
+	$template_name = isset($template_names[$template_id]) ? $template_names[$template_id] : 'Unknown Template';
 } else {
 	// Build columns from selected sections
 	foreach ($selected_sections as $section) {
@@ -65,11 +75,11 @@ include("../includes/mheader.php");
 									</ul>
 								</div>
 
-								<!-- Template Name (always visible for new templates) -->
+								<!-- Template Name (always visible) -->
 								<div id="templateNameSection" class="row gtr-uniform" style="margin-bottom: 20px;">
 									<div class="col-12">
 										<label for="template_name">Template Name *</label>
-										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" />
+										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" value="<?php echo htmlspecialchars($template_name); ?>" />
 										<span id="nameError" style="color: #bf616a; display: none;">Template name is required</span>
 									</div>
 								</div>
@@ -107,6 +117,7 @@ include("../includes/mheader.php");
 // Pass PHP data to JavaScript
 window.templateMethod = '<?php echo $template_method; ?>';
 window.templateColumns = <?php echo json_encode($columns); ?>;
+window.templateId = '<?php echo $template_id; ?>';
 </script>
 <script src="js/design_template.js"></script>
 

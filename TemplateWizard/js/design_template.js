@@ -28,10 +28,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	let hasChanges = false;
 
-	// Show template name field if this is a new template (always visible)
-	if (templateMethod === 'new') {
-		templateNameSection.style.display = 'block';
-	}
+	// Always show template name field (for both new and existing templates)
+	templateNameSection.style.display = 'block';
 
 	// Show save button when template name changes
 	templateNameInput.addEventListener('input', function() {
@@ -82,16 +80,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	// Handle Save Button Click
 	saveBtn.addEventListener('click', function() {
-		// Validate template name if new template
-		if (templateMethod === 'new') {
-			const templateName = templateNameInput.value.trim();
-			if (templateName === '') {
-				nameError.style.display = 'inline';
-				templateNameInput.focus();
-				return;
-			}
-			document.getElementById('hidden_template_name').value = templateName;
+		// Validate template name (required for both new and existing templates)
+		const templateName = templateNameInput.value.trim();
+		if (templateName === '') {
+			nameError.style.display = 'inline';
+			templateNameInput.focus();
+			return;
 		}
+		document.getElementById('hidden_template_name').value = templateName;
 
 		// Get all table data (preserving column order)
 		const tableData = hot.getData();
