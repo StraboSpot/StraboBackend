@@ -93,7 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Validate template name (required for both new and existing templates)
 		const templateName = templateNameInput.value.trim();
 		if (templateName === '') {
-			errorModal.style.display = 'block';
+			errorModal.style.display = 'flex';
 			return;
 		}
 		document.getElementById('hidden_template_name').value = templateName;
