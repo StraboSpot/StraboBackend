@@ -92,6 +92,47 @@ document.addEventListener('DOMContentLoaded', function() {
 			}
 			return cellProperties;
 		},
+		beforeChange: function(changes, source) {
+			// Handle custom header prefix for editable header cells
+			if (changes && source !== 'loadData') {
+				for (let i = 0; i < changes.length; i++) {
+					const [row, prop, oldValue, newValue] = changes[i];
+
+					// Only process header row (row 0) and non-original headers
+					if (row === 0 && newValue !== null && newValue !== '') {
+						// Check if this is NOT an original vocabulary-controlled header
+						if (!originalHeaders.includes(oldValue) && !originalHeaders.includes(newValue)) {
+							// Strip "Custom_" prefix if it exists (user is editing)
+							let cleanValue = newValue.toString();
+							if (cleanValue.startsWith('Custom_')) {
+								cleanValue = cleanValue.substring(7); // Remove "Custom_" prefix
+							}
+
+							// Add "Custom_" prefix if not already present
+							if (cleanValue !== '' && !cleanValue.startsWith('Custom_')) {
+								changes[i][3] = 'Custom_' + cleanValue;
+							} else if (cleanValue !== '') {
+								changes[i][3] = cleanValue;
+							}
+						}
+					}
+				}
+			}
+		},
+		beforeBeginEditing: function(row, column, initialValue) {
+			// Strip "Custom_" prefix when user starts editing a custom header
+			if (row === 0 && initialValue && typeof initialValue === 'string') {
+				if (initialValue.startsWith('Custom_') && !originalHeaders.includes(initialValue)) {
+					// Get the editor and set the value without prefix
+					const editor = this.getActiveEditor();
+					if (editor) {
+						setTimeout(function() {
+							editor.TEXTAREA.value = initialValue.substring(7);
+						}, 0);
+					}
+				}
+			}
+		},
 		afterChange: function(changes, source) {
 			if (source !== 'loadData' && changes) {
 				checkTableData();
