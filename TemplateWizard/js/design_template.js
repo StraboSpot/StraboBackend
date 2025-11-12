@@ -154,6 +154,10 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 		document.getElementById('hidden_template_name').value = templateName;
 
+		// Get project_id if selected
+		const projectId = projectSelect ? projectSelect.value : '';
+		document.getElementById('hidden_project_id').value = projectId;
+
 		// Get all table data (preserving column order)
 		const tableData = hot.getData();
 

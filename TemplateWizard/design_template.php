@@ -125,6 +125,7 @@ include("../includes/mheader.php");
 									<input type="hidden" name="template_method" value="<?php echo htmlspecialchars($template_method); ?>">
 									<input type="hidden" name="template_id" value="<?php echo htmlspecialchars($template_id); ?>">
 									<input type="hidden" name="template_name" id="hidden_template_name">
+									<input type="hidden" name="project_id" id="hidden_project_id">
 									<input type="hidden" name="table_data" id="hidden_table_data">
 								</form>
 
