@@ -169,6 +169,40 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Get all table data (preserving column order)
 		const tableData = hot.getData();
 
+		// Check for data in columns without headers
+		const headerRow = tableData[0];
+		const columnsWithoutHeaders = [];
+
+		for (let col = 0; col < headerRow.length; col++) {
+			// Check if this column has no header
+			if (headerRow[col] === null || headerRow[col] === '') {
+				// Check if any data row has content in this column
+				let hasData = false;
+				for (let row = 1; row < tableData.length; row++) {
+					if (tableData[row][col] !== null && tableData[row][col] !== '') {
+						hasData = true;
+						break;
+					}
+				}
+				if (hasData) {
+					// Convert column index to letter (0=A, 1=B, etc.)
+					const colLetter = String.fromCharCode(65 + col);
+					columnsWithoutHeaders.push(colLetter);
+				}
+			}
+		}
+
+		// If there are columns with data but no headers, show error
+		if (columnsWithoutHeaders.length > 0) {
+			const errorMessage = document.getElementById('errorMessage');
+			errorMessage.textContent = 'Error! Column' + (columnsWithoutHeaders.length > 1 ? 's' : '') + ' ' +
+				columnsWithoutHeaders.join(', ') + ' ' +
+				(columnsWithoutHeaders.length > 1 ? 'have' : 'has') + ' no header' +
+				(columnsWithoutHeaders.length > 1 ? 's' : '') + '. Please fix.';
+			errorModal.style.display = 'flex';
+			return;
+		}
+
 		// Filter out completely empty rows (keep header row at index 0)
 		const filteredData = tableData.filter(function(row, index) {
 			// Always keep the header row (first row)
