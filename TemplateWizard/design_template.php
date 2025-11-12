@@ -82,8 +82,8 @@ include("../includes/mheader.php");
 										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" value="<?php echo htmlspecialchars($template_name); ?>" />
 										<span id="nameError" style="color: #bf616a; display: none;">Template name is required</span>
 									</div>
-									<div class="col-3 col-12-small" id="saveSection" style="display: none; align-items: flex-end;">
-										<button id="saveBtn" class="button primary fit" style="margin-bottom: 0;">Save</button>
+									<div class="col-3 col-12-small" id="saveSection">
+										<button id="saveBtn" class="button primary fit">Save</button>
 									</div>
 								</div>
 
