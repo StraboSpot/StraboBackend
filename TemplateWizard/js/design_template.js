@@ -68,13 +68,15 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Get current headers from HandsonTable
 		const headers = hot.getData()[0];
 
-		// Create worksheet with headers only
-		const ws = XLSX.utils.aoa_to_sheet([headers]);
+		// Create worksheet with headers plus 100 empty rows for data entry
+		const emptyRows = Array(100).fill(null).map(() => new Array(headers.length).fill(''));
+		const sheetData = [headers, ...emptyRows];
+		const ws = XLSX.utils.aoa_to_sheet(sheetData);
 
 		// Set column widths for better readability
 		ws['!cols'] = headers.map(() => ({ wch: 20 }));
 
-		// Apply cell styling and protection to header row
+		// Lock only the header row cells (row 0)
 		for (let col = 0; col < headers.length; col++) {
 			const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
 			if (!ws[cellRef]) ws[cellRef] = {};
@@ -87,14 +89,27 @@ document.addEventListener('DOMContentLoaded', function() {
 			};
 		}
 
-		// Enable sheet protection (locks the header row)
+		// Unlock all data cells (rows 1+)
+		for (let row = 1; row <= 100; row++) {
+			for (let col = 0; col < headers.length; col++) {
+				const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
+				if (!ws[cellRef]) ws[cellRef] = { t: 's', v: '' };
+				if (!ws[cellRef].s) ws[cellRef].s = {};
+				ws[cellRef].s.protection = { locked: false };
+			}
+		}
+
+		// Enable sheet protection (only header row is locked)
 		ws['!protect'] = {
 			sheet: true,
 			selectLockedCells: true,
 			selectUnlockedCells: true,
-			formatRows: false,
+			formatCells: false,
 			formatColumns: false,
+			formatRows: false,
+			insertColumns: false,
 			insertRows: true,
+			deleteColumns: false,
 			deleteRows: true
 		};
 
