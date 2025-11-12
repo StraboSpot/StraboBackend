@@ -40,7 +40,12 @@
 	border-color: #4c566a;
 	overflow: hidden;
 	white-space: nowrap;
-	text-overflow: ellipsis;
+}
+
+/* Show full content when cell is being edited */
+.handsontable td.htEditor {
+	overflow: visible;
+	white-space: normal;
 }
 
 .handsontable td.area {

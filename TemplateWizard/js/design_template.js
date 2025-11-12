@@ -88,6 +88,12 @@ document.addEventListener('DOMContentLoaded', function() {
 		},
 		afterColumnMove: function(movedColumns, finalIndex) {
 			updateSaveButtonVisibility();
+		},
+		afterRenderer: function(TD, row, col, prop, value, cellProperties) {
+			// Add title attribute to show full content on hover
+			if (value && value.toString().trim() !== '') {
+				TD.setAttribute('title', value);
+			}
 		}
 	});
 
