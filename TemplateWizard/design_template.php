@@ -65,29 +65,26 @@ include("../includes/mheader.php");
 									</ul>
 								</div>
 
-								<!-- HandsonTable Container -->
-								<div id="hot-container"></div>
-
-								<!-- Save Section -->
-								<div id="saveSection">
-									<!-- Template Name (only for new templates) -->
-									<div id="templateNameSection" class="row gtr-uniform">
-										<div class="col-12">
-											<label for="template_name">Template Name *</label>
-											<input type="text" id="template_name" name="template_name" placeholder="Enter template name" />
-											<span id="nameError" style="color: #bf616a; display: none;">Template name is required</span>
-										</div>
-									</div>
-
-									<!-- Save Button -->
-									<div class="row gtr-uniform">
-										<div class="col-12">
-											<ul class="actions">
-												<li><button id="saveBtn" class="button primary">Save</button></li>
-											</ul>
-										</div>
+								<!-- Template Name (always visible for new templates) -->
+								<div id="templateNameSection" class="row gtr-uniform" style="margin-bottom: 20px;">
+									<div class="col-12">
+										<label for="template_name">Template Name *</label>
+										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" />
+										<span id="nameError" style="color: #bf616a; display: none;">Template name is required</span>
 									</div>
 								</div>
+
+								<!-- Save Button (hidden until changes detected) -->
+								<div id="saveSection" class="row gtr-uniform" style="margin-bottom: 20px;">
+									<div class="col-12">
+										<ul class="actions">
+											<li><button id="saveBtn" class="button primary">Save</button></li>
+										</ul>
+									</div>
+								</div>
+
+								<!-- HandsonTable Container -->
+								<div id="hot-container"></div>
 
 								<!-- Hidden form for POST submission -->
 								<form id="submitForm" method="POST" action="save_template.php" style="display:none;">

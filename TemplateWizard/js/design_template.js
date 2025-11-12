@@ -28,10 +28,16 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	let hasChanges = false;
 
-	// Show template name field if this is a new template
+	// Show template name field if this is a new template (always visible)
 	if (templateMethod === 'new') {
 		templateNameSection.style.display = 'block';
 	}
+
+	// Show save button when template name changes
+	templateNameInput.addEventListener('input', function() {
+		nameError.style.display = 'none';
+		showSaveSection();
+	});
 
 	// Initialize Handsontable
 	const hot = new Handsontable(container, {
@@ -95,10 +101,5 @@ document.addEventListener('DOMContentLoaded', function() {
 
 		// Submit form
 		document.getElementById('submitForm').submit();
-	});
-
-	// Clear name error when typing
-	templateNameInput.addEventListener('input', function() {
-		nameError.style.display = 'none';
 	});
 });
