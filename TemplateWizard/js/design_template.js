@@ -76,42 +76,17 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Set column widths for better readability
 		ws['!cols'] = headers.map(() => ({ wch: 20 }));
 
-		// Lock only the header row cells (row 0)
+		// Style header row as bold (no protection - it doesn't work reliably)
 		for (let col = 0; col < headers.length; col++) {
 			const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
 			if (!ws[cellRef]) ws[cellRef] = {};
 			if (!ws[cellRef].s) ws[cellRef].s = {};
 
-			// Make header cells bold and locked
+			// Make header cells bold
 			ws[cellRef].s = {
-				font: { bold: true },
-				protection: { locked: true }
+				font: { bold: true }
 			};
 		}
-
-		// Unlock all data cells (rows 1+)
-		for (let row = 1; row <= 100; row++) {
-			for (let col = 0; col < headers.length; col++) {
-				const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
-				if (!ws[cellRef]) ws[cellRef] = { t: 's', v: '' };
-				if (!ws[cellRef].s) ws[cellRef].s = {};
-				ws[cellRef].s.protection = { locked: false };
-			}
-		}
-
-		// Enable sheet protection (only header row is locked)
-		ws['!protect'] = {
-			sheet: true,
-			selectLockedCells: true,
-			selectUnlockedCells: true,
-			formatCells: false,
-			formatColumns: false,
-			formatRows: false,
-			insertColumns: false,
-			insertRows: true,
-			deleteColumns: false,
-			deleteRows: true
-		};
 
 		// Create workbook and add worksheet
 		const wb = XLSX.utils.book_new();
