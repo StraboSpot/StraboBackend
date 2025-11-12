@@ -31,6 +31,9 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	let hasChanges = false;
 
+	// Store the number of original columns for read-only check
+	const originalColumnCount = columns.length;
+
 	// Template name field is always visible in the HTML
 
 	// Update save button visibility when template name changes
@@ -74,9 +77,17 @@ document.addEventListener('DOMContentLoaded', function() {
 		cells: function(row, col) {
 			const cellProperties = {};
 			if (row === 0) {
-				// First row is header - make it read-only
-				cellProperties.readOnly = true;
-				cellProperties.className = 'htCenter htMiddle htDimmed';
+				// First row is header
+				// Only make original columns read-only (vocabulary controlled)
+				// New columns added by user should be editable
+				if (col < originalColumnCount) {
+					cellProperties.readOnly = true;
+					cellProperties.className = 'htCenter htMiddle htDimmed';
+				} else {
+					// New columns have editable headers
+					cellProperties.readOnly = false;
+					cellProperties.className = 'htCenter htMiddle';
+				}
 			}
 			return cellProperties;
 		},
