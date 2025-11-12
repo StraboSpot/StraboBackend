@@ -119,16 +119,19 @@ document.addEventListener('DOMContentLoaded', function() {
 				}
 			}
 		},
-		beforeBeginEditing: function(row, column, initialValue) {
+		afterBeginEditing: function(row, column) {
 			// Strip "Custom_" prefix when user starts editing a custom header
-			if (row === 0 && initialValue && typeof initialValue === 'string') {
-				if (initialValue.startsWith('Custom_') && !originalHeaders.includes(initialValue)) {
-					// Get the editor and set the value without prefix
-					const editor = this.getActiveEditor();
-					if (editor) {
-						setTimeout(function() {
-							editor.TEXTAREA.value = initialValue.substring(7);
-						}, 0);
+			if (row === 0) {
+				const cellValue = this.getDataAtCell(row, column);
+				if (cellValue && typeof cellValue === 'string') {
+					if (cellValue.startsWith('Custom_') && !originalHeaders.includes(cellValue)) {
+						// Get the editor and set the value without prefix
+						const editor = this.getActiveEditor();
+						if (editor && editor.TEXTAREA) {
+							editor.TEXTAREA.value = cellValue.substring(7);
+							// Move cursor to end
+							editor.TEXTAREA.setSelectionRange(editor.TEXTAREA.value.length, editor.TEXTAREA.value.length);
+						}
 					}
 				}
 			}
