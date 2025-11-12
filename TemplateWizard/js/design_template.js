@@ -76,15 +76,16 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Set column widths for better readability
 		ws['!cols'] = headers.map(() => ({ wch: 20 }));
 
-		// Style header row as bold (no protection - it doesn't work reliably)
+		// Style header row with dark grey background, white bold text
 		for (let col = 0; col < headers.length; col++) {
 			const cellRef = XLSX.utils.encode_cell({ r: 0, c: col });
 			if (!ws[cellRef]) ws[cellRef] = {};
 			if (!ws[cellRef].s) ws[cellRef].s = {};
 
-			// Make header cells bold
+			// Make header cells bold, white text on dark grey background
 			ws[cellRef].s = {
-				font: { bold: true }
+				font: { bold: true, color: { rgb: "FFFFFF" } },
+				fill: { fgColor: { rgb: "404040" } }
 			};
 		}
 
