@@ -90,6 +90,15 @@ include("../includes/mheader.php");
 									</div>
 								</div>
 
+								<!-- Load from File -->
+								<div class="row" style="margin-bottom: 20px;">
+									<div class="col-12">
+										<input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.tsv" style="display: none;" />
+										<a href="#" id="loadFileBtn" class="button">Load from File</a>
+										<span style="margin-left: 10px; color: #d8dee9; font-size: 0.9em;">Upload a spreadsheet to populate the template (CSV, Excel)</span>
+									</div>
+								</div>
+
 								<!-- Project to Save -->
 								<div id="project_info" class="row" style="margin-bottom: 20px;display: none;">
 									<div class="col-2 col-12-small gtr-25">
@@ -134,6 +143,9 @@ include("../includes/mheader.php");
 
 <!-- HandsonTable JS -->
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
+
+<!-- SheetJS for Excel/CSV parsing -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
 <script>
 // Pass PHP data to JavaScript

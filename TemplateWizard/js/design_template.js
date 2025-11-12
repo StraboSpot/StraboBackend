@@ -28,6 +28,9 @@ document.addEventListener('DOMContentLoaded', function() {
 	const closeModal = document.getElementById('closeModal');
 	const projectInfo = document.getElementById('project_info');
 	const projectSelect = document.getElementById('project_id');
+	const loadFileBtn = document.getElementById('loadFileBtn');
+	const fileInput = document.getElementById('fileInput');
+	const errorMessage = document.getElementById('errorMessage');
 
 	let hasChanges = false;
 
@@ -55,6 +58,91 @@ document.addEventListener('DOMContentLoaded', function() {
 		if (e.target === errorModal) {
 			errorModal.style.display = 'none';
 		}
+	});
+
+	// Load from File button click
+	loadFileBtn.addEventListener('click', function(e) {
+		e.preventDefault();
+		fileInput.click();
+	});
+
+	// File input change handler
+	fileInput.addEventListener('change', function(e) {
+		const file = e.target.files[0];
+		if (!file) return;
+
+		// Check file size (5MB limit)
+		const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+		if (file.size > maxSize) {
+			errorMessage.textContent = 'Error! File size exceeds 5MB limit. Please use a smaller file.';
+			errorModal.style.display = 'flex';
+			fileInput.value = ''; // Reset file input
+			return;
+		}
+
+		// Read file
+		const reader = new FileReader();
+		reader.onload = function(evt) {
+			try {
+				const data = new Uint8Array(evt.target.result);
+				const workbook = XLSX.read(data, { type: 'array' });
+
+				// Get first sheet
+				const firstSheetName = workbook.SheetNames[0];
+				const worksheet = workbook.Sheets[firstSheetName];
+
+				// Convert to 2D array
+				const fileData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+				if (fileData.length === 0) {
+					errorMessage.textContent = 'Error! File is empty or could not be read.';
+					errorModal.style.display = 'flex';
+					fileInput.value = '';
+					return;
+				}
+
+				// Get current table headers (first row)
+				const currentHeaders = hot.getData()[0];
+				const fileHeaders = fileData[0];
+
+				// Validate headers match exactly
+				if (currentHeaders.length !== fileHeaders.length) {
+					errorMessage.textContent = 'Error! Column count mismatch. File has ' + fileHeaders.length +
+						' columns, template has ' + currentHeaders.length + ' columns.';
+					errorModal.style.display = 'flex';
+					fileInput.value = '';
+					return;
+				}
+
+				// Check each header matches
+				for (let i = 0; i < currentHeaders.length; i++) {
+					if (currentHeaders[i] !== fileHeaders[i]) {
+						errorMessage.textContent = 'Error! Column headers do not match. Expected "' +
+							currentHeaders[i] + '" at position ' + (i + 1) + ', but found "' + fileHeaders[i] + '".';
+						errorModal.style.display = 'flex';
+						fileInput.value = '';
+						return;
+					}
+				}
+
+				// Headers match! Load the data
+				hot.loadData(fileData);
+
+				// Trigger change detection
+				checkTableData();
+				updateSaveButtonVisibility();
+
+				// Reset file input for next use
+				fileInput.value = '';
+
+			} catch (error) {
+				errorMessage.textContent = 'Error! Could not parse file. Please ensure it is a valid CSV or Excel file.';
+				errorModal.style.display = 'flex';
+				fileInput.value = '';
+			}
+		};
+
+		reader.readAsArrayBuffer(file);
 	});
 
 	// Initialize Handsontable
