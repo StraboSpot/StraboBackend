@@ -169,8 +169,20 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Get all table data (preserving column order)
 		const tableData = hot.getData();
 
+		// Filter out completely empty rows (keep header row at index 0)
+		const filteredData = tableData.filter(function(row, index) {
+			// Always keep the header row (first row)
+			if (index === 0) {
+				return true;
+			}
+			// Check if row has any non-empty values
+			return row.some(function(cell) {
+				return cell !== null && cell !== '';
+			});
+		});
+
 		// Store data as JSON
-		document.getElementById('hidden_table_data').value = JSON.stringify(tableData);
+		document.getElementById('hidden_table_data').value = JSON.stringify(filteredData);
 
 		// Submit form
 		document.getElementById('submitForm').submit();
