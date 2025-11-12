@@ -23,8 +23,9 @@ document.addEventListener('DOMContentLoaded', function() {
 	const saveSection = document.getElementById('saveSection');
 	const templateNameSection = document.getElementById('templateNameSection');
 	const templateNameInput = document.getElementById('template_name');
-	const nameError = document.getElementById('nameError');
 	const saveBtn = document.getElementById('saveBtn');
+	const errorModal = document.getElementById('errorModal');
+	const closeModal = document.getElementById('closeModal');
 
 	let hasChanges = false;
 
@@ -32,8 +33,18 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	// Show save button when template name changes
 	templateNameInput.addEventListener('input', function() {
-		nameError.style.display = 'none';
 		showSaveSection();
+	});
+
+	// Close modal when clicking OK or outside the modal
+	closeModal.addEventListener('click', function() {
+		errorModal.style.display = 'none';
+	});
+
+	errorModal.addEventListener('click', function(e) {
+		if (e.target === errorModal) {
+			errorModal.style.display = 'none';
+		}
 	});
 
 	// Initialize Handsontable
@@ -82,8 +93,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Validate template name (required for both new and existing templates)
 		const templateName = templateNameInput.value.trim();
 		if (templateName === '') {
-			nameError.style.display = 'inline';
-			templateNameInput.focus();
+			errorModal.style.display = 'block';
 			return;
 		}
 		document.getElementById('hidden_template_name').value = templateName;

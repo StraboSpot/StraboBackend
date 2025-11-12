@@ -80,10 +80,18 @@ include("../includes/mheader.php");
 									<div class="col-9 col-12-small" id="templateNameSection">
 										<label for="template_name">Template Name *</label>
 										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" value="<?php echo htmlspecialchars($template_name); ?>" />
-										<span id="nameError" style="color: #bf616a; display: none;">Template name is required</span>
 									</div>
 									<div class="col-3 col-12-small" id="saveSection" style="display: none; align-items: flex-end;">
 										<button id="saveBtn" class="button primary fit" style="margin-bottom: 0;"><?php echo ($template_method === 'existing') ? 'Save Changes' : 'Save'; ?></button>
+									</div>
+								</div>
+
+								<!-- Error Modal -->
+								<div id="errorModal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6);">
+									<div style="background-color: #fff; margin: 15% auto; padding: 30px; border-radius: 5px; width: 90%; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.3);">
+										<h3 style="margin-top: 0; color: #bf616a;">Error</h3>
+										<p id="errorMessage" style="margin-bottom: 20px;">Template name is required</p>
+										<button id="closeModal" class="button primary" style="width: 100%;">OK</button>
 									</div>
 								</div>
 
