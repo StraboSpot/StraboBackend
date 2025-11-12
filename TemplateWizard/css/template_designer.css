@@ -1,0 +1,60 @@
+/**
+ * Template Wizard - Designer Styles
+ * Styles for the HandsonTable template designer interface
+ */
+
+/* Dark theme for HandsonTable */
+.htCore {
+	background-color: #2e3440;
+	color: #eceff4;
+}
+
+.handsontable th {
+	background-color: #3b4252;
+	color: #eceff4;
+	font-weight: bold;
+	cursor: move;
+	cursor: grab;
+}
+
+.handsontable th:active {
+	cursor: grabbing;
+}
+
+.handsontable th:hover {
+	background-color: #434c5e;
+}
+
+.handsontable td {
+	background-color: #2e3440;
+	color: #eceff4;
+	border-color: #4c566a;
+}
+
+.handsontable td.area {
+	background-color: #434c5e;
+}
+
+.ht_master .wtHolder {
+	background-color: #2e3440;
+}
+
+.handsontable .htDimmed {
+	color: #d8dee9;
+}
+
+#hot-container {
+	margin: 20px 0;
+	height: 500px;
+	overflow: hidden;
+}
+
+#saveSection {
+	display: none;
+	margin-top: 20px;
+}
+
+#templateNameSection {
+	display: none;
+	margin-bottom: 15px;
+}

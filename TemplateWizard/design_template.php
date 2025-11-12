@@ -42,64 +42,7 @@ include("../includes/mheader.php");
 
 <!-- HandsonTable CSS -->
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.css">
-
-<style>
-/* Dark theme for HandsonTable */
-.htCore {
-	background-color: #2e3440;
-	color: #eceff4;
-}
-
-.handsontable th {
-	background-color: #3b4252;
-	color: #eceff4;
-	font-weight: bold;
-	cursor: move;
-	cursor: grab;
-}
-
-.handsontable th:active {
-	cursor: grabbing;
-}
-
-.handsontable th:hover {
-	background-color: #434c5e;
-}
-
-.handsontable td {
-	background-color: #2e3440;
-	color: #eceff4;
-	border-color: #4c566a;
-}
-
-.handsontable td.area {
-	background-color: #434c5e;
-}
-
-.ht_master .wtHolder {
-	background-color: #2e3440;
-}
-
-.handsontable .htDimmed {
-	color: #d8dee9;
-}
-
-#hot-container {
-	margin: 20px 0;
-	height: 500px;
-	overflow: hidden;
-}
-
-#saveSection {
-	display: none;
-	margin-top: 20px;
-}
-
-#templateNameSection {
-	display: none;
-	margin-bottom: 15px;
-}
-</style>
+<link rel="stylesheet" href="css/template_designer.css">
 
 			<!-- Main -->
 				<div id="main" class="wrapper style1">
@@ -164,102 +107,11 @@ include("../includes/mheader.php");
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
-	const templateMethod = '<?php echo $template_method; ?>';
-	const columns = <?php echo json_encode($columns); ?>;
-
-	// Create initial data with header row
-	const initialData = [columns]; // First row is headers
-
-	// Add a few empty rows for data entry
-	for (let i = 0; i < 10; i++) {
-		initialData.push(new Array(columns.length).fill(''));
-	}
-
-	const container = document.getElementById('hot-container');
-	const saveSection = document.getElementById('saveSection');
-	const templateNameSection = document.getElementById('templateNameSection');
-	const templateNameInput = document.getElementById('template_name');
-	const nameError = document.getElementById('nameError');
-	const saveBtn = document.getElementById('saveBtn');
-
-	let hasChanges = false;
-
-	// Show template name field if this is a new template
-	if (templateMethod === 'new') {
-		templateNameSection.style.display = 'block';
-	}
-
-	// Initialize Handsontable
-	const hot = new Handsontable(container, {
-		data: initialData,
-		colHeaders: true,
-		rowHeaders: true,
-		width: '100%',
-		height: 500,
-		colWidths: 150,
-		licenseKey: 'non-commercial-and-evaluation',
-		manualColumnMove: true,
-		manualColumnResize: true,
-		copyPaste: true,
-		fillHandle: true,
-		contextMenu: true,
-		columns: columns.map(() => ({ type: 'text' })),
-		cells: function(row, col) {
-			const cellProperties = {};
-			if (row === 0) {
-				// First row is header - make it read-only
-				cellProperties.readOnly = true;
-				cellProperties.className = 'htCenter htMiddle htDimmed';
-			}
-			return cellProperties;
-		},
-		afterChange: function(changes, source) {
-			if (source !== 'loadData' && changes) {
-				showSaveSection();
-			}
-		},
-		afterColumnMove: function(movedColumns, finalIndex) {
-			showSaveSection();
-		}
-	});
-
-	function showSaveSection() {
-		if (!hasChanges) {
-			hasChanges = true;
-			saveSection.style.display = 'block';
-		}
-	}
-
-	// Handle Save Button Click
-	saveBtn.addEventListener('click', function() {
-		// Validate template name if new template
-		if (templateMethod === 'new') {
-			const templateName = templateNameInput.value.trim();
-			if (templateName === '') {
-				nameError.style.display = 'inline';
-				templateNameInput.focus();
-				return;
-			}
-			document.getElementById('hidden_template_name').value = templateName;
-		}
-
-		// Get all table data (preserving column order)
-		const tableData = hot.getData();
-
-		// Store data as JSON
-		document.getElementById('hidden_table_data').value = JSON.stringify(tableData);
-
-		// Submit form
-		document.getElementById('submitForm').submit();
-	});
-
-	// Clear name error when typing
-	templateNameInput.addEventListener('input', function() {
-		nameError.style.display = 'none';
-	});
-});
+// Pass PHP data to JavaScript
+window.templateMethod = '<?php echo $template_method; ?>';
+window.templateColumns = <?php echo json_encode($columns); ?>;
 </script>
+<script src="js/design_template.js"></script>
 
 <?php
 include("../includes/mfooter.php");
