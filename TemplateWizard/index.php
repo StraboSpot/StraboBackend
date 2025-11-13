@@ -18,18 +18,28 @@ include("../includes/mheader.php");
 					<div class="container">
 
 						<header class="major">
-							<h2>Build or Choose Template</h2>
+							<h2>StraboSpot Template Wizard</h2>
 						</header>
 
 						<!-- Content -->
 							<section id="content">
+
+								<!-- Instructions -->
+								<div style="background-color: #3b4252; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
+									<strong>About the StraboSpot Template Wizard:</strong>
+									<div style="margin: 10px 0 0 0; padding-left: 20px;">
+										The StraboSpot Template Wizard allows for the creation of custom, reusable spreadsheet templates suited for importing data into the StraboField
+										database. This interface provides options for the creation of new templates, as well as the use and editing of existing templates. Please
+										use the menu below to get started.
+									</div>
+								</div>
 
 								<form id="templateForm" method="POST" action="design_template.php">
 
 									<!-- Option 1: Choose Existing Template -->
 									<div class="row gtr-uniform">
 										<div class="col-12">
-											<h3>Choose Your Method</h3>
+											<h3>Please Choose:</h3>
 										</div>
 
 										<div class="col-12">
@@ -60,11 +70,11 @@ include("../includes/mheader.php");
 
 										<!-- New Template Section Selection (Hidden Initially) -->
 										<div class="col-12" id="new_section" style="display:none; margin-left: 30px;">
-											<h4>Spot Sections to Include</h4>
+											<h4 style="margin-bottom: 10px;">Spot Sections to Include</h4>
 											<div class="row gtr-uniform gtr-25">
 												<div class="col-12">
 													<input type="checkbox" id="section_spot" name="selected_sections[]" value="spot" checked>
-													<label for="section_spot">Spot Data</label>
+													<label for="section_spot">Spot Data (required)</label>
 												</div>
 												<div class="col-12">
 													<input type="checkbox" id="section_orientation" name="selected_sections[]" value="orientation">
