@@ -1,6 +1,6 @@
 <?php
 /**
- * File: my_field_data.php
+ * File: my_field_data2.php
  * Description: My StraboField Data
  *
  * @package    StraboSpot Web Site
@@ -22,8 +22,10 @@ include("adminkeys.php");
 $username = $_SESSION['username'];
 $apptoken = $uuid = $uuid->v4();
 $db->get_var("DELETE from apptokens WHERE created_on < NOW() - INTERVAL '24 hours'");
-$db->prepare_query("INSERT INTO apptokens (uuid, email) VALUES ($1, $2)", array($apptoken, $username));
+$db->prepare_query("insert into apptokens (uuid, email) values ($1,$2)", array($apptoken, $username));
 $tokencreds = base64_encode($username."*****".$apptoken);
+
+$collaboration_rows = $strabo->getCollaborationProjects();
 
 include("includes/mheader.php");
 
@@ -154,24 +156,25 @@ include("includes/mheader.php");
 if(in_array($userpkey, array(3,8988))){
 
 $collabquery = "
-SELECT 	c.uuid,
+select 	c.uuid,
 	c.strabo_project_id,
 	p.project_name,
 	c.collaboration_level,
 	u.firstname,
-	u.lastname
-FROM
+	u.lastname,
+	u.email
+from
 	project p,
 	collaborators c,
 	users u
-WHERE
-	p.strabo_project_id = c.strabo_project_id AND
-	c.project_owner_user_pkey = u.pkey AND
-	c.accepted = false AND
-	c.collaborator_user_pkey = $1
+where
+	p.strabo_project_id = c.strabo_project_id and
+	c.project_owner_user_pkey = u.pkey and
+	c.accepted = false and
+	c.collaborator_user_pkey = $userpkey
 ";
 
-$collabrows = $db->get_results_prepared($collabquery, array($userpkey));
+$collabrows = $db->get_results($collabquery);
 
 	if(count($collabrows) > 0){
 ?>
@@ -202,10 +205,9 @@ if($clevel == "admin") $showlevel = "Admin";
 ?>
 			<!-- foreach collaboration request -->
 			<tr>
-				<!--<td><?php echo $c->project_name?></td>-->
-				<td>This here is a long project title test.</td>
+				<td><?php echo $c->project_name?></td>
 				<td class="hideSmall"><?php echo $showlevel?> </td>
-				<td class="hideSmall"><?php echo $c->firstname?> <?php echo $c->lastname?> </td>
+				<td class="hideSmall"><?php echo $c->firstname?> <?php echo $c->lastname?> (<?php echo $c->email?>)</td>
 				<td><a href="accept_collaboration?p=<?php echo $c->strabo_project_id?>&u=<?php echo $c->uuid?>" class="button primary fit small">Accept</a></td>
 				<td><a href="deny_collaboration?p=<?php echo $c->strabo_project_id?>&u=<?php echo $c->uuid?>" class="button primary fit small">Deny</a></td>
 			</tr>
@@ -225,6 +227,220 @@ if($clevel == "admin") $showlevel = "Admin";
 ?>
 
 							<div style="text-align:center;"><a href="/new_project">(Add Project)</a></div>
+
+<?php
+if($collaboration_rows != ""){
+?>
+
+						<header class="majorcollab">
+							<h2>Collaborative Projects</h2>
+						</header>
+
+<?php
+	foreach($collaboration_rows as $crow){
+
+		$collab = $crow->collaboration;
+		$collaboration_level = $collab->collaboration_level;
+		$cuuid = $collab->uuid;
+
+		if($collaboration_level == "admin") $showlevel = "Admin";
+		if($collaboration_level == "edit") $showlevel = "Edit";
+		if($collaboration_level == "readonly") $showlevel = "Read Only";
+
+		$owner_row = $db->get_row_prepared("select * from users where pkey = $1", array($collab->project_owner_user_pkey));
+		$owner_name = $owner_row->firstname." ".$owner_row->lastname." <span class=\"hideSmall\">(".$owner_row->email.")</span>";
+
+		$projectrow = $crow->project;
+		$pvals = $projectrow->get("p")->values();
+
+		if($pvals["public"]){
+			$checked = " checked";
+		}else{
+			$checked = "";
+		}
+
+		if($userpkey == 3){
+		}
+
+		$projectid=$pvals["id"];
+		$uploaddate = date("F j, Y, g:i a T", $pvals["uploaddate"]);
+		$projectname = $pvals["desc_project_name"];
+
+		$dropdown_projectname = str_replace("'", "", $projectname);
+
+		$drows=$projectrow->get("d");
+		$datasetcount = count($drows);
+
+		$collabcount = $db->get_var_prepared("select count(*) from collaborators where strabo_project_id = $1 and project_owner_user_pkey = $2 and accepted = true", array($projectid, $userpkey));
+
+?>
+
+								<!-- foreach project -->
+								<section>
+									<h3><?php echo $projectname?></h3>
+
+									<div class="row" style="padding-bottom:10px;">
+										<div class="col-6 col-12-xsmall">
+												<h4>Owned by: <?php echo $owner_name?></h4>
+										</div>
+
+										<div class="col-6 col-12-xsmall">
+												<h4>Collaboration Level: <?php echo $showlevel?> <a href="https://strabospot.org/delete_collaborator?u=<?php echo $cuuid?>" onclick="return confirm('Are you sure you want to stop collaborating on <?php echo $projectname?>?')" style="color: #ed7287;">(Remove)</a></h4>
+										</div>
+									</div>
+
+									<div style="margin-top:-5px" class="myDataTable">
+										<ul class="actions MyDataUL">
+											<li>Last Uploaded: <?php echo $uploaddate?></li>
+											<li>
+												<select class="myDataSelect" id="pdl-<?php echo $projectid?>" onChange="doProjectDownload(<?php echo $projectid?>,'<?php echo $dropdown_projectname?>');">
+													<option value="" style="display:none">Options...</option>
+<?php
+if($collaboration_level == "edit"){
+?>
+													<option value="edit">View/Edit/Add Data</option>
+<?php
+}
+?>
+													<option value="field">Download/Share StraboMobile Project File</option>
+													<option value="json">Download Project in Strabo JSON Format</option>
+													<option value="geologic_units">Download Geologic Units</option>
+												</select>
+											</li>
+											<li>
+<?php
+if($collaboration_level == "admin"){
+?>
+												<span>Public? </span><label class="switch"><input type="checkbox" name="switch_<?php echo $projectid?>" id="switch_<?php echo $projectid?>" onclick="projectPub(<?php echo $projectid?>)"<?php echo $checked?>><div class="slider sliderFront"></div></label>
+<?php
+}
+?>
+											</li>
+<?php
+if($collabcount > 0){
+?>
+											<li>
+											<a href="collaborate?p=<?php echo $projectid?>">(<?php echo $collabcount?> <?php if($collabcount == 1){ echo "Collaborator";}else{echo "Collaborators";}?>)</a>
+											</li>
+<?php
+}
+?>
+										</ul>
+									</div>
+
+								<?php
+								if($drows[0]["d"]){ //If datasets exist
+								?>
+									<div class="table-wrapper">
+										<table class="myDataTable">
+											<thead>
+												<tr>
+													<th></th>
+													<th></th>
+													<th>Dataset Name</th>
+													<th>Spots</th>
+													<th class="hideSmall"></th>
+													<th class="hideSmall">Modified</th>
+												</tr>
+											</thead>
+											<tbody>
+
+											<?php
+											foreach($drows as $d){
+											$featurecount = $d["count"];
+
+											if($d["d"]){
+
+											$dvals = $d["d"]->values();
+
+											}
+
+											$id = $dvals["id"];
+											$featuretype = ucfirst($dvals["featuretype"]);
+											$uploaddate = date("F j, Y, g:i a T P", $dvals["datecreated"]);
+											$modified_timestamp = date("F j, Y, g:i a T", substr($dvals["modified_timestamp"],0,10));
+											$name = $dvals["name"];
+											$collaboratorpkey = $dvals["collaboratorpkey"];
+
+											?>
+
+												<!-- foreach dataset -->
+												<tr>
+													<td>
+<?php
+if($collaboratorpkey == $userpkey || $collaboration_level == "admin"){
+?>
+														<a href="delete_dataset?id=<?php echo $id?>" OnClick="return confirm('Are you sure you want to delete <?php echo $name?>?')">Delete</a>
+<?php
+}else{
+?>
+														<div style="width:55px;">&nbsp;</div>
+<?php
+}
+?>
+													</td>
+													<td>
+														<select class="myDataSelect" id="dl-<?php echo $id?>" onChange="doDownload(<?php echo $id?>);">
+															<option value="" style="display:none;">Download</option>
+															<option value="shapefile">Shapefile</option>
+															<option value="kml">KMZ</option>
+															<option value="xls">XLS</option>
+															<option value="stereonet">Stereonet Mobile</option>
+															<option value="fieldbook">Field Book</option>
+															<option value="strat_sections">Strat Section(s)</option>
+															<option value="download_images">Download Photos</option>
+															<option value="landing_page">Landing Page</option>
+															<option value="sample_list">Sample List</option>
+															<option value="geojson">GeoJSON</option>
+															<option value="image_basemaps">Image Basemaps</option>
+														</select>
+													</td>
+													<td><?php echo $name?></td>
+													<td><?php echo $featurecount?></td>
+													<td class="hideSmall">
+														&nbsp;
+													</td>
+													<td class="hideSmall"><?php echo $modified_timestamp?></td>
+												</tr>
+
+											<?php
+											}
+											?>
+
+											</tbody>
+										</table>
+									</div>
+
+								<?php
+								}else{
+								?>
+									<div class="padLeft padBottom">No datasets exist for this project.</div>
+								<?php
+								}
+								?>
+
+								</section>
+
+<?php
+	}//end foreach project
+
+?>
+
+<?php
+}//end if collaboration_rows
+?>
+
+<?php
+if($collaboration_rows != ""){
+?>
+						<div style="padding-top:200px;"></div>
+						<header class="majorcollab">
+							<h2>My Projects</h2>
+						</header>
+
+<?php
+}
+?>
 
 							<section id="content">
 
@@ -257,6 +473,8 @@ if(count($projectrows)==0){
 		$drows=$projectrow->get("d");
 		$datasetcount = count($drows);
 
+		$collabcount = $db->get_var_prepared("select count(*) from collaborators where strabo_project_id = $1 and project_owner_user_pkey = $2 and accepted = true", array($projectid, $userpkey));
+
 ?>
 
 								<!-- foreach project -->
@@ -286,6 +504,15 @@ if(count($projectrows)==0){
 											<li>
 												<span>Public? </span><label class="switch"><input type="checkbox" name="switch_<?php echo $projectid?>" id="switch_<?php echo $projectid?>" onclick="projectPub(<?php echo $projectid?>)"<?php echo $checked?>><div class="slider sliderFront"></div></label>
 											</li>
+<?php
+if($collabcount > 0){
+?>
+											<li>
+											<a href="collaborate?p=<?php echo $projectid?>">(<?php echo $collabcount?> <?php if($collabcount == 1){ echo "Collaborator";}else{echo "Collaborators";}?>)</a>
+											</li>
+<?php
+}
+?>
 										</ul>
 									</div>
 
@@ -354,7 +581,7 @@ if($userpkey==3 || $userpkey==3){
 													<td><?php echo $featurecount?></td>
 													<td class="hideSmall">
 									<?php
-									if($userpkey == 3867234){
+									if($userpkey == 3){
 									?>
 														<select id="dataset<?php echo $id?>" onchange="devmoveDataset(<?php echo $id?>)" class="myDataSelect">
 									<?php
