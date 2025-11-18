@@ -1,5 +1,5 @@
 #!/usr/bin/php
-
+<?php
 /**
  * File: extauth.php
  * Description: Handles External Authentication for Apache
@@ -47,3 +47,4 @@ if($db->num_rows>0){
 
 exit(1);
 
+?>
