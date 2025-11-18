@@ -3978,7 +3978,7 @@ public function getSpotName($id){
 
 				if($feature_id != ""){
 
-					$querystring = "MATCH (n:Image) WHERE n.id = $feature_id and n.userpkey = $this->userpkey RETURN n.filename;";
+					$querystring = "MATCH (n:Image) WHERE n.id = $feature_id RETURN n.filename;";
 
 					$filename = $this->neodb->get_var($querystring);
 
