@@ -81,18 +81,3 @@ echo json_encode([
     'expires_in' => ACCESS_TOKEN_EXPIRY,
 ]);
 ?>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

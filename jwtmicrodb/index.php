@@ -10,7 +10,6 @@
  * @link       https://strabospot.org
  */
 
-
 set_time_limit(0);
 //Initialize Databases
 include_once "../includes/config.inc.php";
@@ -27,20 +26,6 @@ $user = authenticate();
 
 //OK, we're authorized. Let's move forward
 $userpkey = $user['sub'];
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 //Load Base Controller
 include "./controllers/MyController.php";
