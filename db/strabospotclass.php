@@ -3289,7 +3289,7 @@ public function getSpotName($id){
 	public function getCollaborationProjects(){
 
 		$out = [];
-		$collabrows = $this->db->get_results("select * from collaborators where collaborator_user_pkey = $this->userpkey");
+		$collabrows = $this->db->get_results("select * from collaborators where collaborator_user_pkey = $this->userpkey and disabled is FALSE");
 		foreach($collabrows as $crow){
 			$outrow = new stdClass();
 			$outrow->collaboration = $crow;

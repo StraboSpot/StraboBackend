@@ -168,6 +168,7 @@ from
 	collaborators c,
 	users u
 where
+	c.disabled IS FALSE and
 	p.strabo_project_id = c.strabo_project_id and
 	c.project_owner_user_pkey = u.pkey and
 	c.accepted = false and
@@ -285,7 +286,7 @@ if($collaboration_rows != ""){
 										</div>
 
 										<div class="col-6 col-12-xsmall">
-												<h4>Collaboration Level: <?php echo $showlevel?> <a href="https://strabospot.org/delete_collaborator?u=<?php echo $cuuid?>" onclick="return confirm('Are you sure you want to stop collaborating on <?php echo $projectname?>?')" style="color: #ed7287;">(Remove)</a></h4>
+												<h4>Collaboration Level: <?php echo $showlevel?> <a href="/delete_collaborator?u=<?php echo $cuuid?>" onclick="return confirm('Are you sure you want to stop collaborating on <?php echo $projectname?>?')" style="color: #ed7287;">(Remove)</a></h4>
 										</div>
 									</div>
 
@@ -473,7 +474,7 @@ if(count($projectrows)==0){
 		$drows=$projectrow->get("d");
 		$datasetcount = count($drows);
 
-		$collabcount = $db->get_var_prepared("select count(*) from collaborators where strabo_project_id = $1 and project_owner_user_pkey = $2 and accepted = true", array($projectid, $userpkey));
+		$collabcount = $db->get_var_prepared("select count(*) from collaborators where strabo_project_id = $1 and project_owner_user_pkey = $2 and accepted = true and disabled = false", array($projectid, $userpkey));
 
 ?>
 

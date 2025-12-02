@@ -65,7 +65,7 @@ $rawinput = file_get_contents("php://input");
 
 if(file_exists("log.txt")){
 	if($_SERVER["REQUEST_URI"] != "/db/imagexxx"){
-		if($username=="jasonash@ku.edu" || $username=="riplangford@gmail.comdd" || $username=="nathan.novak79@gmail.comdd"){
+		if($username=="jasonash@ku.edu" || $username=="jasonash1@gmail.com" || $username=="nathan.novak79@gmail.comdd"){
 
 			file_put_contents ("log.txt", "\n\n************************************************************************************************************************\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "REQUEST: ".ucfirst($request->url_elements[1])."\n\n", FILE_APPEND);

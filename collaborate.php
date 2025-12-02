@@ -30,7 +30,7 @@ $rows = $db->get_results_prepared("
 			uuid,
 			(SELECT email FROM users WHERE pkey = collaborator_user_pkey) as email
 	FROM collaborators
-	WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2
+	WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 and disabled = false
 	ORDER BY email
 ", array($project_id, $userpkey));
 
@@ -126,11 +126,21 @@ if($row->accepted == "t"){
 }
 ?>
 
-		<div class="medHeader" style="padding-top:0px;padding-bottom:20px;text-align:center;">
-			<div style="padding-top:30px;">
-			<a href="invite_collaborators?p=<?php echo $project_id?>" class="button primary">Invite Collaborators</a>
-			</div>
 
+
+		<div class="row aln-center padtop">
+			<div class="col-3 col-6-medium col-12-xsmall">
+				<ul class="actions stacked">
+					<li><a href="invite_collaborators?p=<?php echo $project_id?>" class="button primary fit green">Invite Collaborators</a></li>
+				</ul>
+			</div>
+			<?php if(count($rows) > 0){?>
+			<div class="col-3 col-6-medium col-12-xsmall">
+				<ul class="actions stacked">
+					<li><a href="halt_collaboration?p=<?php echo $project_id?>" class="button primary fit" onclick="return confirm('Are you sure you want to stop collaborating on this project?\nCollaborators will no longer be able to work on this project.')">Halt Collaboration</a></li>
+				</ul>
+			</div>
+			<?php } ?>
 		</div>
 
 					<div class="bottomSpacer"></div>

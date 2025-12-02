@@ -7,6 +7,14 @@
 	Free for personal and commercial use under the CCA 3.0 license (html5up.net/license)
 */
 
+/* debug */
+/*
+* {
+  outline: 1px solid red;
+  background-color: red;
+}
+*/
+
 html, body, div, span, applet, object,
 iframe, h1, h2, h3, h4, h5, h6, p, blockquote,
 pre, a, abbr, acronym, address, big, cite,
@@ -690,6 +698,10 @@ input, select, textarea {
 		flex-wrap: wrap;
 		box-sizing: border-box;
 		align-items: stretch;
+	}
+	
+	.row.padtop {
+		margin-top: 1em;
 	}
 
 		.row > * {
@@ -3827,6 +3839,10 @@ input:checked + .slider:before {
 }
 
 .button.green {
+	background-color: #30ae4f;
+}
+
+.green {
 	background-color: #30ae4f;
 }
 
