@@ -1,14 +1,29 @@
 <template>
-  <div class="modal-overlay" @click.self="handleClose">
-    <div class="modal-container" :class="{ 'modal-container--wide': hasForm }">
+  <v-dialog
+    :model-value="true"
+    @update:model-value="handleClose"
+    :max-width="hasForm ? 1000 : 700"
+    scrollable
+    persistent
+  >
+    <v-card>
       <!-- Modal Header -->
-      <div class="modal-header">
-        <h2 class="modal-title">{{ sectionTitle }}</h2>
-        <button @click="handleClose" class="close-button">×</button>
-      </div>
+      <v-card-title class="d-flex justify-space-between align-center pa-4">
+        <span class="text-h6 text-uppercase">{{ sectionTitle }}</span>
+        <v-btn
+          icon
+          size="small"
+          color="primary"
+          @click="handleClose"
+        >
+          <v-icon>mdi-close</v-icon>
+        </v-btn>
+      </v-card-title>
+
+      <v-divider />
 
       <!-- Modal Content -->
-      <div class="modal-content">
+      <v-card-text class="pa-4">
         <!-- Sample Form -->
         <SampleForm
           v-if="section === 'sample' && !readonly"
@@ -18,43 +33,45 @@
         />
 
         <!-- Sample View (readonly) -->
-        <div v-else-if="section === 'sample' && readonly" class="readonly-content">
+        <div v-else-if="section === 'sample' && readonly">
           <SampleView :data="data" />
-          <div class="flex justify-center mt-6">
-            <button @click="handleClose" class="btn-secondary">Close</button>
+          <div class="d-flex justify-center mt-6">
+            <v-btn variant="outlined" @click="handleClose">Close</v-btn>
           </div>
         </div>
 
         <!-- Placeholder for other sections -->
-        <div v-else class="placeholder-content">
-          <p class="text-lg mb-4">{{ sectionTitle }} Form</p>
-          <p class="text-strabo-text-secondary mb-6">
+        <div v-else class="text-center pa-4">
+          <p class="text-h6 mb-4">{{ sectionTitle }} Form</p>
+          <p class="text-medium-emphasis mb-6">
             This section will contain the full {{ sectionTitle.toLowerCase() }} form with all LAPS-compliant fields.
           </p>
 
           <!-- Show current data if any -->
-          <div v-if="hasData" class="data-preview">
-            <h3 class="text-sm font-semibold mb-2 text-strabo-text-secondary">Current Data:</h3>
-            <pre class="bg-strabo-bg-primary p-3 rounded text-xs overflow-auto max-h-64">{{ JSON.stringify(data, null, 2) }}</pre>
+          <div v-if="hasData" class="text-left">
+            <div class="text-subtitle-2 mb-2">Current Data:</div>
+            <v-sheet rounded class="pa-3 overflow-auto" style="max-height: 256px; background: rgba(0,0,0,0.2)">
+              <pre class="text-caption">{{ JSON.stringify(data, null, 2) }}</pre>
+            </v-sheet>
           </div>
 
-          <p class="text-sm text-strabo-text-secondary mt-4 italic">
+          <p class="text-caption text-medium-emphasis mt-4 font-italic">
             Full form implementation coming soon...
           </p>
 
           <!-- Placeholder Footer for non-sample sections -->
-          <div class="flex justify-center gap-3 mt-6">
-            <button @click="handleClose" class="btn-secondary">
+          <div class="d-flex justify-center ga-3 mt-6">
+            <v-btn variant="outlined" @click="handleClose">
               {{ readonly ? 'Close' : 'Cancel' }}
-            </button>
-            <button v-if="!readonly" @click="handleSave" class="btn-primary">
+            </v-btn>
+            <v-btn v-if="!readonly" color="primary" @click="handleSave">
               Save {{ sectionTitle }}
-            </button>
+            </v-btn>
           </div>
         </div>
-      </div>
-    </div>
-  </div>
+      </v-card-text>
+    </v-card>
+  </v-dialog>
 </template>
 
 <script setup>
@@ -116,92 +133,3 @@ const handleFormSubmit = (formData) => {
   emit('save', props.section, formData)
 }
 </script>
-
-<style scoped>
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background-color: #1a1a1a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 9999;
-  padding: 1rem;
-}
-
-.modal-container {
-  background-color: var(--strabo-bg-secondary);
-  border: 1px solid var(--strabo-border);
-  border-radius: 0.5rem;
-  width: 100%;
-  max-width: 700px;
-  max-height: 90vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-}
-
-.modal-container--wide {
-  max-width: 950px;
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--strabo-border);
-}
-
-.modal-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  color: var(--strabo-text-primary);
-  text-transform: uppercase;
-  font-family: 'Raleway', sans-serif;
-}
-
-.close-button {
-  width: 2rem;
-  height: 2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background-color: #f4511e;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  font-size: 1.5rem;
-  line-height: 1;
-  cursor: pointer;
-  transition: background-color 0.2s;
-}
-
-.close-button:hover {
-  background-color: #d84315;
-}
-
-.modal-content {
-  flex: 1;
-  overflow-y: auto;
-  padding: 1.5rem;
-}
-
-.placeholder-content {
-  text-align: center;
-  padding: 2rem;
-}
-
-.data-preview {
-  text-align: left;
-  margin-top: 1rem;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: center;
-  gap: 1rem;
-  padding: 1rem 1.5rem;
-  border-top: 1px solid var(--strabo-border);
-}
-</style>

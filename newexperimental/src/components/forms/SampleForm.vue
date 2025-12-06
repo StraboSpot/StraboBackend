@@ -1,470 +1,446 @@
 <template>
-  <form @submit.prevent="handleSubmit" class="sample-form">
+  <v-form @submit.prevent="handleSubmit" class="sample-form">
     <!-- Basic Information -->
-    <CollapsibleSection title="Basic Information" :default-open="true">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label for="sampleName" class="form-label">Sample Name *</label>
-          <input
-            id="sampleName"
-            v-model="form.name"
-            type="text"
-            class="form-input"
-            required
-            placeholder="e.g., Carrara Marble #1"
-          />
-        </div>
+    <v-expansion-panels v-model="openPanels" multiple>
+      <v-expansion-panel value="basic">
+        <v-expansion-panel-title>Basic Information</v-expansion-panel-title>
+        <v-expansion-panel-text>
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.name"
+                label="Sample Name *"
+                placeholder="e.g., Carrara Marble #1"
+                required
+                :rules="[v => !!v || 'Sample name is required']"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.id"
+                label="Sample ID"
+                placeholder="Internal sample identifier"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.igsn"
+                label="IGSN"
+                placeholder="International Geo Sample Number"
+              />
+            </v-col>
+            <v-col cols="12">
+              <v-textarea
+                v-model="form.description"
+                label="Description"
+                placeholder="Brief description of the sample..."
+                rows="3"
+              />
+            </v-col>
+          </v-row>
 
-        <div>
-          <label for="sampleId" class="form-label">Sample ID</label>
-          <input
-            id="sampleId"
-            v-model="form.id"
-            type="text"
-            class="form-input"
-            placeholder="Internal sample identifier"
-          />
-        </div>
+          <!-- Parent Sample -->
+          <v-divider class="my-4" />
+          <div class="text-subtitle-2 mb-3">Parent Sample (Optional)</div>
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.parent.name"
+                label="Parent Name"
+                placeholder="Parent sample name"
+                density="compact"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.parent.id"
+                label="Parent ID"
+                placeholder="Parent sample ID"
+                density="compact"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.parent.igsn"
+                label="Parent IGSN"
+                placeholder="Parent IGSN"
+                density="compact"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.parent.description"
+                label="Parent Description"
+                placeholder="Parent description"
+                density="compact"
+              />
+            </v-col>
+          </v-row>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
 
-        <div>
-          <label for="igsn" class="form-label">IGSN</label>
-          <input
-            id="igsn"
-            v-model="form.igsn"
-            type="text"
-            class="form-input"
-            placeholder="International Geo Sample Number"
-          />
-        </div>
+      <!-- Material -->
+      <v-expansion-panel value="material">
+        <v-expansion-panel-title>Material</v-expansion-panel-title>
+        <v-expansion-panel-text>
+          <!-- Material Type -->
+          <div class="text-subtitle-2 mb-3">Material Type</div>
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-select
+                v-model="form.material.material.type"
+                :items="MATERIAL_TYPES"
+                label="Type"
+                placeholder="Select type..."
+                clearable
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.material.material.name"
+                label="Name"
+                placeholder="e.g., Carrara Marble"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.material.material.state"
+                label="State"
+                placeholder="e.g., Homogeneous"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.material.material.note"
+                label="Note"
+                placeholder="Additional notes"
+              />
+            </v-col>
+          </v-row>
 
-        <div class="md:col-span-2">
-          <label for="description" class="form-label">Description</label>
-          <textarea
-            id="description"
-            v-model="form.description"
-            class="form-textarea"
-            rows="3"
-            placeholder="Brief description of the sample..."
-          ></textarea>
-        </div>
-      </div>
-
-      <!-- Parent Sample -->
-      <div class="mt-4 pt-4 border-t border-strabo-border">
-        <h4 class="text-sm font-semibold text-strabo-text-primary mb-3">Parent Sample (Optional)</h4>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="parentName" class="form-label text-xs">Parent Name</label>
-            <input
-              id="parentName"
-              v-model="form.parent.name"
-              type="text"
-              class="form-input"
-              placeholder="Parent sample name"
-            />
+          <!-- Mineralogy / Composition -->
+          <v-divider class="my-4" />
+          <div class="text-subtitle-2 mb-2">Mineralogy / Composition</div>
+          <div class="text-caption text-medium-emphasis mb-3">
+            Define the mineral phases and their proportions in this sample.
           </div>
-          <div>
-            <label for="parentId" class="form-label text-xs">Parent ID</label>
-            <input
-              id="parentId"
-              v-model="form.parent.id"
-              type="text"
-              class="form-input"
-              placeholder="Parent sample ID"
-            />
-          </div>
-          <div>
-            <label for="parentIgsn" class="form-label text-xs">Parent IGSN</label>
-            <input
-              id="parentIgsn"
-              v-model="form.parent.igsn"
-              type="text"
-              class="form-input"
-              placeholder="Parent IGSN"
-            />
-          </div>
-          <div>
-            <label for="parentDescription" class="form-label text-xs">Parent Description</label>
-            <input
-              id="parentDescription"
-              v-model="form.parent.description"
-              type="text"
-              class="form-input"
-              placeholder="Parent description"
-            />
-          </div>
-        </div>
-      </div>
-    </CollapsibleSection>
 
-    <!-- Material -->
-    <CollapsibleSection title="Material" class="mt-4">
-      <!-- Material Type (nested object: type, name, state, note) -->
-      <h4 class="text-sm font-semibold text-strabo-text-primary mb-3">Material Type</h4>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <div>
-          <label for="materialType" class="form-label text-xs">Type</label>
-          <select id="materialType" v-model="form.material.material.type" class="form-select">
-            <option value="">Select type...</option>
-            <option v-for="t in MATERIAL_TYPES" :key="t" :value="t">{{ t }}</option>
-          </select>
-        </div>
-        <div>
-          <label for="materialName" class="form-label text-xs">Name</label>
-          <input
-            id="materialName"
-            v-model="form.material.material.name"
-            type="text"
-            class="form-input"
-            placeholder="e.g., Carrara Marble"
-          />
-        </div>
-        <div>
-          <label for="materialState" class="form-label text-xs">State</label>
-          <input
-            id="materialState"
-            v-model="form.material.material.state"
-            type="text"
-            class="form-input"
-            placeholder="e.g., Homogeneous"
-          />
-        </div>
-        <div>
-          <label for="materialNote" class="form-label text-xs">Note</label>
-          <input
-            id="materialNote"
-            v-model="form.material.material.note"
-            type="text"
-            class="form-input"
-            placeholder="Additional notes"
-          />
-        </div>
-      </div>
-
-      <!-- Mineralogy / Composition -->
-      <div class="mt-6">
-        <h4 class="text-sm font-semibold text-strabo-text-primary mb-3">Mineralogy / Composition</h4>
-        <p class="text-xs text-strabo-text-secondary mb-3">
-          Define the mineral phases and their proportions in this sample.
-        </p>
-
-        <div v-if="form.material.composition.length > 0" class="space-y-3 mb-4">
-          <div
+          <v-card
             v-for="(phase, idx) in form.material.composition"
             :key="idx"
-            class="p-3 bg-strabo-bg-tertiary rounded"
+            variant="outlined"
+            class="mb-3 pa-3"
           >
-            <div class="flex justify-between items-start mb-2">
-              <span class="text-xs font-medium text-strabo-text-secondary">Phase {{ idx + 1 }}</span>
-              <button
-                type="button"
+            <div class="d-flex justify-space-between align-center mb-2">
+              <span class="text-caption">Phase {{ idx + 1 }}</span>
+              <v-btn
+                size="small"
+                color="error"
+                variant="text"
                 @click="removePhase(idx)"
-                class="text-strabo-error hover:underline text-xs"
               >
                 Remove
-              </button>
+              </v-btn>
             </div>
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <div>
-                <label class="form-label text-xs">Mineral</label>
-                <select v-model="phase.mineral" class="form-select text-sm">
-                  <option value="">Select...</option>
-                  <option v-for="m in MINERAL_TYPES" :key="m" :value="m">{{ m }}</option>
-                </select>
-              </div>
-              <div>
-                <label class="form-label text-xs">Fraction</label>
-                <input v-model="phase.fraction" type="text" class="form-input text-sm" placeholder="e.g., 0.99" />
-              </div>
-              <div>
-                <label class="form-label text-xs">Unit</label>
-                <select v-model="phase.unit" class="form-select text-sm">
-                  <option value="">Select...</option>
-                  <option v-for="u in FRACTION_UNITS" :key="u" :value="u">{{ u }}</option>
-                </select>
-              </div>
-              <div>
-                <label class="form-label text-xs">Grain Size (um)</label>
-                <input v-model="phase.grainsize" type="text" class="form-input text-sm" placeholder="e.g., 150" />
-              </div>
-            </div>
-          </div>
-        </div>
+            <v-row dense>
+              <v-col cols="6" md="3">
+                <v-select
+                  v-model="phase.mineral"
+                  :items="MINERAL_TYPES"
+                  label="Mineral"
+                  density="compact"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="6" md="3">
+                <v-text-field
+                  v-model="phase.fraction"
+                  label="Fraction"
+                  placeholder="e.g., 0.99"
+                  density="compact"
+                />
+              </v-col>
+              <v-col cols="6" md="3">
+                <v-select
+                  v-model="phase.unit"
+                  :items="FRACTION_UNITS"
+                  label="Unit"
+                  density="compact"
+                />
+              </v-col>
+              <v-col cols="6" md="3">
+                <v-text-field
+                  v-model="phase.grainsize"
+                  label="Grain Size (um)"
+                  placeholder="e.g., 150"
+                  density="compact"
+                />
+              </v-col>
+            </v-row>
+          </v-card>
 
-        <button
-          type="button"
-          @click="addPhase"
-          class="btn-secondary text-sm"
-        >
-          + Add Mineral Phase
-        </button>
-      </div>
+          <v-btn
+            variant="outlined"
+            size="small"
+            @click="addPhase"
+            prepend-icon="mdi-plus"
+          >
+            Add Mineral Phase
+          </v-btn>
 
-      <!-- Provenance -->
-      <div class="mt-6">
-        <h4 class="text-sm font-semibold text-strabo-text-primary mb-3">Provenance</h4>
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label for="provFormation" class="form-label text-xs">Formation</label>
-            <input
-              id="provFormation"
-              v-model="form.material.provenance.formation"
-              type="text"
-              class="form-input"
-              placeholder="e.g., Carrara (Italy)"
-            />
-          </div>
-          <div>
-            <label for="provMember" class="form-label text-xs">Member</label>
-            <input
-              id="provMember"
-              v-model="form.material.provenance.member"
-              type="text"
-              class="form-input"
-              placeholder="e.g., Hettangian"
-            />
-          </div>
-          <div>
-            <label for="provSubmember" class="form-label text-xs">Submember</label>
-            <input
-              id="provSubmember"
-              v-model="form.material.provenance.submember"
-              type="text"
-              class="form-input"
-              placeholder="Submember name"
-            />
-          </div>
-          <div>
-            <label for="provSource" class="form-label text-xs">Source</label>
-            <input
-              id="provSource"
-              v-model="form.material.provenance.source"
-              type="text"
-              class="form-input"
-              placeholder="e.g., Quarry"
-            />
-          </div>
-        </div>
+          <!-- Provenance -->
+          <v-divider class="my-4" />
+          <div class="text-subtitle-2 mb-3">Provenance</div>
+          <v-row>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.material.provenance.formation"
+                label="Formation"
+                placeholder="e.g., Carrara (Italy)"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.material.provenance.member"
+                label="Member"
+                placeholder="e.g., Hettangian"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.material.provenance.submember"
+                label="Submember"
+                placeholder="Submember name"
+              />
+            </v-col>
+            <v-col cols="12" md="6">
+              <v-text-field
+                v-model="form.material.provenance.source"
+                label="Source"
+                placeholder="e.g., Quarry"
+              />
+            </v-col>
+          </v-row>
 
-        <!-- Location (nested within provenance) -->
-        <div class="mt-4 pt-4 border-t border-strabo-border">
-          <h5 class="text-xs font-semibold text-strabo-text-secondary mb-3 uppercase">Location</h5>
-          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-            <div>
-              <label class="form-label text-xs">Street</label>
-              <input
+          <!-- Location -->
+          <div class="text-overline mt-4 mb-2">Location</div>
+          <v-row dense>
+            <v-col cols="6" md="3">
+              <v-text-field
                 v-model="form.material.provenance.location.street"
-                type="text"
-                class="form-input"
-                placeholder="Street name"
+                label="Street"
+                density="compact"
               />
-            </div>
-            <div>
-              <label class="form-label text-xs">Building</label>
-              <input
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
                 v-model="form.material.provenance.location.building"
-                type="text"
-                class="form-input"
-                placeholder="Building"
+                label="Building"
+                density="compact"
               />
-            </div>
-            <div>
-              <label class="form-label text-xs">City</label>
-              <input
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
                 v-model="form.material.provenance.location.city"
-                type="text"
-                class="form-input"
-                placeholder="City"
+                label="City"
+                density="compact"
               />
-            </div>
-            <div>
-              <label class="form-label text-xs">State/Region</label>
-              <input
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
                 v-model="form.material.provenance.location.state"
-                type="text"
-                class="form-input"
-                placeholder="State/Region"
+                label="State/Region"
+                density="compact"
               />
-            </div>
-            <div>
-              <label class="form-label text-xs">Postcode</label>
-              <input
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
                 v-model="form.material.provenance.location.postcode"
-                type="text"
-                class="form-input"
-                placeholder="Postal code"
+                label="Postcode"
+                density="compact"
               />
-            </div>
-            <div>
-              <label class="form-label text-xs">Country</label>
-              <input
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
                 v-model="form.material.provenance.location.country"
-                type="text"
-                class="form-input"
-                placeholder="Country"
+                label="Country"
+                density="compact"
               />
-            </div>
-            <div>
-              <label class="form-label text-xs">Latitude</label>
-              <input
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
                 v-model="form.material.provenance.location.latitude"
-                type="text"
-                class="form-input"
+                label="Latitude"
                 placeholder="e.g., 44.0793"
+                density="compact"
               />
-            </div>
-            <div>
-              <label class="form-label text-xs">Longitude</label>
-              <input
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
                 v-model="form.material.provenance.location.longitude"
-                type="text"
-                class="form-input"
+                label="Longitude"
                 placeholder="e.g., 10.0979"
+                density="compact"
               />
-            </div>
-          </div>
-        </div>
-      </div>
+            </v-col>
+          </v-row>
 
-      <!-- Texture -->
-      <div class="mt-6">
-        <h4 class="text-sm font-semibold text-strabo-text-primary mb-3">Texture</h4>
-        <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <div>
-            <label for="bedding" class="form-label text-xs">Bedding</label>
-            <input
-              id="bedding"
-              v-model="form.material.texture.bedding"
-              type="text"
-              class="form-input"
-              placeholder="e.g., no bedding"
-            />
-          </div>
-          <div>
-            <label for="lineation" class="form-label text-xs">Lineation</label>
-            <input
-              id="lineation"
-              v-model="form.material.texture.lineation"
-              type="text"
-              class="form-input"
-              placeholder="e.g., no apparent lineation"
-            />
-          </div>
-          <div>
-            <label for="foliation" class="form-label text-xs">Foliation</label>
-            <input
-              id="foliation"
-              v-model="form.material.texture.foliation"
-              type="text"
-              class="form-input"
-              placeholder="e.g., no foliation"
-            />
-          </div>
-          <div>
-            <label for="fault" class="form-label text-xs">Fault</label>
-            <input
-              id="fault"
-              v-model="form.material.texture.fault"
-              type="text"
-              class="form-input"
-              placeholder="e.g., no faults"
-            />
-          </div>
-        </div>
-      </div>
-    </CollapsibleSection>
+          <!-- Texture -->
+          <v-divider class="my-4" />
+          <div class="text-subtitle-2 mb-3">Texture</div>
+          <v-row>
+            <v-col cols="6" md="3">
+              <v-text-field
+                v-model="form.material.texture.bedding"
+                label="Bedding"
+                placeholder="e.g., no bedding"
+              />
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
+                v-model="form.material.texture.lineation"
+                label="Lineation"
+                placeholder="e.g., no apparent lineation"
+              />
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
+                v-model="form.material.texture.foliation"
+                label="Foliation"
+                placeholder="e.g., no foliation"
+              />
+            </v-col>
+            <v-col cols="6" md="3">
+              <v-text-field
+                v-model="form.material.texture.fault"
+                label="Fault"
+                placeholder="e.g., no faults"
+              />
+            </v-col>
+          </v-row>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
 
-    <!-- Parameters -->
-    <CollapsibleSection title="Parameters" class="mt-4">
-      <p class="text-sm text-strabo-text-secondary mb-4">
-        Pre-experimental sample parameters (weight, porosity, density, etc.).
-      </p>
-
-      <div v-if="form.parameters.length > 0" class="space-y-4 mb-4">
-        <div
-          v-for="(param, idx) in form.parameters"
-          :key="idx"
-          class="p-4 bg-strabo-bg-tertiary rounded"
-        >
-          <div class="flex justify-between items-start mb-3">
-            <span class="text-sm font-medium text-strabo-text-primary">Parameter {{ idx + 1 }}</span>
-            <button
-              type="button"
-              @click="removeParameter(idx)"
-              class="text-strabo-error hover:underline text-sm"
-            >
-              Remove
-            </button>
+      <!-- Parameters -->
+      <v-expansion-panel value="parameters">
+        <v-expansion-panel-title>Parameters</v-expansion-panel-title>
+        <v-expansion-panel-text>
+          <div class="text-caption text-medium-emphasis mb-4">
+            Pre-experimental sample parameters (weight, porosity, density, etc.).
           </div>
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div class="col-span-2 md:col-span-1">
-              <label class="form-label text-xs">Variable</label>
-              <select v-model="param.control" class="form-select text-sm">
-                <option value="">Select...</option>
-                <option v-for="t in SAMPLE_PARAMETER_TYPES" :key="t" :value="t">{{ t }}</option>
-              </select>
+
+          <v-card
+            v-for="(param, idx) in form.parameters"
+            :key="idx"
+            variant="outlined"
+            class="mb-3 pa-3"
+          >
+            <div class="d-flex justify-space-between align-center mb-2">
+              <span class="text-body-2 font-weight-medium">Parameter {{ idx + 1 }}</span>
+              <v-btn
+                size="small"
+                color="error"
+                variant="text"
+                @click="removeParameter(idx)"
+              >
+                Remove
+              </v-btn>
             </div>
-            <div>
-              <label class="form-label text-xs">Value</label>
-              <input v-model="param.value" type="text" class="form-input text-sm" />
-            </div>
-            <div>
-              <label class="form-label text-xs">Unit</label>
-              <select v-model="param.unit" class="form-select text-sm">
-                <option value="">Select...</option>
-                <option v-for="u in UNIT_TYPES" :key="u" :value="u">{{ u }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="form-label text-xs">Prefix</label>
-              <select v-model="param.prefix" class="form-select text-sm">
-                <option value="">Select...</option>
-                <option value="-">-</option>
-                <option v-for="p in UNIT_PREFIXES" :key="p" :value="p">{{ p }}</option>
-              </select>
-            </div>
-            <div class="col-span-2 md:col-span-5">
-              <label class="form-label text-xs">Note (Measurement and Treatment)</label>
-              <input v-model="param.note" type="text" class="form-input text-sm" placeholder="Optional note" />
-            </div>
+            <v-row dense>
+              <v-col cols="12" md="3">
+                <v-select
+                  v-model="param.control"
+                  :items="SAMPLE_PARAMETER_TYPES"
+                  label="Variable"
+                  density="compact"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="6" md="2">
+                <v-text-field
+                  v-model="param.value"
+                  label="Value"
+                  density="compact"
+                />
+              </v-col>
+              <v-col cols="6" md="2">
+                <v-select
+                  v-model="param.unit"
+                  :items="UNIT_TYPES"
+                  label="Unit"
+                  density="compact"
+                  clearable
+                />
+              </v-col>
+              <v-col cols="6" md="2">
+                <v-select
+                  v-model="param.prefix"
+                  :items="prefixOptions"
+                  label="Prefix"
+                  density="compact"
+                />
+              </v-col>
+              <v-col cols="12">
+                <v-text-field
+                  v-model="param.note"
+                  label="Note (Measurement and Treatment)"
+                  placeholder="Optional note"
+                  density="compact"
+                />
+              </v-col>
+            </v-row>
+          </v-card>
+
+          <v-btn
+            variant="outlined"
+            size="small"
+            @click="addParameter"
+            prepend-icon="mdi-plus"
+          >
+            Add Parameter
+          </v-btn>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+
+      <!-- Documents -->
+      <v-expansion-panel value="documents">
+        <v-expansion-panel-title>Documents</v-expansion-panel-title>
+        <v-expansion-panel-text>
+          <div class="text-caption text-medium-emphasis mb-4">
+            Upload sample images, thin section photos, or other documentation.
           </div>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        @click="addParameter"
-        class="btn-secondary text-sm"
-      >
-        + Add Parameter
-      </button>
-    </CollapsibleSection>
-
-    <!-- Documents (placeholder for now) -->
-    <CollapsibleSection title="Documents" class="mt-4">
-      <p class="text-sm text-strabo-text-secondary mb-4">
-        Upload sample images, thin section photos, or other documentation.
-      </p>
-      <div class="text-center py-8 border-2 border-dashed border-strabo-border rounded">
-        <p class="text-strabo-text-secondary">Document upload coming soon</p>
-      </div>
-    </CollapsibleSection>
+          <v-sheet
+            rounded
+            class="d-flex align-center justify-center pa-8"
+            style="border: 2px dashed rgba(255,255,255,0.2)"
+          >
+            <span class="text-medium-emphasis">Document upload coming soon</span>
+          </v-sheet>
+        </v-expansion-panel-text>
+      </v-expansion-panel>
+    </v-expansion-panels>
 
     <!-- Actions -->
-    <div class="flex justify-center gap-3 mt-6">
-      <button type="button" class="btn-secondary" @click="$emit('cancel')">
+    <div class="d-flex justify-center ga-3 mt-6">
+      <v-btn
+        variant="outlined"
+        @click="$emit('cancel')"
+      >
         Cancel
-      </button>
-      <button type="submit" class="btn-primary" :disabled="!isValid">
+      </v-btn>
+      <v-btn
+        type="submit"
+        color="primary"
+        :disabled="!isValid"
+      >
         Save Sample
-      </button>
+      </v-btn>
     </div>
-  </form>
+  </v-form>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
-import CollapsibleSection from '@/components/CollapsibleSection.vue'
 import {
   MATERIAL_TYPES,
   MINERAL_TYPES,
@@ -482,6 +458,10 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['submit', 'cancel'])
+
+const openPanels = ref(['basic'])
+
+const prefixOptions = computed(() => ['-', ...UNIT_PREFIXES])
 
 const createEmptyForm = () => ({
   name: '',
@@ -623,37 +603,5 @@ function handleSubmit() {
 .sample-form {
   max-width: 900px;
   margin: 0 auto;
-}
-
-.form-label {
-  display: block;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
-  color: var(--strabo-text-primary);
-  font-size: 0.875rem;
-}
-
-.form-input,
-.form-select,
-.form-textarea {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  background-color: var(--strabo-bg-primary);
-  border: 1px solid var(--strabo-border);
-  border-radius: 0.375rem;
-  color: var(--strabo-text-primary);
-}
-
-.form-input:focus,
-.form-select:focus,
-.form-textarea:focus {
-  outline: none;
-  border-color: var(--strabo-accent);
-  box-shadow: 0 0 0 2px rgba(244, 81, 30, 0.2);
-}
-
-.form-textarea {
-  resize: vertical;
-  min-height: 80px;
 }
 </style>
