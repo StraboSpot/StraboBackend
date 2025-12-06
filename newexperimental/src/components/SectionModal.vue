@@ -121,7 +121,7 @@ const handleFormSubmit = (formData) => {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background-color: rgba(0, 0, 0, 0.9);
+  background-color: #1a1a1a;
   display: flex;
   align-items: center;
   justify-content: center;
