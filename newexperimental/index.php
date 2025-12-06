@@ -6,15 +6,15 @@
  * It wraps the Vue.js SPA with the site header and footer.
  */
 
-// Session check - require login
-require_once("../includes/sessioncheck.php");
+// Change to root directory for proper include path resolution
+chdir('..');
 
-// Get user info from session
-$userpkey = $_SESSION['userpkey'];
-$username = $_SESSION['username'];
+// Include site header (handles session check internally)
+include("includes/mheader.php");
 
-// Include site header
-include("../includes/mheader.php");
+// Get user info from session (set by mheader.php)
+$userpkey = isset($_SESSION['userpkey']) ? $_SESSION['userpkey'] : null;
+$username = isset($_SESSION['username']) ? $_SESSION['username'] : '';
 ?>
 
 <!-- Vue App Container -->
@@ -45,5 +45,5 @@ include("../includes/mheader.php");
 
 <?php
 // Include site footer
-include("../includes/mfooter.php");
+include("includes/mfooter.php");
 ?>
