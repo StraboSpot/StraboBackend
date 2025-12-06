@@ -119,20 +119,81 @@ export const projectService = {
 
 // Experiment Service
 export const experimentService = {
-  list: () => api.get('/myexperiments'),
+  // Get single experiment with all LAPS data
+  get: async (e) => {
+    const response = await fetch(`/newexperimental/api/get_experiment.php?id=${e}`, {
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to fetch experiment')
+    }
+    return response.json()
+  },
 
-  get: (e) => api.get(`/experiment/${e}`),
+  // Create new experiment
+  create: async (ppk, data = {}) => {
+    const response = await fetch('/newexperimental/api/save_experiment.php', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        project_pkey: ppk,
+        experiment_id: data.experiment_id || '',
+        data: data.data || {}
+      })
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to create experiment')
+    }
+    return response.json()
+  },
 
-  create: (ppk, data) => api.post('/experiment', {
-    project_pkey: ppk,
-    ...data
-  }),
+  // Update existing experiment
+  update: async (e, data) => {
+    const response = await fetch('/newexperimental/api/save_experiment.php', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pkey: e,
+        experiment_id: data.experiment_id || '',
+        data: data.data || {}
+      })
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to update experiment')
+    }
+    return response.json()
+  },
 
-  update: (e, data) => api.put(`/experiment/${e}`, data),
+  // Delete experiment
+  delete: async (e) => {
+    const response = await fetch(`/newexperimental/api/delete_experiment.php?id=${e}`, {
+      method: 'POST',
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to delete experiment')
+    }
+    return response.json()
+  },
 
-  delete: (e) => api.delete(`/experiment/${e}`),
-
-  download: (e) => api.get(`/experiment/${e}/download`)
+  // Download experiment as JSON
+  download: (e) => {
+    window.location.href = `/newexperimental/api/download_experiment.php?id=${e}`
+  }
 }
 
 // Facility Service

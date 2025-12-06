@@ -9,6 +9,7 @@ const DeleteProject = () => import('@/views/project/DeleteProject.vue')
 const AddExperiment = () => import('@/views/experiment/AddExperiment.vue')
 const EditExperiment = () => import('@/views/experiment/EditExperiment.vue')
 const ViewExperiment = () => import('@/views/experiment/ViewExperiment.vue')
+const DeleteExperiment = () => import('@/views/experiment/DeleteExperiment.vue')
 const AddFacility = () => import('@/views/facility/AddFacility.vue')
 const EditFacility = () => import('@/views/facility/EditFacility.vue')
 const ViewFacility = () => import('@/views/facility/ViewFacility.vue')
@@ -67,6 +68,12 @@ const routes = [
     path: '/view_experiment',
     name: 'view-experiment',
     component: ViewExperiment,
+    props: route => ({ e: route.query.e })
+  },
+  {
+    path: '/delete_experiment',
+    name: 'delete-experiment',
+    component: DeleteExperiment,
     props: route => ({ e: route.query.e })
   },
 
