@@ -5,6 +5,7 @@ const HomePage = () => import('@/views/HomePage.vue')
 const AddProject = () => import('@/views/project/AddProject.vue')
 const EditProject = () => import('@/views/project/EditProject.vue')
 const ViewProject = () => import('@/views/project/ViewProject.vue')
+const DeleteProject = () => import('@/views/project/DeleteProject.vue')
 const AddExperiment = () => import('@/views/experiment/AddExperiment.vue')
 const EditExperiment = () => import('@/views/experiment/EditExperiment.vue')
 const ViewExperiment = () => import('@/views/experiment/ViewExperiment.vue')
@@ -40,6 +41,12 @@ const routes = [
     path: '/view_project',
     name: 'view-project',
     component: ViewProject,
+    props: route => ({ ppk: route.query.ppk })
+  },
+  {
+    path: '/delete_project',
+    name: 'delete-project',
+    component: DeleteProject,
     props: route => ({ ppk: route.query.ppk })
   },
 

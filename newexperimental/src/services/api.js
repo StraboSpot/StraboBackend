@@ -26,21 +26,95 @@ api.interceptors.response.use(
 
 // Project Service
 export const projectService = {
-  list: () => api.get('/myprojects'),
+  // Get all user's projects
+  list: async () => {
+    const response = await fetch('/newexperimental/api/get_projects.php', {
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to fetch projects')
+    }
+    const data = await response.json()
+    return data.projects
+  },
 
-  get: (ppk) => api.get(`/project/${ppk}`),
+  // Get single project with experiments
+  get: async (ppk) => {
+    const response = await fetch(`/newexperimental/api/get_project.php?id=${ppk}`, {
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to fetch project')
+    }
+    return response.json()
+  },
 
-  create: (data) => api.post('/project', {
-    name: data.name,
-    notes: data.description || ''
-  }),
+  // Create new project
+  create: async (data) => {
+    const response = await fetch('/newexperimental/api/save_project.php', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        name: data.name,
+        description: data.description || ''
+      })
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to create project')
+    }
+    return response.json()
+  },
 
-  update: (ppk, data) => api.put(`/project/${ppk}`, {
-    name: data.name,
-    notes: data.description || ''
-  }),
+  // Update existing project
+  update: async (ppk, data) => {
+    const response = await fetch('/newexperimental/api/save_project.php', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        pkey: ppk,
+        name: data.name,
+        description: data.description || ''
+      })
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to update project')
+    }
+    return response.json()
+  },
 
-  delete: (ppk) => api.delete(`/project/${ppk}`)
+  // Delete project
+  delete: async (ppk) => {
+    const response = await fetch(`/newexperimental/api/delete_project.php?id=${ppk}`, {
+      method: 'POST',
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to delete project')
+    }
+    return response.json()
+  },
+
+  // Download project as JSON
+  download: (ppk) => {
+    window.location.href = `/newexperimental/api/download_project.php?id=${ppk}`
+  }
 }
 
 // Experiment Service
