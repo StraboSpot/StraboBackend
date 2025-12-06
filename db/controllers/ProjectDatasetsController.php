@@ -29,77 +29,41 @@ class ProjectDatasetsController extends MyController
 		return $data;
 	}
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 	public function postAction($request) {
 
 		if(isset($request->url_elements[2])) {
 
 			$feature_id = $request->url_elements[2];
 
-			//********************************************************************
-			// check for Project with userid and id
-			//********************************************************************
-			if($this->strabo->findProject($feature_id)){
+			$upload = $request->parameters;
 
-				$upload = $request->parameters;
+			unset($upload['apiformat']);
+		
+			$datasetid=$upload['id'];
 
-				unset($upload['apiformat']);
-
-				$datasetid=$upload['id'];
-
-				if($datasetid==""){
-
-					// bad body sent, error
-					header("Bad Request", true, 400);
-					$data["Error"] = "Invalid body JSON sentt.";
-
-				}else{
-
-					//OK, check to see if feature exists
-					if($this->strabo->findDataset($datasetid)){
-
-						if(!$this->strabo->datasetExistsInOtherProject($datasetid,$feature_id)){
-
-							//see if it already exists in group
-							if(!$this->strabo->findDatasetInProject($feature_id,$datasetid)){
-
-								//********************************************************************
-								// Add to project
-								//********************************************************************
-								$this->strabo->addDatasetToProject($feature_id,$datasetid,"HAS_DATASET");
-
-								header("Dataset added to project", true, 201);
-								$data['message']="Dataset $datasetid added to project $feature_id.";
-
-							}else{
-
-								//Error, dataset already exists
-								header("Dataset $datasetid already exists in project $feature_id.", true, 200);
-								$data["Error"] = "Dataset $datasetid already exists in project $feature_id.";
-
-							}
-
-						}else{
-
-							//Error, dataset already exists in another project
-							header("Dataset $datasetid already exists in another project.", true, 200);
-							$data["Error"] = "Dataset $datasetid already exists in another project.";
-
-						}
-
-					}else{
-
-						//Error, feature not found
-						header("Bad Request", true, 404);
-						$data["Error"] = "Dataset $datasetid not found.";
-
-					}
-
-				}
-
-			}else{
+			if($datasetid == ""){
+			
 				//Error, feature not found
 				header("Bad Request", true, 404);
-				$data["Error"] = "Project $feature_id not found.";
+				$data["Error"] = "No dataset ID provided.";
+
+			}else{
+				$data = $this->strabo->addDatasetToProject($feature_id,$datasetid,"HAS_DATASET");
 			}
 
 		} else { //feature id is not set error
@@ -112,6 +76,24 @@ class ProjectDatasetsController extends MyController
 
 		return $data;
 	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 	public function deleteAction($request) {
 

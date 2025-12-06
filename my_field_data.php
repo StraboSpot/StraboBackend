@@ -252,6 +252,7 @@ if($collaboration_rows != ""){
 		$owner_name = $owner_row->firstname." ".$owner_row->lastname." <span class=\"hideSmall\">(".$owner_row->email.")</span>";
 
 		$projectrow = $crow->project;
+		
 		$pvals = $projectrow->get("p")->values();
 
 		if($pvals["public"]){

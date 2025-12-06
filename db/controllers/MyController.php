@@ -22,6 +22,13 @@ class MyController
 		 echo "$value";exit();
 
 	 }
+	 
+	public function dumpVar($var){
+	
+	echo "<pre>";
+	print_r($var);
+	echo "</pre>";	
+	}
 
 	 // Default handlers for unsupported HTTP methods
 	 // Child controllers can override these if needed

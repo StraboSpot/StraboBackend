@@ -74,7 +74,6 @@ foreach($rows as $row){
 		<select name="collaborationlevel_<?php echo $row->uuid?>" onchange="updateCollaborationLevel('<?php echo $row->uuid?>');" id="collaborationlevel_<?php echo $row->uuid?>" class="amyDataSelect">
 			<option value="readonly"<?php if($row->collaboration_level=="readonly"){echo " selected";}?>>Read Only</option>
 			<option value="edit"<?php if($row->collaboration_level=="edit"){echo " selected";}?>>Edit</option>
-			<option value="admin"<?php if($row->collaboration_level=="admin"){echo " selected";}?>>Admin</option>
 		</select>
 	</div>
 	<div class="col-3 col-12-small">

@@ -56,7 +56,104 @@ class DatasetSpotsController extends MyController
 			//*******************************************************************************
 			//update attributes for feature
 
+
+			
 			$feature_id = $request->url_elements[2];
+			$datasetid = $feature_id;
+			
+			if($datasetid == ""){
+				$this->strabo->throwJSONError("No dataset id provided.");
+			}
+
+			//first look natively.
+			if($datasetid!=""){
+				$dataset = $this->strabo->getDataset($datasetid);
+			}
+	
+			//We didn't find a dataset with userpkey that matches userpkey, so let's look for a dataset that matches collaboratorpkey = userpkey
+			if($dataset->id == ""){ 
+				$dataset = $this->strabo->getDataset($datasetid, $this->strabo->userpkey);
+			}
+	
+			if($dataset->id == ""){
+				$this->strabo->throwJSONError("Dataset not found.");
+			}
+
+			$projectid = $this->strabo->neodb->get_var("match (p:Project)-[HAS_DATASET]->(d:Dataset) where d.id = $feature_id and d.userpkey = ".$this->strabo->userpkey." OR d.collaboratorpkey = ".$this->strabo->userpkey." return p.id");
+			if($projectid != ""){
+				$collabinfo = $this->strabo->getCollabInfo($projectid);
+			}
+		
+			//$this->dumpVar($collabinfo);exit();
+			//$this->dumpVar($dataset);exit();
+			/*
+			stdClass Object
+			(
+				[isOwner] => 1
+				[neoid] => 3770198
+				[isCollaborativeProject] => 1
+				[isUserCollaborator] => 
+				[collaborationLevel] => none
+				[isHalted] => 
+			)
+			
+			stdClass Object
+			(
+				[date] => 2025-12-02T17:36:05.157Z
+				[userpkey] => 8988
+				[name] => Default
+				[datecreated] => 1764944241
+				[id] => 17646969651573
+				[collaboratorpkey] => 8988
+				[modified_timestamp] => 1764943395720
+				[datasettype] => app
+				[neoid] => 3770197
+			)
+			*/
+			
+			//$this->dumpVar($collabinfo);exit();
+			
+
+
+
+
+//$this->dumpVar($collabinfo);exit();
+/*
+stdClass Object
+(
+    [isOwner] => 
+    [isCollaborativeProject] => 1
+    [ownerpkey] => 8988
+    [isUserCollaborator] => 1
+    [collaborationLevel] => edit
+    [neoid] => 3770217
+    [isHalted] => 
+)
+*/
+
+//echo $this->strabo->userpkey;
+
+			if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $dataset->userpkey == $this->strabo->userpkey && !$collabinfo->isHalted){
+				echo "is collaborator with edit and dataset";
+				$this->strabo->setuserpkey($collabinfo->ownerpkey);
+			}elseif($collabinfo->isOwner && $dinfo->userpkey == $this->strabo->userpkey){
+				echo "is owner with dataset";
+				//pkey can remain unchanged
+			}elseif($collabinfo->isOwner && $collabinfo->isHalted){
+				echo "is owner and project halted link project to dataset ";
+				//pkey can remain unchanged
+			}else{
+				//Error, don't have permissions
+				header("Don't have permission to collaborate on this", true, 403);
+				$data["Error"] = "Don't have permission to collaborate on this";
+				return $data;
+			}
+
+
+
+//exit();
+
+
 
 			//********************************************************************
 			// check for Dataset with userid and id
@@ -130,17 +227,25 @@ class DatasetSpotsController extends MyController
 
 					if($data["Error"]==""){
 
+						
+						
 						//Gather features and store image ids and filenames
 						$userpkey = $this->strabo->userpkey;
 						$imagefilenames = $this->strabo->getImageFiles($feature_id);
+						
+						//$this->dumpVar($imagefilenames);exit();
 
 						//delete relationships
-						$this->strabo->deleteDatasetReltationships($feature_id);
+						//$this->strabo->deleteDatasetReltationships($feature_id);
+
+						
 
 						$data['type']="FeatureCollection";
 
 						//this turns pixel coordinates into real-world coordinates so we can do spatial searches
 						$features=$this->strabo->fixIncomingBasemaps($features);
+
+
 
 						foreach($features as $feature){
 
@@ -165,7 +270,7 @@ class DatasetSpotsController extends MyController
 
 									$this->strabo->addSpotToDataset($feature_id,$straboid);
 
-									$totalspottime = microtime(true)-$spotstarttime; $this->strabo->logToFile("addspottodataset took: ".$totalspottime." secs","DATASET SPOT TIME");
+									//$totalspottime = microtime(true)-$spotstarttime; $this->strabo->logToFile("addspottodataset took: ".$totalspottime." secs","DATASET SPOT TIME");
 
 								}
 
@@ -207,11 +312,11 @@ class DatasetSpotsController extends MyController
 							}
 						}
 
-						$this->strabo->logToFile("Start building relationships...");
+						//$this->strabo->logToFile("Start building relationships...");
 						$spotstarttime=microtime(true);
 
 						//now build all relationships for project
-						$this->strabo->buildDatasetRelationships($feature_id);
+						//$this->strabo->buildDatasetRelationships($feature_id);
 
 						$this->strabo->setDatasetCenter($feature_id);
 
@@ -219,7 +324,7 @@ class DatasetSpotsController extends MyController
 						$this->strabo->setProjectCenter($projectid);
 
 						$totalspottime = microtime(true)-$spotstarttime;
-						$this->strabo->logToFile("Relationships done in $totalspottime seconds ...");
+						//$this->strabo->logToFile("Relationships done in $totalspottime seconds ...");
 
 						//also add dataset to Postgres Database here.
 						$this->strabo->buildPgDataset($feature_id); //need to re-implement JMA 02282020
