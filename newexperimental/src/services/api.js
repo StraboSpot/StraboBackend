@@ -62,10 +62,23 @@ export const experimentService = {
 }
 
 // Facility Service
+// Note: Uses legacy PHP endpoints from /experimental/ until /expdb/ API is extended
 export const facilityService = {
-  list: () => api.get('/facilities'),
+  // Get all facilities with their apparatuses
+  listWithApparatuses: async () => {
+    const response = await fetch('/experimental/get_all_apparatuses.php', {
+      credentials: 'include'
+    })
+    return response.json()
+  },
 
-  get: (f) => api.get(`/facility/${f}`),
+  // Get single facility
+  get: async (f) => {
+    const response = await fetch(`/experimental/get_apprepo_facility_alone.php?id=${f}`, {
+      credentials: 'include'
+    })
+    return response.json()
+  },
 
   create: (data) => api.post('/facility', data),
 
@@ -80,7 +93,12 @@ export const apparatusService = {
 
   listByFacility: (f) => api.get(`/facility/${f}/apparatuses`),
 
-  get: (a) => api.get(`/apparatus/${a}`),
+  get: async (a) => {
+    const response = await fetch(`/experimental/get_apprepo_apparatus.php?id=${a}`, {
+      credentials: 'include'
+    })
+    return response.json()
+  },
 
   create: (f, data) => api.post('/apparatus', {
     facility_pkey: f,
