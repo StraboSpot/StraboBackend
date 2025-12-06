@@ -206,38 +206,21 @@ export const DOCUMENT_FORMATS = [
   'other'
 ]
 
-// Sample-specific enums
+// Sample-specific enums (from old app)
 export const MATERIAL_TYPES = [
-  'Natural Rock',
-  'Natural Mineral',
-  'Natural Glass',
-  'Natural Powder',
-  'Natural Aggregate',
-  'Natural Gouge',
-  'Natural Soil',
-  'Natural Gel',
-  'Natural Suspension',
-  'Synthetic Rock',
-  'Synthetic Mineral',
-  'Synthetic Glass',
-  'Synthetic Powder',
-  'Synthetic Aggregate',
-  'Synthetic Gouge',
-  'Synthetic Gel',
-  'Synthetic Suspension',
-  'Analog Material',
-  'Other'
-]
-
-export const LITHOLOGY_TYPES = [
-  'Igneous - Plutonic',
-  'Igneous - Volcanic',
-  'Sedimentary - Clastic',
-  'Sedimentary - Chemical',
-  'Sedimentary - Organic',
-  'Metamorphic - Foliated',
-  'Metamorphic - Non-foliated',
-  'Other'
+  'Glass',
+  'Ice',
+  'Ceramic',
+  'Plastic',
+  'Metal',
+  'Soil',
+  'Mineral',
+  'Igneous Rock',
+  'Sedimentary Rock',
+  'Metamorphic Rock',
+  'Epos Lithologies',
+  'Standards',
+  'Commodity'
 ]
 
 export const MINERAL_TYPES = [
