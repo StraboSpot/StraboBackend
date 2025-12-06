@@ -67,15 +67,15 @@
         <label
           v-for="feature in APPARATUS_FEATURES"
           :key="feature"
-          class="flex items-center gap-2 p-2 rounded hover:bg-strabo-bg-tertiary cursor-pointer"
+          class="feature-label"
         >
           <input
             type="checkbox"
             :value="feature"
             v-model="form.features"
-            class="form-checkbox"
+            class="feature-checkbox"
           />
-          <span class="text-sm text-strabo-text-primary">{{ feature }}</span>
+          <span>{{ feature }}</span>
         </label>
       </div>
     </CollapsibleSection>
@@ -212,19 +212,19 @@ const form = ref({
 
 // Populate form with initial data
 watch(() => props.initialData, (data) => {
-  if (data) {
+  if (data && data.name) {
     form.value = {
       name: data.name || '',
       type: data.type || '',
       location: data.location || '',
       id: data.id || '',
       description: data.description || '',
-      features: data.features || [],
+      features: Array.isArray(data.features) ? [...data.features] : [],
       parameters: data.parameters?.map(p => ({ ...p })) || [],
       documents: data.documents?.map(d => ({ ...d })) || []
     }
   }
-}, { immediate: true })
+}, { immediate: true, deep: true })
 
 const isValid = computed(() => {
   return form.value.name.trim().length > 0 && form.value.type.length > 0
@@ -251,8 +251,40 @@ function handleSubmit() {
 }
 </script>
 
-<style scoped>
-.form-checkbox {
-  @apply w-4 h-4 rounded border-strabo-border bg-strabo-bg-secondary text-strabo-accent focus:ring-strabo-accent;
+<style>
+/* Use non-scoped style to override site CSS with higher specificity */
+.feature-label {
+  display: flex !important;
+  align-items: center !important;
+  gap: 10px !important;
+  padding: 8px !important;
+  border-radius: 4px !important;
+  cursor: pointer !important;
+  color: #e0e0e0 !important;
+  font-size: 14px !important;
+}
+
+.feature-label:hover {
+  background-color: #3a3a3a !important;
+}
+
+/* Override site's checkbox hiding */
+.feature-checkbox {
+  width: 18px !important;
+  height: 18px !important;
+  min-width: 18px !important;
+  opacity: 1 !important;
+  position: relative !important;
+  z-index: 1 !important;
+  appearance: auto !important;
+  -webkit-appearance: checkbox !important;
+  -moz-appearance: checkbox !important;
+  -ms-appearance: auto !important;
+  display: inline-block !important;
+  float: none !important;
+  margin: 0 !important;
+  margin-right: 0 !important;
+  accent-color: #f4511e;
+  cursor: pointer !important;
 }
 </style>
