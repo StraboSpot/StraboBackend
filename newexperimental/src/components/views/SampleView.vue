@@ -6,19 +6,35 @@
       <div class="info-grid">
         <InfoField label="Sample Name" :value="data.name" />
         <InfoField label="Sample ID" :value="data.id" />
+        <InfoField label="IGSN" :value="data.igsn" />
         <InfoField label="Description" :value="data.description" class="col-span-2" />
+      </div>
+
+      <!-- Parent Sample -->
+      <div v-if="hasParent" class="mt-4">
+        <h4 class="subsection-title">Parent Sample</h4>
+        <div class="info-grid">
+          <InfoField label="Parent Name" :value="data.parent?.name" />
+          <InfoField label="Parent ID" :value="data.parent?.id" />
+          <InfoField label="Parent IGSN" :value="data.parent?.igsn" />
+          <InfoField label="Parent Description" :value="data.parent?.description" />
+        </div>
       </div>
     </section>
 
     <!-- Material -->
     <section v-if="hasMaterial" class="view-section">
       <h3 class="section-title">Material</h3>
-      <div class="info-grid">
-        <InfoField label="Material Type" :value="data.material?.material" />
-        <InfoField label="Lithology" :value="data.material?.lithology" />
+
+      <!-- Material Type (nested object with type, name, state, note) -->
+      <div v-if="hasMaterialType" class="info-grid mb-4">
+        <InfoField label="Material Type" :value="data.material?.material?.type" />
+        <InfoField label="Material Name" :value="data.material?.material?.name" />
+        <InfoField label="State" :value="data.material?.material?.state" />
+        <InfoField label="Note" :value="data.material?.material?.note" />
       </div>
 
-      <!-- Mineralogy -->
+      <!-- Mineralogy / Composition -->
       <div v-if="data.material?.composition?.length > 0" class="mt-4">
         <h4 class="subsection-title">Mineralogy / Composition</h4>
         <div class="table-container">
@@ -47,10 +63,25 @@
       <div v-if="hasProvenance" class="mt-4">
         <h4 class="subsection-title">Provenance</h4>
         <div class="info-grid">
-          <InfoField label="Location" :value="data.material?.provenance?.location" />
-          <InfoField label="Latitude" :value="data.material?.provenance?.latitude" />
-          <InfoField label="Longitude" :value="data.material?.provenance?.longitude" />
-          <InfoField label="Notes" :value="data.material?.provenance?.note" />
+          <InfoField label="Formation" :value="data.material?.provenance?.formation" />
+          <InfoField label="Member" :value="data.material?.provenance?.member" />
+          <InfoField label="Submember" :value="data.material?.provenance?.submember" />
+          <InfoField label="Source" :value="data.material?.provenance?.source" />
+        </div>
+
+        <!-- Location (nested object within provenance) -->
+        <div v-if="hasProvenanceLocation" class="mt-3">
+          <h5 class="text-xs font-semibold text-strabo-text-secondary mb-2 uppercase">Location</h5>
+          <div class="info-grid grid-cols-4">
+            <InfoField label="Street" :value="provenanceLocation?.street" />
+            <InfoField label="Building" :value="provenanceLocation?.building" />
+            <InfoField label="City" :value="provenanceLocation?.city" />
+            <InfoField label="State/Region" :value="provenanceLocation?.state" />
+            <InfoField label="Postcode" :value="provenanceLocation?.postcode" />
+            <InfoField label="Country" :value="provenanceLocation?.country" />
+            <InfoField label="Latitude" :value="provenanceLocation?.latitude" />
+            <InfoField label="Longitude" :value="provenanceLocation?.longitude" />
+          </div>
         </div>
       </div>
 
@@ -93,6 +124,25 @@
       </div>
     </section>
 
+    <!-- Documents -->
+    <section v-if="data.documents?.length > 0" class="view-section">
+      <h3 class="section-title">Documents</h3>
+      <div class="space-y-2">
+        <div v-for="(doc, idx) in data.documents" :key="idx" class="p-3 bg-strabo-bg-tertiary rounded">
+          <div class="flex justify-between items-start">
+            <div>
+              <span class="font-medium">{{ doc.id || doc.description || `Document ${idx + 1}` }}</span>
+              <span v-if="doc.type" class="text-xs text-strabo-text-secondary ml-2">({{ doc.type }})</span>
+            </div>
+            <a v-if="doc.path" :href="doc.path" target="_blank" class="text-strabo-accent hover:underline text-sm">
+              View
+            </a>
+          </div>
+          <p v-if="doc.description" class="text-sm text-strabo-text-secondary mt-1">{{ doc.description }}</p>
+        </div>
+      </div>
+    </section>
+
     <!-- No Data Message -->
     <div v-if="!hasAnyData" class="no-data">
       <p class="text-strabo-text-secondary">No sample data has been entered yet.</p>
@@ -111,14 +161,43 @@ const props = defineProps({
   }
 })
 
+// Helper to check if provenance.location is an object or a string
+const provenanceLocation = computed(() => {
+  const loc = props.data?.material?.provenance?.location
+  if (typeof loc === 'object' && loc !== null) {
+    return loc
+  }
+  return null
+})
+
+const hasParent = computed(() => {
+  const p = props.data?.parent
+  return p && (p.name || p.id || p.igsn || p.description)
+})
+
+const hasMaterialType = computed(() => {
+  const m = props.data?.material?.material
+  // Check if it's an object with properties
+  if (typeof m === 'object' && m !== null) {
+    return m.type || m.name || m.state || m.note
+  }
+  // Or just a string
+  return typeof m === 'string' && m.length > 0
+})
+
 const hasMaterial = computed(() => {
   const m = props.data?.material
-  return m && (m.material || m.lithology || m.composition?.length > 0 || hasProvenance.value || hasTexture.value)
+  return m && (hasMaterialType.value || m.composition?.length > 0 || hasProvenance.value || hasTexture.value)
 })
 
 const hasProvenance = computed(() => {
   const p = props.data?.material?.provenance
-  return p && (p.location || p.latitude || p.longitude || p.note)
+  return p && (p.formation || p.member || p.submember || p.source || p.location)
+})
+
+const hasProvenanceLocation = computed(() => {
+  const loc = provenanceLocation.value
+  return loc && (loc.street || loc.building || loc.city || loc.state || loc.postcode || loc.country || loc.latitude || loc.longitude)
 })
 
 const hasTexture = computed(() => {
@@ -127,8 +206,8 @@ const hasTexture = computed(() => {
 })
 
 const hasAnyData = computed(() => {
-  return props.data?.name || props.data?.id || props.data?.description ||
-         hasMaterial.value || props.data?.parameters?.length > 0
+  return props.data?.name || props.data?.id || props.data?.igsn || props.data?.description ||
+         hasMaterial.value || props.data?.parameters?.length > 0 || props.data?.documents?.length > 0
 })
 </script>
 

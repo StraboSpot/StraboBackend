@@ -26,6 +26,17 @@
           />
         </div>
 
+        <div>
+          <label for="igsn" class="form-label">IGSN</label>
+          <input
+            id="igsn"
+            v-model="form.igsn"
+            type="text"
+            class="form-input"
+            placeholder="International Geo Sample Number"
+          />
+        </div>
+
         <div class="md:col-span-2">
           <label for="description" class="form-label">Description</label>
           <textarea
@@ -37,29 +48,100 @@
           ></textarea>
         </div>
       </div>
+
+      <!-- Parent Sample -->
+      <div class="mt-4 pt-4 border-t border-strabo-border">
+        <h4 class="text-sm font-semibold text-strabo-text-primary mb-3">Parent Sample (Optional)</h4>
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label for="parentName" class="form-label text-xs">Parent Name</label>
+            <input
+              id="parentName"
+              v-model="form.parent.name"
+              type="text"
+              class="form-input"
+              placeholder="Parent sample name"
+            />
+          </div>
+          <div>
+            <label for="parentId" class="form-label text-xs">Parent ID</label>
+            <input
+              id="parentId"
+              v-model="form.parent.id"
+              type="text"
+              class="form-input"
+              placeholder="Parent sample ID"
+            />
+          </div>
+          <div>
+            <label for="parentIgsn" class="form-label text-xs">Parent IGSN</label>
+            <input
+              id="parentIgsn"
+              v-model="form.parent.igsn"
+              type="text"
+              class="form-input"
+              placeholder="Parent IGSN"
+            />
+          </div>
+          <div>
+            <label for="parentDescription" class="form-label text-xs">Parent Description</label>
+            <input
+              id="parentDescription"
+              v-model="form.parent.description"
+              type="text"
+              class="form-input"
+              placeholder="Parent description"
+            />
+          </div>
+        </div>
+      </div>
     </CollapsibleSection>
 
     <!-- Material -->
     <CollapsibleSection title="Material" class="mt-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+      <!-- Material Type (nested object: type, name, state, note) -->
+      <h4 class="text-sm font-semibold text-strabo-text-primary mb-3">Material Type</h4>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div>
-          <label for="materialType" class="form-label">Material Type</label>
-          <select id="materialType" v-model="form.material.material" class="form-select">
+          <label for="materialType" class="form-label text-xs">Type</label>
+          <select id="materialType" v-model="form.material.material.type" class="form-select">
             <option value="">Select type...</option>
             <option v-for="t in MATERIAL_TYPES" :key="t" :value="t">{{ t }}</option>
           </select>
         </div>
-
         <div>
-          <label for="lithology" class="form-label">Lithology</label>
-          <select id="lithology" v-model="form.material.lithology" class="form-select">
-            <option value="">Select lithology...</option>
-            <option v-for="l in LITHOLOGY_TYPES" :key="l" :value="l">{{ l }}</option>
-          </select>
+          <label for="materialName" class="form-label text-xs">Name</label>
+          <input
+            id="materialName"
+            v-model="form.material.material.name"
+            type="text"
+            class="form-input"
+            placeholder="e.g., Carrara Marble"
+          />
+        </div>
+        <div>
+          <label for="materialState" class="form-label text-xs">State</label>
+          <input
+            id="materialState"
+            v-model="form.material.material.state"
+            type="text"
+            class="form-input"
+            placeholder="e.g., Homogeneous"
+          />
+        </div>
+        <div>
+          <label for="materialNote" class="form-label text-xs">Note</label>
+          <input
+            id="materialNote"
+            v-model="form.material.material.note"
+            type="text"
+            class="form-input"
+            placeholder="Additional notes"
+          />
         </div>
       </div>
 
-      <!-- Mineralogy -->
+      <!-- Mineralogy / Composition -->
       <div class="mt-6">
         <h4 class="text-sm font-semibold text-strabo-text-primary mb-3">Mineralogy / Composition</h4>
         <p class="text-xs text-strabo-text-secondary mb-3">
@@ -92,7 +174,7 @@
               </div>
               <div>
                 <label class="form-label text-xs">Fraction</label>
-                <input v-model="phase.fraction" type="text" class="form-input text-sm" placeholder="e.g., 45" />
+                <input v-model="phase.fraction" type="text" class="form-input text-sm" placeholder="e.g., 0.99" />
               </div>
               <div>
                 <label class="form-label text-xs">Unit</label>
@@ -103,7 +185,7 @@
               </div>
               <div>
                 <label class="form-label text-xs">Grain Size (um)</label>
-                <input v-model="phase.grainsize" type="number" class="form-input text-sm" placeholder="e.g., 100" />
+                <input v-model="phase.grainsize" type="text" class="form-input text-sm" placeholder="e.g., 150" />
               </div>
             </div>
           </div>
@@ -121,46 +203,125 @@
       <!-- Provenance -->
       <div class="mt-6">
         <h4 class="text-sm font-semibold text-strabo-text-primary mb-3">Provenance</h4>
-        <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <label for="provLocation" class="form-label text-xs">Location Name</label>
+            <label for="provFormation" class="form-label text-xs">Formation</label>
             <input
-              id="provLocation"
-              v-model="form.material.provenance.location"
+              id="provFormation"
+              v-model="form.material.provenance.formation"
               type="text"
               class="form-input"
-              placeholder="e.g., Carrara, Italy"
+              placeholder="e.g., Carrara (Italy)"
             />
           </div>
           <div>
-            <label for="provLatitude" class="form-label text-xs">Latitude</label>
+            <label for="provMember" class="form-label text-xs">Member</label>
             <input
-              id="provLatitude"
-              v-model="form.material.provenance.latitude"
+              id="provMember"
+              v-model="form.material.provenance.member"
               type="text"
               class="form-input"
-              placeholder="e.g., 44.0775"
+              placeholder="e.g., Hettangian"
             />
           </div>
           <div>
-            <label for="provLongitude" class="form-label text-xs">Longitude</label>
+            <label for="provSubmember" class="form-label text-xs">Submember</label>
             <input
-              id="provLongitude"
-              v-model="form.material.provenance.longitude"
+              id="provSubmember"
+              v-model="form.material.provenance.submember"
               type="text"
               class="form-input"
-              placeholder="e.g., 10.1308"
+              placeholder="Submember name"
             />
           </div>
-          <div class="md:col-span-3">
-            <label for="provNote" class="form-label text-xs">Notes</label>
+          <div>
+            <label for="provSource" class="form-label text-xs">Source</label>
             <input
-              id="provNote"
-              v-model="form.material.provenance.note"
+              id="provSource"
+              v-model="form.material.provenance.source"
               type="text"
               class="form-input"
-              placeholder="Additional provenance information..."
+              placeholder="e.g., Quarry"
             />
+          </div>
+        </div>
+
+        <!-- Location (nested within provenance) -->
+        <div class="mt-4 pt-4 border-t border-strabo-border">
+          <h5 class="text-xs font-semibold text-strabo-text-secondary mb-3 uppercase">Location</h5>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div>
+              <label class="form-label text-xs">Street</label>
+              <input
+                v-model="form.material.provenance.location.street"
+                type="text"
+                class="form-input"
+                placeholder="Street name"
+              />
+            </div>
+            <div>
+              <label class="form-label text-xs">Building</label>
+              <input
+                v-model="form.material.provenance.location.building"
+                type="text"
+                class="form-input"
+                placeholder="Building"
+              />
+            </div>
+            <div>
+              <label class="form-label text-xs">City</label>
+              <input
+                v-model="form.material.provenance.location.city"
+                type="text"
+                class="form-input"
+                placeholder="City"
+              />
+            </div>
+            <div>
+              <label class="form-label text-xs">State/Region</label>
+              <input
+                v-model="form.material.provenance.location.state"
+                type="text"
+                class="form-input"
+                placeholder="State/Region"
+              />
+            </div>
+            <div>
+              <label class="form-label text-xs">Postcode</label>
+              <input
+                v-model="form.material.provenance.location.postcode"
+                type="text"
+                class="form-input"
+                placeholder="Postal code"
+              />
+            </div>
+            <div>
+              <label class="form-label text-xs">Country</label>
+              <input
+                v-model="form.material.provenance.location.country"
+                type="text"
+                class="form-input"
+                placeholder="Country"
+              />
+            </div>
+            <div>
+              <label class="form-label text-xs">Latitude</label>
+              <input
+                v-model="form.material.provenance.location.latitude"
+                type="text"
+                class="form-input"
+                placeholder="e.g., 44.0793"
+              />
+            </div>
+            <div>
+              <label class="form-label text-xs">Longitude</label>
+              <input
+                v-model="form.material.provenance.location.longitude"
+                type="text"
+                class="form-input"
+                placeholder="e.g., 10.0979"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -176,7 +337,7 @@
               v-model="form.material.texture.bedding"
               type="text"
               class="form-input"
-              placeholder="e.g., Horizontal"
+              placeholder="e.g., no bedding"
             />
           </div>
           <div>
@@ -186,7 +347,7 @@
               v-model="form.material.texture.lineation"
               type="text"
               class="form-input"
-              placeholder="e.g., Weak"
+              placeholder="e.g., no apparent lineation"
             />
           </div>
           <div>
@@ -196,7 +357,7 @@
               v-model="form.material.texture.foliation"
               type="text"
               class="form-input"
-              placeholder="e.g., None"
+              placeholder="e.g., no foliation"
             />
           </div>
           <div>
@@ -206,7 +367,7 @@
               v-model="form.material.texture.fault"
               type="text"
               class="form-input"
-              placeholder="e.g., None"
+              placeholder="e.g., no faults"
             />
           </div>
         </div>
@@ -258,6 +419,7 @@
               <label class="form-label text-xs">Prefix</label>
               <select v-model="param.prefix" class="form-select text-sm">
                 <option value="">Select...</option>
+                <option value="-">-</option>
                 <option v-for="p in UNIT_PREFIXES" :key="p" :value="p">{{ p }}</option>
               </select>
             </div>
@@ -305,7 +467,6 @@ import { ref, computed, watch } from 'vue'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
 import {
   MATERIAL_TYPES,
-  LITHOLOGY_TYPES,
   MINERAL_TYPES,
   SAMPLE_PARAMETER_TYPES,
   FRACTION_UNITS,
@@ -325,16 +486,37 @@ const emit = defineEmits(['submit', 'cancel'])
 const createEmptyForm = () => ({
   name: '',
   id: '',
+  igsn: '',
   description: '',
+  parent: {
+    name: '',
+    id: '',
+    igsn: '',
+    description: ''
+  },
   material: {
-    material: '',
-    lithology: '',
+    material: {
+      type: '',
+      name: '',
+      state: '',
+      note: ''
+    },
     composition: [],
     provenance: {
-      location: '',
-      latitude: '',
-      longitude: '',
-      note: ''
+      formation: '',
+      member: '',
+      submember: '',
+      source: '',
+      location: {
+        street: '',
+        building: '',
+        postcode: '',
+        city: '',
+        state: '',
+        country: '',
+        latitude: '',
+        longitude: ''
+      }
     },
     texture: {
       bedding: '',
@@ -355,16 +537,37 @@ watch(() => props.initialData, (data) => {
     form.value = {
       name: data.name || '',
       id: data.id || '',
+      igsn: data.igsn || '',
       description: data.description || '',
+      parent: {
+        name: data.parent?.name || '',
+        id: data.parent?.id || '',
+        igsn: data.parent?.igsn || '',
+        description: data.parent?.description || ''
+      },
       material: {
-        material: data.material?.material || '',
-        lithology: data.material?.lithology || '',
+        material: {
+          type: data.material?.material?.type || '',
+          name: data.material?.material?.name || '',
+          state: data.material?.material?.state || '',
+          note: data.material?.material?.note || ''
+        },
         composition: data.material?.composition?.map(c => ({ ...c })) || [],
         provenance: {
-          location: data.material?.provenance?.location || '',
-          latitude: data.material?.provenance?.latitude || '',
-          longitude: data.material?.provenance?.longitude || '',
-          note: data.material?.provenance?.note || ''
+          formation: data.material?.provenance?.formation || '',
+          member: data.material?.provenance?.member || '',
+          submember: data.material?.provenance?.submember || '',
+          source: data.material?.provenance?.source || '',
+          location: {
+            street: data.material?.provenance?.location?.street || '',
+            building: data.material?.provenance?.location?.building || '',
+            postcode: data.material?.provenance?.location?.postcode || '',
+            city: data.material?.provenance?.location?.city || '',
+            state: data.material?.provenance?.location?.state || '',
+            country: data.material?.provenance?.location?.country || '',
+            latitude: data.material?.provenance?.location?.latitude || '',
+            longitude: data.material?.provenance?.location?.longitude || ''
+          }
         },
         texture: {
           bedding: data.material?.texture?.bedding || '',
@@ -387,7 +590,7 @@ function addPhase() {
   form.value.material.composition.push({
     mineral: '',
     fraction: '',
-    unit: '%',
+    unit: 'Vol%',
     grainsize: ''
   })
 }
@@ -401,7 +604,7 @@ function addParameter() {
     control: '',
     value: '',
     unit: '',
-    prefix: '',
+    prefix: '-',
     note: ''
   })
 }
