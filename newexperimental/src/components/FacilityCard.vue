@@ -63,10 +63,10 @@
         <router-link :to="`/view_facility?f=${facility.id}`" class="btn-secondary text-sm">
           View Details
         </router-link>
-        <router-link :to="`/edit_facility?f=${facility.id}`" class="btn-secondary text-sm">
+        <router-link v-if="facility.can_edit" :to="`/edit_facility?f=${facility.id}`" class="btn-secondary text-sm">
           Edit
         </router-link>
-        <router-link :to="`/add_apparatus?f=${facility.id}`" class="btn-primary text-sm">
+        <router-link v-if="facility.can_add_apparatus" :to="`/add_apparatus?f=${facility.id}`" class="btn-primary text-sm">
           + Add Apparatus
         </router-link>
       </div>
@@ -107,6 +107,7 @@
                     View
                   </router-link>
                   <router-link
+                    v-if="app.can_edit"
                     :to="`/edit_apparatus?a=${app.id}`"
                     class="text-strabo-accent hover:underline text-sm"
                   >
@@ -121,7 +122,7 @@
 
       <div v-else class="text-center py-4 text-strabo-text-secondary">
         No apparatus registered for this facility.
-        <router-link :to="`/add_apparatus?f=${facility.id}`" class="text-strabo-accent hover:underline ml-1">
+        <router-link v-if="facility.can_add_apparatus" :to="`/add_apparatus?f=${facility.id}`" class="text-strabo-accent hover:underline ml-1">
           Add one now
         </router-link>
       </div>

@@ -1,13 +1,23 @@
 <template>
   <div class="mb-6">
     <div class="flex items-center gap-4 mb-2">
+      <!-- Use @back event for browser history navigation -->
+      <button
+        v-if="hasBackListener"
+        @click="$emit('back')"
+        class="text-strabo-text-secondary hover:text-strabo-accent transition-colors cursor-pointer"
+      >
+        &larr; Back
+      </button>
+      <!-- Use backLink for Vue Router navigation -->
       <router-link
-        v-if="backLink"
+        v-else-if="backLink"
         :to="backLink"
         class="text-strabo-text-secondary hover:text-strabo-accent transition-colors"
       >
         &larr; Back
       </router-link>
+      <!-- Use backHref for external links -->
       <a
         v-else-if="backHref"
         :href="backHref"
@@ -22,6 +32,8 @@
 </template>
 
 <script setup>
+import { computed, useAttrs } from 'vue'
+
 defineProps({
   title: {
     type: String,
@@ -40,4 +52,9 @@ defineProps({
     default: ''
   }
 })
+
+defineEmits(['back'])
+
+const attrs = useAttrs()
+const hasBackListener = computed(() => !!attrs.onBack)
 </script>

@@ -15,9 +15,15 @@
           class="form-input"
         />
       </div>
-      <router-link to="/add_facility" class="btn-primary ml-4">
+      <router-link v-if="appStore.isAdmin" to="/add_facility" class="btn-primary ml-4">
         + Add Facility
       </router-link>
+    </div>
+
+    <!-- Login prompt for guests -->
+    <div v-if="!appStore.isLoggedIn" class="text-center text-sm text-strabo-text-secondary mb-4">
+      If you need an institute added to the list below, please
+      <a href="mailto:strabospot@gmail.com?subject=Need Institute Added to StraboSpot Experimental Apparatus Repository" class="text-strabo-accent hover:underline">click here</a>.
     </div>
 
     <!-- Loading State -->
@@ -35,7 +41,7 @@
       <p class="text-strabo-text-secondary text-lg mb-4">
         {{ searchQuery ? 'No facilities match your search.' : 'No facilities found in the repository.' }}
       </p>
-      <router-link to="/add_facility" class="btn-primary">
+      <router-link v-if="appStore.isAdmin" to="/add_facility" class="btn-primary">
         Add First Facility
       </router-link>
     </div>
@@ -53,11 +59,20 @@
   </div>
 </template>
 
+<script>
+export default {
+  name: 'ApparatusRepository'
+}
+</script>
+
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import PageHeader from '@/components/PageHeader.vue'
 import FacilityCard from '@/components/FacilityCard.vue'
 import { facilityService } from '@/services/api'
+import { useAppStore } from '@/stores/app'
+
+const appStore = useAppStore()
 
 const loading = ref(true)
 const error = ref(null)

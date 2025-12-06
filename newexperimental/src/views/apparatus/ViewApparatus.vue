@@ -2,7 +2,7 @@
   <div>
     <PageHeader
       :title="apparatus?.name || 'Apparatus'"
-      back-link="/apparatus_repository"
+      @back="goBack"
     />
 
     <!-- Loading -->
@@ -19,12 +19,12 @@
     <div v-else-if="apparatus" class="max-w-4xl">
       <!-- Actions -->
       <div class="flex gap-2 mb-6">
-        <router-link :to="`/edit_apparatus?a=${a}`" class="btn-primary">
+        <router-link v-if="apparatus.can_edit" :to="`/edit_apparatus?a=${a}`" class="btn-primary">
           Edit Apparatus
         </router-link>
-        <router-link to="/apparatus_repository" class="btn-secondary">
+        <button @click="goBack" class="btn-secondary">
           Back to Repository
-        </router-link>
+        </button>
       </div>
 
       <!-- Basic Info -->
@@ -114,6 +114,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import InfoField from '@/components/InfoField.vue'
 import { apparatusService } from '@/services/api'
@@ -122,9 +123,14 @@ const props = defineProps({
   a: String
 })
 
+const router = useRouter()
 const apparatus = ref(null)
 const loading = ref(true)
 const error = ref(null)
+
+function goBack() {
+  router.back()
+}
 
 function formatUnit(param) {
   if (!param.unit) return '—'

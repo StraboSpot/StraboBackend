@@ -2,7 +2,7 @@
   <div>
     <PageHeader
       :title="facility?.name || 'Facility'"
-      back-link="/apparatus_repository"
+      @back="goBack"
     />
 
     <!-- Loading -->
@@ -19,10 +19,10 @@
     <div v-else-if="facility" class="max-w-4xl">
       <!-- Actions -->
       <div class="flex gap-2 mb-6">
-        <router-link :to="`/edit_facility?f=${f}`" class="btn-primary">
+        <router-link v-if="facility.can_edit" :to="`/edit_facility?f=${f}`" class="btn-primary">
           Edit Facility
         </router-link>
-        <router-link :to="`/add_apparatus?f=${f}`" class="btn-secondary">
+        <router-link v-if="facility.can_add_apparatus" :to="`/add_apparatus?f=${f}`" class="btn-secondary">
           + Add Apparatus
         </router-link>
       </div>
@@ -79,6 +79,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import InfoField from '@/components/InfoField.vue'
 import { facilityService } from '@/services/api'
@@ -87,9 +88,14 @@ const props = defineProps({
   f: String
 })
 
+const router = useRouter()
 const facility = ref(null)
 const loading = ref(true)
 const error = ref(null)
+
+function goBack() {
+  router.back()
+}
 
 onMounted(async () => {
   try {

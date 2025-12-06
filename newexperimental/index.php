@@ -9,12 +9,17 @@
 // Change to root directory for proper include path resolution
 chdir('..');
 
+// Include admin pkeys for admin check
+include_once("adminkeys.php");
+
 // Include site header (handles session check internally)
 include("includes/mheader.php");
 
 // Get user info from session (set by mheader.php)
 $userpkey = isset($_SESSION['userpkey']) ? $_SESSION['userpkey'] : null;
 $username = isset($_SESSION['username']) ? $_SESSION['username'] : '';
+$isLoggedIn = (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'yes');
+$isAdmin = ($userpkey && in_array($userpkey, $admin_pkeys));
 ?>
 
 <!-- Vue App Container -->
@@ -34,6 +39,8 @@ $username = isset($_SESSION['username']) ? $_SESSION['username'] : '';
     window.STRABO_CONFIG = {
         userPkey: <?php echo json_encode($userpkey); ?>,
         username: <?php echo json_encode($username); ?>,
+        isLoggedIn: <?php echo json_encode($isLoggedIn); ?>,
+        isAdmin: <?php echo json_encode($isAdmin); ?>,
         basePath: '/newexperimental',
         apiPath: '/expdb'
     };
