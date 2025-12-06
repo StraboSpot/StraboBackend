@@ -17,10 +17,10 @@
         <div class="nav-tile-label">My Projects</div>
       </a>
 
-      <router-link to="/apparatus_repository" class="nav-tile">
+      <a href="/fullsearch/" class="nav-tile">
         <div class="nav-tile-icon">&#128269;</div>
         <div class="nav-tile-label">Search Database</div>
-      </router-link>
+      </a>
 
       <router-link to="/apparatus_repository" class="nav-tile">
         <div class="nav-tile-icon">&#9881;</div>
