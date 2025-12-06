@@ -1,3 +1,5 @@
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -124,4 +126,94 @@
 /* Utility for the Vue app container */
 #app {
   min-height: 100vh;
+}
+
+/* Normalize PrimeVue input heights */
+.p-inputtext,
+.p-select,
+.p-multiselect {
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+
+.p-select-label {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* PrimeVue button overrides for StraboSpot branding */
+/* All primary buttons - solid red with white text */
+.p-button {
+  background-color: #dc3545 !important;
+  border-color: #dc3545 !important;
+  color: #ffffff !important;
+}
+
+.p-button:hover {
+  background-color: #c82333 !important;
+  border-color: #bd2130 !important;
+  color: #ffffff !important;
+}
+
+.p-button:active {
+  background-color: #bd2130 !important;
+  border-color: #b21f2d !important;
+  color: #ffffff !important;
+}
+
+/* Outlined buttons - same solid style */
+.p-button.p-button-outlined {
+  background-color: #dc3545 !important;
+  border-color: #dc3545 !important;
+  color: #ffffff !important;
+}
+
+.p-button.p-button-outlined:hover {
+  background-color: #c82333 !important;
+  border-color: #bd2130 !important;
+  color: #ffffff !important;
+}
+
+/* Secondary buttons - keep them different */
+.p-button.p-button-secondary {
+  background-color: #6c757d !important;
+  border-color: #6c757d !important;
+  color: #ffffff !important;
+}
+
+.p-button.p-button-secondary:hover {
+  background-color: #5a6268 !important;
+  border-color: #545b62 !important;
+}
+
+/* Text/icon-only buttons (like trash, arrows) - subtle style */
+.p-button.p-button-text {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  color: #adb5bd !important;
+}
+
+.p-button.p-button-text:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+/* Danger text buttons (trash icon) */
+.p-button.p-button-text.p-button-danger {
+  color: #dc3545 !important;
+}
+
+.p-button.p-button-text.p-button-danger:hover {
+  background-color: rgba(220, 53, 69, 0.1) !important;
+  color: #ff6b7a !important;
+}
+
+/* StraboSpot logo font style for modal headers */
+.p-dialog .p-dialog-title {
+  font-family: 'Raleway', sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  font-weight: 400 !important;
 }

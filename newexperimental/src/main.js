@@ -9,21 +9,31 @@ import ToastService from 'primevue/toastservice'
 import 'primeicons/primeicons.css'
 import './assets/css/main.css'
 
-// Create a dark preset based on Aura
+// Create a dark preset based on Aura with StraboSpot red (#dc3545)
 const StraboAura = definePreset(Aura, {
   semantic: {
     primary: {
-      50: '{orange.50}',
-      100: '{orange.100}',
-      200: '{orange.200}',
-      300: '{orange.300}',
-      400: '{orange.400}',
-      500: '{orange.500}',
-      600: '{orange.600}',
-      700: '{orange.700}',
-      800: '{orange.800}',
-      900: '{orange.900}',
-      950: '{orange.950}'
+      50: '#fef2f2',
+      100: '#fee2e2',
+      200: '#fecaca',
+      300: '#fca5a5',
+      400: '#f87171',
+      500: '#dc3545',
+      600: '#dc3545',
+      700: '#b91c1c',
+      800: '#991b1b',
+      900: '#7f1d1d',
+      950: '#450a0a'
+    },
+    colorScheme: {
+      dark: {
+        primary: {
+          color: '#dc3545',
+          inverseColor: '#ffffff',
+          hoverColor: '#c82333',
+          activeColor: '#bd2130'
+        }
+      }
     }
   }
 })

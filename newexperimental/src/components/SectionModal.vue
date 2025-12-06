@@ -2,14 +2,15 @@
   <Dialog
     :visible="true"
     modal
-    :header="sectionTitle"
-    :style="{ width: hasForm ? '1000px' : '700px' }"
-    :maximizable="true"
+    :header="dialogHeader"
+    :style="{ width: hasForm ? '1100px' : '700px' }"
+    :maximizable="false"
     :closable="true"
     @update:visible="handleClose"
     :pt="{
       root: { class: 'dark-mode' },
       header: { class: 'border-b border-surface-700' },
+      headerTitle: { class: 'text-xl flex-1 text-center' },
       content: { class: 'p-4' }
     }"
   >
@@ -99,10 +100,21 @@ const sectionTitles = {
   data: 'Data'
 }
 
+// Dialog headers (uppercase, stylized)
+const dialogHeaders = {
+  sample: 'SAMPLE INFO',
+  facilityApparatus: 'FACILITY & APPARATUS',
+  experiment: 'EXPERIMENTAL SETUP',
+  daq: 'DATA ACQUISITION',
+  protocol: 'PROTOCOL & CONTROLLED VARIABLES',
+  data: 'DATA'
+}
+
 // Sections that have real form implementations
 const sectionsWithForms = ['sample']
 
 const sectionTitle = computed(() => sectionTitles[props.section] || props.section)
+const dialogHeader = computed(() => dialogHeaders[props.section] || props.section.toUpperCase())
 
 const hasForm = computed(() => sectionsWithForms.includes(props.section))
 
