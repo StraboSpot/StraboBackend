@@ -1,0 +1,127 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base dark theme styles to match StraboSpot */
+@layer base {
+  body {
+    @apply bg-strabo-bg-primary text-strabo-text-primary;
+  }
+}
+
+@layer components {
+  /* Form components */
+  .form-input {
+    @apply w-full px-3 py-2 bg-strabo-bg-secondary border border-strabo-border rounded
+           text-strabo-text-primary placeholder-strabo-text-secondary
+           focus:outline-none focus:border-strabo-accent focus:ring-1 focus:ring-strabo-accent;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-strabo-text-primary mb-1;
+  }
+
+  .form-select {
+    @apply form-input appearance-none cursor-pointer;
+  }
+
+  .form-textarea {
+    @apply form-input resize-y min-h-[100px];
+  }
+
+  /* Buttons */
+  .btn {
+    @apply px-4 py-2 rounded font-medium transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-strabo-bg-primary;
+  }
+
+  .btn-primary {
+    @apply btn bg-strabo-accent text-white hover:bg-strabo-accent-hover
+           focus:ring-strabo-accent;
+  }
+
+  .btn-secondary {
+    @apply btn bg-strabo-bg-tertiary text-strabo-text-primary
+           hover:bg-strabo-border focus:ring-strabo-border;
+  }
+
+  .btn-danger {
+    @apply btn bg-strabo-error text-white hover:bg-red-600
+           focus:ring-strabo-error;
+  }
+
+  /* Cards and sections */
+  .card {
+    @apply bg-strabo-bg-secondary border border-strabo-border rounded-lg p-4;
+  }
+
+  .section-header {
+    @apply text-lg font-semibold text-strabo-text-primary mb-4 pb-2 border-b border-strabo-border;
+  }
+
+  /* Collapsible sections */
+  .collapsible-header {
+    @apply flex items-center justify-between p-3 bg-strabo-bg-tertiary rounded cursor-pointer
+           hover:bg-strabo-border transition-colors duration-200;
+  }
+
+  .collapsible-content {
+    @apply p-4 bg-strabo-bg-secondary border border-t-0 border-strabo-border rounded-b;
+  }
+
+  /* Tables */
+  .data-table {
+    @apply w-full border-collapse;
+  }
+
+  .data-table th {
+    @apply px-4 py-2 text-left text-sm font-medium text-strabo-text-secondary
+           bg-strabo-bg-tertiary border-b border-strabo-border;
+  }
+
+  .data-table td {
+    @apply px-4 py-2 text-sm text-strabo-text-primary border-b border-strabo-border;
+  }
+
+  .data-table tr:hover td {
+    @apply bg-strabo-bg-tertiary;
+  }
+
+  /* Alerts and messages */
+  .alert {
+    @apply p-4 rounded-lg border;
+  }
+
+  .alert-error {
+    @apply alert bg-red-900/20 border-strabo-error text-strabo-error;
+  }
+
+  .alert-success {
+    @apply alert bg-green-900/20 border-strabo-success text-strabo-success;
+  }
+
+  .alert-warning {
+    @apply alert bg-yellow-900/20 border-strabo-warning text-strabo-warning;
+  }
+
+  /* Navigation tiles (homepage) */
+  .nav-tile {
+    @apply flex flex-col items-center justify-center p-8 bg-strabo-bg-secondary
+           border border-strabo-border rounded-lg cursor-pointer
+           hover:border-strabo-accent hover:bg-strabo-bg-tertiary
+           transition-all duration-200;
+  }
+
+  .nav-tile-icon {
+    @apply text-4xl mb-3 text-strabo-accent;
+  }
+
+  .nav-tile-label {
+    @apply text-lg font-medium text-strabo-text-primary;
+  }
+}
+
+/* Utility for the Vue app container */
+#app {
+  min-height: 100vh;
+}
