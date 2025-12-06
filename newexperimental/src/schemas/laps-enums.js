@@ -205,3 +205,87 @@ export const DOCUMENT_FORMATS = [
   'rar',
   'other'
 ]
+
+// Sample-specific enums
+export const MATERIAL_TYPES = [
+  'Natural Rock',
+  'Natural Mineral',
+  'Natural Glass',
+  'Natural Powder',
+  'Natural Aggregate',
+  'Natural Gouge',
+  'Natural Soil',
+  'Natural Gel',
+  'Natural Suspension',
+  'Synthetic Rock',
+  'Synthetic Mineral',
+  'Synthetic Glass',
+  'Synthetic Powder',
+  'Synthetic Aggregate',
+  'Synthetic Gouge',
+  'Synthetic Gel',
+  'Synthetic Suspension',
+  'Analog Material',
+  'Other'
+]
+
+export const LITHOLOGY_TYPES = [
+  'Igneous - Plutonic',
+  'Igneous - Volcanic',
+  'Sedimentary - Clastic',
+  'Sedimentary - Chemical',
+  'Sedimentary - Organic',
+  'Metamorphic - Foliated',
+  'Metamorphic - Non-foliated',
+  'Other'
+]
+
+export const MINERAL_TYPES = [
+  'Quartz',
+  'Feldspar (K)',
+  'Feldspar (Plagioclase)',
+  'Olivine',
+  'Pyroxene',
+  'Amphibole',
+  'Mica (Muscovite)',
+  'Mica (Biotite)',
+  'Calcite',
+  'Dolomite',
+  'Gypsum',
+  'Halite',
+  'Garnet',
+  'Kyanite',
+  'Sillimanite',
+  'Andalusite',
+  'Chlorite',
+  'Serpentine',
+  'Talc',
+  'Clay Minerals',
+  'Magnetite',
+  'Hematite',
+  'Pyrite',
+  'Other'
+]
+
+export const SAMPLE_PARAMETER_TYPES = [
+  'Weight',
+  'Connected Porosity',
+  'Unconnected Porosity',
+  'Total Porosity',
+  'Density',
+  'Permeability (Gas)',
+  'Permeability (Water)',
+  'Temperature',
+  'Humidity',
+  'Fluid Saturation',
+  'Stress',
+  'Other'
+]
+
+export const FRACTION_UNITS = [
+  '%',
+  'vol%',
+  'wt%',
+  'ppm',
+  'ppb'
+]

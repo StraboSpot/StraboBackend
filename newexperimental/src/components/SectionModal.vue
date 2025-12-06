@@ -1,6 +1,6 @@
 <template>
   <div class="modal-overlay" @click.self="handleClose">
-    <div class="modal-container">
+    <div class="modal-container" :class="{ 'modal-container--wide': hasForm }">
       <!-- Modal Header -->
       <div class="modal-header">
         <h2 class="modal-title">{{ sectionTitle }}</h2>
@@ -9,8 +9,24 @@
 
       <!-- Modal Content -->
       <div class="modal-content">
-        <!-- Placeholder content - will be replaced with section-specific forms -->
-        <div class="placeholder-content">
+        <!-- Sample Form -->
+        <SampleForm
+          v-if="section === 'sample' && !readonly"
+          :initial-data="data"
+          @submit="handleFormSubmit"
+          @cancel="handleClose"
+        />
+
+        <!-- Sample View (readonly) -->
+        <div v-else-if="section === 'sample' && readonly" class="readonly-content">
+          <SampleView :data="data" />
+          <div class="flex justify-center mt-6">
+            <button @click="handleClose" class="btn-secondary">Close</button>
+          </div>
+        </div>
+
+        <!-- Placeholder for other sections -->
+        <div v-else class="placeholder-content">
           <p class="text-lg mb-4">{{ sectionTitle }} Form</p>
           <p class="text-strabo-text-secondary mb-6">
             This section will contain the full {{ sectionTitle.toLowerCase() }} form with all LAPS-compliant fields.
@@ -25,17 +41,17 @@
           <p class="text-sm text-strabo-text-secondary mt-4 italic">
             Full form implementation coming soon...
           </p>
-        </div>
-      </div>
 
-      <!-- Modal Footer -->
-      <div class="modal-footer">
-        <button @click="handleClose" class="btn-secondary">
-          {{ readonly ? 'Close' : 'Cancel' }}
-        </button>
-        <button v-if="!readonly" @click="handleSave" class="btn-primary">
-          Save {{ sectionTitle }}
-        </button>
+          <!-- Placeholder Footer for non-sample sections -->
+          <div class="flex justify-center gap-3 mt-6">
+            <button @click="handleClose" class="btn-secondary">
+              {{ readonly ? 'Close' : 'Cancel' }}
+            </button>
+            <button v-if="!readonly" @click="handleSave" class="btn-primary">
+              Save {{ sectionTitle }}
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -43,6 +59,8 @@
 
 <script setup>
 import { computed } from 'vue'
+import SampleForm from '@/components/forms/SampleForm.vue'
+import SampleView from '@/components/views/SampleView.vue'
 
 const props = defineProps({
   section: {
@@ -70,7 +88,12 @@ const sectionTitles = {
   data: 'Data'
 }
 
+// Sections that have real form implementations
+const sectionsWithForms = ['sample']
+
 const sectionTitle = computed(() => sectionTitles[props.section] || props.section)
+
+const hasForm = computed(() => sectionsWithForms.includes(props.section))
 
 const hasData = computed(() => {
   if (Array.isArray(props.data)) {
@@ -84,9 +107,13 @@ const handleClose = () => {
 }
 
 const handleSave = () => {
-  // For now, just pass back the existing data
-  // This will be replaced with form data once forms are implemented
+  // For placeholder sections, just pass back the existing data
   emit('save', props.section, props.data)
+}
+
+const handleFormSubmit = (formData) => {
+  // Called by form components when they submit
+  emit('save', props.section, formData)
 }
 </script>
 
@@ -107,11 +134,15 @@ const handleSave = () => {
   border: 1px solid var(--strabo-border);
   border-radius: 0.5rem;
   width: 100%;
-  max-width: 900px;
+  max-width: 700px;
   max-height: 90vh;
   display: flex;
   flex-direction: column;
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+}
+
+.modal-container--wide {
+  max-width: 950px;
 }
 
 .modal-header {
