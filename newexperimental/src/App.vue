@@ -1,5 +1,5 @@
 <template>
-  <div class="min-h-screen bg-strabo-bg-primary">
+  <div class="min-h-screen bg-strabo-bg-primary dark-mode">
     <main class="container mx-auto px-4 py-6">
       <router-view v-slot="{ Component }">
         <KeepAlive include="ApparatusRepository">

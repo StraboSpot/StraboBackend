@@ -1,81 +1,75 @@
 <template>
-  <v-dialog
-    :model-value="true"
-    @update:model-value="handleClose"
-    :max-width="hasForm ? 1000 : 700"
-    scrollable
-    persistent
+  <Dialog
+    :visible="true"
+    modal
+    :header="sectionTitle"
+    :style="{ width: hasForm ? '1000px' : '700px' }"
+    :maximizable="true"
+    :closable="true"
+    @update:visible="handleClose"
+    :pt="{
+      root: { class: 'dark-mode' },
+      header: { class: 'border-b border-surface-700' },
+      content: { class: 'p-4' }
+    }"
   >
-    <v-card>
-      <!-- Modal Header -->
-      <v-card-title class="d-flex justify-space-between align-center pa-4">
-        <span class="text-h6 text-uppercase">{{ sectionTitle }}</span>
-        <v-btn
-          icon
-          size="small"
-          color="primary"
+    <!-- Sample Form -->
+    <SampleForm
+      v-if="section === 'sample' && !readonly"
+      :initial-data="data"
+      @submit="handleFormSubmit"
+      @cancel="handleClose"
+    />
+
+    <!-- Sample View (readonly) -->
+    <div v-else-if="section === 'sample' && readonly">
+      <SampleView :data="data" />
+      <div class="flex justify-center mt-6">
+        <Button label="Close" outlined @click="handleClose" />
+      </div>
+    </div>
+
+    <!-- Placeholder for other sections -->
+    <div v-else class="text-center p-4">
+      <p class="text-lg mb-4">{{ sectionTitle }} Form</p>
+      <p class="text-surface-400 mb-6">
+        This section will contain the full {{ sectionTitle.toLowerCase() }} form with all LAPS-compliant fields.
+      </p>
+
+      <!-- Show current data if any -->
+      <div v-if="hasData" class="text-left">
+        <div class="text-sm font-semibold mb-2 text-surface-400">Current Data:</div>
+        <div class="p-3 rounded-lg overflow-auto max-h-64 bg-surface-900">
+          <pre class="text-xs">{{ JSON.stringify(data, null, 2) }}</pre>
+        </div>
+      </div>
+
+      <p class="text-sm text-surface-500 mt-4 italic">
+        Full form implementation coming soon...
+      </p>
+
+      <!-- Placeholder Footer for non-sample sections -->
+      <div class="flex justify-center gap-3 mt-6">
+        <Button
+          :label="readonly ? 'Close' : 'Cancel'"
+          severity="secondary"
+          outlined
           @click="handleClose"
-        >
-          <v-icon>mdi-close</v-icon>
-        </v-btn>
-      </v-card-title>
-
-      <v-divider />
-
-      <!-- Modal Content -->
-      <v-card-text class="pa-4">
-        <!-- Sample Form -->
-        <SampleForm
-          v-if="section === 'sample' && !readonly"
-          :initial-data="data"
-          @submit="handleFormSubmit"
-          @cancel="handleClose"
         />
-
-        <!-- Sample View (readonly) -->
-        <div v-else-if="section === 'sample' && readonly">
-          <SampleView :data="data" />
-          <div class="d-flex justify-center mt-6">
-            <v-btn variant="outlined" @click="handleClose">Close</v-btn>
-          </div>
-        </div>
-
-        <!-- Placeholder for other sections -->
-        <div v-else class="text-center pa-4">
-          <p class="text-h6 mb-4">{{ sectionTitle }} Form</p>
-          <p class="text-medium-emphasis mb-6">
-            This section will contain the full {{ sectionTitle.toLowerCase() }} form with all LAPS-compliant fields.
-          </p>
-
-          <!-- Show current data if any -->
-          <div v-if="hasData" class="text-left">
-            <div class="text-subtitle-2 mb-2">Current Data:</div>
-            <v-sheet rounded class="pa-3 overflow-auto" style="max-height: 256px; background: rgba(0,0,0,0.2)">
-              <pre class="text-caption">{{ JSON.stringify(data, null, 2) }}</pre>
-            </v-sheet>
-          </div>
-
-          <p class="text-caption text-medium-emphasis mt-4 font-italic">
-            Full form implementation coming soon...
-          </p>
-
-          <!-- Placeholder Footer for non-sample sections -->
-          <div class="d-flex justify-center ga-3 mt-6">
-            <v-btn variant="outlined" @click="handleClose">
-              {{ readonly ? 'Close' : 'Cancel' }}
-            </v-btn>
-            <v-btn v-if="!readonly" color="primary" @click="handleSave">
-              Save {{ sectionTitle }}
-            </v-btn>
-          </div>
-        </div>
-      </v-card-text>
-    </v-card>
-  </v-dialog>
+        <Button
+          v-if="!readonly"
+          :label="'Save ' + sectionTitle"
+          @click="handleSave"
+        />
+      </div>
+    </div>
+  </Dialog>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import Dialog from 'primevue/dialog'
+import Button from 'primevue/button'
 import SampleForm from '@/components/forms/SampleForm.vue'
 import SampleView from '@/components/views/SampleView.vue'
 

@@ -1,446 +1,335 @@
 <template>
-  <v-form @submit.prevent="handleSubmit" class="sample-form">
+  <form @submit.prevent="handleSubmit" class="sample-form">
     <!-- Basic Information -->
-    <v-expansion-panels v-model="openPanels" multiple>
-      <v-expansion-panel value="basic">
-        <v-expansion-panel-title>Basic Information</v-expansion-panel-title>
-        <v-expansion-panel-text>
-          <v-row>
-            <v-col cols="12" md="6">
-              <v-text-field
+    <Accordion :value="openPanels" multiple>
+      <AccordionPanel value="basic">
+        <AccordionHeader>Basic Information</AccordionHeader>
+        <AccordionContent>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="flex flex-col gap-2">
+              <label for="sampleName">Sample Name *</label>
+              <InputText
+                id="sampleName"
                 v-model="form.name"
-                label="Sample Name *"
                 placeholder="e.g., Carrara Marble #1"
-                required
-                :rules="[v => !!v || 'Sample name is required']"
+                :invalid="!form.name"
               />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
+            </div>
+            <div class="flex flex-col gap-2">
+              <label for="sampleId">Sample ID</label>
+              <InputText
+                id="sampleId"
                 v-model="form.id"
-                label="Sample ID"
                 placeholder="Internal sample identifier"
               />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
+            </div>
+            <div class="flex flex-col gap-2">
+              <label for="igsn">IGSN</label>
+              <InputText
+                id="igsn"
                 v-model="form.igsn"
-                label="IGSN"
                 placeholder="International Geo Sample Number"
               />
-            </v-col>
-            <v-col cols="12">
-              <v-textarea
+            </div>
+            <div class="flex flex-col gap-2 md:col-span-2">
+              <label for="description">Description</label>
+              <Textarea
+                id="description"
                 v-model="form.description"
-                label="Description"
                 placeholder="Brief description of the sample..."
                 rows="3"
+                autoResize
               />
-            </v-col>
-          </v-row>
+            </div>
+          </div>
 
           <!-- Parent Sample -->
-          <v-divider class="my-4" />
-          <div class="text-subtitle-2 mb-3">Parent Sample (Optional)</div>
-          <v-row>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.parent.name"
-                label="Parent Name"
-                placeholder="Parent sample name"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.parent.id"
-                label="Parent ID"
-                placeholder="Parent sample ID"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.parent.igsn"
-                label="Parent IGSN"
-                placeholder="Parent IGSN"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.parent.description"
-                label="Parent Description"
-                placeholder="Parent description"
-                density="compact"
-              />
-            </v-col>
-          </v-row>
-        </v-expansion-panel-text>
-      </v-expansion-panel>
+          <Divider />
+          <div class="text-sm font-semibold mb-3">Parent Sample (Optional)</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Parent Name</label>
+              <InputText v-model="form.parent.name" placeholder="Parent sample name" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Parent ID</label>
+              <InputText v-model="form.parent.id" placeholder="Parent sample ID" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Parent IGSN</label>
+              <InputText v-model="form.parent.igsn" placeholder="Parent IGSN" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Parent Description</label>
+              <InputText v-model="form.parent.description" placeholder="Parent description" />
+            </div>
+          </div>
+        </AccordionContent>
+      </AccordionPanel>
 
       <!-- Material -->
-      <v-expansion-panel value="material">
-        <v-expansion-panel-title>Material</v-expansion-panel-title>
-        <v-expansion-panel-text>
+      <AccordionPanel value="material">
+        <AccordionHeader>Material</AccordionHeader>
+        <AccordionContent>
           <!-- Material Type -->
-          <div class="text-subtitle-2 mb-3">Material Type</div>
-          <v-row>
-            <v-col cols="12" md="6">
-              <v-select
+          <div class="text-sm font-semibold mb-3">Material Type</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Type</label>
+              <Select
                 v-model="form.material.material.type"
-                :items="MATERIAL_TYPES"
-                label="Type"
+                :options="MATERIAL_TYPES"
                 placeholder="Select type..."
-                clearable
+                showClear
               />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.material.material.name"
-                label="Name"
-                placeholder="e.g., Carrara Marble"
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.material.material.state"
-                label="State"
-                placeholder="e.g., Homogeneous"
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.material.material.note"
-                label="Note"
-                placeholder="Additional notes"
-              />
-            </v-col>
-          </v-row>
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Name</label>
+              <InputText v-model="form.material.material.name" placeholder="e.g., Carrara Marble" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">State</label>
+              <InputText v-model="form.material.material.state" placeholder="e.g., Homogeneous" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Note</label>
+              <InputText v-model="form.material.material.note" placeholder="Additional notes" />
+            </div>
+          </div>
 
           <!-- Mineralogy / Composition -->
-          <v-divider class="my-4" />
-          <div class="text-subtitle-2 mb-2">Mineralogy / Composition</div>
-          <div class="text-caption text-medium-emphasis mb-3">
+          <Divider />
+          <div class="text-sm font-semibold mb-2">Mineralogy / Composition</div>
+          <p class="text-xs text-surface-400 mb-3">
             Define the mineral phases and their proportions in this sample.
-          </div>
+          </p>
 
-          <v-card
+          <div
             v-for="(phase, idx) in form.material.composition"
             :key="idx"
-            variant="outlined"
-            class="mb-3 pa-3"
+            class="p-3 mb-3 border border-surface-700 rounded-lg"
           >
-            <div class="d-flex justify-space-between align-center mb-2">
-              <span class="text-caption">Phase {{ idx + 1 }}</span>
-              <v-btn
+            <div class="flex justify-between items-center mb-2">
+              <span class="text-xs text-surface-400">Phase {{ idx + 1 }}</span>
+              <Button
                 size="small"
-                color="error"
-                variant="text"
+                severity="danger"
+                text
+                label="Remove"
                 @click="removePhase(idx)"
-              >
-                Remove
-              </v-btn>
+              />
             </div>
-            <v-row dense>
-              <v-col cols="6" md="3">
-                <v-select
-                  v-model="phase.mineral"
-                  :items="MINERAL_TYPES"
-                  label="Mineral"
-                  density="compact"
-                  clearable
-                />
-              </v-col>
-              <v-col cols="6" md="3">
-                <v-text-field
-                  v-model="phase.fraction"
-                  label="Fraction"
-                  placeholder="e.g., 0.99"
-                  density="compact"
-                />
-              </v-col>
-              <v-col cols="6" md="3">
-                <v-select
-                  v-model="phase.unit"
-                  :items="FRACTION_UNITS"
-                  label="Unit"
-                  density="compact"
-                />
-              </v-col>
-              <v-col cols="6" md="3">
-                <v-text-field
-                  v-model="phase.grainsize"
-                  label="Grain Size (um)"
-                  placeholder="e.g., 150"
-                  density="compact"
-                />
-              </v-col>
-            </v-row>
-          </v-card>
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div class="flex flex-col gap-1">
+                <label class="text-xs">Mineral</label>
+                <Select v-model="phase.mineral" :options="MINERAL_TYPES" placeholder="Select..." showClear size="small" />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-xs">Fraction</label>
+                <InputText v-model="phase.fraction" placeholder="e.g., 0.99" size="small" />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-xs">Unit</label>
+                <Select v-model="phase.unit" :options="FRACTION_UNITS" size="small" />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-xs">Grain Size (um)</label>
+                <InputText v-model="phase.grainsize" placeholder="e.g., 150" size="small" />
+              </div>
+            </div>
+          </div>
 
-          <v-btn
-            variant="outlined"
+          <Button
             size="small"
+            outlined
+            icon="pi pi-plus"
+            label="Add Mineral Phase"
             @click="addPhase"
-            prepend-icon="mdi-plus"
-          >
-            Add Mineral Phase
-          </v-btn>
+          />
 
           <!-- Provenance -->
-          <v-divider class="my-4" />
-          <div class="text-subtitle-2 mb-3">Provenance</div>
-          <v-row>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.material.provenance.formation"
-                label="Formation"
-                placeholder="e.g., Carrara (Italy)"
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.material.provenance.member"
-                label="Member"
-                placeholder="e.g., Hettangian"
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.material.provenance.submember"
-                label="Submember"
-                placeholder="Submember name"
-              />
-            </v-col>
-            <v-col cols="12" md="6">
-              <v-text-field
-                v-model="form.material.provenance.source"
-                label="Source"
-                placeholder="e.g., Quarry"
-              />
-            </v-col>
-          </v-row>
+          <Divider />
+          <div class="text-sm font-semibold mb-3">Provenance</div>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Formation</label>
+              <InputText v-model="form.material.provenance.formation" placeholder="e.g., Carrara (Italy)" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Member</label>
+              <InputText v-model="form.material.provenance.member" placeholder="e.g., Hettangian" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Submember</label>
+              <InputText v-model="form.material.provenance.submember" placeholder="Submember name" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Source</label>
+              <InputText v-model="form.material.provenance.source" placeholder="e.g., Quarry" />
+            </div>
+          </div>
 
           <!-- Location -->
-          <div class="text-overline mt-4 mb-2">Location</div>
-          <v-row dense>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.provenance.location.street"
-                label="Street"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.provenance.location.building"
-                label="Building"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.provenance.location.city"
-                label="City"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.provenance.location.state"
-                label="State/Region"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.provenance.location.postcode"
-                label="Postcode"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.provenance.location.country"
-                label="Country"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.provenance.location.latitude"
-                label="Latitude"
-                placeholder="e.g., 44.0793"
-                density="compact"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.provenance.location.longitude"
-                label="Longitude"
-                placeholder="e.g., 10.0979"
-                density="compact"
-              />
-            </v-col>
-          </v-row>
+          <div class="text-xs font-semibold text-surface-400 uppercase mt-4 mb-2">Location</div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div class="flex flex-col gap-1">
+              <label class="text-xs">Street</label>
+              <InputText v-model="form.material.provenance.location.street" size="small" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs">Building</label>
+              <InputText v-model="form.material.provenance.location.building" size="small" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs">City</label>
+              <InputText v-model="form.material.provenance.location.city" size="small" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs">State/Region</label>
+              <InputText v-model="form.material.provenance.location.state" size="small" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs">Postcode</label>
+              <InputText v-model="form.material.provenance.location.postcode" size="small" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs">Country</label>
+              <InputText v-model="form.material.provenance.location.country" size="small" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs">Latitude</label>
+              <InputText v-model="form.material.provenance.location.latitude" placeholder="e.g., 44.0793" size="small" />
+            </div>
+            <div class="flex flex-col gap-1">
+              <label class="text-xs">Longitude</label>
+              <InputText v-model="form.material.provenance.location.longitude" placeholder="e.g., 10.0979" size="small" />
+            </div>
+          </div>
 
           <!-- Texture -->
-          <v-divider class="my-4" />
-          <div class="text-subtitle-2 mb-3">Texture</div>
-          <v-row>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.texture.bedding"
-                label="Bedding"
-                placeholder="e.g., no bedding"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.texture.lineation"
-                label="Lineation"
-                placeholder="e.g., no apparent lineation"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.texture.foliation"
-                label="Foliation"
-                placeholder="e.g., no foliation"
-              />
-            </v-col>
-            <v-col cols="6" md="3">
-              <v-text-field
-                v-model="form.material.texture.fault"
-                label="Fault"
-                placeholder="e.g., no faults"
-              />
-            </v-col>
-          </v-row>
-        </v-expansion-panel-text>
-      </v-expansion-panel>
+          <Divider />
+          <div class="text-sm font-semibold mb-3">Texture</div>
+          <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Bedding</label>
+              <InputText v-model="form.material.texture.bedding" placeholder="e.g., no bedding" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Lineation</label>
+              <InputText v-model="form.material.texture.lineation" placeholder="e.g., no apparent lineation" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Foliation</label>
+              <InputText v-model="form.material.texture.foliation" placeholder="e.g., no foliation" />
+            </div>
+            <div class="flex flex-col gap-2">
+              <label class="text-sm">Fault</label>
+              <InputText v-model="form.material.texture.fault" placeholder="e.g., no faults" />
+            </div>
+          </div>
+        </AccordionContent>
+      </AccordionPanel>
 
       <!-- Parameters -->
-      <v-expansion-panel value="parameters">
-        <v-expansion-panel-title>Parameters</v-expansion-panel-title>
-        <v-expansion-panel-text>
-          <div class="text-caption text-medium-emphasis mb-4">
+      <AccordionPanel value="parameters">
+        <AccordionHeader>Parameters</AccordionHeader>
+        <AccordionContent>
+          <p class="text-sm text-surface-400 mb-4">
             Pre-experimental sample parameters (weight, porosity, density, etc.).
-          </div>
+          </p>
 
-          <v-card
+          <div
             v-for="(param, idx) in form.parameters"
             :key="idx"
-            variant="outlined"
-            class="mb-3 pa-3"
+            class="p-4 mb-3 border border-surface-700 rounded-lg"
           >
-            <div class="d-flex justify-space-between align-center mb-2">
-              <span class="text-body-2 font-weight-medium">Parameter {{ idx + 1 }}</span>
-              <v-btn
+            <div class="flex justify-between items-center mb-3">
+              <span class="text-sm font-medium">Parameter {{ idx + 1 }}</span>
+              <Button
                 size="small"
-                color="error"
-                variant="text"
+                severity="danger"
+                text
+                label="Remove"
                 @click="removeParameter(idx)"
-              >
-                Remove
-              </v-btn>
+              />
             </div>
-            <v-row dense>
-              <v-col cols="12" md="3">
-                <v-select
-                  v-model="param.control"
-                  :items="SAMPLE_PARAMETER_TYPES"
-                  label="Variable"
-                  density="compact"
-                  clearable
-                />
-              </v-col>
-              <v-col cols="6" md="2">
-                <v-text-field
-                  v-model="param.value"
-                  label="Value"
-                  density="compact"
-                />
-              </v-col>
-              <v-col cols="6" md="2">
-                <v-select
-                  v-model="param.unit"
-                  :items="UNIT_TYPES"
-                  label="Unit"
-                  density="compact"
-                  clearable
-                />
-              </v-col>
-              <v-col cols="6" md="2">
-                <v-select
-                  v-model="param.prefix"
-                  :items="prefixOptions"
-                  label="Prefix"
-                  density="compact"
-                />
-              </v-col>
-              <v-col cols="12">
-                <v-text-field
-                  v-model="param.note"
-                  label="Note (Measurement and Treatment)"
-                  placeholder="Optional note"
-                  density="compact"
-                />
-              </v-col>
-            </v-row>
-          </v-card>
+            <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div class="col-span-2 md:col-span-1 flex flex-col gap-1">
+                <label class="text-xs">Variable</label>
+                <Select v-model="param.control" :options="SAMPLE_PARAMETER_TYPES" placeholder="Select..." showClear size="small" />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-xs">Value</label>
+                <InputText v-model="param.value" size="small" />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-xs">Unit</label>
+                <Select v-model="param.unit" :options="UNIT_TYPES" showClear size="small" />
+              </div>
+              <div class="flex flex-col gap-1">
+                <label class="text-xs">Prefix</label>
+                <Select v-model="param.prefix" :options="prefixOptions" size="small" />
+              </div>
+              <div class="col-span-2 md:col-span-5 flex flex-col gap-1">
+                <label class="text-xs">Note (Measurement and Treatment)</label>
+                <InputText v-model="param.note" placeholder="Optional note" size="small" />
+              </div>
+            </div>
+          </div>
 
-          <v-btn
-            variant="outlined"
+          <Button
             size="small"
+            outlined
+            icon="pi pi-plus"
+            label="Add Parameter"
             @click="addParameter"
-            prepend-icon="mdi-plus"
-          >
-            Add Parameter
-          </v-btn>
-        </v-expansion-panel-text>
-      </v-expansion-panel>
+          />
+        </AccordionContent>
+      </AccordionPanel>
 
       <!-- Documents -->
-      <v-expansion-panel value="documents">
-        <v-expansion-panel-title>Documents</v-expansion-panel-title>
-        <v-expansion-panel-text>
-          <div class="text-caption text-medium-emphasis mb-4">
+      <AccordionPanel value="documents">
+        <AccordionHeader>Documents</AccordionHeader>
+        <AccordionContent>
+          <p class="text-sm text-surface-400 mb-4">
             Upload sample images, thin section photos, or other documentation.
+          </p>
+          <div class="flex items-center justify-center p-8 border-2 border-dashed border-surface-600 rounded-lg">
+            <span class="text-surface-500">Document upload coming soon</span>
           </div>
-          <v-sheet
-            rounded
-            class="d-flex align-center justify-center pa-8"
-            style="border: 2px dashed rgba(255,255,255,0.2)"
-          >
-            <span class="text-medium-emphasis">Document upload coming soon</span>
-          </v-sheet>
-        </v-expansion-panel-text>
-      </v-expansion-panel>
-    </v-expansion-panels>
+        </AccordionContent>
+      </AccordionPanel>
+    </Accordion>
 
     <!-- Actions -->
-    <div class="d-flex justify-center ga-3 mt-6">
-      <v-btn
-        variant="outlined"
+    <div class="flex justify-center gap-3 mt-6">
+      <Button
+        type="button"
+        severity="secondary"
+        outlined
+        label="Cancel"
         @click="$emit('cancel')"
-      >
-        Cancel
-      </v-btn>
-      <v-btn
+      />
+      <Button
         type="submit"
-        color="primary"
+        label="Save Sample"
         :disabled="!isValid"
-      >
-        Save Sample
-      </v-btn>
+      />
     </div>
-  </v-form>
+  </form>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import Accordion from 'primevue/accordion'
+import AccordionPanel from 'primevue/accordionpanel'
+import AccordionHeader from 'primevue/accordionheader'
+import AccordionContent from 'primevue/accordioncontent'
+import InputText from 'primevue/inputtext'
+import Textarea from 'primevue/textarea'
+import Select from 'primevue/select'
+import Button from 'primevue/button'
+import Divider from 'primevue/divider'
 import {
   MATERIAL_TYPES,
   MINERAL_TYPES,
