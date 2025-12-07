@@ -197,28 +197,12 @@ import { facilityService, apparatusService } from '@/services/api'
 import {
   FACILITY_TYPES,
   APPARATUS_TYPES,
-  APPARATUS_FEATURES
+  APPARATUS_FEATURES,
+  PARAMETER_TYPES
 } from '@/schemas/laps-enums'
 
-// Apparatus-specific parameter types (from LAPS schema)
-const APPARATUS_PARAMETER_TYPES = [
-  'Confining Pressure',
-  'Effective Pressure',
-  'Pore Pressure',
-  'Temperature',
-  'σ1-Displacement',
-  'σ2-Displacement',
-  'σ3-Displacement',
-  'σ1-Load',
-  'σ2-Load',
-  'σ3-Load',
-  'Displacement Rate',
-  'Loading Rate',
-  'Stiffness',
-  'Sample Diameter',
-  'Sample Length',
-  'Permeability'
-]
+// Use the correct parameter types from the old app
+const APPARATUS_PARAMETER_TYPES = PARAMETER_TYPES
 
 const props = defineProps({
   initialData: {

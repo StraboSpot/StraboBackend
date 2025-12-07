@@ -168,11 +168,7 @@
         </div>
         <div class="field">
           <label class="text-sm">Source</label>
-          <Select v-model="form.material.provenance.source" :options="SOURCE_TYPES" placeholder="Select..." showClear />
-        </div>
-        <div class="field" v-if="isOther(form.material.provenance.source)">
-          <label class="text-sm">Other Source</label>
-          <InputText v-model="form.material.provenance.other_source" placeholder="Enter other source..." />
+          <Select v-model="form.material.provenance.source" :options="PROVENANCE_SOURCES" placeholder="Select..." showClear />
         </div>
       </div>
     </fieldset>
@@ -353,16 +349,8 @@ import {
   TEXT_INPUT_MATERIAL_TYPES,
   MATERIAL_NAME_LABELS,
   MATERIAL_NAME_OPTIONS,
-  SOIL_TYPES,
-  IGNEOUS_ROCK_TYPES,
-  SEDIMENTARY_ROCK_TYPES,
-  METAMORPHIC_ROCK_TYPES,
-  EPOS_LITHOLOGY_TYPES,
-  LAB_STANDARDS,
-  COMMODITY_TYPES
+  PROVENANCE_SOURCES
 } from '@/schemas/laps-enums'
-
-const SOURCE_TYPES = ['Quarry', 'Mine', 'Outcrop', 'Core', 'Laboratory', 'Commercial', 'Other']
 
 // Check if material type uses text input (vs dropdown)
 const usesTextInput = (materialType) => {
@@ -443,7 +431,6 @@ const createEmptyForm = () => ({
       member: '',
       submember: '',
       source: '',
-      other_source: '',
       location: {
         street: '',
         building: '',
@@ -496,7 +483,6 @@ watch(() => props.initialData, (data) => {
           member: data.material?.provenance?.member || '',
           submember: data.material?.provenance?.submember || '',
           source: data.material?.provenance?.source || '',
-          other_source: data.material?.provenance?.other_source || '',
           location: {
             street: data.material?.provenance?.location?.street || '',
             building: data.material?.provenance?.location?.building || '',

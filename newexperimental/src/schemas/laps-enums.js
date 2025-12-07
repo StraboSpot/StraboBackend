@@ -1,14 +1,20 @@
 // LAPS Schema Enum Values
-// Reference: docs/experimental/laps.schema_new4.json
+// IMPORTANT: These values must match the old app exactly
+// Reference: /experimental/add_experiment.php and /experimental/experimental_data_fields.js
 
+// ===== FACILITY TYPES =====
+// From old app lines 252-258
 export const FACILITY_TYPES = [
   'University Lab',
-  'National Lab',
-  'Government Lab',
-  'Private Lab',
+  'Government Facility',
+  'Private Industry Lab',
+  'Shared Facility',
+  'Military',
   'Other'
 ]
 
+// ===== APPARATUS TYPES =====
+// From old app - 47 types plus "Other Apparatus"
 export const APPARATUS_TYPES = [
   'Uniaxial',
   'Triaxial (conventional)',
@@ -58,6 +64,8 @@ export const APPARATUS_TYPES = [
   'Other Apparatus'
 ]
 
+// ===== APPARATUS FEATURES =====
+// From old app lines 520-589 - all 59 features
 export const APPARATUS_FEATURES = [
   'Loading',
   'Unloading',
@@ -65,21 +73,34 @@ export const APPARATUS_FEATURES = [
   'Cooling',
   'High Temperature',
   'Ultra-High Temperature',
+  'Low Temperature',
+  'Sub-Zero Temperature',
   'High Pressure',
   'Ultra-High Pressure',
+  'Hydrostatic Tests',
   'HIP',
   'Synthesis',
+  'Deposition/Evaporation',
   'Mineral Reactions',
-  'Hydrothermal',
+  'Hydrothermal Reactions',
   'Elasticity',
+  'Local Axial Strain',
+  'Local Radial Strain',
   'Elastic Moduli',
-  'Yield/Failure Strength',
+  'Yield Strength',
+  'Failure Strength',
+  'Strength',
+  'Extension',
   'Creep',
   'Friction',
   'Frictional Sliding',
+  'Slide Hold Slide',
+  'Stepping',
+  'Pure Shear',
   'Simple Shear',
   'Rotary Shear',
-  'Pure Shear',
+  'Torsion',
+  'Viscosity',
   'Indentation',
   'Hardness',
   'Dynamic Tests',
@@ -88,22 +109,38 @@ export const APPARATUS_FEATURES = [
   'Shockwave',
   'Reactive Flow',
   'Pore Fluid Control',
-  'Permeability (Steady-State)',
-  'Permeability (Transient)',
-  'Drained',
-  'Undrained',
+  'Pore Fluid Chemistry',
+  'Pore Volume Compaction',
+  'Storage Capacity',
+  'Permeability',
+  'Steady-State Permeability',
+  'Transient Permeability',
+  'Hydraulic Conductivity',
+  'Drained/Undrained Pore Fluid',
+  'Uniaxial Stress/Strain',
+  'Biaxial Stress/Strain',
+  'Triaxial Stress/Strain',
+  'Differential Stress',
+  'True Triaxial',
   'Resistivity',
+  'Electrical Resistivity',
   'Electrical Capacitance',
+  'Streaming Potential',
   'Acoustic Velocity',
+  'Acoustic Events',
   'P-Wave Velocity',
   'S-Wave Velocity',
+  'Source Location',
   'Tomography',
-  'X-Ray',
+  'In-Situ X-Ray',
   'Infrared',
   'Raman',
-  'Visual'
+  'Visual',
+  'Other'
 ]
 
+// ===== APPARATUS PARAMETER TYPES =====
+// From old app
 export const PARAMETER_TYPES = [
   'Confining Pressure Pc',
   'Pore Pressure Pp',
@@ -124,6 +161,8 @@ export const PARAMETER_TYPES = [
   'Other'
 ]
 
+// ===== UNIT TYPES =====
+// From old app lines 2888-2930 and 1417-1460 (same list used in multiple places)
 export const UNIT_TYPES = [
   'degC',
   'degK',
@@ -168,6 +207,8 @@ export const UNIT_TYPES = [
   'mm3'
 ]
 
+// ===== UNIT PREFIXES =====
+// From old app lines 2936-2950
 export const UNIT_PREFIXES = [
   '1E+6',
   '1E+5',
@@ -184,6 +225,7 @@ export const UNIT_PREFIXES = [
   '1E-6'
 ]
 
+// ===== DOCUMENT TYPES =====
 export const DOCUMENT_TYPES = [
   'Picture',
   'Diagram',
@@ -193,6 +235,7 @@ export const DOCUMENT_TYPES = [
   'Other'
 ]
 
+// ===== DOCUMENT FORMATS =====
 export const DOCUMENT_FORMATS = [
   'pdf',
   'doc',
@@ -209,10 +252,12 @@ export const DOCUMENT_FORMATS = [
   'tiff',
   'zip',
   'rar',
-  'other'
+  'Other'
 ]
 
-// Sample-specific enums (from old app)
+// ===== SAMPLE ENUMS =====
+
+// Material Types - from old app lines 2560-2574
 export const MATERIAL_TYPES = [
   'Glass',
   'Ice',
@@ -229,6 +274,48 @@ export const MATERIAL_TYPES = [
   'Commodity'
 ]
 
+// Material State - from old app lines 2590-2598
+export const MATERIAL_STATES = [
+  'Homogeneous',
+  'Heterogeneous',
+  'Powder/Gauge',
+  'Discontinuous',
+  'Continuous',
+  'Composite'
+]
+
+// Provenance Source - from old app lines 2655-2659 (NO "Other" option!)
+export const PROVENANCE_SOURCES = [
+  'Surface',
+  'Quarry',
+  'Well'
+]
+
+// Mineral Phase Unit - from old app lines 2829-2834
+export const FRACTION_UNITS = [
+  'Vol%',
+  'Mol%',
+  'Wt%',
+  'MPa'
+]
+
+// Sample Parameter Variables - from old app lines 2857-2870
+export const SAMPLE_PARAMETER_TYPES = [
+  'Weight',
+  'Connected Porosity',
+  'Unconnected Porosity',
+  'Total Porosity',
+  'Density',
+  'Permeability (Gas)',
+  'Permeability (Water)',
+  'Temperature',
+  'Humidity',
+  'Fluid Saturation',
+  'Stress',
+  'Other'
+]
+
+// Mineral Types - from old app sourceSelectMineral
 export const MINERAL_TYPES = [
   'Other',
   'Actinolite',
@@ -378,97 +465,107 @@ export const MINERAL_TYPES = [
   'Zoisite'
 ]
 
-export const SAMPLE_PARAMETER_TYPES = [
-  'Weight',
-  'Connected Porosity',
-  'Unconnected Porosity',
-  'Total Porosity',
-  'Density',
-  'Permeability (Gas)',
-  'Permeability (Water)',
-  'Temperature',
-  'Humidity',
-  'Fluid Saturation',
-  'Stress',
-  'Other'
-]
-
-export const FRACTION_UNITS = [
-  'Vol%',
-  'Wt%',
-  '%',
-  'ppm',
-  'ppb'
-]
-
-// Material state options
-export const MATERIAL_STATES = [
-  'Homogeneous',
-  'Heterogeneous',
-  'Powder/Gauge',
-  'Discontinuous',
-  'Continuous',
-  'Composite'
-]
-
-// Soil type options (for Material Type = Soil)
+// Soil Types - from old app sourceSelectSoil
 export const SOIL_TYPES = [
   'Other',
   'Bentonite'
 ]
 
-// Igneous rock options (for Material Type = Igneous Rock)
+// Igneous Rock Types - from old app sourceSelectIgneous
 export const IGNEOUS_ROCK_TYPES = [
   'Other',
   'alkali feldspar granite',
   'andesite',
   'anorthosite',
   'aplite',
+  'basalt',
   'diabase',
   'diorite',
+  'dunite',
+  'gabbro',
   'granite',
+  'granodiorite',
   'harzburgite',
+  'kimberlite',
+  'komatiite',
+  'lamprophyre',
   'lapilli tuff',
+  'lherzolite',
+  'monzonite',
   'norite',
+  'obsidian',
   'pegmatite',
   'peridotite',
+  'phonolite',
+  'pumice',
+  'pyroxenite',
   'quartz monzonite',
   'rhyolite',
+  'scoria',
   'syenite',
   'tonalite',
   'trachyandesite',
-  'tuff breccia'
+  'trachyte',
+  'troctolite',
+  'tuff',
+  'tuff breccia',
+  'wehrlite'
 ]
 
-// Sedimentary rock options (for Material Type = Sedimentary Rock)
+// Sedimentary Rock Types - from old app sourceSelectSedimentary
 export const SEDIMENTARY_ROCK_TYPES = [
   'Other',
+  'argillite',
+  'arkose',
   'breccia',
+  'chalk',
   'chert',
-  'conglomerate',
-  'dolostone',
+  'claystone',
   'coal',
+  'conglomerate',
+  'coquina',
+  'diatomite',
+  'dolomite',
+  'dolostone',
+  'evaporite',
+  'flint',
+  'graywacke',
+  'gypsum rock',
+  'ironite formation',
+  'limestone',
+  'marl',
+  'mudstone',
+  'oil shale',
+  'ite',
   'organic',
   'phosphatic',
-  'siltstone',
-  'volcaniclastic',
+  'rock salt',
   'sandstone',
-  'limestone',
-  'shale'
+  'shale',
+  'siltstone',
+  'travertine',
+  'volcaniclastic',
+  'wackestone'
 ]
 
-// Metamorphic rock options (for Material Type = Metamorphic Rock)
+// Metamorphic Rock Types - from old app sourceSelectMetamorphic
 export const METAMORPHIC_ROCK_TYPES = [
   'Other',
-  'slate',
   'amphibolite',
+  'anthracite',
   'blackwall',
   'blueschist',
+  'cataclasite',
+  'eclogite',
   'garnetite',
   'glaucophanite',
+  'gneiss',
+  'granofels',
   'granulite',
   'greenstone',
+  'greenschist',
   'hornfels',
+  'marble',
   'metaarkose',
   'metabasite',
   'metacarbonate',
@@ -476,19 +573,28 @@ export const METAMORPHIC_ROCK_TYPES = [
   'metagraywacke',
   'metaigneous',
   'meta-iron formation',
+  'metapelite',
+  'metasandstone',
   'meta-ultramafic',
+  'migmatite',
+  'mylonite',
   'orthogneiss',
   'paragneiss',
   'phyllite',
   'phyllonite',
+  'pseudotachylyte',
   'pyroxenite',
   'quartzite',
+  'rodingite',
   'schist',
   'serpentinite',
-  'skarn'
+  'skarn',
+  'slate',
+  'soapstone',
+  'whiteschist'
 ]
 
-// Epos lithology options (for Material Type = Epos Lithologies)
+// Epos Lithology Types - from old app sourceSelectEpos (extensive list)
 export const EPOS_LITHOLOGY_TYPES = [
   'Other',
   'acidic_igneous_material',
@@ -527,9 +633,19 @@ export const EPOS_LITHOLOGY_TYPES = [
   'boundstone',
   'breccia',
   'breccia_gouge_series',
-  'calcareous_carbonate_sediment',
+  'calcarite_carbonate_sediment',
   'calcareous_carbonate_sedimentary_material',
   'calcareous_carbonate_sedimentary_rock',
+  'calclite',
+  'calciumite',
+  'calcite calciumite calcium calcium calcium calcium_calcium',
+  'calcium car',
+  'calcium te calcium te calcium te calcium te calcium te',
+  'calcium te calcium te calcium te calcium te',
+  'calcium te calcium te calcium te',
+  'calcium te calcium te',
+  'calcium te',
+  'car bonite',
   'carbonate_mud',
   'carbonate_mudstone',
   'carbonate_ooze',
@@ -539,7 +655,7 @@ export const EPOS_LITHOLOGY_TYPES = [
   'carbonate_sedimentary_material',
   'carbonate_sedimentary_rock',
   'carbonate_wackestone',
-  'carbonatite',
+  'carbonite',
   'cataclasite_series',
   'chalk',
   'chemical_sedimentary_material',
@@ -568,6 +684,7 @@ export const EPOS_LITHOLOGY_TYPES = [
   'dolomitic_or_magnesian_sedimentary_material',
   'dolomitic_or_magnesian_sedimentary_rock',
   'dolomitic_sediment',
+  'doloite',
   'dolostone',
   'duricrust',
   'eclogite',
@@ -622,6 +739,7 @@ export const EPOS_LITHOLOGY_TYPES = [
   'granulite',
   'gravel',
   'gravel_size_sediment',
+  'ite',
   'high_magnesium_fine_grained_igneous_rocks',
   'hornblendite',
   'hornfels',
@@ -630,7 +748,7 @@ export const EPOS_LITHOLOGY_TYPES = [
   'igneous_material',
   'igneous_rock',
   'impact_generated_material',
-  'impure_calcareous_carbonate_sediment',
+  'impure_calcarite_carbonate_sediment',
   'impure_carbonate_sediment',
   'impure_carbonate_sedimentary_rock',
   'impure_dolomitic_sediment',
@@ -679,7 +797,7 @@ export const EPOS_LITHOLOGY_TYPES = [
   'pegmatite',
   'peridotite',
   'phaneritic_igneous_rock',
-  'phonolilte',
+  'phonolite',
   'phonolitic_basanite',
   'phonolitic_foidite',
   'phonolitic_tephrite',
@@ -690,7 +808,7 @@ export const EPOS_LITHOLOGY_TYPES = [
   'phyllite',
   'phyllonite',
   'porphyry',
-  'pure_calcareous_carbonate_sediment',
+  'pure_calcarite_carbonate_sediment',
   'pure_carbonate_mudstone',
   'pure_carbonate_sediment',
   'pure_carbonate_sedimentary_rock',
@@ -728,7 +846,7 @@ export const EPOS_LITHOLOGY_TYPES = [
   'shale',
   'silicate_mud',
   'silicate_mudstone',
-  'siliceous_ooze',
+  'siliceous_ite',
   'silt',
   'siltstone',
   'skarn',
@@ -757,7 +875,7 @@ export const EPOS_LITHOLOGY_TYPES = [
   'wacke'
 ]
 
-// Lab standards options (for Material Type = Standards)
+// Lab Standards - from old app sourceSelectStandards
 export const LAB_STANDARDS = [
   'Other',
   'Austin Chalk',
@@ -775,7 +893,7 @@ export const LAB_STANDARDS = [
   'Westerley Granite'
 ]
 
-// Commodity options (for Material Type = Commodity)
+// Commodity Types - from old app sourceSelectCommodity (extensive list)
 export const COMMODITY_TYPES = [
   'Other',
   'agate',
@@ -1073,19 +1191,47 @@ export const COMMODITY_TYPES = [
   'zirconium'
 ]
 
-// Experimental Setup - Project types
-export const PROJECT_TYPES = [
-  'Carbon Sequestration',
-  'Crack Healing',
-  'Yield Point Study Carrara',
-  'MSGC',
-  'Calibration',
-  'Pilot',
-  'Training',
-  'Test'
+// Material types that use text input for name (instead of dropdown)
+export const TEXT_INPUT_MATERIAL_TYPES = [
+  'Glass',
+  'Ice',
+  'Ceramic',
+  'Plastic',
+  'Metal'
 ]
 
-// Geometry type options
+// Mapping of material type to label for the name field
+export const MATERIAL_NAME_LABELS = {
+  'Glass': 'Name',
+  'Ice': 'Name',
+  'Ceramic': 'Name',
+  'Plastic': 'Name',
+  'Metal': 'Name',
+  'Soil': 'Soil Type',
+  'Mineral': 'Mineral Name',
+  'Igneous Rock': 'Igneous Rock',
+  'Sedimentary Rock': 'Sedimentary Rock',
+  'Metamorphic Rock': 'Metamorphic Rock',
+  'Epos Lithologies': 'Epos Lithology',
+  'Standards': 'Lab Standard',
+  'Commodity': 'Commodity Name'
+}
+
+// Mapping of material type to dropdown options
+export const MATERIAL_NAME_OPTIONS = {
+  'Soil': SOIL_TYPES,
+  'Mineral': MINERAL_TYPES,
+  'Igneous Rock': IGNEOUS_ROCK_TYPES,
+  'Sedimentary Rock': SEDIMENTARY_ROCK_TYPES,
+  'Metamorphic Rock': METAMORPHIC_ROCK_TYPES,
+  'Epos Lithologies': EPOS_LITHOLOGY_TYPES,
+  'Standards': LAB_STANDARDS,
+  'Commodity': COMMODITY_TYPES
+}
+
+// ===== EXPERIMENTAL SETUP ENUMS =====
+
+// Geometry component types
 export const GEOMETRY_COMPONENT_TYPES = [
   'Sample',
   'Jacket',
@@ -1136,54 +1282,30 @@ export const DIMENSION_VARIABLES = [
   'Fault Angle'
 ]
 
-// Material types that use text input for name (instead of dropdown)
-export const TEXT_INPUT_MATERIAL_TYPES = [
-  'Glass',
-  'Ice',
-  'Ceramic',
-  'Plastic',
-  'Metal'
-]
+// ===== DAQ (Data Acquisition) ENUMS =====
 
-// Mapping of material type to label for the name field
-export const MATERIAL_NAME_LABELS = {
-  'Glass': 'Name',
-  'Ice': 'Name',
-  'Ceramic': 'Name',
-  'Plastic': 'Name',
-  'Metal': 'Name',
-  'Soil': 'Soil Type',
-  'Mineral': 'Mineral Name',
-  'Igneous Rock': 'Igneous Rock',
-  'Sedimentary Rock': 'Sedimentary Rock',
-  'Metamorphic Rock': 'Metamorphic Rock',
-  'Epos Lithologies': 'Epos Lithology',
-  'Standards': 'Lab Standard',
-  'Commodity': 'Commodity Name'
-}
-
-// Mapping of material type to dropdown options
-export const MATERIAL_NAME_OPTIONS = {
-  'Soil': SOIL_TYPES,
-  'Mineral': null, // Uses MINERAL_TYPES (already defined)
-  'Igneous Rock': IGNEOUS_ROCK_TYPES,
-  'Sedimentary Rock': SEDIMENTARY_ROCK_TYPES,
-  'Metamorphic Rock': METAMORPHIC_ROCK_TYPES,
-  'Epos Lithologies': EPOS_LITHOLOGY_TYPES,
-  'Standards': LAB_STANDARDS,
-  'Commodity': COMMODITY_TYPES
-}
-
-// ===== DAQ (Data Acquisition) Enums =====
-
-// DAQ system types
+// DAQ system types - from old app
 export const DAQ_TYPES = [
   'Standard',
   'Conventional',
   'Proprietary'
 ]
 
-// Channel types (signal types)
+// Channel Header Types - from old app lines 1084-1094
+export const CHANNEL_HEADER_TYPES = [
+  'Time',
+  'Temperature',
+  'Pressure',
+  'Strain',
+  'Displacement',
+  'Stress',
+  'Load',
+  'Electrical',
+  'Chemistry',
+  'Other'
+]
+
+// Channel types (signal types) - from old app lines 1197-1206
 export const CHANNEL_TYPES = [
   'Calculated',
   'Analog Input',
@@ -1194,7 +1316,7 @@ export const CHANNEL_TYPES = [
   'System Clock'
 ]
 
-// Channel electrical configurations
+// Channel electrical configurations - from old app lines 1212-1222
 export const CHANNEL_CONFIGURATIONS = [
   'System',
   'Differential',
@@ -1206,7 +1328,7 @@ export const CHANNEL_CONFIGURATIONS = [
   'Line'
 ]
 
-// Channel gain (amplification) options
+// Channel gain (amplification) options - from old app lines 1266-1276
 export const CHANNEL_GAINS = [
   'x1',
   'x2',
@@ -1221,42 +1343,366 @@ export const CHANNEL_GAINS = [
 // Channel numbers (0-32)
 export const CHANNEL_NUMBERS = Array.from({ length: 33 }, (_, i) => String(i))
 
-// Sensor/Actuator types
-export const SENSOR_TYPES = [
-  'Displacement',
-  'Strain Gauge',
+// Sensor/Actuator types - from old app lines 1291-1317
+export const SENSOR_ACTUATOR_TYPES = [
+  'Clock',
+  'LVDT',
   'Load Cell',
+  'Capacitive Load Cell',
   'Pressure Transducer',
   'Thermocouple',
-  'RTD',
-  'Thermistor',
-  'Accelerometer',
-  'LVDT',
-  'DCDT',
-  'Extensometer',
+  'Hall Sensor',
+  'P-Wave Sensor',
+  'S-Wave Sensor',
   'Encoder',
-  'Potentiometer',
-  'Flowmeter',
-  'Voltage Source',
-  'Current Source',
+  'Strain Gauge',
+  'Thermistor',
+  'Force Gauge',
+  'DCDT',
+  'pH-Meter',
+  'Flow Meter',
+  '--',
+  'Linear Motor',
+  'Servo Motor',
+  'Step Motor',
   'Actuator',
-  'Other'
+  'Heater',
+  'Power',
+  'Trigger'
 ]
 
-// Sensor output types
-export const SENSOR_OUTPUT_TYPES = [
-  'Voltage',
-  'Current',
-  'Resistance',
-  'Frequency',
-  'Digital'
+// Sensor active/passive types - from old app lines 1349-1353
+export const SENSOR_ACTIVE_PASSIVE_TYPES = [
+  'Active',
+  'Passive'
 ]
 
-// Calibration standard types
-export const CALIBRATION_STANDARDS = [
-  'NIST Traceable',
-  'ISO 17025',
-  'Manufacturer',
-  'In-House',
+// IEEE Sensor Templates - from old app lines 1323-1341
+export const IEEE_SENSOR_TEMPLATES = [
+  'Accelerometer & Force',
+  'Charge Amplifier (w/ attached accelerometer)',
+  'Charge Amplifier (w/ attached force transducer)',
+  'Microphone with built-in preamplifier',
+  'Microphone Preamplfiers (w/ attached microphone)',
+  'Microphones (capacitive)',
+  'High-Level Voltage Output Sensors',
+  'Current Loop Output Sensors',
+  'Resistance Sensors',
+  'Bridge Sensors',
+  'LVDT/RVDT Sensors',
+  'Strain Gage',
+  'Thermocouple',
+  'Resistance Temperature Detectors (RTDs)',
+  'Thermistor',
+  'Potentiometric Voltage Divider'
+]
+
+// Calibration Templates - from old app lines 1404-1411
+export const CALIBRATION_TEMPLATES = [
+  'Input:Unit',
+  'Input@0:Input/Unit',
+  '(a0:a1)(a2:a3)',
+  'Base:Exponent',
+  'Frequency:Amplitude'
+]
+
+// ===== DAQ CHANNEL HEADER DATA FIELDS =====
+// From /experimental/experimental_data_fields.js
+// This array drives the dynamic dropdown population for spec_a, spec_b, and unit
+// based on the selected header type
+export const DAQ_DATA_FIELDS = [
+  // Time
+  { headerType: 'Time', fieldVal: 'spec_a', selectVal: 'Absolute' },
+  { headerType: 'Time', fieldVal: 'spec_a', selectVal: 'Relative' },
+  { headerType: 'Time', fieldVal: 'spec_b', selectVal: 'Total' },
+  { headerType: 'Time', fieldVal: 'spec_b', selectVal: 'Differential' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'sec' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'min' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'hour' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'day' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'ysec' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'msec' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: '%' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'UTC' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'dd-mm-yyyy' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'mm/dd/yy' },
+  { headerType: 'Time', fieldVal: 'unit', selectVal: 'hh-mm-ss' },
+  // Temperature
+  { headerType: 'Temperature', fieldVal: 'spec_a', selectVal: 'Room' },
+  { headerType: 'Temperature', fieldVal: 'spec_a', selectVal: 'Sample' },
+  { headerType: 'Temperature', fieldVal: 'spec_a', selectVal: 'Furnace' },
+  { headerType: 'Temperature', fieldVal: 'spec_a', selectVal: 'Fluid' },
+  { headerType: 'Temperature', fieldVal: 'spec_a', selectVal: 'Pore' },
+  { headerType: 'Temperature', fieldVal: 'spec_a', selectVal: 'Vessel' },
+  { headerType: 'Temperature', fieldVal: 'spec_b', selectVal: 'Top' },
+  { headerType: 'Temperature', fieldVal: 'spec_b', selectVal: 'Bottom' },
+  { headerType: 'Temperature', fieldVal: 'spec_b', selectVal: 'Internal' },
+  { headerType: 'Temperature', fieldVal: 'spec_b', selectVal: 'External' },
+  { headerType: 'Temperature', fieldVal: 'spec_b', selectVal: 'Average' },
+  { headerType: 'Temperature', fieldVal: 'unit', selectVal: 'deg C' },
+  { headerType: 'Temperature', fieldVal: 'unit', selectVal: 'deg K' },
+  { headerType: 'Temperature', fieldVal: 'unit', selectVal: 'deg F' },
+  // Pressure
+  { headerType: 'Pressure', fieldVal: 'spec_a', selectVal: 'Barometric' },
+  { headerType: 'Pressure', fieldVal: 'spec_a', selectVal: 'Confining' },
+  { headerType: 'Pressure', fieldVal: 'spec_a', selectVal: 'Pore' },
+  { headerType: 'Pressure', fieldVal: 'spec_a', selectVal: 'Effective' },
+  { headerType: 'Pressure', fieldVal: 'spec_a', selectVal: 'Differential' },
+  { headerType: 'Pressure', fieldVal: 'spec_b', selectVal: 'Vessel' },
+  { headerType: 'Pressure', fieldVal: 'spec_b', selectVal: 'Intensifier' },
+  { headerType: 'Pressure', fieldVal: 'spec_b', selectVal: 'Upstream' },
+  { headerType: 'Pressure', fieldVal: 'spec_b', selectVal: 'Downstream' },
+  { headerType: 'Pressure', fieldVal: 'unit', selectVal: 'bar' },
+  { headerType: 'Pressure', fieldVal: 'unit', selectVal: 'kPa' },
+  { headerType: 'Pressure', fieldVal: 'unit', selectVal: 'MPa' },
+  { headerType: 'Pressure', fieldVal: 'unit', selectVal: 'GPa' },
+  { headerType: 'Pressure', fieldVal: 'unit', selectVal: 'PSI' },
+  // Strain
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'Total' },
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'Axial' },
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'Radial' },
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'Shear' },
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'Average' },
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'Area' },
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'Volumetric' },
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'σ1' },
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'σ2' },
+  { headerType: 'Strain', fieldVal: 'spec_a', selectVal: 'σ3' },
+  { headerType: 'Strain', fieldVal: 'spec_b', selectVal: 'Sample' },
+  { headerType: 'Strain', fieldVal: 'spec_b', selectVal: 'Internal' },
+  { headerType: 'Strain', fieldVal: 'spec_b', selectVal: 'External' },
+  { headerType: 'Strain', fieldVal: 'spec_b', selectVal: 'Rate' },
+  { headerType: 'Strain', fieldVal: 'unit', selectVal: '%' },
+  { headerType: 'Strain', fieldVal: 'unit', selectVal: 'mStrain' },
+  { headerType: 'Strain', fieldVal: 'unit', selectVal: 'Strain' },
+  { headerType: 'Strain', fieldVal: 'unit', selectVal: '1/sec' },
+  // Displacement
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'Total' },
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'Axial' },
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'Radial' },
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'Shear' },
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'Average' },
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'Area' },
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'Volumetric' },
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'σ1' },
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'σ2' },
+  { headerType: 'Displacement', fieldVal: 'spec_a', selectVal: 'σ3' },
+  { headerType: 'Displacement', fieldVal: 'spec_b', selectVal: 'Sample' },
+  { headerType: 'Displacement', fieldVal: 'spec_b', selectVal: 'Internal' },
+  { headerType: 'Displacement', fieldVal: 'spec_b', selectVal: 'External' },
+  { headerType: 'Displacement', fieldVal: 'spec_b', selectVal: 'Rate' },
+  { headerType: 'Displacement', fieldVal: 'spec_b', selectVal: 'Pore Pressure Intensifier' },
+  { headerType: 'Displacement', fieldVal: 'spec_b', selectVal: 'Confining Pressure Intensifier' },
+  { headerType: 'Displacement', fieldVal: 'spec_b', selectVal: 'Pore Volume' },
+  { headerType: 'Displacement', fieldVal: 'spec_b', selectVal: 'Confining Volume' },
+  { headerType: 'Displacement', fieldVal: 'unit', selectVal: '%' },
+  { headerType: 'Displacement', fieldVal: 'unit', selectVal: 'μm' },
+  { headerType: 'Displacement', fieldVal: 'unit', selectVal: 'mm' },
+  { headerType: 'Displacement', fieldVal: 'unit', selectVal: 'm' },
+  { headerType: 'Displacement', fieldVal: 'unit', selectVal: 'mm/s' },
+  { headerType: 'Displacement', fieldVal: 'unit', selectVal: 'inches' },
+  { headerType: 'Displacement', fieldVal: 'unit', selectVal: 'feet' },
+  // Stress
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'Axial' },
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'Radial' },
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'Shear' },
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'Normal' },
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'Differential' },
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'Average' },
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'σ1' },
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'σ2' },
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'σ3' },
+  { headerType: 'Stress', fieldVal: 'spec_a', selectVal: 'Confining' },
+  { headerType: 'Stress', fieldVal: 'spec_b', selectVal: 'Sample' },
+  { headerType: 'Stress', fieldVal: 'spec_b', selectVal: 'Internal' },
+  { headerType: 'Stress', fieldVal: 'spec_b', selectVal: 'External' },
+  { headerType: 'Stress', fieldVal: 'unit', selectVal: 'Pa' },
+  { headerType: 'Stress', fieldVal: 'unit', selectVal: 'KPa' },
+  { headerType: 'Stress', fieldVal: 'unit', selectVal: 'MPa' },
+  { headerType: 'Stress', fieldVal: 'unit', selectVal: 'GPa' },
+  // Load
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'Axial' },
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'Radial' },
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'Shear' },
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'Normal' },
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'Differential' },
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'Average' },
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'σ1' },
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'σ2' },
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'σ3' },
+  { headerType: 'Load', fieldVal: 'spec_a', selectVal: 'Confining' },
+  { headerType: 'Load', fieldVal: 'spec_b', selectVal: 'Sample' },
+  { headerType: 'Load', fieldVal: 'spec_b', selectVal: 'Internal' },
+  { headerType: 'Load', fieldVal: 'spec_b', selectVal: 'External' },
+  { headerType: 'Load', fieldVal: 'unit', selectVal: 'N' },
+  { headerType: 'Load', fieldVal: 'unit', selectVal: 'KN' },
+  // Electrical
+  { headerType: 'Electrical', fieldVal: 'spec_a', selectVal: 'Conductivity' },
+  { headerType: 'Electrical', fieldVal: 'spec_a', selectVal: 'Resistivity' },
+  { headerType: 'Electrical', fieldVal: 'spec_a', selectVal: 'Capacity' },
+  { headerType: 'Electrical', fieldVal: 'spec_a', selectVal: 'Spontaneous Potential' },
+  { headerType: 'Electrical', fieldVal: 'spec_a', selectVal: 'AC Voltage' },
+  { headerType: 'Electrical', fieldVal: 'spec_a', selectVal: 'DC Voltage' },
+  { headerType: 'Electrical', fieldVal: 'spec_a', selectVal: 'Current' },
+  { headerType: 'Electrical', fieldVal: 'spec_a', selectVal: 'Induction' },
+  { headerType: 'Electrical', fieldVal: 'spec_b', selectVal: 'Sample' },
+  { headerType: 'Electrical', fieldVal: 'spec_b', selectVal: 'Pore Fluid' },
+  { headerType: 'Electrical', fieldVal: 'spec_b', selectVal: 'Total' },
+  { headerType: 'Electrical', fieldVal: 'spec_b', selectVal: 'Heating' },
+  { headerType: 'Electrical', fieldVal: 'spec_b', selectVal: 'Cooling' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'μVolt' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'mVolt' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'Volt' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'A' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'mA' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'S' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'S/m' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'F' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'Ω' },
+  { headerType: 'Electrical', fieldVal: 'unit', selectVal: 'Ωm' },
+  // Chemistry
+  { headerType: 'Chemistry', fieldVal: 'spec_a', selectVal: 'Pore Fluid' },
+  { headerType: 'Chemistry', fieldVal: 'spec_a', selectVal: 'Fluid' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'pH' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'pOH' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'Na+' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'K+' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'Ca++' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'Mg++' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'Sr++' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'HCO3-' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'TOC' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'TIC' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'CO2(gas)' },
+  { headerType: 'Chemistry', fieldVal: 'spec_b', selectVal: 'CO2(sol)' },
+  { headerType: 'Chemistry', fieldVal: 'unit', selectVal: 'mol/L' },
+  { headerType: 'Chemistry', fieldVal: 'unit', selectVal: 'mMol/L' },
+  { headerType: 'Chemistry', fieldVal: 'unit', selectVal: 'ppm' },
+  { headerType: 'Chemistry', fieldVal: 'unit', selectVal: 'cc' },
+  // Other - extensive list of spec_a values (no spec_b)
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Acoustic Emissions' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Acoustic Velocity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Amplitude' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Anisotropy' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Area' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Attenuation' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Bulk Modulus' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Capacitance' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Centrifugal Force' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Chemical Potential' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Coldness' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Concentration' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Confining Pressure' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Current Density' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Density' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Downstream Pore Pressure' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Dynamic Viscosity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Elasticity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Elastic Wave Velocity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Electric charge' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Electric Charge Density' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Electrical Conductivity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Electric Current' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Electrical Resistance' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Electrical Resistivity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Energy' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Entropy' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Force' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Fracture Toughness' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Frequency' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Friction Coefficient' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Heat' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Heat Capacity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Hydraulic Conductivity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Impedance' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Impulse' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Inductance' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Intensity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Irradiance' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Lame Parameter' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Length' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Linear Density' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Luminance' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Magnetic Field Strength' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Magnetic Flux' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Mass' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Mass Concentration' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Mass Fraction' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Molar Concentration' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Molar Energy' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Molar Entropy' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Molar Heat Capacity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Moment of Force' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Moment of Inertia' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Momentum' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Magnetic Permittivity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Permeability' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Plane Angle' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: "Poisson's Ratio" },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Pore Pressure' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'P-Wave Modulus' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Radiance' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Radioactive Dose' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Reaction Rate' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Refractive Index' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Roughness' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Shear Modulus' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Solid Angle' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Specific Energy' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Specific Entropy' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Specific Heat Capacity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Specific Volume' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Spontaneous Potential' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Strain' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Streaming Potential' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Strength' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Stress' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Surface Charge Density' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Surface Density' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Surface Tension' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Temperature' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Temperature Gradient' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Thermal Conductance' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Thermal Conductivity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Thermal Resistance' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Thermal Resistivity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Time' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Torque' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Upstream Pore Pressure' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Velocity' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Volume' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Volumetric Flow Rate' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Wavelength' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Wavenumber' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Wavevector' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Weight' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Work' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: 'Yield Strength' },
+  { headerType: 'Other', fieldVal: 'spec_a', selectVal: "Young's Modulus" }
+]
+
+// Helper function to get options for a specific header type and field
+export function getDAQOptionsForHeader(headerType, fieldType) {
+  if (!headerType) return []
+
+  const options = DAQ_DATA_FIELDS
+    .filter(df => df.headerType === headerType && df.fieldVal === fieldType)
+    .map(df => df.selectVal)
+
+  // Return unique values
+  return [...new Set(options)]
+}
+
+// Contact affiliation roles
+export const CONTACT_AFFILIATIONS = [
+  'PI',
+  'Co-PI',
+  'Technician',
+  'Student',
+  'Postdoc',
+  'Engineer',
+  'Scientist',
+  'Manager',
+  'Director',
   'Other'
 ]

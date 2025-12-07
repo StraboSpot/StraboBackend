@@ -3,55 +3,85 @@
     <!-- Channel Header Section -->
     <fieldset class="channel-section">
       <legend>Channel Header <span class="text-red-500">*</span></legend>
-      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
-        <div class="field md:col-span-2">
-          <label class="text-xs">Header Type</label>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+        <div class="field">
+          <label class="text-xs">Header Type <span class="text-red-500">*</span></label>
           <Select
             :modelValue="channel.header?.type"
-            @update:modelValue="$emit('update', 'header.type', $event)"
-            :options="HEADER_TYPES"
+            @update:modelValue="handleHeaderTypeChange"
+            :options="CHANNEL_HEADER_TYPES"
             placeholder="Select..."
             showClear
           />
         </div>
+        <!-- Other Channel Header - shown when "Other" is selected -->
+        <div class="field" v-if="channel.header?.type === 'Other'">
+          <label class="text-xs">Other Channel Header</label>
+          <InputText
+            :modelValue="channel.header?.other_type"
+            @update:modelValue="$emit('update', 'header.other_type', $event)"
+            placeholder="Other Channel Header..."
+          />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3">
         <div class="field">
           <label class="text-xs">Specifier A <span class="text-red-500">*</span></label>
           <Select
+            v-if="specAOptions.length > 0"
             :modelValue="channel.header?.spec_a"
             @update:modelValue="$emit('update', 'header.spec_a', $event)"
-            :options="SPECIFIER_A_OPTIONS"
+            :options="specAOptions"
             placeholder="Select..."
             showClear
+          />
+          <InputText
+            v-else
+            :modelValue="channel.header?.spec_a"
+            @update:modelValue="$emit('update', 'header.spec_a', $event)"
+            placeholder="Enter specifier..."
           />
         </div>
         <div class="field">
           <label class="text-xs">Specifier B</label>
           <Select
+            v-if="specBOptions.length > 0"
             :modelValue="channel.header?.spec_b"
             @update:modelValue="$emit('update', 'header.spec_b', $event)"
-            :options="SPECIFIER_B_OPTIONS"
+            :options="specBOptions"
             placeholder="Select..."
             showClear
           />
-        </div>
-        <div class="field">
-          <label class="text-xs">Unit <span class="text-red-500">*</span></label>
-          <Select
-            :modelValue="channel.header?.unit"
-            @update:modelValue="$emit('update', 'header.unit', $event)"
-            :options="UNIT_TYPES"
-            placeholder="Select..."
-            showClear
+          <InputText
+            v-else
+            :modelValue="channel.header?.spec_b"
+            @update:modelValue="$emit('update', 'header.spec_b', $event)"
+            placeholder="Enter specifier..."
           />
         </div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
         <div class="field">
           <label class="text-xs">Other Specifier</label>
           <InputText
             :modelValue="channel.header?.other_specifier"
             @update:modelValue="$emit('update', 'header.other_specifier', $event)"
             placeholder="Other specifier..."
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Unit <span class="text-red-500">*</span></label>
+          <Select
+            v-if="unitOptions.length > 0"
+            :modelValue="channel.header?.unit"
+            @update:modelValue="$emit('update', 'header.unit', $event)"
+            :options="unitOptions"
+            placeholder="Select..."
+            showClear
+          />
+          <InputText
+            v-else
+            :modelValue="channel.header?.unit"
+            @update:modelValue="$emit('update', 'header.unit', $event)"
+            placeholder="Enter unit..."
           />
         </div>
       </div>
@@ -162,7 +192,7 @@
           <Select
             :modelValue="channel.sensor?.name"
             @update:modelValue="$emit('update', 'sensor.name', $event)"
-            :options="SENSOR_TYPES"
+            :options="SENSOR_ACTUATOR_TYPES"
             placeholder="Select..."
             showClear
           />
@@ -172,19 +202,19 @@
           <Select
             :modelValue="channel.sensor?.ieee_template"
             @update:modelValue="$emit('update', 'sensor.ieee_template', $event)"
-            :options="IEEE_TEMPLATES"
+            :options="IEEE_SENSOR_TEMPLATES"
             placeholder="Select..."
             showClear
           />
         </div>
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
+      <div class="grid grid-cols-2 md:grid-cols-3 gap-3 mt-3">
         <div class="field">
           <label class="text-xs">Type</label>
           <Select
             :modelValue="channel.sensor?.type"
             @update:modelValue="$emit('update', 'sensor.type', $event)"
-            :options="SENSOR_ACTIVE_TYPES"
+            :options="SENSOR_ACTIVE_PASSIVE_TYPES"
             placeholder="Select..."
             showClear
           />
@@ -197,7 +227,7 @@
             placeholder="none"
           />
         </div>
-        <div class="field md:col-span-2">
+        <div class="field">
           <label class="text-xs">Model #</label>
           <InputText
             :modelValue="channel.sensor?.model"
@@ -238,7 +268,7 @@
     <fieldset class="channel-section">
       <legend>Calibration Information</legend>
       <p class="text-xs text-surface-400 mb-3">
-        Data can be entered as Pairs: Calibration Table-Input:Unit; Linear Regression1 Input@0:Input/Unit; Linear Regression2 u=(x*a0+a1)*a2+a3; Polynomial-Base:Exponent1; Frequency Response Table-Frequency:Amplitude
+        Data can be entered as Pairs: Calibration Table-Input:Unit; Linear Regression1 Input@0:Input/Unit; Linear Regression2 u=(x*a0+a1)*a2+a3; Polynomial-Base:Exponent); Frequency Response Table-Frequency:Amplitude
       </p>
       <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="field">
@@ -256,7 +286,7 @@
           <Select
             :modelValue="channel.calibration?.input"
             @update:modelValue="$emit('update', 'calibration.input', $event)"
-            :options="CALIBRATION_INPUTS"
+            :options="UNIT_TYPES"
             placeholder="Select..."
             showClear
           />
@@ -377,6 +407,7 @@
 </template>
 
 <script setup>
+import { computed } from 'vue'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
@@ -386,8 +417,13 @@ import {
   CHANNEL_TYPES,
   CHANNEL_CONFIGURATIONS,
   CHANNEL_GAINS,
-  SENSOR_TYPES,
-  UNIT_TYPES
+  CHANNEL_HEADER_TYPES,
+  SENSOR_ACTUATOR_TYPES,
+  SENSOR_ACTIVE_PASSIVE_TYPES,
+  IEEE_SENSOR_TEMPLATES,
+  CALIBRATION_TEMPLATES,
+  UNIT_TYPES,
+  getDAQOptionsForHeader
 } from '@/schemas/laps-enums'
 
 const props = defineProps({
@@ -399,93 +435,28 @@ const props = defineProps({
 
 const emit = defineEmits(['update', 'delete', 'move-up', 'move-down'])
 
-// Header type options (from old app)
-const HEADER_TYPES = [
-  'Load',
-  'Displacement',
-  'Pressure',
-  'Temperature',
-  'Time',
-  'Strain',
-  'Stress',
-  'Force',
-  'Torque',
-  'Velocity',
-  'Acceleration',
-  'Voltage',
-  'Current',
-  'Resistance',
-  'Frequency',
-  'Other'
-]
+// Dynamic dropdown options based on selected header type
+const specAOptions = computed(() => {
+  return getDAQOptionsForHeader(props.channel.header?.type, 'spec_a')
+})
 
-// Specifier A options
-const SPECIFIER_A_OPTIONS = [
-  'Axial',
-  'Radial',
-  'Circumferential',
-  'Confining',
-  'Pore',
-  'Differential',
-  'Internal',
-  'External',
-  'Upper',
-  'Lower',
-  'Left',
-  'Right',
-  'Reference',
-  'Sample'
-]
+const specBOptions = computed(() => {
+  return getDAQOptionsForHeader(props.channel.header?.type, 'spec_b')
+})
 
-// Specifier B options
-const SPECIFIER_B_OPTIONS = [
-  'Internal',
-  'External',
-  'Upper',
-  'Lower',
-  'Left',
-  'Right',
-  'Top',
-  'Bottom',
-  'Front',
-  'Back',
-  'In',
-  'Out'
-]
+const unitOptions = computed(() => {
+  return getDAQOptionsForHeader(props.channel.header?.type, 'unit')
+})
 
-// Sensor active/passive types
-const SENSOR_ACTIVE_TYPES = [
-  'Active',
-  'Passive'
-]
-
-// IEEE Sensor templates
-const IEEE_TEMPLATES = [
-  'IEEE 1451.4 TEDS',
-  'IEEE 21451-4',
-  'Custom'
-]
-
-// Calibration templates
-const CALIBRATION_TEMPLATES = [
-  'Input@0:Input/Unit',
-  'Calibration Table',
-  'Linear Regression1',
-  'Linear Regression2',
-  'Polynomial',
-  'Frequency Response'
-]
-
-// Calibration input types
-const CALIBRATION_INPUTS = [
-  'Volt',
-  'mV',
-  'Amperage',
-  'mA',
-  'Ohm',
-  'Hz',
-  'Count'
-]
+// Handle header type change - clear dependent fields when header changes
+function handleHeaderTypeChange(newType) {
+  emit('update', 'header.type', newType)
+  // Clear the dependent fields when header type changes
+  emit('update', 'header.spec_a', null)
+  emit('update', 'header.spec_b', null)
+  emit('update', 'header.unit', null)
+  emit('update', 'header.other_type', null)
+}
 
 // Calibration data management
 function addCalibrationData() {
