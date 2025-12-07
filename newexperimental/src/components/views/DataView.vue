@@ -1,43 +1,29 @@
 <template>
   <div class="data-view">
     <div v-if="hasData">
-      <!-- Datasets Summary -->
-      <div class="section">
-        <div class="section-title">Datasets</div>
-        <div v-for="(dataset, idx) in modelValue.datasets" :key="idx" class="dataset-card">
-          <div class="dataset-header">
-            <span class="dataset-name">{{ dataset.data || 'Dataset ' + (idx + 1) }}</span>
-            <span class="dataset-type">{{ getDisplayType(dataset) }}</span>
-          </div>
+      <!-- Datasets -->
+      <section class="view-section" v-for="(dataset, idx) in modelValue.datasets" :key="idx">
+        <h3 class="section-title">
+          {{ dataset.data || 'Dataset ' + (idx + 1) }}
+          <span v-if="getDisplayType(dataset)" class="dataset-type-badge">{{ getDisplayType(dataset) }}</span>
+        </h3>
 
-          <!-- Basic Info -->
-          <div class="info-grid">
-            <div class="info-item" v-if="dataset.id">
-              <span class="info-label">Data ID</span>
-              <span class="info-value">{{ dataset.id }}</span>
-            </div>
-            <div class="info-item" v-if="dataset.format">
-              <span class="info-label">Format</span>
-              <span class="info-value">{{ dataset.format === 'Other' ? dataset.other_format : dataset.format }}</span>
-            </div>
-            <div class="info-item" v-if="dataset.rating">
-              <span class="info-label">Quality</span>
-              <span class="info-value">{{ dataset.rating }}</span>
-            </div>
-            <div class="info-item" v-if="dataset.path">
-              <span class="info-label">File</span>
-              <span class="info-value">{{ dataset.path }}</span>
-            </div>
-          </div>
+        <!-- Basic Info -->
+        <div class="info-grid">
+          <InfoField label="Data ID" :value="dataset.id" />
+          <InfoField label="Format" :value="dataset.format === 'Other' ? dataset.other_format : dataset.format" />
+          <InfoField label="Quality" :value="dataset.rating" />
+          <InfoField v-if="dataset.path" label="File" :value="getFilename(dataset.path)" />
+        </div>
 
-          <div class="info-item full-width" v-if="dataset.description">
-            <span class="info-label">Description</span>
-            <span class="info-value description">{{ dataset.description }}</span>
-          </div>
+        <div v-if="dataset.description" class="mt-3">
+          <InfoField label="Description" :value="dataset.description" />
+        </div>
 
-          <!-- Parameters (if data === 'Parameters') -->
-          <div v-if="dataset.data === 'Parameters' && dataset.parameters && dataset.parameters.length > 0" class="subsection">
-            <div class="subsection-title">Parameters</div>
+        <!-- Parameters (if data === 'Parameters') -->
+        <div v-if="dataset.data === 'Parameters' && dataset.parameters?.length > 0" class="mt-4">
+          <h4 class="subsection-title">Parameters</h4>
+          <div class="table-container">
             <table class="data-table">
               <thead>
                 <tr>
@@ -51,94 +37,56 @@
               </thead>
               <tbody>
                 <tr v-for="(param, pIdx) in dataset.parameters" :key="pIdx">
-                  <td>{{ param.control }}</td>
-                  <td>{{ param.value }}</td>
-                  <td>{{ param.error }}</td>
-                  <td>{{ param.unit }}</td>
-                  <td>{{ param.prefix }}</td>
-                  <td>{{ param.note }}</td>
+                  <td>{{ param.control || '-' }}</td>
+                  <td>{{ param.value || '-' }}</td>
+                  <td>{{ param.error || '-' }}</td>
+                  <td>{{ param.unit || '-' }}</td>
+                  <td>{{ param.prefix || '-' }}</td>
+                  <td>{{ param.note || '-' }}</td>
                 </tr>
               </tbody>
             </table>
           </div>
+        </div>
 
-          <!-- Time Series Headers (if data === 'Time Series') -->
-          <div v-if="dataset.data === 'Time Series' && dataset.headers && dataset.headers.length > 0" class="subsection">
-            <div class="subsection-title">Data Headers</div>
-            <div v-for="(hdr, hIdx) in dataset.headers" :key="hIdx" class="header-card">
-              <div class="header-title">{{ hdr.header?.header || 'Header ' + (hIdx + 1) }}</div>
-              <div class="info-grid">
-                <div class="info-item" v-if="hdr.header?.spec_a">
-                  <span class="info-label">Specifier A</span>
-                  <span class="info-value">{{ hdr.header.spec_a }}</span>
-                </div>
-                <div class="info-item" v-if="hdr.header?.spec_b">
-                  <span class="info-label">Specifier B</span>
-                  <span class="info-value">{{ hdr.header.spec_b }}</span>
-                </div>
-                <div class="info-item" v-if="hdr.header?.spec_c">
-                  <span class="info-label">Other Specifier</span>
-                  <span class="info-value">{{ hdr.header.spec_c }}</span>
-                </div>
-                <div class="info-item" v-if="hdr.header?.unit">
-                  <span class="info-label">Unit</span>
-                  <span class="info-value">{{ hdr.header.unit }}</span>
-                </div>
-                <div class="info-item" v-if="hdr.type">
-                  <span class="info-label">Type</span>
-                  <span class="info-value">{{ hdr.type }}</span>
-                </div>
-                <div class="info-item" v-if="hdr.number">
-                  <span class="info-label">Channel #</span>
-                  <span class="info-value">{{ hdr.number }}</span>
-                </div>
-                <div class="info-item" v-if="hdr.rating">
-                  <span class="info-label">Quality</span>
-                  <span class="info-value">{{ hdr.rating }}</span>
-                </div>
-              </div>
-              <div class="info-item full-width" v-if="hdr.note">
-                <span class="info-label">Notes</span>
-                <span class="info-value">{{ hdr.note }}</span>
-              </div>
+        <!-- Time Series Headers (if data === 'Time Series') -->
+        <div v-if="dataset.data === 'Time Series' && dataset.headers?.length > 0" class="mt-4">
+          <h4 class="subsection-title">Data Headers</h4>
+          <div v-for="(hdr, hIdx) in dataset.headers" :key="hIdx" class="nested-card">
+            <div class="nested-card-title">{{ hdr.header?.header || 'Header ' + (hIdx + 1) }}</div>
+            <div class="info-grid">
+              <InfoField label="Specifier A" :value="hdr.header?.spec_a" />
+              <InfoField label="Specifier B" :value="hdr.header?.spec_b" />
+              <InfoField v-if="hdr.header?.spec_c" label="Other Specifier" :value="hdr.header.spec_c" />
+              <InfoField label="Unit" :value="hdr.header?.unit" />
+              <InfoField label="Type" :value="hdr.type" />
+              <InfoField label="Channel #" :value="hdr.number" />
+              <InfoField label="Quality" :value="hdr.rating" />
+            </div>
+            <div v-if="hdr.note" class="mt-2">
+              <InfoField label="Notes" :value="hdr.note" />
             </div>
           </div>
+        </div>
 
-          <!-- Pore Fluid Phases (if data === 'Pore Fluid') -->
-          <div v-if="dataset.data === 'Pore Fluid' && dataset.fluid?.phases && dataset.fluid.phases.length > 0" class="subsection">
-            <div class="subsection-title">Pore Fluid Phases</div>
-            <div v-for="(phase, phIdx) in dataset.fluid.phases" :key="phIdx" class="phase-card">
-              <div class="phase-title">Phase {{ phIdx + 1 }}</div>
-              <div class="info-grid">
-                <div class="info-item" v-if="phase.component">
-                  <span class="info-label">Component</span>
-                  <span class="info-value">{{ phase.component }}</span>
-                </div>
-                <div class="info-item" v-if="phase.fraction">
-                  <span class="info-label">Fraction</span>
-                  <span class="info-value">{{ phase.fraction }}</span>
-                </div>
-                <div class="info-item" v-if="phase.activity">
-                  <span class="info-label">Activity</span>
-                  <span class="info-value">{{ phase.activity }}</span>
-                </div>
-                <div class="info-item" v-if="phase.fugacity">
-                  <span class="info-label">Fugacity</span>
-                  <span class="info-value">{{ phase.fugacity }}</span>
-                </div>
-                <div class="info-item" v-if="phase.unit">
-                  <span class="info-label">Unit</span>
-                  <span class="info-value">{{ phase.unit }}</span>
-                </div>
-                <div class="info-item" v-if="phase.composition">
-                  <span class="info-label">Chemistry Data</span>
-                  <span class="info-value">{{ phase.composition }}</span>
-                </div>
-              </div>
+        <!-- Pore Fluid Phases (if data === 'Pore Fluid') -->
+        <div v-if="dataset.data === 'Pore Fluid' && dataset.fluid?.phases?.length > 0" class="mt-4">
+          <h4 class="subsection-title">Pore Fluid Phases</h4>
+          <div v-for="(phase, phIdx) in dataset.fluid.phases" :key="phIdx" class="nested-card">
+            <div class="nested-card-title">Phase {{ phIdx + 1 }}</div>
+            <div class="info-grid">
+              <InfoField label="Component" :value="phase.component" />
+              <InfoField label="Fraction" :value="phase.fraction" />
+              <InfoField label="Activity" :value="phase.activity" />
+              <InfoField label="Fugacity" :value="phase.fugacity" />
+              <InfoField label="Unit" :value="phase.unit" />
+              <InfoField label="Chemistry Data" :value="phase.composition" />
+            </div>
 
-              <!-- Solutes -->
-              <div v-if="phase.composition === 'Chemistry' && phase.solutes && phase.solutes.length > 0" class="solutes-section">
-                <div class="solutes-title">Chemistry</div>
+            <!-- Solutes -->
+            <div v-if="phase.composition === 'Chemistry' && phase.solutes?.length > 0" class="mt-3">
+              <h5 class="text-sm font-semibold text-surface-400 mb-2">Chemistry</h5>
+              <div class="table-container">
                 <table class="data-table">
                   <thead>
                     <tr>
@@ -150,10 +98,10 @@
                   </thead>
                   <tbody>
                     <tr v-for="(solute, sIdx) in phase.solutes" :key="sIdx">
-                      <td>{{ solute.component }}</td>
-                      <td>{{ solute.value }}</td>
-                      <td>{{ solute.error }}</td>
-                      <td>{{ solute.unit }}</td>
+                      <td>{{ solute.component || '-' }}</td>
+                      <td>{{ solute.value || '-' }}</td>
+                      <td>{{ solute.error || '-' }}</td>
+                      <td>{{ solute.unit || '-' }}</td>
                     </tr>
                   </tbody>
                 </table>
@@ -161,16 +109,17 @@
             </div>
           </div>
         </div>
-      </div>
+      </section>
     </div>
-    <div v-else class="empty-message">
-      No data information available.
+    <div v-else class="no-data">
+      <p class="text-surface-400">No data information available.</p>
     </div>
   </div>
 </template>
 
 <script setup>
 import { computed } from 'vue'
+import InfoField from '@/components/InfoField.vue'
 
 const props = defineProps({
   modelValue: {
@@ -189,161 +138,131 @@ function getDisplayType(dataset) {
   }
   return dataset.type || ''
 }
+
+function getFilename(path) {
+  if (!path) return null
+  // Try to extract filename from URL
+  try {
+    const url = new URL(path, window.location.origin)
+    const filenameParam = url.searchParams.get('filename')
+    if (filenameParam) return decodeURIComponent(filenameParam)
+  } catch (e) {
+    // Fallback
+  }
+  const parts = path.split('/')
+  return parts[parts.length - 1] || path
+}
 </script>
 
 <style scoped>
 .data-view {
-  color: #fff;
+  max-width: 900px;
+  margin: 0 auto;
 }
 
-.section {
-  margin-bottom: 20px;
+.view-section {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--p-surface-600);
+}
+
+.view-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .section-title {
-  font-size: 14px;
+  font-size: 1.125rem;
   font-weight: 600;
-  color: #aaa;
+  color: #ffffff;
+  margin-bottom: 1rem;
   text-transform: uppercase;
-  margin-bottom: 10px;
-  padding-bottom: 5px;
-  border-bottom: 1px solid #444;
-}
-
-.dataset-card {
-  background: #333;
-  border: 1px solid #555;
-  border-radius: 6px;
-  padding: 15px;
-  margin-bottom: 15px;
-}
-
-.dataset-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid #444;
+  gap: 0.75rem;
 }
 
-.dataset-name {
-  font-size: 16px;
+.dataset-type-badge {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--p-surface-400);
+  background: var(--p-surface-700);
+  padding: 0.25rem 0.75rem;
+  border-radius: 1rem;
+  text-transform: none;
+}
+
+.subsection-title {
+  font-size: 1rem;
   font-weight: 600;
-  color: #fff;
-}
-
-.dataset-type {
-  font-size: 13px;
-  color: #888;
-  background: #444;
-  padding: 3px 10px;
-  border-radius: 12px;
+  color: #d1d5db;
+  margin-bottom: 0.75rem;
 }
 
 .info-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  gap: 12px;
-  margin-bottom: 10px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
 }
 
-.info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
+.nested-card {
+  background: var(--p-surface-800);
+  border: 1px solid var(--p-surface-600);
+  border-radius: 0.375rem;
+  padding: 1rem;
+  margin-bottom: 0.75rem;
 }
 
-.info-item.full-width {
-  grid-column: 1 / -1;
+.nested-card:last-child {
+  margin-bottom: 0;
 }
 
-.info-label {
-  font-size: 12px;
-  color: #888;
-}
-
-.info-value {
-  font-size: 14px;
-  color: #fff;
-}
-
-.info-value.description {
-  white-space: pre-wrap;
-  line-height: 1.4;
-}
-
-.subsection {
-  margin-top: 15px;
-  padding-top: 12px;
-  border-top: 1px solid #444;
-}
-
-.subsection-title {
-  font-size: 13px;
+.nested-card-title {
+  font-size: 0.875rem;
   font-weight: 600;
-  color: #aaa;
-  margin-bottom: 10px;
-}
-
-.header-card,
-.phase-card {
-  background: #3a3a3a;
-  border: 1px solid #555;
-  border-radius: 4px;
-  padding: 12px;
-  margin-bottom: 10px;
-}
-
-.header-title,
-.phase-title {
-  font-size: 14px;
-  font-weight: 500;
   color: #dc3545;
-  margin-bottom: 10px;
+  margin-bottom: 0.75rem;
 }
 
-.solutes-section {
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid #555;
-}
-
-.solutes-title {
-  font-size: 12px;
-  font-weight: 500;
-  color: #aaa;
-  margin-bottom: 8px;
+.table-container {
+  overflow-x: auto;
 }
 
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 13px;
+  font-size: 1rem;
+}
+
+.data-table th,
+.data-table td {
+  padding: 0.625rem 0.75rem;
+  text-align: left;
+  border-bottom: 1px solid var(--p-surface-600);
 }
 
 .data-table th {
-  text-align: left;
-  color: #888;
-  font-weight: 500;
-  padding: 6px 8px;
-  border-bottom: 1px solid #555;
+  background-color: var(--p-surface-700);
+  font-weight: 600;
+  color: #d1d5db;
 }
 
 .data-table td {
-  padding: 6px 8px;
-  color: #fff;
-  border-bottom: 1px solid #444;
+  color: #ffffff;
 }
 
 .data-table tr:last-child td {
   border-bottom: none;
 }
 
-.empty-message {
-  color: #888;
-  font-style: italic;
+.no-data {
   text-align: center;
-  padding: 30px;
+  padding: 2rem;
+}
+
+@media (max-width: 768px) {
+  .info-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>
