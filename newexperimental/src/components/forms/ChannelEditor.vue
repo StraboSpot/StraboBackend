@@ -331,7 +331,7 @@
               <InputText
                 :modelValue="dp.b"
                 @update:modelValue="updateCalibrationData(dpIdx, 'b', $event)"
-                placeholder="0.10473398"
+                placeholder=""
               />
             </div>
             <Button
