@@ -1,32 +1,70 @@
 <template>
   <div class="channel-editor">
-    <!-- Channel Header Info -->
+    <!-- Channel Header Section -->
     <fieldset class="channel-section">
-      <legend>HEADER</legend>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div class="field">
-          <label class="text-xs">Spec A (Short Name)</label>
-          <InputText
-            :modelValue="channel.header?.spec_a"
-            @update:modelValue="$emit('update', 'header.spec_a', $event)"
-            placeholder="e.g., Pc"
+      <legend>Channel Header <span class="text-red-500">*</span></legend>
+      <div class="grid grid-cols-1 md:grid-cols-5 gap-3">
+        <div class="field md:col-span-2">
+          <label class="text-xs">Header Type</label>
+          <Select
+            :modelValue="channel.header?.type"
+            @update:modelValue="$emit('update', 'header.type', $event)"
+            :options="HEADER_TYPES"
+            placeholder="Select..."
+            showClear
+            editable
           />
         </div>
         <div class="field">
-          <label class="text-xs">Header Type</label>
+          <label class="text-xs">Specifier A <span class="text-red-500">*</span></label>
+          <Select
+            :modelValue="channel.header?.spec_a"
+            @update:modelValue="$emit('update', 'header.spec_a', $event)"
+            :options="SPECIFIER_A_OPTIONS"
+            placeholder="Select..."
+            showClear
+            editable
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Specifier B</label>
+          <Select
+            :modelValue="channel.header?.spec_b"
+            @update:modelValue="$emit('update', 'header.spec_b', $event)"
+            :options="SPECIFIER_B_OPTIONS"
+            placeholder="Select..."
+            showClear
+            editable
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Unit <span class="text-red-500">*</span></label>
+          <Select
+            :modelValue="channel.header?.unit"
+            @update:modelValue="$emit('update', 'header.unit', $event)"
+            :options="UNIT_TYPES"
+            placeholder="Select..."
+            showClear
+            editable
+          />
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+        <div class="field">
+          <label class="text-xs">Other Specifier</label>
           <InputText
-            :modelValue="channel.header?.type"
-            @update:modelValue="$emit('update', 'header.type', $event)"
-            placeholder="e.g., Pressure"
+            :modelValue="channel.header?.other_specifier"
+            @update:modelValue="$emit('update', 'header.other_specifier', $event)"
+            placeholder="Other specifier..."
           />
         </div>
       </div>
     </fieldset>
 
-    <!-- Channel Info -->
+    <!-- Channel Information Section -->
     <fieldset class="channel-section">
-      <legend>CHANNEL INFO</legend>
-      <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+      <legend>Channel Information</legend>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="field">
           <label class="text-xs">Channel #</label>
           <Select
@@ -36,24 +74,74 @@
             placeholder="#"
           />
         </div>
-        <div class="field md:col-span-2">
+        <div class="field">
           <label class="text-xs">Type</label>
           <Select
             :modelValue="channel.type"
             @update:modelValue="$emit('update', 'type', $event)"
             :options="CHANNEL_TYPES"
-            placeholder="Select type..."
+            placeholder="Select..."
             showClear
           />
         </div>
-        <div class="field md:col-span-2">
+        <div class="field">
           <label class="text-xs">Configuration</label>
           <Select
             :modelValue="channel.configuration"
             @update:modelValue="$emit('update', 'configuration', $event)"
             :options="CHANNEL_CONFIGURATIONS"
-            placeholder="Select config..."
+            placeholder="Select..."
             showClear
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Note</label>
+          <InputText
+            :modelValue="channel.note"
+            @update:modelValue="$emit('update', 'note', $event)"
+            placeholder="Note..."
+          />
+        </div>
+      </div>
+      <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mt-3">
+        <div class="field">
+          <label class="text-xs">Res [bit]</label>
+          <InputText
+            :modelValue="channel.resolution"
+            @update:modelValue="$emit('update', 'resolution', $event)"
+            placeholder="e.g., 16"
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Min</label>
+          <InputText
+            :modelValue="channel.range_low"
+            @update:modelValue="$emit('update', 'range_low', $event)"
+            placeholder="0"
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Max</label>
+          <InputText
+            :modelValue="channel.range_high"
+            @update:modelValue="$emit('update', 'range_high', $event)"
+            placeholder="10"
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Rate</label>
+          <InputText
+            :modelValue="channel.rate"
+            @update:modelValue="$emit('update', 'rate', $event)"
+            placeholder="e.g., 1kHz"
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Filter</label>
+          <InputText
+            :modelValue="channel.filter"
+            @update:modelValue="$emit('update', 'filter', $event)"
+            placeholder="none"
           />
         </div>
         <div class="field">
@@ -67,202 +155,204 @@
           />
         </div>
       </div>
-      <div class="grid grid-cols-2 md:grid-cols-6 gap-3 mt-3">
+    </fieldset>
+
+    <!-- Sensor/Actuator Information Section -->
+    <fieldset class="channel-section">
+      <legend>Sensor/Actuator Information</legend>
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
         <div class="field">
-          <label class="text-xs">Resolution</label>
-          <InputText
-            :modelValue="channel.resolution"
-            @update:modelValue="$emit('update', 'resolution', $event)"
-            placeholder="e.g., 16-bit"
-          />
-        </div>
-        <div class="field">
-          <label class="text-xs">Range Low</label>
-          <InputText
-            :modelValue="channel.range_low"
-            @update:modelValue="$emit('update', 'range_low', $event)"
-            placeholder="e.g., -10V"
-          />
-        </div>
-        <div class="field">
-          <label class="text-xs">Range High</label>
-          <InputText
-            :modelValue="channel.range_high"
-            @update:modelValue="$emit('update', 'range_high', $event)"
-            placeholder="e.g., +10V"
-          />
-        </div>
-        <div class="field">
-          <label class="text-xs">Sample Rate</label>
-          <InputText
-            :modelValue="channel.rate"
-            @update:modelValue="$emit('update', 'rate', $event)"
-            placeholder="e.g., 1 kHz"
+          <label class="text-xs">Sensor/Actuator</label>
+          <Select
+            :modelValue="channel.sensor?.name"
+            @update:modelValue="$emit('update', 'sensor.name', $event)"
+            :options="SENSOR_TYPES"
+            placeholder="Select..."
+            showClear
+            editable
           />
         </div>
         <div class="field md:col-span-2">
-          <label class="text-xs">Filter</label>
-          <InputText
-            :modelValue="channel.filter"
-            @update:modelValue="$emit('update', 'filter', $event)"
-            placeholder="e.g., Low-pass 100Hz"
+          <label class="text-xs">IEEE Sensor Template</label>
+          <Select
+            :modelValue="channel.sensor?.ieee_template"
+            @update:modelValue="$emit('update', 'sensor.ieee_template', $event)"
+            :options="IEEE_TEMPLATES"
+            placeholder="Select..."
+            showClear
           />
         </div>
       </div>
-      <div class="grid grid-cols-1 gap-3 mt-3">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
         <div class="field">
-          <label class="text-xs">Notes</label>
+          <label class="text-xs">Type</label>
+          <Select
+            :modelValue="channel.sensor?.type"
+            @update:modelValue="$emit('update', 'sensor.type', $event)"
+            :options="SENSOR_ACTIVE_TYPES"
+            placeholder="Select..."
+            showClear
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Manufacturer ID</label>
           <InputText
-            :modelValue="channel.note"
-            @update:modelValue="$emit('update', 'note', $event)"
-            placeholder="Channel notes..."
+            :modelValue="channel.sensor?.manufacturer_id"
+            @update:modelValue="$emit('update', 'sensor.manufacturer_id', $event)"
+            placeholder="none"
+          />
+        </div>
+        <div class="field md:col-span-2">
+          <label class="text-xs">Model #</label>
+          <InputText
+            :modelValue="channel.sensor?.model"
+            @update:modelValue="$emit('update', 'sensor.model', $event)"
+            placeholder="custom"
+          />
+        </div>
+      </div>
+      <div class="grid grid-cols-3 gap-3 mt-3">
+        <div class="field">
+          <label class="text-xs">Version Letter</label>
+          <InputText
+            :modelValue="channel.sensor?.version_letter"
+            @update:modelValue="$emit('update', 'sensor.version_letter', $event)"
+            placeholder=""
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Version #</label>
+          <InputText
+            :modelValue="channel.sensor?.version_number"
+            @update:modelValue="$emit('update', 'sensor.version_number', $event)"
+            placeholder=""
+          />
+        </div>
+        <div class="field">
+          <label class="text-xs">Serial #</label>
+          <InputText
+            :modelValue="channel.sensor?.serial_number"
+            @update:modelValue="$emit('update', 'sensor.serial_number', $event)"
+            placeholder=""
           />
         </div>
       </div>
     </fieldset>
 
-    <!-- Sensor Section (collapsible) -->
-    <CollapsibleSection title="SENSOR / ACTUATOR" :default-open="hasSensorData">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+    <!-- Calibration Information Section -->
+    <fieldset class="channel-section">
+      <legend>Calibration Information</legend>
+      <p class="text-xs text-surface-400 mb-3">
+        Data can be entered as Pairs: Calibration Table-Input:Unit; Linear Regression1 Input@0:Input/Unit; Linear Regression2 u=(x*a0+a1)*a2+a3; Polynomial-Base:Exponent1; Frequency Response Table-Frequency:Amplitude
+      </p>
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div class="field">
-          <label class="text-xs">Manufacturer</label>
-          <InputText
-            :modelValue="channel.sensor?.manufacturer"
-            @update:modelValue="$emit('update', 'sensor.manufacturer', $event)"
-            placeholder="e.g., Omega"
-          />
-        </div>
-        <div class="field">
-          <label class="text-xs">Model</label>
-          <InputText
-            :modelValue="channel.sensor?.model"
-            @update:modelValue="$emit('update', 'sensor.model', $event)"
-            placeholder="Model number"
-          />
-        </div>
-        <div class="field">
-          <label class="text-xs">Serial Number</label>
-          <InputText
-            :modelValue="channel.sensor?.serial_number"
-            @update:modelValue="$emit('update', 'sensor.serial_number', $event)"
-            placeholder="Serial #"
-          />
-        </div>
-        <div class="field">
-          <label class="text-xs">Sensor Type</label>
+          <label class="text-xs">Template</label>
           <Select
-            :modelValue="channel.sensor?.type"
-            @update:modelValue="$emit('update', 'sensor.type', $event)"
-            :options="SENSOR_TYPES"
-            placeholder="Select..."
-            showClear
-          />
-        </div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3">
-        <div class="field">
-          <label class="text-xs">Output Type</label>
-          <Select
-            :modelValue="channel.sensor?.output_type"
-            @update:modelValue="$emit('update', 'sensor.output_type', $event)"
-            :options="SENSOR_OUTPUT_TYPES"
+            :modelValue="channel.calibration?.template"
+            @update:modelValue="$emit('update', 'calibration.template', $event)"
+            :options="CALIBRATION_TEMPLATES"
             placeholder="Select..."
             showClear
           />
         </div>
         <div class="field">
-          <label class="text-xs">Range</label>
-          <InputText
-            :modelValue="channel.sensor?.range"
-            @update:modelValue="$emit('update', 'sensor.range', $event)"
-            placeholder="e.g., 0-100 MPa"
+          <label class="text-xs">Input</label>
+          <Select
+            :modelValue="channel.calibration?.input"
+            @update:modelValue="$emit('update', 'calibration.input', $event)"
+            :options="CALIBRATION_INPUTS"
+            placeholder="Select..."
+            showClear
           />
         </div>
         <div class="field">
-          <label class="text-xs">Accuracy</label>
-          <InputText
-            :modelValue="channel.sensor?.accuracy"
-            @update:modelValue="$emit('update', 'sensor.accuracy', $event)"
-            placeholder="e.g., ±0.1%"
+          <label class="text-xs">Unit</label>
+          <Select
+            :modelValue="channel.calibration?.unit"
+            @update:modelValue="$emit('update', 'calibration.unit', $event)"
+            :options="UNIT_TYPES"
+            placeholder="Select..."
+            showClear
           />
         </div>
         <div class="field">
-          <label class="text-xs">Sensor Note</label>
+          <label class="text-xs">Excitation</label>
           <InputText
-            :modelValue="channel.sensor?.note"
-            @update:modelValue="$emit('update', 'sensor.note', $event)"
-            placeholder="Notes..."
+            :modelValue="channel.calibration?.excitation"
+            @update:modelValue="$emit('update', 'calibration.excitation', $event)"
+            placeholder="e.g., 10"
           />
         </div>
       </div>
-    </CollapsibleSection>
-
-    <!-- Calibration Section (collapsible) -->
-    <CollapsibleSection title="CALIBRATION" :default-open="hasCalibrationData">
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
         <div class="field">
-          <label class="text-xs">Calibration Date</label>
+          <label class="text-xs">Date</label>
           <DatePicker
             :modelValue="channel.calibration?.date ? new Date(channel.calibration.date) : null"
             @update:modelValue="$emit('update', 'calibration.date', $event ? $event.toISOString() : null)"
             dateFormat="mm/dd/yy"
-            placeholder="Select date..."
+            placeholder="mm / dd / yyyy"
             showIcon
             iconDisplay="input"
           />
         </div>
         <div class="field">
-          <label class="text-xs">Standard</label>
-          <Select
-            :modelValue="channel.calibration?.standard"
-            @update:modelValue="$emit('update', 'calibration.standard', $event)"
-            :options="CALIBRATION_STANDARDS"
-            placeholder="Select..."
-            showClear
-          />
-        </div>
-        <div class="field">
-          <label class="text-xs">Uncertainty</label>
+          <label class="text-xs">Note</label>
           <InputText
-            :modelValue="channel.calibration?.uncertainty"
-            @update:modelValue="$emit('update', 'calibration.uncertainty', $event)"
-            placeholder="e.g., ±0.5%"
-          />
-        </div>
-        <div class="field">
-          <label class="text-xs">Reference</label>
-          <InputText
-            :modelValue="channel.calibration?.reference"
-            @update:modelValue="$emit('update', 'calibration.reference', $event)"
-            placeholder="Reference document"
+            :modelValue="channel.calibration?.note"
+            @update:modelValue="$emit('update', 'calibration.note', $event)"
+            placeholder="e.g., 100kN max"
           />
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mt-3">
-        <div class="field">
-          <label class="text-xs">Next Calibration</label>
-          <DatePicker
-            :modelValue="channel.calibration?.next_calibration ? new Date(channel.calibration.next_calibration) : null"
-            @update:modelValue="$emit('update', 'calibration.next_calibration', $event ? $event.toISOString() : null)"
-            dateFormat="mm/dd/yy"
-            placeholder="Select date..."
-            showIcon
-            iconDisplay="input"
+
+      <!-- Calibration Data Points -->
+      <div class="calibration-data mt-3">
+        <div class="flex items-center gap-2 mb-2">
+          <span class="text-xs font-semibold uppercase">DATA</span>
+          <Button
+            size="small"
+            label="Add Data"
+            @click="addCalibrationData"
           />
         </div>
-        <div class="field md:col-span-3">
-          <label class="text-xs">Certificate</label>
-          <InputText
-            :modelValue="channel.calibration?.certificate"
-            @update:modelValue="$emit('update', 'calibration.certificate', $event)"
-            placeholder="Certificate ID or URL"
-          />
+        <div v-if="channel.calibration?.data && channel.calibration.data.length > 0" class="data-rows">
+          <div
+            v-for="(dp, dpIdx) in channel.calibration.data"
+            :key="dpIdx"
+            class="data-row flex gap-2 items-end mb-2"
+          >
+            <div class="field w-24">
+              <label class="text-xs" v-if="dpIdx === 0">A:</label>
+              <InputText
+                :modelValue="dp.a"
+                @update:modelValue="updateCalibrationData(dpIdx, 'a', $event)"
+                placeholder="0"
+              />
+            </div>
+            <div class="field w-32">
+              <label class="text-xs" v-if="dpIdx === 0">B:</label>
+              <InputText
+                :modelValue="dp.b"
+                @update:modelValue="updateCalibrationData(dpIdx, 'b', $event)"
+                placeholder="0.10473398"
+              />
+            </div>
+            <Button
+              icon="pi pi-trash"
+              severity="secondary"
+              text
+              size="small"
+              @click="deleteCalibrationData(dpIdx)"
+            />
+          </div>
         </div>
       </div>
-    </CollapsibleSection>
+    </fieldset>
 
     <!-- Delete Channel Button -->
-    <div class="flex justify-end mt-4">
+    <div class="flex justify-end mt-4 gap-2">
       <Button
         label="Delete Channel"
         severity="danger"
@@ -271,25 +361,36 @@
         icon="pi pi-trash"
         @click="$emit('delete')"
       />
+      <Button
+        icon="pi pi-arrow-down"
+        severity="secondary"
+        outlined
+        size="small"
+        v-tooltip.top="'Move Down'"
+      />
+      <Button
+        icon="pi pi-arrow-up"
+        severity="secondary"
+        outlined
+        size="small"
+        v-tooltip.top="'Move Up'"
+      />
     </div>
   </div>
 </template>
 
 <script setup>
-import { computed } from 'vue'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
 import DatePicker from 'primevue/datepicker'
-import CollapsibleSection from '@/components/CollapsibleSection.vue'
 import {
   CHANNEL_NUMBERS,
   CHANNEL_TYPES,
   CHANNEL_CONFIGURATIONS,
   CHANNEL_GAINS,
   SENSOR_TYPES,
-  SENSOR_OUTPUT_TYPES,
-  CALIBRATION_STANDARDS
+  UNIT_TYPES
 } from '@/schemas/laps-enums'
 
 const props = defineProps({
@@ -299,17 +400,112 @@ const props = defineProps({
   }
 })
 
-defineEmits(['update', 'delete'])
+const emit = defineEmits(['update', 'delete'])
 
-const hasSensorData = computed(() => {
-  const s = props.channel.sensor
-  return s && (s.manufacturer || s.model || s.serial_number || s.type)
-})
+// Header type options (from old app)
+const HEADER_TYPES = [
+  'Load',
+  'Displacement',
+  'Pressure',
+  'Temperature',
+  'Time',
+  'Strain',
+  'Stress',
+  'Force',
+  'Torque',
+  'Velocity',
+  'Acceleration',
+  'Voltage',
+  'Current',
+  'Resistance',
+  'Frequency',
+  'Other'
+]
 
-const hasCalibrationData = computed(() => {
-  const c = props.channel.calibration
-  return c && (c.date || c.standard || c.uncertainty)
-})
+// Specifier A options
+const SPECIFIER_A_OPTIONS = [
+  'Axial',
+  'Radial',
+  'Circumferential',
+  'Confining',
+  'Pore',
+  'Differential',
+  'Internal',
+  'External',
+  'Upper',
+  'Lower',
+  'Left',
+  'Right',
+  'Reference',
+  'Sample'
+]
+
+// Specifier B options
+const SPECIFIER_B_OPTIONS = [
+  'Internal',
+  'External',
+  'Upper',
+  'Lower',
+  'Left',
+  'Right',
+  'Top',
+  'Bottom',
+  'Front',
+  'Back',
+  'In',
+  'Out'
+]
+
+// Sensor active/passive types
+const SENSOR_ACTIVE_TYPES = [
+  'Active',
+  'Passive'
+]
+
+// IEEE Sensor templates
+const IEEE_TEMPLATES = [
+  'IEEE 1451.4 TEDS',
+  'IEEE 21451-4',
+  'Custom'
+]
+
+// Calibration templates
+const CALIBRATION_TEMPLATES = [
+  'Input@0:Input/Unit',
+  'Calibration Table',
+  'Linear Regression1',
+  'Linear Regression2',
+  'Polynomial',
+  'Frequency Response'
+]
+
+// Calibration input types
+const CALIBRATION_INPUTS = [
+  'Volt',
+  'mV',
+  'Amperage',
+  'mA',
+  'Ohm',
+  'Hz',
+  'Count'
+]
+
+// Calibration data management
+function addCalibrationData() {
+  const currentData = props.channel.calibration?.data || []
+  emit('update', 'calibration.data', [...currentData, { a: '0', b: '' }])
+}
+
+function updateCalibrationData(idx, field, value) {
+  const newData = [...(props.channel.calibration?.data || [])]
+  newData[idx] = { ...newData[idx], [field]: value }
+  emit('update', 'calibration.data', newData)
+}
+
+function deleteCalibrationData(idx) {
+  const newData = (props.channel.calibration?.data || []).filter((_, i) => i !== idx)
+  emit('update', 'calibration.data', newData)
+}
 </script>
 
 <style scoped>
@@ -326,12 +522,10 @@ const hasCalibrationData = computed(() => {
 }
 
 .channel-section legend {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: 600;
   padding: 0 0.5rem;
-  color: var(--p-surface-400);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
+  color: var(--p-surface-300);
 }
 
 .field {
@@ -341,5 +535,19 @@ const hasCalibrationData = computed(() => {
 
 .field label {
   margin-bottom: 2px;
+}
+
+.calibration-data {
+  background: var(--p-surface-900);
+  border-radius: 4px;
+  padding: 0.75rem;
+}
+
+.data-row {
+  padding-bottom: 0.5rem;
+}
+
+.data-row:last-child {
+  padding-bottom: 0;
 }
 </style>

@@ -33,20 +33,24 @@
             :key="chIdx"
             class="channel-card"
           >
-            <div class="channel-header">
-              <span class="channel-num">Ch {{ channel.number || chIdx }}</span>
+            <!-- Channel Header -->
+            <div class="channel-header-info">
+              <span class="channel-num">Ch {{ channel.number ?? chIdx }}</span>
+              <span v-if="channel.header?.type" class="channel-type-badge">{{ channel.header.type }}</span>
               <span v-if="channel.header?.spec_a" class="channel-spec">{{ channel.header.spec_a }}</span>
-              <span v-if="channel.type" class="channel-type">{{ channel.type }}</span>
+              <span v-if="channel.header?.spec_b" class="channel-spec">{{ channel.header.spec_b }}</span>
+              <span v-if="channel.header?.unit" class="channel-unit">[{{ channel.header.unit }}]</span>
             </div>
 
-            <div class="channel-info">
+            <!-- Channel Info Grid -->
+            <div class="channel-info mt-3">
               <div class="grid grid-cols-3 md:grid-cols-6 gap-2">
+                <InfoField label="Type" :value="channel.type" size="small" />
                 <InfoField label="Config" :value="channel.configuration" size="small" />
                 <InfoField label="Gain" :value="channel.gain" size="small" />
                 <InfoField label="Resolution" :value="channel.resolution" size="small" />
                 <InfoField label="Range" :value="formatRange(channel)" size="small" />
                 <InfoField label="Rate" :value="channel.rate" size="small" />
-                <InfoField label="Filter" :value="channel.filter" size="small" />
               </div>
               <div v-if="channel.note" class="mt-2">
                 <InfoField label="Note" :value="channel.note" size="small" />
@@ -55,17 +59,17 @@
 
             <!-- Sensor info (if present) -->
             <div v-if="hasSensorData(channel)" class="sensor-info mt-3">
-              <div class="subsection-title">Sensor</div>
+              <div class="subsection-title">Sensor/Actuator</div>
               <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <InfoField label="Manufacturer" :value="channel.sensor?.manufacturer" size="small" />
-                <InfoField label="Model" :value="channel.sensor?.model" size="small" />
-                <InfoField label="Serial #" :value="channel.sensor?.serial_number" size="small" />
+                <InfoField label="Name" :value="channel.sensor?.name" size="small" />
                 <InfoField label="Type" :value="channel.sensor?.type" size="small" />
+                <InfoField label="Manufacturer" :value="channel.sensor?.manufacturer_id" size="small" />
+                <InfoField label="Model" :value="channel.sensor?.model" size="small" />
               </div>
-              <div class="grid grid-cols-2 md:grid-cols-4 gap-2 mt-2">
-                <InfoField label="Output" :value="channel.sensor?.output_type" size="small" />
-                <InfoField label="Range" :value="channel.sensor?.range" size="small" />
-                <InfoField label="Accuracy" :value="channel.sensor?.accuracy" size="small" />
+              <div class="grid grid-cols-3 gap-2 mt-2" v-if="channel.sensor?.serial_number || channel.sensor?.version_letter">
+                <InfoField label="Version Letter" :value="channel.sensor?.version_letter" size="small" />
+                <InfoField label="Version #" :value="channel.sensor?.version_number" size="small" />
+                <InfoField label="Serial #" :value="channel.sensor?.serial_number" size="small" />
               </div>
             </div>
 
@@ -73,11 +77,48 @@
             <div v-if="hasCalibrationData(channel)" class="calibration-info mt-3">
               <div class="subsection-title">Calibration</div>
               <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-                <InfoField label="Date" :value="formatDate(channel.calibration?.date)" size="small" />
-                <InfoField label="Standard" :value="channel.calibration?.standard" size="small" />
-                <InfoField label="Uncertainty" :value="channel.calibration?.uncertainty" size="small" />
-                <InfoField label="Next Cal" :value="formatDate(channel.calibration?.next_calibration)" size="small" />
+                <InfoField label="Template" :value="channel.calibration?.template" size="small" />
+                <InfoField label="Input" :value="channel.calibration?.input" size="small" />
+                <InfoField label="Unit" :value="channel.calibration?.unit" size="small" />
+                <InfoField label="Excitation" :value="channel.calibration?.excitation" size="small" />
               </div>
+              <div class="grid grid-cols-2 gap-2 mt-2">
+                <InfoField label="Date" :value="formatDate(channel.calibration?.date)" size="small" />
+                <InfoField label="Note" :value="channel.calibration?.note" size="small" />
+              </div>
+              <!-- Calibration data points -->
+              <div v-if="channel.calibration?.data && channel.calibration.data.length > 0" class="cal-data mt-2">
+                <span class="text-xs text-surface-400">Data Points:</span>
+                <div class="flex flex-wrap gap-2 mt-1">
+                  <span
+                    v-for="(dp, dpIdx) in channel.calibration.data"
+                    :key="dpIdx"
+                    class="data-point"
+                  >
+                    A: {{ dp.a }}, B: {{ dp.b }}
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Device Documents -->
+        <div v-if="device.documents && device.documents.length > 0" class="device-documents mt-3">
+          <div class="subsection-title">Documents</div>
+          <div
+            v-for="(doc, docIdx) in device.documents"
+            :key="docIdx"
+            class="document-item"
+          >
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
+              <InfoField label="Type" :value="doc.type" size="small" />
+              <InfoField label="Format" :value="doc.format" size="small" />
+              <InfoField label="ID" :value="doc.id" size="small" />
+              <InfoField label="Path" :value="doc.path" size="small" />
+            </div>
+            <div v-if="doc.description" class="mt-1">
+              <InfoField label="Description" :value="doc.description" size="small" />
             </div>
           </div>
         </div>
@@ -119,12 +160,12 @@ function formatDate(dateStr) {
 
 function hasSensorData(channel) {
   const s = channel.sensor
-  return s && (s.manufacturer || s.model || s.serial_number || s.type)
+  return s && (s.name || s.manufacturer_id || s.model || s.type)
 }
 
 function hasCalibrationData(channel) {
   const c = channel.calibration
-  return c && (c.date || c.standard || c.uncertainty)
+  return c && (c.date || c.template || c.input || c.data?.length > 0)
 }
 </script>
 
@@ -187,11 +228,11 @@ function hasCalibrationData(channel) {
   padding: 0.75rem;
 }
 
-.channel-header {
+.channel-header-info {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.5rem;
+  gap: 0.5rem;
+  flex-wrap: wrap;
 }
 
 .channel-num {
@@ -200,17 +241,23 @@ function hasCalibrationData(channel) {
   font-size: 0.875rem;
 }
 
-.channel-spec {
-  font-weight: 500;
-  color: var(--p-surface-200);
-}
-
-.channel-type {
+.channel-type-badge {
   font-size: 0.75rem;
-  color: var(--p-surface-400);
+  color: var(--p-surface-100);
   background: var(--p-surface-700);
   padding: 0.125rem 0.5rem;
   border-radius: 3px;
+  font-weight: 500;
+}
+
+.channel-spec {
+  font-size: 0.8rem;
+  color: var(--p-surface-300);
+}
+
+.channel-unit {
+  font-size: 0.75rem;
+  color: var(--p-surface-400);
 }
 
 .channel-info {
@@ -229,8 +276,28 @@ function hasCalibrationData(channel) {
 }
 
 .sensor-info,
-.calibration-info {
+.calibration-info,
+.device-documents {
   padding-top: 0.5rem;
   border-top: 1px solid var(--p-surface-700);
+}
+
+.data-point {
+  font-size: 0.75rem;
+  background: var(--p-surface-800);
+  padding: 0.25rem 0.5rem;
+  border-radius: 3px;
+  color: var(--p-surface-300);
+}
+
+.document-item {
+  background: var(--p-surface-800);
+  padding: 0.5rem;
+  border-radius: 4px;
+  margin-bottom: 0.5rem;
+}
+
+.document-item:last-child {
+  margin-bottom: 0;
 }
 </style>
