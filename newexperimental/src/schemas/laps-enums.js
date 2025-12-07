@@ -1707,6 +1707,169 @@ export const CONTACT_AFFILIATIONS = [
   'Other'
 ]
 
+// ===== DATA FORM ENUMS =====
+// From old app add_experiment.php lines 3826-3862
+
+// Data source types (the main "Data" dropdown)
+export const DATA_SOURCE_TYPES = [
+  'Parameters',
+  'Time Series',
+  'Sample Description',
+  'Pore Fluid',
+  'Imaging',
+  'EBSD',
+  'WDS',
+  'Thin Section',
+  'Raman',
+  'Infrared Spectroscopy',
+  'TEM',
+  'CL',
+  'Profilometry',
+  'Acid Etching',
+  'Evaporative Grid',
+  'Neutron Diffraction',
+  'X-Ray Spectra',
+  'X-Ray Graphs',
+  'Thermal Etching',
+  'Fiducal Marks',
+  'XRCT',
+  'CT Scan',
+  'SEM',
+  'EDS',
+  'EDX',
+  'Optical Microscopy',
+  'Infrared',
+  'Raman',
+  'XRD',
+  'XRF',
+  'Confocal Microscopy',
+  'Photoelasticity',
+  'Polarized Microscopy',
+  'Fluorescence'
+]
+
+// Data type options (Picture, Video, etc.)
+export const DATA_TYPE_OPTIONS = [
+  'Picture',
+  'Video',
+  'Data',
+  'Software',
+  'Other'
+]
+
+// File format options
+export const DATA_FILE_FORMATS = [
+  'text',
+  'csv',
+  'zip',
+  'rar',
+  'Other'
+]
+
+// Data quality rating
+export const DATA_QUALITY_RATINGS = [
+  'Low',
+  'Acceptable',
+  'Good',
+  'Very Good',
+  'Exceptional'
+]
+
+// Data parameter control variables - from old app lines 3994-4029
+export const DATA_PARAMETER_CONTROLS = [
+  'Weight',
+  'Connected Porosity',
+  'Unconnected Porosity',
+  'Length',
+  'Diameter',
+  'Width',
+  'Span',
+  'Height',
+  'Bore Diameter',
+  'Fault Angle',
+  'Total Porosity',
+  'Density',
+  'Gas Permeability',
+  'Fluid Permeability',
+  'Final Strain ε',
+  'Corrected Strain Rate ε/dt',
+  'Final Displacement Δs',
+  'Maximum Force F',
+  'Maximum Stress σ',
+  'Yield Stress σ',
+  'Machine Stiffness N/mm',
+  'Roughness',
+  'Friction Parameter',
+  'Unconfined Compressive Strength (UCS)',
+  'Ultimate Tensile Strength',
+  'Ultimate Shear Strength',
+  'True Tension Strength',
+  'Compressive Strength (σ2=σ3)',
+  'Compressive Strength (σ1=σ2)',
+  'True Triaxial Strength',
+  'Yield Strength',
+  'Tensional Strength',
+  'Torsion Strength',
+  'Flow Strength',
+  'Fracture Strength'
+]
+
+// Data header channel types - from old app lines 4365-4372
+export const DATA_HEADER_CHANNEL_TYPES = [
+  'Analog Input',
+  'Analog Output',
+  'Digital Input',
+  'Digital Output',
+  'System Data',
+  'System Clock',
+  'Calculated'
+]
+
+// Pore fluid phase unit options - from old app lines 4171-4174
+export const PHASE_UNIT_OPTIONS = [
+  'Vol%',
+  'Mol%',
+  'Wt%',
+  'MPa'
+]
+
+// Pore fluid chemistry data options - from old app lines 4182-4183
+export const CHEMISTRY_DATA_OPTIONS = [
+  'Chemistry',
+  'None'
+]
+
+// Solute component options - from old app lines 4233-4246
+// Note: "Resitivity" is a typo in the old app, kept for compatibility
+export const SOLUTE_COMPONENTS = [
+  'pH',
+  'pOH',
+  'Na+',
+  'K+',
+  'Ca++',
+  'Mg++',
+  'Sr++',
+  'HCO3-',
+  'TOC',
+  'TIC',
+  'CO2(gas)',
+  'CO2(sol)',
+  'Resitivity',
+  'Temperature'
+]
+
+// Solute unit options - from old app lines 4257-4264
+export const SOLUTE_UNITS = [
+  'Vol%',
+  'Mol%',
+  'Wt%',
+  'Mol/L',
+  'mMol/L',
+  'S/Mol',
+  'log [C]',
+  'deg C'
+]
+
 // ===== PROTOCOL ENUMS =====
 
 // Protocol control variables - from old app edit_experiment.php lines 3493-3517
