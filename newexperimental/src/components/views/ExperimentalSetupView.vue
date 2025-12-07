@@ -18,7 +18,7 @@
     <!-- Test Features -->
     <section v-if="data.features?.length > 0" class="view-section">
       <h3 class="section-title">Test Features</h3>
-      <div class="features-display">
+      <div class="flex flex-wrap gap-2">
         <span
           v-for="feature in data.features"
           :key="feature"
@@ -210,12 +210,6 @@ const hasAnyData = computed(() => {
 
 .col-span-2 {
   grid-column: span 2;
-}
-
-.features-display {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
 }
 
 .feature-tag {
