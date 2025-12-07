@@ -22,7 +22,15 @@
         <span
           v-for="feature in data.features"
           :key="feature"
-          class="exp-feature-tag"
+          :style="{
+            display: 'inline-block',
+            padding: '0.375rem 0.625rem',
+            backgroundColor: '#374151',
+            border: '1px solid #4b5563',
+            borderRadius: '4px',
+            fontSize: '0.875rem',
+            color: '#ffffff'
+          }"
         >
           {{ feature }}
         </span>
