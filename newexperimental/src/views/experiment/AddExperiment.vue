@@ -1,11 +1,5 @@
 <template>
   <div>
-    <PageHeader
-      title="Add Experiment"
-      :back-link="`/view_project?ppk=${ppk}`"
-      :subtitle="projectName ? `Project: ${projectName}` : ''"
-    />
-
     <div v-if="loading" class="text-center py-12">
       <p class="text-strabo-text-secondary">Loading...</p>
     </div>
@@ -18,16 +12,21 @@
     </div>
 
     <template v-else>
+      <!-- Centered Header -->
+      <div class="text-center mb-6 mt-4">
+        <h1 class="page-title">Add Experiment</h1>
+        <p v-if="projectName" class="page-subtitle">Project: {{ projectName }}</p>
+      </div>
+
       <!-- Experiment ID field -->
       <div class="max-w-3xl mx-auto px-4 mb-6">
         <div class="form-section">
           <label for="experimentId" class="form-label">Experiment ID</label>
-          <input
+          <InputText
             id="experimentId"
             v-model="experimentId"
-            type="text"
-            class="form-input"
             placeholder="Enter experiment identifier..."
+            class="w-full"
           />
         </div>
       </div>
@@ -64,7 +63,7 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import PageHeader from '@/components/PageHeader.vue'
+import InputText from 'primevue/inputtext'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
 import SectionModal from '@/components/SectionModal.vue'
 import { projectService, experimentService } from '@/services/api'
@@ -164,6 +163,18 @@ const handleSave = async () => {
 </script>
 
 <style scoped>
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 600;
+  color: var(--strabo-text-primary);
+  margin-bottom: 0.25rem;
+}
+
+.page-subtitle {
+  font-size: 1rem;
+  color: var(--strabo-text-secondary);
+}
+
 .form-section {
   background-color: var(--strabo-bg-secondary);
   border: 1px solid var(--strabo-border);
@@ -176,20 +187,5 @@ const handleSave = async () => {
   font-weight: 600;
   margin-bottom: 0.5rem;
   color: var(--strabo-text-primary);
-}
-
-.form-input {
-  width: 100%;
-  padding: 0.5rem 0.75rem;
-  background-color: var(--strabo-bg-primary);
-  border: 1px solid var(--strabo-border);
-  border-radius: 0.375rem;
-  color: var(--strabo-text-primary);
-}
-
-.form-input:focus {
-  outline: none;
-  border-color: var(--strabo-accent);
-  box-shadow: 0 0 0 2px rgba(244, 81, 30, 0.2);
 }
 </style>
