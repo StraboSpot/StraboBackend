@@ -29,6 +29,8 @@
                 <Select
                   v-model="form[selectedStepIdx].test"
                   :options="availableFeatures"
+                  optionLabel="label"
+                  optionValue="value"
                   placeholder="Select step type..."
                   showClear
                   class="w-full"
@@ -226,11 +228,12 @@ const selectedStepIdx = ref(null)
 // In old app, this comes from selected apparatus features in experimental setup
 // If no features provided, fall back to all apparatus features
 const availableFeatures = computed(() => {
+  let features = APPARATUS_FEATURES
   if (props.selectedFeatures && props.selectedFeatures.length > 0) {
-    return props.selectedFeatures
+    features = props.selectedFeatures
   }
-  // Fall back to all apparatus features if none selected
-  return APPARATUS_FEATURES
+  // Convert to object format to avoid PrimeVue rendering issues with special characters
+  return features.map(f => ({ label: f, value: f }))
 })
 
 // Initialize form from initial data
