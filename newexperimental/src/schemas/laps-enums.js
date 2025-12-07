@@ -1173,3 +1173,90 @@ export const MATERIAL_NAME_OPTIONS = {
   'Standards': LAB_STANDARDS,
   'Commodity': COMMODITY_TYPES
 }
+
+// ===== DAQ (Data Acquisition) Enums =====
+
+// DAQ system types
+export const DAQ_TYPES = [
+  'Standard',
+  'Conventional',
+  'Proprietary'
+]
+
+// Channel types (signal types)
+export const CHANNEL_TYPES = [
+  'Calculated',
+  'Analog Input',
+  'Analog Output',
+  'Digital Input',
+  'Digital Output',
+  'System Data',
+  'System Clock'
+]
+
+// Channel electrical configurations
+export const CHANNEL_CONFIGURATIONS = [
+  'System',
+  'Differential',
+  'Single Ended',
+  'Referenced Single Ended',
+  'Serial',
+  'Parallel',
+  'Single',
+  'Line'
+]
+
+// Channel gain (amplification) options
+export const CHANNEL_GAINS = [
+  'x1',
+  'x2',
+  'x5',
+  'x10',
+  'x20',
+  'x25',
+  'x50',
+  'x100'
+]
+
+// Channel numbers (0-32)
+export const CHANNEL_NUMBERS = Array.from({ length: 33 }, (_, i) => String(i))
+
+// Sensor/Actuator types
+export const SENSOR_TYPES = [
+  'Displacement',
+  'Strain Gauge',
+  'Load Cell',
+  'Pressure Transducer',
+  'Thermocouple',
+  'RTD',
+  'Thermistor',
+  'Accelerometer',
+  'LVDT',
+  'DCDT',
+  'Extensometer',
+  'Encoder',
+  'Potentiometer',
+  'Flowmeter',
+  'Voltage Source',
+  'Current Source',
+  'Actuator',
+  'Other'
+]
+
+// Sensor output types
+export const SENSOR_OUTPUT_TYPES = [
+  'Voltage',
+  'Current',
+  'Resistance',
+  'Frequency',
+  'Digital'
+]
+
+// Calibration standard types
+export const CALIBRATION_STANDARDS = [
+  'NIST Traceable',
+  'ISO 17025',
+  'Manufacturer',
+  'In-House',
+  'Other'
+]

@@ -62,6 +62,22 @@
       </div>
     </div>
 
+    <!-- DAQ Form -->
+    <DAQForm
+      v-else-if="section === 'daq' && !readonly"
+      :initial-data="data"
+      @submit="handleFormSubmit"
+      @cancel="handleClose"
+    />
+
+    <!-- DAQ View (readonly) -->
+    <div v-else-if="section === 'daq' && readonly">
+      <DAQView :data="data" />
+      <div class="flex justify-center mt-6">
+        <Button label="Close" outlined @click="handleClose" />
+      </div>
+    </div>
+
     <!-- Placeholder for other sections -->
     <div v-else class="text-center p-4">
       <p class="text-lg mb-4">{{ sectionTitle }} Form</p>
@@ -109,6 +125,8 @@ import FacilityApparatusForm from '@/components/forms/FacilityApparatusForm.vue'
 import FacilityApparatusView from '@/components/views/FacilityApparatusView.vue'
 import ExperimentalSetupForm from '@/components/forms/ExperimentalSetupForm.vue'
 import ExperimentalSetupView from '@/components/views/ExperimentalSetupView.vue'
+import DAQForm from '@/components/forms/DAQForm.vue'
+import DAQView from '@/components/views/DAQView.vue'
 
 const props = defineProps({
   section: {
@@ -147,7 +165,7 @@ const dialogHeaders = {
 }
 
 // Sections that have real form implementations
-const sectionsWithForms = ['sample', 'facilityApparatus', 'experiment']
+const sectionsWithForms = ['sample', 'facilityApparatus', 'experiment', 'daq']
 
 const sectionTitle = computed(() => sectionTitles[props.section] || props.section)
 const dialogHeader = computed(() => dialogHeaders[props.section] || props.section.toUpperCase())
