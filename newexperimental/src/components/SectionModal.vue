@@ -30,6 +30,22 @@
       </div>
     </div>
 
+    <!-- Facility & Apparatus Form -->
+    <FacilityApparatusForm
+      v-else-if="section === 'facilityApparatus' && !readonly"
+      :initial-data="data"
+      @submit="handleFormSubmit"
+      @cancel="handleClose"
+    />
+
+    <!-- Facility & Apparatus View (readonly) -->
+    <div v-else-if="section === 'facilityApparatus' && readonly">
+      <FacilityApparatusView :data="data" />
+      <div class="flex justify-center mt-6">
+        <Button label="Close" outlined @click="handleClose" />
+      </div>
+    </div>
+
     <!-- Placeholder for other sections -->
     <div v-else class="text-center p-4">
       <p class="text-lg mb-4">{{ sectionTitle }} Form</p>
@@ -73,6 +89,8 @@ import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import SampleForm from '@/components/forms/SampleForm.vue'
 import SampleView from '@/components/views/SampleView.vue'
+import FacilityApparatusForm from '@/components/forms/FacilityApparatusForm.vue'
+import FacilityApparatusView from '@/components/views/FacilityApparatusView.vue'
 
 const props = defineProps({
   section: {
@@ -111,7 +129,7 @@ const dialogHeaders = {
 }
 
 // Sections that have real form implementations
-const sectionsWithForms = ['sample']
+const sectionsWithForms = ['sample', 'facilityApparatus']
 
 const sectionTitle = computed(() => sectionTitles[props.section] || props.section)
 const dialogHeader = computed(() => dialogHeaders[props.section] || props.section.toUpperCase())
