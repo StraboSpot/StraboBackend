@@ -38,8 +38,12 @@
   }
 
   .btn-primary {
-    @apply btn bg-strabo-accent text-white hover:bg-strabo-accent-hover
-           focus:ring-strabo-accent;
+    @apply btn text-white focus:ring-strabo-accent;
+    background-color: #dc3545 !important;
+  }
+
+  .btn-primary:hover {
+    background-color: #c82333 !important;
   }
 
   .btn-secondary {
