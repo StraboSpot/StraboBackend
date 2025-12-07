@@ -70,6 +70,14 @@
         @close="activeSection = null"
         @save="handleSectionSave"
       />
+
+      <!-- Download Modal -->
+      <DownloadModal
+        :visible="showDownloadModal"
+        :data="downloadData"
+        :filename="experimentId"
+        @close="showDownloadModal = false"
+      />
     </template>
   </div>
 </template>
@@ -80,6 +88,7 @@ import { useRouter } from 'vue-router'
 import InputText from 'primevue/inputtext'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
 import SectionModal from '@/components/SectionModal.vue'
+import DownloadModal from '@/components/DownloadModal.vue'
 import { projectService, experimentService } from '@/services/api'
 
 const props = defineProps({
@@ -94,6 +103,7 @@ const saving = ref(false)
 const projectName = ref('')
 const experimentId = ref('')
 const activeSection = ref(null)
+const showDownloadModal = ref(false)
 
 // LAPS data structure
 const experimentData = ref({
@@ -126,19 +136,15 @@ const hasData = computed(() => {
     hasNonEmptyData(experimentData.value.data)
 })
 
-// Download current experiment data as JSON
+// Data for download modal
+const downloadData = computed(() => ({
+  experiment_id: experimentId.value,
+  ...experimentData.value
+}))
+
+// Open download modal
 const handleDownload = () => {
-  const data = {
-    experiment_id: experimentId.value,
-    ...experimentData.value
-  }
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
-  const url = URL.createObjectURL(blob)
-  const a = document.createElement('a')
-  a.href = url
-  a.download = `${experimentId.value || 'experiment'}.json`
-  a.click()
-  URL.revokeObjectURL(url)
+  showDownloadModal.value = true
 }
 
 onMounted(async () => {

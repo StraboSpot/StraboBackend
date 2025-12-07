@@ -46,14 +46,23 @@
         :readonly="true"
         @close="activeSection = null"
       />
+
+      <!-- Download Modal -->
+      <DownloadModal
+        :visible="showDownloadModal"
+        :data="downloadData"
+        :filename="experimentId"
+        @close="showDownloadModal = false"
+      />
     </template>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
 import SectionModal from '@/components/SectionModal.vue'
+import DownloadModal from '@/components/DownloadModal.vue'
 import { experimentService } from '@/services/api'
 
 const props = defineProps({
@@ -65,6 +74,7 @@ const error = ref(null)
 const experimentId = ref('')
 const modifiedDate = ref('')
 const activeSection = ref(null)
+const showDownloadModal = ref(false)
 
 const experimentData = ref({
   facility: {},
@@ -123,8 +133,15 @@ const getSectionData = (section) => {
   return experimentData.value[section] || {}
 }
 
+// Data for download modal
+const downloadData = computed(() => ({
+  experiment_id: experimentId.value,
+  ...experimentData.value
+}))
+
+// Open download modal
 const handleDownload = () => {
-  experimentService.download(props.e)
+  showDownloadModal.value = true
 }
 </script>
 
