@@ -170,7 +170,7 @@ const hasApparatus = computed(() => {
 .view-section {
   margin-bottom: 1.5rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--strabo-border);
+  border-bottom: 1px solid var(--strabo-border, #4b5563);
 }
 
 .view-section:last-child {
@@ -179,17 +179,17 @@ const hasApparatus = computed(() => {
 }
 
 .section-title {
-  font-size: 1rem;
+  font-size: 1.125rem; /* 18px */
   font-weight: 600;
-  color: var(--strabo-text-primary);
+  color: #ffffff;
   margin-bottom: 1rem;
   text-transform: uppercase;
 }
 
 .subsection-title {
-  font-size: 0.875rem;
+  font-size: 1rem; /* 16px */
   font-weight: 600;
-  color: var(--strabo-text-secondary);
+  color: #d1d5db; /* gray-300 */
   margin-bottom: 0.75rem;
 }
 
@@ -209,12 +209,12 @@ const hasApparatus = computed(() => {
 
 .feature-tag {
   display: inline-block;
-  padding: 0.25rem 0.5rem;
-  background-color: var(--strabo-bg-tertiary);
-  border: 1px solid var(--strabo-border);
+  padding: 0.375rem 0.625rem;
+  background-color: var(--strabo-bg-tertiary, #374151);
+  border: 1px solid var(--strabo-border, #4b5563);
   border-radius: 4px;
-  font-size: 0.75rem;
-  color: var(--strabo-text-secondary);
+  font-size: 0.875rem; /* 14px */
+  color: #ffffff;
 }
 
 .table-container {
@@ -224,29 +224,30 @@ const hasApparatus = computed(() => {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: 1rem; /* 16px */
 }
 
 .data-table th,
 .data-table td {
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.75rem;
   text-align: left;
-  border-bottom: 1px solid var(--strabo-border);
+  border-bottom: 1px solid var(--strabo-border, #4b5563);
 }
 
 .data-table th {
-  background-color: var(--strabo-bg-tertiary);
+  background-color: var(--strabo-bg-tertiary, #374151);
   font-weight: 600;
-  color: var(--strabo-text-secondary);
+  color: #d1d5db; /* gray-300 */
 }
 
 .data-table td {
-  color: var(--strabo-text-primary);
+  color: #ffffff; /* white for better readability */
 }
 
 .no-data {
   text-align: center;
   padding: 2rem;
+  color: #9ca3af;
 }
 
 @media (max-width: 768px) {

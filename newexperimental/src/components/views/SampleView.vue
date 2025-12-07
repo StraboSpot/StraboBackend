@@ -250,7 +250,7 @@ const hasAnyData = computed(() => {
 .view-section {
   margin-bottom: 1.5rem;
   padding-bottom: 1.5rem;
-  border-bottom: 1px solid var(--strabo-border);
+  border-bottom: 1px solid var(--strabo-border, #4b5563);
 }
 
 .view-section:last-child {
@@ -259,17 +259,17 @@ const hasAnyData = computed(() => {
 }
 
 .section-title {
-  font-size: 1rem;
+  font-size: 1.125rem; /* 18px */
   font-weight: 600;
-  color: var(--strabo-text-primary);
+  color: #ffffff;
   margin-bottom: 1rem;
   text-transform: uppercase;
 }
 
 .subsection-title {
-  font-size: 0.875rem;
+  font-size: 1rem; /* 16px */
   font-weight: 600;
-  color: var(--strabo-text-secondary);
+  color: #d1d5db; /* gray-300 - lighter for better visibility */
   margin-bottom: 0.75rem;
 }
 
@@ -294,24 +294,24 @@ const hasAnyData = computed(() => {
 .data-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 0.875rem;
+  font-size: 1rem; /* 16px */
 }
 
 .data-table th,
 .data-table td {
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.75rem;
   text-align: left;
-  border-bottom: 1px solid var(--strabo-border);
+  border-bottom: 1px solid var(--strabo-border, #4b5563);
 }
 
 .data-table th {
-  background-color: var(--strabo-bg-tertiary);
+  background-color: var(--strabo-bg-tertiary, #374151);
   font-weight: 600;
-  color: var(--strabo-text-secondary);
+  color: #d1d5db; /* gray-300 */
 }
 
 .data-table td {
-  color: var(--strabo-text-primary);
+  color: #ffffff; /* white for better readability */
 }
 
 .no-data {
