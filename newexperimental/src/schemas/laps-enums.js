@@ -1073,6 +1073,69 @@ export const COMMODITY_TYPES = [
   'zirconium'
 ]
 
+// Experimental Setup - Project types
+export const PROJECT_TYPES = [
+  'Carbon Sequestration',
+  'Crack Healing',
+  'Yield Point Study Carrara',
+  'MSGC',
+  'Calibration',
+  'Pilot',
+  'Training',
+  'Test'
+]
+
+// Geometry type options
+export const GEOMETRY_COMPONENT_TYPES = [
+  'Sample',
+  'Jacket',
+  'Forcing Block',
+  'Spacer'
+]
+
+// Geometry shape options
+export const GEOMETRY_SHAPES = [
+  'Cylinder',
+  'Rectangular',
+  'Circular',
+  'Precut',
+  'Dogbone',
+  'Split Cylinder',
+  'Tube'
+]
+
+// Geometry material options
+export const GEOMETRY_MATERIALS = [
+  'Sample',
+  'PET',
+  'PVC',
+  'PTFE',
+  'Rubber',
+  'Viton',
+  'Copper',
+  'Iron',
+  'Nickel',
+  'Gold',
+  'Platinum',
+  'Silver',
+  'Alumina',
+  'Porous Alumina',
+  'Zirconia',
+  'PZT'
+]
+
+// Dimension variable options
+export const DIMENSION_VARIABLES = [
+  'Length',
+  'Diameter',
+  'Width',
+  'Span',
+  'Height',
+  'Wall Thickness',
+  'Bore Diameter',
+  'Fault Angle'
+]
+
 // Material types that use text input for name (instead of dropdown)
 export const TEXT_INPUT_MATERIAL_TYPES = [
   'Glass',

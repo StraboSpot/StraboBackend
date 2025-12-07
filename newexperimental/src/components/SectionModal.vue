@@ -46,6 +46,22 @@
       </div>
     </div>
 
+    <!-- Experimental Setup Form -->
+    <ExperimentalSetupForm
+      v-else-if="section === 'experiment' && !readonly"
+      :initial-data="data"
+      @submit="handleFormSubmit"
+      @cancel="handleClose"
+    />
+
+    <!-- Experimental Setup View (readonly) -->
+    <div v-else-if="section === 'experiment' && readonly">
+      <ExperimentalSetupView :data="data" />
+      <div class="flex justify-center mt-6">
+        <Button label="Close" outlined @click="handleClose" />
+      </div>
+    </div>
+
     <!-- Placeholder for other sections -->
     <div v-else class="text-center p-4">
       <p class="text-lg mb-4">{{ sectionTitle }} Form</p>
@@ -91,6 +107,8 @@ import SampleForm from '@/components/forms/SampleForm.vue'
 import SampleView from '@/components/views/SampleView.vue'
 import FacilityApparatusForm from '@/components/forms/FacilityApparatusForm.vue'
 import FacilityApparatusView from '@/components/views/FacilityApparatusView.vue'
+import ExperimentalSetupForm from '@/components/forms/ExperimentalSetupForm.vue'
+import ExperimentalSetupView from '@/components/views/ExperimentalSetupView.vue'
 
 const props = defineProps({
   section: {
@@ -129,7 +147,7 @@ const dialogHeaders = {
 }
 
 // Sections that have real form implementations
-const sectionsWithForms = ['sample', 'facilityApparatus']
+const sectionsWithForms = ['sample', 'facilityApparatus', 'experiment']
 
 const sectionTitle = computed(() => sectionTitles[props.section] || props.section)
 const dialogHeader = computed(() => dialogHeaders[props.section] || props.section.toUpperCase())
