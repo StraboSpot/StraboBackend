@@ -184,11 +184,12 @@ function getFilename(path) {
 
 .dataset-type-badge {
   font-size: 0.75rem;
-  font-weight: 400;
-  color: var(--p-surface-400);
+  font-weight: 500;
+  color: #ffffff;
   background: var(--p-surface-700);
-  padding: 0.25rem 0.75rem;
-  border-radius: 1rem;
+  border: 1px solid var(--p-surface-600);
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
   text-transform: none;
 }
 
@@ -208,7 +209,7 @@ function getFilename(path) {
 .nested-card {
   background: var(--p-surface-800);
   border: 1px solid var(--p-surface-600);
-  border-radius: 0.375rem;
+  border-radius: 6px;
   padding: 1rem;
   margin-bottom: 0.75rem;
 }
@@ -220,7 +221,7 @@ function getFilename(path) {
 .nested-card-title {
   font-size: 0.875rem;
   font-weight: 600;
-  color: #dc3545;
+  color: var(--p-primary-400);
   margin-bottom: 0.75rem;
 }
 
@@ -258,6 +259,7 @@ function getFilename(path) {
 .no-data {
   text-align: center;
   padding: 2rem;
+  color: var(--p-surface-400);
 }
 
 @media (max-width: 768px) {

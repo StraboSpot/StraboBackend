@@ -191,6 +191,13 @@ const hasAnyData = computed(() => {
   text-transform: uppercase;
 }
 
+.subsection-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: #d1d5db;
+  margin-bottom: 0.75rem;
+}
+
 .info-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -213,16 +220,18 @@ const hasAnyData = computed(() => {
 
 .feature-tag {
   display: inline-block;
-  padding: 6px 12px;
-  background-color: #dc3545;
-  color: #ffffff;
-  border-radius: 9999px;
+  padding: 0.375rem 0.625rem;
+  background-color: var(--p-surface-700);
+  border: 1px solid var(--p-surface-600);
+  border-radius: 4px;
   font-size: 0.875rem;
+  color: #ffffff;
 }
 
 .geometry-card {
+  background: var(--p-surface-800);
   border: 1px solid var(--p-surface-600);
-  border-radius: 4px;
+  border-radius: 6px;
   overflow: hidden;
 }
 
@@ -231,6 +240,7 @@ const hasAnyData = computed(() => {
   padding: 0.75rem 1rem;
   font-weight: 600;
   font-size: 0.875rem;
+  color: #ffffff;
   text-transform: uppercase;
 }
 
@@ -268,6 +278,7 @@ const hasAnyData = computed(() => {
 .no-data {
   text-align: center;
   padding: 2rem;
+  color: var(--p-surface-400);
 }
 
 @media (max-width: 768px) {

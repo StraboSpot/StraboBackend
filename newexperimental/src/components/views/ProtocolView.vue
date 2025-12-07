@@ -85,6 +85,7 @@ defineProps({
 
 .step-card {
   background: var(--p-surface-800);
+  border: 1px solid var(--p-surface-600);
   border-radius: 6px;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -96,7 +97,7 @@ defineProps({
   gap: 0.75rem;
   margin-bottom: 0.75rem;
   padding-bottom: 0.5rem;
-  border-bottom: 1px solid var(--p-surface-700);
+  border-bottom: 1px solid var(--p-surface-600);
 }
 
 .step-number {
@@ -108,7 +109,7 @@ defineProps({
 .step-type {
   font-size: 1rem;
   font-weight: 600;
-  color: var(--p-surface-100);
+  color: #ffffff;
 }
 
 .step-info {
@@ -117,21 +118,19 @@ defineProps({
 
 .parameters-section {
   padding-top: 0.75rem;
-  border-top: 1px solid var(--p-surface-700);
+  border-top: 1px solid var(--p-surface-600);
 }
 
 .subsection-title {
-  font-size: 0.75rem;
+  font-size: 1rem;
   font-weight: 600;
-  color: var(--p-surface-400);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
+  color: #d1d5db;
+  margin-bottom: 0.75rem;
 }
 
 .params-table {
   background: var(--p-surface-900);
-  border: 1px solid var(--p-surface-700);
+  border: 1px solid var(--p-surface-600);
   border-radius: 4px;
   overflow: hidden;
 }
@@ -139,20 +138,18 @@ defineProps({
 .params-header {
   display: flex;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 0.75rem;
   font-weight: 600;
-  font-size: 0.75rem;
-  color: var(--p-surface-400);
-  background: var(--p-surface-800);
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
+  font-size: 0.875rem;
+  color: #d1d5db;
+  background: var(--p-surface-700);
 }
 
 .params-row {
   display: flex;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
-  border-top: 1px solid var(--p-surface-800);
+  padding: 0.625rem 0.75rem;
+  border-top: 1px solid var(--p-surface-600);
 }
 
 .params-row:first-of-type {
@@ -182,12 +179,12 @@ defineProps({
 
 .param-value {
   font-size: 1rem;
-  color: var(--p-surface-100);
+  color: #ffffff;
 }
 
 .no-params {
   font-size: 0.875rem;
-  color: var(--p-surface-500);
+  color: var(--p-surface-400);
   padding: 0.5rem 0;
 }
 </style>

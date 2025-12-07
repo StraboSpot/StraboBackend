@@ -158,21 +158,26 @@ function hasCalibrationData(channel) {
 
 .view-section {
   margin-bottom: 1.5rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 1px solid var(--p-surface-600);
+}
+
+.view-section:last-child {
+  border-bottom: none;
+  margin-bottom: 0;
 }
 
 .section-title {
-  font-size: 0.875rem;
+  font-size: 1.125rem;
   font-weight: 600;
-  color: var(--p-surface-300);
+  color: #ffffff;
+  margin-bottom: 1rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.75rem;
-  border-bottom: 1px solid var(--p-surface-700);
-  padding-bottom: 0.5rem;
 }
 
 .device-card {
   background: var(--p-surface-800);
+  border: 1px solid var(--p-surface-600);
   border-radius: 6px;
   padding: 1rem;
   margin-bottom: 1rem;
@@ -187,13 +192,18 @@ function hasCalibrationData(channel) {
 
 .device-name {
   font-weight: 600;
-  color: var(--p-surface-100);
+  color: #ffffff;
   font-size: 1rem;
 }
 
 .channel-count {
   font-size: 0.75rem;
-  color: var(--p-surface-400);
+  font-weight: 500;
+  color: #ffffff;
+  background: var(--p-surface-700);
+  border: 1px solid var(--p-surface-600);
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
 }
 
 .channels-container {
@@ -204,8 +214,8 @@ function hasCalibrationData(channel) {
 
 .channel-card {
   background: var(--p-surface-900);
-  border: 1px solid var(--p-surface-700);
-  border-radius: 4px;
+  border: 1px solid var(--p-surface-600);
+  border-radius: 6px;
   padding: 0.75rem;
 }
 
@@ -224,16 +234,17 @@ function hasCalibrationData(channel) {
 
 .channel-type-badge {
   font-size: 0.75rem;
-  color: var(--p-surface-100);
+  color: #ffffff;
   background: var(--p-surface-700);
-  padding: 0.125rem 0.5rem;
-  border-radius: 3px;
+  border: 1px solid var(--p-surface-600);
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
   font-weight: 500;
 }
 
 .channel-spec {
-  font-size: 0.8rem;
-  color: var(--p-surface-300);
+  font-size: 0.875rem;
+  color: #d1d5db;
 }
 
 .channel-unit {
@@ -246,28 +257,25 @@ function hasCalibrationData(channel) {
 }
 
 .subsection-title {
-  font-size: 0.75rem;
+  font-size: 1rem;
   font-weight: 600;
-  color: var(--p-surface-400);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  margin-bottom: 0.5rem;
-  padding-bottom: 0.25rem;
-  border-bottom: 1px dashed var(--p-surface-700);
+  color: #d1d5db;
+  margin-bottom: 0.75rem;
 }
 
 .sensor-info,
 .calibration-info,
 .device-documents {
   padding-top: 0.5rem;
-  border-top: 1px solid var(--p-surface-700);
+  border-top: 1px solid var(--p-surface-600);
 }
 
 .data-point {
   font-size: 0.75rem;
-  background: var(--p-surface-800);
+  background: var(--p-surface-700);
+  border: 1px solid var(--p-surface-600);
   padding: 0.25rem 0.5rem;
-  border-radius: 3px;
-  color: var(--p-surface-300);
+  border-radius: 4px;
+  color: #ffffff;
 }
 </style>
