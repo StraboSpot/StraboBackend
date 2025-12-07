@@ -323,7 +323,7 @@
               <InputText
                 :modelValue="dp.a"
                 @update:modelValue="updateCalibrationData(dpIdx, 'a', $event)"
-                placeholder="0"
+                placeholder=""
               />
             </div>
             <div class="field w-32">
@@ -490,7 +490,7 @@ const CALIBRATION_INPUTS = [
 // Calibration data management
 function addCalibrationData() {
   const currentData = props.channel.calibration?.data || []
-  emit('update', 'calibration.data', [...currentData, { a: '0', b: '' }])
+  emit('update', 'calibration.data', [...currentData, { a: '', b: '' }])
 }
 
 function updateCalibrationData(idx, field, value) {
