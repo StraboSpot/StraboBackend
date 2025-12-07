@@ -14,6 +14,17 @@
       content: { class: 'p-4' }
     }"
   >
+    <!-- Load Data Bar (only shown in edit mode, not readonly) -->
+    <LoadDataBar
+      v-if="!readonly"
+      :section="section"
+      :show-apparatus-repo="section === 'facilityApparatus'"
+      @load-from-previous="$emit('load-from-previous', section)"
+      @load-from-json="handleLoadFromJson"
+      @load-from-repository="$emit('load-from-repository')"
+      @clear="handleClear"
+    />
+
     <!-- Sample Form -->
     <SampleForm
       v-if="section === 'sample' && !readonly"
@@ -152,6 +163,7 @@
 import { computed } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
+import LoadDataBar from '@/components/LoadDataBar.vue'
 import SampleForm from '@/components/forms/SampleForm.vue'
 import SampleView from '@/components/views/SampleView.vue'
 import FacilityApparatusForm from '@/components/forms/FacilityApparatusForm.vue'
@@ -185,7 +197,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['close', 'save'])
+const emit = defineEmits(['close', 'save', 'load-from-previous', 'load-from-json', 'load-from-repository', 'clear'])
 
 const sectionTitles = {
   sample: 'Sample',
@@ -233,5 +245,15 @@ const handleSave = () => {
 const handleFormSubmit = (formData) => {
   // Called by form components when they submit
   emit('save', props.section, formData)
+}
+
+// Handle JSON file load from LoadDataBar
+const handleLoadFromJson = (data) => {
+  emit('load-from-json', props.section, data)
+}
+
+// Handle clear from LoadDataBar
+const handleClear = () => {
+  emit('clear', props.section)
 }
 </script>

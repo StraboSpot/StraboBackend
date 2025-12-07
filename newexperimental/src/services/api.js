@@ -260,4 +260,72 @@ export const uploadService = {
   }
 }
 
+// Bulk Load Service - for loading data from various sources
+export const bulkLoadService = {
+  // Get all user's experiments for "Load from Previous Experiment" feature
+  getMyExperiments: async () => {
+    const response = await fetch('/newexperimental/api/get_my_experiments.php', {
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to fetch experiments')
+    }
+    return response.json()
+  },
+
+  // Get example experiment data for "New User? Load Example Data" feature
+  getExampleData: async () => {
+    const response = await fetch('/newexperimental/data/example_experiment.json')
+    if (!response.ok) {
+      throw new Error('Failed to load example data')
+    }
+    return response.json()
+  },
+
+  // Get all facilities with apparatuses for apparatus repository selection
+  getApparatusList: async () => {
+    const response = await fetch('/newexperimental/api/get_apparatus_list.php', {
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to fetch apparatus list')
+    }
+    return response.json()
+  },
+
+  // Get single facility from apparatus repository
+  getApprepoFacility: async (id) => {
+    const response = await fetch(`/newexperimental/api/get_apprepo_facility.php?id=${id}`, {
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to fetch facility')
+    }
+    return response.json()
+  },
+
+  // Get single apparatus from apparatus repository
+  getApprepoApparatus: async (id) => {
+    const response = await fetch(`/newexperimental/api/get_apprepo_apparatus.php?id=${id}`, {
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to fetch apparatus')
+    }
+    return response.json()
+  }
+}
+
 export default api

@@ -33,7 +33,7 @@
       <!-- Experiment ID field -->
       <div class="max-w-3xl mx-auto px-4 mb-6">
         <div class="form-section">
-          <label for="experimentId" class="form-label">Experiment ID</label>
+          <label for="experimentId" class="form-label">Experiment ID<span class="text-red-500">*</span></label>
           <InputText
             id="experimentId"
             v-model="experimentId"
@@ -42,6 +42,13 @@
           />
         </div>
       </div>
+
+      <!-- Bulk Load Bar (edit mode - no example data button) -->
+      <BulkLoadBar
+        mode="edit"
+        @load-from-previous="showChooseExperimentModal = true; chooseExperimentDataType = 'all'"
+        @load-from-json="handleLoadFromJson"
+      />
 
       <!-- Section Tiles -->
       <ExperimentTiles
@@ -68,6 +75,10 @@
         :selected-features="getSelectedFeatures()"
         @close="activeSection = null"
         @save="handleSectionSave"
+        @load-from-previous="handleSectionLoadFromPrevious"
+        @load-from-json="handleSectionLoadFromJson"
+        @load-from-repository="showChooseApparatusModal = true"
+        @clear="handleSectionClear"
       />
 
       <!-- Download Modal -->
@@ -76,6 +87,21 @@
         :data="downloadData"
         :filename="experimentId"
         @close="showDownloadModal = false"
+      />
+
+      <!-- Choose Experiment Modal (for bulk load from previous) -->
+      <ChooseExperimentModal
+        :visible="showChooseExperimentModal"
+        :data-type="chooseExperimentDataType"
+        @close="showChooseExperimentModal = false"
+        @select="handleExperimentSelected"
+      />
+
+      <!-- Choose Apparatus Modal (for loading from repository) -->
+      <ChooseApparatusModal
+        :visible="showChooseApparatusModal"
+        @close="showChooseApparatusModal = false"
+        @select="handleApparatusSelected"
       />
     </template>
   </div>
@@ -88,7 +114,10 @@ import InputText from 'primevue/inputtext'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
 import SectionModal from '@/components/SectionModal.vue'
 import DownloadModal from '@/components/DownloadModal.vue'
-import { experimentService } from '@/services/api'
+import BulkLoadBar from '@/components/BulkLoadBar.vue'
+import ChooseExperimentModal from '@/components/ChooseExperimentModal.vue'
+import ChooseApparatusModal from '@/components/ChooseApparatusModal.vue'
+import { experimentService, bulkLoadService } from '@/services/api'
 
 const props = defineProps({
   e: String
@@ -103,6 +132,11 @@ const experimentId = ref('')
 const projectName = ref('')
 const activeSection = ref(null)
 const showDownloadModal = ref(false)
+
+// Bulk load modal states
+const showChooseExperimentModal = ref(false)
+const showChooseApparatusModal = ref(false)
+const chooseExperimentDataType = ref('all')
 
 const experimentData = ref({
   facility: {},
@@ -244,6 +278,138 @@ const handleSave = async () => {
   }
 }
 
+// ===== Bulk Load Handlers =====
+
+// Load from JSON file (top-level)
+const handleLoadFromJson = (data) => {
+  loadExperimentData(data, 'all')
+}
+
+// Handle experiment selected from ChooseExperimentModal
+const handleExperimentSelected = ({ dataType, data }) => {
+  loadExperimentData(data, dataType)
+}
+
+// Handle apparatus selected from ChooseApparatusModal
+const handleApparatusSelected = ({ facility, apparatus }) => {
+  experimentData.value.facility = facility || {}
+  experimentData.value.apparatus = apparatus || {}
+}
+
+// Core function to load experiment data into the form
+const loadExperimentData = (inData, dataType) => {
+  // Clear appropriate section(s) first
+  if (dataType === 'all') {
+    clearAllData()
+  } else if (dataType === 'facilityApparatus') {
+    experimentData.value.facility = {}
+    experimentData.value.apparatus = {}
+  } else if (dataType === 'daq') {
+    experimentData.value.daq = {}
+  } else if (dataType === 'sample') {
+    experimentData.value.sample = {}
+  } else if (dataType === 'experiment' || dataType === 'protocol') {
+    experimentData.value.experiment = {}
+  } else if (dataType === 'data') {
+    experimentData.value.data = {}
+  }
+
+  // Load the data based on dataType
+  if (dataType === 'facilityApparatus' || dataType === 'all') {
+    if (inData.facility) experimentData.value.facility = inData.facility
+    if (inData.apparatus) experimentData.value.apparatus = inData.apparatus
+  }
+  if (dataType === 'daq' || dataType === 'all') {
+    if (inData.daq) experimentData.value.daq = inData.daq
+  }
+  if (dataType === 'sample' || dataType === 'all') {
+    if (inData.sample) experimentData.value.sample = inData.sample
+  }
+  if (dataType === 'experiment' || dataType === 'protocol' || dataType === 'all') {
+    if (inData.experiment) experimentData.value.experiment = inData.experiment
+  }
+  if (dataType === 'data' || dataType === 'all') {
+    if (inData.data) experimentData.value.data = inData.data
+  }
+
+  // Load experiment ID if loading all data
+  if (dataType === 'all' || dataType === 'experiment') {
+    if (inData.experiment_id) {
+      experimentId.value = inData.experiment_id
+    } else if (inData.experiment?.id) {
+      experimentId.value = inData.experiment.id
+    }
+  }
+}
+
+// Clear all experiment data
+const clearAllData = () => {
+  experimentData.value = {
+    facility: {},
+    apparatus: {},
+    daq: {},
+    sample: {},
+    experiment: {},
+    data: {}
+  }
+  experimentId.value = ''
+}
+
+// ===== Section-Level Load Handlers (from LoadDataBar in SectionModal) =====
+
+// Handle "from Previous Experiment" click in section modal
+const handleSectionLoadFromPrevious = (section) => {
+  chooseExperimentDataType.value = section
+  showChooseExperimentModal.value = true
+}
+
+// Handle "From JSON File" load in section modal
+const handleSectionLoadFromJson = (section, data) => {
+  loadExperimentData(data, section)
+  // Close and reopen modal to refresh with new data
+  const currentSection = activeSection.value
+  activeSection.value = null
+  setTimeout(() => {
+    activeSection.value = currentSection
+  }, 50)
+}
+
+// Handle "Clear Interface" click in section modal
+const handleSectionClear = (section) => {
+  if (section === 'facilityApparatus') {
+    experimentData.value.facility = {}
+    experimentData.value.apparatus = {}
+  } else if (section === 'protocol') {
+    if (experimentData.value.experiment) {
+      experimentData.value.experiment.protocol = []
+    }
+  } else {
+    experimentData.value[section] = {}
+  }
+  // Close and reopen modal to refresh with cleared data
+  const currentSection = activeSection.value
+  activeSection.value = null
+  setTimeout(() => {
+    activeSection.value = currentSection
+  }, 50)
+}
+
+// Expose methods for SectionModal to use for per-section loading
+const openChooseExperimentForSection = (dataType) => {
+  chooseExperimentDataType.value = dataType
+  showChooseExperimentModal.value = true
+}
+
+const openChooseApparatusModal = () => {
+  showChooseApparatusModal.value = true
+}
+
+// Expose to SectionModal via provide/inject or props
+defineExpose({
+  openChooseExperimentForSection,
+  openChooseApparatusModal,
+  loadExperimentData
+})
 </script>
 
 <style scoped>
