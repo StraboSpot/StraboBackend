@@ -12,7 +12,6 @@
             :options="HEADER_TYPES"
             placeholder="Select..."
             showClear
-            editable
           />
         </div>
         <div class="field">
@@ -23,7 +22,6 @@
             :options="SPECIFIER_A_OPTIONS"
             placeholder="Select..."
             showClear
-            editable
           />
         </div>
         <div class="field">
@@ -34,7 +32,6 @@
             :options="SPECIFIER_B_OPTIONS"
             placeholder="Select..."
             showClear
-            editable
           />
         </div>
         <div class="field">
@@ -45,7 +42,6 @@
             :options="UNIT_TYPES"
             placeholder="Select..."
             showClear
-            editable
           />
         </div>
       </div>
@@ -169,7 +165,6 @@
             :options="SENSOR_TYPES"
             placeholder="Select..."
             showClear
-            editable
           />
         </div>
         <div class="field md:col-span-2">
