@@ -63,21 +63,10 @@
       <p class="text-sm text-strabo-text-secondary mb-4">
         Select all features that apply to this apparatus.
       </p>
-      <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2">
-        <label
-          v-for="feature in APPARATUS_FEATURES"
-          :key="feature"
-          class="feature-label"
-        >
-          <input
-            type="checkbox"
-            :value="feature"
-            v-model="form.features"
-            class="feature-checkbox"
-          />
-          <span>{{ feature }}</span>
-        </label>
-      </div>
+      <FeaturePills
+        :features="APPARATUS_FEATURES"
+        v-model="form.features"
+      />
     </CollapsibleSection>
 
     <!-- Parameters -->
@@ -85,78 +74,25 @@
       <p class="text-sm text-strabo-text-secondary mb-4">
         Define the operational parameters and limits of this apparatus.
       </p>
-
-      <div v-if="form.parameters.length > 0" class="space-y-4 mb-4">
-        <div
-          v-for="(param, idx) in form.parameters"
-          :key="idx"
-          class="p-4 bg-strabo-bg-tertiary rounded"
-        >
-          <div class="flex justify-between items-start mb-3">
-            <span class="text-sm font-medium text-strabo-text-primary">Parameter {{ idx + 1 }}</span>
-            <button
-              type="button"
-              @click="removeParameter(idx)"
-              class="text-strabo-error hover:underline text-sm"
-            >
-              Remove
-            </button>
-          </div>
-          <div class="grid grid-cols-2 md:grid-cols-5 gap-3">
-            <div class="col-span-2 md:col-span-1">
-              <label class="form-label text-xs">Type</label>
-              <select v-model="param.type" class="form-select text-sm">
-                <option value="">Select...</option>
-                <option v-for="t in PARAMETER_TYPES" :key="t" :value="t">{{ t }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="form-label text-xs">Min</label>
-              <input v-model="param.min" type="text" class="form-input text-sm" />
-            </div>
-            <div>
-              <label class="form-label text-xs">Max</label>
-              <input v-model="param.max" type="text" class="form-input text-sm" />
-            </div>
-            <div>
-              <label class="form-label text-xs">Unit</label>
-              <select v-model="param.unit" class="form-select text-sm">
-                <option value="">Select...</option>
-                <option v-for="u in UNIT_TYPES" :key="u" :value="u">{{ u }}</option>
-              </select>
-            </div>
-            <div>
-              <label class="form-label text-xs">Prefix</label>
-              <select v-model="param.prefix" class="form-select text-sm">
-                <option value="">Select...</option>
-                <option v-for="p in UNIT_PREFIXES" :key="p" :value="p">{{ p }}</option>
-              </select>
-            </div>
-            <div class="col-span-2 md:col-span-5">
-              <label class="form-label text-xs">Note</label>
-              <input v-model="param.note" type="text" class="form-input text-sm" placeholder="Optional note" />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <button
-        type="button"
-        @click="addParameter"
-        class="btn-secondary text-sm"
-      >
-        + Add Parameter
-      </button>
+      <ParametersEditor
+        v-model="form.parameters"
+        add-label="Add Parameter"
+        :name-options="APPARATUS_PARAMETER_TYPES"
+        :show-min="true"
+        :show-max="true"
+      />
     </CollapsibleSection>
 
-    <!-- Documents (placeholder for now) -->
+    <!-- Documents -->
     <CollapsibleSection title="Documents" class="mt-4">
       <p class="text-sm text-strabo-text-secondary mb-4">
         Upload manuals, diagrams, or other documentation.
       </p>
-      <div class="text-center py-8 border-2 border-dashed border-strabo-border rounded">
-        <p class="text-strabo-text-secondary">Document upload coming soon</p>
-      </div>
+      <DocumentsEditor
+        v-model="form.documents"
+        add-label="Add Document"
+        :show-upload="true"
+      />
     </CollapsibleSection>
 
     <!-- Actions -->
@@ -174,13 +110,33 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
+import FeaturePills from '@/components/FeaturePills.vue'
+import ParametersEditor from '@/components/ParametersEditor.vue'
+import DocumentsEditor from '@/components/DocumentsEditor.vue'
 import {
   APPARATUS_TYPES,
-  APPARATUS_FEATURES,
-  PARAMETER_TYPES,
-  UNIT_TYPES,
-  UNIT_PREFIXES
+  APPARATUS_FEATURES
 } from '@/schemas/laps-enums'
+
+// Apparatus-specific parameter types (from LAPS schema)
+const APPARATUS_PARAMETER_TYPES = [
+  'Confining Pressure',
+  'Effective Pressure',
+  'Pore Pressure',
+  'Temperature',
+  'σ1-Displacement',
+  'σ2-Displacement',
+  'σ3-Displacement',
+  'σ1-Load',
+  'σ2-Load',
+  'σ3-Load',
+  'Displacement Rate',
+  'Loading Rate',
+  'Stiffness',
+  'Sample Diameter',
+  'Sample Length',
+  'Permeability'
+]
 
 const props = defineProps({
   initialData: {
@@ -230,61 +186,8 @@ const isValid = computed(() => {
   return form.value.name.trim().length > 0 && form.value.type.length > 0
 })
 
-function addParameter() {
-  form.value.parameters.push({
-    type: '',
-    min: '',
-    max: '',
-    unit: '',
-    prefix: '',
-    note: ''
-  })
-}
-
-function removeParameter(idx) {
-  form.value.parameters.splice(idx, 1)
-}
-
 function handleSubmit() {
   if (!isValid.value) return
   emit('submit', form.value)
 }
 </script>
-
-<style>
-/* Use non-scoped style to override site CSS with higher specificity */
-.feature-label {
-  display: flex !important;
-  align-items: center !important;
-  gap: 10px !important;
-  padding: 8px !important;
-  border-radius: 4px !important;
-  cursor: pointer !important;
-  color: #e0e0e0 !important;
-  font-size: 14px !important;
-}
-
-.feature-label:hover {
-  background-color: #3a3a3a !important;
-}
-
-/* Override site's checkbox hiding */
-.feature-checkbox {
-  width: 18px !important;
-  height: 18px !important;
-  min-width: 18px !important;
-  opacity: 1 !important;
-  position: relative !important;
-  z-index: 1 !important;
-  appearance: auto !important;
-  -webkit-appearance: checkbox !important;
-  -moz-appearance: checkbox !important;
-  -ms-appearance: auto !important;
-  display: inline-block !important;
-  float: none !important;
-  margin: 0 !important;
-  margin-right: 0 !important;
-  accent-color: #f4511e;
-  cursor: pointer !important;
-}
-</style>

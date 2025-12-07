@@ -95,84 +95,13 @@
     <!-- Facility Address Section -->
     <fieldset class="form-section">
       <legend>FACILITY ADDRESS</legend>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div class="field">
-          <label class="text-sm">Street + Number</label>
-          <InputText v-model="form.facility.address.street" />
-        </div>
-        <div class="field">
-          <label class="text-sm">Building - Apt</label>
-          <InputText v-model="form.facility.address.building" />
-        </div>
-        <div class="field">
-          <label class="text-sm">Postal Code</label>
-          <InputText v-model="form.facility.address.postcode" />
-        </div>
-        <div class="field">
-          <label class="text-sm">City</label>
-          <InputText v-model="form.facility.address.city" />
-        </div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
-        <div class="field">
-          <label class="text-sm">State</label>
-          <InputText v-model="form.facility.address.state" />
-        </div>
-        <div class="field">
-          <label class="text-sm">Country</label>
-          <InputText v-model="form.facility.address.country" />
-        </div>
-        <div class="field">
-          <label class="text-sm">Latitude</label>
-          <InputText v-model="form.facility.address.latitude" placeholder="Decimal degrees" />
-        </div>
-        <div class="field">
-          <label class="text-sm">Longitude</label>
-          <InputText v-model="form.facility.address.longitude" placeholder="Decimal degrees" />
-        </div>
-      </div>
+      <AddressFields v-model="form.facility.address" />
     </fieldset>
 
     <!-- Facility Contact Section -->
     <fieldset class="form-section">
       <legend>FACILITY CONTACT</legend>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-        <div class="field">
-          <label class="text-sm">First Name</label>
-          <InputText v-model="form.facility.contact.firstname" />
-        </div>
-        <div class="field">
-          <label class="text-sm">Last Name</label>
-          <InputText v-model="form.facility.contact.lastname" />
-        </div>
-        <div class="field">
-          <label class="text-sm">Affiliation</label>
-          <Select
-            v-model="form.facility.contact.affiliation"
-            :options="AFFILIATION_TYPES"
-            placeholder="Select..."
-            showClear
-          />
-        </div>
-        <div class="field">
-          <label class="text-sm">Email</label>
-          <InputText v-model="form.facility.contact.email" type="email" />
-        </div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
-        <div class="field">
-          <label class="text-sm">Phone</label>
-          <InputText v-model="form.facility.contact.phone" />
-        </div>
-        <div class="field">
-          <label class="text-sm">Website</label>
-          <InputText v-model="form.facility.contact.website" placeholder="https://..." />
-        </div>
-        <div class="field">
-          <label class="text-sm">ORCID ID</label>
-          <InputText v-model="form.facility.contact.id" placeholder="0000-0000-0000-0000" />
-        </div>
-      </div>
+      <ContactFields v-model="form.facility.contact" />
     </fieldset>
 
     <!-- Apparatus Info Section -->
@@ -218,87 +147,22 @@
     <fieldset class="form-section">
       <legend>APPARATUS FEATURES</legend>
       <p class="text-xs text-surface-400 mb-3">Select all applicable test capabilities:</p>
-      <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-        <label
-          v-for="feature in APPARATUS_FEATURES"
-          :key="feature"
-          class="feature-checkbox-label"
-        >
-          <input
-            type="checkbox"
-            :value="feature"
-            v-model="form.apparatus.features"
-            class="feature-checkbox"
-          />
-          <span class="text-sm">{{ feature }}</span>
-        </label>
-      </div>
+      <FeaturePills
+        :features="APPARATUS_FEATURES"
+        v-model="form.apparatus.features"
+      />
     </fieldset>
 
     <!-- Apparatus Parameters Section -->
     <fieldset class="form-section">
       <legend>APPARATUS PARAMETERS</legend>
-      <ListDetailEditor
-        title=""
+      <ParametersEditor
+        v-model="form.apparatus.parameters"
         add-label="Add Parameter"
-        :items="form.apparatus.parameters"
-        :default-item="defaultParameter"
-        :label-function="(item, idx) => item.type || `Param ${idx + 1}`"
-        @update:items="form.apparatus.parameters = $event"
-      >
-        <template #detail="{ item, update }">
-          <div class="flex gap-3 flex-wrap">
-            <div class="field flex-1 min-w-32">
-              <label class="text-sm">Name</label>
-              <Select
-                :modelValue="item.type"
-                @update:modelValue="update('type', $event)"
-                :options="APPARATUS_PARAMETER_TYPES"
-                placeholder="Select..."
-                showClear
-              />
-            </div>
-            <div class="field w-24">
-              <label class="text-sm">Min</label>
-              <InputText
-                :modelValue="item.min"
-                @update:modelValue="update('min', $event)"
-              />
-            </div>
-            <div class="field w-24">
-              <label class="text-sm">Max</label>
-              <InputText
-                :modelValue="item.max"
-                @update:modelValue="update('max', $event)"
-              />
-            </div>
-            <div class="field w-28">
-              <label class="text-sm">Unit</label>
-              <Select
-                :modelValue="item.unit"
-                @update:modelValue="update('unit', $event)"
-                :options="UNIT_TYPES"
-                showClear
-              />
-            </div>
-            <div class="field w-24">
-              <label class="text-sm">Prefix</label>
-              <Select
-                :modelValue="item.prefix"
-                @update:modelValue="update('prefix', $event)"
-                :options="prefixOptions"
-              />
-            </div>
-            <div class="field flex-1 min-w-40">
-              <label class="text-sm">Note</label>
-              <InputText
-                :modelValue="item.note"
-                @update:modelValue="update('note', $event)"
-              />
-            </div>
-          </div>
-        </template>
-      </ListDetailEditor>
+        :name-options="APPARATUS_PARAMETER_TYPES"
+        :show-min="true"
+        :show-max="true"
+      />
     </fieldset>
 
     <!-- Actions -->
@@ -325,18 +189,18 @@ import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
-import ListDetailEditor from '@/components/ListDetailEditor.vue'
+import AddressFields from '@/components/AddressFields.vue'
+import ContactFields from '@/components/ContactFields.vue'
+import FeaturePills from '@/components/FeaturePills.vue'
+import ParametersEditor from '@/components/ParametersEditor.vue'
 import { facilityService, apparatusService } from '@/services/api'
 import {
   FACILITY_TYPES,
   APPARATUS_TYPES,
-  APPARATUS_FEATURES,
-  PARAMETER_TYPES,
-  UNIT_TYPES,
-  UNIT_PREFIXES
+  APPARATUS_FEATURES
 } from '@/schemas/laps-enums'
 
-// Apparatus parameter types (different from sample parameter types)
+// Apparatus-specific parameter types (from LAPS schema)
 const APPARATUS_PARAMETER_TYPES = [
   'Confining Pressure',
   'Effective Pressure',
@@ -356,19 +220,6 @@ const APPARATUS_PARAMETER_TYPES = [
   'Permeability'
 ]
 
-const AFFILIATION_TYPES = [
-  'Student',
-  'Researcher',
-  'Lab Manager',
-  'Principal Investigator',
-  'Technical Associate',
-  'Faculty',
-  'Professor',
-  'Visitor',
-  'Service User',
-  'External User'
-]
-
 const props = defineProps({
   initialData: {
     type: Object,
@@ -377,8 +228,6 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['submit', 'cancel'])
-
-const prefixOptions = computed(() => ['-', ...UNIT_PREFIXES])
 
 // Helper to check if a value is "Other"
 const isOther = (value) => value && value.toLowerCase() === 'other'
@@ -454,16 +303,6 @@ const createEmptyForm = () => ({
 })
 
 const form = ref(createEmptyForm())
-
-// Default parameter factory for ListDetailEditor
-const defaultParameter = () => ({
-  type: '',
-  min: '',
-  max: '',
-  unit: '',
-  prefix: '-',
-  note: ''
-})
 
 // Load facilities for repository selection
 const loadFacilities = async () => {
@@ -651,31 +490,5 @@ onMounted(() => {
 
 .field label {
   margin-bottom: 2px;
-}
-
-/* Feature checkboxes - override site styles */
-.feature-checkbox-label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  cursor: pointer;
-  padding: 0.25rem;
-  border-radius: 4px;
-}
-
-.feature-checkbox-label:hover {
-  background-color: var(--p-surface-700);
-}
-
-.feature-checkbox {
-  opacity: 1 !important;
-  z-index: 1 !important;
-  position: relative !important;
-  appearance: auto !important;
-  -webkit-appearance: checkbox !important;
-  width: 16px !important;
-  height: 16px !important;
-  cursor: pointer;
-  accent-color: var(--p-primary-color);
 }
 </style>
