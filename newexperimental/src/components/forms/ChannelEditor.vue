@@ -346,21 +346,22 @@
       </div>
     </fieldset>
 
-    <!-- Delete Channel Button -->
+    <!-- Channel Action Buttons -->
     <div class="flex justify-end mt-4 gap-2">
       <Button
-        label="Delete Channel"
+        icon="pi pi-trash"
         severity="danger"
         outlined
         size="small"
-        icon="pi pi-trash"
         @click="$emit('delete')"
+        v-tooltip.top="'Delete Channel'"
       />
       <Button
         icon="pi pi-arrow-down"
         severity="secondary"
         outlined
         size="small"
+        @click="$emit('move-down')"
         v-tooltip.top="'Move Down'"
       />
       <Button
@@ -368,6 +369,7 @@
         severity="secondary"
         outlined
         size="small"
+        @click="$emit('move-up')"
         v-tooltip.top="'Move Up'"
       />
     </div>
@@ -395,7 +397,7 @@ const props = defineProps({
   }
 })
 
-const emit = defineEmits(['update', 'delete'])
+const emit = defineEmits(['update', 'delete', 'move-up', 'move-down'])
 
 // Header type options (from old app)
 const HEADER_TYPES = [

@@ -118,6 +118,8 @@
                 :channel="device.channels[device._selectedChannel]"
                 @update="(field, value) => updateChannel(dIdx, device._selectedChannel, field, value)"
                 @delete="deleteChannel(dIdx, device._selectedChannel)"
+                @move-up="moveChannel(dIdx, device._selectedChannel, -1)"
+                @move-down="moveChannel(dIdx, device._selectedChannel, 1)"
               />
             </div>
           </div>
@@ -238,11 +240,17 @@ function addChannel(deviceIdx) {
 
 function updateChannel(deviceIdx, chIdx, field, value) {
   const channel = form.value.devices[deviceIdx].channels[chIdx]
-  // Handle nested fields like 'header.spec_a' or 'sensor.manufacturer'
+  // Handle nested fields like 'header.spec_a' or 'calibration.data'
   if (field.includes('.')) {
     const [parent, child] = field.split('.')
-    if (!channel[parent]) channel[parent] = {}
-    channel[parent][child] = value
+    if (!channel[parent]) {
+      channel[parent] = {}
+    }
+    // Create a new object to ensure reactivity and avoid shared references
+    channel[parent] = {
+      ...channel[parent],
+      [child]: value
+    }
   } else {
     channel[field] = value
   }
@@ -257,6 +265,17 @@ function deleteChannel(deviceIdx, chIdx) {
   } else if (device._selectedChannel >= device.channels.length) {
     device._selectedChannel = device.channels.length - 1
   }
+}
+
+function moveChannel(deviceIdx, chIdx, direction) {
+  const device = form.value.devices[deviceIdx]
+  const newIdx = chIdx + direction
+  if (newIdx < 0 || newIdx >= device.channels.length) return
+
+  const channel = device.channels.splice(chIdx, 1)[0]
+  device.channels.splice(newIdx, 0, channel)
+  // Follow the moved channel
+  device._selectedChannel = newIdx
 }
 
 function createDefaultChannel(index) {
