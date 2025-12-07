@@ -22,15 +22,7 @@
         <span
           v-for="feature in data.features"
           :key="feature"
-          :style="{
-            display: 'inline-block',
-            padding: '0.375rem 0.625rem',
-            backgroundColor: '#374151',
-            border: '1px solid #4b5563',
-            borderRadius: '4px',
-            fontSize: '0.875rem',
-            color: '#ffffff'
-          }"
+          class="feature-tag"
         >
           {{ feature }}
         </span>
@@ -220,14 +212,14 @@ const hasAnyData = computed(() => {
   grid-column: span 2;
 }
 
-.exp-feature-tag {
+.feature-tag {
   display: inline-block;
   padding: 0.375rem 0.625rem;
-  background-color: #374151 !important;
-  border: 1px solid #4b5563 !important;
-  border-radius: 4px !important;
+  background-color: var(--p-surface-700);
+  border: 1px solid var(--p-surface-600);
+  border-radius: 4px;
   font-size: 0.875rem;
-  color: #ffffff !important;
+  color: #ffffff;
 }
 
 .geometry-card {
