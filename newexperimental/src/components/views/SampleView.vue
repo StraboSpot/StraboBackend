@@ -29,7 +29,7 @@
       <!-- Material Type (nested object with type, name, state, note) -->
       <div v-if="hasMaterialType" class="info-grid mb-4">
         <InfoField label="Material Type" :value="data.material?.material?.type" />
-        <InfoField label="Material Name" :value="data.material?.material?.name" />
+        <InfoField :label="materialNameLabel" :value="formatMaterialName" />
         <InfoField label="State" :value="data.material?.material?.state" />
         <InfoField label="Note" :value="data.material?.material?.note" />
       </div>
@@ -153,6 +153,7 @@
 <script setup>
 import { computed } from 'vue'
 import InfoField from '@/components/InfoField.vue'
+import { MATERIAL_NAME_LABELS, TEXT_INPUT_MATERIAL_TYPES } from '@/schemas/laps-enums'
 
 const props = defineProps({
   data: {
@@ -163,6 +164,30 @@ const props = defineProps({
 
 // Helper to check if a value is "Other" (case-insensitive)
 const isOther = (value) => value && value.toLowerCase() === 'other'
+
+// Get the label for material name field based on material type
+const materialNameLabel = computed(() => {
+  const type = props.data?.material?.material?.type
+  return MATERIAL_NAME_LABELS[type] || 'Name'
+})
+
+// Format material name display - show "Other: custom value" if other is selected
+const formatMaterialName = computed(() => {
+  const material = props.data?.material?.material
+  if (!material?.name) return null
+
+  const type = material.type
+  // For text input types, just show the value
+  if (!type || TEXT_INPUT_MATERIAL_TYPES.includes(type)) {
+    return material.name
+  }
+
+  // For dropdown types, check if "Other" and show custom value
+  if (isOther(material.name) && material.other_name) {
+    return `Other: ${material.other_name}`
+  }
+  return material.name
+})
 
 // Format mineral display - show "Other: custom value" if other is selected
 const formatMineral = (phase) => {

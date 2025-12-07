@@ -47,15 +47,41 @@
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="field">
           <label class="text-sm">Material Type *</label>
-          <Select v-model="form.material.material.type" :options="MATERIAL_TYPES" placeholder="Select..." showClear />
+          <Select
+            v-model="form.material.material.type"
+            :options="MATERIAL_TYPES"
+            placeholder="Select..."
+            showClear
+            @update:modelValue="handleMaterialTypeChange"
+          />
         </div>
+        <!-- Dynamic Material Name field - text input or dropdown based on type -->
         <div class="field">
-          <label class="text-sm">Lab Standard *</label>
-          <InputText v-model="form.material.material.name" />
+          <label class="text-sm">{{ materialNameLabel }} *</label>
+          <!-- Text input for Glass, Ice, Ceramic, Plastic, Metal, or no type selected -->
+          <InputText
+            v-if="useTextInputForName"
+            v-model="form.material.material.name"
+          />
+          <!-- Dropdown for other material types -->
+          <Select
+            v-else
+            v-model="form.material.material.name"
+            :options="materialNameOptions"
+            placeholder="Select..."
+            showClear
+            filter
+            filterPlaceholder="Search..."
+          />
+        </div>
+        <!-- Other name field (shown when dropdown value is "Other") -->
+        <div class="field" v-if="!useTextInputForName && isOther(form.material.material.name)">
+          <label class="text-sm">Other Name</label>
+          <InputText v-model="form.material.material.other_name" placeholder="Enter other name..." />
         </div>
         <div class="field">
           <label class="text-sm">State</label>
-          <InputText v-model="form.material.material.state" />
+          <Select v-model="form.material.material.state" :options="MATERIAL_STATES" placeholder="Select..." showClear />
         </div>
         <div class="field">
           <label class="text-sm">Note</label>
@@ -322,10 +348,39 @@ import {
   SAMPLE_PARAMETER_TYPES,
   FRACTION_UNITS,
   UNIT_TYPES,
-  UNIT_PREFIXES
+  UNIT_PREFIXES,
+  MATERIAL_STATES,
+  TEXT_INPUT_MATERIAL_TYPES,
+  MATERIAL_NAME_LABELS,
+  MATERIAL_NAME_OPTIONS,
+  SOIL_TYPES,
+  IGNEOUS_ROCK_TYPES,
+  SEDIMENTARY_ROCK_TYPES,
+  METAMORPHIC_ROCK_TYPES,
+  EPOS_LITHOLOGY_TYPES,
+  LAB_STANDARDS,
+  COMMODITY_TYPES
 } from '@/schemas/laps-enums'
 
 const SOURCE_TYPES = ['Quarry', 'Mine', 'Outcrop', 'Core', 'Laboratory', 'Commercial', 'Other']
+
+// Check if material type uses text input (vs dropdown)
+const usesTextInput = (materialType) => {
+  return !materialType || TEXT_INPUT_MATERIAL_TYPES.includes(materialType)
+}
+
+// Get the label for material name field based on material type
+const getMaterialNameLabel = (materialType) => {
+  return MATERIAL_NAME_LABELS[materialType] || 'Name'
+}
+
+// Get the dropdown options for material name based on material type
+const getMaterialNameOptions = (materialType) => {
+  if (materialType === 'Mineral') {
+    return MINERAL_TYPES
+  }
+  return MATERIAL_NAME_OPTIONS[materialType] || []
+}
 
 // Helper to check if a value is "Other" (case-insensitive)
 const isOther = (value) => value && value.toLowerCase() === 'other'
@@ -340,6 +395,28 @@ const props = defineProps({
 const emit = defineEmits(['submit', 'cancel'])
 
 const prefixOptions = computed(() => ['-', ...UNIT_PREFIXES])
+
+// Computed: should we use text input for material name?
+const useTextInputForName = computed(() => {
+  return usesTextInput(form.value.material.material.type)
+})
+
+// Computed: label for material name field
+const materialNameLabel = computed(() => {
+  return getMaterialNameLabel(form.value.material.material.type)
+})
+
+// Computed: dropdown options for material name
+const materialNameOptions = computed(() => {
+  return getMaterialNameOptions(form.value.material.material.type)
+})
+
+// Handler for material type change - clears the name when type changes
+const handleMaterialTypeChange = (newType) => {
+  // Clear the name field when material type changes
+  form.value.material.material.name = ''
+  form.value.material.material.other_name = ''
+}
 
 const createEmptyForm = () => ({
   name: '',
@@ -356,6 +433,7 @@ const createEmptyForm = () => ({
     material: {
       type: '',
       name: '',
+      other_name: '',
       state: '',
       note: ''
     },
@@ -408,6 +486,7 @@ watch(() => props.initialData, (data) => {
         material: {
           type: data.material?.material?.type || '',
           name: data.material?.material?.name || '',
+          other_name: data.material?.material?.other_name || '',
           state: data.material?.material?.state || '',
           note: data.material?.material?.note || ''
         },
