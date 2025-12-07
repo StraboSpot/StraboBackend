@@ -205,9 +205,10 @@
     <!-- Documents Section -->
     <fieldset class="form-section">
       <legend>DOCUMENTS</legend>
-      <p class="text-sm text-surface-400 mb-4">
-        Document upload coming soon.
-      </p>
+      <DocumentsEditor
+        v-model="form.documents"
+        add-label="Add Document"
+      />
     </fieldset>
 
     <!-- Actions -->
@@ -238,6 +239,7 @@ import DatePicker from 'primevue/datepicker'
 import ListDetailEditor from '@/components/ListDetailEditor.vue'
 import FeaturePills from '@/components/FeaturePills.vue'
 import ContactFields from '@/components/ContactFields.vue'
+import DocumentsEditor from '@/components/DocumentsEditor.vue'
 import {
   APPARATUS_FEATURES,
   GEOMETRY_COMPONENT_TYPES,

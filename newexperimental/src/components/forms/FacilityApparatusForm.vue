@@ -165,6 +165,15 @@
       />
     </fieldset>
 
+    <!-- Apparatus Documents Section -->
+    <fieldset class="form-section">
+      <legend>APPARATUS DOCUMENTS</legend>
+      <DocumentsEditor
+        v-model="form.apparatus.documents"
+        add-label="Add Document"
+      />
+    </fieldset>
+
     <!-- Actions -->
     <div class="flex justify-center gap-3 mt-6">
       <Button
@@ -193,6 +202,7 @@ import AddressFields from '@/components/AddressFields.vue'
 import ContactFields from '@/components/ContactFields.vue'
 import FeaturePills from '@/components/FeaturePills.vue'
 import ParametersEditor from '@/components/ParametersEditor.vue'
+import DocumentsEditor from '@/components/DocumentsEditor.vue'
 import { facilityService, apparatusService } from '@/services/api'
 import {
   FACILITY_TYPES,

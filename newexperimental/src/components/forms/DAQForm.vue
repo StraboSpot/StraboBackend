@@ -129,9 +129,10 @@
         <!-- Device Documents Section -->
         <fieldset class="documents-fieldset">
           <legend>DEVICE DOCUMENTS</legend>
-          <p class="text-sm text-surface-400">
-            Document upload coming soon.
-          </p>
+          <DocumentsEditor
+            v-model="device.documents"
+            add-label="Add Document"
+          />
         </fieldset>
       </div>
 
@@ -164,6 +165,7 @@ import Select from 'primevue/select'
 import Button from 'primevue/button'
 import Textarea from 'primevue/textarea'
 import ChannelEditor from '@/components/forms/ChannelEditor.vue'
+import DocumentsEditor from '@/components/DocumentsEditor.vue'
 import {
   DAQ_TYPES
 } from '@/schemas/laps-enums'
@@ -198,6 +200,7 @@ watch(() => props.initialData, (data) => {
       devices: data.devices?.map(d => ({
         name: d.name || 'System Default',
         channels: d.channels?.map(ch => ({ ...ch })) || [],
+        documents: d.documents?.map(doc => ({ ...doc })) || [],
         _selectedChannel: d.channels?.length > 0 ? 0 : undefined
       })) || []
     }
@@ -209,6 +212,7 @@ function addDevice() {
   form.value.devices.push({
     name: '',
     channels: [],
+    documents: [],
     _selectedChannel: undefined
   })
 }

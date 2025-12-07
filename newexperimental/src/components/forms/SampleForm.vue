@@ -309,9 +309,10 @@
     <!-- Documents Section -->
     <fieldset class="form-section">
       <legend>DOCUMENTS</legend>
-      <p class="text-sm text-surface-400 mb-4">
-        Document upload coming soon.
-      </p>
+      <DocumentsEditor
+        v-model="form.documents"
+        add-label="Add Document"
+      />
     </fieldset>
 
     <!-- Actions -->
@@ -338,6 +339,7 @@ import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
 import ListDetailEditor from '@/components/ListDetailEditor.vue'
+import DocumentsEditor from '@/components/DocumentsEditor.vue'
 import {
   MATERIAL_TYPES,
   MINERAL_TYPES,

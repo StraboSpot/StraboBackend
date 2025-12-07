@@ -226,32 +226,30 @@ export const UNIT_PREFIXES = [
 ]
 
 // ===== DOCUMENT TYPES =====
+// From old app add_experiment.php lines 676-684
 export const DOCUMENT_TYPES = [
-  'Picture',
-  'Diagram',
   'Manual',
+  'Diagram',
+  'Picture',
+  'Video',
   'Data',
   'Software',
+  'ASTM',
+  'Publication',
   'Other'
 ]
 
 // ===== DOCUMENT FORMATS =====
+// From old app add_experiment.php lines 695-703
 export const DOCUMENT_FORMATS = [
-  'pdf',
-  'doc',
-  'docx',
-  'xls',
-  'xlsx',
-  'csv',
-  'txt',
   'jpg',
-  'jpeg',
   'png',
-  'gif',
-  'tif',
-  'tiff',
+  'txt',
+  'csv',
   'zip',
   'rar',
+  'pdf',
+  'docx',
   'Other'
 ]
 
