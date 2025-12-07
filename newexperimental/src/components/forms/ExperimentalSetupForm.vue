@@ -9,24 +9,15 @@
           <InputText v-model="form.title" :invalid="!form.title" />
         </div>
         <div class="field">
-          <label class="text-sm">Project</label>
-          <Select
-            v-model="form.project"
-            :options="PROJECT_TYPES"
-            placeholder="Select..."
-            showClear
-          />
-        </div>
-        <div class="field">
           <label class="text-sm">Experiment ID</label>
           <InputText v-model="form.id" />
         </div>
-      </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
         <div class="field">
           <label class="text-sm">IEDA ID</label>
           <InputText v-model="form.ieda" />
         </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
         <div class="field">
           <label class="text-sm">Start Date/Time</label>
           <DatePicker
@@ -248,7 +239,6 @@ import ListDetailEditor from '@/components/ListDetailEditor.vue'
 import FeaturePills from '@/components/FeaturePills.vue'
 import ContactFields from '@/components/ContactFields.vue'
 import {
-  PROJECT_TYPES,
   APPARATUS_FEATURES,
   GEOMETRY_COMPONENT_TYPES,
   GEOMETRY_SHAPES,
@@ -271,7 +261,6 @@ const prefixOptions = computed(() => ['-', ...UNIT_PREFIXES])
 
 const createEmptyForm = () => ({
   title: '',
-  project: '',
   id: '',
   ieda: '',
   start_date: null,
@@ -298,7 +287,6 @@ watch(() => props.initialData, (data) => {
   if (data && Object.keys(data).length > 0) {
     form.value = {
       title: data.title || '',
-      project: data.project || '',
       id: data.id || '',
       ieda: data.ieda || '',
       start_date: data.start_date ? new Date(data.start_date) : null,

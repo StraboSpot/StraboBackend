@@ -5,7 +5,6 @@
       <h3 class="section-title">Experiment Information</h3>
       <div class="info-grid">
         <InfoField label="Title" :value="data.title" class="col-span-2" />
-        <InfoField label="Project" :value="data.project" />
         <InfoField label="Experiment ID" :value="data.id" />
         <InfoField label="IEDA ID" :value="data.ieda" />
         <InfoField label="Start Date/Time" :value="formatDate(data.start_date)" />
@@ -155,7 +154,6 @@ const hasAuthor = computed(() => {
 
 const hasAnyData = computed(() => {
   return props.data?.title ||
-         props.data?.project ||
          props.data?.id ||
          props.data?.ieda ||
          props.data?.start_date ||
