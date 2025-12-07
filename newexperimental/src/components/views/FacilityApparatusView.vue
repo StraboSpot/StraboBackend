@@ -163,7 +163,7 @@ const hasApparatus = computed(() => {
 
 <style scoped>
 .facility-apparatus-view {
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 

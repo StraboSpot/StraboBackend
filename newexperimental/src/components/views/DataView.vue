@@ -156,7 +156,7 @@ function getFilename(path) {
 
 <style scoped>
 .data-view {
-  max-width: 900px;
+  max-width: 1100px;
   margin: 0 auto;
 }
 
