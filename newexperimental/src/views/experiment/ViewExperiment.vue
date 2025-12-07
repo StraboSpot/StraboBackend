@@ -1,12 +1,5 @@
 <template>
   <div>
-    <PageHeader
-      :title="experimentId ? `Experiment: ${experimentId}` : 'View Experiment'"
-      :subtitle="projectName ? `Project: ${projectName}` : ''"
-      :show-back="true"
-      @back="goBack"
-    />
-
     <div v-if="loading" class="text-center py-12">
       <p class="text-strabo-text-secondary">Loading experiment...</p>
     </div>
@@ -17,49 +10,26 @@
     </div>
 
     <template v-else>
-      <!-- Action buttons -->
-      <div class="max-w-3xl mx-auto px-4 mb-6">
-        <div class="flex justify-end gap-3">
-          <button
-            v-if="canEdit"
-            @click="handleDownload"
-            class="btn-secondary flex items-center gap-2"
-            title="Download Experiment"
-          >
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-            </svg>
-            Download
-          </button>
-          <router-link
-            v-if="canEdit"
-            :to="`/edit_experiment?e=${e}`"
-            class="btn-primary"
-          >
-            Edit Experiment
-          </router-link>
-          <router-link
-            v-if="canDelete"
-            :to="`/delete_experiment?e=${e}`"
-            class="btn-danger"
-          >
-            Delete
-          </router-link>
-        </div>
+      <!-- Download button (top right) -->
+      <div class="flex justify-end px-4 mb-4">
+        <button
+          @click="handleDownload"
+          class="download-btn"
+          title="Download Experiment"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </button>
       </div>
 
-      <!-- Experiment Info -->
-      <div class="max-w-3xl mx-auto px-4 mb-6">
-        <div class="info-card">
-          <div class="info-row">
-            <span class="info-label">Experiment ID:</span>
-            <span class="info-value">{{ experimentId || 'Not set' }}</span>
-          </div>
-          <div class="info-row">
-            <span class="info-label">Last Modified:</span>
-            <span class="info-value">{{ modifiedDate || 'Unknown' }}</span>
-          </div>
-        </div>
+      <!-- Experiment Header -->
+      <div class="text-center mb-6">
+        <h1 class="experiment-title">{{ experimentId || 'Untitled Experiment' }}</h1>
+        <p class="experiment-meta">
+          <span class="meta-label">Last Modified:</span>
+          <span class="meta-value">{{ modifiedDate || 'Unknown' }}</span>
+        </p>
       </div>
 
       <!-- Section Tiles (readonly view) -->
@@ -82,8 +52,6 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import PageHeader from '@/components/PageHeader.vue'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
 import SectionModal from '@/components/SectionModal.vue'
 import { experimentService } from '@/services/api'
@@ -92,16 +60,10 @@ const props = defineProps({
   e: String
 })
 
-const router = useRouter()
-
 const loading = ref(true)
 const error = ref(null)
 const experimentId = ref('')
-const projectPkey = ref(null)
-const projectName = ref('')
 const modifiedDate = ref('')
-const canEdit = ref(false)
-const canDelete = ref(false)
 const activeSection = ref(null)
 
 const experimentData = ref({
@@ -123,11 +85,7 @@ onMounted(async () => {
   try {
     const experiment = await experimentService.get(props.e)
     experimentId.value = experiment.experiment_id || ''
-    projectPkey.value = experiment.project_pkey
-    projectName.value = experiment.project_name || ''
     modifiedDate.value = experiment.modified_date || ''
-    canEdit.value = experiment.can_edit
-    canDelete.value = experiment.can_delete
 
     // Load LAPS data
     if (experiment.data) {
@@ -168,50 +126,41 @@ const getSectionData = (section) => {
 const handleDownload = () => {
   experimentService.download(props.e)
 }
-
-const goBack = () => {
-  router.back()
-}
 </script>
 
 <style scoped>
-.info-card {
-  background-color: var(--strabo-bg-secondary);
-  border: 1px solid var(--strabo-border);
-  border-radius: 0.5rem;
-  padding: 1rem;
-}
-
-.info-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 0.5rem 0;
-  border-bottom: 1px solid var(--strabo-border);
-}
-
-.info-row:last-child {
-  border-bottom: none;
-}
-
-.info-label {
+.download-btn {
+  background-color: var(--strabo-bg-tertiary, #374151);
+  border: 1px solid var(--strabo-border, #4b5563);
+  border-radius: 0.375rem;
+  padding: 0.5rem;
   color: var(--strabo-text-secondary);
-  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
 }
 
-.info-value {
+.download-btn:hover {
+  background-color: var(--strabo-bg-secondary);
   color: var(--strabo-text-primary);
 }
 
-.btn-danger {
-  background-color: #dc2626;
-  color: white;
-  padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
-  font-weight: 500;
-  transition: background-color 0.2s;
+.experiment-title {
+  font-size: 1.75rem;
+  font-weight: 400;
+  color: #9ca3af; /* gray-400 for muted look */
+  margin-bottom: 0.5rem;
 }
 
-.btn-danger:hover {
-  background-color: #b91c1c;
+.experiment-meta {
+  color: var(--strabo-text-secondary);
+  font-size: 0.875rem;
+}
+
+.meta-label {
+  margin-right: 0.5rem;
+}
+
+.meta-value {
+  color: #9ca3af;
 }
 </style>
