@@ -12,8 +12,22 @@
     </div>
 
     <template v-else>
+      <!-- Download button (top right, only visible when there's data) -->
+      <div class="flex justify-end px-4 mb-4">
+        <button
+          v-if="hasData"
+          @click="handleDownload"
+          class="download-btn"
+          title="Download Experiment"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+          </svg>
+        </button>
+      </div>
+
       <!-- Centered Header -->
-      <div class="text-center mb-6 mt-4">
+      <div class="text-center mb-6">
         <h1 class="page-title">Add Experiment</h1>
         <p v-if="projectName" class="page-subtitle">Project: {{ projectName }}</p>
       </div>
@@ -61,7 +75,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import InputText from 'primevue/inputtext'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
@@ -90,6 +104,42 @@ const experimentData = ref({
   experiment: {},
   data: {}
 })
+
+// Helper to check if an object has any non-empty values
+const hasNonEmptyData = (obj) => {
+  if (!obj || typeof obj !== 'object') return false
+  return Object.values(obj).some(val => {
+    if (Array.isArray(val)) return val.length > 0
+    if (typeof val === 'object' && val !== null) return hasNonEmptyData(val)
+    return val !== '' && val !== null && val !== undefined
+  })
+}
+
+// Check if there's any data to download
+const hasData = computed(() => {
+  return experimentId.value.trim() !== '' ||
+    hasNonEmptyData(experimentData.value.facility) ||
+    hasNonEmptyData(experimentData.value.apparatus) ||
+    hasNonEmptyData(experimentData.value.daq) ||
+    hasNonEmptyData(experimentData.value.sample) ||
+    hasNonEmptyData(experimentData.value.experiment) ||
+    hasNonEmptyData(experimentData.value.data)
+})
+
+// Download current experiment data as JSON
+const handleDownload = () => {
+  const data = {
+    experiment_id: experimentId.value,
+    ...experimentData.value
+  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `${experimentId.value || 'experiment'}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
 
 onMounted(async () => {
   if (!props.ppk) {
@@ -163,6 +213,21 @@ const handleSave = async () => {
 </script>
 
 <style scoped>
+.download-btn {
+  background-color: var(--strabo-bg-tertiary, #374151);
+  border: 1px solid var(--strabo-border, #4b5563);
+  border-radius: 0.375rem;
+  padding: 0.5rem;
+  color: var(--strabo-text-secondary);
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.download-btn:hover {
+  background-color: var(--strabo-bg-secondary);
+  color: var(--strabo-text-primary);
+}
+
 .page-title {
   font-size: 1.75rem;
   font-weight: 600;
