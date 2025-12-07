@@ -2,396 +2,629 @@
   <form @submit.prevent="handleSubmit" class="data-form">
     <!-- Datasets Section -->
     <fieldset class="form-section">
-      <legend>
-        Datasets
-        <button type="button" class="add-btn" @click="addDataset">Add Dataset</button>
-      </legend>
+      <legend>Datasets <Button size="small" label="Add Dataset" @click="addDataset" /></legend>
 
-      <div v-if="localData.datasets && localData.datasets.length > 0" class="datasets-container">
-        <!-- Dataset tabs on left -->
+      <div v-if="form.length > 0" class="data-layout">
+        <!-- Left sidebar: Dataset buttons -->
         <div class="dataset-tabs">
-          <button
-            v-for="(dataset, idx) in localData.datasets"
+          <Button
+            v-for="(dataset, idx) in form"
             :key="idx"
-            type="button"
-            class="dataset-tab"
-            :class="{ active: activeDatasetIndex === idx }"
-            @click="activeDatasetIndex = idx"
-          >
-            <span>{{ dataset.data || 'Dataset ' + (idx + 1) }}</span>
-          </button>
+            :label="getDatasetLabel(dataset, idx)"
+            :severity="selectedDatasetIdx === idx ? undefined : 'secondary'"
+            :outlined="selectedDatasetIdx !== idx"
+            size="small"
+            class="dataset-tab-btn"
+            @click="selectedDatasetIdx = idx"
+          />
         </div>
 
-        <!-- Dataset content on right -->
-        <div class="dataset-content">
-          <div v-if="activeDataset" class="dataset-panel">
+        <!-- Right side: Selected dataset detail -->
+        <div v-if="selectedDatasetIdx !== null && form[selectedDatasetIdx]" class="dataset-detail">
+          <div class="dataset-content">
             <!-- Row 1: Data Source, Data Type, File -->
-            <div class="form-row three-col">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div class="field">
-                <label>Data<span class="required">*</span></label>
-                <select v-model="activeDataset.data" @change="onDataSourceChange">
-                  <option value="">Select...</option>
-                  <option v-for="opt in DATA_SOURCE_TYPES" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
-              </div>
-              <div class="field">
-                <label>Data Type<span class="required">*</span></label>
-                <select v-model="activeDataset.type" @change="onDataTypeChange">
-                  <option value="">Select...</option>
-                  <option v-for="opt in DATA_TYPE_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
-                <input
-                  v-if="activeDataset.type === 'Other'"
-                  v-model="activeDataset.other_type"
-                  type="text"
-                  placeholder="enter other data type here..."
-                  class="other-input"
+                <label class="text-sm">Data<span class="text-red-500">*</span></label>
+                <Select
+                  v-model="form[selectedDatasetIdx].data"
+                  :options="DATA_SOURCE_TYPES"
+                  placeholder="Select..."
+                  showClear
+                  class="w-full"
+                  @change="onDataSourceChange"
                 />
               </div>
               <div class="field">
-                <label>Choose File<span class="required">*</span></label>
-                <input type="file" @change="onFileChange" />
-                <div v-if="activeDataset.path" class="file-path">{{ activeDataset.path }}</div>
+                <label class="text-sm">Data Type<span class="text-red-500">*</span></label>
+                <Select
+                  v-model="form[selectedDatasetIdx].type"
+                  :options="DATA_TYPE_OPTIONS"
+                  placeholder="Select..."
+                  showClear
+                  class="w-full"
+                />
+                <InputText
+                  v-if="form[selectedDatasetIdx].type === 'Other'"
+                  v-model="form[selectedDatasetIdx].other_type"
+                  placeholder="enter other data type here..."
+                  class="w-full mt-2"
+                />
+              </div>
+              <div class="field">
+                <label class="text-sm">Choose File<span class="text-red-500">*</span></label>
+                <input type="file" @change="onFileChange" class="file-input" />
+                <div v-if="form[selectedDatasetIdx].path" class="text-xs text-surface-400 mt-1">{{ form[selectedDatasetIdx].path }}</div>
               </div>
             </div>
 
             <!-- Row 2: Data ID, File Format, Data Quality -->
-            <div class="form-row three-col">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
               <div class="field">
-                <label>Data ID</label>
-                <input v-model="activeDataset.id" type="text" />
-              </div>
-              <div class="field">
-                <label>File Format</label>
-                <select v-model="activeDataset.format" @change="onFormatChange">
-                  <option value="">Select...</option>
-                  <option v-for="opt in DATA_FILE_FORMATS" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
-                <input
-                  v-if="activeDataset.format === 'Other'"
-                  v-model="activeDataset.other_format"
-                  type="text"
-                  placeholder="enter other data format here..."
-                  class="other-input"
+                <label class="text-sm">Data ID</label>
+                <InputText
+                  v-model="form[selectedDatasetIdx].id"
+                  class="w-full"
                 />
               </div>
               <div class="field">
-                <label>Data Quality</label>
-                <select v-model="activeDataset.rating">
-                  <option value="">Select...</option>
-                  <option v-for="opt in DATA_QUALITY_RATINGS" :key="opt" :value="opt">{{ opt }}</option>
-                </select>
+                <label class="text-sm">File Format</label>
+                <Select
+                  v-model="form[selectedDatasetIdx].format"
+                  :options="DATA_FILE_FORMATS"
+                  placeholder="Select..."
+                  showClear
+                  class="w-full"
+                />
+                <InputText
+                  v-if="form[selectedDatasetIdx].format === 'Other'"
+                  v-model="form[selectedDatasetIdx].other_format"
+                  placeholder="enter other data format here..."
+                  class="w-full mt-2"
+                />
+              </div>
+              <div class="field">
+                <label class="text-sm">Data Quality</label>
+                <Select
+                  v-model="form[selectedDatasetIdx].rating"
+                  :options="DATA_QUALITY_RATINGS"
+                  placeholder="Select..."
+                  showClear
+                  class="w-full"
+                />
               </div>
             </div>
 
             <!-- Row 3: Description -->
-            <div class="form-row">
-              <div class="field full-width">
-                <label>Description</label>
-                <textarea v-model="activeDataset.description" rows="3"></textarea>
+            <div class="grid grid-cols-1 gap-4 mt-3">
+              <div class="field">
+                <label class="text-sm">Description</label>
+                <Textarea
+                  v-model="form[selectedDatasetIdx].description"
+                  rows="3"
+                  class="w-full"
+                />
               </div>
             </div>
 
             <!-- Conditional: Parameters (when data === 'Parameters') -->
-            <fieldset v-if="activeDataset.data === 'Parameters'" class="sub-section">
-              <legend>
-                Parameter List
-                <button type="button" class="add-btn" @click="addParameter">Add Parameter</button>
-              </legend>
-              <div v-if="activeDataset.parameters && activeDataset.parameters.length > 0" class="parameters-table">
-                <div class="table-header">
-                  <div class="col-data">Data</div>
-                  <div class="col-value">Value</div>
-                  <div class="col-error">Error</div>
-                  <div class="col-unit">Unit</div>
-                  <div class="col-prefix">Prefix</div>
-                  <div class="col-note">Note</div>
-                  <div class="col-actions"></div>
+            <fieldset v-if="form[selectedDatasetIdx].data === 'Parameters'" class="parameters-fieldset">
+              <legend>Parameter List <Button size="small" label="Add Parameter" @click="addParameter" /></legend>
+
+              <div v-if="form[selectedDatasetIdx].parameters && form[selectedDatasetIdx].parameters.length > 0">
+                <!-- Header row -->
+                <div class="param-header-row">
+                  <div class="param-col param-col-data">Data</div>
+                  <div class="param-col param-col-value">Value</div>
+                  <div class="param-col param-col-error">Error</div>
+                  <div class="param-col param-col-unit">Unit</div>
+                  <div class="param-col param-col-prefix">Prefix</div>
+                  <div class="param-col param-col-note">Note</div>
+                  <div class="param-col param-col-actions">&nbsp;</div>
                 </div>
+
+                <!-- Parameter rows -->
                 <div
-                  v-for="(param, pIdx) in activeDataset.parameters"
+                  v-for="(param, pIdx) in form[selectedDatasetIdx].parameters"
                   :key="pIdx"
-                  class="table-row"
+                  class="param-row"
                 >
-                  <div class="col-data">
-                    <select v-model="param.control">
-                      <option v-for="opt in DATA_PARAMETER_CONTROLS" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
+                  <div class="param-col param-col-data">
+                    <Select
+                      v-model="param.control"
+                      :options="DATA_PARAMETER_CONTROLS"
+                      placeholder="Select..."
+                      showClear
+                      class="w-full"
+                    />
                   </div>
-                  <div class="col-value">
-                    <input v-model="param.value" type="text" />
+                  <div class="param-col param-col-value">
+                    <InputText v-model="param.value" class="w-full" />
                   </div>
-                  <div class="col-error">
-                    <input v-model="param.error" type="text" />
+                  <div class="param-col param-col-error">
+                    <InputText v-model="param.error" class="w-full" />
                   </div>
-                  <div class="col-unit">
-                    <select v-model="param.unit">
-                      <option v-for="opt in UNIT_TYPES" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
+                  <div class="param-col param-col-unit">
+                    <Select
+                      v-model="param.unit"
+                      :options="UNIT_TYPES"
+                      placeholder="Unit"
+                      showClear
+                      class="w-full"
+                    />
                   </div>
-                  <div class="col-prefix">
-                    <select v-model="param.prefix">
-                      <option v-for="opt in UNIT_PREFIXES" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
+                  <div class="param-col param-col-prefix">
+                    <Select
+                      v-model="param.prefix"
+                      :options="UNIT_PREFIXES"
+                      placeholder="-"
+                      showClear
+                      class="w-full"
+                    />
                   </div>
-                  <div class="col-note">
-                    <input v-model="param.note" type="text" />
+                  <div class="param-col param-col-note">
+                    <InputText v-model="param.note" class="w-full" />
                   </div>
-                  <div class="col-actions">
-                    <button type="button" class="action-btn delete-btn" @click="deleteParameter(pIdx)" title="Delete">X</button>
-                    <button type="button" class="action-btn" @click="moveParameterUp(pIdx)" :disabled="pIdx === 0" title="Move Up">^</button>
-                    <button type="button" class="action-btn" @click="moveParameterDown(pIdx)" :disabled="pIdx === activeDataset.parameters.length - 1" title="Move Down">v</button>
+                  <div class="param-col param-col-actions">
+                    <Button
+                      icon="pi pi-trash"
+                      severity="secondary"
+                      outlined
+                      size="small"
+                      @click="deleteParameter(pIdx)"
+                      v-tooltip.top="'Delete'"
+                    />
+                    <Button
+                      icon="pi pi-arrow-up"
+                      severity="secondary"
+                      outlined
+                      size="small"
+                      :disabled="pIdx === 0"
+                      @click="moveParameter(pIdx, -1)"
+                      v-tooltip.top="'Move Up'"
+                    />
+                    <Button
+                      icon="pi pi-arrow-down"
+                      severity="secondary"
+                      outlined
+                      size="small"
+                      :disabled="pIdx === form[selectedDatasetIdx].parameters.length - 1"
+                      @click="moveParameter(pIdx, 1)"
+                      v-tooltip.top="'Move Down'"
+                    />
                   </div>
                 </div>
               </div>
-              <div v-else class="empty-message">No parameters added yet.</div>
+              <p v-else class="text-sm text-surface-500 py-2">No parameters added. Click "Add Parameter" to add one.</p>
             </fieldset>
 
             <!-- Conditional: Time Series Headers (when data === 'Time Series') -->
-            <fieldset v-if="activeDataset.data === 'Time Series'" class="sub-section">
-              <legend>
-                Data Headers
-                <button type="button" class="add-btn" @click="addHeader">Add Header</button>
-              </legend>
-              <div v-if="activeDataset.headers && activeDataset.headers.length > 0" class="headers-container">
+            <fieldset v-if="form[selectedDatasetIdx].data === 'Time Series'" class="parameters-fieldset">
+              <legend>Data Headers <Button size="small" label="Add Header" @click="addHeader" /></legend>
+
+              <div v-if="form[selectedDatasetIdx].headers && form[selectedDatasetIdx].headers.length > 0" class="headers-layout">
                 <!-- Header tabs on left -->
                 <div class="header-tabs">
-                  <button
-                    v-for="(hdr, hIdx) in activeDataset.headers"
+                  <Button
+                    v-for="(hdr, hIdx) in form[selectedDatasetIdx].headers"
                     :key="hIdx"
-                    type="button"
-                    class="header-tab"
-                    :class="{ active: activeHeaderIndex === hIdx }"
-                    @click="activeHeaderIndex = hIdx"
-                  >
-                    <span>{{ hdr.header?.header || 'Header ' + (hIdx + 1) }}</span>
-                  </button>
+                    :label="getHeaderLabel(hdr, hIdx)"
+                    :severity="selectedHeaderIdx === hIdx ? undefined : 'secondary'"
+                    :outlined="selectedHeaderIdx !== hIdx"
+                    size="small"
+                    class="header-tab-btn"
+                    @click="selectedHeaderIdx = hIdx"
+                  />
                 </div>
 
                 <!-- Header content on right -->
-                <div class="header-content">
-                  <div v-if="activeHeader" class="header-panel">
+                <div v-if="selectedHeaderIdx !== null && form[selectedDatasetIdx].headers[selectedHeaderIdx]" class="header-detail">
+                  <div class="header-content">
                     <!-- Row 1: Header Type -->
-                    <div class="form-row">
+                    <div class="grid grid-cols-1 gap-4">
                       <div class="field">
-                        <label>Header</label>
-                        <select v-model="activeHeader.header.header" @change="onHeaderTypeChange">
-                          <option v-for="opt in CHANNEL_HEADER_TYPES" :key="opt" :value="opt">{{ opt }}</option>
-                        </select>
+                        <label class="text-sm">Header</label>
+                        <Select
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].header.header"
+                          :options="CHANNEL_HEADER_TYPES"
+                          placeholder="Select..."
+                          showClear
+                          class="w-full"
+                          @change="onHeaderTypeChange"
+                        />
                       </div>
                     </div>
 
                     <!-- Row 2: Specifiers and Unit -->
-                    <div class="form-row four-col">
+                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
                       <div class="field">
-                        <label>Specifier A</label>
-                        <select v-if="specAOptions.length > 0" v-model="activeHeader.header.spec_a">
-                          <option v-for="opt in specAOptions" :key="opt" :value="opt">{{ opt }}</option>
-                        </select>
-                        <input v-else v-model="activeHeader.header.spec_a" type="text" />
+                        <label class="text-sm">Specifier A</label>
+                        <Select
+                          v-if="specAOptions.length > 0"
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].header.spec_a"
+                          :options="specAOptions"
+                          placeholder="Select..."
+                          showClear
+                          class="w-full"
+                        />
+                        <InputText
+                          v-else
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].header.spec_a"
+                          class="w-full"
+                        />
                       </div>
                       <div class="field">
-                        <label>Specifier B</label>
-                        <select v-if="specBOptions.length > 0" v-model="activeHeader.header.spec_b">
-                          <option v-for="opt in specBOptions" :key="opt" :value="opt">{{ opt }}</option>
-                        </select>
-                        <input v-else v-model="activeHeader.header.spec_b" type="text" />
+                        <label class="text-sm">Specifier B</label>
+                        <Select
+                          v-if="specBOptions.length > 0"
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].header.spec_b"
+                          :options="specBOptions"
+                          placeholder="Select..."
+                          showClear
+                          class="w-full"
+                        />
+                        <InputText
+                          v-else
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].header.spec_b"
+                          class="w-full"
+                        />
                       </div>
                       <div class="field">
-                        <label>Other Specifier</label>
-                        <input v-model="activeHeader.header.spec_c" type="text" />
+                        <label class="text-sm">Other Specifier</label>
+                        <InputText
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].header.spec_c"
+                          class="w-full"
+                        />
                       </div>
                       <div class="field">
-                        <label>Unit</label>
-                        <select v-if="unitOptions.length > 0" v-model="activeHeader.header.unit">
-                          <option v-for="opt in unitOptions" :key="opt" :value="opt">{{ opt }}</option>
-                        </select>
-                        <input v-else v-model="activeHeader.header.unit" type="text" />
+                        <label class="text-sm">Unit</label>
+                        <Select
+                          v-if="unitOptions.length > 0"
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].header.unit"
+                          :options="unitOptions"
+                          placeholder="Select..."
+                          showClear
+                          class="w-full"
+                        />
+                        <InputText
+                          v-else
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].header.unit"
+                          class="w-full"
+                        />
                       </div>
                     </div>
 
                     <!-- Row 3: Type, Channel #, Data Quality -->
-                    <div class="form-row three-col">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
                       <div class="field">
-                        <label>Type</label>
-                        <select v-model="activeHeader.type">
-                          <option value=""></option>
-                          <option v-for="opt in DATA_HEADER_CHANNEL_TYPES" :key="opt" :value="opt">{{ opt }}</option>
-                        </select>
+                        <label class="text-sm">Type</label>
+                        <Select
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].type"
+                          :options="DATA_HEADER_CHANNEL_TYPES"
+                          placeholder="Select..."
+                          showClear
+                          class="w-full"
+                        />
                       </div>
                       <div class="field">
-                        <label>Channel #</label>
-                        <select v-model="activeHeader.number">
-                          <option v-for="n in 33" :key="n-1" :value="String(n-1)">{{ n - 1 }}</option>
-                        </select>
+                        <label class="text-sm">Channel #</label>
+                        <Select
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].number"
+                          :options="channelNumbers"
+                          placeholder="Select..."
+                          showClear
+                          class="w-full"
+                        />
                       </div>
                       <div class="field">
-                        <label>Data Quality</label>
-                        <select v-model="activeHeader.rating">
-                          <option v-for="opt in DATA_QUALITY_RATINGS" :key="opt" :value="opt">{{ opt }}</option>
-                        </select>
+                        <label class="text-sm">Data Quality</label>
+                        <Select
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].rating"
+                          :options="DATA_QUALITY_RATINGS"
+                          placeholder="Select..."
+                          showClear
+                          class="w-full"
+                        />
                       </div>
                     </div>
 
                     <!-- Row 4: Notes -->
-                    <div class="form-row">
-                      <div class="field full-width">
-                        <label>Notes</label>
-                        <textarea v-model="activeHeader.note" rows="2"></textarea>
+                    <div class="grid grid-cols-1 gap-4 mt-3">
+                      <div class="field">
+                        <label class="text-sm">Notes</label>
+                        <Textarea
+                          v-model="form[selectedDatasetIdx].headers[selectedHeaderIdx].note"
+                          rows="2"
+                          class="w-full"
+                        />
                       </div>
                     </div>
+                  </div>
 
-                    <!-- Action buttons -->
-                    <div class="header-actions">
-                      <button type="button" class="action-btn delete-btn" @click="deleteHeader(activeHeaderIndex)" title="Delete">Delete</button>
-                      <button type="button" class="action-btn" @click="moveHeaderUp(activeHeaderIndex)" :disabled="activeHeaderIndex === 0" title="Move Up">Up</button>
-                      <button type="button" class="action-btn" @click="moveHeaderDown(activeHeaderIndex)" :disabled="activeHeaderIndex === activeDataset.headers.length - 1" title="Move Down">Down</button>
-                    </div>
+                  <!-- Header action buttons -->
+                  <div class="header-actions">
+                    <Button
+                      icon="pi pi-trash"
+                      severity="secondary"
+                      outlined
+                      size="small"
+                      @click="deleteHeader(selectedHeaderIdx)"
+                      v-tooltip.top="'Delete Header'"
+                    />
+                    <Button
+                      icon="pi pi-arrow-up"
+                      severity="secondary"
+                      outlined
+                      size="small"
+                      :disabled="selectedHeaderIdx === 0"
+                      @click="moveHeader(selectedHeaderIdx, -1)"
+                      v-tooltip.top="'Move Up'"
+                    />
+                    <Button
+                      icon="pi pi-arrow-down"
+                      severity="secondary"
+                      outlined
+                      size="small"
+                      :disabled="selectedHeaderIdx === form[selectedDatasetIdx].headers.length - 1"
+                      @click="moveHeader(selectedHeaderIdx, 1)"
+                      v-tooltip.top="'Move Down'"
+                    />
                   </div>
                 </div>
               </div>
-              <div v-else class="empty-message">No headers added yet.</div>
+              <p v-else class="text-sm text-surface-500 py-2">No headers added. Click "Add Header" to add one.</p>
             </fieldset>
 
             <!-- Conditional: Pore Fluid Phases (when data === 'Pore Fluid') -->
-            <fieldset v-if="activeDataset.data === 'Pore Fluid'" class="sub-section">
-              <legend>
-                Pore Fluid Phases
-                <button type="button" class="add-btn" @click="addPhase">Add Phase</button>
-              </legend>
-              <div v-if="activeDataset.fluid?.phases && activeDataset.fluid.phases.length > 0" class="phases-container">
+            <fieldset v-if="form[selectedDatasetIdx].data === 'Pore Fluid'" class="parameters-fieldset">
+              <legend>Pore Fluid Phases <Button size="small" label="Add Phase" @click="addPhase" /></legend>
+
+              <div v-if="form[selectedDatasetIdx].fluid?.phases && form[selectedDatasetIdx].fluid.phases.length > 0" class="phases-layout">
                 <!-- Phase tabs on left -->
                 <div class="phase-tabs">
-                  <button
-                    v-for="(phase, phIdx) in activeDataset.fluid.phases"
+                  <Button
+                    v-for="(phase, phIdx) in form[selectedDatasetIdx].fluid.phases"
                     :key="phIdx"
-                    type="button"
-                    class="phase-tab"
-                    :class="{ active: activePhaseIndex === phIdx }"
-                    @click="activePhaseIndex = phIdx"
-                  >
-                    <span>Phase {{ phIdx + 1 }}</span>
-                  </button>
+                    :label="'Phase ' + (phIdx + 1)"
+                    :severity="selectedPhaseIdx === phIdx ? undefined : 'secondary'"
+                    :outlined="selectedPhaseIdx !== phIdx"
+                    size="small"
+                    class="phase-tab-btn"
+                    @click="selectedPhaseIdx = phIdx"
+                  />
                 </div>
 
                 <!-- Phase content on right -->
-                <div class="phase-content">
-                  <div v-if="activePhase" class="phase-panel">
+                <div v-if="selectedPhaseIdx !== null && form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx]" class="phase-detail">
+                  <div class="phase-content">
                     <!-- Row 1: Component, Fraction, Activity -->
-                    <div class="form-row three-col">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div class="field">
-                        <label>Component</label>
-                        <input v-model="activePhase.component" type="text" />
+                        <label class="text-sm">Component</label>
+                        <InputText
+                          v-model="form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].component"
+                          class="w-full"
+                        />
                       </div>
                       <div class="field">
-                        <label>Fraction</label>
-                        <input v-model="activePhase.fraction" type="text" />
+                        <label class="text-sm">Fraction</label>
+                        <InputText
+                          v-model="form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].fraction"
+                          class="w-full"
+                        />
                       </div>
                       <div class="field">
-                        <label>Activity</label>
-                        <input v-model="activePhase.activity" type="text" />
+                        <label class="text-sm">Activity</label>
+                        <InputText
+                          v-model="form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].activity"
+                          class="w-full"
+                        />
                       </div>
                     </div>
 
                     <!-- Row 2: Fugacity, Unit, Chemistry Data -->
-                    <div class="form-row three-col">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mt-3">
                       <div class="field">
-                        <label>Fugacity</label>
-                        <input v-model="activePhase.fugacity" type="text" />
+                        <label class="text-sm">Fugacity</label>
+                        <InputText
+                          v-model="form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].fugacity"
+                          class="w-full"
+                        />
                       </div>
                       <div class="field">
-                        <label>Unit</label>
-                        <select v-model="activePhase.unit">
-                          <option v-for="opt in PHASE_UNIT_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
-                        </select>
+                        <label class="text-sm">Unit</label>
+                        <Select
+                          v-model="form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].unit"
+                          :options="PHASE_UNIT_OPTIONS"
+                          placeholder="Select..."
+                          showClear
+                          class="w-full"
+                        />
                       </div>
                       <div class="field">
-                        <label>Chemistry Data</label>
-                        <select v-model="activePhase.composition">
-                          <option v-for="opt in CHEMISTRY_DATA_OPTIONS" :key="opt" :value="opt">{{ opt }}</option>
-                        </select>
+                        <label class="text-sm">Chemistry Data</label>
+                        <Select
+                          v-model="form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].composition"
+                          :options="CHEMISTRY_DATA_OPTIONS"
+                          placeholder="Select..."
+                          showClear
+                          class="w-full"
+                        />
                       </div>
                     </div>
 
                     <!-- Chemistry Solutes (when composition === 'Chemistry') -->
-                    <fieldset v-if="activePhase.composition === 'Chemistry'" class="solutes-section">
-                      <legend>
-                        Chemistry
-                        <button type="button" class="add-btn" @click="addSolute">Add Solute</button>
-                      </legend>
-                      <div v-if="activePhase.solutes && activePhase.solutes.length > 0" class="solutes-table">
-                        <div class="table-header">
-                          <div class="col-component">Component</div>
-                          <div class="col-value">Value</div>
-                          <div class="col-error">Error</div>
-                          <div class="col-unit">Unit</div>
-                          <div class="col-actions"></div>
+                    <fieldset v-if="form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].composition === 'Chemistry'" class="solutes-fieldset">
+                      <legend>Chemistry <Button size="small" label="Add Solute" @click="addSolute" /></legend>
+
+                      <div v-if="form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].solutes && form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].solutes.length > 0">
+                        <!-- Header row -->
+                        <div class="solute-header-row">
+                          <div class="solute-col solute-col-component">Component</div>
+                          <div class="solute-col solute-col-value">Value</div>
+                          <div class="solute-col solute-col-error">Error</div>
+                          <div class="solute-col solute-col-unit">Unit</div>
+                          <div class="solute-col solute-col-actions">&nbsp;</div>
                         </div>
+
+                        <!-- Solute rows -->
                         <div
-                          v-for="(solute, sIdx) in activePhase.solutes"
+                          v-for="(solute, sIdx) in form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].solutes"
                           :key="sIdx"
-                          class="table-row"
+                          class="solute-row"
                         >
-                          <div class="col-component">
-                            <select v-model="solute.component">
-                              <option v-for="opt in SOLUTE_COMPONENTS" :key="opt" :value="opt">{{ opt }}</option>
-                            </select>
+                          <div class="solute-col solute-col-component">
+                            <Select
+                              v-model="solute.component"
+                              :options="SOLUTE_COMPONENTS"
+                              placeholder="Select..."
+                              showClear
+                              class="w-full"
+                            />
                           </div>
-                          <div class="col-value">
-                            <input v-model="solute.value" type="text" />
+                          <div class="solute-col solute-col-value">
+                            <InputText v-model="solute.value" class="w-full" />
                           </div>
-                          <div class="col-error">
-                            <input v-model="solute.error" type="text" />
+                          <div class="solute-col solute-col-error">
+                            <InputText v-model="solute.error" class="w-full" />
                           </div>
-                          <div class="col-unit">
-                            <select v-model="solute.unit">
-                              <option v-for="opt in SOLUTE_UNITS" :key="opt" :value="opt">{{ opt }}</option>
-                            </select>
+                          <div class="solute-col solute-col-unit">
+                            <Select
+                              v-model="solute.unit"
+                              :options="SOLUTE_UNITS"
+                              placeholder="Select..."
+                              showClear
+                              class="w-full"
+                            />
                           </div>
-                          <div class="col-actions">
-                            <button type="button" class="action-btn delete-btn" @click="deleteSolute(sIdx)" title="Delete">X</button>
-                            <button type="button" class="action-btn" @click="moveSoluteUp(sIdx)" :disabled="sIdx === 0" title="Move Up">^</button>
-                            <button type="button" class="action-btn" @click="moveSoluteDown(sIdx)" :disabled="sIdx === activePhase.solutes.length - 1" title="Move Down">v</button>
+                          <div class="solute-col solute-col-actions">
+                            <Button
+                              icon="pi pi-trash"
+                              severity="secondary"
+                              outlined
+                              size="small"
+                              @click="deleteSolute(sIdx)"
+                              v-tooltip.top="'Delete'"
+                            />
+                            <Button
+                              icon="pi pi-arrow-up"
+                              severity="secondary"
+                              outlined
+                              size="small"
+                              :disabled="sIdx === 0"
+                              @click="moveSolute(sIdx, -1)"
+                              v-tooltip.top="'Move Up'"
+                            />
+                            <Button
+                              icon="pi pi-arrow-down"
+                              severity="secondary"
+                              outlined
+                              size="small"
+                              :disabled="sIdx === form[selectedDatasetIdx].fluid.phases[selectedPhaseIdx].solutes.length - 1"
+                              @click="moveSolute(sIdx, 1)"
+                              v-tooltip.top="'Move Down'"
+                            />
                           </div>
                         </div>
                       </div>
-                      <div v-else class="empty-message">No solutes added yet.</div>
+                      <p v-else class="text-sm text-surface-500 py-2">No solutes added. Click "Add Solute" to add one.</p>
                     </fieldset>
+                  </div>
 
-                    <!-- Phase action buttons -->
-                    <div class="phase-actions">
-                      <button type="button" class="action-btn delete-btn" @click="deletePhase(activePhaseIndex)" title="Delete">Delete</button>
-                      <button type="button" class="action-btn" @click="movePhaseUp(activePhaseIndex)" :disabled="activePhaseIndex === 0" title="Move Up">Up</button>
-                      <button type="button" class="action-btn" @click="movePhaseDown(activePhaseIndex)" :disabled="activePhaseIndex === activeDataset.fluid.phases.length - 1" title="Move Down">Down</button>
-                    </div>
+                  <!-- Phase action buttons -->
+                  <div class="phase-actions">
+                    <Button
+                      icon="pi pi-trash"
+                      severity="secondary"
+                      outlined
+                      size="small"
+                      @click="deletePhase(selectedPhaseIdx)"
+                      v-tooltip.top="'Delete Phase'"
+                    />
+                    <Button
+                      icon="pi pi-arrow-up"
+                      severity="secondary"
+                      outlined
+                      size="small"
+                      :disabled="selectedPhaseIdx === 0"
+                      @click="movePhase(selectedPhaseIdx, -1)"
+                      v-tooltip.top="'Move Up'"
+                    />
+                    <Button
+                      icon="pi pi-arrow-down"
+                      severity="secondary"
+                      outlined
+                      size="small"
+                      :disabled="selectedPhaseIdx === form[selectedDatasetIdx].fluid.phases.length - 1"
+                      @click="movePhase(selectedPhaseIdx, 1)"
+                      v-tooltip.top="'Move Down'"
+                    />
                   </div>
                 </div>
               </div>
-              <div v-else class="empty-message">No phases added yet.</div>
+              <p v-else class="text-sm text-surface-500 py-2">No phases added. Click "Add Phase" to add one.</p>
             </fieldset>
+          </div>
 
-            <!-- Dataset action buttons -->
-            <div class="dataset-actions">
-              <button type="button" class="action-btn delete-btn" @click="deleteDataset(activeDatasetIndex)" title="Delete Dataset">Delete Dataset</button>
-              <button type="button" class="action-btn" @click="moveDatasetUp(activeDatasetIndex)" :disabled="activeDatasetIndex === 0" title="Move Up">Move Up</button>
-              <button type="button" class="action-btn" @click="moveDatasetDown(activeDatasetIndex)" :disabled="activeDatasetIndex === localData.datasets.length - 1" title="Move Down">Move Down</button>
-            </div>
+          <!-- Dataset action buttons (right side) -->
+          <div class="dataset-actions">
+            <Button
+              icon="pi pi-trash"
+              severity="secondary"
+              outlined
+              size="small"
+              @click="deleteDataset(selectedDatasetIdx)"
+              v-tooltip.top="'Delete Dataset'"
+            />
+            <Button
+              icon="pi pi-arrow-up"
+              severity="secondary"
+              outlined
+              size="small"
+              :disabled="selectedDatasetIdx === 0"
+              @click="moveDataset(selectedDatasetIdx, -1)"
+              v-tooltip.top="'Move Up'"
+            />
+            <Button
+              icon="pi pi-arrow-down"
+              severity="secondary"
+              outlined
+              size="small"
+              :disabled="selectedDatasetIdx === form.length - 1"
+              @click="moveDataset(selectedDatasetIdx, 1)"
+              v-tooltip.top="'Move Down'"
+            />
           </div>
         </div>
       </div>
-      <div v-else class="empty-message">No datasets added yet. Click "Add Dataset" to begin.</div>
+      <p v-else class="text-surface-500 text-center py-4">
+        No datasets added. Click "Add Dataset" to begin.
+      </p>
     </fieldset>
 
-    <!-- Form Footer -->
-    <div class="form-footer">
-      <button type="button" class="btn-secondary" @click="$emit('cancel')">Cancel</button>
-      <button type="submit" class="btn-primary">Save</button>
+    <!-- Actions -->
+    <div class="flex justify-center gap-3 mt-6">
+      <Button
+        type="button"
+        severity="secondary"
+        outlined
+        label="Cancel"
+        @click="$emit('cancel')"
+      />
+      <Button
+        type="submit"
+        label="Save"
+      />
     </div>
   </form>
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
+import Button from 'primevue/button'
+import InputText from 'primevue/inputtext'
+import Textarea from 'primevue/textarea'
+import Select from 'primevue/select'
 import {
   DATA_SOURCE_TYPES,
   DATA_TYPE_OPTIONS,
@@ -406,7 +639,6 @@ import {
   CHEMISTRY_DATA_OPTIONS,
   SOLUTE_COMPONENTS,
   SOLUTE_UNITS,
-  DAQ_DATA_FIELDS,
   getDAQOptionsForHeader
 } from '@/schemas/laps-enums.js'
 
@@ -419,60 +651,43 @@ const props = defineProps({
 
 const emit = defineEmits(['submit', 'cancel'])
 
-// Local state
-const localData = ref({
-  keys: {
-    facility: '',
-    apparatus: '',
-    sample: '',
-    user: '',
-    experiment: ''
-  },
-  datasets: []
-})
+// Form is the datasets array
+const form = ref([])
 
-const activeDatasetIndex = ref(0)
-const activeHeaderIndex = ref(0)
-const activePhaseIndex = ref(0)
+// Currently selected indices
+const selectedDatasetIdx = ref(null)
+const selectedHeaderIdx = ref(0)
+const selectedPhaseIdx = ref(0)
 
-// Computed: active dataset
-const activeDataset = computed(() => {
-  if (localData.value.datasets && localData.value.datasets.length > 0) {
-    return localData.value.datasets[activeDatasetIndex.value]
-  }
-  return null
-})
-
-// Computed: active header (for Time Series)
-const activeHeader = computed(() => {
-  if (activeDataset.value?.headers && activeDataset.value.headers.length > 0) {
-    return activeDataset.value.headers[activeHeaderIndex.value]
-  }
-  return null
-})
-
-// Computed: active phase (for Pore Fluid)
-const activePhase = computed(() => {
-  if (activeDataset.value?.fluid?.phases && activeDataset.value.fluid.phases.length > 0) {
-    return activeDataset.value.fluid.phases[activePhaseIndex.value]
-  }
-  return null
-})
+// Channel numbers 0-32
+const channelNumbers = Array.from({ length: 33 }, (_, i) => String(i))
 
 // Computed: dynamic dropdown options for header specifiers
 const specAOptions = computed(() => {
-  if (!activeHeader.value?.header?.header) return []
-  return getDAQOptionsForHeader(activeHeader.value.header.header, 'spec_a')
+  if (selectedDatasetIdx.value === null) return []
+  const dataset = form.value[selectedDatasetIdx.value]
+  if (!dataset?.headers || selectedHeaderIdx.value === null) return []
+  const header = dataset.headers[selectedHeaderIdx.value]
+  if (!header?.header?.header) return []
+  return getDAQOptionsForHeader(header.header.header, 'spec_a')
 })
 
 const specBOptions = computed(() => {
-  if (!activeHeader.value?.header?.header) return []
-  return getDAQOptionsForHeader(activeHeader.value.header.header, 'spec_b')
+  if (selectedDatasetIdx.value === null) return []
+  const dataset = form.value[selectedDatasetIdx.value]
+  if (!dataset?.headers || selectedHeaderIdx.value === null) return []
+  const header = dataset.headers[selectedHeaderIdx.value]
+  if (!header?.header?.header) return []
+  return getDAQOptionsForHeader(header.header.header, 'spec_b')
 })
 
 const unitOptions = computed(() => {
-  if (!activeHeader.value?.header?.header) return []
-  return getDAQOptionsForHeader(activeHeader.value.header.header, 'unit')
+  if (selectedDatasetIdx.value === null) return []
+  const dataset = form.value[selectedDatasetIdx.value]
+  if (!dataset?.headers || selectedHeaderIdx.value === null) return []
+  const header = dataset.headers[selectedHeaderIdx.value]
+  if (!header?.header?.header) return []
+  return getDAQOptionsForHeader(header.header.header, 'unit')
 })
 
 // Generate UUID
@@ -484,12 +699,62 @@ function generateUUID() {
   })
 }
 
-// Dataset management
-function addDataset() {
-  if (!localData.value.datasets) {
-    localData.value.datasets = []
+// Initialize form from initial data
+const initForm = () => {
+  if (props.initialData?.datasets && Array.isArray(props.initialData.datasets) && props.initialData.datasets.length > 0) {
+    form.value = props.initialData.datasets.map(ds => ({
+      data: ds.data || '',
+      type: ds.type || '',
+      other_type: ds.other_type || '',
+      format: ds.format || '',
+      other_format: ds.other_format || '',
+      id: ds.id || '',
+      uuid: ds.uuid || generateUUID(),
+      path: ds.path || '',
+      rating: ds.rating || '',
+      description: ds.description || '',
+      parameters: Array.isArray(ds.parameters) ? ds.parameters.map(p => ({ ...p })) : [],
+      headers: Array.isArray(ds.headers) ? ds.headers.map(h => ({
+        header: { ...h.header },
+        type: h.type || '',
+        number: h.number || '0',
+        note: h.note || '',
+        rating: h.rating || ''
+      })) : [],
+      fluid: ds.fluid ? {
+        phases: Array.isArray(ds.fluid.phases) ? ds.fluid.phases.map(ph => ({
+          ...ph,
+          solutes: Array.isArray(ph.solutes) ? ph.solutes.map(s => ({ ...s })) : []
+        })) : []
+      } : { phases: [] }
+    }))
+    selectedDatasetIdx.value = 0
+  } else {
+    form.value = []
+    selectedDatasetIdx.value = null
   }
-  localData.value.datasets.push({
+}
+
+initForm()
+
+// Watch for prop changes
+watch(() => props.initialData, initForm, { deep: true })
+
+// Get dataset label for sidebar button
+const getDatasetLabel = (dataset, idx) => {
+  if (dataset.data) return dataset.data
+  return `Dataset ${idx + 1}`
+}
+
+// Get header label for sidebar button
+const getHeaderLabel = (header, idx) => {
+  if (header?.header?.header) return header.header.header
+  return `Header ${idx + 1}`
+}
+
+// Dataset management
+const addDataset = () => {
+  form.value.push({
     data: '',
     type: '',
     other_type: '',
@@ -504,85 +769,60 @@ function addDataset() {
     headers: [],
     fluid: { phases: [] }
   })
-  activeDatasetIndex.value = localData.value.datasets.length - 1
-  emitUpdate()
+  selectedDatasetIdx.value = form.value.length - 1
 }
 
-function deleteDataset(idx) {
-  if (confirm('Are you sure you want to delete this dataset?\nThis cannot be undone.')) {
-    localData.value.datasets.splice(idx, 1)
-    if (activeDatasetIndex.value >= localData.value.datasets.length) {
-      activeDatasetIndex.value = Math.max(0, localData.value.datasets.length - 1)
-    }
-    emitUpdate()
+const deleteDataset = (idx) => {
+  if (form.value.length === 0) return
+  form.value.splice(idx, 1)
+  if (form.value.length === 0) {
+    selectedDatasetIdx.value = null
+  } else if (selectedDatasetIdx.value >= form.value.length) {
+    selectedDatasetIdx.value = form.value.length - 1
   }
 }
 
-function moveDatasetUp(idx) {
-  if (idx > 0) {
-    const temp = localData.value.datasets[idx]
-    localData.value.datasets[idx] = localData.value.datasets[idx - 1]
-    localData.value.datasets[idx - 1] = temp
-    activeDatasetIndex.value = idx - 1
-    emitUpdate()
-  }
-}
-
-function moveDatasetDown(idx) {
-  if (idx < localData.value.datasets.length - 1) {
-    const temp = localData.value.datasets[idx]
-    localData.value.datasets[idx] = localData.value.datasets[idx + 1]
-    localData.value.datasets[idx + 1] = temp
-    activeDatasetIndex.value = idx + 1
-    emitUpdate()
-  }
+const moveDataset = (idx, direction) => {
+  const newIdx = idx + direction
+  if (newIdx < 0 || newIdx >= form.value.length) return
+  const temp = form.value[idx]
+  form.value[idx] = form.value[newIdx]
+  form.value[newIdx] = temp
+  selectedDatasetIdx.value = newIdx
 }
 
 // Parameter management
-function addParameter() {
-  if (!activeDataset.value.parameters) {
-    activeDataset.value.parameters = []
-  }
-  activeDataset.value.parameters.push({
-    control: 'Weight',
+const addParameter = () => {
+  const dataset = form.value[selectedDatasetIdx.value]
+  if (!dataset.parameters) dataset.parameters = []
+  dataset.parameters.push({
+    control: '',
     value: '',
     error: '',
-    unit: 'degC',
+    unit: '',
     prefix: '-',
     note: ''
   })
-  emitUpdate()
 }
 
-function deleteParameter(idx) {
-  activeDataset.value.parameters.splice(idx, 1)
-  emitUpdate()
+const deleteParameter = (idx) => {
+  form.value[selectedDatasetIdx.value].parameters.splice(idx, 1)
 }
 
-function moveParameterUp(idx) {
-  if (idx > 0) {
-    const temp = activeDataset.value.parameters[idx]
-    activeDataset.value.parameters[idx] = activeDataset.value.parameters[idx - 1]
-    activeDataset.value.parameters[idx - 1] = temp
-    emitUpdate()
-  }
-}
-
-function moveParameterDown(idx) {
-  if (idx < activeDataset.value.parameters.length - 1) {
-    const temp = activeDataset.value.parameters[idx]
-    activeDataset.value.parameters[idx] = activeDataset.value.parameters[idx + 1]
-    activeDataset.value.parameters[idx + 1] = temp
-    emitUpdate()
-  }
+const moveParameter = (idx, direction) => {
+  const params = form.value[selectedDatasetIdx.value].parameters
+  const newIdx = idx + direction
+  if (newIdx < 0 || newIdx >= params.length) return
+  const temp = params[idx]
+  params[idx] = params[newIdx]
+  params[newIdx] = temp
 }
 
 // Header management (Time Series)
-function addHeader() {
-  if (!activeDataset.value.headers) {
-    activeDataset.value.headers = []
-  }
-  activeDataset.value.headers.push({
+const addHeader = () => {
+  const dataset = form.value[selectedDatasetIdx.value]
+  if (!dataset.headers) dataset.headers = []
+  dataset.headers.push({
     header: {
       header: 'Time',
       spec_a: '',
@@ -593,357 +833,311 @@ function addHeader() {
     type: '',
     number: '0',
     note: '',
-    rating: 'Good'
+    rating: ''
   })
-  activeHeaderIndex.value = activeDataset.value.headers.length - 1
-  emitUpdate()
+  selectedHeaderIdx.value = dataset.headers.length - 1
 }
 
-function deleteHeader(idx) {
-  if (confirm('Are you sure you want to delete this header?')) {
-    activeDataset.value.headers.splice(idx, 1)
-    if (activeHeaderIndex.value >= activeDataset.value.headers.length) {
-      activeHeaderIndex.value = Math.max(0, activeDataset.value.headers.length - 1)
-    }
-    emitUpdate()
+const deleteHeader = (idx) => {
+  const headers = form.value[selectedDatasetIdx.value].headers
+  headers.splice(idx, 1)
+  if (headers.length === 0) {
+    selectedHeaderIdx.value = null
+  } else if (selectedHeaderIdx.value >= headers.length) {
+    selectedHeaderIdx.value = headers.length - 1
   }
 }
 
-function moveHeaderUp(idx) {
-  if (idx > 0) {
-    const temp = activeDataset.value.headers[idx]
-    activeDataset.value.headers[idx] = activeDataset.value.headers[idx - 1]
-    activeDataset.value.headers[idx - 1] = temp
-    activeHeaderIndex.value = idx - 1
-    emitUpdate()
-  }
-}
-
-function moveHeaderDown(idx) {
-  if (idx < activeDataset.value.headers.length - 1) {
-    const temp = activeDataset.value.headers[idx]
-    activeDataset.value.headers[idx] = activeDataset.value.headers[idx + 1]
-    activeDataset.value.headers[idx + 1] = temp
-    activeHeaderIndex.value = idx + 1
-    emitUpdate()
-  }
+const moveHeader = (idx, direction) => {
+  const headers = form.value[selectedDatasetIdx.value].headers
+  const newIdx = idx + direction
+  if (newIdx < 0 || newIdx >= headers.length) return
+  const temp = headers[idx]
+  headers[idx] = headers[newIdx]
+  headers[newIdx] = temp
+  selectedHeaderIdx.value = newIdx
 }
 
 // Phase management (Pore Fluid)
-function addPhase() {
-  if (!activeDataset.value.fluid) {
-    activeDataset.value.fluid = { phases: [] }
-  }
-  if (!activeDataset.value.fluid.phases) {
-    activeDataset.value.fluid.phases = []
-  }
-  activeDataset.value.fluid.phases.push({
+const addPhase = () => {
+  const dataset = form.value[selectedDatasetIdx.value]
+  if (!dataset.fluid) dataset.fluid = { phases: [] }
+  if (!dataset.fluid.phases) dataset.fluid.phases = []
+  dataset.fluid.phases.push({
     component: '',
     fraction: '',
     activity: '',
     fugacity: '',
     unit: 'Vol%',
-    composition: 'Chemistry',
+    composition: '',
     solutes: []
   })
-  activePhaseIndex.value = activeDataset.value.fluid.phases.length - 1
-  emitUpdate()
+  selectedPhaseIdx.value = dataset.fluid.phases.length - 1
 }
 
-function deletePhase(idx) {
-  if (confirm('Are you sure you want to delete this phase?')) {
-    activeDataset.value.fluid.phases.splice(idx, 1)
-    if (activePhaseIndex.value >= activeDataset.value.fluid.phases.length) {
-      activePhaseIndex.value = Math.max(0, activeDataset.value.fluid.phases.length - 1)
-    }
-    emitUpdate()
+const deletePhase = (idx) => {
+  const phases = form.value[selectedDatasetIdx.value].fluid.phases
+  phases.splice(idx, 1)
+  if (phases.length === 0) {
+    selectedPhaseIdx.value = null
+  } else if (selectedPhaseIdx.value >= phases.length) {
+    selectedPhaseIdx.value = phases.length - 1
   }
 }
 
-function movePhaseUp(idx) {
-  if (idx > 0) {
-    const temp = activeDataset.value.fluid.phases[idx]
-    activeDataset.value.fluid.phases[idx] = activeDataset.value.fluid.phases[idx - 1]
-    activeDataset.value.fluid.phases[idx - 1] = temp
-    activePhaseIndex.value = idx - 1
-    emitUpdate()
-  }
-}
-
-function movePhaseDown(idx) {
-  if (idx < activeDataset.value.fluid.phases.length - 1) {
-    const temp = activeDataset.value.fluid.phases[idx]
-    activeDataset.value.fluid.phases[idx] = activeDataset.value.fluid.phases[idx + 1]
-    activeDataset.value.fluid.phases[idx + 1] = temp
-    activePhaseIndex.value = idx + 1
-    emitUpdate()
-  }
+const movePhase = (idx, direction) => {
+  const phases = form.value[selectedDatasetIdx.value].fluid.phases
+  const newIdx = idx + direction
+  if (newIdx < 0 || newIdx >= phases.length) return
+  const temp = phases[idx]
+  phases[idx] = phases[newIdx]
+  phases[newIdx] = temp
+  selectedPhaseIdx.value = newIdx
 }
 
 // Solute management
-function addSolute() {
-  if (!activePhase.value.solutes) {
-    activePhase.value.solutes = []
-  }
-  activePhase.value.solutes.push({
-    component: 'pH',
+const addSolute = () => {
+  const phase = form.value[selectedDatasetIdx.value].fluid.phases[selectedPhaseIdx.value]
+  if (!phase.solutes) phase.solutes = []
+  phase.solutes.push({
+    component: '',
     value: '',
     error: '',
-    unit: 'Vol%'
+    unit: ''
   })
-  emitUpdate()
 }
 
-function deleteSolute(idx) {
-  activePhase.value.solutes.splice(idx, 1)
-  emitUpdate()
+const deleteSolute = (idx) => {
+  form.value[selectedDatasetIdx.value].fluid.phases[selectedPhaseIdx.value].solutes.splice(idx, 1)
 }
 
-function moveSoluteUp(idx) {
-  if (idx > 0) {
-    const temp = activePhase.value.solutes[idx]
-    activePhase.value.solutes[idx] = activePhase.value.solutes[idx - 1]
-    activePhase.value.solutes[idx - 1] = temp
-    emitUpdate()
-  }
-}
-
-function moveSoluteDown(idx) {
-  if (idx < activePhase.value.solutes.length - 1) {
-    const temp = activePhase.value.solutes[idx]
-    activePhase.value.solutes[idx] = activePhase.value.solutes[idx + 1]
-    activePhase.value.solutes[idx + 1] = temp
-    emitUpdate()
-  }
+const moveSolute = (idx, direction) => {
+  const solutes = form.value[selectedDatasetIdx.value].fluid.phases[selectedPhaseIdx.value].solutes
+  const newIdx = idx + direction
+  if (newIdx < 0 || newIdx >= solutes.length) return
+  const temp = solutes[idx]
+  solutes[idx] = solutes[newIdx]
+  solutes[newIdx] = temp
 }
 
 // Event handlers
-function onDataSourceChange() {
-  // Reset conditional data when source changes
-  activeHeaderIndex.value = 0
-  activePhaseIndex.value = 0
-  emitUpdate()
+const onDataSourceChange = () => {
+  selectedHeaderIdx.value = 0
+  selectedPhaseIdx.value = 0
 }
 
-function onDataTypeChange() {
-  if (activeDataset.value.type !== 'Other') {
-    activeDataset.value.other_type = ''
+const onHeaderTypeChange = () => {
+  const header = form.value[selectedDatasetIdx.value].headers[selectedHeaderIdx.value]
+  if (header) {
+    header.header.spec_a = ''
+    header.header.spec_b = ''
+    header.header.unit = ''
   }
-  emitUpdate()
 }
 
-function onFormatChange() {
-  if (activeDataset.value.format !== 'Other') {
-    activeDataset.value.other_format = ''
-  }
-  emitUpdate()
-}
-
-function onHeaderTypeChange() {
-  // Clear specifiers when header type changes
-  if (activeHeader.value) {
-    activeHeader.value.header.spec_a = ''
-    activeHeader.value.header.spec_b = ''
-    activeHeader.value.header.unit = ''
-  }
-  emitUpdate()
-}
-
-function onFileChange(event) {
+const onFileChange = (event) => {
   const file = event.target.files[0]
   if (file) {
-    activeDataset.value.path = file.name
-    emitUpdate()
+    form.value[selectedDatasetIdx.value].path = file.name
   }
 }
 
-// Emit updates (not used in modal pattern, but kept for compatibility)
-function emitUpdate() {
-  // No-op in modal pattern
-}
-
-// Handle form submission
-function handleSubmit() {
-  // Clean the data before submitting
-  const cleanedData = JSON.parse(JSON.stringify(localData.value))
-
-  // Clean up empty datasets
-  if (cleanedData.datasets) {
-    cleanedData.datasets = cleanedData.datasets.filter(ds => ds.data || ds.type || ds.id)
+// Handle form submit
+const handleSubmit = () => {
+  const cleanedData = {
+    keys: {
+      facility: '',
+      apparatus: '',
+      sample: '',
+      user: '',
+      experiment: ''
+    },
+    datasets: form.value.filter(ds => ds.data || ds.type || ds.id)
   }
-
   emit('submit', cleanedData)
 }
-
-// Initialize from props
-onMounted(() => {
-  if (props.initialData && Object.keys(props.initialData).length > 0) {
-    localData.value = JSON.parse(JSON.stringify(props.initialData))
-  }
-  // Ensure structure
-  if (!localData.value.keys) {
-    localData.value.keys = { facility: '', apparatus: '', sample: '', user: '', experiment: '' }
-  }
-  if (!localData.value.datasets) {
-    localData.value.datasets = []
-  }
-})
-
-// Watch for prop changes
-watch(() => props.initialData, (newVal) => {
-  if (newVal && Object.keys(newVal).length > 0) {
-    localData.value = JSON.parse(JSON.stringify(newVal))
-    if (!localData.value.keys) {
-      localData.value.keys = { facility: '', apparatus: '', sample: '', user: '', experiment: '' }
-    }
-    if (!localData.value.datasets) {
-      localData.value.datasets = []
-    }
-  }
-}, { deep: true })
 </script>
 
 <style scoped>
 .data-form {
-  font-size: 14px;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 .form-section {
-  border: 1px solid #444;
-  border-radius: 4px;
-  padding: 15px;
-  margin-bottom: 15px;
-  background: #2a2a2a;
+  border: 1px solid var(--p-surface-700);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
 }
 
-.form-section > legend {
-  color: #fff;
+.form-section legend {
+  color: var(--p-surface-300);
   font-weight: 600;
-  padding: 0 10px;
+  padding: 0 0.5rem;
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 0.75rem;
 }
 
-.sub-section {
-  border: 1px solid #555;
-  border-radius: 4px;
-  padding: 10px;
-  margin-top: 15px;
-  background: #333;
+.data-layout {
+  display: flex;
+  gap: 1rem;
+  min-height: 300px;
 }
 
-.sub-section > legend {
-  color: #ccc;
+.dataset-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 120px;
+  max-width: 150px;
+  flex-shrink: 0;
+  padding-top: 0.25rem;
+}
+
+.dataset-tab-btn {
+  width: 100%;
+  justify-content: flex-start;
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dataset-detail {
+  flex: 1;
+  display: flex;
+  gap: 0.75rem;
+  border: 1px solid var(--p-surface-700);
+  border-radius: 6px;
+  padding: 1rem;
+  background: var(--p-surface-900);
+}
+
+.dataset-content {
+  flex: 1;
+}
+
+.dataset-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
+.parameters-fieldset,
+.solutes-fieldset {
+  border: 1px solid var(--p-surface-700);
+  border-radius: 6px;
+  padding: 0.75rem;
+  margin-top: 1rem;
+}
+
+.parameters-fieldset legend,
+.solutes-fieldset legend {
+  color: var(--p-surface-400);
   font-weight: 500;
-  padding: 0 8px;
+  font-size: 0.875rem;
+  padding: 0 0.5rem;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 0.5rem;
 }
 
-.solutes-section {
-  border: 1px solid #666;
-  border-radius: 4px;
-  padding: 10px;
-  margin-top: 10px;
-  background: #3a3a3a;
-}
-
-.solutes-section > legend {
-  color: #bbb;
-  font-weight: 500;
-  padding: 0 6px;
+.param-header-row,
+.solute-header-row {
   display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
+  font-weight: 600;
+  font-size: 0.875rem;
+  color: var(--p-surface-300);
+  border-bottom: 1px solid var(--p-surface-700);
+}
+
+.param-row,
+.solute-row {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.5rem 0;
   align-items: center;
-  gap: 6px;
+  border-bottom: 1px solid var(--p-surface-800);
 }
 
-.add-btn {
-  background: #dc3545;
-  color: white;
-  border: none;
-  padding: 4px 12px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
+.param-row:last-child,
+.solute-row:last-child {
+  border-bottom: none;
 }
 
-.add-btn:hover {
-  background: #c82333;
+.param-col,
+.solute-col {
+  flex-shrink: 0;
 }
 
-.datasets-container,
-.headers-container,
-.phases-container {
+.param-col-data { width: 150px; }
+.param-col-value { width: 80px; }
+.param-col-error { width: 80px; }
+.param-col-unit { width: 100px; }
+.param-col-prefix { width: 80px; }
+.param-col-note { flex: 1; min-width: 120px; }
+.param-col-actions { display: flex; gap: 0.25rem; width: auto; }
+
+.solute-col-component { width: 140px; }
+.solute-col-value { width: 100px; }
+.solute-col-error { width: 100px; }
+.solute-col-unit { width: 120px; }
+.solute-col-actions { display: flex; gap: 0.25rem; width: auto; }
+
+/* Headers layout (nested tabs) */
+.headers-layout,
+.phases-layout {
   display: flex;
-  gap: 10px;
+  gap: 0.75rem;
 }
 
-.dataset-tabs,
 .header-tabs,
 .phase-tabs {
   display: flex;
   flex-direction: column;
-  gap: 5px;
-  min-width: 120px;
+  gap: 0.25rem;
+  min-width: 100px;
+  max-width: 120px;
+  flex-shrink: 0;
 }
 
-.dataset-tab,
-.header-tab,
-.phase-tab {
-  background: #444;
-  color: #ccc;
-  border: 1px solid #555;
-  padding: 8px 12px;
+.header-tab-btn,
+.phase-tab-btn {
+  width: 100%;
+  justify-content: flex-start;
   text-align: left;
-  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.header-detail,
+.phase-detail {
+  flex: 1;
+  display: flex;
+  gap: 0.5rem;
+  border: 1px solid var(--p-surface-700);
   border-radius: 4px;
-  font-size: 13px;
+  padding: 0.75rem;
+  background: var(--p-surface-800);
 }
 
-.dataset-tab:hover,
-.header-tab:hover,
-.phase-tab:hover {
-  background: #555;
-}
-
-.dataset-tab.active,
-.header-tab.active,
-.phase-tab.active {
-  background: #dc3545;
-  color: white;
-  border-color: #dc3545;
-}
-
-.dataset-content,
 .header-content,
 .phase-content {
   flex: 1;
-  min-width: 0;
 }
 
-.dataset-panel,
-.header-panel,
-.phase-panel {
-  background: #333;
-  border: 1px solid #555;
-  border-radius: 4px;
-  padding: 15px;
-}
-
-.form-row {
+.header-actions,
+.phase-actions {
   display: flex;
-  gap: 15px;
-  margin-bottom: 12px;
-}
-
-.form-row.three-col > .field {
-  flex: 1;
-}
-
-.form-row.four-col > .field {
-  flex: 1;
+  flex-direction: column;
+  gap: 0.25rem;
+  flex-shrink: 0;
 }
 
 .field {
@@ -952,183 +1146,30 @@ watch(() => props.initialData, (newVal) => {
   gap: 2px;
 }
 
-.field.full-width {
-  flex: 1;
-}
-
 .field label {
-  color: #aaa;
-  font-size: 12px;
+  color: var(--p-surface-400);
 }
 
-.field .required {
-  color: #dc3545;
-  margin-left: 2px;
-}
-
-.field input,
-.field select,
-.field textarea {
-  background: #222;
-  border: 1px solid #555;
-  color: #fff;
-  padding: 8px;
+.file-input {
+  background: var(--p-surface-800);
+  border: 1px solid var(--p-surface-600);
   border-radius: 4px;
-  font-size: 13px;
+  padding: 0.5rem;
+  color: var(--p-surface-100);
+  font-size: 0.875rem;
 }
 
-.field input:focus,
-.field select:focus,
-.field textarea:focus {
-  outline: none;
-  border-color: #dc3545;
-}
-
-.field textarea {
-  resize: vertical;
-}
-
-.other-input {
-  margin-top: 5px;
-}
-
-.file-path {
-  color: #888;
-  font-size: 11px;
-  margin-top: 3px;
-}
-
-/* Tables */
-.parameters-table,
-.solutes-table {
-  width: 100%;
-}
-
-.table-header,
-.table-row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.table-header {
-  font-weight: 600;
-  color: #aaa;
-  padding: 5px 0;
-  border-bottom: 1px solid #555;
-  font-size: 12px;
-}
-
-.table-row {
-  padding: 5px 0;
-  border-bottom: 1px solid #444;
-}
-
-/* Parameter table columns */
-.col-data { flex: 2; }
-.col-value { flex: 1; }
-.col-error { flex: 1; }
-.col-unit { flex: 1; }
-.col-prefix { flex: 1; }
-.col-note { flex: 1.5; }
-.col-actions { width: 90px; display: flex; gap: 3px; }
-
-/* Solute table columns */
-.col-component { flex: 1.5; }
-
-.table-row input,
-.table-row select {
-  width: 100%;
-  background: #222;
-  border: 1px solid #555;
-  color: #fff;
-  padding: 5px;
-  border-radius: 3px;
-  font-size: 12px;
-}
-
-.action-btn {
-  background: #444;
-  border: 1px solid #555;
-  color: #ccc;
-  cursor: pointer;
-  padding: 3px 8px;
-  border-radius: 3px;
-  font-size: 11px;
-}
-
-.action-btn:hover:not(:disabled) {
-  background: #555;
-  color: #fff;
-}
-
-.action-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.action-btn.delete-btn {
-  background: #8b0000;
-  border-color: #a00;
-}
-
-.action-btn.delete-btn:hover:not(:disabled) {
-  background: #a52a2a;
-}
-
-.dataset-actions,
-.header-actions,
-.phase-actions {
-  display: flex;
-  gap: 5px;
-  margin-top: 15px;
-  padding-top: 10px;
-  border-top: 1px solid #555;
-}
-
-.empty-message {
-  color: #888;
-  font-style: italic;
-  padding: 20px;
-  text-align: center;
-}
-
-/* Form footer */
-.form-footer {
-  display: flex;
-  justify-content: center;
-  gap: 20px;
-  margin-top: 20px;
-  padding-top: 15px;
-  border-top: 1px solid #444;
-}
-
-.btn-primary {
-  background: #dc3545;
-  color: white;
-  border: none;
-  padding: 10px 30px;
+.file-input::file-selector-button {
+  background: var(--p-surface-700);
+  border: 1px solid var(--p-surface-500);
   border-radius: 4px;
+  padding: 0.25rem 0.75rem;
+  color: var(--p-surface-100);
   cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
+  margin-right: 0.5rem;
 }
 
-.btn-primary:hover {
-  background: #c82333;
-}
-
-.btn-secondary {
-  background: transparent;
-  color: #ccc;
-  border: 1px solid #666;
-  padding: 10px 30px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.btn-secondary:hover {
-  background: #444;
+.file-input::file-selector-button:hover {
+  background: var(--p-surface-600);
 }
 </style>
