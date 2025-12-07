@@ -1,9 +1,9 @@
 <template>
   <div class="mb-6">
     <div class="flex items-center gap-4 mb-2">
-      <!-- Use @back event for browser history navigation -->
+      <!-- Use showBack prop with @back event for browser history navigation -->
       <button
-        v-if="hasBackListener"
+        v-if="showBack"
         @click="$emit('back')"
         class="text-strabo-text-secondary hover:text-strabo-accent transition-colors cursor-pointer"
       >
@@ -32,8 +32,6 @@
 </template>
 
 <script setup>
-import { computed, useAttrs } from 'vue'
-
 defineProps({
   title: {
     type: String,
@@ -50,11 +48,12 @@ defineProps({
   backHref: {
     type: String,
     default: ''
+  },
+  showBack: {
+    type: Boolean,
+    default: false
   }
 })
 
 defineEmits(['back'])
-
-const attrs = useAttrs()
-const hasBackListener = computed(() => !!attrs.onBack)
 </script>

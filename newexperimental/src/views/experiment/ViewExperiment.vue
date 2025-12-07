@@ -3,6 +3,7 @@
     <PageHeader
       :title="experimentId ? `Experiment: ${experimentId}` : 'View Experiment'"
       :subtitle="projectName ? `Project: ${projectName}` : ''"
+      :show-back="true"
       @back="goBack"
     />
 
