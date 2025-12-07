@@ -49,7 +49,7 @@
             </thead>
             <tbody>
               <tr v-for="(phase, idx) in data.material.composition" :key="idx">
-                <td>{{ phase.mineral || '-' }}</td>
+                <td>{{ formatMineral(phase) }}</td>
                 <td>{{ phase.fraction || '-' }}</td>
                 <td>{{ phase.unit || '-' }}</td>
                 <td>{{ phase.grainsize || '-' }}</td>
@@ -66,7 +66,7 @@
           <InfoField label="Formation" :value="data.material?.provenance?.formation" />
           <InfoField label="Member" :value="data.material?.provenance?.member" />
           <InfoField label="Submember" :value="data.material?.provenance?.submember" />
-          <InfoField label="Source" :value="data.material?.provenance?.source" />
+          <InfoField label="Source" :value="formatSource(data.material?.provenance)" />
         </div>
 
         <!-- Location (nested object within provenance) -->
@@ -113,7 +113,7 @@
           </thead>
           <tbody>
             <tr v-for="(param, idx) in data.parameters" :key="idx">
-              <td>{{ param.control || '-' }}</td>
+              <td>{{ formatVariable(param) }}</td>
               <td>{{ param.value || '-' }}</td>
               <td>{{ param.unit || '-' }}</td>
               <td>{{ param.prefix || '-' }}</td>
@@ -160,6 +160,36 @@ const props = defineProps({
     default: () => ({})
   }
 })
+
+// Helper to check if a value is "Other" (case-insensitive)
+const isOther = (value) => value && value.toLowerCase() === 'other'
+
+// Format mineral display - show "Other: custom value" if other is selected
+const formatMineral = (phase) => {
+  if (!phase.mineral) return '-'
+  if (isOther(phase.mineral) && phase.other_mineral) {
+    return `Other: ${phase.other_mineral}`
+  }
+  return phase.mineral
+}
+
+// Format source display - show "Other: custom value" if other is selected
+const formatSource = (provenance) => {
+  if (!provenance?.source) return null
+  if (isOther(provenance.source) && provenance.other_source) {
+    return `Other: ${provenance.other_source}`
+  }
+  return provenance.source
+}
+
+// Format variable display - show "Other: custom value" if other is selected
+const formatVariable = (param) => {
+  if (!param.control) return '-'
+  if (isOther(param.control) && param.other_control) {
+    return `Other: ${param.other_control}`
+  }
+  return param.control
+}
 
 // Helper to check if provenance.location is an object or a string
 const provenanceLocation = computed(() => {

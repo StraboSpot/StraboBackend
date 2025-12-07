@@ -76,38 +76,48 @@
         @update:items="form.material.composition = $event"
       >
         <template #detail="{ item, update }">
-          <div class="flex gap-3">
-            <div class="field flex-1">
-              <label class="text-sm">Mineral *</label>
-              <Select
-                :modelValue="item.mineral"
-                @update:modelValue="update('mineral', $event)"
-                :options="MINERAL_TYPES"
-                placeholder="Select..."
-                showClear
-              />
-            </div>
-            <div class="field w-24">
-              <label class="text-sm">Fraction</label>
-              <InputText
-                :modelValue="item.fraction"
-                @update:modelValue="update('fraction', $event)"
-              />
-            </div>
-            <div class="field w-32">
-              <label class="text-sm">Grain Size [μm]</label>
-              <InputText
-                :modelValue="item.grainsize"
-                @update:modelValue="update('grainsize', $event)"
-              />
-            </div>
-            <div class="field w-24">
-              <label class="text-sm">Unit</label>
-              <Select
-                :modelValue="item.unit"
-                @update:modelValue="update('unit', $event)"
-                :options="FRACTION_UNITS"
-              />
+          <div class="flex flex-col gap-3">
+            <div class="flex gap-3">
+              <div class="field flex-1">
+                <label class="text-sm">Mineral *</label>
+                <Select
+                  :modelValue="item.mineral"
+                  @update:modelValue="update('mineral', $event)"
+                  :options="MINERAL_TYPES"
+                  placeholder="Select..."
+                  showClear
+                />
+              </div>
+              <div class="field flex-1" v-if="isOther(item.mineral)">
+                <label class="text-sm">Other Mineral</label>
+                <InputText
+                  :modelValue="item.other_mineral"
+                  @update:modelValue="update('other_mineral', $event)"
+                  placeholder="Enter other mineral..."
+                />
+              </div>
+              <div class="field w-24">
+                <label class="text-sm">Fraction</label>
+                <InputText
+                  :modelValue="item.fraction"
+                  @update:modelValue="update('fraction', $event)"
+                />
+              </div>
+              <div class="field w-32">
+                <label class="text-sm">Grain Size [μm]</label>
+                <InputText
+                  :modelValue="item.grainsize"
+                  @update:modelValue="update('grainsize', $event)"
+                />
+              </div>
+              <div class="field w-24">
+                <label class="text-sm">Unit</label>
+                <Select
+                  :modelValue="item.unit"
+                  @update:modelValue="update('unit', $event)"
+                  :options="FRACTION_UNITS"
+                />
+              </div>
             </div>
           </div>
         </template>
@@ -133,6 +143,10 @@
         <div class="field">
           <label class="text-sm">Source</label>
           <Select v-model="form.material.provenance.source" :options="SOURCE_TYPES" placeholder="Select..." showClear />
+        </div>
+        <div class="field" v-if="isOther(form.material.provenance.source)">
+          <label class="text-sm">Other Source</label>
+          <InputText v-model="form.material.provenance.other_source" placeholder="Enter other source..." />
         </div>
       </div>
     </fieldset>
@@ -225,6 +239,14 @@
                   showClear
                 />
               </div>
+              <div class="field flex-1" v-if="isOther(item.control)">
+                <label class="text-sm">Other Variable</label>
+                <InputText
+                  :modelValue="item.other_control"
+                  @update:modelValue="update('other_control', $event)"
+                  placeholder="Enter other variable..."
+                />
+              </div>
               <div class="field w-28">
                 <label class="text-sm">Value</label>
                 <InputText
@@ -305,6 +327,9 @@ import {
 
 const SOURCE_TYPES = ['Quarry', 'Mine', 'Outcrop', 'Core', 'Laboratory', 'Commercial', 'Other']
 
+// Helper to check if a value is "Other" (case-insensitive)
+const isOther = (value) => value && value.toLowerCase() === 'other'
+
 const props = defineProps({
   initialData: {
     type: Object,
@@ -340,6 +365,7 @@ const createEmptyForm = () => ({
       member: '',
       submember: '',
       source: '',
+      other_source: '',
       location: {
         street: '',
         building: '',
@@ -391,6 +417,7 @@ watch(() => props.initialData, (data) => {
           member: data.material?.provenance?.member || '',
           submember: data.material?.provenance?.submember || '',
           source: data.material?.provenance?.source || '',
+          other_source: data.material?.provenance?.other_source || '',
           location: {
             street: data.material?.provenance?.location?.street || '',
             building: data.material?.provenance?.location?.building || '',
@@ -422,6 +449,7 @@ const isValid = computed(() => {
 // Default item factory functions for ListDetailEditor
 const defaultPhase = () => ({
   mineral: '',
+  other_mineral: '',
   fraction: '',
   unit: 'Vol%',
   grainsize: ''
@@ -429,6 +457,7 @@ const defaultPhase = () => ({
 
 const defaultParameter = () => ({
   control: '',
+  other_control: '',
   value: '',
   unit: '',
   prefix: '-',
