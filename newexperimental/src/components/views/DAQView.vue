@@ -103,25 +103,6 @@
           </div>
         </div>
 
-        <!-- Device Documents -->
-        <div v-if="device.documents && device.documents.length > 0" class="device-documents mt-3">
-          <div class="subsection-title">Documents</div>
-          <div
-            v-for="(doc, docIdx) in device.documents"
-            :key="docIdx"
-            class="document-item"
-          >
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-2">
-              <InfoField label="Type" :value="doc.type" size="small" />
-              <InfoField label="Format" :value="doc.format" size="small" />
-              <InfoField label="ID" :value="doc.id" size="small" />
-              <InfoField label="Path" :value="doc.path" size="small" />
-            </div>
-            <div v-if="doc.description" class="mt-1">
-              <InfoField label="Description" :value="doc.description" size="small" />
-            </div>
-          </div>
-        </div>
       </div>
     </div>
 
@@ -288,16 +269,5 @@ function hasCalibrationData(channel) {
   padding: 0.25rem 0.5rem;
   border-radius: 3px;
   color: var(--p-surface-300);
-}
-
-.document-item {
-  background: var(--p-surface-800);
-  padding: 0.5rem;
-  border-radius: 4px;
-  margin-bottom: 0.5rem;
-}
-
-.document-item:last-child {
-  margin-bottom: 0;
 }
 </style>

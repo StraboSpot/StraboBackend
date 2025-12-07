@@ -127,74 +127,9 @@
         <!-- Device Documents Section -->
         <fieldset class="documents-fieldset">
           <legend>DEVICE DOCUMENTS</legend>
-          <div class="flex items-center gap-2 mb-3">
-            <Button
-              size="small"
-              label="Add Document"
-              @click="addDeviceDocument(dIdx)"
-            />
-          </div>
-
-          <div v-if="device.documents && device.documents.length > 0" class="documents-list">
-            <div
-              v-for="(doc, docIdx) in device.documents"
-              :key="docIdx"
-              class="document-row"
-            >
-              <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-                <div class="field">
-                  <label class="text-xs">Document Type <span class="text-red-500">*</span></label>
-                  <Select
-                    v-model="doc.type"
-                    :options="DOCUMENT_TYPES"
-                    placeholder="Select..."
-                  />
-                </div>
-                <div class="field">
-                  <label class="text-xs">Document Format <span class="text-red-500">*</span></label>
-                  <Select
-                    v-model="doc.format"
-                    :options="DOCUMENT_FORMATS"
-                    placeholder="Select..."
-                  />
-                </div>
-                <div class="field">
-                  <label class="text-xs">File Uploaded</label>
-                  <InputText
-                    v-model="doc.path"
-                    placeholder="File path or URL"
-                  />
-                </div>
-                <div class="field">
-                  <label class="text-xs">Document ID</label>
-                  <div class="flex gap-2">
-                    <InputText
-                      v-model="doc.id"
-                      placeholder="ID"
-                      class="flex-1"
-                    />
-                    <Button
-                      icon="pi pi-trash"
-                      severity="secondary"
-                      outlined
-                      size="small"
-                      @click="deleteDeviceDocument(dIdx, docIdx)"
-                    />
-                  </div>
-                </div>
-              </div>
-              <div class="field mt-2">
-                <label class="text-xs">Description</label>
-                <Textarea
-                  v-model="doc.description"
-                  rows="2"
-                  autoResize
-                  placeholder="Document description..."
-                />
-              </div>
-            </div>
-          </div>
-          <p v-else class="text-sm text-surface-500">No documents added yet.</p>
+          <p class="text-sm text-surface-400">
+            Document upload coming soon.
+          </p>
         </fieldset>
       </div>
 
@@ -228,9 +163,7 @@ import Button from 'primevue/button'
 import Textarea from 'primevue/textarea'
 import ChannelEditor from '@/components/forms/ChannelEditor.vue'
 import {
-  DAQ_TYPES,
-  DOCUMENT_TYPES,
-  DOCUMENT_FORMATS
+  DAQ_TYPES
 } from '@/schemas/laps-enums'
 
 const props = defineProps({
@@ -263,7 +196,6 @@ watch(() => props.initialData, (data) => {
       devices: data.devices?.map(d => ({
         name: d.name || 'System Default',
         channels: d.channels?.map(ch => ({ ...ch })) || [],
-        documents: d.documents?.map(doc => ({ ...doc })) || [],
         _selectedChannel: d.channels?.length > 0 ? 0 : undefined
       })) || []
     }
@@ -275,7 +207,6 @@ function addDevice() {
   form.value.devices.push({
     name: '',
     channels: [],
-    documents: [],
     _selectedChannel: undefined
   })
 }
@@ -366,23 +297,6 @@ function createDefaultChannel(index) {
       data: []
     }
   }
-}
-
-// Device document management
-function addDeviceDocument(deviceIdx) {
-  const device = form.value.devices[deviceIdx]
-  if (!device.documents) device.documents = []
-  device.documents.push({
-    type: '',
-    format: '',
-    path: '',
-    id: '',
-    description: ''
-  })
-}
-
-function deleteDeviceDocument(deviceIdx, docIdx) {
-  form.value.devices[deviceIdx].documents.splice(docIdx, 1)
 }
 
 function handleSubmit() {
