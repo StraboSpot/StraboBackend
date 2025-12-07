@@ -1706,3 +1706,34 @@ export const CONTACT_AFFILIATIONS = [
   'Director',
   'Other'
 ]
+
+// ===== PROTOCOL ENUMS =====
+
+// Protocol control variables - from old app edit_experiment.php lines 3493-3517
+// These are the parameter variables for protocol steps
+export const PROTOCOL_CONTROL_VARIABLES = [
+  'Temperature T',
+  'Confining Pressure Pc',
+  'Pore Pressure Pp',
+  'Time t',
+  'Frequency',
+  'Amplitude',
+  'Stress σ1',
+  'Strain ε1',
+  'Strain Rate ε1/dt',
+  'Displacement Δs1',
+  'Force F2',
+  'Stress σ2',
+  'Strain ε2',
+  'Strain Rate ε2/dt',
+  'Displacement Δs2',
+  'Force F2',
+  'Stress σ3',
+  'Strain ε3',
+  'Strain Rate ε3/dt',
+  'Displacement Δs3',
+  'Force F3',
+  'Saturation',
+  'Humidity',
+  'Count'
+]

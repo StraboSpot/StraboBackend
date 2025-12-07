@@ -67,6 +67,7 @@
         :section="activeSection"
         :data="getSectionData(activeSection)"
         :readonly="false"
+        :selected-features="getSelectedFeatures()"
         @close="activeSection = null"
         @save="handleSectionSave"
       />
@@ -181,6 +182,16 @@ const getSectionData = (section) => {
     return experimentData.value.experiment?.protocol || []
   }
   return experimentData.value[section] || {}
+}
+
+// Get selected features from experimental setup for protocol step dropdown
+const getSelectedFeatures = () => {
+  // Features are stored in experiment.features (from experimental setup form)
+  const features = experimentData.value.experiment?.features
+  if (Array.isArray(features) && features.length > 0) {
+    return features
+  }
+  return []
 }
 
 const handleSectionSave = (section, data) => {

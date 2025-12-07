@@ -78,6 +78,23 @@
       </div>
     </div>
 
+    <!-- Protocol Form -->
+    <ProtocolForm
+      v-else-if="section === 'protocol' && !readonly"
+      :initial-data="data"
+      :selected-features="selectedFeatures"
+      @submit="handleFormSubmit"
+      @cancel="handleClose"
+    />
+
+    <!-- Protocol View (readonly) -->
+    <div v-else-if="section === 'protocol' && readonly">
+      <ProtocolView :data="data" />
+      <div class="flex justify-center mt-6">
+        <Button label="Close" outlined @click="handleClose" />
+      </div>
+    </div>
+
     <!-- Placeholder for other sections -->
     <div v-else class="text-center p-4">
       <p class="text-lg mb-4">{{ sectionTitle }} Form</p>
@@ -127,6 +144,8 @@ import ExperimentalSetupForm from '@/components/forms/ExperimentalSetupForm.vue'
 import ExperimentalSetupView from '@/components/views/ExperimentalSetupView.vue'
 import DAQForm from '@/components/forms/DAQForm.vue'
 import DAQView from '@/components/views/DAQView.vue'
+import ProtocolForm from '@/components/forms/ProtocolForm.vue'
+import ProtocolView from '@/components/views/ProtocolView.vue'
 
 const props = defineProps({
   section: {
@@ -140,6 +159,11 @@ const props = defineProps({
   readonly: {
     type: Boolean,
     default: false
+  },
+  // For Protocol section: list of features selected in experimental setup
+  selectedFeatures: {
+    type: Array,
+    default: () => []
   }
 })
 
@@ -165,7 +189,7 @@ const dialogHeaders = {
 }
 
 // Sections that have real form implementations
-const sectionsWithForms = ['sample', 'facilityApparatus', 'experiment', 'daq']
+const sectionsWithForms = ['sample', 'facilityApparatus', 'experiment', 'daq', 'protocol']
 
 const sectionTitle = computed(() => sectionTitles[props.section] || props.section)
 const dialogHeader = computed(() => dialogHeaders[props.section] || props.section.toUpperCase())
