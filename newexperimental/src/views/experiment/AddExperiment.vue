@@ -298,6 +298,12 @@ const handleApparatusSelected = ({ facility, apparatus }) => {
 
 // Core function to load experiment data into the form
 const loadExperimentData = (inData, dataType) => {
+  // Handle nested data structure from API (experiment.data contains LAPS sections)
+  // vs flat structure from JSON file (LAPS sections at root)
+  const lapsData = inData.data && (inData.data.facility || inData.data.apparatus || inData.data.daq || inData.data.sample || inData.data.experiment || inData.data.data)
+    ? inData.data  // API format: { data: { facility: {...}, ... } }
+    : inData       // JSON file format: { facility: {...}, ... }
+
   // Clear appropriate section(s) first
   if (dataType === 'all') {
     clearAllData()
@@ -316,28 +322,29 @@ const loadExperimentData = (inData, dataType) => {
 
   // Load the data based on dataType
   if (dataType === 'facilityApparatus' || dataType === 'all') {
-    if (inData.facility) experimentData.value.facility = inData.facility
-    if (inData.apparatus) experimentData.value.apparatus = inData.apparatus
+    if (lapsData.facility) experimentData.value.facility = lapsData.facility
+    if (lapsData.apparatus) experimentData.value.apparatus = lapsData.apparatus
   }
   if (dataType === 'daq' || dataType === 'all') {
-    if (inData.daq) experimentData.value.daq = inData.daq
+    if (lapsData.daq) experimentData.value.daq = lapsData.daq
   }
   if (dataType === 'sample' || dataType === 'all') {
-    if (inData.sample) experimentData.value.sample = inData.sample
+    if (lapsData.sample) experimentData.value.sample = lapsData.sample
   }
   if (dataType === 'experiment' || dataType === 'protocol' || dataType === 'all') {
-    if (inData.experiment) experimentData.value.experiment = inData.experiment
+    if (lapsData.experiment) experimentData.value.experiment = lapsData.experiment
   }
   if (dataType === 'data' || dataType === 'all') {
-    if (inData.data) experimentData.value.data = inData.data
+    if (lapsData.data) experimentData.value.data = lapsData.data
   }
 
   // Load experiment ID if loading all data
   if (dataType === 'all' || dataType === 'experiment') {
+    // Try multiple locations for experiment_id
     if (inData.experiment_id) {
       experimentId.value = inData.experiment_id
-    } else if (inData.experiment?.id) {
-      experimentId.value = inData.experiment.id
+    } else if (lapsData.experiment?.id) {
+      experimentId.value = lapsData.experiment.id
     }
   }
 }
