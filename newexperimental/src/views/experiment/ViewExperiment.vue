@@ -2,9 +2,8 @@
   <div>
     <PageHeader
       :title="experimentId ? `Experiment: ${experimentId}` : 'View Experiment'"
-      :back-link="projectPkey ? `/view_project?ppk=${projectPkey}` : null"
-      :back-href="!projectPkey ? '/my_experimental_data' : null"
       :subtitle="projectName ? `Project: ${projectName}` : ''"
+      @back="goBack"
     />
 
     <div v-if="loading" class="text-center py-12">
@@ -82,6 +81,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
 import SectionModal from '@/components/SectionModal.vue'
@@ -90,6 +90,8 @@ import { experimentService } from '@/services/api'
 const props = defineProps({
   e: String
 })
+
+const router = useRouter()
 
 const loading = ref(true)
 const error = ref(null)
@@ -164,6 +166,10 @@ const getSectionData = (section) => {
 
 const handleDownload = () => {
   experimentService.download(props.e)
+}
+
+const goBack = () => {
+  router.back()
 }
 </script>
 

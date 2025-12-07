@@ -2,9 +2,8 @@
   <div>
     <PageHeader
       :title="experimentId ? `Edit: ${experimentId}` : 'Edit Experiment'"
-      :back-link="projectPkey ? `/view_project?ppk=${projectPkey}` : null"
-      :back-href="!projectPkey ? '/my_experimental_data' : null"
       :subtitle="projectName ? `Project: ${projectName}` : ''"
+      @back="goBack"
     />
 
     <div v-if="loading" class="text-center py-12">
@@ -179,6 +178,10 @@ const handleSave = async () => {
   } finally {
     saving.value = false
   }
+}
+
+const goBack = () => {
+  router.back()
 }
 </script>
 
