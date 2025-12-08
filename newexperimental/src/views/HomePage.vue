@@ -89,7 +89,7 @@ import {
 }
 
 .title-divider {
-  width: 200px;
+  width: 420px;
   height: 2px;
   background-color: rgb(220, 53, 69);
   margin: 0 auto;
