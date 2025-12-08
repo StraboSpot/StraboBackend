@@ -366,8 +366,8 @@ function handleSubmit() {
 
 <style scoped>
 .experiment-form {
-  max-width: 1100px;
-  margin: 0 auto;
+  width: 100%;
+  
 }
 
 .form-section {

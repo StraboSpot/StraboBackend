@@ -3,7 +3,7 @@
     :visible="true"
     modal
     :header="dialogHeader"
-    :style="{ width: hasForm ? '1100px' : '700px' }"
+    :style="{ width: hasForm ? '1200px' : '800px' }"
     :maximizable="false"
     :closable="true"
     @update:visible="handleClose"

@@ -290,8 +290,7 @@ function handleSubmit() {
 
 <style scoped>
 .facility-apparatus-form {
-  max-width: 1100px;
-  margin: 0 auto;
+  width: 100%;
 }
 
 .form-section {

@@ -337,8 +337,8 @@ function handleSubmit() {
 
 <style scoped>
 .daq-form {
-  max-width: 1100px;
-  margin: 0 auto;
+  width: 100%;
+  
 }
 
 .form-section {
