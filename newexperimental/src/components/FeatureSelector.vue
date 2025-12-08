@@ -79,8 +79,9 @@ const emit = defineEmits(['update:modelValue'])
 
 const groups = GROUPED_FEATURES
 const expandedGroups = ref([])
+const hasInitialized = ref(false)
 
-// Auto-expand groups that have selections when data loads
+// Auto-expand groups that have selections when data first loads
 const autoExpandSelected = () => {
   const groupsWithSelections = groups
     .filter(g => g.features.some(f => props.modelValue.includes(f)))
@@ -95,12 +96,21 @@ const autoExpandSelected = () => {
 }
 
 onMounted(() => {
-  autoExpandSelected()
+  // Only auto-expand if we have initial data (edit mode)
+  if (props.modelValue.length > 0) {
+    autoExpandSelected()
+  }
+  hasInitialized.value = true
 })
 
-// Watch for changes to modelValue (e.g., when loading existing data)
-watch(() => props.modelValue, () => {
-  autoExpandSelected()
+// Watch for external changes to modelValue (e.g., when loading existing data from parent)
+// But only before the component has been interacted with
+watch(() => props.modelValue, (newVal, oldVal) => {
+  // Only auto-expand if this is new data being loaded externally
+  // (detected by going from empty to having values, after mount)
+  if (hasInitialized.value && oldVal?.length === 0 && newVal?.length > 0) {
+    autoExpandSelected()
+  }
 }, { deep: true })
 
 function toggleGroup(groupName) {
