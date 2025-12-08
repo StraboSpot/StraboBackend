@@ -1,11 +1,5 @@
 <template>
   <div class="home-page">
-    <!-- Header -->
-    <header class="text-center mb-10">
-      <h1 class="site-title">STRABOEXPERIMENTAL</h1>
-      <div class="title-divider"></div>
-    </header>
-
     <!-- Navigation Tiles - 2x2 grid like legacy app -->
     <div class="tiles-container">
       <div class="tile-row">
@@ -74,25 +68,7 @@ import {
 
 <style scoped>
 .home-page {
-  padding: 2rem 1rem;
-  min-height: calc(100vh - 200px);
-}
-
-.site-title {
-  font-family: 'Raleway', sans-serif;
-  font-size: 2rem;
-  font-weight: 400;
-  letter-spacing: 0.15em;
-  color: #ffffff;
-  text-transform: uppercase;
-  margin-bottom: 1rem;
-}
-
-.title-divider {
-  width: 520px;
-  height: 2px;
-  background-color: rgb(220, 53, 69);
-  margin: 0 auto;
+  padding: 1rem;
 }
 
 .tiles-container {
