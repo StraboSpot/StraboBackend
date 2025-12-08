@@ -170,6 +170,7 @@ function removeFeature(feature) {
   color: white;
   border-radius: 4px;
   font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -253,6 +254,7 @@ function removeFeature(feature) {
   background: transparent;
   color: var(--p-surface-300);
   font-size: 0.875rem;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
 }
