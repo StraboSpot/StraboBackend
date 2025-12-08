@@ -9,39 +9,47 @@
           :class="{ 'has-data': hasData('sample') }"
           @click="openSection('sample')"
         >
-          <img :src="images.sample" alt="Sample" class="tile-image" />
-          <img
-            v-if="hasData('sample')"
-            :src="images.greencheck"
-            alt="Complete"
-            class="check-icon"
-          />
+          <div class="tile-content">
+            <div class="icon-wrapper">
+              <!-- Sample: cube and cylinder representing rock specimens -->
+              <Box class="tile-icon main-icon" :stroke-width="1.2" />
+              <Cylinder class="tile-icon secondary-icon" :stroke-width="1.2" />
+            </div>
+            <span class="tile-label">Sample</span>
+          </div>
+          <CircleCheck v-if="hasData('sample')" class="check-icon" />
         </div>
+
         <div
           class="section-tile"
           :class="{ 'has-data': hasData('facilityApparatus') }"
           @click="openSection('facilityApparatus')"
         >
-          <img :src="images.facilityApparatus" alt="Facility & Apparatus" class="tile-image" />
-          <img
-            v-if="hasData('facilityApparatus')"
-            :src="images.greencheck"
-            alt="Complete"
-            class="check-icon"
-          />
+          <div class="tile-content">
+            <div class="icon-wrapper">
+              <!-- Facility & Apparatus: building + cog for lab equipment -->
+              <Building2 class="tile-icon main-icon" :stroke-width="1.2" />
+              <Wrench class="tile-icon secondary-icon" :stroke-width="1.2" />
+            </div>
+            <span class="tile-label">Facility and Apparatus</span>
+          </div>
+          <CircleCheck v-if="hasData('facilityApparatus')" class="check-icon" />
         </div>
+
         <div
           class="section-tile"
           :class="{ 'has-data': hasData('experiment') }"
           @click="openSection('experiment')"
         >
-          <img :src="images.experiment" alt="Experimental Setup" class="tile-image" />
-          <img
-            v-if="hasData('experiment')"
-            :src="images.greencheck"
-            alt="Complete"
-            class="check-icon"
-          />
+          <div class="tile-content">
+            <div class="icon-wrapper">
+              <!-- Experimental Setup: layout/assembly diagram -->
+              <LayoutGrid class="tile-icon main-icon" :stroke-width="1.2" />
+              <Settings class="tile-icon secondary-icon" :stroke-width="1.2" />
+            </div>
+            <span class="tile-label">Experimental Setup</span>
+          </div>
+          <CircleCheck v-if="hasData('experiment')" class="check-icon" />
         </div>
       </div>
 
@@ -52,39 +60,47 @@
           :class="{ 'has-data': hasData('daq') }"
           @click="openSection('daq')"
         >
-          <img :src="images.daq" alt="DAQ" class="tile-image" />
-          <img
-            v-if="hasData('daq')"
-            :src="images.greencheck"
-            alt="Complete"
-            class="check-icon"
-          />
+          <div class="tile-content">
+            <div class="icon-wrapper">
+              <!-- DAQ: circuit board + activity/signal -->
+              <CircuitBoard class="tile-icon main-icon" :stroke-width="1.2" />
+              <Activity class="tile-icon secondary-icon" :stroke-width="1.2" />
+            </div>
+            <span class="tile-label">DAQ</span>
+          </div>
+          <CircleCheck v-if="hasData('daq')" class="check-icon" />
         </div>
+
         <div
           class="section-tile"
           :class="{ 'has-data': hasData('protocol') }"
           @click="openSection('protocol')"
         >
-          <img :src="images.protocol" alt="Protocol" class="tile-image" />
-          <img
-            v-if="hasData('protocol')"
-            :src="images.greencheck"
-            alt="Complete"
-            class="check-icon"
-          />
+          <div class="tile-content">
+            <div class="icon-wrapper">
+              <!-- Protocol: steps/list + chart showing controlled variables -->
+              <ListOrdered class="tile-icon main-icon" :stroke-width="1.2" />
+              <TrendingUp class="tile-icon secondary-icon" :stroke-width="1.2" />
+            </div>
+            <span class="tile-label">Protocol and<br>Controlled Variables</span>
+          </div>
+          <CircleCheck v-if="hasData('protocol')" class="check-icon" />
         </div>
+
         <div
           class="section-tile"
           :class="{ 'has-data': hasData('data') }"
           @click="openSection('data')"
         >
-          <img :src="images.data" alt="Data" class="tile-image" />
-          <img
-            v-if="hasData('data')"
-            :src="images.greencheck"
-            alt="Complete"
-            class="check-icon"
-          />
+          <div class="tile-content">
+            <div class="icon-wrapper">
+              <!-- Data: table + chart for data/time series -->
+              <Table class="tile-icon main-icon" :stroke-width="1.2" />
+              <LineChart class="tile-icon secondary-icon" :stroke-width="1.2" />
+            </div>
+            <span class="tile-label">Data</span>
+          </div>
+          <CircleCheck v-if="hasData('data')" class="check-icon" />
         </div>
       </div>
     </div>
@@ -92,26 +108,21 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
-
-// Import images as assets so Vite can handle them
-import sampleTile from '@/assets/images/sample_tile.png'
-import facilityApparatusTile from '@/assets/images/f_and_a_tile.png'
-import experimentTile from '@/assets/images/experimental_setup_tile.png'
-import daqTile from '@/assets/images/daq_tile.png'
-import protocolTile from '@/assets/images/protocol_controlled_variables_tile.png'
-import dataTile from '@/assets/images/data_tile.png'
-import greencheck from '@/assets/images/greencheck.png'
-
-const images = {
-  sample: sampleTile,
-  facilityApparatus: facilityApparatusTile,
-  experiment: experimentTile,
-  daq: daqTile,
-  protocol: protocolTile,
-  data: dataTile,
-  greencheck: greencheck
-}
+import {
+  Box,
+  Cylinder,
+  Building2,
+  Wrench,
+  LayoutGrid,
+  Settings,
+  CircuitBoard,
+  Activity,
+  ListOrdered,
+  TrendingUp,
+  Table,
+  LineChart,
+  CircleCheck
+} from 'lucide-vue-next'
 
 const props = defineProps({
   experimentData: {
@@ -176,36 +187,91 @@ const openSection = (section) => {
   position: relative;
   width: 230px;
   height: 230px;
-  border: 1px solid #444;
-  border-radius: 8px;
+  border: 2px solid #444;
+  border-radius: 12px;
   cursor: pointer;
   overflow: hidden;
-  background-color: #2a2a2a;
-  transition: transform 0.2s, box-shadow 0.2s, border-color 0.2s;
+  background: linear-gradient(145deg, #2a2a2a 0%, #1f1f1f 100%);
+  transition: all 0.25s ease;
 }
 
 .section-tile:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   border-color: #f4511e;
+  background: linear-gradient(145deg, #333 0%, #252525 100%);
 }
 
 .section-tile.has-data {
   border-color: #4caf50;
 }
 
-.tile-image {
-  width: 100%;
+.section-tile.has-data:hover {
+  border-color: #66bb6a;
+}
+
+.tile-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
   height: 100%;
-  object-fit: contain;
+  padding: 1.5rem;
+}
+
+.icon-wrapper {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.tile-icon {
+  color: #e0e0e0;
+  transition: color 0.25s ease;
+}
+
+.main-icon {
+  width: 64px;
+  height: 64px;
+}
+
+.secondary-icon {
+  width: 48px;
+  height: 48px;
+  opacity: 0.7;
+}
+
+.section-tile:hover .tile-icon {
+  color: #ffffff;
+}
+
+.section-tile:hover .secondary-icon {
+  opacity: 1;
+}
+
+.tile-label {
+  font-family: 'Roboto', sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #b0b0b0;
+  text-align: center;
+  line-height: 1.3;
+  transition: color 0.25s ease;
+}
+
+.section-tile:hover .tile-label {
+  color: #ffffff;
 }
 
 .check-icon {
   position: absolute;
-  bottom: 5px;
-  right: 5px;
-  width: 20px;
-  height: 20px;
+  bottom: 10px;
+  right: 10px;
+  width: 24px;
+  height: 24px;
+  color: #4caf50;
 }
 
 /* Responsive adjustments */
@@ -218,12 +284,40 @@ const openSection = (section) => {
     width: 180px;
     height: 180px;
   }
+
+  .main-icon {
+    width: 48px;
+    height: 48px;
+  }
+
+  .secondary-icon {
+    width: 36px;
+    height: 36px;
+  }
+
+  .tile-label {
+    font-size: 0.875rem;
+  }
 }
 
 @media (max-width: 600px) {
   .section-tile {
     width: 150px;
     height: 150px;
+  }
+
+  .main-icon {
+    width: 40px;
+    height: 40px;
+  }
+
+  .secondary-icon {
+    width: 30px;
+    height: 30px;
+  }
+
+  .tile-label {
+    font-size: 0.75rem;
   }
 }
 </style>

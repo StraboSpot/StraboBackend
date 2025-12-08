@@ -13,6 +13,7 @@
     "ajv": "^8.12.0",
     "ajv-formats": "^2.1.0",
     "axios": "^1.6.0",
+    "lucide-vue-next": "^0.556.0",
     "pinia": "^2.1.0",
     "primeicons": "^7.0.0",
     "primevue": "^4.5.1",
