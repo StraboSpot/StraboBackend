@@ -58,9 +58,9 @@
 
       <!-- Action Buttons -->
       <div class="flex justify-center gap-4 mt-8 mb-8">
-        <router-link :to="`/view_experiment?e=${e}`" class="btn-secondary">
+        <a href="/my_experimental_data.php" class="btn-secondary">
           Cancel
-        </router-link>
+        </a>
         <button @click="handleSave" :disabled="saving" class="btn-primary">
           {{ saving ? 'Saving...' : 'Save Changes' }}
         </button>
