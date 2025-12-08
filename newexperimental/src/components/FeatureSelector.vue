@@ -41,23 +41,20 @@
           </span>
         </button>
 
-        <!-- Category content (checkboxes) -->
+        <!-- Category content (toggle buttons) -->
         <div
           v-show="expandedGroup === group.name"
           class="category-content"
         >
-          <label
+          <button
             v-for="feature in group.features"
             :key="feature"
-            class="feature-checkbox"
+            type="button"
+            :class="['feature-btn', { 'feature-btn-selected': modelValue.includes(feature) }]"
+            @click="toggleFeature(feature)"
           >
-            <input
-              type="checkbox"
-              :checked="modelValue.includes(feature)"
-              @change="toggleFeature(feature)"
-            />
-            <span class="checkbox-label">{{ feature }}</span>
-          </label>
+            {{ feature }}
+          </button>
         </div>
       </div>
     </div>
@@ -231,47 +228,50 @@ function removeFeature(feature) {
 }
 
 .category-count {
-  font-size: 0.8125rem;
+  font-size: 0.875rem;
   color: white;
   background: #dc3545;
   padding: 0.25rem 0.625rem;
   border-radius: 4px;
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .category-content {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 0.375rem 1.5rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   padding: 0.75rem 1rem 1rem;
   background: var(--p-surface-900);
   border-top: 1px solid var(--p-surface-700);
 }
 
-/* Checkboxes */
-.feature-checkbox {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.375rem 0;
-  cursor: pointer;
-  font-size: 0.9375rem;
+/* Feature toggle buttons */
+.feature-btn {
+  padding: 0.375rem 0.75rem;
+  border: 1px solid var(--p-surface-500);
+  border-radius: 4px;
+  background: transparent;
   color: var(--p-surface-300);
-  transition: color 0.15s;
-}
-
-.feature-checkbox:hover {
-  color: var(--p-surface-100);
-}
-
-.feature-checkbox input[type="checkbox"] {
-  width: 1.125rem;
-  height: 1.125rem;
-  accent-color: #dc3545;
+  font-size: 0.875rem;
   cursor: pointer;
+  transition: all 0.15s;
 }
 
-.checkbox-label {
-  user-select: none;
+.feature-btn:hover {
+  border-color: var(--p-surface-400);
+  color: var(--p-surface-100);
+  background: var(--p-surface-800);
+}
+
+.feature-btn-selected {
+  background: #dc3545;
+  border-color: #dc3545;
+  color: white;
+}
+
+.feature-btn-selected:hover {
+  background: #c82333;
+  border-color: #c82333;
+  color: white;
 }
 </style>
