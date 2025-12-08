@@ -13,7 +13,18 @@
           <InfoField label="Data ID" :value="dataset.id" />
           <InfoField label="Format" :value="dataset.format === 'Other' ? dataset.other_format : dataset.format" />
           <InfoField label="Quality" :value="dataset.rating" />
-          <InfoField v-if="dataset.path" label="File" :value="getFilename(dataset.path)" />
+        </div>
+
+        <!-- File (with View button) -->
+        <div v-if="dataset.path" class="file-section">
+          <div class="file-card">
+            <div class="file-info">
+              <span class="file-name">{{ getFilename(dataset.path) }}</span>
+            </div>
+            <a :href="dataset.path" target="_blank" class="file-btn">
+              View
+            </a>
+          </div>
         </div>
 
         <div v-if="dataset.description" class="mt-3">
@@ -260,6 +271,54 @@ function getFilename(path) {
   text-align: center;
   padding: 2rem;
   color: var(--p-surface-400);
+}
+
+/* File section with View button */
+.file-section {
+  margin-top: 1rem;
+}
+
+.file-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.75rem 1rem;
+  background-color: var(--p-surface-800);
+  border-radius: 6px;
+  border: 1px solid var(--p-surface-600);
+}
+
+.file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.file-name {
+  font-size: 1rem;
+  font-weight: 500;
+  color: #ffffff;
+  word-break: break-all;
+}
+
+.file-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1rem;
+  background-color: #dc3545;
+  color: #ffffff;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 4px;
+  text-decoration: none;
+  flex-shrink: 0;
+  margin-left: 1rem;
+  transition: background-color 0.2s;
+}
+
+.file-btn:hover {
+  background-color: #c82333;
+  text-decoration: none;
 }
 
 @media (max-width: 768px) {
