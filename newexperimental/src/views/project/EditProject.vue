@@ -1,9 +1,20 @@
 <template>
   <div>
-    <PageHeader title="Edit Project" :back-link="`/view_project?ppk=${ppk}`" />
+    <PageHeader title="Edit Project" back-link="/my_experimental_data" />
 
     <div v-if="loading" class="text-center py-8">
       <p class="text-strabo-text-secondary">Loading project...</p>
+    </div>
+
+    <div v-else-if="error" class="max-w-2xl mx-auto">
+      <div class="alert-error">
+        {{ error }}
+      </div>
+      <div class="mt-4">
+        <router-link to="/my_experimental_data" class="btn-secondary">
+          ← Back to My Projects
+        </router-link>
+      </div>
     </div>
 
     <div v-else class="card max-w-2xl mx-auto">
@@ -58,14 +69,23 @@ const form = ref({
 
 const loading = ref(true)
 const saving = ref(false)
+const error = ref(null)
 
 onMounted(async () => {
   try {
     const project = await projectService.get(props.ppk)
+
+    // Check if user can edit this project
+    if (!project.can_edit) {
+      error.value = 'You do not have permission to edit this project.'
+      return
+    }
+
     form.value.name = project.name || ''
     form.value.description = project.description || ''
-  } catch (error) {
-    console.error('Failed to load project:', error)
+  } catch (err) {
+    console.error('Failed to load project:', err)
+    error.value = 'Project not found or you do not have permission to access it.'
   } finally {
     loading.value = false
   }
@@ -78,9 +98,9 @@ async function handleSubmit() {
   try {
     await projectService.update(props.ppk, form.value)
     window.location.href = '/my_experimental_data'
-  } catch (error) {
-    console.error('Failed to update project:', error)
-    alert('Failed to save changes. Please try again.')
+  } catch (err) {
+    console.error('Failed to update project:', err)
+    alert('Failed to save changes. You may not have permission to edit this project.')
   } finally {
     saving.value = false
   }
