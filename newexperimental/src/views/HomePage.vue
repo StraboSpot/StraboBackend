@@ -3,6 +3,7 @@
     <!-- Header -->
     <header class="text-center mb-10">
       <h1 class="site-title">STRABOEXPERIMENTAL</h1>
+      <div class="title-divider"></div>
     </header>
 
     <!-- Navigation Tiles - 2x2 grid like legacy app -->
@@ -84,6 +85,14 @@ import {
   letter-spacing: 0.15em;
   color: #ffffff;
   text-transform: uppercase;
+  margin-bottom: 1rem;
+}
+
+.title-divider {
+  width: 200px;
+  height: 2px;
+  background-color: rgb(220, 53, 69);
+  margin: 0 auto;
 }
 
 .tiles-container {
