@@ -42,11 +42,12 @@ defineProps({
 
 .info-label {
   display: block;
-  font-size: 0.8125rem; /* 13px - slightly larger than text-xs */
+  font-family: 'Roboto', sans-serif;
+  font-size: 0.8125rem; /* 13px */
   font-weight: 500;
-  color: #9ca3af; /* gray-400 */
+  color: #b0b0b0; /* Brighter gray for better contrast */
   text-transform: uppercase;
-  letter-spacing: 0.025em;
+  letter-spacing: 0.05em; /* Wider spacing for small caps */
   margin-bottom: 0.125rem;
 }
 

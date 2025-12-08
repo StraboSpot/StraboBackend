@@ -96,18 +96,18 @@
     <!-- Documents -->
     <section v-if="data.documents?.length > 0" class="view-section">
       <h3 class="section-title">Documents</h3>
-      <div class="space-y-2">
-        <div v-for="(doc, idx) in data.documents" :key="idx" class="p-3 bg-surface-700 rounded">
-          <div class="flex justify-between items-start">
+      <div class="documents-list">
+        <div v-for="(doc, idx) in data.documents" :key="idx" class="document-card">
+          <div class="document-header">
             <div>
-              <span class="font-medium">{{ doc.id || doc.description || `Document ${idx + 1}` }}</span>
-              <span v-if="doc.type" class="text-xs text-surface-400 ml-2">({{ doc.type }})</span>
+              <span class="document-name">{{ doc.id || doc.description || `Document ${idx + 1}` }}</span>
+              <span v-if="doc.type" class="document-type">({{ doc.type }})</span>
             </div>
-            <a v-if="doc.path" :href="doc.path" target="_blank" class="text-red-400 hover:underline text-sm">
+            <a v-if="doc.path" :href="doc.path" target="_blank" class="document-btn">
               View
             </a>
           </div>
-          <p v-if="doc.description" class="text-sm text-surface-400 mt-1">{{ doc.description }}</p>
+          <p v-if="doc.description" class="document-description">{{ doc.description }}</p>
         </div>
       </div>
     </section>
@@ -273,6 +273,63 @@ const hasAnyData = computed(() => {
   text-align: center;
   padding: 2rem;
   color: var(--p-surface-400);
+}
+
+/* Documents section */
+.documents-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.document-card {
+  padding: 0.75rem 1rem;
+  background-color: var(--p-surface-800);
+  border-radius: 0.375rem;
+}
+
+.document-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.document-name {
+  font-family: 'Roboto', sans-serif;
+  font-size: 1rem;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.document-type {
+  font-family: 'Roboto', sans-serif;
+  font-size: 1rem;
+  color: #d0d0d0;
+  margin-left: 0.5rem;
+}
+
+.document-btn {
+  font-family: 'Roboto', sans-serif;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #ffffff;
+  background-color: #dc3545;
+  border: none;
+  border-radius: 4px;
+  padding: 0.375rem 0.75rem;
+  text-decoration: none;
+  transition: background-color 0.2s;
+}
+
+.document-btn:hover {
+  background-color: #c82333;
+}
+
+.document-description {
+  font-family: 'Roboto', sans-serif;
+  font-size: 1rem;
+  color: #d0d0d0;
+  margin: 0.25rem 0 0 0;
 }
 
 @media (max-width: 768px) {

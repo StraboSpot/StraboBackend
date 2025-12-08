@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600&family=Roboto:wght@400;500;700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -8,8 +8,6 @@
 @layer base {
   body {
     @apply bg-strabo-bg-primary text-strabo-text-primary;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
   }
 }
 
@@ -22,9 +20,7 @@
   }
 
   .form-label {
-    @apply block font-semibold mb-1;
-    font-size: 0.875rem; /* 14px - slightly larger than text-sm */
-    color: #f0f0f0; /* Brighter than strabo-text-primary (#e0e0e0) */
+    @apply block text-sm font-medium text-strabo-text-primary mb-1;
   }
 
   .form-select {
@@ -85,10 +81,8 @@
   }
 
   .data-table th {
-    @apply px-4 py-2 text-left font-semibold
+    @apply px-4 py-2 text-left text-sm font-medium text-strabo-text-secondary
            bg-strabo-bg-tertiary border-b border-strabo-border;
-    font-size: 0.875rem;
-    color: #d0d0d0; /* Brighter than strabo-text-secondary */
   }
 
   .data-table td {
@@ -228,22 +222,3 @@
   font-weight: 400 !important;
 }
 
-/* Improve text rendering for crisp labels on dark backgrounds */
-label,
-.field label,
-.p-dialog label,
-legend,
-fieldset legend {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-  font-weight: 600 !important;
-  font-size: 0.875rem !important;
-  color: #f0f0f0 !important;
-}
-
-/* Ensure fieldset legends are also crisp */
-fieldset.form-section legend {
-  font-weight: 600 !important;
-  font-size: 1rem !important;
-  color: #ffffff !important;
-}
