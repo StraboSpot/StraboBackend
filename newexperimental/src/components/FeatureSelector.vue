@@ -30,7 +30,7 @@
           @click="toggleGroup(group.name)"
         >
           <span class="category-arrow">
-            {{ expandedGroups.includes(group.name) ? '▼' : '►' }}
+            {{ expandedGroup === group.name ? '▼' : '►' }}
           </span>
           <span class="category-name">{{ group.name }}</span>
           <span
@@ -43,7 +43,7 @@
 
         <!-- Category content (checkboxes) -->
         <div
-          v-show="expandedGroups.includes(group.name)"
+          v-show="expandedGroup === group.name"
           class="category-content"
         >
           <label
@@ -78,21 +78,17 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const groups = GROUPED_FEATURES
-const expandedGroups = ref([])
+const expandedGroup = ref(null)  // Only one group can be open at a time
 const hasInitialized = ref(false)
 
-// Auto-expand groups that have selections when data first loads
+// Auto-expand the first group that has selections when data first loads
 const autoExpandSelected = () => {
-  const groupsWithSelections = groups
-    .filter(g => g.features.some(f => props.modelValue.includes(f)))
-    .map(g => g.name)
-
-  // Add any groups with selections that aren't already expanded
-  groupsWithSelections.forEach(name => {
-    if (!expandedGroups.value.includes(name)) {
-      expandedGroups.value.push(name)
-    }
-  })
+  const firstGroupWithSelection = groups.find(g =>
+    g.features.some(f => props.modelValue.includes(f))
+  )
+  if (firstGroupWithSelection) {
+    expandedGroup.value = firstGroupWithSelection.name
+  }
 }
 
 onMounted(() => {
@@ -114,12 +110,8 @@ watch(() => props.modelValue, (newVal, oldVal) => {
 }, { deep: true })
 
 function toggleGroup(groupName) {
-  const idx = expandedGroups.value.indexOf(groupName)
-  if (idx === -1) {
-    expandedGroups.value.push(groupName)
-  } else {
-    expandedGroups.value.splice(idx, 1)
-  }
+  // If clicking the already-open group, close it; otherwise open the new one
+  expandedGroup.value = expandedGroup.value === groupName ? null : groupName
 }
 
 function getSelectedCount(group) {
