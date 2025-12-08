@@ -62,7 +62,7 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref } from 'vue'
 import { GROUPED_FEATURES } from '@/schemas/laps-enums'
 
 const props = defineProps({
@@ -75,36 +75,7 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const groups = GROUPED_FEATURES
-const expandedGroup = ref(null)  // Only one group can be open at a time
-const hasInitialized = ref(false)
-
-// Auto-expand the first group that has selections when data first loads
-const autoExpandSelected = () => {
-  const firstGroupWithSelection = groups.find(g =>
-    g.features.some(f => props.modelValue.includes(f))
-  )
-  if (firstGroupWithSelection) {
-    expandedGroup.value = firstGroupWithSelection.name
-  }
-}
-
-onMounted(() => {
-  // Only auto-expand if we have initial data (edit mode)
-  if (props.modelValue.length > 0) {
-    autoExpandSelected()
-  }
-  hasInitialized.value = true
-})
-
-// Watch for external changes to modelValue (e.g., when loading existing data from parent)
-// But only before the component has been interacted with
-watch(() => props.modelValue, (newVal, oldVal) => {
-  // Only auto-expand if this is new data being loaded externally
-  // (detected by going from empty to having values, after mount)
-  if (hasInitialized.value && oldVal?.length === 0 && newVal?.length > 0) {
-    autoExpandSelected()
-  }
-}, { deep: true })
+const expandedGroup = ref(null)  // Only one group can be open at a time, starts closed
 
 function toggleGroup(groupName) {
   // If clicking the already-open group, close it; otherwise open the new one
