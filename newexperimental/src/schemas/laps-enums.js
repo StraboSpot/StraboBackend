@@ -65,97 +65,255 @@ export const APPARATUS_TYPES = [
 ]
 
 // ===== APPARATUS FEATURES =====
-// From old app lines 520-589 - all 59 features
+// All unique features from GROUPED_FEATURES (flat list for compatibility)
 export const APPARATUS_FEATURES = [
+  // Type of Experiment
   'Loading',
   'Unloading',
+  'Uniaxial Stress/Strain',
+  'Biaxial Stress/Strain',
+  'Triaxial Stress/Strain',
+  'True Triaxial Stress/Strain',
+  'Pure Shear',
+  'Simple Shear',
+  'General Shear',
+  'Rotary Shear',
+  'Indentation',
+  'Hydraulic Fracturing',
+  'Hydrothermal Fracturing',
+  'Stepping',
+  'Cyclic',
+  'Slide-Hold-Slide',
+  'Dynamic Deformation (Tests)',
+  'Shock Deformation (shockwave)',
+  // Mechanical Behavior
+  'Elasticity',
+  'Fracture',
+  'Compaction (Pore Volume Compaction)',
+  'Friction',
+  '(Frictional Sliding)',
+  'Plastic',
+  'Hardness',
+  'Viscous Deformation',
+  'Creep & Rate dependent deformation',
+  'Brittle-Plastic',
+  'Brittle-Ductile',
+  'Brittle-Viscous',
+  // Mechanical Measurements
+  'Stress',
+  'Strain',
+  'Axial Stress',
+  'Lateral Stress(es)',
+  'Differential Stress',
+  'Strength',
+  'Yield Strength',
+  'Failure Strength',
+  'Flow Strength',
+  'Axial Strain',
+  'Radial Strain',
+  'Lateral Strain(s)',
+  'Shear Strain',
+  'Elastic Moduli',
+  'Acoustic Velocity',
+  'Acoustic Events (AE)',
+  'P-wave Velocity',
+  'S-wave Velocity',
+  'AE Source Location',
+  '(Pore Fluid) Permeability',
+  'Fluid storage capacity',
+  'Steady-state fluid flow (permeability)',
+  'Transient fluid flow (permeability)',
+  'Hydraulic Conductivity',
+  'Resistivity (Electrical Resistivity)',
+  'Conductivity (Electrical Conductivity)',
+  'Electrical Capacitance',
+  'Streaming Potential',
+  // Sample / Starting Material
+  'Single Crystal',
+  'Natural Rock',
+  'Natural Gouge',
+  'Synthetic Gouge',
+  'Sintered',
+  'Gel-synthesized',
+  'Cold Pressed',
+  'HIP Synthesized',
+  // Sample / Starting Material Characterization
+  'Visual',
+  'Optical Microscopy',
+  'Electron Microscopy (SEM, TEM)',
+  'X-ray Diffraction',
+  'EDS or WDS Probe Analyses',
+  'Infrared Spectroscopy',
+  'Raman Spectroscopy',
+  'Tomography',
+  'In-situ X-ray Diffraction',
+  'Other',
+  // Pore Fluids and Geochemical Processes
+  'Pore Fluid',
+  'Permeable fluid flow',
+  'Hydrothermal Reactions',
+  'Mineral Reactions',
+  'Deposition/Evaporation',
+  'Reactive Flow',
+  // Experimental Conditions (Pressure / Stress)
+  'High Pressure',
+  'Ultra-high Pressure',
+  'Hydrostatic',
+  'HIP (Hot Isostatic Pressing) Synthesis',
+  'Pore Pressure',
+  'Drained/Undrained Pore Fluid',
+  'Pore Fluid Control',
+  'Pore Fluid Chemistry',
+  'Compression',
+  'Extension',
+  'Tension',
+  'Torsion',
+  // Experimental Conditions (Thermal)
   'Heating',
   'Cooling',
   'High Temperature',
   'Ultra-High Temperature',
   'Low Temperature',
-  'Sub-Zero Temperature',
-  'High Pressure',
-  'Ultra-High Pressure',
-  'Hydrostatic Tests',
-  'HIP',
-  'Synthesis',
-  'Deposition/Evaporation',
-  'Mineral Reactions',
-  'Hydrothermal Reactions',
-  'Elasticity',
-  'Local Axial Strain',
-  'Local Radial Strain',
-  'Elastic Moduli',
-  'Yield Strength',
-  'Failure Strength',
-  'Strength',
-  'Extension',
-  'Creep',
-  'Friction',
-  'Frictional Sliding',
-  'Slide Hold Slide',
-  'Stepping',
-  'Pure Shear',
-  'Simple Shear',
-  'Rotary Shear',
-  'Torsion',
-  'Viscosity',
-  'Indentation',
-  'Hardness',
-  'Dynamic Tests',
-  'Hydraulic Fracturing',
-  'Hydrothermal Fracturing',
-  'Shockwave',
-  'Reactive Flow',
-  'Pore Fluid Control',
-  'Pore Fluid Chemistry',
-  'Pore Volume Compaction',
-  'Storage Capacity',
-  'Permeability',
-  'Steady-State Permeability',
-  'Transient Permeability',
-  'Hydraulic Conductivity',
-  'Drained/Undrained Pore Fluid',
-  'Uniaxial Stress/Strain',
-  'Biaxial Stress/Strain',
-  'Triaxial Stress/Strain',
-  'Differential Stress',
-  'True Triaxial',
-  'Resistivity',
-  'Electrical Resistivity',
-  'Electrical Capacitance',
-  'Streaming Potential',
-  'Acoustic Velocity',
-  'Acoustic Events',
-  'P-Wave Velocity',
-  'S-Wave Velocity',
-  'Source Location',
-  'Tomography',
-  'In-Situ X-Ray',
-  'Infrared',
-  'Raman',
-  'Visual',
-  'Other'
+  'Sub-Zero Temperature'
 ]
 
 // ===== GROUPED APPARATUS/TEST FEATURES =====
-// Same features as above, organized into logical categories for the UI
+// Features organized by category from experimental_features.xlsx
+// NOTE: Some features appear in multiple categories - that's intentional.
+// When a feature is selected, it highlights in ALL categories where it appears,
+// but is only saved once in the data.
 export const GROUPED_FEATURES = [
   {
-    name: 'Loading & Stress States',
+    name: 'Type of Experiment',
     features: [
       'Loading',
       'Unloading',
       'Uniaxial Stress/Strain',
       'Biaxial Stress/Strain',
       'Triaxial Stress/Strain',
-      'Differential Stress',
-      'True Triaxial'
+      'True Triaxial Stress/Strain',
+      'Pure Shear',
+      'Simple Shear',
+      'General Shear',
+      'Rotary Shear',
+      'Indentation',
+      'Hydraulic Fracturing',
+      'Hydrothermal Fracturing',
+      'Stepping',
+      'Cyclic',
+      'Slide-Hold-Slide',
+      'Dynamic Deformation (Tests)',
+      'Shock Deformation (shockwave)'
     ]
   },
   {
-    name: 'Temperature',
+    name: 'Mechanical Behavior',
+    features: [
+      'Elasticity',
+      'Fracture',
+      'Compaction (Pore Volume Compaction)',
+      'Friction',
+      '(Frictional Sliding)',
+      'Plastic',
+      'Hardness',
+      'Viscous Deformation',
+      'Creep & Rate dependent deformation',
+      'Brittle-Plastic',
+      'Brittle-Ductile',
+      'Brittle-Viscous'
+    ]
+  },
+  {
+    name: 'Mechanical Measurements',
+    features: [
+      'Stress',
+      'Strain',
+      'Axial Stress',
+      'Lateral Stress(es)',
+      'Differential Stress',
+      'Strength',
+      'Yield Strength',
+      'Failure Strength',
+      'Flow Strength',
+      'Axial Strain',
+      'Radial Strain',
+      'Lateral Strain(s)',
+      'Shear Strain',
+      'Elastic Moduli',
+      'Acoustic Velocity',
+      'Acoustic Events (AE)',
+      'P-wave Velocity',
+      'S-wave Velocity',
+      'AE Source Location',
+      '(Pore Fluid) Permeability',
+      'Fluid storage capacity',
+      'Steady-state fluid flow (permeability)',
+      'Transient fluid flow (permeability)',
+      'Hydraulic Conductivity',
+      'Resistivity (Electrical Resistivity)',
+      'Conductivity (Electrical Conductivity)',
+      'Electrical Capacitance',
+      'Streaming Potential'
+    ]
+  },
+  {
+    name: 'Sample / Starting Material',
+    features: [
+      'Single Crystal',
+      'Natural Rock',
+      'Natural Gouge',
+      'Synthetic Gouge',
+      'Sintered',
+      'Gel-synthesized',
+      'Cold Pressed',
+      'HIP Synthesized'
+    ]
+  },
+  {
+    name: 'Sample / Starting Material Characterization',
+    features: [
+      'Visual',
+      'Optical Microscopy',
+      'Electron Microscopy (SEM, TEM)',
+      'X-ray Diffraction',
+      'EDS or WDS Probe Analyses',
+      'Infrared Spectroscopy',
+      'Raman Spectroscopy',
+      'Tomography',
+      'In-situ X-ray Diffraction',
+      'Other'
+    ]
+  },
+  {
+    name: 'Pore Fluids and Geochemical Processes',
+    features: [
+      'Pore Fluid',
+      'Permeable fluid flow',
+      'Hydrothermal Reactions',
+      'Mineral Reactions',
+      'Deposition/Evaporation',
+      'Reactive Flow'
+    ]
+  },
+  {
+    name: 'Experimental Conditions (Pressure / Stress)',
+    features: [
+      'High Pressure',
+      'Ultra-high Pressure',
+      'Hydrostatic',
+      'HIP (Hot Isostatic Pressing) Synthesis',
+      'Pore Pressure',
+      'Drained/Undrained Pore Fluid',
+      'Pore Fluid Control',
+      'Pore Fluid Chemistry',
+      'Compression',
+      'Extension',
+      'Tension',
+      'Torsion'
+    ]
+  },
+  {
+    name: 'Experimental Conditions (Thermal)',
     features: [
       'Heating',
       'Cooling',
@@ -163,123 +321,6 @@ export const GROUPED_FEATURES = [
       'Ultra-High Temperature',
       'Low Temperature',
       'Sub-Zero Temperature'
-    ]
-  },
-  {
-    name: 'Pressure',
-    features: [
-      'High Pressure',
-      'Ultra-High Pressure',
-      'Hydrostatic Tests',
-      'HIP'
-    ]
-  },
-  {
-    name: 'Mechanical Properties',
-    features: [
-      'Elasticity',
-      'Elastic Moduli',
-      'Yield Strength',
-      'Failure Strength',
-      'Strength',
-      'Extension',
-      'Local Axial Strain',
-      'Local Radial Strain',
-      'Indentation',
-      'Hardness'
-    ]
-  },
-  {
-    name: 'Friction & Shear',
-    features: [
-      'Friction',
-      'Frictional Sliding',
-      'Slide Hold Slide',
-      'Stepping',
-      'Pure Shear',
-      'Simple Shear',
-      'Rotary Shear',
-      'Torsion'
-    ]
-  },
-  {
-    name: 'Time-Dependent & Dynamic',
-    features: [
-      'Creep',
-      'Viscosity',
-      'Dynamic Tests',
-      'Shockwave'
-    ]
-  },
-  {
-    name: 'Fracturing',
-    features: [
-      'Hydraulic Fracturing',
-      'Hydrothermal Fracturing'
-    ]
-  },
-  {
-    name: 'Permeability & Flow',
-    features: [
-      'Permeability',
-      'Steady-State Permeability',
-      'Transient Permeability',
-      'Hydraulic Conductivity',
-      'Reactive Flow',
-      'Storage Capacity'
-    ]
-  },
-  {
-    name: 'Pore Fluid',
-    features: [
-      'Pore Fluid Control',
-      'Pore Fluid Chemistry',
-      'Pore Volume Compaction',
-      'Drained/Undrained Pore Fluid'
-    ]
-  },
-  {
-    name: 'Chemical & Reactions',
-    features: [
-      'Synthesis',
-      'Deposition/Evaporation',
-      'Mineral Reactions',
-      'Hydrothermal Reactions'
-    ]
-  },
-  {
-    name: 'Electrical',
-    features: [
-      'Resistivity',
-      'Electrical Resistivity',
-      'Electrical Capacitance',
-      'Streaming Potential'
-    ]
-  },
-  {
-    name: 'Acoustic & Seismic',
-    features: [
-      'Acoustic Events',
-      'Acoustic Velocity',
-      'P-Wave Velocity',
-      'S-Wave Velocity',
-      'Source Location',
-      'Tomography'
-    ]
-  },
-  {
-    name: 'Imaging & Spectroscopy',
-    features: [
-      'In-Situ X-Ray',
-      'Infrared',
-      'Raman',
-      'Visual'
-    ]
-  },
-  {
-    name: 'Other',
-    features: [
-      'Other'
     ]
   }
 ]
