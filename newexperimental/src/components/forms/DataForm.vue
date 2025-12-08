@@ -622,6 +622,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
@@ -652,6 +653,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['submit', 'cancel'])
+
+const toast = useToast()
 
 // Form is the datasets array
 const form = ref([])
@@ -939,6 +942,37 @@ const onHeaderTypeChange = () => {
 
 // Handle form submit
 const handleSubmit = () => {
+  // Validate
+  const errors = []
+
+  // Validate each dataset
+  form.value.forEach((dataset, idx) => {
+    // Data Source is required
+    if (!dataset.data || dataset.data.trim() === '') {
+      errors.push(`Data (source) cannot be blank for Dataset ${idx + 1}.`)
+    }
+
+    // Data Type is required
+    if (!dataset.type || dataset.type.trim() === '') {
+      errors.push(`Data Type cannot be blank for Dataset ${idx + 1}.`)
+    }
+
+    // File is required (path must exist)
+    if (!dataset.path || dataset.path.trim() === '') {
+      errors.push(`File cannot be blank for Dataset ${idx + 1}.`)
+    }
+  })
+
+  if (errors.length > 0) {
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: errors.join('\n'),
+      life: 5000
+    })
+    return
+  }
+
   const cleanedData = {
     keys: {
       facility: '',

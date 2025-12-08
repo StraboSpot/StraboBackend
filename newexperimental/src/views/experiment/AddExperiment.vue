@@ -246,7 +246,41 @@ const handleSectionSave = (section, data) => {
   activeSection.value = null
 }
 
+// Validate experiment before saving
+const validateExperiment = () => {
+  const errors = []
+
+  // Experiment ID is required
+  if (!experimentId.value || experimentId.value.trim() === '') {
+    errors.push('Experiment ID cannot be blank.')
+  }
+
+  // Facility/Apparatus info is required
+  const hasFacilityData = experimentData.value.facility &&
+    (experimentData.value.facility.name || experimentData.value.facility.type)
+  const hasApparatusData = experimentData.value.apparatus &&
+    (experimentData.value.apparatus.name || experimentData.value.apparatus.type)
+
+  if (!hasFacilityData && !hasApparatusData) {
+    errors.push('Facility & Apparatus info cannot be blank.')
+  }
+
+  return errors
+}
+
 const handleSave = async () => {
+  // Validate before saving
+  const errors = validateExperiment()
+  if (errors.length > 0) {
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: errors.join('\n'),
+      life: 5000
+    })
+    return
+  }
+
   saving.value = true
 
   try {

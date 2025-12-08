@@ -229,6 +229,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
@@ -256,6 +257,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['submit', 'cancel'])
+
+const toast = useToast()
 
 const prefixOptions = computed(() => ['-', ...UNIT_PREFIXES])
 
@@ -351,7 +354,21 @@ function removeDimension(item, dimIdx, update) {
 }
 
 function handleSubmit() {
-  if (!isValid.value) return
+  // Validate
+  const errors = []
+  if (!form.value.title || form.value.title.trim() === '') {
+    errors.push('Title cannot be blank.')
+  }
+
+  if (errors.length > 0) {
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: errors.join('\n'),
+      life: 5000
+    })
+    return
+  }
 
   // Convert dates to ISO strings for storage
   const formData = {

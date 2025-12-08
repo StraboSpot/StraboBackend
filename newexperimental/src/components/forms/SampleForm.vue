@@ -13,8 +13,8 @@
           <InputText v-model="form.igsn" />
         </div>
         <div class="field">
-          <label class="text-sm">Sample ID</label>
-          <InputText v-model="form.id" />
+          <label class="text-sm">Sample ID *</label>
+          <InputText v-model="form.id" :invalid="!form.id" />
         </div>
         <div class="field">
           <label class="text-sm">Description</label>
@@ -52,6 +52,7 @@
             :options="MATERIAL_TYPES"
             placeholder="Select..."
             showClear
+            :invalid="!form.material.material.type"
             @update:modelValue="handleMaterialTypeChange"
           />
         </div>
@@ -62,6 +63,7 @@
           <InputText
             v-if="useTextInputForName"
             v-model="form.material.material.name"
+            :invalid="!form.material.material.name"
           />
           <!-- Dropdown for other material types -->
           <Select
@@ -72,6 +74,7 @@
             showClear
             filter
             filterPlaceholder="Search..."
+            :invalid="!form.material.material.name"
           />
         </div>
         <!-- Other name field (shown when dropdown value is "Other") -->
@@ -335,6 +338,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
@@ -383,6 +387,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['submit', 'cancel'])
+
+const toast = useToast()
 
 const prefixOptions = computed(() => ['-', ...UNIT_PREFIXES])
 
@@ -509,8 +515,49 @@ watch(() => props.initialData, (data) => {
   }
 }, { immediate: true, deep: true })
 
+// Validate form and return array of error messages
+const validateForm = () => {
+  const errors = []
+
+  // Sample Name is required
+  if (!form.value.name || form.value.name.trim() === '') {
+    errors.push('Sample Name cannot be blank.')
+  }
+
+  // Sample ID is required
+  if (!form.value.id || form.value.id.trim() === '') {
+    errors.push('Sample ID cannot be blank.')
+  }
+
+  // Material Type is required
+  if (!form.value.material.material.type || form.value.material.material.type.trim() === '') {
+    errors.push('Material Type cannot be blank.')
+  }
+
+  // Material Name is required
+  if (!form.value.material.material.name || form.value.material.material.name.trim() === '') {
+    errors.push('Material Name cannot be blank.')
+  }
+
+  // If mineralogy phases exist, mineral name is required for each
+  form.value.material.composition.forEach((phase, idx) => {
+    if (!phase.mineral || phase.mineral.trim() === '') {
+      errors.push(`Mineral cannot be blank for Phase ${idx + 1}.`)
+    }
+  })
+
+  // If parameters exist, variable is required for each
+  form.value.parameters.forEach((param, idx) => {
+    if (!param.control || param.control.trim() === '') {
+      errors.push(`Variable cannot be blank for Parameter ${idx + 1}.`)
+    }
+  })
+
+  return errors
+}
+
 const isValid = computed(() => {
-  return form.value.name.trim().length > 0
+  return validateForm().length === 0
 })
 
 // Default item factory functions for ListDetailEditor
@@ -532,7 +579,16 @@ const defaultParameter = () => ({
 })
 
 function handleSubmit() {
-  if (!isValid.value) return
+  const errors = validateForm()
+  if (errors.length > 0) {
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: errors.join('\n'),
+      life: 5000
+    })
+    return
+  }
   emit('submit', form.value)
 }
 </script>

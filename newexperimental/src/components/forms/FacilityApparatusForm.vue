@@ -15,6 +15,7 @@
             :options="FACILITY_TYPES"
             placeholder="Select..."
             showClear
+            :invalid="!form.facility.type"
           />
         </div>
         <div class="field" v-if="isOther(form.facility.type)">
@@ -74,6 +75,7 @@
             placeholder="Select..."
             showClear
             filter
+            :invalid="!form.apparatus.type"
           />
         </div>
         <div class="field" v-if="isOtherApparatus(form.apparatus.type)">
@@ -148,6 +150,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
@@ -175,6 +178,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['submit', 'cancel'])
+
+const toast = useToast()
 
 // Helper to check if a value is "Other"
 const isOther = (value) => value && value.toLowerCase() === 'other'
@@ -274,16 +279,53 @@ watch(() => props.initialData, (data) => {
   }
 }, { immediate: true, deep: true })
 
+// Validate form and return array of error messages
+const validateForm = () => {
+  const errors = []
+
+  // Facility Name is required
+  if (!form.value.facility.name || form.value.facility.name.trim() === '') {
+    errors.push('Facility Name cannot be blank.')
+  }
+
+  // Facility Type is required
+  if (!form.value.facility.type || form.value.facility.type.trim() === '') {
+    errors.push('Facility Type cannot be blank.')
+  }
+
+  // Institute Name is required
+  if (!form.value.facility.institute || form.value.facility.institute.trim() === '') {
+    errors.push('Institute Name cannot be blank.')
+  }
+
+  // Apparatus Name is required
+  if (!form.value.apparatus.name || form.value.apparatus.name.trim() === '') {
+    errors.push('Apparatus Name cannot be blank.')
+  }
+
+  // Apparatus Type is required
+  if (!form.value.apparatus.type || form.value.apparatus.type.trim() === '') {
+    errors.push('Apparatus Type cannot be blank.')
+  }
+
+  return errors
+}
+
 const isValid = computed(() => {
-  return (
-    form.value.facility.name.trim().length > 0 &&
-    form.value.facility.institute.trim().length > 0 &&
-    form.value.apparatus.name.trim().length > 0
-  )
+  return validateForm().length === 0
 })
 
 function handleSubmit() {
-  if (!isValid.value) return
+  const errors = validateForm()
+  if (errors.length > 0) {
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: errors.join('\n'),
+      life: 5000
+    })
+    return
+  }
   emit('submit', form.value)
 }
 </script>

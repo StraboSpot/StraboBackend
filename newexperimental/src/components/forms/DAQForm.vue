@@ -5,16 +5,17 @@
       <legend>DAQ INFO</legend>
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="field md:col-span-2">
-          <label class="text-sm">DAQ Group Name</label>
-          <InputText v-model="form.name" placeholder="e.g., Main Data Acquisition System" />
+          <label class="text-sm">DAQ Group Name *</label>
+          <InputText v-model="form.name" placeholder="e.g., Main Data Acquisition System" :invalid="!form.name" />
         </div>
         <div class="field">
-          <label class="text-sm">DAQ Type</label>
+          <label class="text-sm">DAQ Type *</label>
           <Select
             v-model="form.type"
             :options="DAQ_TYPES"
             placeholder="Select type..."
             showClear
+            :invalid="!form.type"
           />
         </div>
         <div class="field">
@@ -160,6 +161,7 @@
 
 <script setup>
 import { ref, watch } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
@@ -178,6 +180,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['submit', 'cancel'])
+
+const toast = useToast()
 
 const createEmptyForm = () => ({
   name: '',
@@ -323,6 +327,55 @@ function createDefaultChannel(index) {
 }
 
 function handleSubmit() {
+  // Validate
+  const errors = []
+
+  // DAQ Group Name is required
+  if (!form.value.name || form.value.name.trim() === '') {
+    errors.push('DAQ Group Name cannot be blank.')
+  }
+
+  // DAQ Type is required
+  if (!form.value.type || form.value.type.trim() === '') {
+    errors.push('DAQ Type cannot be blank.')
+  }
+
+  // Validate each device
+  form.value.devices.forEach((device, dIdx) => {
+    // Device Name is required
+    if (!device.name || device.name.trim() === '') {
+      errors.push(`Device Name cannot be blank for Device ${dIdx + 1}.`)
+    }
+
+    // Validate each channel
+    device.channels?.forEach((channel, chIdx) => {
+      // Channel Header is required
+      if (!channel.header?.type || channel.header.type.trim() === '') {
+        errors.push(`Channel Header cannot be blank for Device ${dIdx + 1}, Channel ${chIdx + 1}.`)
+      }
+
+      // Specifier A is required
+      if (!channel.header?.spec_a || channel.header.spec_a.trim() === '') {
+        errors.push(`Specifier A cannot be blank for Device ${dIdx + 1}, Channel ${chIdx + 1}.`)
+      }
+
+      // Unit is required
+      if (!channel.header?.unit || channel.header.unit.trim() === '') {
+        errors.push(`Unit cannot be blank for Device ${dIdx + 1}, Channel ${chIdx + 1}.`)
+      }
+    })
+  })
+
+  if (errors.length > 0) {
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: errors.join('\n'),
+      life: 5000
+    })
+    return
+  }
+
   // Clean up internal state before emitting
   const formData = {
     ...form.value,
