@@ -80,8 +80,12 @@ $experiment_id = $row->id;
 $project_pkey = (int)$row->project_pkey;
 $project_name = $row->project_name;
 
-// Delete the experiment
-$db->prepare_query("DELETE FROM straboexp.experiment WHERE pkey = $1", array($experiment_pkey));
+// Delete the experiment - include userpkey in WHERE for extra security
+if ($is_admin) {
+    $db->prepare_query("DELETE FROM straboexp.experiment WHERE pkey = $1", array($experiment_pkey));
+} else {
+    $db->prepare_query("DELETE FROM straboexp.experiment WHERE pkey = $1 AND userpkey = $2", array($experiment_pkey, $userpkey));
+}
 
 // Return success response
 $result = new stdClass();

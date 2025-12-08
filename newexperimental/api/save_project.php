@@ -88,14 +88,24 @@ if (!empty($input->pkey)) {
         exit;
     }
 
-    // Update project
-    $db->prepare_query("
-        UPDATE straboexp.project SET
-            name = $1,
-            notes = $2,
-            modified_timestamp = NOW()
-        WHERE pkey = $3
-    ", array($name, $description, $project_pkey));
+    // Update project - include userpkey in WHERE for extra security
+    if ($is_admin) {
+        $db->prepare_query("
+            UPDATE straboexp.project SET
+                name = $1,
+                notes = $2,
+                modified_timestamp = NOW()
+            WHERE pkey = $3
+        ", array($name, $description, $project_pkey));
+    } else {
+        $db->prepare_query("
+            UPDATE straboexp.project SET
+                name = $1,
+                notes = $2,
+                modified_timestamp = NOW()
+            WHERE pkey = $3 AND userpkey = $4
+        ", array($name, $description, $project_pkey, $userpkey));
+    }
 
     // Return updated project
     $result = new stdClass();

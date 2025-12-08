@@ -102,14 +102,24 @@ if (!empty($input->pkey)) {
         exit;
     }
 
-    // Update experiment
-    $db->prepare_query("
-        UPDATE straboexp.experiment SET
-            id = $1,
-            json = $2,
-            modified_timestamp = NOW()
-        WHERE pkey = $3
-    ", array($experiment_id, $json_string, $experiment_pkey));
+    // Update experiment - include userpkey in WHERE for extra security
+    if ($is_admin) {
+        $db->prepare_query("
+            UPDATE straboexp.experiment SET
+                id = $1,
+                json = $2,
+                modified_timestamp = NOW()
+            WHERE pkey = $3
+        ", array($experiment_id, $json_string, $experiment_pkey));
+    } else {
+        $db->prepare_query("
+            UPDATE straboexp.experiment SET
+                id = $1,
+                json = $2,
+                modified_timestamp = NOW()
+            WHERE pkey = $3 AND userpkey = $4
+        ", array($experiment_id, $json_string, $experiment_pkey, $userpkey));
+    }
 
     // Return updated experiment
     $result = new stdClass();

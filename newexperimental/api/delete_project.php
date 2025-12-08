@@ -84,11 +84,18 @@ try {
     error_log("Failed to create version backup before deleting project $project_pkey: " . $e->getMessage());
 }
 
-// Delete all experiments for this project first
-$db->prepare_query(
-    "DELETE FROM straboexp.experiment WHERE project_pkey = $1",
-    array($project_pkey)
-);
+// Delete all experiments for this project first - include userpkey for extra security
+if ($is_admin) {
+    $db->prepare_query(
+        "DELETE FROM straboexp.experiment WHERE project_pkey = $1",
+        array($project_pkey)
+    );
+} else {
+    $db->prepare_query(
+        "DELETE FROM straboexp.experiment WHERE project_pkey = $1 AND userpkey = $2",
+        array($project_pkey, $userpkey)
+    );
+}
 
 // Delete the project
 if ($is_admin) {
