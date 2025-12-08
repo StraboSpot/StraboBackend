@@ -42,8 +42,13 @@
     background-color: #dc3545 !important;
   }
 
-  .btn-primary:hover {
+  .btn-primary:hover:not(:disabled) {
     background-color: #c82333 !important;
+  }
+
+  .btn-primary:disabled {
+    @apply cursor-not-allowed opacity-50;
+    background-color: #6c757d !important;
   }
 
   .btn-secondary {
@@ -51,14 +56,29 @@
            hover:bg-strabo-border focus:ring-strabo-border;
   }
 
+  .btn-secondary:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
   .btn-danger {
     @apply btn bg-strabo-error text-white hover:bg-red-600
            focus:ring-strabo-error;
   }
 
+  .btn-danger:disabled {
+    @apply cursor-not-allowed opacity-50;
+    background-color: #6c757d !important;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
   /* Cards and sections */
   .card {
-    @apply bg-strabo-bg-secondary border border-strabo-border rounded-lg p-4;
+    @apply rounded-lg p-4;
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid #525252;
   }
 
   .section-header {
@@ -66,13 +86,32 @@
   }
 
   /* Collapsible sections */
+  .collapsible-section {
+    margin-bottom: 0;
+  }
+
   .collapsible-header {
-    @apply flex items-center justify-between p-3 bg-strabo-bg-tertiary rounded cursor-pointer
-           hover:bg-strabo-border transition-colors duration-200;
+    @apply flex items-center justify-between p-3 cursor-pointer
+           transition-colors duration-200;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid #525252;
+    border-radius: 4px 4px 0 0;
+  }
+
+  .collapsible-header.collapsed {
+    border-radius: 4px;
+  }
+
+  .collapsible-header:hover {
+    background-color: rgba(255, 255, 255, 0.08);
   }
 
   .collapsible-content {
-    @apply p-4 bg-strabo-bg-secondary border border-t-0 border-strabo-border rounded-b;
+    @apply p-4;
+    background-color: transparent;
+    border: 1px solid #525252;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
   }
 
   /* Tables */
@@ -81,16 +120,18 @@
   }
 
   .data-table th {
-    @apply px-4 py-2 text-left text-sm font-medium text-strabo-text-secondary
-           bg-strabo-bg-tertiary border-b border-strabo-border;
+    @apply px-4 py-2 text-left text-sm font-medium text-strabo-text-secondary;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid #525252;
   }
 
   .data-table td {
-    @apply px-4 py-2 text-sm text-strabo-text-primary border-b border-strabo-border;
+    @apply px-4 py-2 text-sm text-strabo-text-primary;
+    border-bottom: 1px solid #424242;
   }
 
   .data-table tr:hover td {
-    @apply bg-strabo-bg-tertiary;
+    background-color: rgba(255, 255, 255, 0.03);
   }
 
   /* Alerts and messages */

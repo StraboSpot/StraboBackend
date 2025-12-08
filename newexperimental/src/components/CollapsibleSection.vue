@@ -1,7 +1,8 @@
 <template>
-  <div class="card">
+  <div class="collapsible-section">
     <div
       class="collapsible-header"
+      :class="{ 'collapsed': !isOpen }"
       @click="isOpen = !isOpen"
     >
       <h3 class="font-semibold text-strabo-text-primary">{{ title }}</h3>
