@@ -334,12 +334,15 @@ const closeDetail = () => {
   detailData.value = null
 }
 
-// Handle modal close - reset state
+// Handle modal close - if in detail mode, go back to list; otherwise close modal
 const handleClose = () => {
-  detailMode.value = false
-  detailType.value = null
-  detailData.value = null
-  emit('close')
+  if (detailMode.value) {
+    // In detail view - go back to list instead of closing
+    closeDetail()
+  } else {
+    // In list view - close the modal
+    emit('close')
+  }
 }
 
 // Helper functions for checking data
