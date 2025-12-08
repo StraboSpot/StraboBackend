@@ -1,32 +1,30 @@
 <template>
-  <form @submit.prevent="handleSubmit">
+  <form @submit.prevent="handleSubmit" class="apparatus-form">
     <!-- Basic Information -->
-    <CollapsibleSection title="Basic Information" :default-open="true">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label for="name" class="form-label">Apparatus Name *</label>
+    <fieldset class="form-section">
+      <legend>BASIC INFORMATION</legend>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="field">
+          <label class="text-sm">Apparatus Name *</label>
           <input
-            id="name"
             v-model="form.name"
             type="text"
             class="form-input"
-            required
             placeholder="e.g., Triaxial Testing System"
           />
         </div>
 
-        <div>
-          <label for="type" class="form-label">Apparatus Type *</label>
-          <select id="type" v-model="form.type" class="form-select" required>
+        <div class="field">
+          <label class="text-sm">Apparatus Type *</label>
+          <select v-model="form.type" class="form-select">
             <option value="">Select type...</option>
             <option v-for="t in APPARATUS_TYPES" :key="t" :value="t">{{ t }}</option>
           </select>
         </div>
 
-        <div>
-          <label for="location" class="form-label">Location</label>
+        <div class="field">
+          <label class="text-sm">Location</label>
           <input
-            id="location"
             v-model="form.location"
             type="text"
             class="form-input"
@@ -34,40 +32,41 @@
           />
         </div>
 
-        <div>
-          <label for="apparatusId" class="form-label">Apparatus ID</label>
+        <div class="field">
+          <label class="text-sm">Apparatus ID</label>
           <input
-            id="apparatusId"
             v-model="form.id"
             type="text"
             class="form-input"
             placeholder="Internal ID or serial number"
           />
         </div>
-
-        <div class="md:col-span-2">
-          <label for="description" class="form-label">Description</label>
+      </div>
+      <div class="grid grid-cols-1 gap-4 mt-3">
+        <div class="field">
+          <label class="text-sm">Description</label>
           <textarea
-            id="description"
             v-model="form.description"
             class="form-textarea"
-            rows="3"
+            rows="2"
             placeholder="Brief description of the apparatus..."
           ></textarea>
         </div>
       </div>
-    </CollapsibleSection>
+    </fieldset>
 
     <!-- Features -->
-    <CollapsibleSection title="Features" class="mt-4">
+    <fieldset class="form-section">
+      <legend>FEATURES</legend>
       <p class="text-sm text-strabo-text-secondary mb-4">
         Select all features that apply to this apparatus.
       </p>
       <FeatureSelector v-model="form.features" />
-    </CollapsibleSection>
+    </fieldset>
 
     <!-- Parameters -->
-    <CollapsibleSection title="Parameters" class="mt-4">
+    <fieldset class="form-section">
+      <legend>PARAMETERS</legend>
       <p class="text-sm text-strabo-text-secondary mb-4">
         Define the operational parameters and limits of this apparatus.
       </p>
@@ -78,10 +77,11 @@
         :show-min="true"
         :show-max="true"
       />
-    </CollapsibleSection>
+    </fieldset>
 
     <!-- Documents -->
-    <CollapsibleSection title="Documents" class="mt-4">
+    <fieldset class="form-section">
+      <legend>DOCUMENTS</legend>
       <p class="text-sm text-strabo-text-secondary mb-4">
         Upload manuals, diagrams, or other documentation.
       </p>
@@ -90,10 +90,10 @@
         add-label="Add Document"
         :show-upload="true"
       />
-    </CollapsibleSection>
+    </fieldset>
 
     <!-- Actions -->
-    <div class="flex justify-end gap-3 mt-6">
+    <div class="flex justify-center gap-3 mt-6">
       <button type="button" class="btn-secondary" @click="$emit('cancel')">
         Cancel
       </button>
@@ -107,7 +107,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
-import CollapsibleSection from '@/components/CollapsibleSection.vue'
 import FeatureSelector from '@/components/FeatureSelector.vue'
 import ParametersEditor from '@/components/ParametersEditor.vue'
 import DocumentsEditor from '@/components/DocumentsEditor.vue'
@@ -211,3 +210,34 @@ function handleSubmit() {
   emit('submit', form.value)
 }
 </script>
+
+<style scoped>
+.apparatus-form {
+  width: 100%;
+}
+
+.form-section {
+  border: 1px solid #525252;
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.form-section legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0 0.5rem;
+  color: #9e9e9e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+.field label {
+  margin-bottom: 2px;
+}
+</style>

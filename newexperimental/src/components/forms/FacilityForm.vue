@@ -1,55 +1,51 @@
 <template>
-  <form @submit.prevent="handleSubmit">
+  <form @submit.prevent="handleSubmit" class="facility-form">
     <!-- Basic Information -->
-    <CollapsibleSection title="Basic Information" :default-open="true">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label for="name" class="form-label">Facility Name *</label>
+    <fieldset class="form-section">
+      <legend>BASIC INFORMATION</legend>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="field">
+          <label class="text-sm">Facility Name *</label>
           <input
-            id="name"
             v-model="form.name"
             type="text"
             class="form-input"
-            required
             placeholder="e.g., Rock Mechanics Laboratory"
           />
         </div>
 
-        <div>
-          <label for="type" class="form-label">Facility Type *</label>
-          <select id="type" v-model="form.type" class="form-select" required>
+        <div class="field">
+          <label class="text-sm">Facility Type *</label>
+          <select v-model="form.type" class="form-select">
             <option value="">Select type...</option>
             <option v-for="t in FACILITY_TYPES" :key="t" :value="t">{{ t }}</option>
           </select>
         </div>
 
-        <div>
-          <label for="institute" class="form-label">Institute *</label>
+        <div class="field">
+          <label class="text-sm">Institute *</label>
           <input
-            id="institute"
             v-model="form.institute"
             type="text"
             class="form-input"
-            required
             placeholder="e.g., Massachusetts Institute of Technology"
           />
         </div>
 
-        <div>
-          <label for="department" class="form-label">Department</label>
+        <div class="field">
+          <label class="text-sm">Department</label>
           <input
-            id="department"
             v-model="form.department"
             type="text"
             class="form-input"
             placeholder="e.g., Earth, Atmospheric and Planetary Sciences"
           />
         </div>
-
-        <div>
-          <label for="website" class="form-label">Website</label>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
+        <div class="field">
+          <label class="text-sm">Website</label>
           <input
-            id="website"
             v-model="form.website"
             type="url"
             class="form-input"
@@ -57,26 +53,25 @@
           />
         </div>
 
-        <div class="md:col-span-2">
-          <label for="description" class="form-label">Description</label>
-          <textarea
-            id="description"
+        <div class="field md:col-span-3">
+          <label class="text-sm">Description</label>
+          <input
             v-model="form.description"
-            class="form-textarea"
-            rows="3"
+            type="text"
+            class="form-input"
             placeholder="Brief description of the facility..."
-          ></textarea>
+          />
         </div>
       </div>
-    </CollapsibleSection>
+    </fieldset>
 
     <!-- Address -->
-    <CollapsibleSection title="Address" class="mt-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label for="building" class="form-label">Building</label>
+    <fieldset class="form-section">
+      <legend>ADDRESS</legend>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="field">
+          <label class="text-sm">Building</label>
           <input
-            id="building"
             v-model="form.address.building"
             type="text"
             class="form-input"
@@ -84,10 +79,9 @@
           />
         </div>
 
-        <div>
-          <label for="street" class="form-label">Street</label>
+        <div class="field">
+          <label class="text-sm">Street</label>
           <input
-            id="street"
             v-model="form.address.street"
             type="text"
             class="form-input"
@@ -95,50 +89,46 @@
           />
         </div>
 
-        <div>
-          <label for="city" class="form-label">City</label>
+        <div class="field">
+          <label class="text-sm">City</label>
           <input
-            id="city"
             v-model="form.address.city"
             type="text"
             class="form-input"
           />
         </div>
 
-        <div>
-          <label for="state" class="form-label">State/Province</label>
+        <div class="field">
+          <label class="text-sm">State/Province</label>
           <input
-            id="state"
             v-model="form.address.state"
             type="text"
             class="form-input"
           />
         </div>
-
-        <div>
-          <label for="country" class="form-label">Country</label>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
+        <div class="field">
+          <label class="text-sm">Country</label>
           <input
-            id="country"
             v-model="form.address.country"
             type="text"
             class="form-input"
           />
         </div>
 
-        <div>
-          <label for="postcode" class="form-label">Postal Code</label>
+        <div class="field">
+          <label class="text-sm">Postal Code</label>
           <input
-            id="postcode"
             v-model="form.address.postcode"
             type="text"
             class="form-input"
           />
         </div>
 
-        <div>
-          <label for="latitude" class="form-label">Latitude</label>
+        <div class="field">
+          <label class="text-sm">Latitude</label>
           <input
-            id="latitude"
             v-model="form.address.latitude"
             type="number"
             step="any"
@@ -147,10 +137,9 @@
           />
         </div>
 
-        <div>
-          <label for="longitude" class="form-label">Longitude</label>
+        <div class="field">
+          <label class="text-sm">Longitude</label>
           <input
-            id="longitude"
             v-model="form.address.longitude"
             type="number"
             step="any"
@@ -159,65 +148,61 @@
           />
         </div>
       </div>
-    </CollapsibleSection>
+    </fieldset>
 
     <!-- Contact -->
-    <CollapsibleSection title="Contact Person" class="mt-4">
-      <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label for="firstname" class="form-label">First Name</label>
+    <fieldset class="form-section">
+      <legend>CONTACT PERSON</legend>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div class="field">
+          <label class="text-sm">First Name</label>
           <input
-            id="firstname"
             v-model="form.contact.firstname"
             type="text"
             class="form-input"
           />
         </div>
 
-        <div>
-          <label for="lastname" class="form-label">Last Name</label>
+        <div class="field">
+          <label class="text-sm">Last Name</label>
           <input
-            id="lastname"
             v-model="form.contact.lastname"
             type="text"
             class="form-input"
           />
         </div>
 
-        <div>
-          <label for="affiliation" class="form-label">Affiliation</label>
+        <div class="field">
+          <label class="text-sm">Affiliation</label>
           <input
-            id="affiliation"
             v-model="form.contact.affiliation"
             type="text"
             class="form-input"
           />
         </div>
 
-        <div>
-          <label for="email" class="form-label">Email</label>
+        <div class="field">
+          <label class="text-sm">Email</label>
           <input
-            id="email"
             v-model="form.contact.email"
             type="email"
             class="form-input"
           />
         </div>
-
-        <div>
-          <label for="phone" class="form-label">Phone</label>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
+        <div class="field">
+          <label class="text-sm">Phone</label>
           <input
-            id="phone"
             v-model="form.contact.phone"
             type="tel"
             class="form-input"
           />
         </div>
 
-        <div>
-          <label for="contactWebsite" class="form-label">Website</label>
+        <div class="field">
+          <label class="text-sm">Website</label>
           <input
-            id="contactWebsite"
             v-model="form.contact.website"
             type="url"
             class="form-input"
@@ -225,10 +210,9 @@
           />
         </div>
 
-        <div>
-          <label for="orcid" class="form-label">ORCID ID</label>
+        <div class="field">
+          <label class="text-sm">ORCID ID</label>
           <input
-            id="orcid"
             v-model="form.contact.id"
             type="text"
             class="form-input"
@@ -236,10 +220,10 @@
           />
         </div>
       </div>
-    </CollapsibleSection>
+    </fieldset>
 
     <!-- Actions -->
-    <div class="flex justify-end gap-3 mt-6">
+    <div class="flex justify-center gap-3 mt-6">
       <button type="button" class="btn-secondary" @click="$emit('cancel')">
         Cancel
       </button>
@@ -253,7 +237,6 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
-import CollapsibleSection from '@/components/CollapsibleSection.vue'
 import { FACILITY_TYPES } from '@/schemas/laps-enums'
 
 const toast = useToast()
@@ -370,3 +353,34 @@ function handleSubmit() {
   emit('submit', form.value)
 }
 </script>
+
+<style scoped>
+.facility-form {
+  width: 100%;
+}
+
+.form-section {
+  border: 1px solid #525252;
+  border-radius: 4px;
+  padding: 1rem 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.form-section legend {
+  font-size: 0.875rem;
+  font-weight: 600;
+  padding: 0 0.5rem;
+  color: #9e9e9e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+}
+
+.field label {
+  margin-bottom: 2px;
+}
+</style>
