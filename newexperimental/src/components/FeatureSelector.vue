@@ -143,14 +143,14 @@ function removeFeature(feature) {
 /* Selected summary at top */
 .selected-summary {
   margin-bottom: 1rem;
-  padding: 0.75rem;
+  padding: 0.75rem 1rem;
   background: var(--p-surface-800);
   border-radius: 4px;
   border: 1px solid var(--p-surface-600);
 }
 
 .summary-label {
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   color: var(--p-surface-400);
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -161,18 +161,18 @@ function removeFeature(feature) {
 .selected-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 0.375rem;
+  gap: 0.5rem;
 }
 
 .selected-tag {
   display: inline-flex;
   align-items: center;
-  gap: 0.25rem;
-  padding: 0.25rem 0.5rem;
+  gap: 0.375rem;
+  padding: 0.375rem 0.75rem;
   background: #dc3545;
   color: white;
   border-radius: 4px;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
   cursor: pointer;
   transition: background 0.15s;
 }
@@ -182,7 +182,7 @@ function removeFeature(feature) {
 }
 
 .tag-remove {
-  font-size: 0.875rem;
+  font-size: 1rem;
   line-height: 1;
   opacity: 0.8;
 }
@@ -191,7 +191,7 @@ function removeFeature(feature) {
 .categories {
   display: flex;
   flex-direction: column;
-  gap: 0.25rem;
+  gap: 0.375rem;
 }
 
 .category {
@@ -205,13 +205,13 @@ function removeFeature(feature) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 0.75rem;
+  padding: 0.625rem 1rem;
   background: var(--p-surface-800);
   border: none;
   color: var(--p-surface-200);
   cursor: pointer;
   text-align: left;
-  font-size: 0.875rem;
+  font-size: 0.9375rem;
   transition: background 0.15s;
 }
 
@@ -220,8 +220,8 @@ function removeFeature(feature) {
 }
 
 .category-arrow {
-  font-size: 0.625rem;
-  width: 0.75rem;
+  font-size: 0.75rem;
+  width: 1rem;
   color: var(--p-surface-400);
 }
 
@@ -231,18 +231,19 @@ function removeFeature(feature) {
 }
 
 .category-count {
-  font-size: 0.75rem;
-  color: #dc3545;
-  background: rgba(220, 53, 69, 0.15);
-  padding: 0.125rem 0.5rem;
-  border-radius: 9999px;
+  font-size: 0.8125rem;
+  color: white;
+  background: #dc3545;
+  padding: 0.25rem 0.625rem;
+  border-radius: 4px;
+  font-weight: 500;
 }
 
 .category-content {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 0.25rem 1rem;
-  padding: 0.5rem 0.75rem 0.75rem;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.375rem 1.5rem;
+  padding: 0.75rem 1rem 1rem;
   background: var(--p-surface-900);
   border-top: 1px solid var(--p-surface-700);
 }
@@ -252,9 +253,9 @@ function removeFeature(feature) {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.25rem 0;
+  padding: 0.375rem 0;
   cursor: pointer;
-  font-size: 0.8125rem;
+  font-size: 0.9375rem;
   color: var(--p-surface-300);
   transition: color 0.15s;
 }
@@ -264,8 +265,8 @@ function removeFeature(feature) {
 }
 
 .feature-checkbox input[type="checkbox"] {
-  width: 1rem;
-  height: 1rem;
+  width: 1.125rem;
+  height: 1.125rem;
   accent-color: #dc3545;
   cursor: pointer;
 }
