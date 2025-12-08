@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="handleSubmit" class="max-w-4xl">
+  <form @submit.prevent="handleSubmit">
     <!-- Basic Information -->
     <CollapsibleSection title="Basic Information" :default-open="true">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -16,20 +16,21 @@
         </div>
 
         <div>
-          <label for="type" class="form-label">Facility Type</label>
-          <select id="type" v-model="form.type" class="form-select">
+          <label for="type" class="form-label">Facility Type *</label>
+          <select id="type" v-model="form.type" class="form-select" required>
             <option value="">Select type...</option>
             <option v-for="t in FACILITY_TYPES" :key="t" :value="t">{{ t }}</option>
           </select>
         </div>
 
         <div>
-          <label for="institute" class="form-label">Institute</label>
+          <label for="institute" class="form-label">Institute *</label>
           <input
             id="institute"
             v-model="form.institute"
             type="text"
             class="form-input"
+            required
             placeholder="e.g., Massachusetts Institute of Technology"
           />
         </div>
@@ -251,8 +252,11 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
 import { FACILITY_TYPES } from '@/schemas/laps-enums'
+
+const toast = useToast()
 
 const props = defineProps({
   initialData: {
@@ -333,12 +337,36 @@ watch(() => props.initialData, (data) => {
   }
 }, { immediate: true })
 
+// Validate form and return array of error messages
+const validateForm = () => {
+  const errors = []
+  if (!form.value.name || form.value.name.trim() === '') {
+    errors.push('Facility Name cannot be blank.')
+  }
+  if (!form.value.type || form.value.type.trim() === '') {
+    errors.push('Facility Type cannot be blank.')
+  }
+  if (!form.value.institute || form.value.institute.trim() === '') {
+    errors.push('Institute Name cannot be blank.')
+  }
+  return errors
+}
+
 const isValid = computed(() => {
-  return form.value.name.trim().length > 0
+  return validateForm().length === 0
 })
 
 function handleSubmit() {
-  if (!isValid.value) return
+  const errors = validateForm()
+  if (errors.length > 0) {
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: errors.join('\n'),
+      life: 5000
+    })
+    return
+  }
   emit('submit', form.value)
 }
 </script>

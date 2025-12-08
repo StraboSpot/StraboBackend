@@ -2,6 +2,7 @@
   <div>
     <PageHeader
       :title="apparatus?.name || 'Apparatus'"
+      show-back
       @back="goBack"
     />
 
@@ -16,17 +17,7 @@
     </div>
 
     <!-- Content -->
-    <div v-else-if="apparatus" class="max-w-4xl">
-      <!-- Actions -->
-      <div class="flex gap-2 mb-6">
-        <router-link v-if="apparatus.can_edit" :to="`/edit_apparatus?a=${a}`" class="btn-primary">
-          Edit Apparatus
-        </router-link>
-        <button @click="goBack" class="btn-secondary">
-          Back to Repository
-        </button>
-      </div>
-
+    <div v-else-if="apparatus">
       <!-- Basic Info -->
       <div class="card mb-6">
         <h2 class="section-header">Apparatus Information</h2>

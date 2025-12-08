@@ -2,6 +2,7 @@
   <div>
     <PageHeader
       :title="facility?.name || 'Facility'"
+      show-back
       @back="goBack"
     />
 
@@ -16,17 +17,7 @@
     </div>
 
     <!-- Content -->
-    <div v-else-if="facility" class="max-w-4xl">
-      <!-- Actions -->
-      <div class="flex gap-2 mb-6">
-        <router-link v-if="facility.can_edit" :to="`/edit_facility?f=${f}`" class="btn-primary">
-          Edit Facility
-        </router-link>
-        <router-link v-if="facility.can_add_apparatus" :to="`/add_apparatus?f=${f}`" class="btn-secondary">
-          + Add Apparatus
-        </router-link>
-      </div>
-
+    <div v-else-if="facility">
       <!-- Basic Info -->
       <div class="card mb-6">
         <h2 class="section-header">Facility Information</h2>

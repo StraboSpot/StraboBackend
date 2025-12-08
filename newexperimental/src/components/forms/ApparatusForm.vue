@@ -1,5 +1,5 @@
 <template>
-  <form @submit.prevent="handleSubmit" class="max-w-4xl">
+  <form @submit.prevent="handleSubmit">
     <!-- Basic Information -->
     <CollapsibleSection title="Basic Information" :default-open="true">
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -106,6 +106,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useToast } from 'primevue/usetoast'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
 import FeatureSelector from '@/components/FeatureSelector.vue'
 import ParametersEditor from '@/components/ParametersEditor.vue'
@@ -113,6 +114,8 @@ import DocumentsEditor from '@/components/DocumentsEditor.vue'
 import {
   APPARATUS_TYPES
 } from '@/schemas/laps-enums'
+
+const toast = useToast()
 
 // Apparatus-specific parameter types (from LAPS schema)
 const APPARATUS_PARAMETER_TYPES = [
@@ -178,12 +181,33 @@ watch(() => props.initialData, (data) => {
   }
 }, { immediate: true, deep: true })
 
+// Validate form and return array of error messages
+const validateForm = () => {
+  const errors = []
+  if (!form.value.name || form.value.name.trim() === '') {
+    errors.push('Apparatus Name cannot be blank.')
+  }
+  if (!form.value.type || form.value.type.trim() === '') {
+    errors.push('Apparatus Type cannot be blank.')
+  }
+  return errors
+}
+
 const isValid = computed(() => {
-  return form.value.name.trim().length > 0 && form.value.type.length > 0
+  return validateForm().length === 0
 })
 
 function handleSubmit() {
-  if (!isValid.value) return
+  const errors = validateForm()
+  if (errors.length > 0) {
+    toast.add({
+      severity: 'error',
+      summary: 'Validation Error',
+      detail: errors.join('\n'),
+      life: 5000
+    })
+    return
+  }
   emit('submit', form.value)
 }
 </script>
