@@ -10,7 +10,7 @@ export default {
       colors: {
         // StraboSpot dark theme colors
         'strabo': {
-          'bg-primary': '#1a1a1a',
+          'bg-primary': '#1c1d26',
           'bg-secondary': '#2d2d2d',
           'bg-tertiary': '#3a3a3a',
           'text-primary': '#e0e0e0',

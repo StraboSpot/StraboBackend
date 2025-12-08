@@ -30,7 +30,8 @@ const routes = [
   {
     path: '/add_project',
     name: 'add-project',
-    component: AddProject
+    component: AddProject,
+    meta: { requiresAuth: true }
   },
   {
     path: '/edit_project',
@@ -141,6 +142,16 @@ const router = createRouter({
     // Otherwise scroll to top
     return { top: 0 }
   }
+})
+
+// Navigation guard for protected routes
+router.beforeEach((to, from, next) => {
+  if (to.meta.requiresAuth && !window.STRABO_CONFIG?.isLoggedIn) {
+    // Redirect to login page (full page redirect, not SPA navigation)
+    window.location.href = '/login.php'
+    return
+  }
+  next()
 })
 
 export default router

@@ -108,7 +108,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
@@ -147,6 +147,14 @@ const experimentData = ref({
   sample: {},
   experiment: {},
   data: {}
+})
+
+// Sync experimentId (front page) with experiment.id (Experimental Setup form)
+watch(experimentId, (newVal) => {
+  if (!experimentData.value.experiment) {
+    experimentData.value.experiment = {}
+  }
+  experimentData.value.experiment.id = newVal
 })
 
 // Helper to check if an object has any non-empty values
@@ -255,9 +263,22 @@ const handleSectionSave = (section, data) => {
       experimentData.value.experiment = {}
     }
     experimentData.value.experiment.protocol = data
+  } else if (section === 'experiment') {
+    // Merge experiment data, preserving protocol (which is a separate UI section)
+    const existingProtocol = experimentData.value.experiment?.protocol
+    experimentData.value.experiment = {
+      ...data,
+      protocol: existingProtocol || []
+    }
   } else {
     experimentData.value[section] = data
   }
+
+  // Sync experiment.id back to the front page experimentId field
+  if (section === 'experiment' && data.id) {
+    experimentId.value = data.id
+  }
+
   activeSection.value = null
 }
 
