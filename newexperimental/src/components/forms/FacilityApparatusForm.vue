@@ -1,51 +1,5 @@
 <template>
   <form @submit.prevent="handleSubmit" class="facility-apparatus-form">
-    <!-- Repository Selection Option -->
-    <fieldset class="form-section">
-      <legend>SELECT FROM REPOSITORY</legend>
-      <div class="flex gap-4 items-end">
-        <div class="field flex-1">
-          <label class="text-sm">Facility</label>
-          <Select
-            v-model="selectedFacilityId"
-            :options="facilityOptions"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Select facility..."
-            showClear
-            filter
-            @change="handleFacilitySelect"
-            class="w-full"
-          />
-        </div>
-        <div class="field flex-1">
-          <label class="text-sm">Apparatus</label>
-          <Select
-            v-model="selectedApparatusId"
-            :options="apparatusOptions"
-            optionLabel="label"
-            optionValue="value"
-            placeholder="Select apparatus..."
-            showClear
-            filter
-            :disabled="!selectedFacilityId"
-            @change="handleApparatusSelect"
-            class="w-full"
-          />
-        </div>
-        <Button
-          type="button"
-          label="Load"
-          :disabled="!selectedApparatusId"
-          @click="loadFromRepository"
-          class="mb-1"
-        />
-      </div>
-      <p class="text-xs text-surface-400 mt-2">
-        Select a facility and apparatus from the repository to auto-fill the form, or enter details manually below.
-      </p>
-    </fieldset>
-
     <!-- Facility Info Section -->
     <fieldset class="form-section">
       <legend>FACILITY INFO</legend>
@@ -193,7 +147,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
@@ -203,7 +157,6 @@ import ContactFields from '@/components/ContactFields.vue'
 import FeaturePills from '@/components/FeaturePills.vue'
 import ParametersEditor from '@/components/ParametersEditor.vue'
 import DocumentsEditor from '@/components/DocumentsEditor.vue'
-import { facilityService, apparatusService } from '@/services/api'
 import {
   FACILITY_TYPES,
   APPARATUS_TYPES,
@@ -226,31 +179,6 @@ const emit = defineEmits(['submit', 'cancel'])
 // Helper to check if a value is "Other"
 const isOther = (value) => value && value.toLowerCase() === 'other'
 const isOtherApparatus = (value) => value && value.toLowerCase() === 'other apparatus'
-
-// Repository selection state
-const facilities = ref([])
-const selectedFacilityId = ref(null)
-const selectedApparatusId = ref(null)
-const loading = ref(false)
-
-// Facility options for dropdown
-const facilityOptions = computed(() => {
-  return facilities.value.map(f => ({
-    label: `${f.name} (${f.institute || 'No Institute'})`,
-    value: f.pkey
-  }))
-})
-
-// Apparatus options for selected facility
-const apparatusOptions = computed(() => {
-  if (!selectedFacilityId.value) return []
-  const facility = facilities.value.find(f => f.pkey === selectedFacilityId.value)
-  if (!facility?.apparatuses) return []
-  return facility.apparatuses.map(a => ({
-    label: `${a.name} (${a.type || 'No Type'})`,
-    value: a.pkey
-  }))
-})
 
 // Create empty form structure
 const createEmptyForm = () => ({
@@ -297,96 +225,6 @@ const createEmptyForm = () => ({
 })
 
 const form = ref(createEmptyForm())
-
-// Load facilities for repository selection
-const loadFacilities = async () => {
-  try {
-    loading.value = true
-    const response = await facilityService.listWithApparatuses()
-    facilities.value = response.facilities || []
-  } catch (error) {
-    console.error('Failed to load facilities:', error)
-  } finally {
-    loading.value = false
-  }
-}
-
-// Handle facility selection change
-const handleFacilitySelect = () => {
-  selectedApparatusId.value = null
-}
-
-// Handle apparatus selection change
-const handleApparatusSelect = () => {
-  // Just update the selection, don't auto-load
-}
-
-// Load data from repository
-const loadFromRepository = async () => {
-  if (!selectedFacilityId.value || !selectedApparatusId.value) return
-
-  try {
-    loading.value = true
-
-    // Fetch full facility and apparatus data
-    const [facilityData, apparatusData] = await Promise.all([
-      facilityService.get(selectedFacilityId.value),
-      apparatusService.get(selectedApparatusId.value)
-    ])
-
-    // Populate facility form
-    if (facilityData) {
-      form.value.facility = {
-        name: facilityData.name || '',
-        type: facilityData.type || '',
-        other_type: facilityData.other_type || '',
-        id: facilityData.id || '',
-        website: facilityData.website || '',
-        institute: facilityData.institute || '',
-        department: facilityData.department || '',
-        description: facilityData.description || '',
-        address: {
-          street: facilityData.address?.street || '',
-          building: facilityData.address?.building || '',
-          postcode: facilityData.address?.postcode || '',
-          city: facilityData.address?.city || '',
-          state: facilityData.address?.state || '',
-          country: facilityData.address?.country || '',
-          latitude: facilityData.address?.latitude || '',
-          longitude: facilityData.address?.longitude || ''
-        },
-        contact: {
-          firstname: facilityData.contact?.firstname || '',
-          lastname: facilityData.contact?.lastname || '',
-          affiliation: facilityData.contact?.affiliation || '',
-          email: facilityData.contact?.email || '',
-          phone: facilityData.contact?.phone || '',
-          website: facilityData.contact?.website || '',
-          id: facilityData.contact?.id || ''
-        }
-      }
-    }
-
-    // Populate apparatus form
-    if (apparatusData) {
-      form.value.apparatus = {
-        name: apparatusData.name || '',
-        type: apparatusData.type || '',
-        other_type: apparatusData.other_type || '',
-        location: apparatusData.location || '',
-        id: apparatusData.id || '',
-        description: apparatusData.description || '',
-        features: apparatusData.features || [],
-        parameters: apparatusData.parameters?.map(p => ({ ...p })) || [],
-        documents: apparatusData.documents?.map(d => ({ ...d })) || []
-      }
-    }
-  } catch (error) {
-    console.error('Failed to load from repository:', error)
-  } finally {
-    loading.value = false
-  }
-}
 
 // Populate form with initial data
 watch(() => props.initialData, (data) => {
@@ -448,10 +286,6 @@ function handleSubmit() {
   if (!isValid.value) return
   emit('submit', form.value)
 }
-
-onMounted(() => {
-  loadFacilities()
-})
 </script>
 
 <style scoped>
