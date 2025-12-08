@@ -63,10 +63,7 @@
       <p class="text-sm text-strabo-text-secondary mb-4">
         Select all features that apply to this apparatus.
       </p>
-      <FeaturePills
-        :features="APPARATUS_FEATURES"
-        v-model="form.features"
-      />
+      <FeatureSelector v-model="form.features" />
     </CollapsibleSection>
 
     <!-- Parameters -->
@@ -110,12 +107,11 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import CollapsibleSection from '@/components/CollapsibleSection.vue'
-import FeaturePills from '@/components/FeaturePills.vue'
+import FeatureSelector from '@/components/FeatureSelector.vue'
 import ParametersEditor from '@/components/ParametersEditor.vue'
 import DocumentsEditor from '@/components/DocumentsEditor.vue'
 import {
-  APPARATUS_TYPES,
-  APPARATUS_FEATURES
+  APPARATUS_TYPES
 } from '@/schemas/laps-enums'
 
 // Apparatus-specific parameter types (from LAPS schema)

@@ -59,10 +59,7 @@
     <fieldset class="form-section">
       <legend>TEST FEATURES</legend>
       <p class="text-sm text-surface-400 mb-3">Select experimental test capabilities:</p>
-      <FeaturePills
-        :features="APPARATUS_FEATURES"
-        v-model="form.features"
-      />
+      <FeatureSelector v-model="form.features" />
     </fieldset>
 
     <!-- Author Section -->
@@ -236,11 +233,10 @@ import Button from 'primevue/button'
 import Textarea from 'primevue/textarea'
 import DatePicker from 'primevue/datepicker'
 import ListDetailEditor from '@/components/ListDetailEditor.vue'
-import FeaturePills from '@/components/FeaturePills.vue'
+import FeatureSelector from '@/components/FeatureSelector.vue'
 import ContactFields from '@/components/ContactFields.vue'
 import DocumentsEditor from '@/components/DocumentsEditor.vue'
 import {
-  APPARATUS_FEATURES,
   GEOMETRY_COMPONENT_TYPES,
   GEOMETRY_SHAPES,
   GEOMETRY_MATERIALS,

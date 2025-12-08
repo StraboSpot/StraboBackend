@@ -103,10 +103,7 @@
     <fieldset class="form-section">
       <legend>APPARATUS FEATURES</legend>
       <p class="text-xs text-surface-400 mb-3">Select all applicable test capabilities:</p>
-      <FeaturePills
-        :features="APPARATUS_FEATURES"
-        v-model="form.apparatus.features"
-      />
+      <FeatureSelector v-model="form.apparatus.features" />
     </fieldset>
 
     <!-- Apparatus Parameters Section -->
@@ -157,13 +154,12 @@ import Select from 'primevue/select'
 import Button from 'primevue/button'
 import AddressFields from '@/components/AddressFields.vue'
 import ContactFields from '@/components/ContactFields.vue'
-import FeaturePills from '@/components/FeaturePills.vue'
+import FeatureSelector from '@/components/FeatureSelector.vue'
 import ParametersEditor from '@/components/ParametersEditor.vue'
 import DocumentsEditor from '@/components/DocumentsEditor.vue'
 import {
   FACILITY_TYPES,
   APPARATUS_TYPES,
-  APPARATUS_FEATURES,
   PARAMETER_TYPES
 } from '@/schemas/laps-enums'
 

@@ -139,6 +139,151 @@ export const APPARATUS_FEATURES = [
   'Other'
 ]
 
+// ===== GROUPED APPARATUS/TEST FEATURES =====
+// Same features as above, organized into logical categories for the UI
+export const GROUPED_FEATURES = [
+  {
+    name: 'Loading & Stress States',
+    features: [
+      'Loading',
+      'Unloading',
+      'Uniaxial Stress/Strain',
+      'Biaxial Stress/Strain',
+      'Triaxial Stress/Strain',
+      'Differential Stress',
+      'True Triaxial'
+    ]
+  },
+  {
+    name: 'Temperature',
+    features: [
+      'Heating',
+      'Cooling',
+      'High Temperature',
+      'Ultra-High Temperature',
+      'Low Temperature',
+      'Sub-Zero Temperature'
+    ]
+  },
+  {
+    name: 'Pressure',
+    features: [
+      'High Pressure',
+      'Ultra-High Pressure',
+      'Hydrostatic Tests',
+      'HIP'
+    ]
+  },
+  {
+    name: 'Mechanical Properties',
+    features: [
+      'Elasticity',
+      'Elastic Moduli',
+      'Yield Strength',
+      'Failure Strength',
+      'Strength',
+      'Extension',
+      'Local Axial Strain',
+      'Local Radial Strain',
+      'Indentation',
+      'Hardness'
+    ]
+  },
+  {
+    name: 'Friction & Shear',
+    features: [
+      'Friction',
+      'Frictional Sliding',
+      'Slide Hold Slide',
+      'Stepping',
+      'Pure Shear',
+      'Simple Shear',
+      'Rotary Shear',
+      'Torsion'
+    ]
+  },
+  {
+    name: 'Time-Dependent & Dynamic',
+    features: [
+      'Creep',
+      'Viscosity',
+      'Dynamic Tests',
+      'Shockwave'
+    ]
+  },
+  {
+    name: 'Fracturing',
+    features: [
+      'Hydraulic Fracturing',
+      'Hydrothermal Fracturing'
+    ]
+  },
+  {
+    name: 'Permeability & Flow',
+    features: [
+      'Permeability',
+      'Steady-State Permeability',
+      'Transient Permeability',
+      'Hydraulic Conductivity',
+      'Reactive Flow',
+      'Storage Capacity'
+    ]
+  },
+  {
+    name: 'Pore Fluid',
+    features: [
+      'Pore Fluid Control',
+      'Pore Fluid Chemistry',
+      'Pore Volume Compaction',
+      'Drained/Undrained Pore Fluid'
+    ]
+  },
+  {
+    name: 'Chemical & Reactions',
+    features: [
+      'Synthesis',
+      'Deposition/Evaporation',
+      'Mineral Reactions',
+      'Hydrothermal Reactions'
+    ]
+  },
+  {
+    name: 'Electrical',
+    features: [
+      'Resistivity',
+      'Electrical Resistivity',
+      'Electrical Capacitance',
+      'Streaming Potential'
+    ]
+  },
+  {
+    name: 'Acoustic & Seismic',
+    features: [
+      'Acoustic Events',
+      'Acoustic Velocity',
+      'P-Wave Velocity',
+      'S-Wave Velocity',
+      'Source Location',
+      'Tomography'
+    ]
+  },
+  {
+    name: 'Imaging & Spectroscopy',
+    features: [
+      'In-Situ X-Ray',
+      'Infrared',
+      'Raman',
+      'Visual'
+    ]
+  },
+  {
+    name: 'Other',
+    features: [
+      'Other'
+    ]
+  }
+]
+
 // ===== APPARATUS PARAMETER TYPES =====
 // From old app
 export const PARAMETER_TYPES = [
