@@ -110,6 +110,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
 import SectionModal from '@/components/SectionModal.vue'
@@ -124,6 +125,7 @@ const props = defineProps({
 })
 
 const router = useRouter()
+const toast = useToast()
 
 const loading = ref(true)
 const error = ref(null)
@@ -268,12 +270,26 @@ const handleSave = async () => {
       data: experimentData.value
     })
 
-    // Navigate back to view
-    router.push(`/view_experiment?e=${props.e}`)
+    // Show success toast
+    toast.add({
+      severity: 'success',
+      summary: 'Changes Saved',
+      detail: 'Your experiment has been updated successfully.',
+      life: 2000
+    })
+
+    // Redirect to My Experimental Data after brief delay
+    setTimeout(() => {
+      window.location.href = '/my_experimental_data.php'
+    }, 1500)
   } catch (err) {
     console.error('Failed to save experiment:', err)
-    alert('Failed to save experiment. Please try again.')
-  } finally {
+    toast.add({
+      severity: 'error',
+      summary: 'Error',
+      detail: 'Failed to save experiment. Please try again.',
+      life: 5000
+    })
     saving.value = false
   }
 }

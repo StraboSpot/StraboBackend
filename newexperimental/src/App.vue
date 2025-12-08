@@ -1,5 +1,8 @@
 <template>
   <div class="min-h-screen bg-strabo-bg-primary dark-mode">
+    <!-- Toast notifications -->
+    <Toast position="top-center" />
+
     <!-- Global Header -->
     <header class="app-header">
       <router-link to="/" class="header-link">
@@ -19,7 +22,7 @@
 </template>
 
 <script setup>
-// App-level setup can go here
+import Toast from 'primevue/toast'
 </script>
 
 <style scoped>
