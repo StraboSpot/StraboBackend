@@ -144,33 +144,31 @@
                   :key="dimIdx"
                   class="dimension-row flex gap-2 items-end mb-2"
                 >
-                  <div class="field flex-1">
+                  <div class="field dim-variable">
                     <label class="text-xs" v-if="dimIdx === 0">Variable</label>
                     <Select
                       :modelValue="dim.variable"
                       @update:modelValue="updateDimension(item, dimIdx, 'variable', $event, update)"
                       :options="DIMENSION_VARIABLES"
                       placeholder="Select..."
-                      showClear
                     />
                   </div>
-                  <div class="field w-24">
+                  <div class="field dim-value">
                     <label class="text-xs" v-if="dimIdx === 0">Value</label>
                     <InputText
                       :modelValue="dim.value"
                       @update:modelValue="updateDimension(item, dimIdx, 'value', $event, update)"
                     />
                   </div>
-                  <div class="field w-24">
+                  <div class="field dim-unit">
                     <label class="text-xs" v-if="dimIdx === 0">Unit</label>
                     <Select
                       :modelValue="dim.unit"
                       @update:modelValue="updateDimension(item, dimIdx, 'unit', $event, update)"
                       :options="UNIT_TYPES"
-                      showClear
                     />
                   </div>
-                  <div class="field w-20">
+                  <div class="field dim-prefix">
                     <label class="text-xs" v-if="dimIdx === 0">Prefix</label>
                     <Select
                       :modelValue="dim.prefix"
@@ -412,5 +410,26 @@ function handleSubmit() {
 .dimension-row:last-child {
   border-bottom: none;
   padding-bottom: 0;
+}
+
+/* Dimension column widths */
+.dim-variable {
+  width: 140px;
+  flex-shrink: 0;
+}
+
+.dim-value {
+  width: 90px;
+  flex-shrink: 0;
+}
+
+.dim-unit {
+  width: 100px;
+  flex-shrink: 0;
+}
+
+.dim-prefix {
+  width: 90px;
+  flex-shrink: 0;
 }
 </style>
