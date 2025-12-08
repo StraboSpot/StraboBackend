@@ -2,7 +2,7 @@
   <div>
     <PageHeader
       :title="`Edit: ${apparatus?.name || 'Apparatus'}`"
-      :back-link="`/view_apparatus?a=${a}`"
+      back-link="/apparatus_repository"
     />
 
     <!-- Loading -->
@@ -22,7 +22,7 @@
       :saving="saving"
       submit-label="Save Changes"
       @submit="handleSubmit"
-      @cancel="router.push(`/view_apparatus?a=${a}`)"
+      @cancel="router.push('/apparatus_repository')"
     />
   </div>
 </template>
@@ -62,10 +62,12 @@ onMounted(async () => {
 async function handleSubmit(formData) {
   saving.value = true
   try {
-    // TODO: Call API to update apparatus
-    console.log('Updating apparatus:', formData)
-    alert('Apparatus update will be implemented with API integration')
-    router.push(`/view_apparatus?a=${props.a}`)
+    const result = await apparatusService.update(props.a, formData)
+    if (result.error) {
+      alert('Error: ' + result.error)
+    } else {
+      router.push('/apparatus_repository')
+    }
   } catch (err) {
     console.error('Failed to update apparatus:', err)
     alert('Failed to save changes. Please try again.')

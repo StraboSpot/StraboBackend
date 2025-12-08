@@ -214,9 +214,27 @@ export const facilityService = {
     return response.json()
   },
 
-  create: (data) => api.post('/facility', data),
+  // Create new facility
+  create: async (data) => {
+    const response = await fetch('/newexperimental/api/save_facility.php', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data)
+    })
+    return response.json()
+  },
 
-  update: (f, data) => api.put(`/facility/${f}`, data),
+  // Update existing facility
+  update: async (f, data) => {
+    const response = await fetch('/newexperimental/api/save_facility.php', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, pkey: f })
+    })
+    return response.json()
+  },
 
   delete: (f) => api.delete(`/facility/${f}`)
 }
@@ -235,12 +253,27 @@ export const apparatusService = {
     return response.json()
   },
 
-  create: (f, data) => api.post('/apparatus', {
-    facility_pkey: f,
-    ...data
-  }),
+  // Create new apparatus
+  create: async (f, data) => {
+    const response = await fetch('/newexperimental/api/save_apparatus.php', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, facility_pkey: f })
+    })
+    return response.json()
+  },
 
-  update: (a, data) => api.put(`/apparatus/${a}`, data),
+  // Update existing apparatus
+  update: async (a, data) => {
+    const response = await fetch('/newexperimental/api/save_apparatus.php', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...data, pkey: a })
+    })
+    return response.json()
+  },
 
   delete: (a) => api.delete(`/apparatus/${a}`)
 }

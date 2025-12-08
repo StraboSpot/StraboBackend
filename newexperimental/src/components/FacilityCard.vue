@@ -6,17 +6,17 @@
       @click="$emit('toggle')"
     >
       <div class="flex-1">
-        <h3 class="text-lg font-semibold text-strabo-text-primary">
+        <h3 class="text-xl font-semibold text-strabo-text-primary">
           {{ facility.name }}
         </h3>
-        <p class="text-sm text-strabo-text-secondary">
+        <p class="text-base text-strabo-text-secondary">
           {{ facility.institute }}
           <span v-if="facility.department"> &mdash; {{ facility.department }}</span>
         </p>
       </div>
 
       <div class="flex items-center gap-4">
-        <span class="text-sm text-strabo-text-secondary">
+        <span class="text-base text-strabo-text-secondary">
           {{ facility.apparatuses?.length || 0 }} apparatus{{ facility.apparatuses?.length !== 1 ? 'es' : '' }}
         </span>
         <span class="text-strabo-accent text-xl">
@@ -30,14 +30,14 @@
       <!-- Facility Details -->
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div v-if="facility.address">
-          <span class="text-xs text-strabo-text-secondary uppercase">Location</span>
-          <p class="text-strabo-text-primary">
+          <span class="text-sm text-strabo-text-secondary uppercase tracking-wide">Location</span>
+          <p class="text-base text-strabo-text-primary mt-1">
             {{ formatAddress(facility.address) }}
           </p>
         </div>
         <div v-if="facility.contact">
-          <span class="text-xs text-strabo-text-secondary uppercase">Contact</span>
-          <p class="text-strabo-text-primary">
+          <span class="text-sm text-strabo-text-secondary uppercase tracking-wide">Contact</span>
+          <p class="text-base text-strabo-text-primary mt-1">
             {{ facility.contact.firstname }} {{ facility.contact.lastname }}
             <a v-if="facility.contact.email" :href="`mailto:${facility.contact.email}`" class="text-strabo-accent ml-2">
               {{ facility.contact.email }}
@@ -45,38 +45,38 @@
           </p>
         </div>
         <div v-if="facility.website">
-          <span class="text-xs text-strabo-text-secondary uppercase">Website</span>
-          <p>
-            <a :href="facility.website" target="_blank" class="text-strabo-accent hover:underline">
+          <span class="text-sm text-strabo-text-secondary uppercase tracking-wide">Website</span>
+          <p class="mt-1">
+            <a :href="facility.website" target="_blank" class="text-base text-strabo-accent hover:underline">
               {{ facility.website }}
             </a>
           </p>
         </div>
         <div v-if="facility.description">
-          <span class="text-xs text-strabo-text-secondary uppercase">Description</span>
-          <p class="text-strabo-text-primary">{{ facility.description }}</p>
+          <span class="text-sm text-strabo-text-secondary uppercase tracking-wide">Description</span>
+          <p class="text-base text-strabo-text-primary mt-1">{{ facility.description }}</p>
         </div>
       </div>
 
       <!-- Facility Actions -->
       <div class="flex gap-2 mb-4">
-        <router-link :to="`/view_facility?f=${facility.id}`" class="btn-secondary text-sm">
+        <router-link :to="`/view_facility?f=${facility.id}`" class="btn-secondary">
           View Details
         </router-link>
-        <router-link v-if="facility.can_edit" :to="`/edit_facility?f=${facility.id}`" class="btn-secondary text-sm">
+        <router-link v-if="facility.can_edit" :to="`/edit_facility?f=${facility.id}`" class="btn-secondary">
           Edit
         </router-link>
-        <router-link v-if="facility.can_add_apparatus" :to="`/add_apparatus?f=${facility.id}`" class="btn-primary text-sm">
+        <router-link v-if="facility.can_add_apparatus" :to="`/add_apparatus?f=${facility.id}`" class="btn-primary">
           + Add Apparatus
         </router-link>
       </div>
 
       <!-- Apparatus List -->
       <div v-if="facility.apparatuses?.length > 0">
-        <h4 class="text-sm font-medium text-strabo-text-secondary uppercase mb-2">
+        <h4 class="text-base font-medium text-strabo-text-secondary uppercase tracking-wide mb-3">
           Apparatus
         </h4>
-        <table class="data-table">
+        <table class="data-table text-base">
           <thead>
             <tr>
               <th>Name</th>
@@ -90,7 +90,7 @@
               <td>{{ app.name }}</td>
               <td>{{ app.type }}</td>
               <td>
-                <span v-if="app.features?.length" class="text-sm">
+                <span v-if="app.features?.length">
                   {{ app.features.slice(0, 3).join(', ') }}
                   <span v-if="app.features.length > 3" class="text-strabo-text-secondary">
                     +{{ app.features.length - 3 }} more
@@ -102,14 +102,14 @@
                 <div class="flex gap-2">
                   <router-link
                     :to="`/view_apparatus?a=${app.id}`"
-                    class="text-strabo-accent hover:underline text-sm"
+                    class="btn-primary btn-sm"
                   >
                     View
                   </router-link>
                   <router-link
                     v-if="app.can_edit"
                     :to="`/edit_apparatus?a=${app.id}`"
-                    class="text-strabo-accent hover:underline text-sm"
+                    class="btn-secondary btn-sm"
                   >
                     Edit
                   </router-link>
@@ -120,7 +120,7 @@
         </table>
       </div>
 
-      <div v-else class="text-center py-4 text-strabo-text-secondary">
+      <div v-else class="text-center py-4 text-base text-strabo-text-secondary">
         No apparatus registered for this facility.
         <router-link v-if="facility.can_add_apparatus" :to="`/add_apparatus?f=${facility.id}`" class="text-strabo-accent hover:underline ml-1">
           Add one now

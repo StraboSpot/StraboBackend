@@ -60,7 +60,8 @@ if (!empty($row->json)) {
 }
 
 // Add/override with direct columns
-$data->id = $row->pkey;
+$data->pkey = $row->pkey;
+$data->id = $row->apparatus_id;  // User-entered apparatus ID
 $data->facility_id = $row->facility_pkey;
 $data->name = $row->name;
 

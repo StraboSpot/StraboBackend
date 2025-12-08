@@ -2,7 +2,7 @@
   <div>
     <PageHeader
       title="Apparatus Repository"
-      back-link="/"
+      back-href="./"
       subtitle="Browse facilities and equipment"
     />
 
@@ -66,12 +66,14 @@ export default {
 </script>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { useRoute } from 'vue-router'
 import PageHeader from '@/components/PageHeader.vue'
 import FacilityCard from '@/components/FacilityCard.vue'
 import { facilityService } from '@/services/api'
 import { useAppStore } from '@/stores/app'
 
+const route = useRoute()
 const appStore = useAppStore()
 
 const loading = ref(true)
@@ -108,7 +110,9 @@ function toggleFacility(id) {
   expandedFacility.value = expandedFacility.value === id ? null : id
 }
 
-onMounted(async () => {
+async function loadFacilities() {
+  loading.value = true
+  error.value = null
   try {
     const data = await facilityService.listWithApparatuses()
     facilities.value = data.facilities || []
@@ -118,5 +122,12 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
-})
+}
+
+// Load data when route changes to this page (immediate: true for initial load)
+watch(() => route.path, () => {
+  if (route.path === '/apparatus_repository') {
+    loadFacilities()
+  }
+}, { immediate: true })
 </script>
