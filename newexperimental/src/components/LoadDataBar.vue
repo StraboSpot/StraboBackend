@@ -120,22 +120,24 @@ const handleClear = () => {
 }
 
 .load-data-btn {
-  padding: 0.4rem 0.75rem;
-  background-color: #dc3545;
-  color: white;
-  border: none;
+  padding: 0.5rem 1rem;
+  background-color: var(--p-surface-700, #4b5563);
+  color: #e5e7eb;
+  border: 1px solid var(--p-surface-600, #6b7280);
   border-radius: 4px;
-  font-size: 0.85rem;
+  font-size: 0.9rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s;
+  transition: background-color 0.2s, border-color 0.2s;
   white-space: nowrap;
 }
 
 .load-data-btn:hover {
-  background-color: #c82333;
+  background-color: var(--p-surface-600, #6b7280);
+  border-color: var(--p-surface-500, #9ca3af);
 }
 
 .load-data-btn:active {
-  background-color: #bd2130;
+  background-color: var(--p-surface-500, #6b7280);
 }
 </style>
