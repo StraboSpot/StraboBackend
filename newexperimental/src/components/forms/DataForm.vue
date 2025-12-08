@@ -52,9 +52,10 @@
                 />
               </div>
               <div class="field">
-                <label class="text-sm">Choose File<span class="text-red-500">*</span></label>
-                <input type="file" @change="onFileChange" class="file-input" />
-                <div v-if="form[selectedDatasetIdx].path" class="text-xs text-surface-400 mt-1">{{ form[selectedDatasetIdx].path }}</div>
+                <DocumentUploader
+                  :uuid="form[selectedDatasetIdx].uuid"
+                  v-model="form[selectedDatasetIdx].path"
+                />
               </div>
             </div>
 
@@ -625,6 +626,7 @@ import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
 import Select from 'primevue/select'
+import DocumentUploader from '@/components/DocumentUploader.vue'
 import {
   DATA_SOURCE_TYPES,
   DATA_TYPE_OPTIONS,
@@ -935,13 +937,6 @@ const onHeaderTypeChange = () => {
   }
 }
 
-const onFileChange = (event) => {
-  const file = event.target.files[0]
-  if (file) {
-    form.value[selectedDatasetIdx.value].path = file.name
-  }
-}
-
 // Handle form submit
 const handleSubmit = () => {
   const cleanedData = {
@@ -1148,28 +1143,5 @@ const handleSubmit = () => {
 
 .field label {
   color: var(--p-surface-400);
-}
-
-.file-input {
-  background: var(--p-surface-800);
-  border: 1px solid var(--p-surface-600);
-  border-radius: 4px;
-  padding: 0.5rem;
-  color: var(--p-surface-100);
-  font-size: 0.875rem;
-}
-
-.file-input::file-selector-button {
-  background: var(--p-surface-700);
-  border: 1px solid var(--p-surface-500);
-  border-radius: 4px;
-  padding: 0.25rem 0.75rem;
-  color: var(--p-surface-100);
-  cursor: pointer;
-  margin-right: 0.5rem;
-}
-
-.file-input::file-selector-button:hover {
-  background: var(--p-surface-600);
 }
 </style>
