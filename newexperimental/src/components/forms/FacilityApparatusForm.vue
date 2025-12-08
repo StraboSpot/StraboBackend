@@ -102,7 +102,7 @@
     <!-- Apparatus Features Section -->
     <fieldset class="form-section">
       <legend>APPARATUS FEATURES</legend>
-      <p class="text-xs text-surface-400 mb-3">Select all applicable test capabilities:</p>
+      <p class="text-surface-400 mb-3">Select all applicable test capabilities:</p>
       <FeatureSelector v-model="form.apparatus.features" />
     </fieldset>
 

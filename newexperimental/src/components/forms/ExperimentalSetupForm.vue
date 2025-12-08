@@ -58,7 +58,7 @@
     <!-- Test Features Section -->
     <fieldset class="form-section">
       <legend>TEST FEATURES</legend>
-      <p class="text-sm text-surface-400 mb-3">Select experimental test capabilities:</p>
+      <p class="text-surface-400 mb-3">Select experimental test capabilities:</p>
       <FeatureSelector v-model="form.features" />
     </fieldset>
 
