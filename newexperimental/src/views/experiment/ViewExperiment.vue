@@ -52,6 +52,7 @@
         :visible="showDownloadModal"
         :data="downloadData"
         :filename="experimentId"
+        :experiment-pkey="props.e"
         @close="showDownloadModal = false"
       />
     </template>
