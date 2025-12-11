@@ -45,6 +45,7 @@ if (!filter_var($username, FILTER_VALIDATE_EMAIL)) {
 	exit();
 }
 
+
 $userpkey = $db->get_var_prepared("SELECT pkey FROM users WHERE email=$1", array($username));
 $userpkey = (int)$userpkey;
 

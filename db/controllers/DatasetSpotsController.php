@@ -126,21 +126,37 @@ stdClass Object
     [ownerpkey] => 8988
     [isUserCollaborator] => 1
     [collaborationLevel] => edit
-    [neoid] => 3770217
+    [neoid] => 3770309
     [isHalted] => 
 )
 */
 
-//echo $this->strabo->userpkey;
 
-			if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $dataset->userpkey == $this->strabo->userpkey && !$collabinfo->isHalted){
-				echo "is collaborator with edit and dataset";
-				$this->strabo->setuserpkey($collabinfo->ownerpkey);
-			}elseif($collabinfo->isOwner && $dinfo->userpkey == $this->strabo->userpkey){
-				echo "is owner with dataset";
+//$this->dumpVar($dataset);exit();
+
+/*
+stdClass Object
+(
+    [date] => 2025-12-02T17:36:05.157Z
+    [userpkey] => 8988
+    [name] => Default2
+    [datecreated] => 1765317851
+    [id] => 17646969651444
+    [collaboratorpkey] => 3
+    [modified_timestamp] => 1764943395720
+    [datasettype] => app
+    [neoid] => 3770318
+)
+*/
+
+			if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $dataset->collaboratorpkey == $this->strabo->userpkey && !$collabinfo->isHalted){
+				//echo "is collaborator with edit and dataset";
+				$this->strabo->setuserpkey((int)$collabinfo->ownerpkey);
+			}elseif($collabinfo->isOwner && $dataset->userpkey == $this->strabo->userpkey){
+				//echo "is owner with dataset";
 				//pkey can remain unchanged
 			}elseif($collabinfo->isOwner && $collabinfo->isHalted){
-				echo "is owner and project halted link project to dataset ";
+				//echo "is owner and project halted link project to dataset ";
 				//pkey can remain unchanged
 			}else{
 				//Error, don't have permissions
@@ -160,6 +176,8 @@ stdClass Object
 			//********************************************************************
 			if($this->strabo->findDataset($feature_id)){
 
+
+				
 				$upload = $request->parameters;
 
 				unset($upload['apiformat']);
@@ -267,6 +285,8 @@ stdClass Object
 								$straboid = end($parts);
 
 								if(!$this->strabo->findSpotInDataset($feature_id,$straboid)){
+
+
 
 									$this->strabo->addSpotToDataset($feature_id,$straboid);
 

@@ -51,6 +51,7 @@ class ProjectDatasetDeleteSpotController extends MyController
 
 		$collabinfo = $this->strabo->getCollabInfo($projectid);
 
+		$originaluserpkey = $this->strabo->userpkey;
 		$newuserpkey = $this->strabo->userpkey;
 
 		//Keep track of collaborative pkeys for dataset? No, the inside code will do that. Just keep track of datasets that we are allowed to edit?
@@ -134,17 +135,24 @@ class ProjectDatasetDeleteSpotController extends MyController
 						//first, delete dataset relationships
 						//$this->strabo->deleteDatasetRelationships($datasetid);
 						$injson = json_encode($d);
+						
+						
+						$this->strabo->setuserpkey((int)$originaluserpkey);
 						$this->strabo->insertDataset($injson);
+						$this->strabo->setuserpkey((int)$originaluserpkey);
 						$this->strabo->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
 	
 						if($spotid!=""){
 	
+							$this->strabo->setuserpkey((int)$newuserpkey);
 							$this->strabo->deleteSingleSpot($spotid,$newuserpkey);
 	
 						}
 					}
 	
 					if($datasetid!=""){
+						
+						$this->strabo->setuserpkey((int)$newuserpkey);
 						//$this->strabo->buildDatasetRelationships($datasetid);
 						$this->strabo->setDatasetCenter($datasetid);
 	

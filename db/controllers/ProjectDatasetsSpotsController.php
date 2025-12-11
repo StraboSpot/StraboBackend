@@ -34,9 +34,9 @@ class ProjectDatasetsSpotsController extends MyController
 			$errors.="No Project ID Provided. ";
 		}
 
+
+
 		$showout = json_decode(json_encode($upload));
-
-
 
 
 		$collabinfo = $this->strabo->getCollabInfo($projectid);
@@ -127,7 +127,12 @@ class ProjectDatasetsSpotsController extends MyController
 							//first, delete dataset relationships
 							//$this->strabo->deleteDatasetRelationships($datasetid);
 							$injson = json_encode($dataset, JSON_PRETTY_PRINT);
+
+							$this->strabo->setuserpkey((int)$userpkey);
+
 							$this->strabo->insertDataset($injson);
+							
+							$this->strabo->setuserpkey((int)$userpkey);
 							$this->strabo->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
 	
 							//Check if this user is able to edit this dataset
@@ -136,6 +141,10 @@ class ProjectDatasetsSpotsController extends MyController
 							
 								if($spots->features != ""){
 		
+									$this->strabo->setuserpkey((int)$newuserpkey);
+									
+									//echo "$newuserpkey";exit();
+									
 									foreach($spots->features as $spot){
 		
 										$spotid = $spot->properties->id;
