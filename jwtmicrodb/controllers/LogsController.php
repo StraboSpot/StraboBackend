@@ -9,37 +9,6 @@ Description: This controller allows users to submit error logs
 ******************************************************************
 */
 
-/*
-{
-  "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdHJhYm9zcG90Lm9yZyIsImF1ZCI6InN0cmFib3Nwb3QiLCJpYXQiOjE3NjU0NzAxODYsImV4cCI6MTc2NTQ3Mzc4Niwic3ViIjoiMyIsImVtYWlsIjoiamFzb25hc2hAa3UuZWR1IiwibmFtZSI6Ikphc29uIEFzaCJ9.S23ebq6U1ZOqStb5DwbnCsM6Ujis85kXGTwT5Yrj3GA",
-  "refresh_token": "18e68431825c65960df6833e00939299cbf57837577716f4ed7230c295d2ba55",
-  "token_type": "Bearer",
-  "expires_in": 3600,
-  "user": {
-    "pkey": "3",
-    "email": "jasonash@ku.edu",
-    "name": "Jason Ash"
-  }
-}
-
-
-curl -X POST https://strabospot.org/jwtmicrodb/logs \
-     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdHJhYm9zcG90Lm9yZyIsImF1ZCI6InN0cmFib3Nwb3QiLCJpYXQiOjE3NjU0NzAxODYsImV4cCI6MTc2NTQ3Mzc4Niwic3ViIjoiMyIsImVtYWlsIjoiamFzb25hc2hAa3UuZWR1IiwibmFtZSI6Ikphc29uIEFzaCJ9.S23ebq6U1ZOqStb5DwbnCsM6Ujis85kXGTwT5Yrj3GA" \
-     -H "Content-Type: application/json" \
-     -d 'name=linuxize'
-
-
-
-
-curl -X POST https://strabospot.org/jwtmicrodb/logs \
-     -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdHJhYm9zcG90Lm9yZyIsImF1ZCI6InN0cmFib3Nwb3QiLCJpYXQiOjE3NjU0NzAxODYsImV4cCI6MTc2NTQ3Mzc4Niwic3ViIjoiMyIsImVtYWlsIjoiamFzb25hc2hAa3UuZWR1IiwibmFtZSI6Ikphc29uIEFzaCJ9.S23ebq6U1ZOqStb5DwbnCsM6Ujis85kXGTwT5Yrj3GA" \
-     -F "log_file=@/Users/jason/Desktop/log.txt" \
-     -F "notes=some notes about error report here..." \
-     -F "appversion=v1.2.3"
-
-
-*/
-
 class LogsController extends MyController
 {
     public function getAction($request) {
