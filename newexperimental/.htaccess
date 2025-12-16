@@ -1,0 +1,23 @@
+# StraboExperimental SPA Routing
+# All requests (except static assets) go to index.php for Vue Router
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    RewriteBase /newexperimental/
+
+    # Don't rewrite requests for actual files
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+
+    # Don't rewrite dist folder (built assets)
+    RewriteCond %{REQUEST_URI} !^/newexperimental/dist/
+
+    # Send everything else to index.php
+    RewriteRule ^(.*)$ index.php [L,QSA]
+</IfModule>
+
+# Security headers
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+</IfModule>

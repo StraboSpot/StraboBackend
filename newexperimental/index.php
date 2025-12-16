@@ -1,0 +1,56 @@
+<?php
+/**
+ * StraboExperimental - New Interface
+ *
+ * This is the main entry point for the new StraboExperimental interface.
+ * It wraps the Vue.js SPA with the site header and footer.
+ */
+
+// Change to root directory for proper include path resolution
+chdir('..');
+
+// Include admin pkeys for admin check
+include_once("adminkeys.php");
+
+// Include site header (handles session check internally)
+include("includes/mheader.php");
+
+// Get user info from session (set by mheader.php)
+$userpkey = isset($_SESSION['userpkey']) ? $_SESSION['userpkey'] : null;
+$username = isset($_SESSION['username']) ? $_SESSION['username'] : '';
+$isLoggedIn = (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'yes');
+$isAdmin = ($userpkey && in_array($userpkey, $admin_pkeys));
+?>
+
+<!-- Vue App Container -->
+<div id="main" class="wrapper style1">
+    <div class="container">
+        <div id="vue-app">
+            <!-- Vue app mounts here -->
+            <div style="text-align: center; padding: 50px;">
+                <p>Loading StraboExperimental...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pass PHP session data to JavaScript -->
+<script>
+    window.STRABO_CONFIG = {
+        userPkey: <?php echo json_encode($userpkey); ?>,
+        username: <?php echo json_encode($username); ?>,
+        isLoggedIn: <?php echo json_encode($isLoggedIn); ?>,
+        isAdmin: <?php echo json_encode($isAdmin); ?>,
+        basePath: '/newexperimental',
+        apiPath: '/expdb'
+    };
+</script>
+
+<!-- Load Vue App (built assets) -->
+<script type="module" src="/newexperimental/dist/assets/main.js"></script>
+<link rel="stylesheet" href="/newexperimental/dist/assets/main.css">
+
+<?php
+// Include site footer
+include("includes/mfooter.php");
+?>
