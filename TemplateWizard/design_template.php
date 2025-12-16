@@ -65,13 +65,19 @@ include("../includes/mheader.php");
 						<!-- Content -->
 							<section id="content">
 
+								<!-- Hidden file input -->
+								<input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.tsv" style="display: none;" />
+
 								<!-- Instructions -->
-								<div style="background-color: #3b4252; color: #eceff4; padding: 15px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
+								<div style="background-color: #3b4252; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
 									<strong>Instructions:</strong>
 									<ul style="margin: 10px 0 0 0; padding-left: 20px;">
-										<li><strong>Reorder columns:</strong> Click a column header to select it, then drag the handle that appears to move it</li>
-										<li><strong>Resize columns:</strong> Drag the edge of any column header</li>
-										<li><strong>Enter data:</strong> Click any cell to edit, or paste from Excel/CSV</li>
+										<li><strong>Reorder columns if Desired:</strong> Click a column header once to select it, then drag to move it.</li>
+										<li><strong>Add/Remove Columns:</strong> Right click in column header to add or remove columns. Any columns added will be considered "custom".</li>
+										<li><strong>Once Columns Completed:</strong> Click to <a href="#" id="downloadTemplateLink">Download Template</a> and <a href="#" id="uploadFileLink">Upload your completed file</a></li>
+										<li><strong>Alternatively:</strong> Paste from Excel/CSV below.</li>
+										<li><strong>Attention:</strong> If saved with no data in table, template will still be saved.</li>
+										<li><strong>When Saved:</strong> Any changes to your template will be saved and any data provided will be uploaded to your chosen project.</li>
 									</ul>
 								</div>
 
@@ -134,6 +140,12 @@ include("../includes/mheader.php");
 
 <!-- HandsonTable JS -->
 <script src="https://cdn.jsdelivr.net/npm/handsontable@12.4.0/dist/handsontable.full.min.js"></script>
+
+<!-- SheetJS for Excel/CSV parsing (file upload) -->
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+
+<!-- ExcelJS for Excel file generation with styling (file download) -->
+<script src="https://cdn.jsdelivr.net/npm/exceljs@4.3.0/dist/exceljs.min.js"></script>
 
 <script>
 // Pass PHP data to JavaScript

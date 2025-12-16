@@ -28,8 +28,15 @@ document.addEventListener('DOMContentLoaded', function() {
 	const closeModal = document.getElementById('closeModal');
 	const projectInfo = document.getElementById('project_info');
 	const projectSelect = document.getElementById('project_id');
+	const downloadTemplateLink = document.getElementById('downloadTemplateLink');
+	const uploadFileLink = document.getElementById('uploadFileLink');
+	const fileInput = document.getElementById('fileInput');
+	const errorMessage = document.getElementById('errorMessage');
 
 	let hasChanges = false;
+
+	// Store the original column headers (vocabulary-controlled)
+	const originalHeaders = columns.slice();
 
 	// Template name field is always visible in the HTML
 
@@ -54,6 +61,167 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 	});
 
+	// Download template link click
+	downloadTemplateLink.addEventListener('click', async function(e) {
+		e.preventDefault();
+
+		// Get current headers from HandsonTable
+		const headers = hot.getData()[0];
+
+		// Create workbook using ExcelJS
+		const workbook = new ExcelJS.Workbook();
+		const worksheet = workbook.addWorksheet('Template');
+
+		// Set column widths
+		worksheet.columns = headers.map(header => ({
+			header: header,
+			key: header,
+			width: 20
+		}));
+
+		// Style the header row
+		const headerRow = worksheet.getRow(1);
+		headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' }, size: 14 };
+		headerRow.fill = {
+			type: 'pattern',
+			pattern: 'solid',
+			fgColor: { argb: 'FF404040' }
+		};
+		headerRow.alignment = { horizontal: 'center', vertical: 'middle' };
+
+		// Lock header cells
+		headerRow.eachCell((cell) => {
+			cell.protection = { locked: true };
+		});
+
+		// Add 100 empty data rows with larger font and unlock them
+		for (let i = 2; i <= 101; i++) {
+			const row = worksheet.addRow(new Array(headers.length).fill(''));
+			row.font = { size: 12 };
+			row.eachCell((cell) => {
+				cell.protection = { locked: false };
+			});
+		}
+
+		// Protect the sheet (only header row is locked, allow most formatting)
+		await worksheet.protect('', {
+			selectLockedCells: true,
+			selectUnlockedCells: true,
+			formatCells: true,
+			formatColumns: true,
+			formatRows: true,
+			insertRows: true,
+			deleteRows: true,
+			insertColumns: false,
+			deleteColumns: false
+		});
+
+		// Sanitize template name for filename
+		const templateName = templateNameInput.value.trim() || 'Untitled';
+		const sanitizedName = templateName
+			.replace(/[^a-zA-Z0-9_-]/g, '_')  // Replace special chars with underscore
+			.replace(/_+/g, '_')               // Replace multiple underscores with single
+			.replace(/^_|_$/g, '');            // Remove leading/trailing underscores
+
+		// Generate filename
+		const filename = 'StraboSpot_' + sanitizedName + '_template.xlsx';
+
+		// Generate Excel file and trigger download
+		const buffer = await workbook.xlsx.writeBuffer();
+		const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+		const url = window.URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = filename;
+		a.click();
+		window.URL.revokeObjectURL(url);
+	});
+
+	// Upload file link click
+	uploadFileLink.addEventListener('click', function(e) {
+		e.preventDefault();
+		fileInput.click();
+	});
+
+	// File input change handler
+	fileInput.addEventListener('change', function(e) {
+		const file = e.target.files[0];
+		if (!file) return;
+
+		// Check file size (5MB limit)
+		const maxSize = 5 * 1024 * 1024; // 5MB in bytes
+		if (file.size > maxSize) {
+			errorMessage.textContent = 'Error! File size exceeds 5MB limit. Please use a smaller file.';
+			errorModal.style.display = 'flex';
+			fileInput.value = ''; // Reset file input
+			return;
+		}
+
+		// Read file
+		const reader = new FileReader();
+		reader.onload = function(evt) {
+			try {
+				const data = new Uint8Array(evt.target.result);
+				const workbook = XLSX.read(data, { type: 'array' });
+
+				// Get first sheet
+				const firstSheetName = workbook.SheetNames[0];
+				const worksheet = workbook.Sheets[firstSheetName];
+
+				// Convert to 2D array
+				const fileData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+				if (fileData.length === 0) {
+					errorMessage.textContent = 'Error! File is empty or could not be read.';
+					errorModal.style.display = 'flex';
+					fileInput.value = '';
+					return;
+				}
+
+				// Get current table headers (first row)
+				const currentHeaders = hot.getData()[0];
+				const fileHeaders = fileData[0];
+
+				// Validate headers match exactly
+				if (currentHeaders.length !== fileHeaders.length) {
+					errorMessage.textContent = 'Error! Column count mismatch. File has ' + fileHeaders.length +
+						' columns, template has ' + currentHeaders.length + ' columns.';
+					errorModal.style.display = 'flex';
+					fileInput.value = '';
+					return;
+				}
+
+				// Check each header matches
+				for (let i = 0; i < currentHeaders.length; i++) {
+					if (currentHeaders[i] !== fileHeaders[i]) {
+						errorMessage.textContent = 'Error! Column headers do not match. Expected "' +
+							currentHeaders[i] + '" at position ' + (i + 1) + ', but found "' + fileHeaders[i] + '".';
+						errorModal.style.display = 'flex';
+						fileInput.value = '';
+						return;
+					}
+				}
+
+				// Headers match! Load the data
+				hot.loadData(fileData);
+
+				// Trigger change detection
+				checkTableData();
+				updateSaveButtonVisibility();
+
+				// Reset file input for next use
+				fileInput.value = '';
+
+			} catch (error) {
+				errorMessage.textContent = 'Error! Could not parse file. Please ensure it is a valid CSV or Excel file.';
+				errorModal.style.display = 'flex';
+				fileInput.value = '';
+			}
+		};
+
+		reader.readAsArrayBuffer(file);
+	});
+
 	// Initialize Handsontable
 	const hot = new Handsontable(container, {
 		data: initialData,
@@ -65,18 +233,73 @@ document.addEventListener('DOMContentLoaded', function() {
 		licenseKey: 'non-commercial-and-evaluation',
 		manualColumnMove: true,
 		manualColumnResize: true,
+		manualColumnRemove: true,
 		copyPaste: true,
 		fillHandle: true,
 		contextMenu: true,
-		columns: columns.map(() => ({ type: 'text' })),
+		autoWrapRow: false,
+		autoWrapCol: false,
 		cells: function(row, col) {
 			const cellProperties = {};
 			if (row === 0) {
-				// First row is header - make it read-only
-				cellProperties.readOnly = true;
-				cellProperties.className = 'htCenter htMiddle htDimmed';
+				// First row is header
+				// Check if this cell contains an original vocabulary-controlled header
+				const cellValue = this.instance.getDataAtCell(row, col);
+				if (originalHeaders.includes(cellValue)) {
+					// Original vocabulary-controlled header - read-only
+					cellProperties.readOnly = true;
+					cellProperties.className = 'htCenter htMiddle htDimmed';
+				} else {
+					// New custom column header - editable
+					cellProperties.readOnly = false;
+					cellProperties.className = 'htCenter htMiddle';
+				}
 			}
 			return cellProperties;
+		},
+		beforeChange: function(changes, source) {
+			// Handle custom header prefix for editable header cells
+			if (changes && source !== 'loadData') {
+				for (let i = 0; i < changes.length; i++) {
+					const [row, prop, oldValue, newValue] = changes[i];
+
+					// Only process header row (row 0) and non-original headers
+					if (row === 0 && newValue !== null && newValue !== '') {
+						// Check if this is NOT an original vocabulary-controlled header
+						if (!originalHeaders.includes(oldValue) && !originalHeaders.includes(newValue)) {
+							// Strip "Custom_" prefix if it exists (user is editing)
+							let cleanValue = newValue.toString();
+							if (cleanValue.startsWith('Custom_')) {
+								cleanValue = cleanValue.substring(7); // Remove "Custom_" prefix
+							}
+
+							// Add "Custom_" prefix if not already present
+							if (cleanValue !== '' && !cleanValue.startsWith('Custom_')) {
+								changes[i][3] = 'Custom_' + cleanValue;
+							} else if (cleanValue !== '') {
+								changes[i][3] = cleanValue;
+							}
+						}
+					}
+				}
+			}
+		},
+		afterBeginEditing: function(row, column) {
+			// Strip "Custom_" prefix when user starts editing a custom header
+			if (row === 0) {
+				const cellValue = this.getDataAtCell(row, column);
+				if (cellValue && typeof cellValue === 'string') {
+					if (cellValue.startsWith('Custom_') && !originalHeaders.includes(cellValue)) {
+						// Get the editor and set the value without prefix
+						const editor = this.getActiveEditor();
+						if (editor && editor.TEXTAREA) {
+							editor.TEXTAREA.value = cellValue.substring(7);
+							// Move cursor to end
+							editor.TEXTAREA.setSelectionRange(editor.TEXTAREA.value.length, editor.TEXTAREA.value.length);
+						}
+					}
+				}
+			}
 		},
 		afterChange: function(changes, source) {
 			if (source !== 'loadData' && changes) {
@@ -86,6 +309,12 @@ document.addEventListener('DOMContentLoaded', function() {
 		},
 		afterColumnMove: function(movedColumns, finalIndex) {
 			updateSaveButtonVisibility();
+		},
+		afterRenderer: function(TD, row, col, prop, value, cellProperties) {
+			// Add title attribute to show full content on hover
+			if (value && value.toString().trim() !== '') {
+				TD.setAttribute('title', value);
+			}
 		}
 	});
 
@@ -161,8 +390,54 @@ document.addEventListener('DOMContentLoaded', function() {
 		// Get all table data (preserving column order)
 		const tableData = hot.getData();
 
+		// Check for data in columns without headers
+		const headerRow = tableData[0];
+		const columnsWithoutHeaders = [];
+
+		for (let col = 0; col < headerRow.length; col++) {
+			// Check if this column has no header
+			if (headerRow[col] === null || headerRow[col] === '') {
+				// Check if any data row has content in this column
+				let hasData = false;
+				for (let row = 1; row < tableData.length; row++) {
+					if (tableData[row][col] !== null && tableData[row][col] !== '') {
+						hasData = true;
+						break;
+					}
+				}
+				if (hasData) {
+					// Convert column index to letter (0=A, 1=B, etc.)
+					const colLetter = String.fromCharCode(65 + col);
+					columnsWithoutHeaders.push(colLetter);
+				}
+			}
+		}
+
+		// If there are columns with data but no headers, show error
+		if (columnsWithoutHeaders.length > 0) {
+			const errorMessage = document.getElementById('errorMessage');
+			errorMessage.textContent = 'Error! Column' + (columnsWithoutHeaders.length > 1 ? 's' : '') + ' ' +
+				columnsWithoutHeaders.join(', ') + ' ' +
+				(columnsWithoutHeaders.length > 1 ? 'have' : 'has') + ' no header' +
+				(columnsWithoutHeaders.length > 1 ? 's' : '') + '. Please fix.';
+			errorModal.style.display = 'flex';
+			return;
+		}
+
+		// Filter out completely empty rows (keep header row at index 0)
+		const filteredData = tableData.filter(function(row, index) {
+			// Always keep the header row (first row)
+			if (index === 0) {
+				return true;
+			}
+			// Check if row has any non-empty values
+			return row.some(function(cell) {
+				return cell !== null && cell !== '';
+			});
+		});
+
 		// Store data as JSON
-		document.getElementById('hidden_table_data').value = JSON.stringify(tableData);
+		document.getElementById('hidden_table_data').value = JSON.stringify(filteredData);
 
 		// Submit form
 		document.getElementById('submitForm').submit();
