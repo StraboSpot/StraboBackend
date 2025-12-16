@@ -10,6 +10,7 @@
  * @link       https://strabospot.org
  */
 
+
 set_time_limit(0);
 //Initialize Databases
 include_once "../includes/config.inc.php";

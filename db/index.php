@@ -45,6 +45,7 @@ if (!filter_var($username, FILTER_VALIDATE_EMAIL)) {
 	exit();
 }
 
+
 $userpkey = $db->get_var_prepared("SELECT pkey FROM users WHERE email=$1", array($username));
 $userpkey = (int)$userpkey;
 
@@ -65,13 +66,13 @@ $rawinput = file_get_contents("php://input");
 
 if(file_exists("log.txt")){
 	if($_SERVER["REQUEST_URI"] != "/db/imagexxx"){
-		if($username=="jasonash@ku.edu" || $username=="riplangford@gmail.comdd" || $username=="nathan.novak79@gmail.comdd"){
+		if($username=="jasonash@ku.edu" || $username=="jasonash1@gmail.com" || $username=="nathan.novak79@gmail.comdd"){
 
 			file_put_contents ("log.txt", "\n\n************************************************************************************************************************\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "REQUEST: ".ucfirst($request->url_elements[1])."\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "REQUEST_URI: ".$_SERVER["REQUEST_URI"]."\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "username: $username\n\n", FILE_APPEND);
-			file_put_contents ("log.txt", "Raw Input:\n".$rawinput, FILE_APPEND);
+			file_put_contents ("log.txt", "Raw Input:\n\n".$rawinput."\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "Request Method: ".$_SERVER['REQUEST_METHOD'], FILE_APPEND);
 		}
 	}

@@ -48,6 +48,68 @@ class ProjectDatasetDeleteSpotController extends MyController
 		$datasets=$upload['datasets'];
 		$spotid=$upload['spotId'];
 
+
+		$collabinfo = $this->strabo->getCollabInfo($projectid);
+
+		$originaluserpkey = $this->strabo->userpkey;
+		$newuserpkey = $this->strabo->userpkey;
+
+		//Keep track of collaborative pkeys for dataset? No, the inside code will do that. Just keep track of datasets that we are allowed to edit?
+		$authorizeddatasets = [];
+		
+		//?? Strip out datasets we're not allowed to edit, and if we're allowed to collaborate, we pass them through, and change userpkey? 
+		if($collabinfo->isCollaborativeProject){
+			
+			if($collabinfo->isOwner || ($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && !$collabinfo->isHalted)){
+			
+				foreach($upload['datasets'] as $d){
+
+					$datasetid = $d->id;
+					//first look natively.
+					if($datasetid!=""){
+						$dataset = $this->strabo->getDataset($datasetid);
+					}
+			
+					//We didn't find a dataset with userpkey that matches userpkey, so let's look for a dataset that matches collaboratorpkey = userpkey
+					if($dataset->id == ""){ 
+						$dataset = $this->strabo->getDataset($datasetid, $this->strabo->userpkey);
+					}
+
+					if($dataset->id == ""){
+						$this->strabo->throwJSONError("Dataset $datasetid not found.");
+					}
+					
+					if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $dataset->collaboratorpkey == $this->strabo->userpkey && !$collabinfo->isHalted){
+						//echo "is collaborator with edit and dataset";
+						$newuserpkey = $collabinfo->ownerpkey;
+						$authorizeddatasets[] = $dataset->id;
+					}elseif($collabinfo->isOwner && $dinfo->userpkey = $this->strabo->userpkey){
+						//echo "is owner with dataset";
+						//pkey can remain unchanged
+						$authorizeddatasets[] = $dataset->id;
+					}elseif($collabinfo->isOwner && $collabinfo->isHalted){
+						//echo "is owner and project halted link project to dataset ";
+						//pkey can remain unchanged
+						$authorizeddatasets[] = $dataset->id;
+					}
+					
+				}
+
+			}else{
+				$this->strabo->throwJSONError("Don't have permission to collaborate on this");
+			}
+		}else{
+			//load all datasetids if not collaborative
+			foreach($upload['project']->datasets as $d){
+				$authorizeddatasets[] = $d->id;
+			}
+		}
+
+
+
+
+
+
 		if(!$errors){
 
 			$userpkey = $this->strabo->userpkey;
@@ -64,27 +126,46 @@ class ProjectDatasetDeleteSpotController extends MyController
 			foreach($datasets as $d){
 				$datasetid = $d->id;
 
-				if($datasetid!=""){
-					//first, delete dataset relationships
-					$this->strabo->deleteDatasetRelationships($datasetid);
-					$injson = json_encode($d);
-					$this->strabo->insertDataset($injson);
-					$this->strabo->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
 
-					if($spotid!=""){
 
-						$this->strabo->deleteSingleSpot($spotid);
+				if(in_array($datasetid, $authorizeddatasets)){
 
+
+					if($datasetid!=""){
+						//first, delete dataset relationships
+						//$this->strabo->deleteDatasetRelationships($datasetid);
+						$injson = json_encode($d);
+						
+						
+						$this->strabo->setuserpkey((int)$originaluserpkey);
+						$this->strabo->insertDataset($injson);
+						$this->strabo->setuserpkey((int)$originaluserpkey);
+						$this->strabo->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
+	
+						if($spotid!=""){
+	
+							$this->strabo->setuserpkey((int)$newuserpkey);
+							$this->strabo->deleteSingleSpot($spotid,$newuserpkey);
+	
+						}
 					}
+	
+					if($datasetid!=""){
+						
+						$this->strabo->setuserpkey((int)$newuserpkey);
+						//$this->strabo->buildDatasetRelationships($datasetid);
+						$this->strabo->setDatasetCenter($datasetid);
+	
+						//also add dataset to Postgres Database here.
+						$this->strabo->buildPgDataset($datasetid); //need to re-implement JMA 02282020
+					}
+
+
+
 				}
 
-				if($datasetid!=""){
-					$this->strabo->buildDatasetRelationships($datasetid);
-					$this->strabo->setDatasetCenter($datasetid);
 
-					//also add dataset to Postgres Database here.
-					$this->strabo->buildPgDataset($datasetid); //need to re-implement JMA 02282020
-				}
+
 
 			}
 
