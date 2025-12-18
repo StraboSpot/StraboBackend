@@ -281,6 +281,19 @@
 		***********************************************************************/
 
 		/**
+		* Debug a prepared statement
+		* @param string $query SQL query with $1, $2, etc. placeholders
+		* @param array $params Array of parameters to bind
+		* @return debug output
+		*/
+		function debug_query($query, $params = array()) {
+			echo "<pre>";
+			echo "$query\n";
+			print_r($params);
+			echo "</pre>";
+		}
+		
+		/**
 		* Execute a prepared statement securely
 		* @param string $query SQL query with $1, $2, etc. placeholders
 		* @param array $params Array of parameters to bind

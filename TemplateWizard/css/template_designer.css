@@ -25,10 +25,27 @@
 	background-color: #434c5e;
 }
 
+.handsontable th.ht__highlight {
+	background-color: #2e3440;
+}
+
+.handsontable thead th.ht__highlight,
+.handsontable tbody th.ht__highlight {
+	background-color: #2e3440;
+}
+
 .handsontable td {
 	background-color: #2e3440;
 	color: #eceff4;
 	border-color: #4c566a;
+	overflow: hidden;
+	white-space: nowrap;
+}
+
+/* Show full content when cell is being edited */
+.handsontable td.htEditor {
+	overflow: visible;
+	white-space: normal;
 }
 
 .handsontable td.area {
@@ -41,6 +58,11 @@
 
 .handsontable .htDimmed {
 	color: #d8dee9;
+	background-color: #5e2e2e !important;
+}
+
+.handsontable th.htDimmed {
+	background-color: #5e2e2e !important;
 }
 
 #hot-container {
@@ -51,6 +73,31 @@
 
 #saveSection {
 	display: none;
+}
+
+/* Context menu styling */
+.htContextMenu {
+	background-color: #3b4252 !important;
+	border: 1px solid #4c566a !important;
+}
+
+.htContextMenu table tbody tr td {
+	background-color: #3b4252 !important;
+	color: #eceff4 !important;
+	border-color: #4c566a !important;
+}
+
+.htContextMenu table tbody tr td.htDisabled {
+	color: #6b7280 !important;
+}
+
+.htContextMenu table tbody tr td:hover {
+	background-color: #434c5e !important;
+	color: #eceff4 !important;
+}
+
+.htContextMenu table tbody tr td.htSeparator {
+	border-top: 1px solid #4c566a !important;
 }
 
 

@@ -1,98 +1,48 @@
 <?php
-/**
- * File: index.php
- * Description: Main page or directory index
- *
- * @package    StraboSpot Web Site
- * @author     Jason Ash <jasonash@ku.edu>
- * @copyright  2025 StraboSpot
- * @license    https://opensource.org/licenses/MIT MIT License
- * @link       https://strabospot.org
- */
-
-
+/*
+******************************************************************
+StraboSpot REST API - JWT Authenticated
+Author: Jason Ash (jasonash@ku.edu)
+Description: This codebase allows end-users to communicate with
+			 the StraboSpot Database.
+******************************************************************
+*/
 //Initialize Databases
 include_once "../includes/config.inc.php";
-include "../db.php";
-include "../neodb.php";
-include "../db/strabospotclass.php";
-include_once('../includes/geophp/geoPHP.inc');
+include_once "../db.php";
+include_once "../neodb.php";
+include_once "../db/strabospotclass.php";
+include_once "../includes/geophp/geoPHP.inc";
 include_once "../includes/UUID.php";
-include_once('../includes/jwt/quick-jwt.php');
+
+include_once '../jwtauth/middleware.php';
+
+//Authenticate via JWT - Todo Class this out for better workflow.
+$user = authenticate();
+
+//OK, we're authorized. Let's move forward
+$userpkey = $user['sub'];
 
 //Load Base Controller
 include "../db/controllers/MyController.php";
 
 //Load Additional Controllers
-foreach (glob("../db/controllers
+foreach (glob("../db/controllers/*.php") as $filename){
+    include_once $filename;
+}
 
-$headers = getallheaders();
+include "./library/Request.php";
+include "./views/ApiView.php";
+include "./views/JsonView.php";
+include "./views/HtmlView.php";
 
-logToFile($headers, "Headers");
-
-if($headers['Authorization'] != ""){
-
-	$header = trim($headers['Authorization']);
-
-	if(strtolower(substr($header, 0, 5)) == "basic") {
-
-		$encoded = substr($header, 6);
-		$decoded = base64_decode($encoded);
-		$pos = strpos($decoded, ":");
-		$username = substr($decoded, 0, $pos);
-		$password = substr($decoded, $pos + 1);
-
-		if(md5($password)==$hashval){
-			$row=$db->get_row_prepared("select * from users where email=$1 and active = TRUE and deleted = FALSE", array($username));
-		}else{
-			$row=$db->get_row_prepared("select * from users where email=$1 and crypt($2, password) = password and active = TRUE and deleted = FALSE", array($username, $password));
-		}
-
-		if($row->pkey != ""){
-			$userpkey = (int)$row->pkey;
-		}else{
-			showUnauthorized();
-		}
-
-	}elseif(strtolower(substr($header, 0, 6)) == "bearer"){
-
-		$encoded = substr($header, 7);
-
-		$isValid = $qjt->validate($jwtsecret, $encoded);
-		if($isValid){
-
-			$decoded = $qjt->decode($encoded);
-
-			$username = $decoded['email'];
-			$jwtdate = $decoded['datecreated'];
-			$jwtuuid = $decoded['uuid'];
-
-			$row=$db->get_row_prepared("select * from users where email=$1 and active = TRUE and deleted = FALSE", array($username));
-
-			if($row->pkey != ""){
-
-				//Now check to see if JWT is still active
-				$count = $db->get_var_prepared("select count(*) from jwts where uuid = $1 and user_pkey = $2", array($jwtuuid, $row->pkey));
-
-				if($count > 0){
-					$userpkey = (int)$row->pkey;
-				}else{
-					showUnauthorized();
-				}
-			}else{
-				showUnauthorized();
-			}
-
-		}else{
-			showUnauthorized();
-		}
-
-	}else{
-		showUnauthorized();
+function logToFile($var,$label=null){
+	if(is_writable("/srv/app/www/log.txt")){
+		if($label==""){$label="LogToFile";}
+		$out = print_r($var, true);
+		file_put_contents ("/srv/app/www/log.txt", "\n\n$label\n$out \n", FILE_APPEND);
+		file_put_contents ("/srv/app/www/log.txt", "************************************************************\n\n", FILE_APPEND);
 	}
-
-}else{
-	showUnauthorized();
 }
 
 $strabo = new StraboSpot($neodb,$userpkey,$db);
@@ -111,7 +61,7 @@ $rawinput = file_get_contents("php://input");
 if(file_exists("log.txt")){
 	if($_SERVER["REQUEST_URI"] != "/db/imagexxx"){
 		if($username=="jasonash@ku.edu" || $username=="riplangford@gmail.comdd" || $username=="nathan.novak79@gmail.comdd"){
-
+		
 			file_put_contents ("log.txt", "\n\n************************************************************************************************************************\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "REQUEST: ".ucfirst($request->url_elements[1])."\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "REQUEST_URI: ".$_SERVER["REQUEST_URI"]."\n\n", FILE_APPEND);
@@ -129,7 +79,7 @@ $db->query("
 
 //Store username, request, request_uri, rawinput, date
 $db->query("
-	insert into rawcache (
+	insert into rawcache (	
 							username,
 							request,
 							request_uri,
@@ -143,8 +93,9 @@ $db->query("
 							'".pg_escape_string($rawinput)."',
 							'$request_method',
 							'$user_agent'
-							);
+							);			
 ");
+
 
 // route the request to the right place
 $request_type = $request->url_elements[1];
@@ -154,10 +105,10 @@ $showcontroller = $request->url_elements[1];
 if($showcontroller==""){$showcontroller="null";}
 
 if (class_exists($controller_name)) {
-	$controller = new $controller_name();
-	$controller->setstrabohandler($strabo);
-	$action_name = strtolower($request->verb) . 'Action';
-	$result = $controller->$action_name($request);
+    $controller = new $controller_name();
+    $controller->setstrabohandler($strabo);
+    $action_name = strtolower($request->verb) . 'Action';
+    $result = $controller->$action_name($request);
 }else{
 	//send an error header with brief explanation.
 	header("Bad Request", true, 404);
@@ -167,7 +118,7 @@ if (class_exists($controller_name)) {
 
 $view_name = ucfirst($request->apiformat) . 'View';
 if(class_exists($view_name)) {
-
+	
 	//Log REST call to Matomo
 	$remoteip = $_SERVER['HTTP_X_FORWARDED_FOR'];
 	$rand = rand(111111,999999);
@@ -200,7 +151,7 @@ if(class_exists($view_name)) {
 
 	$view = new $view_name();
 	$view->render($result);
-
+	
 }else{
 	header("Bad Request", true, 400);
 	echo "Error: $request->format output not supported.";

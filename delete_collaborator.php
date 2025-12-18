@@ -20,12 +20,12 @@ $uuid = $_GET['u'] ?? '';
 $uuid = preg_replace('/[^a-zA-Z0-9\-]/', '', $uuid);
 if($uuid == "") exit("No uuid provided.");
 
-$db->prepare_query("DELETE FROM collaborators WHERE uuid = $1", array($uuid));
+$db->prepare_query("UPDATE collaborators set disabled = TRUE, accepted = false, collaboration_level = 'readonly' WHERE uuid = $1", array($uuid));
 
 if($project_id != ""){
 	header("Location: collaborate?p=$project_id");
 }else{
-	header("Location: my_field_data2");
+	header("Location: my_field_data");
 }
 
 ?>

@@ -26,7 +26,7 @@ if($count == 0){
 	exit("Collaboration Invite not Found.");
 }
 
-$db->prepare_query("DELETE FROM collaborators WHERE uuid = $1", array($uuid));
+$db->prepare_query("update collaborators set disabled = true WHERE uuid = $1", array($uuid));
 
 header("Location: my_field_data");
 

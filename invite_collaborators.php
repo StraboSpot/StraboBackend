@@ -57,6 +57,9 @@ if($_POST){
 								) VALUES ($1, $2, $3, $4, $5)
 							", array($project_id, $userpkey, $collaborator_pkey, $collaborationlevel, $uuid));
 
+						}else{
+							//Exists, just update
+							$db->prepare_query("UPDATE collaborators SET disabled = FALSE, collaboration_level = $4 WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND collaborator_user_pkey = $3", array($project_id, $userpkey, $collaborator_pkey, $collaborationlevel));
 						}
 					}
 				}

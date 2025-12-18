@@ -1,64 +1,56 @@
 <?php
 /**
- * File: index.php
- * Description: Main page or directory index
+ * StraboExperimental - New Interface
  *
- * @package    StraboSpot Web Site
- * @author     Jason Ash <jasonash@ku.edu>
- * @copyright  2025 StraboSpot
- * @license    https://opensource.org/licenses/MIT MIT License
- * @link       https://strabospot.org
+ * This is the main entry point for the new StraboExperimental interface.
+ * It wraps the Vue.js SPA with the site header and footer.
  */
 
-include("../includes/header.php");
+// Change to root directory for proper include path resolution
+chdir('..');
+
+// Include admin pkeys for admin check
+include_once("adminkeys.php");
+
+// Include site header (handles session check internally)
+include("includes/mheader.php");
+
+// Get user info from session (set by mheader.php)
+$userpkey = isset($_SESSION['userpkey']) ? $_SESSION['userpkey'] : null;
+$username = isset($_SESSION['username']) ? $_SESSION['username'] : '';
+$isLoggedIn = (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'yes');
+$isAdmin = ($userpkey && in_array($userpkey, $admin_pkeys));
 ?>
-<link rel="stylesheet" href="/experimental/experimental.css" type="text/css" />
-<script src='/experimental/experimental.js'></script>
-<script src='/assets/js/jquery/jquery.min.js'></script>
 
-<div class="topTitle">StraboExperimental</div>
-
-<div style="padding-top:20px;"></div>
-
-<div class="frontPageGrid">
-	<div class="frontBoxRow">
-		<div class="frontBoxCell">
-			<a href="add_project"><img title="Start New Project" class="frontBoxImage" src="gridImages/Homepage_Button_1new.png"/></a>
-		</div>
-		<div class="frontBoxCell">
-			<a href="/my_experimental_data"><img class="frontBoxImage" src="gridImages/Homepage_Button_2new.png"/></a>
-		</div>
-	</div>
-	<div class="frontBoxRow">
-		<div class="frontBoxLabel">
-			Start New Project
-		</div>
-		<div class="frontBoxLabel">
-			Continue Project
-		</div>
-	</div>
-	<div class="frontBoxRow">
-		<div class="frontBoxCell">
-			<a href="/fullsearch" target="_blank"><img class="frontBoxImage" src="gridImages/Homepage_Button_3new.png"/></a>
-		</div>
-		<div class="frontBoxCell">
-			<a href="apparatus_repository"><img class="frontBoxImage" src="gridImages/Homepage_Button_4new.png"/></a>
-		</div>
-	</div>
-	<div class="frontBoxRow">
-		<div class="frontBoxLabel">
-			Search Database
-		</div>
-		<div class="frontBoxLabel">
-			Apparatus Repository
-		</div>
-	</div>
+<!-- Vue App Container -->
+<div id="main" class="wrapper style1">
+    <div class="container">
+        <div id="vue-app">
+            <!-- Vue app mounts here -->
+            <div style="text-align: center; padding: 50px;">
+                <p>Loading StraboExperimental...</p>
+            </div>
+        </div>
+    </div>
 </div>
 
-<div style="text-align:center;margin-bottom:100px;margin-top:30px;">
-	<button class="submitButton" style="vertical-align:middle;" onclick="window.open('https://forms.gle/Q594vh2WzQLpHwnq9', '_blank');"><span>Feedback? </span></button>
-</div>
+<!-- Pass PHP session data to JavaScript -->
+<script>
+    window.STRABO_CONFIG = {
+        userPkey: <?php echo json_encode($userpkey); ?>,
+        username: <?php echo json_encode($username); ?>,
+        isLoggedIn: <?php echo json_encode($isLoggedIn); ?>,
+        isAdmin: <?php echo json_encode($isAdmin); ?>,
+        basePath: '/experimental',
+        apiPath: '/expdb'
+    };
+</script>
+
+<!-- Load Vue App (built assets) -->
+<script type="module" src="/experimental/dist/assets/main.js"></script>
+<link rel="stylesheet" href="/experimental/dist/assets/main.css">
 
 <?php
-include("../includes/footer.php");
+// Include site footer
+include("includes/mfooter.php");
 ?>

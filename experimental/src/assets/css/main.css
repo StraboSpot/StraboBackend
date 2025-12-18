@@ -1,0 +1,301 @@
+@import url('https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600&family=Roboto:wght@400;500;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Base dark theme styles to match StraboSpot */
+@layer base {
+  body {
+    @apply bg-strabo-bg-primary text-strabo-text-primary;
+  }
+}
+
+@layer components {
+  /* Form components */
+  .form-input {
+    @apply w-full px-3 py-2 bg-strabo-bg-secondary border border-strabo-border rounded
+           text-strabo-text-primary placeholder-strabo-text-secondary
+           focus:outline-none focus:border-strabo-accent focus:ring-1 focus:ring-strabo-accent;
+  }
+
+  .form-label {
+    @apply block text-sm font-medium text-strabo-text-primary mb-1;
+  }
+
+  .form-select {
+    @apply form-input appearance-none cursor-pointer;
+  }
+
+  .form-textarea {
+    @apply form-input resize-y min-h-[100px];
+  }
+
+  /* Buttons */
+  .btn {
+    @apply px-4 py-2 rounded font-medium transition-colors duration-200
+           focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-strabo-bg-primary;
+  }
+
+  .btn-primary {
+    @apply btn text-white focus:ring-strabo-accent;
+    background-color: #dc3545 !important;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background-color: #c82333 !important;
+  }
+
+  .btn-primary:disabled {
+    @apply cursor-not-allowed opacity-50;
+    background-color: #6c757d !important;
+  }
+
+  .btn-secondary {
+    @apply btn bg-strabo-bg-tertiary text-strabo-text-primary
+           hover:bg-strabo-border focus:ring-strabo-border;
+  }
+
+  .btn-secondary:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  .btn-danger {
+    @apply btn bg-strabo-error text-white hover:bg-red-600
+           focus:ring-strabo-error;
+  }
+
+  .btn-danger:disabled {
+    @apply cursor-not-allowed opacity-50;
+    background-color: #6c757d !important;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-sm;
+  }
+
+  /* Cards and sections */
+  .card {
+    @apply rounded-lg p-4;
+    background-color: rgba(255, 255, 255, 0.03);
+    border: 1px solid #525252;
+  }
+
+  .section-header {
+    @apply text-lg font-semibold text-strabo-text-primary mb-4 pb-2 border-b border-strabo-border;
+  }
+
+  /* Collapsible sections */
+  .collapsible-section {
+    margin-bottom: 0;
+  }
+
+  .collapsible-header {
+    @apply flex items-center justify-between p-3 cursor-pointer
+           transition-colors duration-200;
+    background-color: rgba(255, 255, 255, 0.05);
+    border: 1px solid #525252;
+    border-radius: 4px 4px 0 0;
+  }
+
+  .collapsible-header.collapsed {
+    border-radius: 4px;
+  }
+
+  .collapsible-header:hover {
+    background-color: rgba(255, 255, 255, 0.08);
+  }
+
+  .collapsible-content {
+    @apply p-4;
+    background-color: transparent;
+    border: 1px solid #525252;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+  }
+
+  /* Tables */
+  .data-table {
+    @apply w-full border-collapse;
+  }
+
+  .data-table th {
+    @apply px-4 py-2 text-left text-sm font-medium text-strabo-text-secondary;
+    background-color: rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid #525252;
+  }
+
+  .data-table td {
+    @apply px-4 py-2 text-sm text-strabo-text-primary;
+    border-bottom: 1px solid #424242;
+  }
+
+  .data-table tr:hover td {
+    background-color: rgba(255, 255, 255, 0.03);
+  }
+
+  /* Alerts and messages */
+  .alert {
+    @apply p-4 rounded-lg border;
+  }
+
+  .alert-error {
+    @apply alert bg-red-900/20 border-strabo-error text-strabo-error;
+  }
+
+  .alert-success {
+    @apply alert bg-green-900/20 border-strabo-success text-strabo-success;
+  }
+
+  .alert-warning {
+    @apply alert bg-yellow-900/20 border-strabo-warning text-strabo-warning;
+  }
+
+  /* Navigation tiles (homepage) */
+  .nav-tile {
+    @apply flex flex-col items-center justify-center p-8 bg-strabo-bg-secondary
+           border border-strabo-border rounded-lg cursor-pointer
+           hover:border-strabo-accent hover:bg-strabo-bg-tertiary
+           transition-all duration-200;
+  }
+
+  .nav-tile-icon {
+    @apply text-4xl mb-3 text-strabo-accent;
+  }
+
+  .nav-tile-label {
+    @apply text-lg font-medium text-strabo-text-primary;
+  }
+}
+
+/* Utility for the Vue app container */
+#app {
+  min-height: 100vh;
+}
+
+/* Normalize PrimeVue input heights */
+.p-inputtext,
+.p-select,
+.p-multiselect {
+  height: 2.75rem !important;
+  min-height: 2.75rem !important;
+}
+
+.p-select-label {
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+}
+
+/* PrimeVue button overrides for StraboSpot branding */
+/* All primary buttons - solid red with white text */
+.p-button {
+  background-color: #dc3545 !important;
+  border-color: #dc3545 !important;
+  color: #ffffff !important;
+}
+
+.p-button:hover {
+  background-color: #c82333 !important;
+  border-color: #bd2130 !important;
+  color: #ffffff !important;
+}
+
+.p-button:active {
+  background-color: #bd2130 !important;
+  border-color: #b21f2d !important;
+  color: #ffffff !important;
+}
+
+/* Outlined buttons - same solid style */
+.p-button.p-button-outlined {
+  background-color: #dc3545 !important;
+  border-color: #dc3545 !important;
+  color: #ffffff !important;
+}
+
+.p-button.p-button-outlined:hover {
+  background-color: #c82333 !important;
+  border-color: #bd2130 !important;
+  color: #ffffff !important;
+}
+
+/* Secondary buttons - keep them different */
+.p-button.p-button-secondary {
+  background-color: #6c757d !important;
+  border-color: #6c757d !important;
+  color: #ffffff !important;
+}
+
+.p-button.p-button-secondary:hover {
+  background-color: #5a6268 !important;
+  border-color: #545b62 !important;
+}
+
+/* Text/icon-only buttons (like trash, arrows) - subtle style */
+.p-button.p-button-text {
+  background-color: transparent !important;
+  border-color: transparent !important;
+  color: #adb5bd !important;
+}
+
+.p-button.p-button-text:hover {
+  background-color: rgba(255, 255, 255, 0.1) !important;
+  color: #ffffff !important;
+}
+
+/* Danger text buttons (trash icon) */
+.p-button.p-button-text.p-button-danger {
+  color: #dc3545 !important;
+}
+
+.p-button.p-button-text.p-button-danger:hover {
+  background-color: rgba(220, 53, 69, 0.1) !important;
+  color: #ff6b7a !important;
+}
+
+/* PrimeVue focus ring override - kill all blue focus indicators */
+:root {
+  --p-focus-ring-color: transparent !important;
+  --p-focus-ring-offset: 0 !important;
+  --p-focus-ring-width: 0 !important;
+  --p-focus-ring-shadow: none !important;
+}
+
+.p-select,
+.p-select.p-focus,
+.p-select:focus,
+.p-select:focus-within,
+.p-select:focus-visible,
+.p-multiselect,
+.p-multiselect.p-focus,
+.p-multiselect:focus,
+.p-multiselect:focus-within,
+.p-multiselect:focus-visible,
+.p-inputtext,
+.p-inputtext:focus,
+.p-inputtext:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+  border-color: var(--p-surface-500) !important;
+}
+
+.p-select.p-focus,
+.p-select:focus-within,
+.p-multiselect.p-focus,
+.p-multiselect:focus-within,
+.p-inputtext:focus {
+  border-color: #dc3545 !important;
+}
+
+/* StraboSpot logo font style for modal headers */
+.p-dialog .p-dialog-title {
+  font-family: 'Raleway', sans-serif !important;
+  text-transform: uppercase !important;
+  letter-spacing: 0.1em !important;
+  font-weight: 400 !important;
+}
+
