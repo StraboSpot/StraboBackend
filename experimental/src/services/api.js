@@ -28,7 +28,7 @@ api.interceptors.response.use(
 export const projectService = {
   // Get all user's projects
   list: async () => {
-    const response = await fetch('/newexperimental/api/get_projects.php', {
+    const response = await fetch('/experimental/api/get_projects.php', {
       credentials: 'include'
     })
     if (!response.ok) {
@@ -43,7 +43,7 @@ export const projectService = {
 
   // Get single project with experiments
   get: async (ppk) => {
-    const response = await fetch(`/newexperimental/api/get_project.php?id=${ppk}`, {
+    const response = await fetch(`/experimental/api/get_project.php?id=${ppk}`, {
       credentials: 'include'
     })
     if (!response.ok) {
@@ -57,7 +57,7 @@ export const projectService = {
 
   // Create new project
   create: async (data) => {
-    const response = await fetch('/newexperimental/api/save_project.php', {
+    const response = await fetch('/experimental/api/save_project.php', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -77,7 +77,7 @@ export const projectService = {
 
   // Update existing project
   update: async (ppk, data) => {
-    const response = await fetch('/newexperimental/api/save_project.php', {
+    const response = await fetch('/experimental/api/save_project.php', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -98,7 +98,7 @@ export const projectService = {
 
   // Delete project
   delete: async (ppk) => {
-    const response = await fetch(`/newexperimental/api/delete_project.php?id=${ppk}`, {
+    const response = await fetch(`/experimental/api/delete_project.php?id=${ppk}`, {
       method: 'POST',
       credentials: 'include'
     })
@@ -113,7 +113,7 @@ export const projectService = {
 
   // Download project as JSON
   download: (ppk) => {
-    window.location.href = `/newexperimental/api/download_project.php?id=${ppk}`
+    window.location.href = `/experimental/api/download_project.php?id=${ppk}`
   }
 }
 
@@ -121,7 +121,7 @@ export const projectService = {
 export const experimentService = {
   // Get single experiment with all LAPS data
   get: async (e) => {
-    const response = await fetch(`/newexperimental/api/get_experiment.php?id=${e}`, {
+    const response = await fetch(`/experimental/api/get_experiment.php?id=${e}`, {
       credentials: 'include'
     })
     if (!response.ok) {
@@ -135,7 +135,7 @@ export const experimentService = {
 
   // Create new experiment
   create: async (ppk, data = {}) => {
-    const response = await fetch('/newexperimental/api/save_experiment.php', {
+    const response = await fetch('/experimental/api/save_experiment.php', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -156,7 +156,7 @@ export const experimentService = {
 
   // Update existing experiment
   update: async (e, data) => {
-    const response = await fetch('/newexperimental/api/save_experiment.php', {
+    const response = await fetch('/experimental/api/save_experiment.php', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -177,7 +177,7 @@ export const experimentService = {
 
   // Delete experiment
   delete: async (e) => {
-    const response = await fetch(`/newexperimental/api/delete_experiment.php?id=${e}`, {
+    const response = await fetch(`/experimental/api/delete_experiment.php?id=${e}`, {
       method: 'POST',
       credentials: 'include'
     })
@@ -192,7 +192,7 @@ export const experimentService = {
 
   // Download experiment as JSON
   download: (e) => {
-    window.location.href = `/newexperimental/api/download_experiment.php?id=${e}`
+    window.location.href = `/experimental/api/download_experiment.php?id=${e}`
   }
 }
 
@@ -200,7 +200,7 @@ export const experimentService = {
 export const facilityService = {
   // Get all facilities with their apparatuses (includes permission flags)
   listWithApparatuses: async () => {
-    const response = await fetch('/newexperimental/api/get_facilities.php', {
+    const response = await fetch('/experimental/api/get_facilities.php', {
       credentials: 'include'
     })
     return response.json()
@@ -208,7 +208,7 @@ export const facilityService = {
 
   // Get single facility (guest-friendly)
   get: async (f) => {
-    const response = await fetch(`/newexperimental/api/get_facility.php?id=${f}`, {
+    const response = await fetch(`/experimental/api/get_facility.php?id=${f}`, {
       credentials: 'include'
     })
     return response.json()
@@ -216,7 +216,7 @@ export const facilityService = {
 
   // Create new facility
   create: async (data) => {
-    const response = await fetch('/newexperimental/api/save_facility.php', {
+    const response = await fetch('/experimental/api/save_facility.php', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -227,7 +227,7 @@ export const facilityService = {
 
   // Update existing facility
   update: async (f, data) => {
-    const response = await fetch('/newexperimental/api/save_facility.php', {
+    const response = await fetch('/experimental/api/save_facility.php', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -247,7 +247,7 @@ export const apparatusService = {
 
   // Get single apparatus (guest-friendly)
   get: async (a) => {
-    const response = await fetch(`/newexperimental/api/get_apparatus.php?id=${a}`, {
+    const response = await fetch(`/experimental/api/get_apparatus.php?id=${a}`, {
       credentials: 'include'
     })
     return response.json()
@@ -255,7 +255,7 @@ export const apparatusService = {
 
   // Create new apparatus
   create: async (f, data) => {
-    const response = await fetch('/newexperimental/api/save_apparatus.php', {
+    const response = await fetch('/experimental/api/save_apparatus.php', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -266,7 +266,7 @@ export const apparatusService = {
 
   // Update existing apparatus
   update: async (a, data) => {
-    const response = await fetch('/newexperimental/api/save_apparatus.php', {
+    const response = await fetch('/experimental/api/save_apparatus.php', {
       method: 'POST',
       credentials: 'include',
       headers: { 'Content-Type': 'application/json' },
@@ -297,7 +297,7 @@ export const uploadService = {
 export const bulkLoadService = {
   // Get all user's experiments for "Load from Previous Experiment" feature
   getMyExperiments: async () => {
-    const response = await fetch('/newexperimental/api/get_my_experiments.php', {
+    const response = await fetch('/experimental/api/get_my_experiments.php', {
       credentials: 'include'
     })
     if (!response.ok) {
@@ -311,7 +311,7 @@ export const bulkLoadService = {
 
   // Get example experiment data for "New User? Load Example Data" feature
   getExampleData: async () => {
-    const response = await fetch('/newexperimental/data/example_experiment.json')
+    const response = await fetch('/experimental/data/example_experiment.json')
     if (!response.ok) {
       throw new Error('Failed to load example data')
     }
@@ -320,7 +320,7 @@ export const bulkLoadService = {
 
   // Get all facilities with apparatuses for apparatus repository selection
   getApparatusList: async () => {
-    const response = await fetch('/newexperimental/api/get_apparatus_list.php', {
+    const response = await fetch('/experimental/api/get_apparatus_list.php', {
       credentials: 'include'
     })
     if (!response.ok) {
@@ -334,7 +334,7 @@ export const bulkLoadService = {
 
   // Get single facility from apparatus repository
   getApprepoFacility: async (id) => {
-    const response = await fetch(`/newexperimental/api/get_apprepo_facility.php?id=${id}`, {
+    const response = await fetch(`/experimental/api/get_apprepo_facility.php?id=${id}`, {
       credentials: 'include'
     })
     if (!response.ok) {
@@ -348,7 +348,7 @@ export const bulkLoadService = {
 
   // Get single apparatus from apparatus repository
   getApprepoApparatus: async (id) => {
-    const response = await fetch(`/newexperimental/api/get_apprepo_apparatus.php?id=${id}`, {
+    const response = await fetch(`/experimental/api/get_apprepo_apparatus.php?id=${id}`, {
       credentials: 'include'
     })
     if (!response.ok) {

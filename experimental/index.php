@@ -41,14 +41,14 @@ $isAdmin = ($userpkey && in_array($userpkey, $admin_pkeys));
         username: <?php echo json_encode($username); ?>,
         isLoggedIn: <?php echo json_encode($isLoggedIn); ?>,
         isAdmin: <?php echo json_encode($isAdmin); ?>,
-        basePath: '/newexperimental',
+        basePath: '/experimental',
         apiPath: '/expdb'
     };
 </script>
 
 <!-- Load Vue App (built assets) -->
-<script type="module" src="/newexperimental/dist/assets/main.js"></script>
-<link rel="stylesheet" href="/newexperimental/dist/assets/main.css">
+<script type="module" src="/experimental/dist/assets/main.js"></script>
+<link rel="stylesheet" href="/experimental/dist/assets/main.css">
 
 <?php
 // Include site footer

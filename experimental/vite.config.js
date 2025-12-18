@@ -4,7 +4,7 @@ import { resolve } from 'path'
 
 export default defineConfig({
   plugins: [vue()],
-  base: '/newexperimental/dist/',
+  base: '/experimental/dist/',
   build: {
     outDir: 'dist',
     emptyDirOnBuild: true,

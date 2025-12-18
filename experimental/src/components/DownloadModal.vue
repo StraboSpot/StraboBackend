@@ -212,7 +212,7 @@ const handleDownloadPdf = async () => {
 
   try {
     // Construct the PDF download URL
-    const pdfUrl = `/newexperimental/api/download_pdf.php?id=${props.experimentPkey}`
+    const pdfUrl = `/experimental/api/download_pdf.php?id=${props.experimentPkey}`
 
     // Create a link and trigger download
     const link = document.createElement('a')

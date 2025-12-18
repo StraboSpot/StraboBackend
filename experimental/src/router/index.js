@@ -132,7 +132,7 @@ const routes = [
 ]
 
 const router = createRouter({
-  history: createWebHistory('/newexperimental/'),
+  history: createWebHistory('/experimental/'),
   routes,
   scrollBehavior(to, from, savedPosition) {
     // If browser back/forward, restore saved position

@@ -94,7 +94,7 @@ function generateFileUrl(uuid, filename) {
   // Sanitize filename - replace spaces with underscores (matching old app)
   const sanitizedFilename = filename.replace(/\s+/g, '_')
   // Use the new view endpoint
-  return `/newexperimental/api/view_document.php?uuid=${uuid}&filename=${encodeURIComponent(sanitizedFilename)}`
+  return `/experimental/api/view_document.php?uuid=${uuid}&filename=${encodeURIComponent(sanitizedFilename)}`
 }
 
 async function handleFileSelect(event) {
@@ -140,7 +140,7 @@ async function handleFileSelect(event) {
     }
 
     // POST to the upload endpoint
-    xhr.open('POST', '/newexperimental/api/upload_document.php')
+    xhr.open('POST', '/experimental/api/upload_document.php')
     xhr.send(formData)
 
   } catch (error) {

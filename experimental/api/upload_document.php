@@ -85,7 +85,7 @@ if (!$result) {
 }
 
 // Move file to filesystem (new location for newexperimental app)
-$targetPath = "/srv/app/www/newexperimental/expimages/$uuid";
+$targetPath = "/srv/app/www/experimental/expimages/$uuid";
 if (!move_uploaded_file($tmp_name, $targetPath)) {
     http_response_code(500);
     echo json_encode(['error' => 'Failed to move uploaded file']);

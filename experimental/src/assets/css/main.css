@@ -255,6 +255,42 @@
   color: #ff6b7a !important;
 }
 
+/* PrimeVue focus ring override - kill all blue focus indicators */
+:root {
+  --p-focus-ring-color: transparent !important;
+  --p-focus-ring-offset: 0 !important;
+  --p-focus-ring-width: 0 !important;
+  --p-focus-ring-shadow: none !important;
+}
+
+.p-select,
+.p-select.p-focus,
+.p-select:focus,
+.p-select:focus-within,
+.p-select:focus-visible,
+.p-multiselect,
+.p-multiselect.p-focus,
+.p-multiselect:focus,
+.p-multiselect:focus-within,
+.p-multiselect:focus-visible,
+.p-inputtext,
+.p-inputtext:focus,
+.p-inputtext:focus-visible {
+  outline: none !important;
+  outline-width: 0 !important;
+  outline-color: transparent !important;
+  box-shadow: none !important;
+  border-color: var(--p-surface-500) !important;
+}
+
+.p-select.p-focus,
+.p-select:focus-within,
+.p-multiselect.p-focus,
+.p-multiselect:focus-within,
+.p-inputtext:focus {
+  border-color: #dc3545 !important;
+}
+
 /* StraboSpot logo font style for modal headers */
 .p-dialog .p-dialog-title {
   font-family: 'Raleway', sans-serif !important;

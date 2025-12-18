@@ -3,14 +3,14 @@
 
 <IfModule mod_rewrite.c>
     RewriteEngine On
-    RewriteBase /newexperimental/
+    RewriteBase /experimental/
 
     # Don't rewrite requests for actual files
     RewriteCond %{REQUEST_FILENAME} !-f
     RewriteCond %{REQUEST_FILENAME} !-d
 
     # Don't rewrite dist folder (built assets)
-    RewriteCond %{REQUEST_URI} !^/newexperimental/dist/
+    RewriteCond %{REQUEST_URI} !^/experimental/dist/
 
     # Send everything else to index.php
     RewriteRule ^(.*)$ index.php [L,QSA]

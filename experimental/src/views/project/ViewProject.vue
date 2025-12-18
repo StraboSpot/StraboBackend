@@ -73,7 +73,7 @@
                   <router-link v-if="project.can_edit" :to="`/edit_experiment?e=${exp.pkey}`" class="text-strabo-accent hover:underline">
                     Edit
                   </router-link>
-                  <a :href="`/newexperimental/api/download_experiment.php?id=${exp.pkey}`" class="text-strabo-accent hover:underline">
+                  <a :href="`/experimental/api/download_experiment.php?id=${exp.pkey}`" class="text-strabo-accent hover:underline">
                     Download
                   </a>
                 </div>
