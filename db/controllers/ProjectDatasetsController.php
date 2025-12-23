@@ -29,21 +29,6 @@ class ProjectDatasetsController extends MyController
 		return $data;
 	}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	public function postAction($request) {
 
 		if(isset($request->url_elements[2])) {
@@ -76,24 +61,6 @@ class ProjectDatasetsController extends MyController
 
 		return $data;
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 	public function deleteAction($request) {
 

@@ -3008,12 +3008,12 @@ stdClass Object
 			$data['projects'][$x]['modified_timestamp'] = (int) $mod;
 
 			if($cdata->collaboration_level == "edit"){
-				$data['projects'][$x]['readonly'] = FALSE;
+				$data['projects'][$x]['isReadOnly'] = FALSE;
 			}else{
-				$data['projects'][$x]['readonly'] = TRUE;
+				$data['projects'][$x]['isReadOnly'] = TRUE;
 			}
 			
-			$data['projects'][$x]['isowner'] = FALSE;
+			$data['projects'][$x]['isOwner'] = FALSE;
 
 			$x++;
 
@@ -3068,8 +3068,8 @@ stdClass Object
 
 				$data['projects'][$x]['modified_timestamp'] = (int) $mod;
 				
-				$data['projects'][$x]['isowner'] = TRUE;
-				$data['projects'][$x]['readonly'] = FALSE;
+				$data['projects'][$x]['isOwner'] = TRUE;
+				$data['projects'][$x]['isReadOnly'] = FALSE;
 
 				$x++;
 			}
@@ -4429,8 +4429,8 @@ public function getSpotName($id){
 
 			$data->self="https://strabospot.org/db/project/$feature_id";
 			
-			$data->readonly = $readonly;
-			$data->isowner = $isowner;
+			$data->isReadOnly = $readonly;
+			$data->isOwner = $isowner;
 
 		}else{
 			//Error, sample not found
@@ -4648,7 +4648,7 @@ stdClass Object
 				}
 
 				$data['datasets'][$x]=$this->singleDatasetJSON($fd);
-				$data['datasets'][$x]['readonly'] = $readonly;
+				$data['datasets'][$x]['isReadOnly'] = $readonly;
 				
 
 				$x++;
