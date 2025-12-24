@@ -133,16 +133,16 @@ class ProjectDatasetDeleteSpotController extends MyController
 						$this->strabo->addDatasetToProject($projectid, $datasetid, "HAS_DATASET", $ownerPkey, $originaluserpkey);
 	
 						if($spotid!=""){
-	
-							$this->strabo->setuserpkey((int)$newuserpkey);
-							$this->strabo->deleteSingleSpot($spotid,$newuserpkey);
-	
+
+							$this->strabo->setuserpkey((int)$ownerPkey);
+							$this->strabo->deleteSingleSpot($spotid,$ownerPkey);
+
 						}
 					}
-	
+
 					if($datasetid!=""){
 
-						$this->strabo->setuserpkey((int)$newuserpkey); // Kept for other strabo methods
+						$this->strabo->setuserpkey((int)$ownerPkey); // Kept for other strabo methods
 						//$this->strabo->buildDatasetRelationships($datasetid);
 						$this->strabo->setDatasetCenter($datasetid, $ownerPkey);
 

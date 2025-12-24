@@ -3789,22 +3789,29 @@ public function getSpotName($id){
 	 * by the new collaboration model. Controllers should use the CollaborationAuth
 	 * service for authorization checks.
 	 */
+	/**
+	 * @deprecated Use CollaborationAuth service instead.
+	 * This function has been replaced by the CollaborationAuth service (db/services/CollaborationAuth.php)
+	 * which provides proper authorization checks using the new ownership model (userpkey + created_by).
+	 * Commented out 2025-12-24 during collaboration cleanup.
+	 */
+	/*
 	public function getCollabInfo($projectid) {
 
 		//This is a helper class that gets collaboration info for a given project
 		$out = new stdClass();
-		
+
 		//collab :	pkey 	strabo_project_id 	project_owner_user_pkey 	collaborator_user_pkey 	collaboration_level 	accepted 	created_date 	accepted_date 	uuid 	disabled
 		//users:	 pkey 	firstname 	lastname 	email 	password 	hash 	active 	userlevel 	profileimage 	signup_date 	deleted 	orcid_token 	macrostrat_token
-		
+
 		//need to check accepted, and disabled fields too. Set to readonly as necessary.
-		
+
 		//echo "select * from collaborators where strabo_project_id = '$projectid'";exit();
-		
+
 		$collabcount = $this->db->get_var_prepared("
 			select count(*) from collaborators where strabo_project_id = $1
 		",array($projectid));
-		
+
 
 		//Check to see if user owns a project with this id:
 		$usercount = $this->neodb->get_var("match (p:Project) where p.userpkey = $this->userpkey and p.id = $projectid return count(p)");
@@ -3818,28 +3825,12 @@ public function getSpotName($id){
 			$out->neoid = $this->neodb->get_var("match (p:Project) where p.userpkey = $this->userpkey and p.id = $projectid return id(p) as neoid");
 		}else{
 			$out->isOwner = FALSE;
-		}	
-		
-		/*
-		stdClass Object
-		(
-			[pkey] => 37
-			[strabo_project_id] => 17646969651556
-			[project_owner_user_pkey] => 8988
-			[collaborator_user_pkey] => 3
-			[collaboration_level] => readonly
-			[accepted] => f
-			[created_date] => 2025-12-03 10:06:48.619087-05
-			[accepted_date] => 
-			[uuid] => 7f9a5783-94b0-45ea-a996-b0f163f5d309
-			[disabled] => f
-		)
-		*/
-		
+		}
+
 		if($collabcount > 0){
 			$out->isCollaborativeProject = TRUE;
 			$out->ownerpkey = $this->db->get_var_prepared("select project_owner_user_pkey from collaborators where strabo_project_id = $1",array($projectid));
-			
+
 			//Also get user's collaboration (if they are one)
 			$collabrow = $this->db->get_row_prepared("select * from collaborators where strabo_project_id = $1 and collaborator_user_pkey = $2 and accepted = true and disabled = false",array($projectid, $this->userpkey));
 
@@ -3853,7 +3844,7 @@ public function getSpotName($id){
 				$out->isUserCollaborator = FALSE;
 				$out->collaborationLevel = "none";
 			}
-			
+
 			//Also check for "halted" collaboration. If collabcount > 0 and all disabled, collab is now halted
 			$enabledcount = $this->db->get_var_prepared("select count(*) from collaborators where strabo_project_id = $1 and disabled = false",array($projectid));
 			if($enabledcount > 0){
@@ -3861,7 +3852,7 @@ public function getSpotName($id){
 			}else{
 				$out->isHalted = TRUE;
 			}
-			
+
 		}else{
 			$out->isCollaborativeProject = FALSE;
 			$out->isUserCollaborator = FALSE;
@@ -3870,6 +3861,7 @@ public function getSpotName($id){
 
 		return $out;
 	}
+	*/
 
 	public function throwJSONError($message){
 		$out = new stdClass();
