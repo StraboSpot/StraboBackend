@@ -168,7 +168,8 @@ class DatasetController extends MyController
 				}
 
 				$injson=json_encode($upload);
-				$data = $this->strabo->insertDataset($injson,$thisid);
+				// Pass originalUserpkey for created_by tracking on new datasets
+				$data = $this->strabo->insertDataset($injson, $thisid, $originalUserpkey);
 
 				// Restore original userpkey if changed
 				if ($context->effectiveOwner !== $originalUserpkey) {
@@ -177,12 +178,14 @@ class DatasetController extends MyController
 			} else {
 				// Dataset not linked to project - allow create/update
 				$injson=json_encode($upload);
-				$data = $this->strabo->insertDataset($injson,$thisid);
+				// User is the creator
+				$data = $this->strabo->insertDataset($injson, $thisid, $this->strabo->userpkey);
 			}
 		} else {
 			// New dataset - anyone can create their own datasets
 			$injson=json_encode($upload);
-			$data = $this->strabo->insertDataset($injson,$thisid);
+			// User is the creator
+			$data = $this->strabo->insertDataset($injson, $thisid, $this->strabo->userpkey);
 		}
 
 		if($data->Error != ""){

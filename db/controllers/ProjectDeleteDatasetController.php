@@ -75,7 +75,9 @@ class ProjectDeleteDatasetController extends MyController
 			}
 
 			$injson = json_encode($upload['project']);
-			$this->strabo->insertProject($injson);
+			// Determine if this is a collaborative edit (user is collaborator, not owner)
+			$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner);
+			$this->strabo->insertProject($injson, null, $isCollaborativeEdit, $userpkey);
 
 			//Delete Dataset
 			if($dcount > 0) $this->strabo->deleteSingleDataset($datasetid);

@@ -33,7 +33,14 @@ class ProjectDatasetsController extends MyController
 				$this->strabo->setuserpkey($context->effectiveOwner);
 			}
 
-			$data = $this->strabo->getProjectDatasets($projectId);
+			// Pass collaboration context for proper readonly determination
+			$data = $this->strabo->getProjectDatasets(
+				$projectId,
+				$originalUserpkey,
+				$context->isOwner,
+				$context->isHalted,
+				$context->permissionLevel
+			);
 
 			// Restore original userpkey if changed
 			if ($context->effectiveOwner !== $originalUserpkey) {
@@ -76,18 +83,15 @@ class ProjectDatasetsController extends MyController
 				$data["Error"] = "No dataset ID provided.";
 
 			}else{
-				// Use effectiveOwner for the operation
+				// Pass collaboration context to addDatasetToProject
 				$originalUserpkey = $this->strabo->userpkey;
-				if ($context->effectiveOwner !== $originalUserpkey) {
-					$this->strabo->setuserpkey($context->effectiveOwner);
-				}
-
-				$data = $this->strabo->addDatasetToProject($projectId,$datasetid,"HAS_DATASET");
-
-				// Restore original userpkey if changed
-				if ($context->effectiveOwner !== $originalUserpkey) {
-					$this->strabo->setuserpkey($originalUserpkey);
-				}
+				$data = $this->strabo->addDatasetToProject(
+					$projectId,
+					$datasetid,
+					"HAS_DATASET",
+					$context->effectiveOwner,
+					$originalUserpkey
+				);
 			}
 
 		} else { //feature id is not set error

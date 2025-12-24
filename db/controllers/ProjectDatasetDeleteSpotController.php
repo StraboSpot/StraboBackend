@@ -108,7 +108,9 @@ class ProjectDatasetDeleteSpotController extends MyController
 			}
 
 			$injson = json_encode($upload['project']);
-			$this->strabo->insertProject($injson);
+			// Determine if this is a collaborative edit (user is collaborator, not owner)
+			$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner);
+			$this->strabo->insertProject($injson, null, $isCollaborativeEdit, $ownerPkey);
 
 			foreach($datasets as $d){
 				$datasetid = $d->id;
@@ -122,12 +124,13 @@ class ProjectDatasetDeleteSpotController extends MyController
 						//first, delete dataset relationships
 						//$this->strabo->deleteDatasetRelationships($datasetid);
 						$injson = json_encode($d);
-						
-						
+
+
 						$this->strabo->setuserpkey((int)$originaluserpkey);
-						$this->strabo->insertDataset($injson);
+						// Pass originaluserpkey for created_by tracking
+						$this->strabo->insertDataset($injson, null, $originaluserpkey);
 						$this->strabo->setuserpkey((int)$originaluserpkey);
-						$this->strabo->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
+						$this->strabo->addDatasetToProject($projectid, $datasetid, "HAS_DATASET", $ownerPkey, $originaluserpkey);
 	
 						if($spotid!=""){
 	

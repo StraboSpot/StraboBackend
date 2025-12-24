@@ -120,20 +120,18 @@ class ProjectController extends MyController
 
 			if ($context->canRead()) {
 				// Project exists - check if user can edit
-				// Project metadata (name, description, etc.) can only be edited by owner
-				// But insertProject also handles datasets which collaborators can add
-				// The business logic layer handles the fine-grained permissions
-
-				// For now, allow owner and edit collaborators to call insertProject
-				// The business logic will enforce per-field permissions
 				if ($context->permissionLevel === 'readonly') {
 					return $this->forbidden("You don't have edit permission on this project");
 				}
 
-				// Set effective owner for the operation
+				// Determine if this is a collaborative edit (user is collaborator, not owner)
 				$originalUserpkey = $this->strabo->userpkey;
-				if ($context->effectiveOwner !== $originalUserpkey) {
-					$this->strabo->setuserpkey($context->effectiveOwner);
+				$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner);
+				$ownerPkey = $context->effectiveOwner;
+
+				// Set effective owner for the operation
+				if ($ownerPkey !== $originalUserpkey) {
+					$this->strabo->setuserpkey($ownerPkey);
 				}
 
 				if($uuid = $this->strabo->createVersion($projectid)){
@@ -144,10 +142,11 @@ class ProjectController extends MyController
 
 				$injson = json_encode($upload);
 
-				$data = $this->strabo->insertProject($injson,$thisid);
+				// Pass collaborative edit flag and owner pkey
+				$data = $this->strabo->insertProject($injson, $thisid, $isCollaborativeEdit, $ownerPkey);
 
 				// Restore original userpkey if changed
-				if ($context->effectiveOwner !== $originalUserpkey) {
+				if ($ownerPkey !== $originalUserpkey) {
 					$this->strabo->setuserpkey($originalUserpkey);
 				}
 			} else {
@@ -161,7 +160,8 @@ class ProjectController extends MyController
 
 				$injson = json_encode($upload);
 
-				$data = $this->strabo->insertProject($injson,$thisid);
+				// New project - not a collaborative edit
+				$data = $this->strabo->insertProject($injson, $thisid, false, null);
 			}
 
 			//valid JSON found. Look for id or self and update if exists

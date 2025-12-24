@@ -105,7 +105,9 @@ class ProjectDatasetsSpotsController extends MyController
 			unset($upload['project']->datasets);
 			$injson = json_encode($upload['project'], JSON_PRETTY_PRINT);
 
-			$this->strabo->insertProject($injson);
+			// Determine if this is a collaborative edit (user is collaborator, not owner)
+			$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner);
+			$this->strabo->insertProject($injson, null, $isCollaborativeEdit, $ownerPkey);
 
 			if($datasets != ""){
 				foreach($datasets as $dataset){
@@ -125,10 +127,11 @@ class ProjectDatasetsSpotsController extends MyController
 
 							$this->strabo->setuserpkey((int)$userpkey);
 
-							$this->strabo->insertDataset($injson);
-							
+							// Pass originalUploader for created_by tracking
+							$this->strabo->insertDataset($injson, null, $originalUploader);
+
 							$this->strabo->setuserpkey((int)$userpkey);
-							$this->strabo->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
+							$this->strabo->addDatasetToProject($projectid, $datasetid, "HAS_DATASET", $ownerPkey, $originalUploader);
 	
 							//Check if this user is able to edit this dataset
 							
