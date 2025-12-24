@@ -26,6 +26,12 @@ class ProjectContext {
     /** @var int|null The collaboration record pkey (if collaborator) */
     public ?int $collaborationId = null;
 
+    /** @var string|null The dataset ID (when context was obtained via getDatasetContext) */
+    public ?string $datasetId = null;
+
+    /** @var int|null Who created the dataset (when context was obtained via getDatasetContext) */
+    public ?int $datasetCreatedBy = null;
+
     /**
      * Quick check: is user the owner?
      */

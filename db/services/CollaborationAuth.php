@@ -285,4 +285,65 @@ class CollaborationAuth {
 
         return ['allowed' => true, 'reason' => null];
     }
+
+    // =========================================================================
+    // DATASET CONTEXT LOOKUPS
+    // =========================================================================
+
+    /**
+     * Get authorization context for a dataset
+     *
+     * Finds the project containing the dataset and returns the project context.
+     * This is needed for dataset-based operations where we don't have project ID upfront.
+     *
+     * @param int $userpkey - The requesting user's pkey
+     * @param string $datasetId - The dataset ID
+     * @return ProjectContext|null - Returns null if dataset not found or not linked to a project
+     */
+    public function getDatasetContext(int $userpkey, string $datasetId): ?ProjectContext {
+        // Find the project that contains this dataset (without userpkey filter)
+        $result = $this->neodb->get_row(
+            "MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset {id:$datasetId})
+             RETURN p.id as projectId, p.userpkey as ownerPkey, d.created_by as createdBy"
+        );
+
+        if (!$result) {
+            // Dataset not found or not linked to a project
+            return null;
+        }
+
+        $projectId = $result->get('projectId');
+        $ownerPkey = (int)$result->get('ownerPkey');
+
+        // Now get the full project context
+        $context = $this->getProjectContext($userpkey, $projectId);
+
+        // Add dataset-specific info
+        $context->datasetId = $datasetId;
+        $context->datasetCreatedBy = $result->get('createdBy') ? (int)$result->get('createdBy') : $ownerPkey;
+
+        return $context;
+    }
+
+    /**
+     * Get the project ID and owner for a dataset (no auth check, just lookup)
+     *
+     * @param string $datasetId - The dataset ID
+     * @return array|null - ['projectId' => string, 'ownerPkey' => int] or null if not found
+     */
+    public function getDatasetOwnerInfo(string $datasetId): ?array {
+        $result = $this->neodb->get_row(
+            "MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset {id:$datasetId})
+             RETURN p.id as projectId, p.userpkey as ownerPkey"
+        );
+
+        if (!$result) {
+            return null;
+        }
+
+        return [
+            'projectId' => $result->get('projectId'),
+            'ownerPkey' => (int)$result->get('ownerPkey')
+        ];
+    }
 }

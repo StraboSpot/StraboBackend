@@ -49,6 +49,37 @@ class MoveSpotToDatasetController extends MyController
 			return $data;
 		}
 
+		// Get the original dataset for this spot
+		$originaldatasetid = $this->strabo->getDatasetId($spotid);
+
+		// Check permissions on source dataset (where spot is coming from)
+		if ($originaldatasetid) {
+			$sourceContext = $this->auth->getDatasetContext($this->strabo->userpkey, $originaldatasetid);
+			if ($sourceContext !== null && !$this->auth->canEditDataset($sourceContext, $sourceContext->datasetCreatedBy)) {
+				if ($sourceContext->permissionLevel === 'none') {
+					return $this->notFound("Spot not found");
+				}
+				return $this->forbidden("You don't have permission to move spots from this dataset");
+			}
+		}
+
+		// Check permissions on target dataset (where spot is going to)
+		$targetContext = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetid);
+		if ($targetContext !== null && !$this->auth->canEditDataset($targetContext, $targetContext->datasetCreatedBy)) {
+			if ($targetContext->permissionLevel === 'none') {
+				return $this->notFound("Target dataset not found");
+			}
+			return $this->forbidden("You don't have permission to add spots to target dataset");
+		}
+
+		// Determine effectiveOwner - should be consistent across both datasets
+		// For collaboration, use the target project's owner
+		$userpkey = $targetContext ? $targetContext->effectiveOwner : $this->strabo->userpkey;
+		$originalUserpkey = $this->strabo->userpkey;
+		if ($userpkey !== $originalUserpkey) {
+			$this->strabo->setuserpkey($userpkey);
+		}
+
 		//First, check for spot
 		if($this->strabo->findSpot($spotid)){
 
@@ -59,8 +90,6 @@ class MoveSpotToDatasetController extends MyController
 				$originalprojectid = $this->strabo->getProjectId($originaldatasetid);
 				$projectid = $this->strabo->getProjectId($datasetid);
 
-				
-
 				//remove
 				$this->strabo->removeSpotFromDataset($spotid);
 
@@ -68,7 +97,6 @@ class MoveSpotToDatasetController extends MyController
 				$this->strabo->addSpotToDataset($datasetid,$spotid);
 
 				//Update all modified_timestamps
-				$userpkey = $this->strabo->userpkey;
 
 				//Original Project
 				$this->strabo->neodb->query("match (p:Project) where p.id = $originalprojectid and p.userpkey = $userpkey set p.modified_timestamp = $modified_timestamp");
@@ -89,15 +117,15 @@ class MoveSpotToDatasetController extends MyController
 				$this->strabo->buildDatasetRelationships($datasetid);
 				$this->strabo->buildDatasetRelationships($originaldatasetid);
 
-				$this->strabo->setDatasetCenter($datasetid);
-				$this->strabo->setDatasetCenter($originaldatasetid);
+				$this->strabo->setDatasetCenter($datasetid, $userpkey);
+				$this->strabo->setDatasetCenter($originaldatasetid, $userpkey);
 
-				$this->strabo->setProjectCenter($originalprojectid);
-				$this->strabo->setProjectCenter($projectid);
+				$this->strabo->setProjectCenter($originalprojectid, $userpkey);
+				$this->strabo->setProjectCenter($projectid, $userpkey);
 
 				//also add dataset to Postgres Database here.
-				$this->strabo->buildPgDataset($originaldatasetid); //need to re-implement JMA 02282020
-				$this->strabo->buildPgDataset($datasetid);
+				$this->strabo->buildPgDataset($originaldatasetid, $userpkey);
+				$this->strabo->buildPgDataset($datasetid, $userpkey);
 
 				header("Success", true, 201);
 				$data['message'] = "Spot $spotid moved to dataset $datasetid.";
@@ -111,6 +139,11 @@ class MoveSpotToDatasetController extends MyController
 			//Error, feature not found
 			header("Bad Request", true, 404);
 			$data["Error"] = "Spot $spotid not found.";
+		}
+
+		// Restore original userpkey if changed
+		if ($userpkey !== $originalUserpkey) {
+			$this->strabo->setuserpkey($originalUserpkey);
 		}
 
 		return $data;

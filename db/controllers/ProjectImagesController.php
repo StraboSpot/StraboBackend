@@ -18,9 +18,27 @@ class ProjectImagesController extends MyController
 
 		if(isset($request->url_elements[2])) {
 
-			$feature_id = $request->url_elements[2];
+			$projectId = $request->url_elements[2];
 
-			$data = $this->strabo->getProjectImagesForAPI($feature_id);
+			// Check if user has read access to this project
+			$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectId);
+
+			if (!$context->canRead()) {
+				return $this->notFound("Project not found");
+			}
+
+			// Use effectiveOwner to get images from the correct owner's project
+			$originalUserpkey = $this->strabo->userpkey;
+			if ($context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($context->effectiveOwner);
+			}
+
+			$data = $this->strabo->getProjectImagesForAPI($projectId);
+
+			// Restore original userpkey if changed
+			if ($context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($originalUserpkey);
+			}
 
 		} else {
 			header("Bad Request", true, 400);

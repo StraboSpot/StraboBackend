@@ -26,6 +26,7 @@ class ProjectDatasetSpotController extends MyController
 
 		$upload = $request->parameters;
 		unset($upload['apiformat']);
+		$errors = "";
 
 		$projectid = $upload['project']->id;
 		if($projectid != ""){
@@ -49,7 +50,36 @@ class ProjectDatasetSpotController extends MyController
 
 		if(!$errors){
 
-			$userpkey = $this->strabo->userpkey;
+			// Check project authorization
+			$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectid);
+
+			// If project exists, check if user can edit
+			if ($context->canRead()) {
+				// Project exists
+				if ($context->permissionLevel === 'readonly') {
+					return $this->forbidden("You don't have edit permission on this project");
+				}
+
+				// For dataset operations, check dataset permission
+				if ($datasetid) {
+					$datasetContext = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetid);
+					$datasetCreatedBy = $datasetContext ? $datasetContext->datasetCreatedBy : $this->strabo->userpkey;
+
+					// Check if user can edit dataset (or create new dataset)
+					if ($datasetContext !== null && !$this->auth->canEditDataset($context, $datasetCreatedBy)) {
+						return $this->forbidden("You don't have permission to edit this dataset");
+					}
+				}
+			}
+			// If project doesn't exist, user is creating a new project - allowed
+
+			// Use effectiveOwner for operations
+			$userpkey = $context->effectiveOwner ?: $this->strabo->userpkey;
+			$originalUserpkey = $this->strabo->userpkey;
+			if ($userpkey !== $originalUserpkey) {
+				$this->strabo->setuserpkey($userpkey);
+			}
+
 			$pcount = $this->strabo->db->get_var_prepared("SELECT count(*) FROM vprojects WHERE userpkey=$1 AND projectid=$2", array($userpkey, $projectid));
 			if($pcount > 0){
 				$this->strabo->createVersion($projectid);
@@ -85,8 +115,6 @@ class ProjectDatasetSpotController extends MyController
 						$newwkt = $this->strabo->fixSpotCoordinates($image_basemap);
 					}
 
-					$userpkey = $this->strabo->userpkey;
-
 					$safe_userpkey = addslashes($userpkey);
 					$safe_spotid = addslashes($spotid);
 					$safe_newwkt = addslashes($newwkt);
@@ -102,13 +130,18 @@ class ProjectDatasetSpotController extends MyController
 
 			if($datasetid!=""){
 				$this->strabo->buildDatasetRelationships($datasetid);
-				$this->strabo->setDatasetCenter($datasetid);
+				$this->strabo->setDatasetCenter($datasetid, $userpkey);
 
 				//also add dataset to Postgres Database here.
-				$this->strabo->buildPgDataset($datasetid); //need to re-implement JMA 02282020
+				$this->strabo->buildPgDataset($datasetid, $userpkey);
 			}
 
-			$this->strabo->setProjectCenter($projectid);
+			$this->strabo->setProjectCenter($projectid, $userpkey);
+
+			// Restore original userpkey if changed
+			if ($userpkey !== $originalUserpkey) {
+				$this->strabo->setuserpkey($originalUserpkey);
+			}
 
 			$data = $upload;
 		}else{

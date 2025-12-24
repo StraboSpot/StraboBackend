@@ -26,6 +26,7 @@ class ProjectDeleteDatasetController extends MyController
 
 		$upload = $request->parameters;
 		unset($upload['apiformat']);
+		$errors = "";
 
 		$projectid = $upload['project']->id;
 		if($projectid != ""){
@@ -41,11 +42,31 @@ class ProjectDeleteDatasetController extends MyController
 		$datasetid=$upload['datasetId'];
 		$projectid=$upload['project']->id;
 
-		$dcount = $this->strabo->neodb->get_var("match (p:Project)-[HAS_DATASET]->(d:Dataset) where p.id = $projectid and d.id = $datasetid return count(d)");
-
 		if(!$errors){
 
-			$userpkey = $this->strabo->userpkey;
+			// Check project authorization
+			$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectid);
+
+			// Get dataset creator to check edit permission
+			$datasetContext = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetid);
+			$datasetCreatedBy = $datasetContext ? $datasetContext->datasetCreatedBy : $this->strabo->userpkey;
+
+			// Check if user can delete this dataset
+			if (!$this->auth->canEditDataset($context, $datasetCreatedBy)) {
+				if ($context->permissionLevel === 'none') {
+					return $this->notFound("Project not found");
+				}
+				return $this->forbidden("You don't have permission to delete this dataset");
+			}
+
+			// Use effectiveOwner for operations
+			$userpkey = $context->effectiveOwner;
+			$originalUserpkey = $this->strabo->userpkey;
+			if ($userpkey !== $originalUserpkey) {
+				$this->strabo->setuserpkey($userpkey);
+			}
+
+			$dcount = $this->strabo->neodb->get_var("match (p:Project)-[HAS_DATASET]->(d:Dataset) where p.id = $projectid and d.id = $datasetid return count(d)");
 
 			$pcount = $this->strabo->db->get_var_prepared("SELECT count(*) FROM vprojects WHERE userpkey=$1 AND projectid=$2", array($userpkey, $projectid));
 			if($pcount > 0){
@@ -59,7 +80,12 @@ class ProjectDeleteDatasetController extends MyController
 			//Delete Dataset
 			if($dcount > 0) $this->strabo->deleteSingleDataset($datasetid);
 
-			$this->strabo->setProjectCenter($projectid);
+			$this->strabo->setProjectCenter($projectid, $userpkey);
+
+			// Restore original userpkey if changed
+			if ($userpkey !== $originalUserpkey) {
+				$this->strabo->setuserpkey($originalUserpkey);
+			}
 
 			$data = $upload;
 		}else{

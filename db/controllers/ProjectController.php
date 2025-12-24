@@ -16,7 +16,7 @@ class ProjectController extends MyController
 	public function getAction($request) {
 
 		if(isset($request->url_elements[2])) {
-			$feature_id = $request->url_elements[2];
+			$projectId = $request->url_elements[2];
 
 			if(isset($request->url_elements[3])) {
 				// do nothing, this is not a supported action
@@ -25,7 +25,25 @@ class ProjectController extends MyController
 
 			} else {
 
-				$data = $this->strabo->getProject($feature_id);
+				// Check if user has read access to this project
+				$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectId);
+
+				if (!$context->canRead()) {
+					return $this->notFound("Project not found");
+				}
+
+				// Use effectiveOwner to get project from the correct owner's data
+				$originalUserpkey = $this->strabo->userpkey;
+				if ($context->effectiveOwner !== $originalUserpkey) {
+					$this->strabo->setuserpkey($context->effectiveOwner);
+				}
+
+				$data = $this->strabo->getProject($projectId);
+
+				// Restore original userpkey if changed
+				if ($context->effectiveOwner !== $originalUserpkey) {
+					$this->strabo->setuserpkey($originalUserpkey);
+				}
 
 				if($data->Error!=""){
 					header("Project not Found", true, 404);
@@ -46,19 +64,27 @@ class ProjectController extends MyController
 			// check for feature with userid and id; delete if exists
 			//********************************************************************
 
-			$feature_id = (int)$request->url_elements[2];
+			$projectId = (int)$request->url_elements[2];
 
-			if($this->strabo->findProject($feature_id)){
+			// Check if user is owner of this project (only owner can delete)
+			$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectId);
 
-				$this->strabo->deleteProject($feature_id);
+			if (!$context->isOwner()) {
+				// Return 404 to hide existence of project from non-owners
+				return $this->notFound("Project $projectId not found.");
+			}
+
+			if($this->strabo->findProject($projectId)){
+
+				$this->strabo->deleteProject($projectId);
 
 				header("Project deleted", true, 204);
-				$data['message']="Project $feature_id deleted.";
+				$data['message']="Project $projectId deleted.";
 
 			}else{
 				//Error, feature not found
 				header("Bad Request", true, 404);
-				$data["Error"] = "Project $feature_id not found.";
+				$data["Error"] = "Project $projectId not found.";
 			}
 
 		} else {
@@ -87,15 +113,56 @@ class ProjectController extends MyController
 
 		}else{
 
-			if($uuid = $this->strabo->createVersion($projectid)){
-				$this->strabo->logToFile("Version created: $uuid.");
-			}else{
-				$this->strabo->logToFile("Version creation failed.");
+			// Check project authorization
+			// Note: insertProject() handles both create and update
+			// For updates, check if user has permission (owner or edit collaborator)
+			$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectid);
+
+			if ($context->canRead()) {
+				// Project exists - check if user can edit
+				// Project metadata (name, description, etc.) can only be edited by owner
+				// But insertProject also handles datasets which collaborators can add
+				// The business logic layer handles the fine-grained permissions
+
+				// For now, allow owner and edit collaborators to call insertProject
+				// The business logic will enforce per-field permissions
+				if ($context->permissionLevel === 'readonly') {
+					return $this->forbidden("You don't have edit permission on this project");
+				}
+
+				// Set effective owner for the operation
+				$originalUserpkey = $this->strabo->userpkey;
+				if ($context->effectiveOwner !== $originalUserpkey) {
+					$this->strabo->setuserpkey($context->effectiveOwner);
+				}
+
+				if($uuid = $this->strabo->createVersion($projectid)){
+					$this->strabo->logToFile("Version created: $uuid.");
+				}else{
+					$this->strabo->logToFile("Version creation failed.");
+				}
+
+				$injson = json_encode($upload);
+
+				$data = $this->strabo->insertProject($injson,$thisid);
+
+				// Restore original userpkey if changed
+				if ($context->effectiveOwner !== $originalUserpkey) {
+					$this->strabo->setuserpkey($originalUserpkey);
+				}
+			} else {
+				// New project - anyone can create their own project
+
+				if($uuid = $this->strabo->createVersion($projectid)){
+					$this->strabo->logToFile("Version created: $uuid.");
+				}else{
+					$this->strabo->logToFile("Version creation failed.");
+				}
+
+				$injson = json_encode($upload);
+
+				$data = $this->strabo->insertProject($injson,$thisid);
 			}
-
-			$injson = json_encode($upload);
-
-			$data = $this->strabo->insertProject($injson,$thisid);
 
 			//valid JSON found. Look for id or self and update if exists
 

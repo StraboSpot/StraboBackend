@@ -13,21 +13,50 @@
 
 class MyController
 {
-	 public function setstrabohandler($strabo){
-		 $this->strabo=$strabo;
-	 }
+	protected $strabo;
+	protected $auth;
 
-	 public function foobar($value){
+	public function setstrabohandler($strabo){
+		$this->strabo=$strabo;
+	}
 
-		 echo "$value";exit();
+	public function setauthhandler($auth){
+		$this->auth=$auth;
+	}
 
-	 }
-	 
+	/**
+	 * Return a 403 Forbidden response
+	 *
+	 * @param string $message Error message
+	 * @return array
+	 */
+	protected function forbidden($message = "You don't have permission to perform this action") {
+		header("Forbidden", true, 403);
+		return ["Error" => $message];
+	}
+
+	/**
+	 * Return a 404 Not Found response
+	 *
+	 * @param string $message Error message
+	 * @return array
+	 */
+	protected function notFound($message = "Resource not found") {
+		header("Not Found", true, 404);
+		return ["Error" => $message];
+	}
+
+	public function foobar($value){
+
+		echo "$value";exit();
+
+	}
+
 	public function dumpVar($var){
-	
+
 	echo "<pre>";
 	print_r($var);
-	echo "</pre>";	
+	echo "</pre>";
 	}
 
 	 // Default handlers for unsupported HTTP methods

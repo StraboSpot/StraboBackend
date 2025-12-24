@@ -16,7 +16,7 @@ class DatasetController extends MyController
 	public function getAction($request) {
 
 		if(isset($request->url_elements[2])) {
-			$feature_id = $request->url_elements[2];
+			$datasetId = $request->url_elements[2];
 
 			if(isset($request->url_elements[3])) {
 				// do nothing, this is not a supported action
@@ -24,8 +24,31 @@ class DatasetController extends MyController
 				$data["Error"] = $request->url_elements[3]." not supported.";
 
 			} else {
-				//get the feature from neo4j
-				$data = $this->strabo->getSingleDataset($feature_id);
+				// Check if user has read access to this dataset's project
+				$context = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetId);
+
+				// If dataset is linked to a project, check access
+				if ($context !== null) {
+					if (!$context->canRead()) {
+						return $this->notFound("Dataset not found");
+					}
+
+					// Use effectiveOwner to get dataset from the correct owner's data
+					$originalUserpkey = $this->strabo->userpkey;
+					if ($context->effectiveOwner !== $originalUserpkey) {
+						$this->strabo->setuserpkey($context->effectiveOwner);
+					}
+
+					$data = $this->strabo->getSingleDataset($datasetId);
+
+					// Restore original userpkey if changed
+					if ($context->effectiveOwner !== $originalUserpkey) {
+						$this->strabo->setuserpkey($originalUserpkey);
+					}
+				} else {
+					// Dataset not linked to project - use current user's context
+					$data = $this->strabo->getSingleDataset($datasetId);
+				}
 
 				if($data["Error"]!=""){
 					header("Dataset not Found", true, 404);
@@ -42,7 +65,7 @@ class DatasetController extends MyController
 	public function deleteAction($request) {
 
 		if(isset($request->url_elements[2])) {
-			$feature_id = (int)$request->url_elements[2];
+			$datasetId = (int)$request->url_elements[2];
 			if(isset($request->url_elements[3])) {
 				// do nothing, this is not a supported action
 				header("Bad Request", true, 400);
@@ -53,17 +76,55 @@ class DatasetController extends MyController
 				// check for feature with userid and id; delete if exists
 				//********************************************************************
 
-				if($this->strabo->findDataset($feature_id)){
+				// Check if user has edit access to this dataset
+				$context = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetId);
 
-					$this->strabo->deleteSingleDataset($feature_id);
+				if ($context !== null) {
+					// Dataset is linked to a project - check edit permission
+					if (!$this->auth->canEditDataset($context, $context->datasetCreatedBy)) {
+						if ($context->permissionLevel === 'none') {
+							return $this->notFound("Dataset $datasetId not found.");
+						}
+						return $this->forbidden("You don't have permission to delete this dataset");
+					}
 
-					header("Dataset deleted", true, 204);
-					$data['message']="Dataset $feature_id deleted.";
+					// Use effectiveOwner for the operation
+					$originalUserpkey = $this->strabo->userpkey;
+					if ($context->effectiveOwner !== $originalUserpkey) {
+						$this->strabo->setuserpkey($context->effectiveOwner);
+					}
 
-				}else{
-					//Error, feature not found
-					header("Bad Request", true, 404);
-					$data["Error"] = "Dataset $feature_id not found.";
+					if($this->strabo->findDataset($datasetId)){
+
+						$this->strabo->deleteSingleDataset($datasetId);
+
+						header("Dataset deleted", true, 204);
+						$data['message']="Dataset $datasetId deleted.";
+
+					}else{
+						//Error, feature not found
+						header("Bad Request", true, 404);
+						$data["Error"] = "Dataset $datasetId not found.";
+					}
+
+					// Restore original userpkey if changed
+					if ($context->effectiveOwner !== $originalUserpkey) {
+						$this->strabo->setuserpkey($originalUserpkey);
+					}
+				} else {
+					// Dataset not linked to project - user can delete their own unlinked datasets
+					if($this->strabo->findDataset($datasetId)){
+
+						$this->strabo->deleteSingleDataset($datasetId);
+
+						header("Dataset deleted", true, 204);
+						$data['message']="Dataset $datasetId deleted.";
+
+					}else{
+						//Error, feature not found
+						header("Bad Request", true, 404);
+						$data["Error"] = "Dataset $datasetId not found.";
+					}
 				}
 
 			}
@@ -74,14 +135,55 @@ class DatasetController extends MyController
 		return $data;
 	}
 
+	/**
+	 * Create or update a dataset
+	 *
+	 * NOTE: Datasets are created before being linked to projects, so no
+	 * project context is available at creation time. For updates to linked
+	 * datasets, we check collaboration permissions.
+	 */
 	public function postAction($request) {
 
 		$thisid = $request->url_elements[2];
 		$upload = $request->parameters;
 		unset($upload['apiformat']);
-		$injson=json_encode($upload);
 
-		$data = $this->strabo->insertDataset($injson,$thisid);
+		// Check if this is an update to an existing linked dataset
+		if ($thisid) {
+			$context = $this->auth->getDatasetContext($this->strabo->userpkey, $thisid);
+
+			if ($context !== null) {
+				// Dataset is linked to a project - check edit permission
+				if (!$this->auth->canEditDataset($context, $context->datasetCreatedBy)) {
+					if ($context->permissionLevel === 'none') {
+						return $this->notFound("Dataset not found");
+					}
+					return $this->forbidden("You don't have permission to edit this dataset");
+				}
+
+				// Use effectiveOwner for the operation
+				$originalUserpkey = $this->strabo->userpkey;
+				if ($context->effectiveOwner !== $originalUserpkey) {
+					$this->strabo->setuserpkey($context->effectiveOwner);
+				}
+
+				$injson=json_encode($upload);
+				$data = $this->strabo->insertDataset($injson,$thisid);
+
+				// Restore original userpkey if changed
+				if ($context->effectiveOwner !== $originalUserpkey) {
+					$this->strabo->setuserpkey($originalUserpkey);
+				}
+			} else {
+				// Dataset not linked to project - allow create/update
+				$injson=json_encode($upload);
+				$data = $this->strabo->insertDataset($injson,$thisid);
+			}
+		} else {
+			// New dataset - anyone can create their own datasets
+			$injson=json_encode($upload);
+			$data = $this->strabo->insertDataset($injson,$thisid);
+		}
 
 		if($data->Error != ""){
 			header("Bad Request", true, 400);

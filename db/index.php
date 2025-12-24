@@ -19,6 +19,9 @@ include "./strabospotclass.php";
 include_once('../includes/geophp/geoPHP.inc');
 include_once "../includes/UUID.php";
 
+//Load Collaboration Services
+include_once "./services/CollaborationAuth.php";
+
 //Load Base Controller
 include "./controllers/MyController.php";
 
@@ -50,6 +53,9 @@ $userpkey = $db->get_var_prepared("SELECT pkey FROM users WHERE email=$1", array
 $userpkey = (int)$userpkey;
 
 $strabo = new StraboSpot($neodb,$userpkey,$db);
+
+//Initialize collaboration auth service
+$collabAuth = new CollaborationAuth($db, $neodb);
 
 //pass along uuid class
 $uuid = new UUID();
@@ -112,6 +118,7 @@ if($showcontroller==""){$showcontroller="null";}
 if (class_exists($controller_name)) {
 	$controller = new $controller_name();
 	$controller->setstrabohandler($strabo);
+	$controller->setauthhandler($collabAuth);
 	$action_name = strtolower($request->verb) . 'Action';
 	$result = $controller->$action_name($request);
 }else{

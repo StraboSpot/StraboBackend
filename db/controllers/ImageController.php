@@ -13,6 +13,14 @@
 
 class ImageController extends MyController
 {
+	/**
+	 * Get an image file
+	 *
+	 * NOTE: Currently queries by userpkey which works for image owner.
+	 * TODO (Phase 6 - Image Ownership): Add collaboration support so
+	 * collaborators can access images that belong to the project owner's
+	 * namespace after ownership transfer.
+	 */
 	public function getAction($request) {
 
 		if(isset($request->url_elements[2])) {
@@ -61,6 +69,13 @@ class ImageController extends MyController
 		return $data;
 	}
 
+	/**
+	 * Delete an image
+	 *
+	 * NOTE: Currently only the original image owner can delete.
+	 * TODO (Phase 6 - Image Ownership): Consider whether project owner
+	 * should be able to delete collaborator-uploaded images after ownership transfer.
+	 */
 	public function deleteAction($request) {
 
 		if(isset($request->url_elements[2])) {
@@ -86,7 +101,7 @@ class ImageController extends MyController
 					$this->strabo->deleteImage($image_id);
 
 					header("Image deleted", true, 204);
-					$data['message']="Image $feature_id deleted.";
+					$data['message']="Image $image_id deleted.";
 
 				}else{
 					//Error, feature not found
@@ -102,6 +117,16 @@ class ImageController extends MyController
 		return $data;
 	}
 
+	/**
+	 * Upload a new image
+	 *
+	 * Images are uploaded before being linked to spots/projects, so no
+	 * project context is available at upload time. The image is owned by
+	 * the uploading user until linked to a collaborative project.
+	 *
+	 * TODO (Phase 6 - Image Ownership): Add created_by field to track
+	 * original uploader after ownership transfer.
+	 */
 	public function postAction($request) {
 
 		$data = $this->strabo->insertImage($_POST,$_FILES['image_file']);

@@ -18,10 +18,28 @@ class DatasetFieldsController extends MyController
 
 		if(isset($request->url_elements[2])) {
 
-			$feature_id = $request->url_elements[2];
+			$datasetId = $request->url_elements[2];
 			$ingtype = strtolower($request->url_elements[3]);
 
-			$data = $this->strabo->getDatasetFields($feature_id,$ingtype);
+			// Check if user has read access to this dataset's project
+			$context = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetId);
+
+			if (!$context || !$context->canRead()) {
+				return $this->notFound("Dataset not found");
+			}
+
+			// Use effectiveOwner to get dataset from the correct owner's data
+			$originalUserpkey = $this->strabo->userpkey;
+			if ($context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($context->effectiveOwner);
+			}
+
+			$data = $this->strabo->getDatasetFields($datasetId, $ingtype);
+
+			// Restore original userpkey if changed
+			if ($context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($originalUserpkey);
+			}
 
 		} else {
 			header("Bad Request", true, 400);

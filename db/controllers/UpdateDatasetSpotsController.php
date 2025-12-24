@@ -18,9 +18,27 @@ class UpdateDatasetSpotsController extends MyController
 
 		if(isset($request->url_elements[2])) {
 
-			$feature_id = $request->url_elements[2];
+			$datasetId = $request->url_elements[2];
 
-			$data = $this->strabo->getDatasetSpots($feature_id);
+			// Check if user has read access to this dataset's project
+			$context = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetId);
+
+			if ($context !== null && !$context->canRead()) {
+				return $this->notFound("Dataset not found");
+			}
+
+			// Use effectiveOwner for the query
+			$originalUserpkey = $this->strabo->userpkey;
+			if ($context !== null && $context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($context->effectiveOwner);
+			}
+
+			$data = $this->strabo->getDatasetSpots($datasetId);
+
+			// Restore original userpkey if changed
+			if ($context !== null && $context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($originalUserpkey);
+			}
 
 		} else {
 			header("Bad Request", true, 400);
@@ -36,12 +54,32 @@ class UpdateDatasetSpotsController extends MyController
 			//*******************************************************************************
 			//update attributes for feature
 
-			$feature_id = $request->url_elements[2];
+			$datasetId = $request->url_elements[2];
+
+			// Check if user has edit access to this dataset
+			$context = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetId);
+
+			if ($context !== null) {
+				// Dataset is linked to a project - check edit permission
+				if (!$this->auth->canEditDataset($context, $context->datasetCreatedBy)) {
+					if ($context->permissionLevel === 'none') {
+						return $this->notFound("Dataset not found");
+					}
+					return $this->forbidden("You don't have permission to update spots in this dataset");
+				}
+			}
+
+			// Use effectiveOwner for the operation
+			$originalUserpkey = $this->strabo->userpkey;
+			$effectiveUserpkey = $context !== null ? $context->effectiveOwner : $this->strabo->userpkey;
+			if ($effectiveUserpkey !== $originalUserpkey) {
+				$this->strabo->setuserpkey($effectiveUserpkey);
+			}
 
 			//********************************************************************
 			// check for Dataset with userid and id
 			//********************************************************************
-			if($this->strabo->findDataset($feature_id)){
+			if($this->strabo->findDataset($datasetId)){
 
 				$upload = $request->parameters;
 
@@ -57,21 +95,21 @@ class UpdateDatasetSpotsController extends MyController
 					if($this->strabo->findSpot($straboid)){
 
 						//see if it already exists in dataset
-						if(!$this->strabo->findSpotInDataset($feature_id,$straboid)){
+						if(!$this->strabo->findSpotInDataset($datasetId,$straboid)){
 
 							//********************************************************************
 							// Add to group
 							//********************************************************************
-							$this->strabo->addSpotToDataset($feature_id,$straboid);
+							$this->strabo->addSpotToDataset($datasetId,$straboid);
 
 							header("Spot added to dataset", true, 201);
-							$data['message']="Spot $straboid added to dataset $feature_id.";
+							$data['message']="Spot $straboid added to dataset $datasetId.";
 
 						}else{
 
 							//Error, feature not found
-							header("Spot $straboid already exists in dataset $feature_id.", true, 200);
-							$data["Error"] = "Spot $straboid already exists in dataset $feature_id.";
+							header("Spot $straboid already exists in dataset $datasetId.", true, 200);
+							$data["Error"] = "Spot $straboid already exists in dataset $datasetId.";
 
 						}
 
@@ -95,7 +133,7 @@ class UpdateDatasetSpotsController extends MyController
 
 						$spotid = $feature->properties->id;
 
-						if($this->strabo->spotExistsInOtherDataset($spotid,$feature_id)){
+						if($this->strabo->spotExistsInOtherDataset($spotid,$datasetId)){
 
 							//also get name
 							$spotname = $this->strabo->getSpotName($spotid);
@@ -111,7 +149,7 @@ class UpdateDatasetSpotsController extends MyController
 					if($data["Error"]==""){
 
 						//delete relationships
-						$this->strabo->deleteDatasetReltationships($feature_id);
+						$this->strabo->deleteDatasetReltationships($datasetId);
 
 						$data['type']="FeatureCollection";
 
@@ -122,7 +160,7 @@ class UpdateDatasetSpotsController extends MyController
 
 							$spotid = $feature->properties->id;
 
-							if(!$this->strabo->spotExistsInOtherDataset($spotid,$feature_id)){
+							if(!$this->strabo->spotExistsInOtherDataset($spotid,$datasetId)){
 
 								$spotstarttime = microtime(true);
 
@@ -135,9 +173,9 @@ class UpdateDatasetSpotsController extends MyController
 								$parts = explode("/",$parts);
 								$straboid = end($parts);
 
-								if(!$this->strabo->findSpotInDataset($feature_id,$straboid)){
+								if(!$this->strabo->findSpotInDataset($datasetId,$straboid)){
 
-									$this->strabo->addSpotToDataset($feature_id,$straboid);
+									$this->strabo->addSpotToDataset($datasetId,$straboid);
 
 									$totalspottime = microtime(true)-$spotstarttime; $this->strabo->logToFile("addspottodataset took: ".$totalspottime." secs","DATASET SPOT TIME");
 
@@ -151,8 +189,8 @@ class UpdateDatasetSpotsController extends MyController
 
 						}
 
+						// Log upload stats (use original user for tracking)
 						$spotcount = count($features);
-						$userpkey = $this->strabo->userpkey;
 						$this->strabo->db->query("
 							insert into up_down_stats
 								(
@@ -162,7 +200,7 @@ class UpdateDatasetSpotsController extends MyController
 									count_type,
 									count
 								) values (
-									$userpkey,
+									$originalUserpkey,
 									'upload',
 									'field app data',
 									'spot',
@@ -171,24 +209,24 @@ class UpdateDatasetSpotsController extends MyController
 						");
 
 						//now look on server to see if any spots need to be deleted
-						
+
 
 						$this->strabo->logToFile("Start building relationships...");
 						$spotstarttime=microtime(true);
 
 						//now build all relationships for project
-						$this->strabo->buildDatasetRelationships($feature_id);
+						$this->strabo->buildDatasetRelationships($datasetId);
 
-						$this->strabo->setDatasetCenter($feature_id);
+						$this->strabo->setDatasetCenter($datasetId, $effectiveUserpkey);
 
-						$projectid = $this->strabo->getProjectId($feature_id);
-						$this->strabo->setProjectCenter($projectid);
+						$projectid = $this->strabo->getProjectId($datasetId);
+						$this->strabo->setProjectCenter($projectid, $effectiveUserpkey);
 
 						$totalspottime = microtime(true)-$spotstarttime;
 						$this->strabo->logToFile("Relationships done in $totalspottime seconds ...");
 
 						//also add dataset to Postgres Database here.
-						$this->strabo->buildPgDataset($feature_id); //need to re-implement JMA 02282020
+						$this->strabo->buildPgDataset($datasetId, $effectiveUserpkey);
 					}
 
 				}else{
@@ -202,7 +240,12 @@ class UpdateDatasetSpotsController extends MyController
 			}else{
 				//Error, feature not found
 				header("Bad Request", true, 404);
-				$data["Error"] = "Dataset $feature_id not found.";
+				$data["Error"] = "Dataset $datasetId not found.";
+			}
+
+			// Restore original userpkey if changed
+			if ($effectiveUserpkey !== $originalUserpkey) {
+				$this->strabo->setuserpkey($originalUserpkey);
 			}
 
 		} else { //feature id is not set error

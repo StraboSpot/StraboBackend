@@ -18,14 +18,32 @@ class DatasetSpotsArcController extends MyController
 
 		if(isset($request->url_elements[2])) {
 
-			$feature_id = $request->url_elements[2];
+			$datasetId = $request->url_elements[2];
 			$ingtype = strtolower($request->url_elements[3]);
 
-			$data = $this->strabo->getDatasetSpotsArc($feature_id,$ingtype);
+			// Check if user has read access to this dataset's project
+			$context = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetId);
 
-			//Log download here
+			if (!$context || !$context->canRead()) {
+				return $this->notFound("Dataset not found");
+			}
+
+			// Use effectiveOwner to get dataset from the correct owner's data
+			$originalUserpkey = $this->strabo->userpkey;
+			if ($context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($context->effectiveOwner);
+			}
+
+			$data = $this->strabo->getDatasetSpotsArc($datasetId, $ingtype);
+
+			// Restore original userpkey if changed
+			if ($context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($originalUserpkey);
+			}
+
+			// Log download here (use requesting user, not effective owner)
 			$spotcount = count($data['features']);
-			$userpkey = $this->strabo->userpkey;
+			$userpkey = $originalUserpkey;
 			$this->strabo->db->query("
 				insert into up_down_stats
 					(
