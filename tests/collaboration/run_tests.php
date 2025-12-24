@@ -261,11 +261,11 @@ test(
     "HTTP {$r['code']}"
 );
 
-// Former collaborators should not have access (disabled = true)
+// Halted collaborators become readonly - they can still READ but not EDIT
 $r = makeRequest('GET', "$baseUrl/project/$projectHaltedId", 'editor@test.strabospot.org', $testPassword);
 test(
-    "Disabled collaborator gets 404 for halted project",
-    $r['code'] == 404,
+    "Halted collaborator can still read project (readonly)",
+    $r['code'] == 200,
     "HTTP {$r['code']}"
 );
 
