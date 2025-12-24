@@ -183,12 +183,11 @@ $neodb->query("
         name: 'Editor Dataset Collab',
         userpkey: $ownerPkey,
         created_by: $editorPkey,
-        collaboratorpkey: $editorPkey,
         modified_timestamp: $timestamp
     })
     CREATE (p)-[:HAS_DATASET]->(d)
 ");
-echo "   - Created dataset $datasetCollabEditor (created by editor, with collaboratorpkey)\n";
+echo "   - Created dataset $datasetCollabEditor (created by editor)\n";
 
 // Datasets in halted project
 $neodb->query("
