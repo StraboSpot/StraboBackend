@@ -3782,12 +3782,14 @@ public function getSpotName($id){
 
 	}
 
+	/**
+	 * @deprecated Use CollaborationAuth::getProjectContext() instead.
+	 * This method is kept for backwards compatibility but is no longer used
+	 * by the new collaboration model. Controllers should use the CollaborationAuth
+	 * service for authorization checks.
+	 */
 	public function getCollabInfo($projectid) {
 
-		//echo $this->userpkey;exit();
-		
-		//echo "projectid: $projectid";exit();
-	
 		//This is a helper class that gets collaboration info for a given project
 		$out = new stdClass();
 		
@@ -4187,39 +4189,46 @@ public function getSpotName($id){
 
 	}
 
-	public function getDataset($feature_id, $collaboratorpkey = ""){
+	/**
+	 * Get a dataset by ID.
+	 *
+	 * @param int $feature_id Dataset ID
+	 * @param int|null $createdBy Optional filter by created_by (who created the dataset)
+	 * @return object Dataset properties
+	 */
+	public function getDataset($feature_id, $createdBy = null){
 
-		if($collaboratorpkey != ""){
-			$userpkeystring=" and n.collaboratorpkey = $collaboratorpkey";
+		// Build filter for user access
+		if($createdBy !== null){
+			$userpkeystring=" and n.created_by = $createdBy";
 		}else{
 			if($this->userpkey!=99999){
 				$userpkeystring=" and n.userpkey = $this->userpkey";
+			}else{
+				$userpkeystring="";
 			}
 		}
-
-		$data = new stdClass();
 
 		//get the feature from neo4j
 		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id".$userpkeystring." RETURN n, id(n) as id;";
 
-		//echo "querystring: $querystring\n";//exit();
-		
 		$records = $this->neodb->query($querystring);
 
 		$count=count($records);
 
+		$properties = [];
 		if($count > 0){
 			$record = $records[0];
 
 			$project = $record->get("n");
 			$properties = $project->values();
-			
+
 			$id = $record->get("id");
 
 			$properties['neoid'] = $id;
 
 		}
-		
+
 		return (object)$properties;
 
 	}
