@@ -43,6 +43,12 @@ class ProjectDatasetsSpotsController extends MyController
 
 		$newuserpkey = $this->strabo->userpkey;
 
+		// Determine owner for side-effect functions
+		$ownerPkey = $this->strabo->userpkey; // default: current user is owner
+		if (isset($collabinfo) && $collabinfo->isCollaborativeProject && $collabinfo->ownerpkey) {
+			$ownerPkey = (int)$collabinfo->ownerpkey;
+		}
+
 		//Keep track of collaborative pkeys for dataset? No, the inside code will do that. Just keep track of datasets that we are allowed to edit?
 		$authorizeddatasets = [];
 		
@@ -185,8 +191,8 @@ class ProjectDatasetsSpotsController extends MyController
 	
 						if($datasetid!=""){
 							//$this->strabo->buildDatasetRelationships($datasetid);
-							$this->strabo->setDatasetCenter($datasetid);
-	
+							$this->strabo->setDatasetCenter($datasetid, $ownerPkey);
+
 							//also add dataset to Postgres Database here.
 						}
 					}
@@ -195,11 +201,11 @@ class ProjectDatasetsSpotsController extends MyController
 
 			}
 
-			$this->strabo->setProjectCenter($projectid);
+			$this->strabo->setProjectCenter($projectid, $ownerPkey);
 
 			if($datasetid!=""){
-				$this->strabo->setDatasetCenter($datasetid);
-				$this->strabo->buildPgDataset($datasetid);
+				$this->strabo->setDatasetCenter($datasetid, $ownerPkey);
+				$this->strabo->buildPgDataset($datasetid, $ownerPkey);
 			}
 
 			$data = $showout;

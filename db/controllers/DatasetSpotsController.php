@@ -149,9 +149,13 @@ stdClass Object
 )
 */
 
+			// Determine owner for side-effect functions
+			$ownerPkey = $this->strabo->userpkey; // default: current user
+
 			if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $dataset->collaboratorpkey == $this->strabo->userpkey && !$collabinfo->isHalted){
 				//echo "is collaborator with edit and dataset";
-				$this->strabo->setuserpkey((int)$collabinfo->ownerpkey);
+				$ownerPkey = (int)$collabinfo->ownerpkey;
+				$this->strabo->setuserpkey($ownerPkey); // Kept for other strabo methods
 			}elseif($collabinfo->isOwner && $dataset->userpkey == $this->strabo->userpkey){
 				//echo "is owner with dataset";
 				//pkey can remain unchanged
@@ -338,16 +342,16 @@ stdClass Object
 						//now build all relationships for project
 						//$this->strabo->buildDatasetRelationships($feature_id);
 
-						$this->strabo->setDatasetCenter($feature_id);
+						$this->strabo->setDatasetCenter($feature_id, $ownerPkey);
 
 						$projectid = $this->strabo->getProjectId($feature_id);
-						$this->strabo->setProjectCenter($projectid);
+						$this->strabo->setProjectCenter($projectid, $ownerPkey);
 
 						$totalspottime = microtime(true)-$spotstarttime;
 						//$this->strabo->logToFile("Relationships done in $totalspottime seconds ...");
 
 						//also add dataset to Postgres Database here.
-						$this->strabo->buildPgDataset($feature_id); //need to re-implement JMA 02282020
+						$this->strabo->buildPgDataset($feature_id, $ownerPkey);
 					}
 
 				}else{

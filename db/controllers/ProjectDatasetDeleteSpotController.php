@@ -54,6 +54,12 @@ class ProjectDatasetDeleteSpotController extends MyController
 		$originaluserpkey = $this->strabo->userpkey;
 		$newuserpkey = $this->strabo->userpkey;
 
+		// Determine owner for side-effect functions
+		$ownerPkey = $this->strabo->userpkey; // default: current user is owner
+		if (isset($collabinfo) && $collabinfo->isCollaborativeProject && $collabinfo->ownerpkey) {
+			$ownerPkey = (int)$collabinfo->ownerpkey;
+		}
+
 		//Keep track of collaborative pkeys for dataset? No, the inside code will do that. Just keep track of datasets that we are allowed to edit?
 		$authorizeddatasets = [];
 		
@@ -151,13 +157,13 @@ class ProjectDatasetDeleteSpotController extends MyController
 					}
 	
 					if($datasetid!=""){
-						
-						$this->strabo->setuserpkey((int)$newuserpkey);
+
+						$this->strabo->setuserpkey((int)$newuserpkey); // Kept for other strabo methods
 						//$this->strabo->buildDatasetRelationships($datasetid);
-						$this->strabo->setDatasetCenter($datasetid);
-	
+						$this->strabo->setDatasetCenter($datasetid, $ownerPkey);
+
 						//also add dataset to Postgres Database here.
-						$this->strabo->buildPgDataset($datasetid); //need to re-implement JMA 02282020
+						$this->strabo->buildPgDataset($datasetid, $ownerPkey);
 					}
 
 
@@ -169,7 +175,7 @@ class ProjectDatasetDeleteSpotController extends MyController
 
 			}
 
-			$this->strabo->setProjectCenter($projectid);
+			$this->strabo->setProjectCenter($projectid, $ownerPkey);
 
 			$data = $upload;
 		}else{

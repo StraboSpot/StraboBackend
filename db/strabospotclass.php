@@ -3995,7 +3995,8 @@ public function getSpotName($id){
 				if($collabinfo->isUserCollaborator){
 					if($collabinfo->collaborationLevel == "edit"){
 						$injson = $this->combineCollaborativeProject($injson, $collabinfo->ownerpkey);
-						$this->userpkey = (int)$collabinfo->ownerpkey;
+						// Note: Previously swapped $this->userpkey here (the kludge).
+						// Now we use $ownerPkey variable instead (set after this block).
 					}else{
 						//Not editor, throw error!
 						$this->throwJSONError("You don't have edit privileges on this project.");
@@ -4009,11 +4010,15 @@ public function getSpotName($id){
 			//Not collaboration project. Put in as normal
 			$injson = $this->combineNormalProject($injson);
 		}
-		
-		
-		
-		//Make sure to change $this->userpkey to owner if needed!!!
-		//Combine project but keep everything but tags,reports,etc... Project editor.
+
+		// Determine the effective owner for storing project data
+		// For collaborative projects where current user is an editor, use the project owner's pkey
+		// Otherwise, the current user is the owner
+		$ownerPkey = $this->userpkey;
+		if (isset($collabinfo) && $collabinfo->isCollaborativeProject &&
+		    $collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit") {
+			$ownerPkey = (int)$collabinfo->ownerpkey;
+		}
 		
 
 		
@@ -4046,7 +4051,7 @@ public function getSpotName($id){
 
 		if($thisid != ""){
 
-			$record=$this->neodb->getRecord("match (p:Project {id:$thisid, userpkey:$this->userpkey}) return id(p) as id,p");
+			$record=$this->neodb->getRecord("match (p:Project {id:$thisid, userpkey:$ownerPkey}) return id(p) as id,p");
 			if($record){
 				$projectid=$record->get("id");
 				$server_timestamp = $record->get("p")->values()["modified_timestamp"];
@@ -4061,7 +4066,7 @@ public function getSpotName($id){
 		// first the spot-level items
 		// ************************************************************
 		$newproject["id"]=$thisid;
-		$newproject['userpkey']=$this->userpkey;
+		$newproject['userpkey']=$ownerPkey;
 		if($upload->modified_timestamp!=""){ $newproject["modified_timestamp"] = (int) $upload->modified_timestamp; }
 		if($upload->date!=""){ $newproject["date"]=$upload->date; }
 
@@ -4107,7 +4112,7 @@ public function getSpotName($id){
 			$rockunits=array();
 			$runum=0;
 			foreach($upload->rock_units as $ru){
-				$rockunits[$runum]["userpkey"]=$this->userpkey;
+				$rockunits[$runum]["userpkey"]=$ownerPkey;
 				foreach($ru as $key=>$value){
 					if(is_array($value)||is_object($value)){ $value = json_encode($value); }
 					if($key=="id"){
@@ -4128,7 +4133,7 @@ public function getSpotName($id){
 			$tags=array();
 			$tagnum=0;
 			foreach($upload->tags as $t){
-				$tags[$tagnum]["userpkey"]=$this->userpkey;
+				$tags[$tagnum]["userpkey"]=$ownerPkey;
 				foreach($t as $key=>$value){
 					if(is_array($value)||is_object($value)){ $value = json_encode($value); }
 					if($key=="id"){
@@ -4150,7 +4155,7 @@ public function getSpotName($id){
 			$relnum=0;
 			foreach($upload->relationships as $rel){
 
-				$relationships[$relnum]["userpkey"]=$this->userpkey;
+				$relationships[$relnum]["userpkey"]=$ownerPkey;
 				foreach($rel as $key=>$value){
 					if(is_array($value)||is_object($value)){ $value = json_encode($value); }
 					if($key=="id"){
@@ -4203,7 +4208,7 @@ public function getSpotName($id){
 			// create new project node, and then add other nodes
 			//********************************************************************
 			$projectid = $this->neodb->createNode($newprojectjson,"Project");
-			$userid = $this->neodb->get_var("match (a:User) where a.userpkey=".$this->userpkey." return id(a)");
+			$userid = $this->neodb->get_var("match (a:User) where a.userpkey=".$ownerPkey." return id(a)");
 			//$this->neodb->addRelationship($userid, $projectid, "HAS_PROJECT","User","Project");
 
 		}elseif($dbaction=="update"){
@@ -4273,7 +4278,7 @@ public function getSpotName($id){
 			//$this->buildProjectRelationships($thisid);
 		}
 
-		$this->setProjectCenter($thisid);
+		$this->setProjectCenter($thisid, $ownerPkey);
 
 		$totalprojecttime = microtime(true)-$projectstarttime;
 		//$this->logToFile("buildprojectrelationships took: ".$totalprojecttime." secs","Project Time");
