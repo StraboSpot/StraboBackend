@@ -4819,7 +4819,7 @@ match (d:Dataset) where id(d) = $datasetneoid set d.userpkey = $collabinfo->owne
 			$projectneoid = (int)$collabinfo->neoid;
 			$datasetneoid = (int)$dvals->neoid;
 			
-			if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $dinfo->userpkey = $this->userpkey && !$collabinfo->isHalted){
+			if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $dvals->userpkey == $this->userpkey && !$collabinfo->isHalted){
 				//echo "is collaborator with edit and dataset";
 				$this->neodb->query("MATCH (from:Project), (to:Dataset) where id(from)=$projectneoid and id(to)=$datasetneoid CREATE UNIQUE (from)-[r:HAS_DATASET]->(to) return id(r)");
 				$this->neodb->query("match (d:Dataset) where id(d) = $datasetneoid set d.userpkey = $collabinfo->ownerpkey, d.collaboratorpkey=$this->userpkey return d;");
@@ -4828,7 +4828,7 @@ match (d:Dataset) where id(d) = $datasetneoid set d.userpkey = $collabinfo->owne
 				return $data;
 				
 				
-			}elseif($collabinfo->isOwner && $dinfo->userpkey = $this->userpkey){
+			}elseif($collabinfo->isOwner && $dvals->userpkey == $this->userpkey){
 				//echo "is owner with dataset";
 				$this->neodb->query("MATCH (from:Project), (to:Dataset) where id(from)=$projectneoid and id(to)=$datasetneoid CREATE UNIQUE (from)-[r:HAS_DATASET]->(to) return id(r)");
 				$this->neodb->query("match (d:Dataset) where id(d) = $datasetneoid set d.userpkey = $this->userpkey, d.collaboratorpkey=$this->userpkey return d;");
