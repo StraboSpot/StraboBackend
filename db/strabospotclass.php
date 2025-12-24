@@ -4643,7 +4643,7 @@ stdClass Object
 					}
 				}else{
 					//Not collaborative project
-					echo "Not collaborative project\n";
+					//echo "Not collaborative project\n";
 					$readonly = false;
 				}
 

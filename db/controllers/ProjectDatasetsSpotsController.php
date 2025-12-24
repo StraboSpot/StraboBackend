@@ -71,7 +71,7 @@ class ProjectDatasetsSpotsController extends MyController
 						//echo "is collaborator with edit and dataset";
 						$newuserpkey = $collabinfo->ownerpkey;
 						$authorizeddatasets[] = $dataset->id;
-					}elseif($collabinfo->isOwner && $dinfo->userpkey = $this->strabo->userpkey){
+					}elseif($collabinfo->isOwner && $dinfo->userpkey == $this->strabo->userpkey){
 						//echo "is owner with dataset";
 						//pkey can remain unchanged
 						$authorizeddatasets[] = $dataset->id;
