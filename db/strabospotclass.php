@@ -1367,7 +1367,8 @@ class StraboSpot
 					$key != "geometrytype" &&
 					$key != "coordinates" &&
 					$key != "userpkey" &&
-					$key != "collaboratorpkey" &&
+					$key != "collaboratorpkey" && // deprecated, kept for backwards compat
+					$key != "created_by" && // new ownership field
 					$key != "folder" &&
 					$key != "centroidzz" &&
 					$key != "datasettypezz" &&
@@ -4233,10 +4234,17 @@ public function getSpotName($id){
 
 	}
 
-	public function getProject($feature_id, $collaboratorpkey = ""){
+	/**
+	 * Get a project by ID.
+	 *
+	 * @param int $feature_id Project ID
+	 * @param int|string $ownerPkey Optional owner pkey to filter by (for collaborative access)
+	 * @return object Project properties
+	 */
+	public function getProject($feature_id, $ownerPkey = ""){
 
-		if($collaboratorpkey != ""){
-			$userpkeystring=" and n.userpkey = $collaboratorpkey";
+		if($ownerPkey != ""){
+			$userpkeystring=" and n.userpkey = $ownerPkey";
 		}else{
 			if($this->userpkey!=99999){
 				$userpkeystring=" and n.userpkey = $this->userpkey";
