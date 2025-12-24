@@ -74,7 +74,7 @@ class DatasetSingleSpotController extends MyController
 
 					$injson = json_encode($upload,JSON_PRETTY_PRINT);
 
-					$thisdata = $this->strabo->insertSpot($injson);
+					$thisdata = $this->strabo->insertSpot($injson, null, "", $originalUserpkey);
 
 					$parts = $thisdata->properties->self;
 

@@ -166,7 +166,7 @@ class UpdateDatasetSpotsController extends MyController
 
 								$injson = json_encode($feature,JSON_PRETTY_PRINT);
 
-								$thisdata = $this->strabo->insertSpot($injson);
+								$thisdata = $this->strabo->insertSpot($injson, null, "", $originalUserpkey);
 
 								$parts = $thisdata->properties->self;
 

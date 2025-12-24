@@ -99,7 +99,7 @@ class ProjectDatasetSpotController extends MyController
 				if($spotid!=""){
 
 					$injson = json_encode($upload['spot']);
-					$this->strabo->insertSpot($injson);
+					$this->strabo->insertSpot($injson, null, "", $originalUserpkey);
 					$this->strabo->addSpotToDataset($datasetid,$spotid,"HAS_SPOT");
 
 					//fix real-world coordinates here

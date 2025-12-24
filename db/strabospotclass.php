@@ -585,7 +585,15 @@ class StraboSpot
 		return $data;
 	}
 
-	public function insertSpot($injson,$thisid=null,$newuserpkey=""){
+	/**
+	 * Insert or update a spot
+	 *
+	 * @param string $injson JSON string containing spot data
+	 * @param int|null $thisid Optional spot ID
+	 * @param string $newuserpkey Optional new userpkey for the spot
+	 * @param int|null $originalUploader Original uploader's pkey for image ownership transfer (collaboration)
+	 */
+	public function insertSpot($injson,$thisid=null,$newuserpkey="",$originalUploader=null){
 
 		$spotstarttime=microtime(true);
 
@@ -735,7 +743,7 @@ class StraboSpot
 			//********************************************************************
 			// Now, load images...
 			//********************************************************************
-			$this->loadImages($spotid,$images);
+			$this->loadImages($spotid,$images,$originalUploader);
 
 			//********************************************************************
 			// Finally, return original upload data + "self"
@@ -837,7 +845,7 @@ class StraboSpot
 					// Now, load images...
 					//********************************************************************
 
-					$this->loadImages($spotid,$images);
+					$this->loadImages($spotid,$images,$originalUploader);
 
 					$upload->properties->self="https://strabospot.org/db/feature/$thisid";
 					$data=$upload;
@@ -1009,7 +1017,16 @@ class StraboSpot
 		return $ids;
 	}
 
-	public function loadImages($spotid,$images){
+	/**
+	 * Load images and link them to a spot
+	 *
+	 * @param int $spotid The Neo4j ID of the spot to link images to
+	 * @param array $images Array of image objects to link
+	 * @param int|null $originalUploader The original uploader's pkey (for collaboration ownership transfer)
+	 *        When provided, this allows finding images uploaded by a collaborator and transferring
+	 *        ownership to the project owner (stored in $this->userpkey after setuserpkey())
+	 */
+	public function loadImages($spotid, $images, $originalUploader = null){
 
 		if($images!=""){
 
@@ -1036,21 +1053,39 @@ class StraboSpot
 					}
 				}
 
+				// Set ownership to current userpkey (may be owner after setuserpkey for collaboration)
 				$injson["userpkey"]=$this->userpkey;
 
 				//********************************************************************
 				// check to see if image already exists
+				// For collaboration: try original uploader's images first, then current user's
 				//********************************************************************
+				$neoid = "";
 				if($imageid!=""){
+					// First try to find by current userpkey (owner or normal user)
 					$querystring = "MATCH (n:Image) WHERE n.id=$imageid and n.userpkey = $this->userpkey RETURN id(n);";
 					$neoid = $this->neodb->get_var($querystring);
-				}else{
-					$neoid="";
+
+					// If not found and we have original uploader, try their images (collaboration scenario)
+					if($neoid == "" && $originalUploader !== null && $originalUploader != $this->userpkey){
+						$querystring = "MATCH (n:Image) WHERE n.id=$imageid and n.userpkey = $originalUploader RETURN id(n);";
+						$neoid = $this->neodb->get_var($querystring);
+					}
 				}
 
 				if($neoid!=""){
 
-					$querystring = "MATCH (n:Image) WHERE n.id=$imageid and n.userpkey = $this->userpkey RETURN n;";
+					// Determine which userpkey to query with (may be original uploader for collab)
+					$imageOwner = $this->userpkey;
+					if($originalUploader !== null && $originalUploader != $this->userpkey){
+						// Check if image belongs to original uploader
+						$testQuery = "MATCH (n:Image) WHERE id(n)=$neoid and n.userpkey = $originalUploader RETURN count(n);";
+						if($this->neodb->get_var($testQuery) > 0){
+							$imageOwner = $originalUploader;
+						}
+					}
+
+					$querystring = "MATCH (n:Image) WHERE n.id=$imageid and n.userpkey = $imageOwner RETURN n;";
 					$body = $this->neodb->getNode($querystring);
 
 					foreach($body as $key=>$value){
@@ -1060,6 +1095,14 @@ class StraboSpot
 							}
 						}
 					}
+
+					// Preserve created_by if exists, otherwise set to original uploader or image owner
+					if(!isset($injson['created_by']) || $injson['created_by'] == ""){
+						$injson['created_by'] = $originalUploader !== null ? $originalUploader : $imageOwner;
+					}
+
+					// Transfer ownership to project owner (current userpkey after setuserpkey)
+					$injson['userpkey'] = $this->userpkey;
 
 					$injson = json_encode($injson);
 
@@ -1072,7 +1115,12 @@ class StraboSpot
 
 				}else{
 
-					//image doesn't exist, create new image here
+					// Image doesn't exist, create new image here
+					// Set created_by to original uploader or current user
+					if(!isset($injson['created_by'])){
+						$injson['created_by'] = $originalUploader !== null ? $originalUploader : $this->userpkey;
+					}
+
 					$injson=json_encode($injson);
 
 					//********************************************************************
@@ -2714,28 +2762,120 @@ class StraboSpot
 		return $randomString;
 	}
 
+	/**
+	 * Get image info - supports direct ownership and collaborative access
+	 *
+	 * @param int $image_id Image ID to retrieve
+	 * @return stdClass Image info including filename, dimensions, etc.
+	 */
 	public function getImageInfo($image_id){
 
+		// First try direct ownership
 		$querystring = "MATCH (n:Image) WHERE n.id = $image_id and n.userpkey = $this->userpkey RETURN n limit 1;";
 		$featuredata = $this->neodb->getNode($querystring);
 
+		// If not found as owner, check if user has access via collaboration
+		if(empty($featuredata) || count($featuredata) == 0){
+			// Find image through project hierarchy and check collaboration access
+			$querystring = "
+				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
+				WHERE n.id = $image_id
+				RETURN n, p.id as projectId, p.userpkey as ownerPkey
+				LIMIT 1
+			";
+			$result = $this->neodb->getNode($querystring);
+
+			if(!empty($result) && isset($result['projectId'])){
+				// Check if user is collaborator on this project
+				$collab = $this->db->get_row_prepared(
+					"SELECT * FROM collaborators
+					 WHERE strabo_project_id = $1
+					 AND project_owner_user_pkey = $2
+					 AND collaborator_user_pkey = $3
+					 AND accepted = true AND disabled = false",
+					array($result['projectId'], $result['ownerPkey'], $this->userpkey)
+				);
+
+				if($collab){
+					$featuredata = $result;
+				}
+			}
+		}
+
 		$data = new stdClass();
 		$data->count = count($featuredata);
-		$data->filename = $featuredata["filename"];
-		$data->origfilename = $featuredata["origfilename"];
-		$data->extension = end(explode(".",$featuredata["origfilename"]));
-		$data->width = $featuredata["width"];
-		$data->height = $featuredata["height"];
+		$data->filename = isset($featuredata["filename"]) ? $featuredata["filename"] : "";
+		$data->origfilename = isset($featuredata["origfilename"]) ? $featuredata["origfilename"] : "";
+		$data->extension = $data->origfilename != "" ? end(explode(".", $data->origfilename)) : "";
+		$data->width = isset($featuredata["width"]) ? $featuredata["width"] : "";
+		$data->height = isset($featuredata["height"]) ? $featuredata["height"] : "";
 
 		return $data;
 	}
 
+	/**
+	 * Delete image - supports direct ownership and collaborative deletion
+	 *
+	 * Deletion is allowed if:
+	 * 1. User directly owns the image (userpkey == current user), OR
+	 * 2. User is the project owner (image is in their project), OR
+	 * 3. User is a collaborator who uploaded the image (created_by == current user)
+	 *
+	 * @param int $image_id Image ID to delete
+	 * @return bool True if deletion was performed
+	 */
 	public function deleteImage($image_id){
 
-		$querystring = "MATCH (n:Image) where (n.id = $image_id ) and n.userpkey = $this->userpkey optional match (a:Spot)-[b:HAS_IMAGE]-(n) DELETE b,n;";
-
+		// First try direct ownership
+		$querystring = "MATCH (n:Image) WHERE n.id = $image_id AND n.userpkey = $this->userpkey
+						OPTIONAL MATCH (a:Spot)-[b:HAS_IMAGE]-(n) DELETE b,n;";
 		$this->neodb->query($querystring);
 
+		// Check if image still exists (wasn't deleted)
+		$stillExists = $this->neodb->get_var("MATCH (n:Image) WHERE n.id = $image_id RETURN count(n);");
+
+		if($stillExists > 0){
+			// Try collaborative deletion - find image and check permissions
+			$imageInfo = $this->neodb->getNode("
+				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
+				WHERE n.id = $image_id
+				RETURN n, p.id as projectId, p.userpkey as ownerPkey, n.created_by as createdBy
+				LIMIT 1
+			");
+
+			if(!empty($imageInfo) && isset($imageInfo['projectId'])){
+				$canDelete = false;
+
+				// Check if user is the project owner
+				if($imageInfo['ownerPkey'] == $this->userpkey){
+					$canDelete = true;
+				} else {
+					// Check if user is a collaborator who created this image
+					$collab = $this->db->get_row_prepared(
+						"SELECT * FROM collaborators
+						 WHERE strabo_project_id = $1
+						 AND project_owner_user_pkey = $2
+						 AND collaborator_user_pkey = $3
+						 AND accepted = true AND disabled = false",
+						array($imageInfo['projectId'], $imageInfo['ownerPkey'], $this->userpkey)
+					);
+
+					if($collab && isset($imageInfo['createdBy']) && $imageInfo['createdBy'] == $this->userpkey){
+						$canDelete = true;
+					}
+				}
+
+				if($canDelete){
+					$querystring = "MATCH (n:Image) WHERE n.id = $image_id
+									OPTIONAL MATCH (a:Spot)-[b:HAS_IMAGE]-(n) DELETE b,n;";
+					$this->neodb->query($querystring);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		return true;
 	}
 
 	public function insertImage($post,$file){
@@ -2814,6 +2954,10 @@ class StraboSpot
 				$injson['filename'] = $filename;
 				$injson['origfilename'] = $imagefilename;
 				$injson['userpkey']=$this->userpkey;
+				// Preserve existing created_by or set to current user if not set
+				if(!isset($injson['created_by'])){
+					$injson['created_by']=$this->userpkey;
+				}
 				$injson['imagesha1']=$imagesha1;
 				$injson['id']=$id;
 				$injson['modified_timestamp']=$modified_timestamp;
@@ -2848,6 +2992,7 @@ class StraboSpot
 				$injson['filename'] = $newfilename;
 				$injson['origfilename'] = $imagefilename;
 				$injson['userpkey']=$this->userpkey;
+				$injson['created_by']=$this->userpkey; // Track original uploader
 				$injson['imagesha1']=$imagesha1;
 				$injson['id']=$id;
 				$injson['modified_timestamp']=$modified_timestamp;
@@ -5112,21 +5257,83 @@ Normal way:
 
 	}
 
+	/**
+	 * Get image timestamp - supports direct ownership and collaborative access
+	 *
+	 * @param int $feature_id Image ID
+	 * @return mixed Modified timestamp or null if not found/not accessible
+	 */
 	public function getImageTimestamp($feature_id){
 
+		// First try direct ownership
 		$querystring = "MATCH (n:Image) WHERE n.id = $feature_id and n.userpkey = $this->userpkey RETURN n.modified_timestamp;";
-
 		$modified_timestamp = $this->neodb->get_var($querystring);
+
+		// If not found, check collaboration access
+		if($modified_timestamp == "" || $modified_timestamp === null){
+			$imageInfo = $this->neodb->getNode("
+				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
+				WHERE n.id = $feature_id
+				RETURN n.modified_timestamp as timestamp, p.id as projectId, p.userpkey as ownerPkey
+				LIMIT 1
+			");
+
+			if(!empty($imageInfo) && isset($imageInfo['projectId'])){
+				$collab = $this->db->get_row_prepared(
+					"SELECT * FROM collaborators
+					 WHERE strabo_project_id = $1
+					 AND project_owner_user_pkey = $2
+					 AND collaborator_user_pkey = $3
+					 AND accepted = true AND disabled = false",
+					array($imageInfo['projectId'], $imageInfo['ownerPkey'], $this->userpkey)
+				);
+
+				if($collab){
+					$modified_timestamp = $imageInfo['timestamp'];
+				}
+			}
+		}
 
 		return $modified_timestamp;
 
 	}
 
+	/**
+	 * Find image file - supports direct ownership and collaborative access
+	 *
+	 * @param int $feature_id Image ID
+	 * @return bool True if image file exists and user has access
+	 */
 	public function findImageFile($feature_id){
 
+		// First try direct ownership
 		$querystring = "MATCH (n:Image) WHERE n.id = $feature_id and n.userpkey = $this->userpkey RETURN n.filename;";
-
 		$filename = $this->neodb->get_var($querystring);
+
+		// If not found, check collaboration access
+		if($filename == "" || $filename === null){
+			$imageInfo = $this->neodb->getNode("
+				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
+				WHERE n.id = $feature_id
+				RETURN n.filename as filename, p.id as projectId, p.userpkey as ownerPkey
+				LIMIT 1
+			");
+
+			if(!empty($imageInfo) && isset($imageInfo['projectId'])){
+				$collab = $this->db->get_row_prepared(
+					"SELECT * FROM collaborators
+					 WHERE strabo_project_id = $1
+					 AND project_owner_user_pkey = $2
+					 AND collaborator_user_pkey = $3
+					 AND accepted = true AND disabled = false",
+					array($imageInfo['projectId'], $imageInfo['ownerPkey'], $this->userpkey)
+				);
+
+				if($collab){
+					$filename = $imageInfo['filename'];
+				}
+			}
+		}
 
 		if($filename!="" && file_exists("/srv/app/www/dbimages/$filename")){
 			return true;

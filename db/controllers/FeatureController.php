@@ -206,7 +206,7 @@ class FeatureController extends MyController
 						}
 
 						$injson = json_encode($upload);
-						$data = $this->strabo->insertSpot($injson,$thisid);
+						$data = $this->strabo->insertSpot($injson, $thisid, "", $originalUserpkey);
 
 						// Restore original userpkey if changed
 						if ($context->effectiveOwner !== $originalUserpkey) {
@@ -215,17 +215,17 @@ class FeatureController extends MyController
 					} else {
 						// Spot in unlinked dataset
 						$injson = json_encode($upload);
-						$data = $this->strabo->insertSpot($injson,$thisid);
+						$data = $this->strabo->insertSpot($injson, $thisid);
 					}
 				} else {
 					// Spot not linked to dataset
 					$injson = json_encode($upload);
-					$data = $this->strabo->insertSpot($injson,$thisid);
+					$data = $this->strabo->insertSpot($injson, $thisid);
 				}
 			} else {
 				// New spot
 				$injson = json_encode($upload);
-				$data = $this->strabo->insertSpot($injson,$thisid);
+				$data = $this->strabo->insertSpot($injson, $thisid);
 			}
 
 			if($data->Error != ""){

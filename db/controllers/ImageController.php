@@ -16,10 +16,9 @@ class ImageController extends MyController
 	/**
 	 * Get an image file
 	 *
-	 * NOTE: Currently queries by userpkey which works for image owner.
-	 * TODO (Phase 6 - Image Ownership): Add collaboration support so
-	 * collaborators can access images that belong to the project owner's
-	 * namespace after ownership transfer.
+	 * Supports both direct ownership and collaborative access.
+	 * If user owns the image directly OR is a collaborator on the project
+	 * that contains the image, they can retrieve it.
 	 */
 	public function getAction($request) {
 
@@ -72,9 +71,9 @@ class ImageController extends MyController
 	/**
 	 * Delete an image
 	 *
-	 * NOTE: Currently only the original image owner can delete.
-	 * TODO (Phase 6 - Image Ownership): Consider whether project owner
-	 * should be able to delete collaborator-uploaded images after ownership transfer.
+	 * Supports collaborative deletion:
+	 * - Project owner can delete any image in their project
+	 * - Collaborators can delete images they uploaded (created_by == user)
 	 */
 	public function deleteAction($request) {
 
@@ -124,8 +123,8 @@ class ImageController extends MyController
 	 * project context is available at upload time. The image is owned by
 	 * the uploading user until linked to a collaborative project.
 	 *
-	 * TODO (Phase 6 - Image Ownership): Add created_by field to track
-	 * original uploader after ownership transfer.
+	 * The created_by field tracks the original uploader even after
+	 * ownership is transferred to the project owner during collaboration.
 	 */
 	public function postAction($request) {
 

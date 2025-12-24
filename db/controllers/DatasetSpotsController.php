@@ -149,6 +149,9 @@ stdClass Object
 )
 */
 
+			// Save original uploader for image ownership tracking (before any userpkey swap)
+			$originalUploader = $this->strabo->userpkey;
+
 			// Determine owner for side-effect functions
 			$ownerPkey = $this->strabo->userpkey; // default: current user
 
@@ -281,7 +284,7 @@ stdClass Object
 
 								$injson = json_encode($feature,JSON_PRETTY_PRINT);
 
-								$thisdata = $this->strabo->insertSpot($injson);
+								$thisdata = $this->strabo->insertSpot($injson, null, "", $originalUploader);
 
 								$parts = $thisdata->properties->self;
 

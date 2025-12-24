@@ -41,6 +41,9 @@ class ProjectDatasetsSpotsController extends MyController
 
 		$collabinfo = $this->strabo->getCollabInfo($projectid);
 
+		// Save original uploader for image ownership tracking (before any swaps)
+		$originalUploader = $this->strabo->userpkey;
+
 		$newuserpkey = $this->strabo->userpkey;
 
 		// Determine owner for side-effect functions
@@ -158,7 +161,7 @@ class ProjectDatasetsSpotsController extends MyController
 										if($spotid!=""){
 		
 											$injson = json_encode($spot, JSON_PRETTY_PRINT);
-											$this->strabo->insertSpot($injson,null,$newuserpkey);
+											$this->strabo->insertSpot($injson,null,$newuserpkey,$originalUploader);
 											$this->strabo->addSpotToDataset($datasetid,$spotid,"HAS_SPOT");
 		
 										}
