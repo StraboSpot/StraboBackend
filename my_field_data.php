@@ -359,7 +359,8 @@ if($collabcount > 0){
 											$uploaddate = date("F j, Y, g:i a T P", $dvals["datecreated"]);
 											$modified_timestamp = date("F j, Y, g:i a T", substr($dvals["modified_timestamp"],0,10));
 											$name = $dvals["name"];
-											$collaboratorpkey = $dvals["collaboratorpkey"];
+											// Use created_by instead of collaboratorpkey for new collaboration model
+											$datasetCreatedBy = $dvals["created_by"] ?? $dvals["collaboratorpkey"] ?? $dvals["userpkey"];
 
 											?>
 
@@ -367,7 +368,7 @@ if($collabcount > 0){
 												<tr>
 													<td>
 <?php
-if($collaboratorpkey == $userpkey || $collaboration_level == "admin"){
+if($datasetCreatedBy == $userpkey || $collaboration_level == "admin"){
 ?>
 														<a href="delete_dataset?id=<?php echo $id?>" OnClick="return confirm('Are you sure you want to delete <?php echo $name?>?')">Delete</a>
 <?php
