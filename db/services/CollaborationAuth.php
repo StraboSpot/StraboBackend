@@ -302,16 +302,17 @@ class CollaborationAuth {
      */
     public function getDatasetContext(int $userpkey, string $datasetId): ?ProjectContext {
         // Find the project that contains this dataset (without userpkey filter)
-        $result = $this->neodb->get_row(
+        $records = $this->neodb->query(
             "MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset {id:$datasetId})
              RETURN p.id as projectId, p.userpkey as ownerPkey, d.created_by as createdBy"
         );
 
-        if (!$result) {
+        if (count($records) === 0) {
             // Dataset not found or not linked to a project
             return null;
         }
 
+        $result = $records[0];
         $projectId = $result->get('projectId');
         $ownerPkey = (int)$result->get('ownerPkey');
 
@@ -332,15 +333,16 @@ class CollaborationAuth {
      * @return array|null - ['projectId' => string, 'ownerPkey' => int] or null if not found
      */
     public function getDatasetOwnerInfo(string $datasetId): ?array {
-        $result = $this->neodb->get_row(
+        $records = $this->neodb->query(
             "MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset {id:$datasetId})
              RETURN p.id as projectId, p.userpkey as ownerPkey"
         );
 
-        if (!$result) {
+        if (count($records) === 0) {
             return null;
         }
 
+        $result = $records[0];
         return [
             'projectId' => $result->get('projectId'),
             'ownerPkey' => (int)$result->get('ownerPkey')
