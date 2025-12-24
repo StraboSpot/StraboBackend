@@ -5212,6 +5212,24 @@ Normal way:
 
 			if($projectid!=""){
 
+				// Check if user is collaborating on any project with this ID
+				// Prevents collision where user restores their own project while
+				// collaborating on someone else's project with the same ID
+				$isCollaborating = $this->db->get_var_prepared(
+					"SELECT COUNT(*) FROM collaborators
+					 WHERE strabo_project_id = $1
+					 AND collaborator_user_pkey = $2
+					 AND accepted = true
+					 AND disabled = false",
+					array($projectid, $this->userpkey)
+				);
+
+				if($isCollaborating > 0){
+					return (object)[
+						'Error' => "Cannot restore project: you are collaborating on a project with ID $projectid. Leave the collaboration first to restore your own version."
+					];
+				}
+
 				//log usage here
 				$this->db->query("	insert into verlog (userpkey, dateactivated, projectid, uuid)
 												values ($this->userpkey, now(), '$projectid', '$uuid')
