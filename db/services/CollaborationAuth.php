@@ -48,24 +48,35 @@ class CollaborationAuth {
         }
 
         // Check if user is a collaborator on someone else's project
+        // Include disabled (halted) collaborators - they still have readonly access
         $collab = $this->db->get_row_prepared(
             "SELECT * FROM collaborators
              WHERE strabo_project_id = $1
              AND collaborator_user_pkey = $2
-             AND accepted = true
-             AND disabled = false",
+             AND accepted = true",
             array($projectId, $userpkey)
         );
 
         if ($collab) {
             $context->effectiveOwner = (int)$collab->project_owner_user_pkey;
-            $context->permissionLevel = $collab->collaboration_level; // 'edit' or 'readonly'
-            $context->isHalted = $this->isCollaborationHalted($projectId, (int)$collab->project_owner_user_pkey);
             $context->collaborationId = (int)$collab->pkey;
 
-            // If halted, collaborators become readonly
-            if ($context->isHalted && $context->permissionLevel === 'edit') {
+            // Check if this specific collaborator is disabled (halted)
+            $isDisabled = ($collab->disabled === true || $collab->disabled === 't');
+
+            if ($isDisabled) {
+                // Halted collaborators have readonly access
                 $context->permissionLevel = 'readonly';
+                $context->isHalted = true;
+            } else {
+                $context->permissionLevel = $collab->collaboration_level; // 'edit' or 'readonly'
+                $context->isHalted = $this->isCollaborationHalted($projectId, (int)$collab->project_owner_user_pkey);
+
+                // If project collaboration is halted (all collaborators disabled),
+                // this collaborator becomes readonly
+                if ($context->isHalted && $context->permissionLevel === 'edit') {
+                    $context->permissionLevel = 'readonly';
+                }
             }
 
             return $context;

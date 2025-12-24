@@ -45,6 +45,11 @@ class ProjectController extends MyController
 					$this->strabo->setuserpkey($originalUserpkey);
 				}
 
+				// Correct the isOwner and isReadOnly flags based on actual context
+				// (getProject uses swapped userpkey so its values may be incorrect)
+				$data->isOwner = $context->isOwner();
+				$data->isReadOnly = ($context->permissionLevel === 'readonly');
+
 				if($data->Error!=""){
 					header("Project not Found", true, 404);
 				}
