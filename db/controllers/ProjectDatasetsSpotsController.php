@@ -138,19 +138,17 @@ class ProjectDatasetsSpotsController extends MyController
 							//if(user is able to edit) {
 							
 								if($spots->features != ""){
-		
-									$this->strabo->setuserpkey((int)$newuserpkey);
-									
-									//echo "$newuserpkey";exit();
-									
+
+									$this->strabo->setuserpkey((int)$ownerPkey);
+
 									foreach($spots->features as $spot){
-		
+
 										$spotid = $spot->properties->id;
-		
+
 										if($spotid!=""){
-		
+
 											$injson = json_encode($spot, JSON_PRETTY_PRINT);
-											$this->strabo->insertSpot($injson,null,$newuserpkey,$originalUploader);
+											$this->strabo->insertSpot($injson,null,$ownerPkey,$originalUploader);
 											$this->strabo->addSpotToDataset($datasetid,$spotid,"HAS_SPOT");
 		
 										}
