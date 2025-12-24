@@ -5396,12 +5396,14 @@ Normal way:
 
 	}
 
-	public function setProjectCenter($projectid){
+	public function setProjectCenter($projectid, $ownerPkey = null){
 		//gathers geometries for project and calculates center
+		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
+		$ownerPkey = $ownerPkey ?? $this->userpkey;
 
 		$pointarray = array();
 
-		$rows = $this->neodb->get_results("match (p:Project {id:$projectid, userpkey:$this->userpkey})-[HAS_DATASET]->(d:Dataset)-[HAS_SPOT]->(s:Spot) return s");
+		$rows = $this->neodb->get_results("match (p:Project {id:$projectid, userpkey:$ownerPkey})-[HAS_DATASET]->(d:Dataset)-[HAS_SPOT]->(s:Spot) return s");
 
 		foreach($rows as $row){
 
@@ -5435,19 +5437,21 @@ Normal way:
 			$center = $centroid->out("wkt");
 
 			if($center!=""){
-				$this->neodb->query("match (p:Project {id:$projectid, userpkey:$this->userpkey}) set p.centroid='$center'");
-				$this->db->query("update project set location = ST_GeomFromText('$center') where strabo_project_id = '$projectid' and user_pkey = $this->userpkey");
+				$this->neodb->query("match (p:Project {id:$projectid, userpkey:$ownerPkey}) set p.centroid='$center'");
+				$this->db->query("update project set location = ST_GeomFromText('$center') where strabo_project_id = '$projectid' and user_pkey = $ownerPkey");
 			}
 
 		}
 
 	}
 
-	public function setDatasetCenter($datasetid){
+	public function setDatasetCenter($datasetid, $ownerPkey = null){
+		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
+		$ownerPkey = $ownerPkey ?? $this->userpkey;
 
 		$pointarray = array();
 
-		$rows = $this->neodb->get_results("match (d:Dataset {id:$datasetid, userpkey:$this->userpkey})-[HAS_SPOT]->(s:Spot) return s");
+		$rows = $this->neodb->get_results("match (d:Dataset {id:$datasetid, userpkey:$ownerPkey})-[HAS_SPOT]->(s:Spot) return s");
 
 		foreach($rows as $row){
 
@@ -5481,19 +5485,20 @@ Normal way:
 			$center = $centroid->out("wkt");
 
 			if($center!=""){
-				$this->neodb->query("match (d:Dataset {id:$datasetid, userpkey:$this->userpkey}) set d.centroid='$center'");
-				$this->db->query("update dataset set location = ST_GeomFromText('$center') where strabo_dataset_id = '$datasetid' and user_pkey = $this->userpkey");
+				$this->neodb->query("match (d:Dataset {id:$datasetid, userpkey:$ownerPkey}) set d.centroid='$center'");
+				$this->db->query("update dataset set location = ST_GeomFromText('$center') where strabo_dataset_id = '$datasetid' and user_pkey = $ownerPkey");
 			}
 
 		}
 
 	}
 
-	public function buildPgDataset($datasetid){
+	public function buildPgDataset($datasetid, $ownerPkey = null){
+		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
 
 		//add neo4j dataset to postgres for search
 
-		$thisuserpkey = $this->userpkey;
+		$thisuserpkey = $ownerPkey ?? $this->userpkey;
 
 		$userrow = $this->db->get_row("select * from users where pkey = $thisuserpkey");
 		$firstname = pg_escape_string($userrow->firstname);
