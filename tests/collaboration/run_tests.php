@@ -333,6 +333,110 @@ test(
 );
 
 // ============================================================================
+// SECTION: Former Collaborator Upload Prevention
+// ============================================================================
+section("Former Collaborator Upload Prevention");
+
+// Test: Halted collaborator cannot upload their own version of a project they collaborated on
+// The editor was a collaborator on project 9999999903 (halted)
+$uploadProject = [
+    'id' => $projectHaltedId,
+    'description' => [
+        'project_name' => 'Hijacked Project'
+    ],
+    'modified_timestamp' => time() * 1000
+];
+
+$r = makeRequest(
+    'POST',
+    "$baseUrl/project/$projectHaltedId",
+    'editor@test.strabospot.org',
+    $testPassword,
+    $uploadProject
+);
+
+// Should return an error - former collaborator cannot create their own version
+test(
+    "Former collaborator cannot upload own version of project (should get error)",
+    $r['code'] != 200 && $r['code'] != 201,
+    "HTTP {$r['code']} - " . ($r['body']['Error'] ?? 'no error message')
+);
+
+// The error could be from controller auth (edit permission) or from insertProject (collaborated)
+// Either way, the upload should be blocked
+$hasError = isset($r['body']['Error']);
+test(
+    "Error message returned (either permission or collaboration error)",
+    $hasError,
+    "Error: " . ($r['body']['Error'] ?? 'none')
+);
+
+// Test: A non-collaborator CAN create a project with the same ID (edge case - different user entirely)
+// Note: outsider was never a collaborator on any project
+$newProjectId = 9999999999; // A completely new ID
+$newProject = [
+    'id' => $newProjectId,
+    'description' => [
+        'project_name' => 'Outsider New Project'
+    ],
+    'modified_timestamp' => time() * 1000
+];
+
+$r = makeRequest(
+    'POST',
+    "$baseUrl/project/$newProjectId",
+    'outsider@test.strabospot.org',
+    $testPassword,
+    $newProject
+);
+test(
+    "Non-collaborator can create a new project",
+    $r['code'] == 200 || $r['code'] == 201,
+    "HTTP {$r['code']}"
+);
+
+// Clean up: delete the test project we just created
+$neodb->query("MATCH (p:Project {id: $newProjectId}) DETACH DELETE p");
+
+// ============================================================================
+// SECTION: Direct canUploadProjectAsOwner() Unit Tests
+// ============================================================================
+section("canUploadProjectAsOwner() Unit Tests");
+
+require_once('db/services/CollaborationAuth.php');
+$collabAuth = new CollaborationAuth($db, $neodb);
+
+// Test: Editor (former collaborator) cannot upload project they collaborated on
+$result = $collabAuth->canUploadProjectAsOwner((string)$projectHaltedId, (int)$editorPkey);
+test(
+    "canUploadProjectAsOwner() returns false for former collaborator",
+    $result['allowed'] === false,
+    "allowed: " . ($result['allowed'] ? 'true' : 'false')
+);
+
+test(
+    "canUploadProjectAsOwner() returns correct error message",
+    strpos($result['reason'], 'collaborated') !== false,
+    "reason: " . ($result['reason'] ?? 'none')
+);
+
+// Test: Outsider (never a collaborator) can upload any project
+$result = $collabAuth->canUploadProjectAsOwner((string)$projectHaltedId, (int)$outsiderPkey);
+test(
+    "canUploadProjectAsOwner() returns true for non-collaborator",
+    $result['allowed'] === true,
+    "allowed: " . ($result['allowed'] ? 'true' : 'false')
+);
+
+// Test: Owner can still upload their own project (they're not in collaborators table for their own project)
+$result = $collabAuth->canUploadProjectAsOwner((string)$projectSoloId, (int)$ownerPkey);
+test(
+    "canUploadProjectAsOwner() returns true for project owner",
+    $result['allowed'] === true,
+    "allowed: " . ($result['allowed'] ? 'true' : 'false')
+);
+
+// ============================================================================
 // RESULTS
 // ============================================================================
 echo "\n\033[1;33m╔══════════════════════════════════════════════════════════════╗\033[0m\n";
