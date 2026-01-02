@@ -3947,8 +3947,21 @@ public function getSpotName($id){
 				$projectid=$record->get("id");
 				$server_timestamp = $record->get("p")->values()["modified_timestamp"];
 
-				
+
 				$dbaction="update";
+			}
+		}
+
+		// Prevent former collaborators from uploading their own version of a project
+		// This check only applies when creating a NEW project as owner (not collaborative edit)
+		if($dbaction == "new" && !$isCollaborativeEdit && $thisid != ""){
+			require_once(__DIR__ . '/services/CollaborationAuth.php');
+			$collabAuth = new CollaborationAuth($this->db, $this->neodb);
+			$canUpload = $collabAuth->canUploadProjectAsOwner($thisid, $this->userpkey);
+			if(!$canUpload['allowed']){
+				$result = new stdClass();
+				$result->Error = $canUpload['reason'];
+				return $result;
 			}
 		}
 

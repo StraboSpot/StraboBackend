@@ -267,6 +267,38 @@ class CollaborationAuth {
     }
 
     /**
+     * Check if a user can upload/create a project with this ID
+     *
+     * Prevents former collaborators from uploading their own version of a
+     * project they collaborated on. Once you've been a collaborator on a
+     * project ID (even if halted), you cannot create your own project with
+     * that same ID.
+     *
+     * @param string $projectId - The project ID being uploaded
+     * @param int $userpkey - The user uploading
+     * @return array ['allowed' => bool, 'reason' => string|null]
+     */
+    public function canUploadProjectAsOwner(string $projectId, int $userpkey): array {
+        // Check if user has EVER been a collaborator on this project ID
+        // This includes: active, halted, disabled, accepted, or not accepted
+        $wasCollaborator = $this->db->get_var_prepared(
+            "SELECT COUNT(*) FROM collaborators
+             WHERE strabo_project_id = $1
+             AND collaborator_user_pkey = $2",
+            array($projectId, $userpkey)
+        );
+
+        if ($wasCollaborator > 0) {
+            return [
+                'allowed' => false,
+                'reason' => "Cannot upload project: you have collaborated on a project with ID $projectId"
+            ];
+        }
+
+        return ['allowed' => true, 'reason' => null];
+    }
+
+    /**
      * Check if a user can restore a versioned project
      *
      * Prevents restoring a project if user is already collaborating on a project
