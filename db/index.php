@@ -40,15 +40,6 @@ list($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']) = explode(':' , base64_
 $username = strtolower(trim($_SERVER['PHP_AUTH_USER']));
 $password = $_SERVER['PHP_AUTH_PW'];
 
-// Validate email format for security
-if (!filter_var($username, FILTER_VALIDATE_EMAIL)) {
-	http_response_code(401);
-	header('Content-Type: application/json');
-	echo json_encode(['Error' => 'Invalid credentials']);
-	exit();
-}
-
-
 $userpkey = $db->get_var_prepared("SELECT pkey FROM users WHERE email=$1", array($username));
 $userpkey = (int)$userpkey;
 
@@ -159,7 +150,7 @@ if(class_exists($view_name)) {
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_URL, $url);
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-	$output = curl_exec($ch);
+	//$output = curl_exec($ch); //Turn off for debugging JMA 20260102
 	curl_close($ch);
 
 	$view = new $view_name();
