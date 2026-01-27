@@ -57,17 +57,16 @@ include("includes/mheader.php");
 			</nav>
 		</section>
 
-		<!-- Application Tools Screenshot Section -->
+		<!-- Application Tools Section -->
 		<section id="tools" class="micro-section">
 			<h2 class="micro-section-title">Application Tools</h2>
+
+			<!-- Screenshot -->
 			<div class="micro-screenshot-container">
 				<img src="/includes/mimages/strabomicro/application_tools_screenshot.png" alt="StraboMicro Application Tools" class="micro-screenshot" onerror="this.parentElement.innerHTML='<div class=\'micro-screenshot-placeholder\'>Application Screenshot Placeholder</div>'">
 			</div>
-		</section>
 
-		<!-- Tools Feature Cards (3x3 grid with images) -->
-		<section class="micro-section">
-			<h2 class="micro-section-title">Application Tools</h2>
+			<!-- Tools Feature Cards (3x3 grid with images) -->
 			<div class="row gtr-uniform">
 
 				<!-- Card 1: See micrographs your way -->
@@ -170,7 +169,7 @@ include("includes/mheader.php");
 				</div>
 
 			</div>
-		</section>
+		</section><!-- end #tools -->
 
 		<!-- Application Features Section (3x3 grid, text-only) -->
 		<section id="features" class="micro-section">
