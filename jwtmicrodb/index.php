@@ -22,11 +22,14 @@ include_once "../includes/UUID.php";
 
 include_once '../jwtauth/middleware.php';
 
-//Authenticate via JWT - Todo Class this out for better workflow.
-$user = authenticate();
-
-//OK, we're authorized. Let's move forward
-$userpkey = $user['sub'];
+function logToFile($var){
+	if(file_exists("log.txt")){
+		$outvar = print_r($var, true);
+		file_put_contents ("log.txt", "\n\n************************************************************************************************************************\n\n", FILE_APPEND);
+		file_put_contents ("log.txt", "$outvar", FILE_APPEND);
+		file_put_contents ("log.txt", "\n\n************************************************************************************************************************\n\n", FILE_APPEND);
+	}
+}
 
 //Load Base Controller
 include "./controllers/MyController.php";
@@ -41,13 +44,26 @@ include "./views/ApiView.php";
 include "./views/JsonView.php";
 include "./views/HtmlView.php";
 
+$request = new Request();
+
+//Check if we're just uploading logs here and let through without auth
+if($request->url_elements[1] == "logs" && strtoupper($_SERVER['REQUEST_METHOD']) == "POST"){
+
+}else{
+
+	//Authenticate via JWT - Todo Class this out for better workflow.
+	$user = authenticate();
+	
+	//OK, we're authorized. Let's move forward
+	$userpkey = $user['sub'];
+
+}
+
 $sm = new StraboMicro($neodb,$userpkey,$db);
 
 //pass along uuid class
 $uuid = new UUID();
 $sm->setuuid($uuid);
-
-$request = new Request();
 
 //log raw input for debug
 

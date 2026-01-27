@@ -12,6 +12,9 @@
 
 include("logincheck.php");
 include("prepare_connections.php");
+require_once("db/services/CollaborationAuth.php");
+
+$collabAuth = new CollaborationAuth($db, $neodb);
 
 $email = $_SESSION['username'];
 
@@ -33,6 +36,7 @@ if($_POST){
 	$addresses = explode("\n", $addresses);
 
 	$foundaddresses = [];
+	$errors = [];
 
 	foreach($addresses as $address){
 		$address = trim($address);
@@ -45,17 +49,23 @@ if($_POST){
 						$existcount = $db->get_var_prepared("SELECT count(*) FROM collaborators WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND collaborator_user_pkey = $3", array($project_id, $userpkey, $collaborator_pkey));
 						if($existcount == 0){
 
-							$uuid = $strabo->uuid->v4();
+							// Check if invitee can be invited (duplicate project ID prevention)
+							$canInvite = $collabAuth->canInviteUser($project_id, (int)$collaborator_pkey);
+							if(!$canInvite['allowed']){
+								$errors[] = "$address: " . $canInvite['reason'];
+							}else{
+								$uuid = $strabo->uuid->v4();
 
-							$db->prepare_query("
-								INSERT INTO collaborators (
-									strabo_project_id,
-									project_owner_user_pkey,
-									collaborator_user_pkey,
-									collaboration_level,
-									uuid
-								) VALUES ($1, $2, $3, $4, $5)
-							", array($project_id, $userpkey, $collaborator_pkey, $collaborationlevel, $uuid));
+								$db->prepare_query("
+									INSERT INTO collaborators (
+										strabo_project_id,
+										project_owner_user_pkey,
+										collaborator_user_pkey,
+										collaboration_level,
+										uuid
+									) VALUES ($1, $2, $3, $4, $5)
+								", array($project_id, $userpkey, $collaborator_pkey, $collaborationlevel, $uuid));
+							}
 
 						}else{
 							//Exists, just update
@@ -67,6 +77,11 @@ if($_POST){
 		}
 
 		$foundaddresses[] = $address;
+	}
+
+	// If there were errors, store them in session and redirect to show them
+	if(!empty($errors)){
+		$_SESSION['invite_errors'] = $errors;
 	}
 
 	header("Location: /collaborate?p=$project_id");

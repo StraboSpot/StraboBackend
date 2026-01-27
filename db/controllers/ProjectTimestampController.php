@@ -32,18 +32,27 @@ class ProjectTimestampController extends MyController
 
 		$upload = $request->parameters;
 		unset($upload['apiformat']);
+		$errors = "";
 
 		if(isset($request->url_elements[2])) {
 
-			$thisid = $request->url_elements[2];
+			$projectId = $request->url_elements[2];
+
+			// Check if user has write access to this project
+			$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectId);
+
+			// Only owner can update project metadata (including timestamp)
+			if (!$this->auth->canEditProjectMetadata($context)) {
+				return $this->forbidden("You don't have permission to update this project");
+			}
 
 			if($upload['timestamp'] != ""){
 
 				$timestamp = $upload['timestamp'];
-				$userpkey = $this->strabo->userpkey;
+				$userpkey = $context->effectiveOwner;
 
 				//update here
-				$this->strabo->neodb->query("match (p:Project {id:$thisid, userpkey:$userpkey}) set p.modified_timestamp=$timestamp");
+				$this->strabo->neodb->query("match (p:Project {id:$projectId, userpkey:$userpkey}) set p.modified_timestamp=$timestamp");
 
 			}else{
 				$errors.="No Timestamp Provided. ";

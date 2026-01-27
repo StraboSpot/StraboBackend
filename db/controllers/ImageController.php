@@ -13,6 +13,13 @@
 
 class ImageController extends MyController
 {
+	/**
+	 * Get an image file
+	 *
+	 * Supports both direct ownership and collaborative access.
+	 * If user owns the image directly OR is a collaborator on the project
+	 * that contains the image, they can retrieve it.
+	 */
 	public function getAction($request) {
 
 		if(isset($request->url_elements[2])) {
@@ -61,6 +68,13 @@ class ImageController extends MyController
 		return $data;
 	}
 
+	/**
+	 * Delete an image
+	 *
+	 * Supports collaborative deletion:
+	 * - Project owner can delete any image in their project
+	 * - Collaborators can delete images they uploaded (created_by == user)
+	 */
 	public function deleteAction($request) {
 
 		if(isset($request->url_elements[2])) {
@@ -86,7 +100,7 @@ class ImageController extends MyController
 					$this->strabo->deleteImage($image_id);
 
 					header("Image deleted", true, 204);
-					$data['message']="Image $feature_id deleted.";
+					$data['message']="Image $image_id deleted.";
 
 				}else{
 					//Error, feature not found
@@ -102,6 +116,16 @@ class ImageController extends MyController
 		return $data;
 	}
 
+	/**
+	 * Upload a new image
+	 *
+	 * Images are uploaded before being linked to spots/projects, so no
+	 * project context is available at upload time. The image is owned by
+	 * the uploading user until linked to a collaborative project.
+	 *
+	 * The created_by field tracks the original uploader even after
+	 * ownership is transferred to the project owner during collaboration.
+	 */
 	public function postAction($request) {
 
 		$data = $this->strabo->insertImage($_POST,$_FILES['image_file']);

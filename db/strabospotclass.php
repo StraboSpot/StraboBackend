@@ -585,7 +585,15 @@ class StraboSpot
 		return $data;
 	}
 
-	public function insertSpot($injson,$thisid=null,$newuserpkey=""){
+	/**
+	 * Insert or update a spot
+	 *
+	 * @param string $injson JSON string containing spot data
+	 * @param int|null $thisid Optional spot ID
+	 * @param string $newuserpkey Optional new userpkey for the spot
+	 * @param int|null $originalUploader Original uploader's pkey for image ownership transfer (collaboration)
+	 */
+	public function insertSpot($injson,$thisid=null,$newuserpkey="",$originalUploader=null){
 
 		$spotstarttime=microtime(true);
 
@@ -735,7 +743,7 @@ class StraboSpot
 			//********************************************************************
 			// Now, load images...
 			//********************************************************************
-			$this->loadImages($spotid,$images);
+			$this->loadImages($spotid,$images,$originalUploader);
 
 			//********************************************************************
 			// Finally, return original upload data + "self"
@@ -837,7 +845,7 @@ class StraboSpot
 					// Now, load images...
 					//********************************************************************
 
-					$this->loadImages($spotid,$images);
+					$this->loadImages($spotid,$images,$originalUploader);
 
 					$upload->properties->self="https://strabospot.org/db/feature/$thisid";
 					$data=$upload;
@@ -1009,7 +1017,16 @@ class StraboSpot
 		return $ids;
 	}
 
-	public function loadImages($spotid,$images){
+	/**
+	 * Load images and link them to a spot
+	 *
+	 * @param int $spotid The Neo4j ID of the spot to link images to
+	 * @param array $images Array of image objects to link
+	 * @param int|null $originalUploader The original uploader's pkey (for collaboration ownership transfer)
+	 *        When provided, this allows finding images uploaded by a collaborator and transferring
+	 *        ownership to the project owner (stored in $this->userpkey after setuserpkey())
+	 */
+	public function loadImages($spotid, $images, $originalUploader = null){
 
 		if($images!=""){
 
@@ -1036,21 +1053,39 @@ class StraboSpot
 					}
 				}
 
+				// Set ownership to current userpkey (may be owner after setuserpkey for collaboration)
 				$injson["userpkey"]=$this->userpkey;
 
 				//********************************************************************
 				// check to see if image already exists
+				// For collaboration: try original uploader's images first, then current user's
 				//********************************************************************
+				$neoid = "";
 				if($imageid!=""){
+					// First try to find by current userpkey (owner or normal user)
 					$querystring = "MATCH (n:Image) WHERE n.id=$imageid and n.userpkey = $this->userpkey RETURN id(n);";
 					$neoid = $this->neodb->get_var($querystring);
-				}else{
-					$neoid="";
+
+					// If not found and we have original uploader, try their images (collaboration scenario)
+					if($neoid == "" && $originalUploader !== null && $originalUploader != $this->userpkey){
+						$querystring = "MATCH (n:Image) WHERE n.id=$imageid and n.userpkey = $originalUploader RETURN id(n);";
+						$neoid = $this->neodb->get_var($querystring);
+					}
 				}
 
 				if($neoid!=""){
 
-					$querystring = "MATCH (n:Image) WHERE n.id=$imageid and n.userpkey = $this->userpkey RETURN n;";
+					// Determine which userpkey to query with (may be original uploader for collab)
+					$imageOwner = $this->userpkey;
+					if($originalUploader !== null && $originalUploader != $this->userpkey){
+						// Check if image belongs to original uploader
+						$testQuery = "MATCH (n:Image) WHERE id(n)=$neoid and n.userpkey = $originalUploader RETURN count(n);";
+						if($this->neodb->get_var($testQuery) > 0){
+							$imageOwner = $originalUploader;
+						}
+					}
+
+					$querystring = "MATCH (n:Image) WHERE n.id=$imageid and n.userpkey = $imageOwner RETURN n;";
 					$body = $this->neodb->getNode($querystring);
 
 					foreach($body as $key=>$value){
@@ -1060,6 +1095,14 @@ class StraboSpot
 							}
 						}
 					}
+
+					// Preserve created_by if exists, otherwise set to original uploader or image owner
+					if(!isset($injson['created_by']) || $injson['created_by'] == ""){
+						$injson['created_by'] = $originalUploader !== null ? $originalUploader : $imageOwner;
+					}
+
+					// Transfer ownership to project owner (current userpkey after setuserpkey)
+					$injson['userpkey'] = $this->userpkey;
 
 					$injson = json_encode($injson);
 
@@ -1072,7 +1115,12 @@ class StraboSpot
 
 				}else{
 
-					//image doesn't exist, create new image here
+					// Image doesn't exist, create new image here
+					// Set created_by to original uploader or current user
+					if(!isset($injson['created_by'])){
+						$injson['created_by'] = $originalUploader !== null ? $originalUploader : $this->userpkey;
+					}
+
 					$injson=json_encode($injson);
 
 					//********************************************************************
@@ -1319,7 +1367,8 @@ class StraboSpot
 					$key != "geometrytype" &&
 					$key != "coordinates" &&
 					$key != "userpkey" &&
-					$key != "collaboratorpkey" &&
+					$key != "collaboratorpkey" && // deprecated, kept for backwards compat
+					$key != "created_by" && // new ownership field
 					$key != "folder" &&
 					$key != "centroidzz" &&
 					$key != "datasettypezz" &&
@@ -1494,218 +1543,45 @@ class StraboSpot
 		}
 	}
 
-	public function insertDataset($injson,$feature_id=null){
+	/**
+	 * Insert or update a dataset.
+	 *
+	 * Authorization is handled by controllers using CollaborationAuth service.
+	 * This method assumes the caller has already verified edit permissions.
+	 *
+	 * @param string $injson JSON data for the dataset
+	 * @param int|null $feature_id Dataset ID (optional, can be in JSON)
+	 * @param int|null $originalUploader The pkey of the user creating this dataset (for created_by tracking)
+	 * @return object The created/updated dataset data
+	 */
+	public function insertDataset($injson, $feature_id=null, $originalUploader=null){
 
-		//get id from json in case $feature_id supplied is null (from url)
-		$thisjson=json_decode($injson);
-		if($thisjson->id!=""){
+		// Get id from json in case $feature_id supplied is null (from url)
+		$thisjson = json_decode($injson);
+		if($thisjson->id != ""){
 			$feature_id = $thisjson->id;
 		}
 
-		//first look natively.
-		if($feature_id!=""){
-			$dataset = $this->getDataset($feature_id);
+		// Look for existing dataset by ID
+		// New model: userpkey = project owner, created_by = who can edit
+		// Look for dataset where userpkey matches OR created_by matches current user
+		$dataset = null;
+		if($feature_id != ""){
+			// First try by userpkey (owner's dataset)
+			$dataset = $this->getDatasetById($feature_id);
 		}
 
-		
-		
-		if($dataset->id == ""){ //We didn't find a dataset with userpkey that matches userpkey, so let's look for a dataset that matches collaboratorpkey = userpkey
+		if($dataset && $dataset->id != ""){ // Dataset already exists - UPDATE
 
-			
-			$dataset = $this->getDataset($feature_id, $this->userpkey);
-			//If we find one here, we need to make sure that we are still collaborating. First, we need to make the project connection. We'll fix this after projectDatasets is working.
-			//Check collaboration here
-			
-			//First, find project to see if we're collaborating.
-
-			//$this->dumpVar($dataset);exit();
-			
-			/*
-			stdClass Object
-			(
-				[date] => 2025-12-02T17:36:05.157Z
-				[userpkey] => 8988
-				[name] => JasonsKUProject
-				[datecreated] => 1764886859
-				[id] => 17646969651333
-				[collaboratorpkey] => 3
-				[modified_timestamp] => 1764697026119
-				[datasettype] => app
-				[neoid] => 3770188
-			)
-			*/
-
-			//Might be collaborating, let's set userpkey in case
-			//$this->userpkey = $dataset->userpkey;
-			
-			//Get project id
-
-			//$this->dumpVar($collabinfo);
-		}
-
-		$projectid = $this->neodb->get_var("match (p:Project)-[HAS_DATASET]->(d:Dataset) where d.id = $feature_id and d.userpkey = $this->userpkey OR d.collaboratorpkey = $this->userpkey return p.id");
-		if($projectid != ""){
-			$collabinfo = $this->getCollabInfo($projectid);
-		}
-		
-		
-		//echo "userpkey: ".$this->userpkey;
-		//$this->dumpVar($collabinfo);exit();
-		
-		
-		/*
-		stdClass Object
-		(
-			[isOwner] => 
-			[isCollaborativeProject] => 1
-			[isUserCollaborator] => 1
-			[collaborationLevel] => edit
-			[ownerpkey] => 8988
-			[neoid] => 3770187
-			[isHalted] => 
-		)
-		*/
-		
-		/*
-		if( iscollaborator and userpkey = collaboratorpkey and collaborationlevel = edit and not halted ){
-			go ahead
-		}elsif(userpkey = ownerpkey and halted = yes){
-			go ahead
-		}else{
-			no dice
-		}
-
-		stdClass Object
-		(
-			[isOwner] => 1
-			[neoid] => 3770187
-			[isCollaborativeProject] => 1
-			[isUserCollaborator] => 
-			[collaborationLevel] => none
-			[isHalted] => 1
-		)
-
-		*/
-		
-		/*
-		stdClass Object
-		(
-			[isOwner] => 1
-			[neoid] => 3770309
-			[isCollaborativeProject] => 1
-			[ownerpkey] => 8988
-			[isUserCollaborator] => 
-			[collaborationLevel] => none
-			[isHalted] => 
-		)
-		stdClass Object
-		(
-			[date] => 2025-12-02T17:36:05.157Z
-			[userpkey] => 8988
-			[centroid] => POINT (-97.78068443462089 39.02683352890006)
-			[name] => Default2
-			[datecreated] => 1765317851
-			[id] => 17646969651444
-			[collaboratorpkey] => 3
-			[modified_timestamp] => 1764943395720
-			[datasettype] => app
-			[neoid] => 3770318
-		)
-		*/
-		
-		//$this->dumpVar($this->userpkey);$this->dumpVar($collabinfo);$this->dumpVar($dataset);exit();
-		
-		if($collabinfo->isCollaborativeProject){
-			if($collabinfo->isUserCollaborator && $this->userpkey == $dataset->collaboratorpkey && $collabinfo->collaborationLevel == "edit" && !$collabinfo->isHalted){
-				//go
-				//echo "go!\n";
-				$collabuserpkey = $dataset->userpkey;
-				$collabcollaboratorpkey = $dataset->collaboratorpkey;
-			}elseif($collabinfo->isOwner && $this->userpkey == $dataset->collaboratorpkey){
-				$collabuserpkey = $dataset->userpkey;
-				$collabcollaboratorpkey = $dataset->collaboratorpkey;
-			}elseif($collabinfo->isOwner && $collabinfo->isHalted){
-				//go
-				//echo "go!\n";
-				$collabuserpkey = $dataset->userpkey;
-				$collabcollaboratorpkey = $dataset->collaboratorpkey;
-			}else{
-				//echo "Stop!";
-				$this->throwJSONError("You don't have edit privileges on this dataset.");
-			}
-		}
-
-/*
-        (
-            [pkey] => 37
-            [strabo_project_id] => 17646969651556
-            [project_owner_user_pkey] => 8988
-            [collaborator_user_pkey] => 3
-            [collaboration_level] => edit
-            [accepted] => t
-            [created_date] => 2025-12-03 10:06:48.619087-05
-            [accepted_date] => 2025-12-05 16:15:15.945546-05
-            [uuid] => 7f9a5783-94b0-45ea-a996-b0f163f5d309
-            [disabled] => f
-        )
-*/
-
-		//One final check. Let's look to see if there is a dataset with this ID in the database that is part of user's collaboration projects. If so, fail
-		$crows = $this->db->get_results("select * from collaborators where collaborator_user_pkey = $this->userpkey");
-		foreach($crows as $crow){
-			$lookprojectid = $crow->strabo_project_id;
-
-			$pcount = $this->neodb->get_var("match (p:Project)-[HAS_DATASET]->(d:Dataset) where p.id = $lookprojectid and d.id = $feature_id and (d.userpkey <> $this->userpkey) and (d.collaboratorpkey <> $this->userpkey) return count(p)");
-			if($pcount > 0){
-				$this->throwJSONError("This dataset already exists in the database and you are not the owner ($this->userpkey).");
-			}
-		}
-
-
-//echo $dataset->id;
-
-
-
-
-
-
-		//echo "collabuserpkey: $collabuserpkey\n";
-		//echo "collabcollaboratorpkey: $collabcollaboratorpkey\n";
-
-		//exit();
-		
-		
-		//$this->dumpVar($dataset); exit();
-		/*
-		stdClass Object
-		(
-			[date] => 2025-12-02T17:36:05.157Z
-			[userpkey] => 3
-			[name] => Default
-			[datecreated] => 1764794779
-			[id] => 17646969651573
-			[modified_timestamp] => 1764697026119
-			[datasettype] => app
-		)
-		*/
-
-
-
-		if($dataset->id != ""){ //already exists
-		
-			//grab the neoid so we can update the node
+			// Grab the neoid so we can update the node
 			$neoid = $dataset->neoid;
 			unset($dataset->neoid);
 
-			//feature found, update
-			//********************************************************************
-			// get existing dataset so we can gather up datecreated
-			//********************************************************************
-
+			// Feature found, update
 			$node = $dataset;
-			
+
 			foreach($node as $key=>$value){
-				if($key!="featureid" && $key!="self"){
+				if($key != "featureid" && $key != "self"){
 					eval("\$$key=\$value;");
 				}
 			}
@@ -1714,127 +1590,126 @@ class StraboSpot
 				$modified_timestamp = 999;
 			}
 
-			//********************************************************************
-			//need to add some error checking here
-			//********************************************************************
-
 			$upload = json_decode($injson);
-
 			unset($injson);
-
 			unset($upload->apiformat);
 
 			foreach($upload as $key=>$value){
-				if($key!="id" && $key!="featureid" && $key!="self" ){
+				if($key != "id" && $key != "featureid" && $key != "self"){
 					if(is_array($value)){
-						$value=json_encode($value);
+						$value = json_encode($value);
 					}
 					eval("\$injson['$key']=\$value;");
 				}
 			}
 
-			if($id!=""){
-				$injson['id']=(int)$id;
+			if($id != ""){
+				$injson['id'] = (int)$id;
 			}
 
-			if($datecreated==""){
-				$datecreated=time();
+			if($datecreated == ""){
+				$datecreated = time();
 			}
 
-			$injson['datecreated']=$datecreated;
-			$injson['datasettype']="app";
-			
-			if($collabuserpkey != ""){
-				$injson['userpkey'] = $collabuserpkey;
-				$injson['collaboratorpkey'] = $collabcollaboratorpkey;
-			}else{
-				$injson['userpkey']=$this->userpkey; //if updating do we need this? keep it?
+			$injson['datecreated'] = $datecreated;
+			$injson['datasettype'] = "app";
+
+			// Preserve existing userpkey and created_by
+			$injson['userpkey'] = $dataset->userpkey ?? $this->userpkey;
+			if(isset($dataset->created_by)){
+				$injson['created_by'] = $dataset->created_by;
 			}
 
 			$inmodified_timestamp = $injson['modified_timestamp'];
 
-			$injson=json_encode($injson);
-
-			//********************************************************************
-			// OK, we have some JSON formed and ready for Neo4j.
-			// Let's PUT to the REST API to update attributes for node
-			//********************************************************************
-
-			//$this->logToFile($modified_timestamp, "existing modified timestamp");
-			//$this->logToFile($inmodified_timestamp, "in modified timestamp");
+			$injson = json_encode($injson);
 
 			$modified_timestamp = 0;
-			
-			//$this->dumpVar($injson);exit();
-			
+
 			if($inmodified_timestamp > $modified_timestamp){
-				//$this->logToFile("Creating new dataset");
-				$self = $this->neodb->updateNode($neoid,$injson,"Dataset");
+				$self = $this->neodb->updateNode($neoid, $injson, "Dataset");
 				$upload->modified_on_server = true;
 			}else{
-				//$this->logToFile("Skipping dataset creation. Already up to date.");
 				$upload->modified_on_server = false;
 			}
 
-			$upload->self="https://strabospot.org/db/dataset/$feature_id";
+			$upload->self = "https://strabospot.org/db/dataset/$feature_id";
 
-			$data=$upload;
+			$data = $upload;
 
 		}else{
-			//Either feature_id not provided, or not found, let's put new dataset in
-			if($feature_id==""){
-				$mytime=time();
-				$myrand = rand(1000,9999);
-				$feature_id= $mytime.$myrand;
+			// Either feature_id not provided, or not found - CREATE NEW
+			if($feature_id == ""){
+				$mytime = time();
+				$myrand = rand(1000, 9999);
+				$feature_id = $mytime . $myrand;
 			}
 
 			$feature_id = (int) $feature_id;
 
-			//********************************************************************
-			//need to add some error checking here
-			//********************************************************************
-
 			$upload = json_decode($injson);
-
 			unset($injson);
 
 			foreach($upload as $key=>$value){
-				if($key!="id" && $key!="featureid" && $key!="self"){
+				if($key != "id" && $key != "featureid" && $key != "self"){
 					if(is_array($value)){
-						$value=json_encode($value);
+						$value = json_encode($value);
 					}
 					eval("\$injson['$key']=\$value;");
 				}
 			}
 
-			$datecreated=time();
+			$datecreated = time();
 			$injson['datecreated'] = $datecreated;
 
-			$injson['id']=$feature_id;
-			$injson['userpkey']=$this->userpkey;
+			$injson['id'] = $feature_id;
+			$injson['userpkey'] = $this->userpkey; // Project owner (set by controller)
 
-			$injson['datasettype']="app";
+			// Set created_by to track who created this dataset
+			// If originalUploader provided, use it; otherwise use current userpkey
+			$injson['created_by'] = $originalUploader ?? $this->userpkey;
 
-			$injson=json_encode($injson,JSON_PRETTY_PRINT);
+			$injson['datasettype'] = "app";
 
-			//********************************************************************
-			// OK, we have some JSON formed and ready for Neo4j.
-			// Let's create a node
-			//********************************************************************
-			$newdatasetid = $this->neodb->createNode($injson,"Dataset");
+			$injson = json_encode($injson, JSON_PRETTY_PRINT);
 
-			$upload->datasettype="app";
-			$upload->self="https://strabospot.org/db/dataset/$feature_id";
+			$newdatasetid = $this->neodb->createNode($injson, "Dataset");
+
+			$upload->datasettype = "app";
+			$upload->self = "https://strabospot.org/db/dataset/$feature_id";
 
 			$upload->modified_on_server = true;
 
 			header("Feature created", true, 201);
-			$data=$upload;
+			$data = $upload;
 
 		}
 
 		return $data;
 
+	}
+
+	/**
+	 * Get a dataset by ID without userpkey filtering.
+	 * Used internally when we need to find a dataset regardless of ownership.
+	 *
+	 * @param int $feature_id The dataset ID
+	 * @return object|null The dataset data or null if not found
+	 */
+	private function getDatasetById($feature_id){
+		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id RETURN n, id(n) as id;";
+		$records = $this->neodb->query($querystring);
+
+		if(count($records) > 0){
+			$record = $records[0];
+			$project = $record->get("n");
+			$properties = $project->values();
+			$id = $record->get("id");
+			$properties['neoid'] = $id;
+			return (object)$properties;
+		}
+
+		return null;
 	}
 
 	public function getDatasetSpots($feature_id){
@@ -2714,28 +2589,120 @@ class StraboSpot
 		return $randomString;
 	}
 
+	/**
+	 * Get image info - supports direct ownership and collaborative access
+	 *
+	 * @param int $image_id Image ID to retrieve
+	 * @return stdClass Image info including filename, dimensions, etc.
+	 */
 	public function getImageInfo($image_id){
 
+		// First try direct ownership
 		$querystring = "MATCH (n:Image) WHERE n.id = $image_id and n.userpkey = $this->userpkey RETURN n limit 1;";
 		$featuredata = $this->neodb->getNode($querystring);
 
+		// If not found as owner, check if user has access via collaboration
+		if(empty($featuredata) || count($featuredata) == 0){
+			// Find image through project hierarchy and check collaboration access
+			$querystring = "
+				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
+				WHERE n.id = $image_id
+				RETURN n, p.id as projectId, p.userpkey as ownerPkey
+				LIMIT 1
+			";
+			$result = $this->neodb->getNode($querystring);
+
+			if(!empty($result) && isset($result['projectId'])){
+				// Check if user is collaborator on this project
+				$collab = $this->db->get_row_prepared(
+					"SELECT * FROM collaborators
+					 WHERE strabo_project_id = $1
+					 AND project_owner_user_pkey = $2
+					 AND collaborator_user_pkey = $3
+					 AND accepted = true AND disabled = false",
+					array($result['projectId'], $result['ownerPkey'], $this->userpkey)
+				);
+
+				if($collab){
+					$featuredata = $result;
+				}
+			}
+		}
+
 		$data = new stdClass();
 		$data->count = count($featuredata);
-		$data->filename = $featuredata["filename"];
-		$data->origfilename = $featuredata["origfilename"];
-		$data->extension = end(explode(".",$featuredata["origfilename"]));
-		$data->width = $featuredata["width"];
-		$data->height = $featuredata["height"];
+		$data->filename = isset($featuredata["filename"]) ? $featuredata["filename"] : "";
+		$data->origfilename = isset($featuredata["origfilename"]) ? $featuredata["origfilename"] : "";
+		$data->extension = $data->origfilename != "" ? end(explode(".", $data->origfilename)) : "";
+		$data->width = isset($featuredata["width"]) ? $featuredata["width"] : "";
+		$data->height = isset($featuredata["height"]) ? $featuredata["height"] : "";
 
 		return $data;
 	}
 
+	/**
+	 * Delete image - supports direct ownership and collaborative deletion
+	 *
+	 * Deletion is allowed if:
+	 * 1. User directly owns the image (userpkey == current user), OR
+	 * 2. User is the project owner (image is in their project), OR
+	 * 3. User is a collaborator who uploaded the image (created_by == current user)
+	 *
+	 * @param int $image_id Image ID to delete
+	 * @return bool True if deletion was performed
+	 */
 	public function deleteImage($image_id){
 
-		$querystring = "MATCH (n:Image) where (n.id = $image_id ) and n.userpkey = $this->userpkey optional match (a:Spot)-[b:HAS_IMAGE]-(n) DELETE b,n;";
-
+		// First try direct ownership
+		$querystring = "MATCH (n:Image) WHERE n.id = $image_id AND n.userpkey = $this->userpkey
+						OPTIONAL MATCH (a:Spot)-[b:HAS_IMAGE]-(n) DELETE b,n;";
 		$this->neodb->query($querystring);
 
+		// Check if image still exists (wasn't deleted)
+		$stillExists = $this->neodb->get_var("MATCH (n:Image) WHERE n.id = $image_id RETURN count(n);");
+
+		if($stillExists > 0){
+			// Try collaborative deletion - find image and check permissions
+			$imageInfo = $this->neodb->getNode("
+				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
+				WHERE n.id = $image_id
+				RETURN n, p.id as projectId, p.userpkey as ownerPkey, n.created_by as createdBy
+				LIMIT 1
+			");
+
+			if(!empty($imageInfo) && isset($imageInfo['projectId'])){
+				$canDelete = false;
+
+				// Check if user is the project owner
+				if($imageInfo['ownerPkey'] == $this->userpkey){
+					$canDelete = true;
+				} else {
+					// Check if user is a collaborator who created this image
+					$collab = $this->db->get_row_prepared(
+						"SELECT * FROM collaborators
+						 WHERE strabo_project_id = $1
+						 AND project_owner_user_pkey = $2
+						 AND collaborator_user_pkey = $3
+						 AND accepted = true AND disabled = false",
+						array($imageInfo['projectId'], $imageInfo['ownerPkey'], $this->userpkey)
+					);
+
+					if($collab && isset($imageInfo['createdBy']) && $imageInfo['createdBy'] == $this->userpkey){
+						$canDelete = true;
+					}
+				}
+
+				if($canDelete){
+					$querystring = "MATCH (n:Image) WHERE n.id = $image_id
+									OPTIONAL MATCH (a:Spot)-[b:HAS_IMAGE]-(n) DELETE b,n;";
+					$this->neodb->query($querystring);
+					return true;
+				}
+			}
+			return false;
+		}
+
+		return true;
 	}
 
 	public function insertImage($post,$file){
@@ -2814,6 +2781,10 @@ class StraboSpot
 				$injson['filename'] = $filename;
 				$injson['origfilename'] = $imagefilename;
 				$injson['userpkey']=$this->userpkey;
+				// Preserve existing created_by or set to current user if not set
+				if(!isset($injson['created_by'])){
+					$injson['created_by']=$this->userpkey;
+				}
 				$injson['imagesha1']=$imagesha1;
 				$injson['id']=$id;
 				$injson['modified_timestamp']=$modified_timestamp;
@@ -2848,6 +2819,7 @@ class StraboSpot
 				$injson['filename'] = $newfilename;
 				$injson['origfilename'] = $imagefilename;
 				$injson['userpkey']=$this->userpkey;
+				$injson['created_by']=$this->userpkey; // Track original uploader
 				$injson['imagesha1']=$imagesha1;
 				$injson['id']=$id;
 				$injson['modified_timestamp']=$modified_timestamp;
@@ -3660,14 +3632,6 @@ public function getSpotName($id){
 
 
 
-
-
-
-
-
-
-
-
 	public function combineCollaborativeProject($injson, $collabuserpkey){ //Accepts JSON and combines incoming project tags with project in server and returns JSON string with combined based on server (only changes tags).
 
 		$ex_project = json_decode($injson);
@@ -3819,37 +3783,35 @@ public function getSpotName($id){
 
 	}
 
-
-
-
-
-
-
-
-
-
-
-
+	/**
+	 * @deprecated Use CollaborationAuth::getProjectContext() instead.
+	 * This method is kept for backwards compatibility but is no longer used
+	 * by the new collaboration model. Controllers should use the CollaborationAuth
+	 * service for authorization checks.
+	 */
+	/**
+	 * @deprecated Use CollaborationAuth service instead.
+	 * This function has been replaced by the CollaborationAuth service (db/services/CollaborationAuth.php)
+	 * which provides proper authorization checks using the new ownership model (userpkey + created_by).
+	 * Commented out 2025-12-24 during collaboration cleanup.
+	 */
+	/*
 	public function getCollabInfo($projectid) {
 
-		//echo $this->userpkey;exit();
-		
-		//echo "projectid: $projectid";exit();
-	
 		//This is a helper class that gets collaboration info for a given project
 		$out = new stdClass();
-		
+
 		//collab :	pkey 	strabo_project_id 	project_owner_user_pkey 	collaborator_user_pkey 	collaboration_level 	accepted 	created_date 	accepted_date 	uuid 	disabled
 		//users:	 pkey 	firstname 	lastname 	email 	password 	hash 	active 	userlevel 	profileimage 	signup_date 	deleted 	orcid_token 	macrostrat_token
-		
+
 		//need to check accepted, and disabled fields too. Set to readonly as necessary.
-		
+
 		//echo "select * from collaborators where strabo_project_id = '$projectid'";exit();
-		
+
 		$collabcount = $this->db->get_var_prepared("
 			select count(*) from collaborators where strabo_project_id = $1
 		",array($projectid));
-		
+
 
 		//Check to see if user owns a project with this id:
 		$usercount = $this->neodb->get_var("match (p:Project) where p.userpkey = $this->userpkey and p.id = $projectid return count(p)");
@@ -3863,28 +3825,12 @@ public function getSpotName($id){
 			$out->neoid = $this->neodb->get_var("match (p:Project) where p.userpkey = $this->userpkey and p.id = $projectid return id(p) as neoid");
 		}else{
 			$out->isOwner = FALSE;
-		}	
-		
-		/*
-		stdClass Object
-		(
-			[pkey] => 37
-			[strabo_project_id] => 17646969651556
-			[project_owner_user_pkey] => 8988
-			[collaborator_user_pkey] => 3
-			[collaboration_level] => readonly
-			[accepted] => f
-			[created_date] => 2025-12-03 10:06:48.619087-05
-			[accepted_date] => 
-			[uuid] => 7f9a5783-94b0-45ea-a996-b0f163f5d309
-			[disabled] => f
-		)
-		*/
-		
+		}
+
 		if($collabcount > 0){
 			$out->isCollaborativeProject = TRUE;
 			$out->ownerpkey = $this->db->get_var_prepared("select project_owner_user_pkey from collaborators where strabo_project_id = $1",array($projectid));
-			
+
 			//Also get user's collaboration (if they are one)
 			$collabrow = $this->db->get_row_prepared("select * from collaborators where strabo_project_id = $1 and collaborator_user_pkey = $2 and accepted = true and disabled = false",array($projectid, $this->userpkey));
 
@@ -3898,7 +3844,7 @@ public function getSpotName($id){
 				$out->isUserCollaborator = FALSE;
 				$out->collaborationLevel = "none";
 			}
-			
+
 			//Also check for "halted" collaboration. If collabcount > 0 and all disabled, collab is now halted
 			$enabledcount = $this->db->get_var_prepared("select count(*) from collaborators where strabo_project_id = $1 and disabled = false",array($projectid));
 			if($enabledcount > 0){
@@ -3906,7 +3852,7 @@ public function getSpotName($id){
 			}else{
 				$out->isHalted = TRUE;
 			}
-			
+
 		}else{
 			$out->isCollaborativeProject = FALSE;
 			$out->isUserCollaborator = FALSE;
@@ -3915,6 +3861,7 @@ public function getSpotName($id){
 
 		return $out;
 	}
+	*/
 
 	public function throwJSONError($message){
 		$out = new stdClass();
@@ -3925,95 +3872,44 @@ public function getSpotName($id){
 		exit();
 	}
 
-	public function insertProject($injson,$thisid=null){
+	/**
+	 * Insert or update a project.
+	 *
+	 * Authorization is handled by controllers using CollaborationAuth service.
+	 * This method assumes the caller has already verified edit permissions and
+	 * set $this->userpkey to the effective owner.
+	 *
+	 * @param string $injson JSON data for the project
+	 * @param int|null $thisid Project ID (optional, can be in JSON)
+	 * @param bool $isCollaborativeEdit If true, merge data using combineCollaborativeProject
+	 * @param int|null $ownerPkeyOverride Override the owner pkey (for collaborative edits)
+	 * @return object The created/updated project data
+	 */
+	public function insertProject($injson, $thisid=null, $isCollaborativeEdit=false, $ownerPkeyOverride=null){
 
-		if($thisid!=""){
+		if($thisid != ""){
 			$thisid = (int) $thisid;
 		}
-		
-		//Also look for id in JSON
-		if($id == ""){
-			$upload = json_decode($injson);
-			foreach($upload as $key=>$value){
-				if($key=="id"){
-					$thisid= (int) $value;
-				}
-			}
-		}
-		
-		if($thisid != ""){
-			$collabinfo = $this->getCollabInfo($thisid);
-		}
-		
-		//$this->dumpVar($collabinfo);exit();
-		
-		/*
-		stdClass Object
-		(
-			[isOwner] => 
-			[isCollaborativeProject] => 1
-			[isUserCollaborator] => 1
-			[collaborationLevel] => edit
-			[ownerpkey] => 8988
-			[isHalted] => 
-		)
-		*/
-		
-		
-		
-		//do collab stuff here
-		/*
-		if anyone is collaborating on a project with this id {	//project is a collaboration project
-			if uplading user owns a project with this id {
-				do as normal
-			}else{
-				Check to see if user is a collaborator on this project...
-				If collaborator (
-					if user is an EDIT collaborator (
-						Combine tags,reports, etc... but keep rest of project
-					)else(
-						Do nothing. Not an editor... Error message.
-					)
-				)else(
-					if project is being collaborated on, and user is not an editor, stop now and throw error???
-					This would mean no more uploading projects that don't belong to you.
-					Let's think about this.
-					Probably just upload as normal to preserve legacy behavior.
-				)
-			}
-		}else{
-			upload as normal
-		}
-		*/
 
-		// Look at incoming project and decide if it is a collaborative project,
-		// and whether the user uploading is a collaborator
-		if($collabinfo->isCollaborativeProject){
-			if($collabinfo->isOwner){
-				$injson = $this->combineNormalProject($injson);
-			}else{
-				if($collabinfo->isUserCollaborator){
-					if($collabinfo->collaborationLevel == "edit"){
-						$injson = $this->combineCollaborativeProject($injson, $collabinfo->ownerpkey);
-						$this->userpkey = (int)$collabinfo->ownerpkey;
-					}else{
-						//Not editor, throw error!
-						$this->throwJSONError("You don't have edit privileges on this project.");
-					}
-				}else{
-					//Not collaborator. Put in as normal
-					$injson = $this->combineNormalProject($injson);
-				}
+		// Also look for id in JSON
+		$upload = json_decode($injson);
+		foreach($upload as $key=>$value){
+			if($key == "id"){
+				$thisid = (int) $value;
 			}
+		}
+
+		// Determine how to merge the project data
+		// For collaborative edits: merge tags, reports, etc. with existing project
+		// For normal edits: standard combination
+		if($isCollaborativeEdit && $ownerPkeyOverride !== null){
+			$injson = $this->combineCollaborativeProject($injson, $ownerPkeyOverride);
 		}else{
-			//Not collaboration project. Put in as normal
 			$injson = $this->combineNormalProject($injson);
 		}
-		
-		
-		
-		//Make sure to change $this->userpkey to owner if needed!!!
-		//Combine project but keep everything but tags,reports,etc... Project editor.
+
+		// Use the effective owner (set by controller, or override for collab)
+		$ownerPkey = $ownerPkeyOverride ?? $this->userpkey;
 		
 
 		
@@ -4046,13 +3942,26 @@ public function getSpotName($id){
 
 		if($thisid != ""){
 
-			$record=$this->neodb->getRecord("match (p:Project {id:$thisid, userpkey:$this->userpkey}) return id(p) as id,p");
+			$record=$this->neodb->getRecord("match (p:Project {id:$thisid, userpkey:$ownerPkey}) return id(p) as id,p");
 			if($record){
 				$projectid=$record->get("id");
 				$server_timestamp = $record->get("p")->values()["modified_timestamp"];
 
-				
+
 				$dbaction="update";
+			}
+		}
+
+		// Prevent former collaborators from uploading their own version of a project
+		// This check only applies when creating a NEW project as owner (not collaborative edit)
+		if($dbaction == "new" && !$isCollaborativeEdit && $thisid != ""){
+			require_once(__DIR__ . '/services/CollaborationAuth.php');
+			$collabAuth = new CollaborationAuth($this->db, $this->neodb);
+			$canUpload = $collabAuth->canUploadProjectAsOwner($thisid, $this->userpkey);
+			if(!$canUpload['allowed']){
+				$result = new stdClass();
+				$result->Error = $canUpload['reason'];
+				return $result;
 			}
 		}
 
@@ -4061,7 +3970,7 @@ public function getSpotName($id){
 		// first the spot-level items
 		// ************************************************************
 		$newproject["id"]=$thisid;
-		$newproject['userpkey']=$this->userpkey;
+		$newproject['userpkey']=$ownerPkey;
 		if($upload->modified_timestamp!=""){ $newproject["modified_timestamp"] = (int) $upload->modified_timestamp; }
 		if($upload->date!=""){ $newproject["date"]=$upload->date; }
 
@@ -4107,7 +4016,7 @@ public function getSpotName($id){
 			$rockunits=array();
 			$runum=0;
 			foreach($upload->rock_units as $ru){
-				$rockunits[$runum]["userpkey"]=$this->userpkey;
+				$rockunits[$runum]["userpkey"]=$ownerPkey;
 				foreach($ru as $key=>$value){
 					if(is_array($value)||is_object($value)){ $value = json_encode($value); }
 					if($key=="id"){
@@ -4128,7 +4037,7 @@ public function getSpotName($id){
 			$tags=array();
 			$tagnum=0;
 			foreach($upload->tags as $t){
-				$tags[$tagnum]["userpkey"]=$this->userpkey;
+				$tags[$tagnum]["userpkey"]=$ownerPkey;
 				foreach($t as $key=>$value){
 					if(is_array($value)||is_object($value)){ $value = json_encode($value); }
 					if($key=="id"){
@@ -4150,7 +4059,7 @@ public function getSpotName($id){
 			$relnum=0;
 			foreach($upload->relationships as $rel){
 
-				$relationships[$relnum]["userpkey"]=$this->userpkey;
+				$relationships[$relnum]["userpkey"]=$ownerPkey;
 				foreach($rel as $key=>$value){
 					if(is_array($value)||is_object($value)){ $value = json_encode($value); }
 					if($key=="id"){
@@ -4203,7 +4112,7 @@ public function getSpotName($id){
 			// create new project node, and then add other nodes
 			//********************************************************************
 			$projectid = $this->neodb->createNode($newprojectjson,"Project");
-			$userid = $this->neodb->get_var("match (a:User) where a.userpkey=".$this->userpkey." return id(a)");
+			$userid = $this->neodb->get_var("match (a:User) where a.userpkey=".$ownerPkey." return id(a)");
 			//$this->neodb->addRelationship($userid, $projectid, "HAS_PROJECT","User","Project");
 
 		}elseif($dbaction=="update"){
@@ -4273,7 +4182,7 @@ public function getSpotName($id){
 			//$this->buildProjectRelationships($thisid);
 		}
 
-		$this->setProjectCenter($thisid);
+		$this->setProjectCenter($thisid, $ownerPkey);
 
 		$totalprojecttime = microtime(true)-$projectstarttime;
 		//$this->logToFile("buildprojectrelationships took: ".$totalprojecttime." secs","Project Time");
@@ -4286,47 +4195,61 @@ public function getSpotName($id){
 
 	}
 
-	public function getDataset($feature_id, $collaboratorpkey = ""){
+	/**
+	 * Get a dataset by ID.
+	 *
+	 * @param int $feature_id Dataset ID
+	 * @param int|null $createdBy Optional filter by created_by (who created the dataset)
+	 * @return object Dataset properties
+	 */
+	public function getDataset($feature_id, $createdBy = null){
 
-		if($collaboratorpkey != ""){
-			$userpkeystring=" and n.collaboratorpkey = $collaboratorpkey";
+		// Build filter for user access
+		if($createdBy !== null){
+			$userpkeystring=" and n.created_by = $createdBy";
 		}else{
 			if($this->userpkey!=99999){
 				$userpkeystring=" and n.userpkey = $this->userpkey";
+			}else{
+				$userpkeystring="";
 			}
 		}
-
-		$data = new stdClass();
 
 		//get the feature from neo4j
 		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id".$userpkeystring." RETURN n, id(n) as id;";
 
-		//echo "querystring: $querystring\n";//exit();
-		
 		$records = $this->neodb->query($querystring);
 
 		$count=count($records);
 
+		$properties = [];
 		if($count > 0){
 			$record = $records[0];
 
 			$project = $record->get("n");
 			$properties = $project->values();
-			
+
 			$id = $record->get("id");
 
 			$properties['neoid'] = $id;
 
 		}
-		
+
 		return (object)$properties;
 
 	}
 
-	public function getProject($feature_id, $collaboratorpkey = ""){
+	/**
+	 * Get a project by ID.
+	 *
+	 * @param int $feature_id Project ID
+	 * @param int|string $ownerPkey Optional owner pkey to filter by (for collaborative access)
+	 * @return object Project properties
+	 */
+	public function getProject($feature_id, $ownerPkey = ""){
 
-		if($collaboratorpkey != ""){
-			$userpkeystring=" and n.userpkey = $collaboratorpkey";
+		if($ownerPkey != ""){
+			$userpkeystring=" and n.userpkey = $ownerPkey";
 		}else{
 			if($this->userpkey!=99999){
 				$userpkeystring=" and n.userpkey = $this->userpkey";
@@ -4532,124 +4455,64 @@ public function getSpotName($id){
 
 	}
 
-	public function getProjectDatasets($feature_id){
+	/**
+	 * Get datasets for a project with readonly status.
+	 *
+	 * The readonly status is determined by the new collaboration model:
+	 * - Non-collaborative projects: all datasets editable by owner
+	 * - Collaborative projects: user can edit datasets where created_by matches their pkey
+	 * - Halted projects: owner can edit all datasets
+	 *
+	 * @param int $feature_id Project ID
+	 * @param int|null $originalUserpkey The original user's pkey (before any owner swap)
+	 * @param bool $isOwner Whether the user is the project owner
+	 * @param bool $isHalted Whether collaboration is halted
+	 * @param string $permissionLevel User's permission level ('owner', 'edit', 'readonly', 'none')
+	 * @return array Dataset data with isReadOnly flags
+	 */
+	public function getProjectDatasets($feature_id, $originalUserpkey = null, $isOwner = true, $isHalted = false, $permissionLevel = 'owner'){
 
-		//First look for collaborative project
-		$collabinfo = $this->getCollabInfo($feature_id);
-		
-/*
-stdClass Object
-(
-    [isOwner] => 1
-    [neoid] => 3770383
-    [isCollaborativeProject] => 1
-    [ownerpkey] => 8988
-    [isUserCollaborator] => 
-    [collaborationLevel] => none
-    [isHalted] => 
-)
-*/
-		if($collabinfo->isCollaborativeProject){
-			if($collabinfo->isOwner || $collabinfo->isUserCollaborator){
-				$querystring = "match (p:Project)-[r:HAS_DATASET]->(d:Dataset) where p.userpkey=$collabinfo->ownerpkey and p.id=$feature_id RETURN d;";
-			}else{
-				//If not owner or collaborator project, just get normally:
-				$querystring = "match (p:Project)-[r:HAS_DATASET]->(d:Dataset) where p.userpkey=$this->userpkey and p.id=$feature_id RETURN d;";
-			}
-		}else{
-			//If no collaborative project, just get normally:
-			$querystring = "match (p:Project)-[r:HAS_DATASET]->(d:Dataset) where p.userpkey=$this->userpkey and p.id=$feature_id RETURN d;";
+		// Default to current userpkey if not provided
+		if($originalUserpkey === null){
+			$originalUserpkey = $this->userpkey;
 		}
 
-		//get the features from neo4j
+		// Get datasets - use $this->userpkey which may be set to owner by controller
+		$querystring = "match (p:Project)-[r:HAS_DATASET]->(d:Dataset) where p.userpkey=$this->userpkey and p.id=$feature_id RETURN d;";
+
 		$featuredata = $this->neodb->get_results($querystring);
 
-		$count=count($featuredata);
+		$count = count($featuredata);
 
 		if($count > 0){
 
-			$x=0;
-/*
-<pre>Array
-(
-    [date] => 2025-12-02T17:36:05.157Z
-    [userpkey] => 8988
-    [centroid] => POINT (-97.90913815047305 39.05458994344033)
-    [name] => Default22
-    [datecreated] => 1765322717
-    [id] => 17646969651444
-    [collaboratorpkey] => 3
-    [modified_timestamp] => 1764954968461
-    [datasettype] => app
-)
-</pre><pre>stdClass Object
-(
-    [isOwner] => 1
-    [neoid] => 3770383
-    [isCollaborativeProject] => 1
-    [ownerpkey] => 8988
-    [isUserCollaborator] => 
-    [collaborationLevel] => none
-    [isHalted] => 
-)
-</pre><pre>Array
-(
-    [date] => 2025-12-02T17:36:05.157Z
-    [userpkey] => 8988
-    [centroid] => POINT (-98.57995616891327 39.82686906055531)
-    [name] => Default
-    [datecreated] => 1765322688
-    [id] => 17646969651573
-    [collaboratorpkey] => 8988
-    [modified_timestamp] => 1764954968461
-    [datasettype] => app
-)
-</pre><pre>stdClass Object
-(
-    [isOwner] => 1
-    [neoid] => 3770383
-    [isCollaborativeProject] => 1
-    [ownerpkey] => 8988
-    [isUserCollaborator] => 
-    [collaborationLevel] => none
-    [isHalted] => 
-)
-</pre>
-*/
+			$x = 0;
+
 			foreach($featuredata as $fd){
 
-				$fd=$fd->get("d")->values();
-				
-				$readonly = true;
-				
-				if($collabinfo->isCollaborativeProject){
-					if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $fd['collaboratorpkey'] == $this->userpkey){
-						//collaborator with edit and owns dataset
-						//echo "collaborator with edit and owns dataset\n";
-						$readonly = false;
-					}elseif($collabinfo->isOwner && $fd['collaboratorpkey'] == $this->userpkey){
-						//owner and owns dataset
-						//echo "owner and owns dataset\n";
-						$readonly = false;
-					}elseif($collabinfo->isOwner && $collabinfo->isHalted){
-						//owner and halted
-						//echo "owner and halted\n";
-						$readonly = false;
-					}else{
-						//fallthru
-						//echo "fallthru\n";
-						//$this->dumpVar($collabinfo);
-						//$this->dumpVar($fd);
-					}
-				}else{
-					//Not collaborative project
-					echo "Not collaborative project\n";
-					$readonly = false;
-				}
+				$fd = $fd->get("d")->values();
 
-				$data['datasets'][$x]=$this->singleDatasetJSON($fd);
+				// Determine readonly status using new collaboration model
+				$readonly = true;
+
+				if($isOwner){
+					// Owner can always edit their own datasets (created_by matches or no created_by)
+					$datasetCreatedBy = $fd['created_by'] ?? $fd['userpkey'];
+					if($datasetCreatedBy == $originalUserpkey || $isHalted){
+						// Owner's dataset or halted project
+						$readonly = false;
+					}
+				}elseif($permissionLevel === 'edit'){
+					// Edit collaborator can edit datasets they created
+					$datasetCreatedBy = $fd['created_by'] ?? null;
+					if($datasetCreatedBy !== null && $datasetCreatedBy == $originalUserpkey){
+						$readonly = false;
+					}
+				}
+				// readonly collaborators or no permission = always readonly (default)
+
+				$data['datasets'][$x] = $this->singleDatasetJSON($fd);
 				$data['datasets'][$x]['isReadOnly'] = $readonly;
-				
 
 				$x++;
 			}
@@ -4732,293 +4595,100 @@ stdClass Object
 
 	}
 
-	public function addDatasetToProject($from,$to,$relationshiptype){
+	/**
+	 * Add a dataset to a project.
+	 *
+	 * Authorization is handled by controllers using CollaborationAuth service.
+	 * This method assumes the caller has already verified permissions.
+	 *
+	 * @param int $from Project ID
+	 * @param int $to Dataset ID
+	 * @param string $relationshiptype Relationship type (HAS_DATASET)
+	 * @param int|null $ownerPkey Project owner's pkey (for collaborative projects)
+	 * @param int|null $originalUploader User who is adding the dataset (for created_by tracking)
+	 * @return array Response data
+	 */
+	public function addDatasetToProject($from, $to, $relationshiptype, $ownerPkey = null, $originalUploader = null){
 
-
-		
 		//from = project	to = dataset
 		$datasetid = $to;
 		$projectid = $from;
 		$feature_id = $projectid;
 
-		$collabinfo = $this->getCollabInfo($projectid);
-		//$this->dumpVar($collabinfo);exit();
-		/*
-		stdClass Object
-		(
-			[isOwner] => 
-			[isCollaborativeProject] => 1
-			[isUserCollaborator] => 1
-			[collaborationLevel] => edit
-			[ownerpkey] => 8988
-			[isHalted] => 
-		)
-		
-		stdClass Object
-		(
-			[isOwner] => 1
-			[isCollaborativeProject] => 
-			[isUserCollaborator] => 
-			[collaborationLevel] => none
-		)
-		*/
-		
-		//$this->dumpVar($collabinfo);
-		
-		//$datasetid = 16763002463101;
-		
-		//$datasetid = 167630024631013;
-		
-		//Let's get some info on this dataset so we know who the owner is
+		// Determine the effective owner - if ownerPkey is provided, use it (collaborative case)
+		// Otherwise use the current user (normal case)
+		$effectiveOwner = $ownerPkey ?? $this->userpkey;
+		$uploader = $originalUploader ?? $this->userpkey;
+
+		// Look for orphaned dataset (not yet linked to any project)
+		// First try to find it with the current user's pkey
 		$dvars = $this->neodb->get_results("MATCH (d:Dataset) WHERE d.userpkey = $this->userpkey and d.id = $datasetid and NOT EXISTS ((d)--()) RETURN d, id(d) as neoid;");
+
+		// If not found, also check with the effectiveOwner's pkey (for collaborative case)
+		if(count($dvars) == 0 && $effectiveOwner != $this->userpkey){
+			$dvars = $this->neodb->get_results("MATCH (d:Dataset) WHERE d.userpkey = $effectiveOwner and d.id = $datasetid and NOT EXISTS ((d)--()) RETURN d, id(d) as neoid;");
+		}
+
 		if(count($dvars) > 0){
+			// Found orphaned dataset - link it to the project
 			$drow = $dvars[0];
 			$dvals = (object)$drow->get("d")->values();
-			$dneoid = $drow->get("neoid");			
-			$dvals->neoid = $dneoid;
-		}
+			$datasetneoid = (int)$drow->get("neoid");
 
+			// Get project Neo4j ID
+			$pvars = $this->neodb->get_results("MATCH (p:Project) WHERE p.userpkey = $effectiveOwner and p.id = $projectid RETURN id(p) as neoid;");
+			if(count($pvars) > 0){
+				$projectneoid = (int)$pvars[0]->get("neoid");
 
-
-		/*//JMA 20251205 I don't think we actually need this part, since we're entering a unique link below.
-		if($dvals->id == ""){
-			//Didn't find orphaned dataset, so let's see if it is hooked to something
-			$dinfo = (object)$this->neodb->getNode("MATCH (d:Dataset) WHERE (d.userpkey = $this->userpkey) OR (d.collaboratorpkey = $this->userpkey) and d.id = $datasetid RETURN d;");
-			
-			if($dinfo->id != ""){
-				//exists
-				header("Bad Request", true, 404);
-				$data["Error"] = "Dataset $datasetid belongs to another project.";
-				return $data;
-			}else{
-				//not found entirely
-				header("Bad Request", true, 404);
-				$data["Error"] = "Dataset $datasetid not found.";
-				return $data;
-			}
-		}
-		*/
-		
-		
-		//exit();
-		
-		/*
-			MATCH (from:Project), (to:Dataset) where id(from)=3770182 and id(to)= CREATE UNIQUE (from)-[r:HAS_DATASET]->(to) return id(r)
-		*/
-
-				/*
-MATCH (p:Person {name: 'Alice'})
-SET p.age = 30
-RETURN p;
-
-match (d:Dataset) where id(d) = $datasetneoid set d.userpkey = $collabinfo->ownerpkey, d.collaboratorpkey return d;
-				*/
-
-		if($collabinfo->isCollaborativeProject){
-			
-			$projectneoid = (int)$collabinfo->neoid;
-			$datasetneoid = (int)$dvals->neoid;
-			
-			if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $dinfo->userpkey = $this->userpkey && !$collabinfo->isHalted){
-				//echo "is collaborator with edit and dataset";
+				// Create the relationship
 				$this->neodb->query("MATCH (from:Project), (to:Dataset) where id(from)=$projectneoid and id(to)=$datasetneoid CREATE UNIQUE (from)-[r:HAS_DATASET]->(to) return id(r)");
-				$this->neodb->query("match (d:Dataset) where id(d) = $datasetneoid set d.userpkey = $collabinfo->ownerpkey, d.collaboratorpkey=$this->userpkey return d;");
-				header("Dataset added to project", true, 201);
-				$data['message']="Dataset $datasetid added to project $feature_id.";
-				return $data;
-				
-				
-			}elseif($collabinfo->isOwner && $dinfo->userpkey = $this->userpkey){
-				//echo "is owner with dataset";
-				$this->neodb->query("MATCH (from:Project), (to:Dataset) where id(from)=$projectneoid and id(to)=$datasetneoid CREATE UNIQUE (from)-[r:HAS_DATASET]->(to) return id(r)");
-				$this->neodb->query("match (d:Dataset) where id(d) = $datasetneoid set d.userpkey = $this->userpkey, d.collaboratorpkey=$this->userpkey return d;");
+
+				// Update dataset ownership: userpkey = project owner, created_by = who uploaded it
+				$this->neodb->query("match (d:Dataset) where id(d) = $datasetneoid set d.userpkey = $effectiveOwner, d.created_by = $uploader return d;");
+
 				header("Dataset added to project", true, 201);
 				$data['message']="Dataset $datasetid added to project $feature_id.";
 				return $data;
 	
-			}elseif($collabinfo->isOwner && $collabinfo->isHalted){
-				//echo "is owner and project halted link project to dataset ";
-				//$this->neodb->query("MATCH (from:Project), (to:Dataset) where id(from)=$projectneoid and id(to)=$datasetneoid CREATE UNIQUE (from)-[r:HAS_DATASET]->(to) return id(r)");
-				$this->neodb->query("match (d:Dataset) where id(d) = $datasetneoid set d.userpkey = $collabinfo->ownerpkey, d.collaboratorpkey=$this->userpkey return d;");
-				header("Dataset added to project", true, 201);
-				$data['message']="Dataset $datasetid added to project $feature_id.";
-				return $data;
-
-			}else{
-				//Error, don't have permissions
-				header("Don't have permission to collaborate on this", true, 403);
-				$data["Error"] = "Don't have permission to collaborate on this";
-				return $data;
 			}
-			
-		}else{
+		}
 
-			//Do normal way
-			//OK, check to see if feature exists
-			if($this->findDataset($datasetid)){
-				
-				if(!$this->datasetExistsInOtherProject($datasetid,$feature_id)){
-				
-					//see if it already exists in group
-					if(!$this->findDatasetInProject($feature_id,$datasetid)){
+		// Not an orphaned dataset - check if it already exists somewhere
+		if($this->findDataset($datasetid)){
 
-						//********************************************************************
-						// Add to project 
-						//********************************************************************
-						$from = $this->straboIDToID($from,"Project");
-						$to = $this->straboIDToID($to,"Dataset");
-						$self = $this->neodb->addRelationship($from,$to,$relationshiptype,"Project","Dataset");
+			if(!$this->datasetExistsInOtherProject($datasetid, $feature_id)){
 
-						header("Dataset added to project", true, 201);
-						$data['message']="Dataset $datasetid added to project $feature_id.";
-						return $data;
-					}else{
+				// See if it already exists in this project
+				if(!$this->findDatasetInProject($feature_id, $datasetid)){
 
-						//Error, dataset already exists
-						header("Dataset $datasetid already exists in project $feature_id.", true, 200);
-						$data["Error"] = "Dataset $datasetid already exists in project $feature_id.";							
-						return $data;
-					}
-				
+					// Add to project using relationship
+					$fromNeoId = $this->straboIDToID($from, "Project");
+					$toNeoId = $this->straboIDToID($to, "Dataset");
+					$self = $this->neodb->addRelationship($fromNeoId, $toNeoId, $relationshiptype, "Project", "Dataset");
+
+					header("Dataset added to project", true, 201);
+					$data['message']="Dataset $datasetid added to project $feature_id.";
+					return $data;
 				}else{
-				
-					//Error, dataset already exists in another project
-					header("Dataset $datasetid already exists in another project.", true, 200);
-					$data["Error"] = "Dataset $datasetid already exists in another project.";
+					// Dataset already exists in this project
+					header("Dataset $datasetid already exists in project $feature_id.", true, 200);
+					$data["Error"] = "Dataset $datasetid already exists in project $feature_id.";
 					return $data;
 				}
 
 			}else{
-
-				//Error, feature not found
-				header("Bad Request", true, 404);
-				$data["Error"] = "Dataset $datasetid not found.";
+				// Dataset already exists in another project
+				header("Dataset $datasetid already exists in another project.", true, 200);
+				$data["Error"] = "Dataset $datasetid already exists in another project.";
 				return $data;
 			}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-		}
-
-
-/*
-if project is collaborative {
-	if is owner or is collaborator with edit {
-		if exists dataset with userpkey that not linked {
-			link
-			add collaboratorpkey
-			change userpkey
 		}else{
-			error
+			// Dataset not found
+			header("Bad Request", true, 404);
+			$data["Error"] = "Dataset $datasetid not found.";
+			return $data;
 		}
-	}else if is owner and is halted {
-		if exists dataset with userpkey that not linked {
-			link
-			add collaboratorpkey
-		}else{
-			error
-		}
-	}
-}else{
-	if project exists{
-		if dataset exists {
-			if not linked {
-				make link
-			}else{
-				error
-			}
-		}else{
-			error
-		}
-	}else{
-		error
-	}
-}
-*/
-
-
-
-/*
-Normal way:
-
-					//OK, check to see if feature exists
-					if($this->strabo->findDataset($datasetid)){
-						
-						if(!$this->strabo->datasetExistsInOtherProject($datasetid,$feature_id)){
-						
-							//see if it already exists in group
-							if(!$this->strabo->findDatasetInProject($feature_id,$datasetid)){
-
-								//********************************************************************
-								// Add to project 
-								//********************************************************************
-								$this->strabo->addDatasetToProject($feature_id,$datasetid,"HAS_DATASET");
-
-								header("Dataset added to project", true, 201);
-								$data['message']="Dataset $datasetid added to project $feature_id.";
-							
-							}else{
-
-								//Error, dataset already exists
-								header("Dataset $datasetid already exists in project $feature_id.", true, 200);
-								$data["Error"] = "Dataset $datasetid already exists in project $feature_id.";							
-
-							}
-						
-						}else{
-						
-							//Error, dataset already exists in another project
-							header("Dataset $datasetid already exists in another project.", true, 200);
-							$data["Error"] = "Dataset $datasetid already exists in another project.";
-								
-						}
-
-					}else{
-
-						//Error, feature not found
-						header("Bad Request", true, 404);
-						$data["Error"] = "Dataset $datasetid not found.";
-					
-					}
-
-
-		$from = $this->straboIDToID($from,"Project");
-		$to = $this->straboIDToID($to,"Dataset");
-		$self = $this->neodb->addRelationship($from,$to,$relationshiptype,"Project","Dataset");
-		return $self;	
-*/
-
-
-
-
-
-
-		
-		exit();
-
-
 	}
 
 	public function deleteProjectDatasets($project_id){
@@ -5107,21 +4777,83 @@ Normal way:
 
 	}
 
+	/**
+	 * Get image timestamp - supports direct ownership and collaborative access
+	 *
+	 * @param int $feature_id Image ID
+	 * @return mixed Modified timestamp or null if not found/not accessible
+	 */
 	public function getImageTimestamp($feature_id){
 
+		// First try direct ownership
 		$querystring = "MATCH (n:Image) WHERE n.id = $feature_id and n.userpkey = $this->userpkey RETURN n.modified_timestamp;";
-
 		$modified_timestamp = $this->neodb->get_var($querystring);
+
+		// If not found, check collaboration access
+		if($modified_timestamp == "" || $modified_timestamp === null){
+			$imageInfo = $this->neodb->getNode("
+				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
+				WHERE n.id = $feature_id
+				RETURN n.modified_timestamp as timestamp, p.id as projectId, p.userpkey as ownerPkey
+				LIMIT 1
+			");
+
+			if(!empty($imageInfo) && isset($imageInfo['projectId'])){
+				$collab = $this->db->get_row_prepared(
+					"SELECT * FROM collaborators
+					 WHERE strabo_project_id = $1
+					 AND project_owner_user_pkey = $2
+					 AND collaborator_user_pkey = $3
+					 AND accepted = true AND disabled = false",
+					array($imageInfo['projectId'], $imageInfo['ownerPkey'], $this->userpkey)
+				);
+
+				if($collab){
+					$modified_timestamp = $imageInfo['timestamp'];
+				}
+			}
+		}
 
 		return $modified_timestamp;
 
 	}
 
+	/**
+	 * Find image file - supports direct ownership and collaborative access
+	 *
+	 * @param int $feature_id Image ID
+	 * @return bool True if image file exists and user has access
+	 */
 	public function findImageFile($feature_id){
 
+		// First try direct ownership
 		$querystring = "MATCH (n:Image) WHERE n.id = $feature_id and n.userpkey = $this->userpkey RETURN n.filename;";
-
 		$filename = $this->neodb->get_var($querystring);
+
+		// If not found, check collaboration access
+		if($filename == "" || $filename === null){
+			$imageInfo = $this->neodb->getNode("
+				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
+				WHERE n.id = $feature_id
+				RETURN n.filename as filename, p.id as projectId, p.userpkey as ownerPkey
+				LIMIT 1
+			");
+
+			if(!empty($imageInfo) && isset($imageInfo['projectId'])){
+				$collab = $this->db->get_row_prepared(
+					"SELECT * FROM collaborators
+					 WHERE strabo_project_id = $1
+					 AND project_owner_user_pkey = $2
+					 AND collaborator_user_pkey = $3
+					 AND accepted = true AND disabled = false",
+					array($imageInfo['projectId'], $imageInfo['ownerPkey'], $this->userpkey)
+				);
+
+				if($collab){
+					$filename = $imageInfo['filename'];
+				}
+			}
+		}
 
 		if($filename!="" && file_exists("/srv/app/www/dbimages/$filename")){
 			return true;
@@ -5207,6 +4939,24 @@ Normal way:
 
 			if($projectid!=""){
 
+				// Check if user is collaborating on any project with this ID
+				// Prevents collision where user restores their own project while
+				// collaborating on someone else's project with the same ID
+				$isCollaborating = $this->db->get_var_prepared(
+					"SELECT COUNT(*) FROM collaborators
+					 WHERE strabo_project_id = $1
+					 AND collaborator_user_pkey = $2
+					 AND accepted = true
+					 AND disabled = false",
+					array($projectid, $this->userpkey)
+				);
+
+				if($isCollaborating > 0){
+					return (object)[
+						'Error' => "Cannot restore project: you are collaborating on a project with ID $projectid. Leave the collaboration first to restore your own version."
+					];
+				}
+
 				//log usage here
 				$this->db->query("	insert into verlog (userpkey, dateactivated, projectid, uuid)
 												values ($this->userpkey, now(), '$projectid', '$uuid')
@@ -5241,7 +4991,9 @@ Normal way:
 					$datasetjson = json_encode($dataset);
 
 					//insert dataset here
-					$datasetdata = $this->insertDataset($datasetjson);
+					// When restoring from version, use existing created_by from JSON if present,
+					// otherwise default to current user (who is restoring their own project)
+					$datasetdata = $this->insertDataset($datasetjson, null, $this->userpkey);
 
 					$this->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
 
@@ -5396,12 +5148,14 @@ Normal way:
 
 	}
 
-	public function setProjectCenter($projectid){
+	public function setProjectCenter($projectid, $ownerPkey = null){
 		//gathers geometries for project and calculates center
+		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
+		$ownerPkey = $ownerPkey ?? $this->userpkey;
 
 		$pointarray = array();
 
-		$rows = $this->neodb->get_results("match (p:Project {id:$projectid, userpkey:$this->userpkey})-[HAS_DATASET]->(d:Dataset)-[HAS_SPOT]->(s:Spot) return s");
+		$rows = $this->neodb->get_results("match (p:Project {id:$projectid, userpkey:$ownerPkey})-[HAS_DATASET]->(d:Dataset)-[HAS_SPOT]->(s:Spot) return s");
 
 		foreach($rows as $row){
 
@@ -5435,19 +5189,21 @@ Normal way:
 			$center = $centroid->out("wkt");
 
 			if($center!=""){
-				$this->neodb->query("match (p:Project {id:$projectid, userpkey:$this->userpkey}) set p.centroid='$center'");
-				$this->db->query("update project set location = ST_GeomFromText('$center') where strabo_project_id = '$projectid' and user_pkey = $this->userpkey");
+				$this->neodb->query("match (p:Project {id:$projectid, userpkey:$ownerPkey}) set p.centroid='$center'");
+				$this->db->query("update project set location = ST_GeomFromText('$center') where strabo_project_id = '$projectid' and user_pkey = $ownerPkey");
 			}
 
 		}
 
 	}
 
-	public function setDatasetCenter($datasetid){
+	public function setDatasetCenter($datasetid, $ownerPkey = null){
+		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
+		$ownerPkey = $ownerPkey ?? $this->userpkey;
 
 		$pointarray = array();
 
-		$rows = $this->neodb->get_results("match (d:Dataset {id:$datasetid, userpkey:$this->userpkey})-[HAS_SPOT]->(s:Spot) return s");
+		$rows = $this->neodb->get_results("match (d:Dataset {id:$datasetid, userpkey:$ownerPkey})-[HAS_SPOT]->(s:Spot) return s");
 
 		foreach($rows as $row){
 
@@ -5481,19 +5237,20 @@ Normal way:
 			$center = $centroid->out("wkt");
 
 			if($center!=""){
-				$this->neodb->query("match (d:Dataset {id:$datasetid, userpkey:$this->userpkey}) set d.centroid='$center'");
-				$this->db->query("update dataset set location = ST_GeomFromText('$center') where strabo_dataset_id = '$datasetid' and user_pkey = $this->userpkey");
+				$this->neodb->query("match (d:Dataset {id:$datasetid, userpkey:$ownerPkey}) set d.centroid='$center'");
+				$this->db->query("update dataset set location = ST_GeomFromText('$center') where strabo_dataset_id = '$datasetid' and user_pkey = $ownerPkey");
 			}
 
 		}
 
 	}
 
-	public function buildPgDataset($datasetid){
+	public function buildPgDataset($datasetid, $ownerPkey = null){
+		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
 
 		//add neo4j dataset to postgres for search
 
-		$thisuserpkey = $this->userpkey;
+		$thisuserpkey = $ownerPkey ?? $this->userpkey;
 
 		$userrow = $this->db->get_row("select * from users where pkey = $thisuserpkey");
 		$firstname = pg_escape_string($userrow->firstname);
@@ -5630,6 +5387,8 @@ Normal way:
 				//check for strat_section_id
 				$strat_section_id = $spot['properties']['strat_section_id'];
 
+
+				
 				if($spotlocation == null || $strat_section_id == "foo"){
 
 					//don't put these in
@@ -5734,6 +5493,82 @@ Normal way:
 															)";
 
 					$this->db->query($query);
+
+
+
+
+
+
+
+/*
+	public function recordsToFeatureData($records){
+
+		if(count($records)>0){
+
+			foreach($records as $record){
+				unset($res);
+				$res = new stdClass();
+				unset($row);
+				unset($imagearray);
+				$s=$record->get("s");
+				$s=$s->values();
+				$row[0]=(object)$s;
+				$images=$record->get("i");
+				if(count($images)>0){
+					foreach($images as $i){
+						$i=(object)$i->values();
+						$imagearray[]=$i;
+					}
+				}
+				$row[1]=$imagearray;
+				$res->row=$row;
+				$results[]=$res;
+			}
+
+			return $results;
+
+		}else{
+
+			return null;
+
+		}
+
+	}
+*/
+
+
+
+
+
+
+
+					//Put in strat_section if we need to:
+					
+					if($spotlocation != ""){
+						if($spot['properties']['sed']->strat_section != ""){
+							$neorow = $this->neodb->getRecord("match (s:Spot) where s.id = $strabo_spot_id return s limit 1");
+							$neorow = (object)$neorow->get('s')->values();
+							
+							if($neorow->sed!=""){
+								$sed = (object)json_decode($neorow->sed);
+								if($sed->strat_section != ""){
+	
+									$count = $this->db->get_var("select count(*) from strat_sections where spot_pkey = $spot_pkey");
+									if($count == 0){
+										$json = pg_escape_string(json_encode($neorow,JSON_PRETTY_PRINT));
+										$this->db->query("insert into strat_sections (spot_pkey, json, location, strabo_spot_id) values ($spot_pkey, '$json', $spotlocation, '$strabo_spot_id')");
+									}	
+								}
+							}
+						}
+					}
+
+
+
+
+
+
+
 
 					//Now, check for images and put in
 					if($properties->images){

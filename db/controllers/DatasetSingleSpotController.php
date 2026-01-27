@@ -29,12 +29,31 @@ class DatasetSingleSpotController extends MyController
 			//*******************************************************************************
 			//update attributes for feature
 
-			$feature_id = $request->url_elements[2];
+			$datasetId = $request->url_elements[2];
+
+			// Check if user has edit access to this dataset
+			$context = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetId);
+
+			if ($context !== null) {
+				// Dataset is linked to a project - check edit permission
+				if (!$this->auth->canEditDataset($context, $context->datasetCreatedBy)) {
+					if ($context->permissionLevel === 'none') {
+						return $this->notFound("Dataset not found");
+					}
+					return $this->forbidden("You don't have permission to add spots to this dataset");
+				}
+			}
+
+			// Use effectiveOwner for the operation
+			$originalUserpkey = $this->strabo->userpkey;
+			if ($context !== null && $context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($context->effectiveOwner);
+			}
 
 			//********************************************************************
 			// check for Dataset with userid and id
 			//********************************************************************
-			if($this->strabo->findDataset($feature_id)){
+			if($this->strabo->findDataset($datasetId)){
 
 				$upload = $request->parameters;
 
@@ -49,22 +68,22 @@ class DatasetSingleSpotController extends MyController
 					//********************************************************************
 
 					//delete relationships
-					$this->strabo->deleteDatasetReltationships($feature_id);
+					$this->strabo->deleteDatasetReltationships($datasetId);
 
 					//fix single spot basemap coords
 
 					$injson = json_encode($upload,JSON_PRETTY_PRINT);
 
-					$thisdata = $this->strabo->insertSpot($injson);
+					$thisdata = $this->strabo->insertSpot($injson, null, "", $originalUserpkey);
 
 					$parts = $thisdata->properties->self;
 
 					$parts = explode("/",$parts);
 					$straboid = end($parts);
 
-					if(!$this->strabo->findSpotInDataset($feature_id,$straboid)){
+					if(!$this->strabo->findSpotInDataset($datasetId,$straboid)){
 
-						$this->strabo->addSpotToDataset($feature_id,$straboid);
+						$this->strabo->addSpotToDataset($datasetId,$straboid);
 
 						$totalspottime = microtime(true)-$spotstarttime; $this->strabo->logToFile("addspottodataset took: ".$totalspottime." secs","DATASET SPOT TIME");
 
@@ -74,7 +93,7 @@ class DatasetSingleSpotController extends MyController
 					$spotstarttime=microtime(true);
 
 					//now build all relationships for project
-					$this->strabo->buildDatasetRelationships($feature_id);
+					$this->strabo->buildDatasetRelationships($datasetId);
 
 					$totalspottime = microtime(true)-$spotstarttime;
 					$this->strabo->logToFile("Relationships done in $totalspottime seconds ...");
@@ -90,7 +109,12 @@ class DatasetSingleSpotController extends MyController
 			}else{
 				//Error, feature not found
 				header("Bad Request", true, 404);
-				$data["Error"] = "Dataset $feature_id not found.";
+				$data["Error"] = "Dataset $datasetId not found.";
+			}
+
+			// Restore original userpkey if changed
+			if ($context !== null && $context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($originalUserpkey);
 			}
 
 		} else { //feature id is not set error
