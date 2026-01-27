@@ -39,14 +39,14 @@ include("includes/mheader.php");
 				</div>
 				<div class="col-4 col-12-medium">
 					<div class="micro-hero-download">
-						<a href="https://www.jdeploy.com/~strabomicro" target="_blank" class="button primary micro-download-btn">[Download Application]</a>
+						<a href="https://www.jdeploy.com/~strabomicro" target="_blank" class="button primary">Download</a>
 						<p class="micro-version-text"><em>Current Version:</em> StraboMicro 2.0.0</p>
 					</div>
 				</div>
 			</div>
 
 			<!-- Navigation Tabs -->
-			<nav class="micro-nav-tabs">
+			<nav class="micro-nav-tabs" style="justify-content: center;">
 				<ul>
 					<li><a href="#tools">Tools</a></li>
 					<li><a href="#features">Application Features</a></li>
@@ -59,12 +59,14 @@ include("includes/mheader.php");
 
 		<!-- Application Tools Section -->
 		<section id="tools" class="micro-section">
-			<h2 class="micro-section-title">Application Tools</h2>
+			
 
 			<!-- Screenshot -->
 			<div class="micro-screenshot-container">
 				<img src="/includes/mimages/strabomicro/application_tools_screenshot.jpg" alt="StraboMicro Application Tools" class="micro-screenshot">
 			</div>
+			
+			<h2 class="micro-section-title">Application Tools</h2>
 
 			<!-- Tools Feature Cards (3x3 grid with images) -->
 			<div class="row gtr-uniform">
