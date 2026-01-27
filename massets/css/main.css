@@ -5225,3 +5225,253 @@ Download:
 			}
 
 	}
+
+/* ============================================
+   StraboMicro Landing Page Styles
+   ============================================ */
+
+/* Hero Section */
+.micro-landing-hero {
+	background-color: #272833;
+	border-radius: 4px;
+	padding: 2em;
+	margin-bottom: 2em;
+}
+
+.micro-hero-content {
+	display: flex;
+	align-items: flex-start;
+	gap: 1.5em;
+}
+
+.micro-hero-logo img {
+	width: 100px;
+	height: auto;
+	border-radius: 8px;
+}
+
+.micro-hero-title {
+	display: block;
+	font-size: 1.2em;
+	color: #ffffff;
+	margin-bottom: 0.25em;
+}
+
+.micro-hero-tagline {
+	color: #e44c65;
+	font-size: 1.8em;
+	line-height: 1.2em;
+	margin-bottom: 0.5em;
+}
+
+.micro-hero-description {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 0.95em;
+	line-height: 1.6em;
+	margin-bottom: 0;
+}
+
+.micro-hero-download {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: flex-start;
+	height: 100%;
+	padding-top: 4em;
+}
+
+.micro-download-btn {
+	background-color: #e44c65;
+	color: #ffffff !important;
+	font-weight: 300;
+	padding: 0.75em 1.5em;
+	white-space: nowrap;
+}
+
+.micro-download-btn:hover {
+	background-color: #c43a52 !important;
+}
+
+.micro-version-text {
+	color: rgba(255, 255, 255, 0.6);
+	font-size: 0.9em;
+	margin-top: 0.75em;
+	margin-bottom: 0;
+}
+
+/* Navigation Tabs */
+.micro-nav-tabs {
+	margin-top: 2em;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	padding-top: 1.5em;
+}
+
+.micro-nav-tabs ul {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: flex-start;
+	gap: 2em;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.micro-nav-tabs ul li a {
+	color: rgba(255, 255, 255, 0.75);
+	text-decoration: none;
+	font-size: 1em;
+	font-weight: 300;
+	transition: color 0.2s ease;
+}
+
+.micro-nav-tabs ul li a:hover {
+	color: #e44c65;
+}
+
+/* Section Styles */
+.micro-section {
+	margin-bottom: 3em;
+}
+
+.micro-section-title {
+	color: #e44c65;
+	font-size: 1.8em;
+	margin-bottom: 1.5em;
+}
+
+/* Screenshot Container */
+.micro-screenshot-container {
+	margin-bottom: 2em;
+}
+
+.micro-screenshot {
+	width: 100%;
+	height: auto;
+	border-radius: 4px;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.micro-screenshot-placeholder {
+	background-color: #272833;
+	border: 2px dashed rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+	padding: 4em;
+	text-align: center;
+	color: rgba(255, 255, 255, 0.5);
+	font-size: 1.2em;
+}
+
+/* Feature Cards */
+.micro-feature-card {
+	background-color: #272833;
+	border-radius: 4px;
+	padding: 0;
+	height: 100%;
+	overflow: hidden;
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.micro-feature-card:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.micro-card-image {
+	width: 100%;
+	height: 180px;
+	overflow: hidden;
+}
+
+.micro-card-image img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.micro-feature-card h3 {
+	color: #e44c65;
+	font-size: 1.1em;
+	line-height: 1.4em;
+	margin: 1em 1em 0.5em 1em;
+	font-weight: 300;
+}
+
+.micro-feature-card p {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 0.9em;
+	line-height: 1.6em;
+	margin: 0 1em 1em 1em;
+}
+
+/* Text-only feature cards */
+.micro-feature-card.micro-text-only {
+	padding: 1.5em;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.micro-feature-card.micro-text-only h3 {
+	margin: 0 0 0.75em 0;
+}
+
+.micro-feature-card.micro-text-only p {
+	margin: 0;
+}
+
+/* Responsive adjustments for StraboMicro landing */
+@media screen and (max-width: 980px) {
+	.micro-hero-content {
+		flex-direction: column;
+		text-align: center;
+	}
+
+	.micro-hero-logo {
+		margin: 0 auto;
+	}
+
+	.micro-hero-download {
+		align-items: center;
+		padding-top: 2em;
+	}
+
+	.micro-nav-tabs ul {
+		justify-content: center;
+	}
+
+	.micro-hero-tagline {
+		font-size: 1.5em;
+	}
+}
+
+@media screen and (max-width: 736px) {
+	.micro-landing-hero {
+		padding: 1.5em;
+	}
+
+	.micro-nav-tabs ul {
+		flex-direction: column;
+		align-items: center;
+		gap: 1em;
+	}
+
+	.micro-card-image {
+		height: 150px;
+	}
+
+	.micro-hero-tagline {
+		font-size: 1.3em;
+	}
+}
+
+@media screen and (max-width: 480px) {
+	.micro-hero-tagline {
+		font-size: 1.1em;
+	}
+
+	.micro-section-title {
+		font-size: 1.4em;
+	}
+
+	.micro-feature-card h3 {
+		font-size: 1em;
+	}
+}
