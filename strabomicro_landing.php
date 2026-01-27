@@ -63,7 +63,7 @@ include("includes/mheader.php");
 
 			<!-- Screenshot -->
 			<div class="micro-screenshot-container">
-				<img src="/includes/mimages/strabomicro/application_tools_screenshot.png" alt="StraboMicro Application Tools" class="micro-screenshot" onerror="this.parentElement.innerHTML='<div class=\'micro-screenshot-placeholder\'>Application Screenshot Placeholder</div>'">
+				<img src="/includes/mimages/strabomicro/application_tools_screenshot.jpg" alt="StraboMicro Application Tools" class="micro-screenshot">
 			</div>
 
 			<!-- Tools Feature Cards (3x3 grid with images) -->
