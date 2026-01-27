@@ -24,7 +24,7 @@ include_once '../jwtauth/middleware.php';
 $user = authenticate();
 
 //OK, we're authorized. Let's move forward
-$userpkey = $user['sub'];
+$userpkey = (int)$user['sub'];
 
 //Load Base Controller
 include "../db/controllers/MyController.php";

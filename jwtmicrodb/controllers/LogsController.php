@@ -9,6 +9,8 @@ Description: This controller allows users to submit error logs
 ******************************************************************
 */
 
+
+
 class LogsController extends MyController
 {
     public function getAction($request) {
@@ -42,25 +44,9 @@ class LogsController extends MyController
 
     public function postAction($request) {
 
-		/*
-			[PHP_AUTH_USER] => jasonash@ku.edu
-			[PHP_AUTH_PW] => strabotest
-		*/
-
-
-		//var_dump($_POST);
-		//var_dump($_FILES);
-
-		$userpkey = $this->sm->userpkey;
-
-		$email = $this->sm->db->get_var_prepared("select email from users where pkey = $1",array($userpkey));
-		
-		//echo "email: $email";
-
-		//$email = pg_escape_string($_SERVER['PHP_AUTH_USER']);
-		//exit();
-
-
+		//$userpkey = $this->sm->userpkey;
+		//$email = $this->sm->db->get_var_prepared("select email from users where pkey = $1",array($userpkey));
+		$email = pg_escape_string($_POST['email']);
 
 		$notes = pg_escape_string($_POST['notes']);
 		$appversion = pg_escape_string($_POST['appversion']);
@@ -92,11 +78,7 @@ class LogsController extends MyController
 
 		$tmp_name = $file['tmp_name'];
 
-		//exit();
-
 		$pkey = $this->sm->db->get_var("select nextval('micro_logs_pkey_seq')");
-
-		//exec("/usr/bin/unzip $tmp_name -d /srv/app/www/microLogs/$pkey");
 
 		exec("mv $tmp_name /srv/app/www/microLogs/$pkey.txt");
 

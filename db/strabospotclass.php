@@ -5387,6 +5387,8 @@ public function getSpotName($id){
 				//check for strat_section_id
 				$strat_section_id = $spot['properties']['strat_section_id'];
 
+
+				
 				if($spotlocation == null || $strat_section_id == "foo"){
 
 					//don't put these in
@@ -5491,6 +5493,82 @@ public function getSpotName($id){
 															)";
 
 					$this->db->query($query);
+
+
+
+
+
+
+
+/*
+	public function recordsToFeatureData($records){
+
+		if(count($records)>0){
+
+			foreach($records as $record){
+				unset($res);
+				$res = new stdClass();
+				unset($row);
+				unset($imagearray);
+				$s=$record->get("s");
+				$s=$s->values();
+				$row[0]=(object)$s;
+				$images=$record->get("i");
+				if(count($images)>0){
+					foreach($images as $i){
+						$i=(object)$i->values();
+						$imagearray[]=$i;
+					}
+				}
+				$row[1]=$imagearray;
+				$res->row=$row;
+				$results[]=$res;
+			}
+
+			return $results;
+
+		}else{
+
+			return null;
+
+		}
+
+	}
+*/
+
+
+
+
+
+
+
+					//Put in strat_section if we need to:
+					
+					if($spotlocation != ""){
+						if($spot['properties']['sed']->strat_section != ""){
+							$neorow = $this->neodb->getRecord("match (s:Spot) where s.id = $strabo_spot_id return s limit 1");
+							$neorow = (object)$neorow->get('s')->values();
+							
+							if($neorow->sed!=""){
+								$sed = (object)json_decode($neorow->sed);
+								if($sed->strat_section != ""){
+	
+									$count = $this->db->get_var("select count(*) from strat_sections where spot_pkey = $spot_pkey");
+									if($count == 0){
+										$json = pg_escape_string(json_encode($neorow,JSON_PRETTY_PRINT));
+										$this->db->query("insert into strat_sections (spot_pkey, json, location, strabo_spot_id) values ($spot_pkey, '$json', $spotlocation, '$strabo_spot_id')");
+									}	
+								}
+							}
+						}
+					}
+
+
+
+
+
+
+
 
 					//Now, check for images and put in
 					if($properties->images){

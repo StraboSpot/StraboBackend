@@ -61,6 +61,8 @@ $user_agent = $_SERVER['HTTP_USER_AGENT'];
 
 $rawinput = file_get_contents("php://input");
 
+$serv = print_r($_SERVER, true);
+
 if(file_exists("log.txt")){
 	if($_SERVER["REQUEST_URI"] != "/db/imagexxx"){
 		if($username=="jasonash@ku.edu" || $username=="jasonash1@gmail.com" || $username=="nathan.novak79@gmail.comdd"){
@@ -71,6 +73,7 @@ if(file_exists("log.txt")){
 			file_put_contents ("log.txt", "username: $username\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "Raw Input:\n\n".$rawinput."\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "Request Method: ".$_SERVER['REQUEST_METHOD'], FILE_APPEND);
+			file_put_contents ("log.txt", "Server: ".$serv, FILE_APPEND);
 		}
 	}
 }
