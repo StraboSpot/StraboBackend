@@ -17,6 +17,10 @@ include("includes/mheader.php");
 <div id="main" class="wrapper style1">
 	<div class="container">
 
+		<header class="major">
+			<h2>StraboMicro</h2>
+		</header>
+
 		<!-- Hero Section -->
 		<section id="micro-hero" class="micro-landing-hero">
 			<div class="row gtr-uniform">
@@ -26,7 +30,7 @@ include("includes/mheader.php");
 							<img src="/includes/mimages/strabomicro/strabomicro_logo.png" alt="StraboMicro Logo" onerror="this.style.display='none'">
 						</div>
 						<div class="micro-hero-text">
-							<span class="micro-hero-title">StraboMicro</span>
+							<!--<span class="micro-hero-title">StraboMicro</span>-->
 							<h2 class="micro-hero-tagline">Organize, analyze, and connect<br>microstructural data.</h2>
 							<p class="micro-hero-description">
 								A desktop application for geologic micrograph analysis and data management.
@@ -46,7 +50,7 @@ include("includes/mheader.php");
 			</div>
 
 			<!-- Navigation Tabs -->
-			<nav class="micro-nav-tabs" style="justify-content: center;">
+			<nav class="micro-nav-tabs">
 				<ul>
 					<li><a href="#tools">Tools</a></li>
 					<li><a href="#features">Application Features</a></li>
