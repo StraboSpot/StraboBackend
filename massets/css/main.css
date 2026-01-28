@@ -5645,15 +5645,6 @@ Download:
 	padding: 1em;
 }
 
-.field-image-label {
-	color: #ffffff;
-	font-size: 1em;
-	font-weight: 600;
-	letter-spacing: 0.05em;
-	margin-bottom: 1em;
-	text-transform: uppercase;
-}
-
 .field-section-image img {
 	width: 100%;
 	height: auto;

@@ -71,7 +71,6 @@ include("includes/mheader.php");
 				</div>
 				<div class="col-6 col-12-medium">
 					<div class="field-section-image">
-						<div class="field-image-label">USE BUILT IN BASEMAPS</div>
 						<img src="/includes/mimages/strabofield/iPad_Image Basemap.png" alt="StraboField Basemaps">
 					</div>
 				</div>
@@ -83,7 +82,6 @@ include("includes/mheader.php");
 			<div class="row gtr-uniform field-content-row">
 				<div class="col-6 col-12-medium">
 					<div class="field-section-image">
-						<div class="field-image-label">NEST OBSERVATIONS</div>
 						<img src="/includes/mimages/strabofield/iPad_Nesting.png" alt="StraboField Nesting">
 					</div>
 				</div>
@@ -121,7 +119,6 @@ include("includes/mheader.php");
 				</div>
 				<div class="col-6 col-12-medium">
 					<div class="field-section-image">
-						<div class="field-image-label">FIELD TO LAB</div>
 						<img src="/includes/mimages/strabofield/iPad_Field-Micro.png" alt="StraboField to StraboMicro workflow">
 					</div>
 				</div>
@@ -133,7 +130,6 @@ include("includes/mheader.php");
 			<div class="row gtr-uniform field-content-row">
 				<div class="col-6 col-12-medium">
 					<div class="field-section-image">
-						<div class="field-image-label">CUSTOMIZE DATA PAGES</div>
 						<img src="/includes/mimages/strabofield/iPad_More Pages.png" alt="StraboField Data Pages">
 					</div>
 				</div>
