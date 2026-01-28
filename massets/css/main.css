@@ -5661,19 +5661,6 @@ Download:
 	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
 }
 
-/* Row reverse for alternating layout */
-.field-row-reverse {
-	flex-direction: row-reverse;
-}
-
-.field-order-1 {
-	order: 1;
-}
-
-.field-order-2 {
-	order: 2;
-}
-
 /* Feature Cards */
 .field-feature-card {
 	background-color: #272833;
@@ -5779,15 +5766,6 @@ Download:
 
 	.field-hero-tagline {
 		font-size: 2em;
-	}
-
-	.field-row-reverse {
-		flex-direction: column;
-	}
-
-	.field-order-1,
-	.field-order-2 {
-		order: unset;
 	}
 
 	.field-section-image {

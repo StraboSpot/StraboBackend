@@ -80,8 +80,14 @@ include("includes/mheader.php");
 
 		<!-- Section 2: Multi-scale Observations -->
 		<section id="multiscale" class="field-section">
-			<div class="row gtr-uniform field-content-row field-row-reverse">
-				<div class="col-6 col-12-medium field-order-2">
+			<div class="row gtr-uniform field-content-row">
+				<div class="col-6 col-12-medium">
+					<div class="field-section-image">
+						<div class="field-image-label">NEST OBSERVATIONS</div>
+						<img src="/includes/mimages/strabofield/iPad_Nesting.png" alt="StraboField Nesting">
+					</div>
+				</div>
+				<div class="col-6 col-12-medium">
 					<div class="field-section-text">
 						<h2 class="field-section-title">Multi-scale observations that stay connected.</h2>
 						<h3 class="field-section-subtitle">Nest observations from outcrop to sample.</h3>
@@ -92,12 +98,6 @@ include("includes/mheader.php");
 						<p>
 							Most tools flatten your data. StraboField keeps relationships intact for deeper interpretation.
 						</p>
-					</div>
-				</div>
-				<div class="col-6 col-12-medium field-order-1">
-					<div class="field-section-image">
-						<div class="field-image-label">NEST OBSERVATIONS</div>
-						<img src="/includes/mimages/strabofield/iPad_Nesting.png" alt="StraboField Nesting">
 					</div>
 				</div>
 			</div>
@@ -130,8 +130,14 @@ include("includes/mheader.php");
 
 		<!-- Section 4: Built for Research -->
 		<section id="research" class="field-section">
-			<div class="row gtr-uniform field-content-row field-row-reverse">
-				<div class="col-6 col-12-medium field-order-2">
+			<div class="row gtr-uniform field-content-row">
+				<div class="col-6 col-12-medium">
+					<div class="field-section-image">
+						<div class="field-image-label">CUSTOMIZE DATA PAGES</div>
+						<img src="/includes/mimages/strabofield/iPad_More Pages.png" alt="StraboField Data Pages">
+					</div>
+				</div>
+				<div class="col-6 col-12-medium">
 					<div class="field-section-text">
 						<h2 class="field-section-title">Built for research, teaching, and reuse.</h2>
 						<h3 class="field-section-subtitle">Structured data designed for science.</h3>
@@ -142,12 +148,6 @@ include("includes/mheader.php");
 						<p>
 							Your data stays understandable, shareable, and reusable long after the field season ends.
 						</p>
-					</div>
-				</div>
-				<div class="col-6 col-12-medium field-order-1">
-					<div class="field-section-image">
-						<div class="field-image-label">CUSTOMIZE DATA PAGES</div>
-						<img src="/includes/mimages/strabofield/iPad_More Pages.png" alt="StraboField Data Pages">
 					</div>
 				</div>
 			</div>
