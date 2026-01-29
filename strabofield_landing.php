@@ -17,16 +17,22 @@ include("includes/mheader.php");
 <div id="main" class="wrapper style1">
 	<div class="container">
 
+		<header class="major">
+			<h2>StraboField</h2>
+		</header>
+
 		<!-- Hero Section -->
-		<section id="field-hero" class="field-landing-hero">
+		<section id="field-hero" class="field-landing-hero" style="margin-top:20px;">
 			<div class="field-hero-background" style="background-image: url('/includes/mimages/strabofield/header_image.jpg');">
 				<div class="field-hero-overlay">
 					<div class="field-hero-content">
+						<!--
 						<div class="field-hero-logo">
 							<img src="/files/strabospot_pub_logo.png" alt="StraboSpot Logo">
 						</div>
+						-->
 						<div class="field-hero-text">
-							<span class="field-hero-title">StraboField</span>
+							<!--<span class="field-hero-title">StraboField</span>-->
 							<h2 class="field-hero-tagline">From outcrop to insight.</h2>
 							<p class="field-hero-description">
 								Go beyond digital mapping with data that stays organized, shareable, and scientifically meaningful.
@@ -40,7 +46,7 @@ include("includes/mheader.php");
 									<span class="field-store-large">App Store</span>
 								</span>
 							</a>
-							<a href="https://play.google.com/store/apps/details?id=gov.kansas.ku.cgerg.strabospot2" target="_blank" class="field-store-btn field-google-btn">
+							<a href="https://play.google.com/store/search?q=strabospot+2&c=apps&hl=en" target="_blank" class="field-store-btn field-google-btn">
 								<span class="field-store-icon">&#9658;</span>
 								<span class="field-store-text">
 									<span class="field-store-small">Get it on</span>
@@ -239,7 +245,7 @@ include("includes/mheader.php");
 						<span class="field-store-large">App Store</span>
 					</span>
 				</a>
-				<a href="https://play.google.com/store/apps/details?id=gov.kansas.ku.cgerg.strabospot2" target="_blank" class="field-store-btn field-google-btn">
+				<a href="https://play.google.com/store/search?q=strabospot+2&c=apps&hl=en" target="_blank" class="field-store-btn field-google-btn">
 					<span class="field-store-icon">&#9658;</span>
 					<span class="field-store-text">
 						<span class="field-store-small">Get it on</span>
