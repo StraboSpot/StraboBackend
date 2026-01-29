@@ -55,7 +55,7 @@ include("includes/mheader.php");
 
 			<!-- Workflow Screenshot -->
 			<div class="exp-screenshot-container exp-community-section">
-				<img src="/includes/mimages/straboexperimental/Experimental_promo.png" alt="StraboExperimental Workflow" class="exp-screenshot">
+				<img src="/includes/mimages/straboexperimental/Experimental_promo.jpg" alt="StraboExperimental Workflow" class="exp-screenshot">
 			</div>
 			
 			<h2 class="exp-section-title">How it works:</h2>

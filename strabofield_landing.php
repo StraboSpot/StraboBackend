@@ -77,7 +77,7 @@ include("includes/mheader.php");
 				</div>
 				<div class="col-6 col-12-medium">
 					<div class="field-section-image">
-						<img src="/includes/mimages/strabofield/iPad_Offline.png" alt="StraboField Basemaps">
+						<img src="/includes/mimages/strabofield/iPad_Offline.jpg" alt="StraboField Basemaps">
 					</div>
 				</div>
 			</div>
@@ -88,7 +88,7 @@ include("includes/mheader.php");
 			<div class="row gtr-uniform field-content-row">
 				<div class="col-6 col-12-medium">
 					<div class="field-section-image">
-						<img src="/includes/mimages/strabofield/iPad_Nesting.png" alt="StraboField Nesting">
+						<img src="/includes/mimages/strabofield/iPad_Nesting.jpg" alt="StraboField Nesting">
 					</div>
 				</div>
 				<div class="col-6 col-12-medium">
@@ -125,7 +125,7 @@ include("includes/mheader.php");
 				</div>
 				<div class="col-6 col-12-medium">
 					<div class="field-section-image">
-						<img src="/includes/mimages/strabofield/iPad_Field-Micro.png" alt="StraboField to StraboMicro workflow">
+						<img src="/includes/mimages/strabofield/iPad_Field-Micro.jpg" alt="StraboField to StraboMicro workflow">
 					</div>
 				</div>
 			</div>
@@ -136,7 +136,7 @@ include("includes/mheader.php");
 			<div class="row gtr-uniform field-content-row">
 				<div class="col-6 col-12-medium">
 					<div class="field-section-image">
-						<img src="/includes/mimages/strabofield/iPad_More Pages.png" alt="StraboField Data Pages">
+						<img src="/includes/mimages/strabofield/iPad_More Pages.jpg" alt="StraboField Data Pages">
 					</div>
 				</div>
 				<div class="col-6 col-12-medium">
