@@ -5268,6 +5268,7 @@ Download:
 	font-size: 1.8em;
 	line-height: 1.2em;
 	margin-bottom: 0.5em;
+	font-weight: bold;
 }
 
 .micro-hero-description {
@@ -5343,6 +5344,7 @@ Download:
 	color: #e44c65;
 	font-size: 1.8em;
 	margin-bottom: 1.5em;
+	font-weight: bold;
 }
 
 /* Screenshot Container */
@@ -5445,6 +5447,7 @@ Download:
 
 	.micro-hero-tagline {
 		font-size: 1.5em;
+		font-weight: bold;
 	}
 }
 
@@ -5465,12 +5468,14 @@ Download:
 
 	.micro-hero-tagline {
 		font-size: 1.3em;
+		font-weight: bold;
 	}
 }
 
 @media screen and (max-width: 480px) {
 	.micro-hero-tagline {
 		font-size: 1.1em;
+		font-weight: bold;
 	}
 
 	.micro-section-title {
@@ -5820,7 +5825,7 @@ Download:
 /* Hero Section */
 .exp-landing-hero {
 	border-radius: 4px;
-	padding: 2em;
+	/*padding: 2em;*/
 	margin-bottom: 2em;
 }
 
@@ -5865,7 +5870,8 @@ Download:
 .exp-section-title {
 	color: #e44c65;
 	font-size: 1.8em;
-	margin-bottom: 1.5em;
+	margin-bottom: 0.5em;
+	font-weight: bold;
 }
 
 /* Screenshot Container */
@@ -5882,7 +5888,7 @@ Download:
 
 /* Steps List */
 .exp-steps {
-	margin-top: 2em;
+	margin-top: 0em;
 }
 
 .exp-steps-list {
@@ -5919,7 +5925,7 @@ Download:
 	color: #e44c65;
 	font-size: 1.4em;
 	margin-bottom: 1em;
-	font-weight: 300;
+	font-weight: bold;
 }
 
 .exp-benefits-list {
@@ -5946,7 +5952,7 @@ Download:
 	color: #e44c65;
 	font-size: 1.6em;
 	margin-bottom: 0.5em;
-	font-weight: 300;
+	font-weight: bold;
 }
 
 .exp-community-subtitle {
@@ -5994,7 +6000,7 @@ Download:
 	color: #e44c65;
 	font-size: 1.8em;
 	margin-bottom: 1.5em;
-	font-weight: 300;
+	font-weight: bold;
 }
 
 .exp-cta-buttons {
@@ -6036,6 +6042,7 @@ Download:
 
 	.exp-section-title {
 		font-size: 1.5em;
+		font-weight: bold;
 	}
 
 	.exp-steps-list li {
@@ -6068,6 +6075,7 @@ Download:
 
 	.exp-box-title {
 		font-size: 1.2em;
+		font-weight: bold;
 	}
 
 	.exp-feature-box h4 {

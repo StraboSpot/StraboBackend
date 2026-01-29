@@ -24,32 +24,41 @@ include("includes/mheader.php");
 		<!-- Hero Section -->
 		<section id="exp-hero" class="exp-landing-hero">
 			<div class="row gtr-uniform">
+				<!--
 				<div class="col-2 col-12-medium">
 					<div class="exp-hero-logo">
 						<img src="/files/strabospot_pub_logo.png" alt="StraboSpot Logo">
 					</div>
 				</div>
-				<div class="col-10 col-12-medium">
+				-->
+				<div class="col-9 col-12-medium">
 					<div class="exp-hero-content">
 						<div class="exp-hero-text">
-							<h2 class="exp-hero-tagline">StraboExperimental helps researchers organize, document, and share experimental geoscience data in a structured, reproducible way.</h2>
+							<h2 class="exp-hero-tagline exp-section-title">StraboExperimental helps researchers organize, document, and share experimental geoscience data in a structured, reproducible way.</h2>
 							<p class="exp-hero-description">
 								A free, open platform for documenting apparatus metadata, acquisition system (DAQ) variables, experimental setup, sample information, and results in a standardized, reusable format.
 							</p>
 						</div>
 					</div>
 				</div>
+				<div class="col-3 col-12-medium" style="text-align: center;">
+					<a href="/experimental" class="button primary">Get Started</a>
+					<a href="#" class="button primary" style="margin-top: 12px;">Explore Example Experiment</a>
+					<a href="/manual/experimental" target="_blank" class="button primary" style="margin-top: 12px;">Read the Manual</a>
+				</div>
 			</div>
 		</section>
 
 		<!-- How It Works Section -->
 		<section id="how-it-works" class="exp-section">
-			<h2 class="exp-section-title">How it works:</h2>
+			
 
 			<!-- Workflow Screenshot -->
-			<div class="exp-screenshot-container">
+			<div class="exp-screenshot-container exp-community-section">
 				<img src="/includes/mimages/straboexperimental/Experimental_promo.png" alt="StraboExperimental Workflow" class="exp-screenshot">
 			</div>
+			
+			<h2 class="exp-section-title">How it works:</h2>
 
 			<!-- Steps -->
 			<div class="exp-steps">
@@ -62,6 +71,8 @@ include("includes/mheader.php");
 				</ol>
 			</div>
 		</section>
+
+		<h2 class="exp-section-title" style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 25px;">View projects and experiments on the data page:</h2>
 
 		<!-- Project Example Screenshot -->
 		<section class="exp-section">
@@ -110,19 +121,19 @@ include("includes/mheader.php");
 			<div class="row gtr-uniform">
 				<div class="col-4 col-12-medium">
 					<div class="exp-feature-box">
-						<h4>Free, open-source, and community designed</h4>
+						<h4 style="font-weight: bold;">Free, open-source, and community designed</h4>
 						<p>Built with support from public research funding.</p>
 					</div>
 				</div>
 				<div class="col-4 col-12-medium">
 					<div class="exp-feature-box">
-						<h4>Your data, your terms</h4>
+						<h4 style="font-weight: bold;">Your data, your terms</h4>
 						<p>Keep experiments private, share with collaborators, or publish openly on your terms.</p>
 					</div>
 				</div>
 				<div class="col-4 col-12-medium">
 					<div class="exp-feature-box">
-						<h4>FAIR data principles</h4>
+						<h4 style="font-weight: bold;">FAIR data principles</h4>
 						<p>Supports FAIR data principles so experiments remain findable, accessible, and reusable.</p>
 					</div>
 				</div>
@@ -133,8 +144,8 @@ include("includes/mheader.php");
 		<section class="exp-section exp-cta-section">
 			<h2 class="exp-cta-title">Start documenting experiments clearly.</h2>
 			<div class="exp-cta-buttons">
-				<a href="/expdb" class="button primary">Get Started</a>
-				<a href="/exphelp" class="button">Read the Manual</a>
+				<a href="/experimental" class="button primary">Get Started</a>
+				<a href="/manual/experimental" target="_blank" class="button">Read the Manual</a>
 			</div>
 		</section>
 

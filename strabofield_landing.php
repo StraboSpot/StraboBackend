@@ -77,7 +77,7 @@ include("includes/mheader.php");
 				</div>
 				<div class="col-6 col-12-medium">
 					<div class="field-section-image">
-						<img src="/includes/mimages/strabofield/iPad_Image Basemap.png" alt="StraboField Basemaps">
+						<img src="/includes/mimages/strabofield/iPad_Offline.png" alt="StraboField Basemaps">
 					</div>
 				</div>
 			</div>
@@ -161,7 +161,7 @@ include("includes/mheader.php");
 				<!-- Card 1: Work with any basemap -->
 				<div class="col-4 col-6-medium col-12-xsmall">
 					<div class="field-feature-card">
-						<h3>Work with any basemap.</h3>
+						<h3 style="font-weight:bold;">Work with any basemap.</h3>
 						<p>Use built-in or custom basemaps, downloadable for offline fieldwork.</p>
 					</div>
 				</div>
@@ -169,7 +169,7 @@ include("includes/mheader.php");
 				<!-- Card 2: Tag and search -->
 				<div class="col-4 col-6-medium col-12-xsmall">
 					<div class="field-feature-card">
-						<h3>Tag and search your observations.</h3>
+						<h3 style="font-weight:bold;">Tag and search your observations.</h3>
 						<p>Add conceptual tags to spots to filter and analyze data across your project.</p>
 					</div>
 				</div>
@@ -177,7 +177,7 @@ include("includes/mheader.php");
 				<!-- Card 3: Georeferenced notes -->
 				<div class="col-4 col-6-medium col-12-xsmall">
 					<div class="field-feature-card">
-						<h3>Georeferenced notes and sketches.</h3>
+						<h3 style="font-weight:bold;">Georeferenced notes and sketches.</h3>
 						<p>Capture photos, sketches, and notes tied to exact field locations.</p>
 					</div>
 				</div>
@@ -185,7 +185,7 @@ include("includes/mheader.php");
 				<!-- Card 4: Measure and log -->
 				<div class="col-4 col-6-medium col-12-xsmall">
 					<div class="field-feature-card">
-						<h3>Measure, log, and interpret in the field.</h3>
+						<h3 style="font-weight:bold;">Measure, log, and interpret in the field.</h3>
 						<p>Take field measurements, capture observations, and construct stratigraphic columns in context.</p>
 					</div>
 				</div>
@@ -193,7 +193,7 @@ include("includes/mheader.php");
 				<!-- Card 5: Offline first -->
 				<div class="col-4 col-6-medium col-12-xsmall">
 					<div class="field-feature-card">
-						<h3>Offline first, sync later.</h3>
+						<h3 style="font-weight:bold;">Offline first, sync later.</h3>
 						<p>Collect data anywhere and upload when you're back online.</p>
 					</div>
 				</div>
@@ -201,32 +201,38 @@ include("includes/mheader.php");
 				<!-- Card 6: Export and share -->
 				<div class="col-4 col-6-medium col-12-xsmall">
 					<div class="field-feature-card">
-						<h3>Export &amp; share your data your way.</h3>
+						<h3 style="font-weight:bold;">Export &amp; share your data your way.</h3>
 						<p>Export to common formats for GIS, analysis, and publication.</p>
 					</div>
 				</div>
 			</div>
 		</section>
 
-		<!-- Community Section -->
-		<section id="community" class="field-section field-community-section">
-			<h2 class="field-section-title">Built by the geoscience community for geoscientists.</h2>
-			<h3 class="field-section-subtitle">Developed with researchers, educators, and students to support real scientific workflows.</h3>
+		<!-- Community Statement -->
+		<section class="exp-section exp-community-section">
+			<h2 class="exp-community-title">Built by the experimental community for geoscientists.</h2>
+			<p class="exp-community-subtitle">Developed with researchers, educators, and students to support real scientific workflows.</p>
+		</section>
 
-			<div class="row gtr-uniform field-community-cards">
+		<!-- Three Feature Boxes -->
+		<section class="exp-section">
+			<div class="row gtr-uniform">
 				<div class="col-4 col-12-medium">
-					<div class="field-community-card">
-						<p>Used in research &amp; teaching.</p>
+					<div class="exp-feature-box">
+						<h4 style="font-weight: bold;">Free, open-source, and community designed</h4>
+						<p>Built with support from public research funding.</p>
 					</div>
 				</div>
 				<div class="col-4 col-12-medium">
-					<div class="field-community-card">
-						<p>NSF-supported development.</p>
+					<div class="exp-feature-box">
+						<h4 style="font-weight: bold;">Your data, your terms</h4>
+						<p>Keep experiments private, share with collaborators, or publish openly on your terms.</p>
 					</div>
 				</div>
 				<div class="col-4 col-12-medium">
-					<div class="field-community-card">
-						<p>Free and open-source ecosystem.</p>
+					<div class="exp-feature-box">
+						<h4 style="font-weight: bold;">FAIR data principles</h4>
+						<p>Supports FAIR data principles so experiments remain findable, accessible, and reusable.</p>
 					</div>
 				</div>
 			</div>
