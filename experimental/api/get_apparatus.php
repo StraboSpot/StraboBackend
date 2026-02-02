@@ -42,7 +42,7 @@ if ($id == 0) {
 }
 
 // Query apparatus
-$row = $db->get_row("SELECT * FROM apprepo.apparatus WHERE pkey = $id");
+$row = $db->get_row_prepared("SELECT * FROM apprepo.apparatus WHERE pkey = $1", array($id));
 
 if (empty($row->pkey)) {
     $error = new stdClass();
