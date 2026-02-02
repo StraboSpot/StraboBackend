@@ -7,7 +7,7 @@
  *   id - Experiment pkey (required)
  *
  * Returns experiment JSON with all LAPS sections.
- * Requires login - user must own the experiment.
+ * Requires login - user must own the experiment OR parent project must be public.
  */
 
 // Change to root directory for proper include path resolution
@@ -45,7 +45,7 @@ include("prepare_connections.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 
-// Query experiment - must be owned by user or user is admin
+// Query experiment - must be owned by user, parent project is public, or user is admin
 if ($is_admin) {
     $row = $db->get_row_prepared("
         SELECT
@@ -59,7 +59,8 @@ if ($is_admin) {
             to_char(e.modified_timestamp AT TIME ZONE 'UTC', 'Mon DD, YYYY HH24:MI') as modified_date,
             EXTRACT(EPOCH FROM e.created_timestamp)::integer as created_timestamp,
             EXTRACT(EPOCH FROM e.modified_timestamp)::integer as modified_timestamp,
-            p.name as project_name
+            p.name as project_name,
+            p.ispublic as project_is_public
         FROM straboexp.experiment e
         LEFT JOIN straboexp.project p ON e.project_pkey = p.pkey
         WHERE e.pkey = $1
@@ -77,10 +78,11 @@ if ($is_admin) {
             to_char(e.modified_timestamp AT TIME ZONE 'UTC', 'Mon DD, YYYY HH24:MI') as modified_date,
             EXTRACT(EPOCH FROM e.created_timestamp)::integer as created_timestamp,
             EXTRACT(EPOCH FROM e.modified_timestamp)::integer as modified_timestamp,
-            p.name as project_name
+            p.name as project_name,
+            p.ispublic as project_is_public
         FROM straboexp.experiment e
         LEFT JOIN straboexp.project p ON e.project_pkey = p.pkey
-        WHERE e.pkey = $1 AND e.userpkey = $2
+        WHERE e.pkey = $1 AND (e.userpkey = $2 OR p.ispublic = true)
     ", array($experiment_pkey, $userpkey));
 }
 
@@ -106,6 +108,7 @@ $experiment->modified_timestamp = (int)$row->modified_timestamp;
 $experiment->is_owner = ((int)$row->userpkey === $userpkey);
 $experiment->can_edit = ($experiment->is_owner || $is_admin);
 $experiment->can_delete = ($experiment->is_owner || $is_admin);
+$experiment->project_is_public = ($row->project_is_public === 't' || $row->project_is_public === true);
 
 // Parse and include the full JSON data (LAPS sections)
 if (!empty($row->json)) {

@@ -5,12 +5,33 @@
  *
  * Usage: view_document.php?uuid={uuid}&filename={original_filename}
  *
+ * Requires authentication - user must own the document or be admin.
+ *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
  * @copyright  2025 StraboSpot
  * @license    https://opensource.org/licenses/MIT MIT License
  * @link       https://strabospot.org
  */
+
+// Change to root directory for proper include path resolution
+chdir('../..');
+
+session_start();
+
+// Check session timeout
+if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > 7200)) {
+    $_SESSION['loggedin'] = "no";
+}
+$_SESSION['LAST_ACTIVITY'] = time();
+
+// Require login for document access
+if ($_SESSION['loggedin'] != "yes") {
+    http_response_code(401);
+    exit("Authentication required.");
+}
+
+$userpkey = $_SESSION['userpkey'];
 
 // Get and sanitize parameters
 $uuid = isset($_REQUEST['uuid']) ? preg_replace('/[^a-zA-Z0-9\-]/', '', $_REQUEST['uuid']) : '';
@@ -20,6 +41,32 @@ $original_filename = isset($_REQUEST['filename']) ? $_REQUEST['filename'] : '';
 if (empty($uuid) || strlen($uuid) !== 36) {
     http_response_code(400);
     exit("Invalid or missing UUID.");
+}
+
+// Include database and admin configuration
+include_once("adminkeys.php");
+include("prepare_connections.php");
+
+$is_admin = in_array($userpkey, $admin_pkeys);
+
+// Verify document ownership - user must own the document or be admin
+if (!$is_admin) {
+    $owner_check = $db->get_var_prepared(
+        "SELECT userpkey FROM straboexp.file_holdings WHERE uuid = $1",
+        array($uuid)
+    );
+
+    if ($owner_check === null) {
+        // Document not found in database
+        http_response_code(404);
+        exit("Document not found.");
+    }
+
+    if ((int)$owner_check !== $userpkey) {
+        // User doesn't own this document
+        http_response_code(403);
+        exit("Access denied.");
+    }
 }
 
 // Path to the uploaded file
