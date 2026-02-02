@@ -12,6 +12,9 @@
 
 include("logincheck.php");
 include("prepare_connections.php");
+require_once("db/services/CollaborationAuth.php");
+
+$collabAuth = new CollaborationAuth($db, $neodb);
 
 $referer = $_SERVER['HTTP_REFERER'] ?? '';
 
@@ -28,22 +31,21 @@ if($count == 0){
 	exit("Collaboration Invite not Found.");
 }
 
-/*
-Check here to see if user already has a project with this project_id.
-If so, exit.
-*/
+// Check if user can accept this invitation (duplicate project ID prevention)
+// This checks both active projects in Neo4j AND restorable versions in PostgreSQL
+$canAccept = $collabAuth->canAcceptInvitation($project_id, (int)$userpkey);
 
-$querystring = "MATCH (n:Project) WHERE n.id = $project_id and n.userpkey = $userpkey RETURN n;";
-
-$records = $neodb->query($querystring);
-
-$count=count($records);
-
-if($count > 0){
-	$record = $records[0];
-	$project = $record->get("n");
-	$properties = $project->values();
-	$project_name = $properties['desc_project_name'];
+if(!$canAccept['allowed']){
+	// Get project name and owner info for the error message
+	$querystring = "MATCH (n:Project) WHERE n.id = $project_id and n.userpkey = $userpkey RETURN n;";
+	$records = $neodb->query($querystring);
+	$project_name = "this project";
+	if(count($records) > 0){
+		$record = $records[0];
+		$project = $record->get("n");
+		$properties = $project->values();
+		$project_name = $properties['desc_project_name'] ?? $project_name;
+	}
 
 	//Also get User information
 	$row = $db->get_row_prepared("
@@ -73,7 +75,9 @@ include 'includes/mheader.php';
 	<div class="col-6 col-12-small">
 		<ul class="actions fit small">
 			<li>
-				You already have a copy of <?php echo $project_name?> in your account. In order to collaborate on the project <?php echo $project_name?> owned by <?php echo $owner_name?>, you must not have a copy of this project in your account. Please delete your own copy of <?php echo $project_name?> in order to collaborate.
+				<?php echo htmlspecialchars($canAccept['reason']); ?>
+				<br><br>
+				In order to collaborate on the project <?php echo htmlspecialchars($project_name)?> owned by <?php echo htmlspecialchars($owner_name)?>, you must not have your own copy of this project in your account. Please delete or remove your version of this project to accept the collaboration invitation.
 			</li>
 		</ul>
 	</div>

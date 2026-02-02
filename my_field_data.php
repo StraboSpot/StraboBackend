@@ -153,8 +153,6 @@ include("includes/mheader.php");
 						</header>
 
 <?php
-if(in_array($userpkey, array(3,8988))){
-
 $collabquery = "
 select 	c.uuid,
 	c.strabo_project_id,
@@ -224,7 +222,6 @@ if($clevel == "admin") $showlevel = "Admin";
 
 <?php
 	}
-}
 ?>
 
 							<div style="text-align:center;"><a href="/new_project">(Add Project)</a></div>
@@ -362,7 +359,8 @@ if($collabcount > 0){
 											$uploaddate = date("F j, Y, g:i a T P", $dvals["datecreated"]);
 											$modified_timestamp = date("F j, Y, g:i a T", substr($dvals["modified_timestamp"],0,10));
 											$name = $dvals["name"];
-											$collaboratorpkey = $dvals["collaboratorpkey"];
+											// Use created_by instead of collaboratorpkey for new collaboration model
+											$datasetCreatedBy = $dvals["created_by"] ?? $dvals["collaboratorpkey"] ?? $dvals["userpkey"];
 
 											?>
 
@@ -370,7 +368,7 @@ if($collabcount > 0){
 												<tr>
 													<td>
 <?php
-if($collaboratorpkey == $userpkey || $collaboration_level == "admin"){
+if($datasetCreatedBy == $userpkey || $collaboration_level == "admin"){
 ?>
 														<a href="delete_dataset?id=<?php echo $id?>" OnClick="return confirm('Are you sure you want to delete <?php echo $name?>?')">Delete</a>
 <?php
@@ -491,13 +489,7 @@ if(count($projectrows)==0){
 													<option value="edit">View/Edit/Add Data</option>
 													<option value="field">Download/Share StraboMobile Project File</option>
 													<option value="doi">Get DOI for Project</option>
-													<?php
-													if(in_array($userpkey, array(3,8988))){
-													?>
 													<option value="collaborate">Invite Collaborators</option>
-													<?php
-													}
-													?>
 													<option value="json">Download Project in Strabo JSON Format</option>
 													<option value="geologic_units">Download Geologic Units</option>
 													<option value="delete">Delete Project</option>

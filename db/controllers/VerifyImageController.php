@@ -13,7 +13,13 @@
 
 class VerifyImageController extends MyController
 {
-
+	/**
+	 * Verify if a single image file exists
+	 *
+	 * Used during the upload flow to check if an image needs to be uploaded.
+	 * Supports both direct ownership and collaborative access - collaborators
+	 * can verify images that have been transferred to the project owner's namespace.
+	 */
 	public function getAction($request) {
 
 		if(isset($request->url_elements[2])) {

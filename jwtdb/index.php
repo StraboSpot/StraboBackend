@@ -15,13 +15,16 @@ include_once "../db/strabospotclass.php";
 include_once "../includes/geophp/geoPHP.inc";
 include_once "../includes/UUID.php";
 
+//Load Collaboration Services
+include_once "../db/services/CollaborationAuth.php";
+
 include_once '../jwtauth/middleware.php';
 
 //Authenticate via JWT - Todo Class this out for better workflow.
 $user = authenticate();
 
 //OK, we're authorized. Let's move forward
-$userpkey = $user['sub'];
+$userpkey = (int)$user['sub'];
 
 //Load Base Controller
 include "../db/controllers/MyController.php";
@@ -46,6 +49,9 @@ function logToFile($var,$label=null){
 }
 
 $strabo = new StraboSpot($neodb,$userpkey,$db);
+
+//Initialize collaboration auth service
+$collabAuth = new CollaborationAuth($db, $neodb);
 
 //pass along uuid class
 $uuid = new UUID();
@@ -107,6 +113,7 @@ if($showcontroller==""){$showcontroller="null";}
 if (class_exists($controller_name)) {
     $controller = new $controller_name();
     $controller->setstrabohandler($strabo);
+    $controller->setauthhandler($collabAuth);
     $action_name = strtolower($request->verb) . 'Action';
     $result = $controller->$action_name($request);
 }else{

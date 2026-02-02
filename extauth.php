@@ -24,10 +24,6 @@ if($user == "" || $pass == ""){
 	exit(1);
 }
 
-if(!filter_var($user, FILTER_VALIDATE_EMAIL)){
-	exit(1);
-}
-
 $count = $db->get_var_prepared("SELECT count(*) FROM users WHERE email=$1 AND deleted = FALSE", array($user));
 if($count > 0){
 	if(md5($pass)==$hashval) exit(0);

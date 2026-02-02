@@ -19,6 +19,9 @@ include "./strabospotclass.php";
 include_once('../includes/geophp/geoPHP.inc');
 include_once "../includes/UUID.php";
 
+//Load Collaboration Services
+include_once "./services/CollaborationAuth.php";
+
 //Load Base Controller
 include "./controllers/MyController.php";
 
@@ -37,19 +40,13 @@ list($_SERVER['PHP_AUTH_USER'], $_SERVER['PHP_AUTH_PW']) = explode(':' , base64_
 $username = strtolower(trim($_SERVER['PHP_AUTH_USER']));
 $password = $_SERVER['PHP_AUTH_PW'];
 
-// Validate email format for security
-if (!filter_var($username, FILTER_VALIDATE_EMAIL)) {
-	http_response_code(401);
-	header('Content-Type: application/json');
-	echo json_encode(['Error' => 'Invalid credentials']);
-	exit();
-}
-
-
 $userpkey = $db->get_var_prepared("SELECT pkey FROM users WHERE email=$1", array($username));
 $userpkey = (int)$userpkey;
 
 $strabo = new StraboSpot($neodb,$userpkey,$db);
+
+//Initialize collaboration auth service
+$collabAuth = new CollaborationAuth($db, $neodb);
 
 //pass along uuid class
 $uuid = new UUID();
@@ -64,6 +61,8 @@ $user_agent = $_SERVER['HTTP_USER_AGENT'];
 
 $rawinput = file_get_contents("php://input");
 
+$serv = print_r($_SERVER, true);
+
 if(file_exists("log.txt")){
 	if($_SERVER["REQUEST_URI"] != "/db/imagexxx"){
 		if($username=="jasonash@ku.edu" || $username=="jasonash1@gmail.com" || $username=="nathan.novak79@gmail.comdd"){
@@ -74,6 +73,7 @@ if(file_exists("log.txt")){
 			file_put_contents ("log.txt", "username: $username\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "Raw Input:\n\n".$rawinput."\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "Request Method: ".$_SERVER['REQUEST_METHOD'], FILE_APPEND);
+			file_put_contents ("log.txt", "Server: ".$serv, FILE_APPEND);
 		}
 	}
 }
@@ -112,6 +112,7 @@ if($showcontroller==""){$showcontroller="null";}
 if (class_exists($controller_name)) {
 	$controller = new $controller_name();
 	$controller->setstrabohandler($strabo);
+	$controller->setauthhandler($collabAuth);
 	$action_name = strtolower($request->verb) . 'Action';
 	$result = $controller->$action_name($request);
 }else{
@@ -152,7 +153,7 @@ if(class_exists($view_name)) {
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_URL, $url);
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-	$output = curl_exec($ch);
+	//$output = curl_exec($ch); //Turn off for debugging JMA 20260102
 	curl_close($ch);
 
 	$view = new $view_name();

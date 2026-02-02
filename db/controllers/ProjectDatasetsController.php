@@ -18,52 +18,80 @@ class ProjectDatasetsController extends MyController
 
 		if(isset($request->url_elements[2])) {
 
-			$feature_id = $request->url_elements[2];
+			$projectId = $request->url_elements[2];
 
-			$data = $this->strabo->getProjectDatasets($feature_id);
+			// Check if user has read access to this project
+			$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectId);
+
+			if (!$context->canRead()) {
+				return $this->notFound("Project not found");
+			}
+
+			// Use effectiveOwner to get datasets from the correct owner's project
+			$originalUserpkey = $this->strabo->userpkey;
+			if ($context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($context->effectiveOwner);
+			}
+
+			// Pass collaboration context for proper readonly determination
+			$data = $this->strabo->getProjectDatasets(
+				$projectId,
+				$originalUserpkey,
+				$context->isOwner,
+				$context->isHalted,
+				$context->permissionLevel
+			);
+
+			// Restore original userpkey if changed
+			if ($context->effectiveOwner !== $originalUserpkey) {
+				$this->strabo->setuserpkey($originalUserpkey);
+			}
 
 		} else {
 			header("Bad Request", true, 400);
-			$data["Error"] = "Bad Request. No Dataset id specified.";
+			$data["Error"] = "Bad Request. No Project id specified.";
 		}
 		return $data;
 	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 	public function postAction($request) {
 
 		if(isset($request->url_elements[2])) {
 
-			$feature_id = $request->url_elements[2];
+			$projectId = $request->url_elements[2];
+
+			// Check if user can add datasets to this project
+			$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectId);
+
+			if (!$this->auth->canCreateDataset($context)) {
+				if ($context->permissionLevel === 'none') {
+					return $this->notFound("Project not found");
+				}
+				return $this->forbidden("You don't have permission to add datasets to this project");
+			}
 
 			$upload = $request->parameters;
 
 			unset($upload['apiformat']);
-		
+
 			$datasetid=$upload['id'];
 
 			if($datasetid == ""){
-			
+
 				//Error, feature not found
 				header("Bad Request", true, 404);
 				$data["Error"] = "No dataset ID provided.";
 
 			}else{
-				$data = $this->strabo->addDatasetToProject($feature_id,$datasetid,"HAS_DATASET");
+				// Pass collaboration context to addDatasetToProject
+				$originalUserpkey = $this->strabo->userpkey;
+				$data = $this->strabo->addDatasetToProject(
+					$projectId,
+					$datasetid,
+					"HAS_DATASET",
+					$context->effectiveOwner,
+					$originalUserpkey
+				);
 			}
 
 		} else { //feature id is not set error
@@ -77,31 +105,23 @@ class ProjectDatasetsController extends MyController
 		return $data;
 	}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	public function deleteAction($request) {
 
 		if(isset($request->url_elements[2])) {
 
-			$feature_id = $request->url_elements[2];
+			$projectId = $request->url_elements[2];
 
-			$this->strabo->deleteProjectDatasets($feature_id);
+			// Only owner can delete all datasets from a project
+			$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectId);
+
+			if (!$context->isOwner()) {
+				if ($context->permissionLevel === 'none') {
+					return $this->notFound("Project not found");
+				}
+				return $this->forbidden("Only the project owner can delete all datasets");
+			}
+
+			$this->strabo->deleteProjectDatasets($projectId);
 
 			header("Datasets deleted", true, 204);
 			$data['message']="Datasets deleted.";

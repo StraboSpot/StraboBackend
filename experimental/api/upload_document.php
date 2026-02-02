@@ -67,16 +67,12 @@ if (strlen($uuid) !== 36) {
 // Sanitize filename - replace spaces with underscores
 $original_filename = preg_replace('/\s+/', '_', $original_filename);
 
-// Store file metadata in PostgreSQL
-$result = $db->query("
+// Store file metadata in PostgreSQL using prepared statement
+$result = $db->prepare_query("
     INSERT INTO straboexp.file_holdings
         (userpkey, uuid, original_filename)
-    VALUES (
-        $userpkey,
-        '$uuid',
-        '" . pg_escape_string($original_filename) . "'
-    )
-");
+    VALUES ($1, $2, $3)
+", array($userpkey, $uuid, $original_filename));
 
 if (!$result) {
     http_response_code(500);
