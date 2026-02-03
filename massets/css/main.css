@@ -8,12 +8,18 @@
 */
 
 /* debug */
+
 /*
 * {
   outline: 1px solid red;
   background-color: red;
 }
 */
+
+* {
+  /*outline: 1px solid red;*/
+}
+
 
 html, body, div, span, applet, object,
 iframe, h1, h2, h3, h4, h5, h6, p, blockquote,
@@ -108,7 +114,7 @@ input, select, textarea {
 	body, input, select, textarea {
 		/*color: rgba(255, 255, 255, 0.75);*/
 		color: rgba(255, 255, 255);
-		font-family: "Roboto", Helvetica, sans-serif;
+		font-family: "Raleway", Helvetica, sans-serif;
 		font-size: 15pt;
 		font-weight: 100;
 		line-height: 1.75em;
@@ -5225,3 +5231,854 @@ Download:
 			}
 
 	}
+
+/* ============================================
+   StraboMicro Landing Page Styles
+   ============================================ */
+
+/* Hero Section */
+.micro-landing-hero {
+	/*background-color: #272833;*/
+	border-radius: 4px;
+	padding: 2em;
+	margin-bottom: 2em;
+}
+
+.micro-hero-content {
+	display: flex;
+	align-items: flex-start;
+	gap: 1.5em;
+}
+
+.micro-hero-logo img {
+	width: 100px;
+	height: auto;
+	border-radius: 8px;
+}
+
+.micro-hero-title {
+	display: block;
+	font-size: 1.2em;
+	color: #ffffff;
+	margin-bottom: 0.25em;
+}
+
+.micro-hero-tagline {
+	color: #e44c65;
+	font-size: 1.8em;
+	line-height: 1.2em;
+	margin-bottom: 0.5em;
+	font-weight: bold;
+}
+
+.micro-hero-description {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 0.95em;
+	line-height: 1.6em;
+	margin-bottom: 0;
+}
+
+.micro-hero-download {
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	align-items: flex-start;
+	height: 100%;
+	padding-top: 4em;
+}
+
+.micro-download-btn {
+	background-color: #e44c65;
+	color: #ffffff !important;
+	font-weight: 300;
+	padding: 0.75em 1.5em;
+	white-space: nowrap;
+}
+
+.micro-download-btn:hover {
+	background-color: #c43a52 !important;
+}
+
+.micro-version-text {
+	color: rgba(255, 255, 255, 0.6);
+	font-size: 0.9em;
+	margin-top: 0.75em;
+	margin-bottom: 0;
+}
+
+/* Navigation Tabs */
+.micro-nav-tabs {
+	margin-top: 2em;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	padding-top: 1.5em;
+}
+
+.micro-nav-tabs ul {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 2em;
+	list-style: none;
+	margin: 0;
+	padding: 0;
+}
+
+.micro-nav-tabs ul li a {
+	color: rgba(255, 255, 255, 0.75);
+	text-decoration: none;
+	font-size: 1em;
+	font-weight: 300;
+	transition: color 0.2s ease;
+}
+
+.micro-nav-tabs ul li a:hover {
+	color: #e44c65;
+}
+
+/* Section Styles */
+.micro-section {
+	margin-bottom: 3em;
+}
+
+.micro-section-title {
+	color: #e44c65;
+	font-size: 1.8em;
+	margin-bottom: 1.5em;
+	font-weight: bold;
+}
+
+/* Screenshot Container */
+.micro-screenshot-container {
+	margin-bottom: 2em;
+}
+
+.micro-screenshot {
+	width: 100%;
+	height: auto;
+	border-radius: 4px;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.micro-screenshot-placeholder {
+	background-color: #272833;
+	border: 2px dashed rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+	padding: 4em;
+	text-align: center;
+	color: rgba(255, 255, 255, 0.5);
+	font-size: 1.2em;
+}
+
+/* Feature Cards */
+.micro-feature-card {
+	background-color: #272833;
+	border-radius: 4px;
+	padding: 0;
+	height: 100%;
+	overflow: hidden;
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.micro-feature-card:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.micro-card-image {
+	width: 100%;
+	height: 180px;
+	overflow: hidden;
+}
+
+.micro-card-image img {
+	width: 100%;
+	height: 100%;
+	object-fit: cover;
+}
+
+.micro-feature-card h3 {
+	color: #e44c65;
+	font-size: 1.1em;
+	line-height: 1.4em;
+	margin: 1em 1em 0.5em 1em;
+	font-weight: 300;
+}
+
+.micro-feature-card p {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 0.9em;
+	line-height: 1.6em;
+	margin: 0 1em 1em 1em;
+}
+
+/* Text-only feature cards */
+.micro-feature-card.micro-text-only {
+	padding: 1.5em;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.micro-feature-card.micro-text-only h3 {
+	margin: 0 0 0.75em 0;
+}
+
+.micro-feature-card.micro-text-only p {
+	margin: 0;
+}
+
+/* Responsive adjustments for StraboMicro landing */
+@media screen and (max-width: 980px) {
+	.micro-hero-content {
+		flex-direction: column;
+		text-align: center;
+	}
+
+	.micro-hero-logo {
+		margin: 0 auto;
+	}
+
+	.micro-hero-download {
+		align-items: center;
+		padding-top: 2em;
+	}
+
+	.micro-nav-tabs ul {
+		justify-content: center;
+	}
+
+	.micro-hero-tagline {
+		font-size: 1.5em;
+		font-weight: bold;
+	}
+}
+
+@media screen and (max-width: 736px) {
+	.micro-landing-hero {
+		padding: 1.5em;
+	}
+
+	.micro-nav-tabs ul {
+		flex-direction: column;
+		align-items: center;
+		gap: 1em;
+	}
+
+	.micro-card-image {
+		height: 150px;
+	}
+
+	.micro-hero-tagline {
+		font-size: 1.3em;
+		font-weight: bold;
+	}
+}
+
+@media screen and (max-width: 480px) {
+	.micro-hero-tagline {
+		font-size: 1.1em;
+		font-weight: bold;
+	}
+
+	.micro-section-title {
+		font-size: 1.4em;
+	}
+
+	.micro-feature-card h3 {
+		font-size: 1em;
+	}
+}
+
+/* ============================================
+   StraboField Landing Page Styles
+   ============================================ */
+
+/* Hero Section */
+.field-landing-hero {
+	margin: -2em -2em 3em -2em;
+}
+
+.field-hero-background {
+	background-size: cover;
+	background-position: center;
+	background-repeat: no-repeat;
+	min-height: 400px;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.field-hero-overlay {
+	background: linear-gradient(135deg, rgba(39, 40, 51, 0.85) 0%, rgba(39, 40, 51, 0.6) 100%);
+	min-height: 400px;
+	display: flex;
+	align-items: center;
+	padding: 3em;
+}
+
+.field-hero-content {
+	max-width: 700px;
+}
+
+.field-hero-logo {
+	width: 80px;
+	height: 80px;
+	margin-bottom: 1em;
+}
+
+.field-hero-logo img {
+	width: 100%;
+	height: auto;
+}
+
+.field-hero-title {
+	display: block;
+	color: rgba(255, 255, 255, 0.9);
+	font-size: 1.2em;
+	font-weight: 300;
+	margin-bottom: 0.25em;
+}
+
+.field-hero-tagline {
+	color: #ffffff;
+	font-size: 2.5em;
+	font-weight: 700;
+	margin: 0 0 0.5em 0;
+	line-height: 1.2;
+}
+
+.field-hero-description {
+	color: rgba(255, 255, 255, 0.85);
+	font-size: 1.1em;
+	line-height: 1.6;
+	margin-bottom: 1.5em;
+}
+
+/* Store Buttons */
+.field-hero-buttons,
+.field-cta-buttons {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 1em;
+	margin-top: 1.5em;
+}
+
+.field-store-btn {
+	display: inline-flex;
+	align-items: center;
+	padding: 0.6em 1.2em;
+	border-radius: 8px;
+	text-decoration: none;
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+	min-width: 160px;
+}
+
+.field-store-btn:hover {
+	transform: translateY(-2px);
+	box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.field-apple-btn {
+	background-color: #000000;
+	color: #ffffff;
+}
+
+.field-google-btn {
+	background-color: #000000;
+	color: #ffffff;
+}
+
+.field-store-icon {
+	font-size: 2em;
+	margin-right: 0.4em;
+	line-height: 1;
+}
+
+.field-store-text {
+	display: flex;
+	flex-direction: column;
+	line-height: 1.2;
+}
+
+.field-store-small {
+	font-size: 0.65em;
+	color: rgba(255, 255, 255, 0.8);
+}
+
+.field-store-large {
+	font-size: 1.1em;
+	font-weight: 600;
+	color: #ffffff;
+}
+
+/* Section Styles */
+.field-section {
+	margin-bottom: 4em;
+	padding-top: 1em;
+}
+
+.field-content-row {
+	align-items: center;
+}
+
+.field-section-text {
+	padding: 1em 0;
+}
+
+.field-section-title {
+	color: #e44c65;
+	font-size: 1.8em;
+	font-weight: 600;
+	margin-bottom: 0.5em;
+	line-height: 1.3;
+}
+
+.field-section-subtitle {
+	color: rgba(255, 255, 255, 0.9);
+	font-size: 1.1em;
+	font-weight: 400;
+	margin-bottom: 1em;
+}
+
+.field-section-text p {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 1em;
+	line-height: 1.7;
+	margin-bottom: 1em;
+}
+
+/* Section Images */
+.field-section-image {
+	position: relative;
+	padding: 1em;
+}
+
+.field-section-image img {
+	width: 100%;
+	height: auto;
+	border-radius: 8px;
+	box-shadow: 0 8px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Feature Cards */
+.field-feature-card {
+	background-color: #272833;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 4px;
+	padding: 1.5em;
+	height: 100%;
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.field-feature-card:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.field-feature-card h3 {
+	color: #e44c65;
+	font-size: 1.1em;
+	font-weight: 400;
+	margin: 0 0 0.75em 0;
+	line-height: 1.4;
+}
+
+.field-feature-card p {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 0.95em;
+	line-height: 1.6;
+	margin: 0;
+}
+
+/* Community Section */
+.field-community-section {
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	padding-top: 3em;
+	text-align: center;
+}
+
+.field-community-section .field-section-title {
+	font-size: 1.6em;
+}
+
+.field-community-section .field-section-subtitle {
+	max-width: 700px;
+	margin: 0 auto 2em auto;
+}
+
+.field-community-cards {
+	margin-top: 1.5em;
+}
+
+.field-community-card {
+	background-color: transparent;
+	border-top: 1px solid rgba(255, 255, 255, 0.2);
+	padding: 1.5em 1em;
+}
+
+.field-community-card p {
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 1em;
+	margin: 0;
+}
+
+/* CTA Section */
+.field-cta-section {
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	padding-top: 3em;
+	text-align: center;
+}
+
+.field-cta-section .field-section-subtitle {
+	margin-bottom: 2em;
+}
+
+.field-cta-buttons {
+	justify-content: center;
+	margin-bottom: 2em;
+}
+
+.field-cta-links {
+	display: flex;
+	flex-wrap: wrap;
+	justify-content: center;
+	gap: 2em;
+}
+
+.field-cta-link {
+	color: #ffffff;
+	font-size: 1.1em;
+	font-weight: 600;
+	text-decoration: none;
+	transition: color 0.2s ease;
+}
+
+.field-cta-link:hover {
+	color: #e44c65;
+}
+
+/* Responsive adjustments for StraboField landing */
+@media screen and (max-width: 980px) {
+	.field-hero-overlay {
+		padding: 2em;
+	}
+
+	.field-hero-tagline {
+		font-size: 2em;
+	}
+
+	.field-section-image {
+		margin-top: 2em;
+	}
+}
+
+@media screen and (max-width: 736px) {
+	.field-landing-hero {
+		margin: -1em -1em 2em -1em;
+	}
+
+	.field-hero-overlay {
+		padding: 1.5em;
+		min-height: 350px;
+	}
+
+	.field-hero-tagline {
+		font-size: 1.6em;
+	}
+
+	.field-hero-description {
+		font-size: 1em;
+	}
+
+	.field-hero-buttons,
+	.field-cta-buttons {
+		flex-direction: column;
+		align-items: center;
+	}
+
+	.field-store-btn {
+		width: 100%;
+		max-width: 220px;
+		justify-content: center;
+	}
+
+	.field-section-title {
+		font-size: 1.5em;
+	}
+}
+
+@media screen and (max-width: 480px) {
+	.field-hero-tagline {
+		font-size: 1.4em;
+	}
+
+	.field-section-title {
+		font-size: 1.3em;
+	}
+
+	.field-feature-card h3 {
+		font-size: 1em;
+	}
+}
+
+/* ============================================
+   StraboExperimental Landing Page Styles
+   ============================================ */
+
+/* Hero Section */
+.exp-landing-hero {
+	border-radius: 4px;
+	/*padding: 2em;*/
+	margin-bottom: 2em;
+}
+
+.exp-hero-logo {
+	display: flex;
+	justify-content: center;
+	align-items: flex-start;
+	padding-top: 0.5em;
+}
+
+.exp-hero-logo img {
+	width: 120px;
+	height: auto;
+	border-radius: 8px;
+}
+
+.exp-hero-content {
+	display: flex;
+	align-items: flex-start;
+}
+
+.exp-hero-tagline {
+	color: #ffffff;
+	font-size: 1.6em;
+	line-height: 1.3em;
+	margin-bottom: 0.75em;
+	font-weight: 300;
+}
+
+.exp-hero-description {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 1em;
+	line-height: 1.6em;
+	margin-bottom: 0;
+}
+
+/* Section Styles */
+.exp-section {
+	margin-bottom: 3em;
+}
+
+.exp-section-title {
+	color: #e44c65;
+	font-size: 1.8em;
+	margin-bottom: 0.5em;
+	font-weight: bold;
+}
+
+/* Screenshot Container */
+.exp-screenshot-container {
+	margin-bottom: 2em;
+}
+
+.exp-screenshot {
+	width: 100%;
+	height: auto;
+	border-radius: 4px;
+	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+/* Steps List */
+.exp-steps {
+	margin-top: 0em;
+}
+
+.exp-steps-list {
+	list-style: decimal;
+	padding-left: 1.5em;
+	color: rgba(255, 255, 255, 0.85);
+}
+
+.exp-steps-list li {
+	margin-bottom: 0.75em;
+	font-size: 1.1em;
+	line-height: 1.5em;
+}
+
+.exp-steps-list li strong {
+	color: #ffffff;
+}
+
+.exp-tip {
+	color: rgba(255, 255, 255, 0.6);
+	font-style: italic;
+}
+
+/* Info Boxes (Why / Built For) */
+.exp-info-box {
+	background-color: #272833;
+	border-radius: 4px;
+	padding: 1.5em;
+	height: 100%;
+	border-left: 3px solid #e44c65;
+}
+
+.exp-box-title {
+	color: #e44c65;
+	font-size: 1.4em;
+	margin-bottom: 1em;
+	font-weight: bold;
+}
+
+.exp-benefits-list {
+	list-style: disc;
+	padding-left: 1.5em;
+	margin: 0;
+}
+
+.exp-benefits-list li {
+	color: rgba(255, 255, 255, 0.85);
+	margin-bottom: 0.5em;
+	line-height: 1.5em;
+}
+
+/* Community Section */
+.exp-community-section {
+	text-align: center;
+	padding: 2em 0;
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.exp-community-title {
+	color: #e44c65;
+	font-size: 1.6em;
+	margin-bottom: 0.5em;
+	font-weight: bold;
+}
+
+.exp-community-subtitle {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 1.1em;
+	margin: 0;
+}
+
+/* Feature Boxes */
+.exp-feature-box {
+	background-color: #272833;
+	border-radius: 4px;
+	padding: 1.5em;
+	height: 100%;
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.exp-feature-box:hover {
+	transform: translateY(-3px);
+	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+}
+
+.exp-feature-box h4 {
+	color: #ffffff;
+	font-size: 1.1em;
+	margin-bottom: 0.75em;
+	font-weight: 300;
+}
+
+.exp-feature-box p {
+	color: rgba(255, 255, 255, 0.75);
+	font-size: 0.95em;
+	line-height: 1.5em;
+	margin: 0;
+}
+
+/* CTA Section */
+.exp-cta-section {
+	text-align: center;
+	padding-top: 2em;
+}
+
+.exp-cta-title {
+	color: #e44c65;
+	font-size: 1.8em;
+	margin-bottom: 1.5em;
+	font-weight: bold;
+}
+
+.exp-cta-buttons {
+	display: flex;
+	justify-content: center;
+	gap: 1em;
+	flex-wrap: wrap;
+}
+
+/* Responsive adjustments for StraboExperimental landing */
+@media screen and (max-width: 980px) {
+	.exp-hero-logo {
+		justify-content: center;
+		margin-bottom: 1.5em;
+	}
+
+	.exp-hero-tagline {
+		font-size: 1.4em;
+		text-align: center;
+	}
+
+	.exp-hero-description {
+		text-align: center;
+	}
+
+	.exp-info-box {
+		margin-bottom: 1em;
+	}
+}
+
+@media screen and (max-width: 736px) {
+	.exp-landing-hero {
+		padding: 1.5em;
+	}
+
+	.exp-hero-tagline {
+		font-size: 1.2em;
+	}
+
+	.exp-section-title {
+		font-size: 1.5em;
+		font-weight: bold;
+	}
+
+	.exp-steps-list li {
+		font-size: 1em;
+	}
+
+	.exp-community-title {
+		font-size: 1.3em;
+	}
+
+	.exp-cta-title {
+		font-size: 1.5em;
+	}
+
+	.exp-cta-buttons {
+		flex-direction: column;
+		align-items: center;
+	}
+
+	.exp-cta-buttons .button {
+		width: 100%;
+		max-width: 200px;
+	}
+}
+
+@media screen and (max-width: 480px) {
+	.exp-hero-tagline {
+		font-size: 1.1em;
+	}
+
+	.exp-box-title {
+		font-size: 1.2em;
+		font-weight: bold;
+	}
+
+	.exp-feature-box h4 {
+		font-size: 1em;
+	}
+}

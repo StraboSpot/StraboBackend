@@ -27,14 +27,6 @@ $email = strtolower(trim($jsonbody->email ?? ''));
 $password = $jsonbody->password ?? '';
 
 // Validate email format for security
-if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-	header("Bad Request", true, 400);
-	$output['error'] = "Invalid email format.";
-	header('Content-Type: application/json; charset=utf8');
-	echo json_encode($output);
-	exit();
-}
-
 if($email == "" || $password == ""){
 	header("Bad Request", true, 400);
 	$output['error'] = "Email address and passord must be provided.";

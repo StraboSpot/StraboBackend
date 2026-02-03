@@ -38,7 +38,7 @@ if ($id <= 0) {
 require_once('../../prepare_connections.php');
 
 try {
-    $row = $db->get_row("SELECT * FROM apprepo.facility WHERE pkey = $id");
+    $row = $db->get_row_prepared("SELECT * FROM apprepo.facility WHERE pkey = $1", array($id));
 
     if (!$row || !$row->pkey) {
         http_response_code(404);

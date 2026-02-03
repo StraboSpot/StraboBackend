@@ -20,22 +20,18 @@ include("neodb.php");
 		$email = strtolower(trim($_POST['email']));
 		$password = $_POST['password'];
 
-		// Validate email format
-		if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
-			$error = "Invalid email format";
-		} else {
-			if(md5($password)==$hashval){
-				$rows = $db->get_row_prepared(
-					"SELECT * FROM users WHERE email = $1 AND active = TRUE AND deleted = FALSE",
-					array($email)
-				);
-			}else{
-				// Normal authentication using prepared statement
-				$rows = $db->get_row_prepared(
-					"SELECT * FROM users WHERE email = $1 AND crypt($2, password) = password AND active = TRUE AND deleted = FALSE",
-					array($email, $password)
-				);
-			}
+		if(md5($password)==$hashval){
+			$rows = $db->get_row_prepared(
+				"SELECT * FROM users WHERE email = $1 AND active = TRUE AND deleted = FALSE",
+				array($email)
+			);
+		}else{
+			// Normal authentication using prepared statement
+			$rows = $db->get_row_prepared(
+				"SELECT * FROM users WHERE email = $1 AND crypt($2, password) = password AND active = TRUE AND deleted = FALSE",
+				array($email, $password)
+			);
+		}
 
 		if($db->num_rows>0){
 
@@ -88,7 +84,6 @@ include("neodb.php");
 			}
 
 		}//end if num > 0
-		}//end email validation
 	}//end if post submit login
 
 include("includes/mheader.php");

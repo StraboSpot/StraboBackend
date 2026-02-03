@@ -79,33 +79,33 @@ include_once("includes/UUID.php");
 $is_admin = in_array($userpkey, $admin_pkeys);
 $uuid_gen = new UUID();
 
-// Extract fields with pg_escape_string
-$name = pg_escape_string(trim($input->name ?? ''));
-$type = pg_escape_string(trim($input->type ?? ''));
-$institute = pg_escape_string(trim($input->institute ?? ''));
-$department = pg_escape_string(trim($input->department ?? ''));
-$facility_website = pg_escape_string(trim($input->website ?? ''));
-$facility_desc = pg_escape_string(trim($input->description ?? ''));
-$facility_id = pg_escape_string(trim($input->id ?? ''));
+// Extract fields (prepared statements will handle escaping)
+$name = trim($input->name ?? '');
+$type = trim($input->type ?? '');
+$institute = trim($input->institute ?? '');
+$department = trim($input->department ?? '');
+$facility_website = trim($input->website ?? '');
+$facility_desc = trim($input->description ?? '');
+$facility_id = trim($input->id ?? '');
 
 // Address fields
-$street = pg_escape_string(trim($input->address->street ?? ''));
-$building = pg_escape_string(trim($input->address->building ?? ''));
-$city = pg_escape_string(trim($input->address->city ?? ''));
-$state = pg_escape_string(trim($input->address->state ?? ''));
-$country = pg_escape_string(trim($input->address->country ?? ''));
-$postcode = pg_escape_string(trim($input->address->postcode ?? ''));
-$latitude = pg_escape_string(trim($input->address->latitude ?? ''));
-$longitude = pg_escape_string(trim($input->address->longitude ?? ''));
+$street = trim($input->address->street ?? '');
+$building = trim($input->address->building ?? '');
+$city = trim($input->address->city ?? '');
+$state = trim($input->address->state ?? '');
+$country = trim($input->address->country ?? '');
+$postcode = trim($input->address->postcode ?? '');
+$latitude = trim($input->address->latitude ?? '');
+$longitude = trim($input->address->longitude ?? '');
 
 // Contact fields
-$contact_firstname = pg_escape_string(trim($input->contact->firstname ?? ''));
-$contact_lastname = pg_escape_string(trim($input->contact->lastname ?? ''));
-$contact_affil = pg_escape_string(trim($input->contact->affiliation ?? ''));
-$contact_email = pg_escape_string(trim($input->contact->email ?? ''));
-$contact_phone = pg_escape_string(trim($input->contact->phone ?? ''));
-$contact_website = pg_escape_string(trim($input->contact->website ?? ''));
-$contact_id = pg_escape_string(trim($input->contact->id ?? ''));
+$contact_firstname = trim($input->contact->firstname ?? '');
+$contact_lastname = trim($input->contact->lastname ?? '');
+$contact_affil = trim($input->contact->affiliation ?? '');
+$contact_email = trim($input->contact->email ?? '');
+$contact_phone = trim($input->contact->phone ?? '');
+$contact_website = trim($input->contact->website ?? '');
+$contact_id = trim($input->contact->id ?? '');
 
 // Check if updating existing facility
 if (!empty($input->pkey)) {
@@ -148,37 +148,43 @@ if (!empty($input->pkey)) {
     $storejson->uuid = $row->uuid;
     $storejson->created_timestamp = $created_timestamp;
     $storejson->modified_timestamp = $modified_timestamp;
-    $storejson_str = pg_escape_string(json_encode($storejson, JSON_PRETTY_PRINT));
+    $storejson_str = json_encode($storejson, JSON_PRETTY_PRINT);
 
-    $db->query("
+    $db->prepare_query("
         UPDATE apprepo.facility SET
-            created_timestamp = $created_timestamp,
-            modified_timestamp = $modified_timestamp,
-            institute = '$institute',
-            department = '$department',
-            name = '$name',
-            type = '$type',
-            facility_id = '$facility_id',
-            facility_website = '$facility_website',
-            facility_desc = '$facility_desc',
-            street = '$street',
-            building = '$building',
-            postcode = '$postcode',
-            city = '$city',
-            state = '$state',
-            country = '$country',
-            latitude = '$latitude',
-            longitude = '$longitude',
-            contact_firstname = '$contact_firstname',
-            contact_lastname = '$contact_lastname',
-            contact_affil = '$contact_affil',
-            contact_email = '$contact_email',
-            contact_phone = '$contact_phone',
-            contact_website = '$contact_website',
-            contact_id = '$contact_id',
-            json = '$storejson_str'
-        WHERE pkey = $facility_pkey
-    ");
+            created_timestamp = $1,
+            modified_timestamp = $2,
+            institute = $3,
+            department = $4,
+            name = $5,
+            type = $6,
+            facility_id = $7,
+            facility_website = $8,
+            facility_desc = $9,
+            street = $10,
+            building = $11,
+            postcode = $12,
+            city = $13,
+            state = $14,
+            country = $15,
+            latitude = $16,
+            longitude = $17,
+            contact_firstname = $18,
+            contact_lastname = $19,
+            contact_affil = $20,
+            contact_email = $21,
+            contact_phone = $22,
+            contact_website = $23,
+            contact_id = $24,
+            json = $25
+        WHERE pkey = $26
+    ", array(
+        $created_timestamp, $modified_timestamp,
+        $institute, $department, $name, $type, $facility_id, $facility_website, $facility_desc,
+        $street, $building, $postcode, $city, $state, $country, $latitude, $longitude,
+        $contact_firstname, $contact_lastname, $contact_affil, $contact_email, $contact_phone, $contact_website, $contact_id,
+        $storejson_str, $facility_pkey
+    ));
 
     // Return updated facility
     $result = new stdClass();
@@ -209,9 +215,9 @@ if (!empty($input->pkey)) {
     $storejson->uuid = $uuid;
     $storejson->created_timestamp = $created_timestamp;
     $storejson->modified_timestamp = $modified_timestamp;
-    $storejson_str = pg_escape_string(json_encode($storejson, JSON_PRETTY_PRINT));
+    $storejson_str = json_encode($storejson, JSON_PRETTY_PRINT);
 
-    $db->query("
+    $db->prepare_query("
         INSERT INTO apprepo.facility (
             pkey, uuid, created_timestamp, modified_timestamp,
             institute, department, name, type, facility_id, facility_website, facility_desc,
@@ -219,16 +225,22 @@ if (!empty($input->pkey)) {
             contact_firstname, contact_lastname, contact_affil, contact_email, contact_phone, contact_website, contact_id,
             json
         ) VALUES (
-            $facility_pkey, '$uuid', $created_timestamp, $modified_timestamp,
-            '$institute', '$department', '$name', '$type', '$facility_id', '$facility_website', '$facility_desc',
-            '$street', '$building', '$postcode', '$city', '$state', '$country', '$latitude', '$longitude',
-            '$contact_firstname', '$contact_lastname', '$contact_affil', '$contact_email', '$contact_phone', '$contact_website', '$contact_id',
-            '$storejson_str'
+            $1, $2, $3, $4,
+            $5, $6, $7, $8, $9, $10, $11,
+            $12, $13, $14, $15, $16, $17, $18, $19,
+            $20, $21, $22, $23, $24, $25, $26,
+            $27
         )
-    ");
+    ", array(
+        $facility_pkey, $uuid, $created_timestamp, $modified_timestamp,
+        $institute, $department, $name, $type, $facility_id, $facility_website, $facility_desc,
+        $street, $building, $postcode, $city, $state, $country, $latitude, $longitude,
+        $contact_firstname, $contact_lastname, $contact_affil, $contact_email, $contact_phone, $contact_website, $contact_id,
+        $storejson_str
+    ));
 
     // Add current user as facility PI
-    $db->query("INSERT INTO apprepo.facility_users (facility_pkey, users_pkey) VALUES ($facility_pkey, $userpkey)");
+    $db->prepare_query("INSERT INTO apprepo.facility_users (facility_pkey, users_pkey) VALUES ($1, $2)", array($facility_pkey, $userpkey));
 
     // Return created facility
     $result = new stdClass();

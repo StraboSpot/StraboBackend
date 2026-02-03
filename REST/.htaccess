@@ -1,0 +1,2 @@
+RewriteEngine on
+RewriteRule ^publicStratSectionDetail/(.*)$ doPublicStratSectionDetail.php?spot_id=$1 [L]

@@ -49,60 +49,47 @@ class ProjectDatasetDeleteSpotController extends MyController
 		$spotid=$upload['spotId'];
 
 
-		$collabinfo = $this->strabo->getCollabInfo($projectid);
+		// Use CollaborationAuth to check project access (new authorization model)
+		$context = $this->auth->getProjectContext($this->strabo->userpkey, $projectid);
+
+		if (!$context->canRead()) {
+			return $this->notFound("Project not found");
+		}
 
 		$originaluserpkey = $this->strabo->userpkey;
-		$newuserpkey = $this->strabo->userpkey;
 
-		//Keep track of collaborative pkeys for dataset? No, the inside code will do that. Just keep track of datasets that we are allowed to edit?
+		// Determine owner for side-effect functions
+		$ownerPkey = $context->effectiveOwner;
+
+		// Build list of datasets user is authorized to edit
 		$authorizeddatasets = [];
-		
-		//?? Strip out datasets we're not allowed to edit, and if we're allowed to collaborate, we pass them through, and change userpkey? 
-		if($collabinfo->isCollaborativeProject){
-			
-			if($collabinfo->isOwner || ($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && !$collabinfo->isHalted)){
-			
-				foreach($upload['datasets'] as $d){
 
-					$datasetid = $d->id;
-					//first look natively.
-					if($datasetid!=""){
-						$dataset = $this->strabo->getDataset($datasetid);
-					}
-			
-					//We didn't find a dataset with userpkey that matches userpkey, so let's look for a dataset that matches collaboratorpkey = userpkey
-					if($dataset->id == ""){ 
-						$dataset = $this->strabo->getDataset($datasetid, $this->strabo->userpkey);
-					}
+		foreach($upload['datasets'] as $d){
+			$datasetid = $d->id;
 
-					if($dataset->id == ""){
-						$this->strabo->throwJSONError("Dataset $datasetid not found.");
-					}
-					
-					if($collabinfo->isUserCollaborator && $collabinfo->collaborationLevel == "edit" && $dataset->collaboratorpkey == $this->strabo->userpkey && !$collabinfo->isHalted){
-						//echo "is collaborator with edit and dataset";
-						$newuserpkey = $collabinfo->ownerpkey;
-						$authorizeddatasets[] = $dataset->id;
-					}elseif($collabinfo->isOwner && $dinfo->userpkey = $this->strabo->userpkey){
-						//echo "is owner with dataset";
-						//pkey can remain unchanged
-						$authorizeddatasets[] = $dataset->id;
-					}elseif($collabinfo->isOwner && $collabinfo->isHalted){
-						//echo "is owner and project halted link project to dataset ";
-						//pkey can remain unchanged
-						$authorizeddatasets[] = $dataset->id;
-					}
-					
+			if($datasetid == ""){
+				continue;
+			}
+
+			// Get dataset context to check created_by
+			$datasetContext = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetid);
+
+			if ($datasetContext) {
+				// Check if user can edit this dataset using new authorization model
+				if ($this->auth->canEditDataset($datasetContext, $datasetContext->datasetCreatedBy)) {
+					$authorizeddatasets[] = $datasetid;
 				}
+			}
+		}
 
-			}else{
-				$this->strabo->throwJSONError("Don't have permission to collaborate on this");
-			}
-		}else{
-			//load all datasetids if not collaborative
-			foreach($upload['project']->datasets as $d){
-				$authorizeddatasets[] = $d->id;
-			}
+		// If user has no edit permissions on any dataset, deny
+		if (count($authorizeddatasets) == 0 && count($upload['datasets']) > 0) {
+			return $this->forbidden("You don't have permission to edit any datasets in this project");
+		}
+
+		// Set effective owner for strabo methods that still need it
+		if ($context->effectiveOwner !== $this->strabo->userpkey) {
+			$this->strabo->setuserpkey($context->effectiveOwner);
 		}
 
 
@@ -121,7 +108,9 @@ class ProjectDatasetDeleteSpotController extends MyController
 			}
 
 			$injson = json_encode($upload['project']);
-			$this->strabo->insertProject($injson);
+			// Determine if this is a collaborative edit (user is collaborator, not owner)
+			$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner);
+			$this->strabo->insertProject($injson, null, $isCollaborativeEdit, $ownerPkey);
 
 			foreach($datasets as $d){
 				$datasetid = $d->id;
@@ -135,29 +124,30 @@ class ProjectDatasetDeleteSpotController extends MyController
 						//first, delete dataset relationships
 						//$this->strabo->deleteDatasetRelationships($datasetid);
 						$injson = json_encode($d);
-						
-						
+
+
 						$this->strabo->setuserpkey((int)$originaluserpkey);
-						$this->strabo->insertDataset($injson);
+						// Pass originaluserpkey for created_by tracking
+						$this->strabo->insertDataset($injson, null, $originaluserpkey);
 						$this->strabo->setuserpkey((int)$originaluserpkey);
-						$this->strabo->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
+						$this->strabo->addDatasetToProject($projectid, $datasetid, "HAS_DATASET", $ownerPkey, $originaluserpkey);
 	
 						if($spotid!=""){
-	
-							$this->strabo->setuserpkey((int)$newuserpkey);
-							$this->strabo->deleteSingleSpot($spotid,$newuserpkey);
-	
+
+							$this->strabo->setuserpkey((int)$ownerPkey);
+							$this->strabo->deleteSingleSpot($spotid,$ownerPkey);
+
 						}
 					}
-	
+
 					if($datasetid!=""){
-						
-						$this->strabo->setuserpkey((int)$newuserpkey);
+
+						$this->strabo->setuserpkey((int)$ownerPkey); // Kept for other strabo methods
 						//$this->strabo->buildDatasetRelationships($datasetid);
-						$this->strabo->setDatasetCenter($datasetid);
-	
+						$this->strabo->setDatasetCenter($datasetid, $ownerPkey);
+
 						//also add dataset to Postgres Database here.
-						$this->strabo->buildPgDataset($datasetid); //need to re-implement JMA 02282020
+						$this->strabo->buildPgDataset($datasetid, $ownerPkey);
 					}
 
 
@@ -169,7 +159,7 @@ class ProjectDatasetDeleteSpotController extends MyController
 
 			}
 
-			$this->strabo->setProjectCenter($projectid);
+			$this->strabo->setProjectCenter($projectid, $ownerPkey);
 
 			$data = $upload;
 		}else{

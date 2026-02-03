@@ -77,17 +77,17 @@ include_once("includes/UUID.php");
 $is_admin = in_array($userpkey, $admin_pkeys);
 $uuid_gen = new UUID();
 
-// Extract fields with pg_escape_string
-$name = pg_escape_string(trim($input->name ?? ''));
-$type = pg_escape_string(trim($input->type ?? ''));
-$location = pg_escape_string(trim($input->location ?? ''));
-$apparatus_id = pg_escape_string(trim($input->id ?? ''));
-$description = pg_escape_string(trim($input->description ?? ''));
+// Extract fields (prepared statements will handle escaping)
+$name = trim($input->name ?? '');
+$type = trim($input->type ?? '');
+$location = trim($input->location ?? '');
+$apparatus_id = trim($input->id ?? '');
+$description = trim($input->description ?? '');
 
 // Features as semicolon-separated string
 $features = '';
 if (!empty($input->features) && is_array($input->features)) {
-    $features = pg_escape_string(implode('; ', $input->features));
+    $features = implode('; ', $input->features);
 }
 
 // Check if updating existing apparatus
@@ -132,41 +132,47 @@ if (!empty($input->pkey)) {
     $storejson->uuid = $row->uuid;
     $storejson->created_timestamp = $created_timestamp;
     $storejson->modified_timestamp = $modified_timestamp;
-    $storejson_str = pg_escape_string(json_encode($storejson, JSON_PRETTY_PRINT));
+    $storejson_str = json_encode($storejson, JSON_PRETTY_PRINT);
 
-    $db->query("
+    $db->prepare_query("
         UPDATE apprepo.apparatus SET
-            created_timestamp = $created_timestamp,
-            modified_timestamp = $modified_timestamp,
-            name = '$name',
-            type = '$type',
-            location = '$location',
-            apparatus_id = '$apparatus_id',
-            description = '$description',
-            json = '$storejson_str'
-        WHERE pkey = $apparatus_pkey
-    ");
+            created_timestamp = $1,
+            modified_timestamp = $2,
+            name = $3,
+            type = $4,
+            location = $5,
+            apparatus_id = $6,
+            description = $7,
+            json = $8
+        WHERE pkey = $9
+    ", array(
+        $created_timestamp, $modified_timestamp,
+        $name, $type, $location, $apparatus_id, $description,
+        $storejson_str, $apparatus_pkey
+    ));
 
     // Update parameters - delete existing and re-insert
-    $db->query("DELETE FROM apprepo.apparatus_parameter WHERE apparatus_pkey = $apparatus_pkey");
+    $db->prepare_query("DELETE FROM apprepo.apparatus_parameter WHERE apparatus_pkey = $1", array($apparatus_pkey));
 
     if (!empty($input->parameters) && is_array($input->parameters)) {
         foreach ($input->parameters as $par) {
             $param_pkey = $db->get_var("SELECT nextval('apprepo.parameter_pkey_seq')");
-            $par_type = pg_escape_string($par->type ?? '');
-            $par_min = pg_escape_string($par->min ?? '');
-            $par_max = pg_escape_string($par->max ?? '');
-            $par_unit = pg_escape_string($par->unit ?? '');
-            $par_prefix = pg_escape_string($par->prefix ?? '');
-            $par_note = pg_escape_string($par->note ?? '');
+            $par_type = $par->type ?? '';
+            $par_min = $par->min ?? '';
+            $par_max = $par->max ?? '';
+            $par_unit = $par->unit ?? '';
+            $par_prefix = $par->prefix ?? '';
+            $par_note = $par->note ?? '';
             $par_created = time();
             $par_modified = time();
 
-            $db->query("
+            $db->prepare_query("
                 INSERT INTO apprepo.apparatus_parameter
-                VALUES ($param_pkey, $apparatus_pkey, $userpkey, $par_created, $par_modified,
-                        '$par_type', '$par_min', '$par_max', '$par_unit', '$par_prefix', '$par_note')
-            ");
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ", array(
+                $param_pkey, $apparatus_pkey, $userpkey, $par_created, $par_modified,
+                $par_type, $par_min, $par_max, $par_unit, $par_prefix, $par_note
+            ));
         }
     }
 
@@ -220,36 +226,41 @@ if (!empty($input->pkey)) {
     $storejson->uuid = $uuid;
     $storejson->created_timestamp = $created_timestamp;
     $storejson->modified_timestamp = $modified_timestamp;
-    $storejson_str = pg_escape_string(json_encode($storejson, JSON_PRETTY_PRINT));
+    $storejson_str = json_encode($storejson, JSON_PRETTY_PRINT);
 
-    $db->query("
+    $db->prepare_query("
         INSERT INTO apprepo.apparatus (
             pkey, facility_pkey, userpkey, uuid, created_timestamp, modified_timestamp,
             name, type, location, apparatus_id, description, json
         ) VALUES (
-            $apparatus_pkey, $facility_pkey, $userpkey, '$uuid', $created_timestamp, $modified_timestamp,
-            '$name', '$type', '$location', '$apparatus_id', '$description', '$storejson_str'
+            $1, $2, $3, $4, $5, $6,
+            $7, $8, $9, $10, $11, $12
         )
-    ");
+    ", array(
+        $apparatus_pkey, $facility_pkey, $userpkey, $uuid, $created_timestamp, $modified_timestamp,
+        $name, $type, $location, $apparatus_id, $description, $storejson_str
+    ));
 
     // Insert parameters
     if (!empty($input->parameters) && is_array($input->parameters)) {
         foreach ($input->parameters as $par) {
             $param_pkey = $db->get_var("SELECT nextval('apprepo.parameter_pkey_seq')");
-            $par_type = pg_escape_string($par->type ?? '');
-            $par_min = pg_escape_string($par->min ?? '');
-            $par_max = pg_escape_string($par->max ?? '');
-            $par_unit = pg_escape_string($par->unit ?? '');
-            $par_prefix = pg_escape_string($par->prefix ?? '');
-            $par_note = pg_escape_string($par->note ?? '');
+            $par_type = $par->type ?? '';
+            $par_min = $par->min ?? '';
+            $par_max = $par->max ?? '';
+            $par_unit = $par->unit ?? '';
+            $par_prefix = $par->prefix ?? '';
+            $par_note = $par->note ?? '';
             $par_created = time();
             $par_modified = time();
 
-            $db->query("
+            $db->prepare_query("
                 INSERT INTO apprepo.apparatus_parameter
-                VALUES ($param_pkey, $apparatus_pkey, $userpkey, $par_created, $par_modified,
-                        '$par_type', '$par_min', '$par_max', '$par_unit', '$par_prefix', '$par_note')
-            ");
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+            ", array(
+                $param_pkey, $apparatus_pkey, $userpkey, $par_created, $par_modified,
+                $par_type, $par_min, $par_max, $par_unit, $par_prefix, $par_note
+            ));
         }
     }
 

@@ -37,10 +37,10 @@ try {
 
     if ($frows) {
         foreach ($frows as $frow) {
-            $fpkey = $frow->pkey;
+            $fpkey = (int)$frow->pkey;
 
             // Get apparatuses for this facility
-            $arows = $db->get_results("SELECT * FROM apprepo.apparatus WHERE facility_pkey = $fpkey ORDER BY modified_timestamp DESC");
+            $arows = $db->get_results_prepared("SELECT * FROM apprepo.apparatus WHERE facility_pkey = $1 ORDER BY modified_timestamp DESC", array($fpkey));
 
             // Only include facilities that have apparatuses
             if ($arows && count($arows) > 0) {

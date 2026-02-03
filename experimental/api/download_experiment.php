@@ -7,7 +7,7 @@
  *   id - Experiment pkey (required)
  *
  * Returns the experiment JSON as a downloadable file.
- * Requires login - user must own the experiment.
+ * Requires login - user must own the experiment OR parent project must be public.
  */
 
 // Change to root directory for proper include path resolution
@@ -45,7 +45,7 @@ include("prepare_connections.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 
-// Query experiment - must be owned by user or user is admin
+// Query experiment - must be owned by user, parent project is public, or user is admin
 if ($is_admin) {
     $row = $db->get_row_prepared("
         SELECT
@@ -70,7 +70,7 @@ if ($is_admin) {
             p.name as project_name
         FROM straboexp.experiment e
         LEFT JOIN straboexp.project p ON e.project_pkey = p.pkey
-        WHERE e.pkey = $1 AND e.userpkey = $2
+        WHERE e.pkey = $1 AND (e.userpkey = $2 OR p.ispublic = true)
     ", array($experiment_pkey, $userpkey));
 }
 
