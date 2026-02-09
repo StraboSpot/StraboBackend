@@ -71,7 +71,7 @@ include 'includes/mheader.php';
 							<p>Edit the startup message displayed in StraboMicro2. A new UUID is generated on each save so the app knows to show the updated message.</p>
 						</header>
 
-<link rel="stylesheet" href="https://unpkg.com/easymde/dist/easymde.min.css">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
 
 <style>
 .editor-toolbar {
@@ -120,27 +120,32 @@ include 'includes/mheader.php';
 	</div>
 </div>
 
-<script src="https://unpkg.com/easymde/dist/easymde.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.js"></script>
 <script>
-var easyMDE = new EasyMDE({
-	element: document.getElementById('messageEditor'),
-	spellChecker: false,
-	autosave: false,
-	toolbar: [
-		'bold', 'italic', 'heading', '|',
-		'unordered-list', 'ordered-list', '|',
-		'link', 'horizontal-rule', '|',
-		'preview', 'side-by-side', 'fullscreen', '|',
-		'guide'
-	],
-	status: false,
-	placeholder: 'Type your message here...'
-});
+var easyMDE = null;
+try {
+	easyMDE = new EasyMDE({
+		element: document.getElementById('messageEditor'),
+		spellChecker: false,
+		autosave: false,
+		toolbar: [
+			'bold', 'italic', 'heading', '|',
+			'unordered-list', 'ordered-list', '|',
+			'link', 'horizontal-rule', '|',
+			'preview', 'side-by-side', 'fullscreen', '|',
+			'guide'
+		],
+		status: false,
+		placeholder: 'Type your message here...'
+	});
+} catch(e) {
+	console.error('EasyMDE failed to initialize:', e);
+}
 
 function saveMessage(){
 	var btn = document.getElementById('saveBtn');
 	var statusDiv = document.getElementById('saveStatus');
-	var message = easyMDE.value();
+	var message = easyMDE ? easyMDE.value() : document.getElementById('messageEditor').value;
 
 	btn.disabled = true;
 	btn.value = 'Saving...';
