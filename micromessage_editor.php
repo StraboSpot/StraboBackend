@@ -135,7 +135,7 @@ try {
 			'preview', 'side-by-side', 'fullscreen', '|',
 			'guide'
 		],
-		status: false,
+		status: [],
 		placeholder: 'Type your message here...'
 	});
 } catch(e) {
