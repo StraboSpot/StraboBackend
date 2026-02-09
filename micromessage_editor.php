@@ -75,52 +75,68 @@ include 'includes/mheader.php';
 
 <style>
 .EasyMDEContainer {
-	background: #fff;
 	border-radius: 6px;
 	overflow: hidden;
 }
-.editor-toolbar {
-	background: #f5f5f5;
-	border-color: #ccc;
-	border-bottom: 1px solid #ccc;
-}
-.editor-toolbar button {
-	color: #333 !important;
-}
-.editor-toolbar button:hover,
-.editor-toolbar button.active {
-	background: #ddd;
-}
-.editor-toolbar i.separator {
-	border-left-color: #ccc;
-	border-right-color: #ccc;
-}
-.CodeMirror {
-	background: #fff;
-	color: #333;
-	border-color: #ccc;
+.EasyMDEContainer .CodeMirror {
+	background: #1c1d26;
+	color: #ccc;
+	border-color: #3a3b4a;
 	min-height: 300px;
 }
-.CodeMirror .CodeMirror-cursor {
-	border-left-color: #333;
+.EasyMDEContainer .cm-s-easymde .CodeMirror-cursor {
+	border-left-color: #ccc;
 }
-.CodeMirror .cm-header {
-	color: #111;
+.EasyMDEContainer .cm-s-easymde .cm-header {
+	color: #fff;
 }
-.CodeMirror .cm-link {
-	color: #0366d6;
+.EasyMDEContainer .cm-s-easymde .cm-link {
+	color: #6cb4ee;
 }
-.CodeMirror .cm-url {
-	color: #0366d6;
+.EasyMDEContainer .cm-s-easymde .cm-url {
+	color: #6cb4ee;
 }
-.editor-statusbar {
-	background: #f5f5f5;
-	border-top: 1px solid #ccc;
-	color: #666;
+.EasyMDEContainer .cm-s-easymde .cm-comment {
+	background: #272833;
 }
-.editor-preview {
-	background: #fff;
-	color: #333;
+.EasyMDEContainer .editor-toolbar {
+	background: #272833;
+	border-color: #3a3b4a;
+}
+.EasyMDEContainer .editor-toolbar button {
+	color: #ccc !important;
+}
+.EasyMDEContainer .editor-toolbar button:hover,
+.EasyMDEContainer .editor-toolbar button.active {
+	background: #3a3b4a;
+}
+.EasyMDEContainer .editor-toolbar i.separator {
+	border-left-color: #3a3b4a;
+	border-right-color: #3a3b4a;
+}
+.EasyMDEContainer .editor-statusbar {
+	background: #272833;
+	border-top: 1px solid #3a3b4a;
+	color: #888;
+}
+.EasyMDEContainer .editor-preview {
+	background: #1c1d26;
+	color: #ccc;
+}
+.EasyMDEContainer .editor-preview h1,
+.EasyMDEContainer .editor-preview h2,
+.EasyMDEContainer .editor-preview h3 {
+	color: #fff;
+}
+.EasyMDEContainer .editor-preview a {
+	color: #6cb4ee;
+}
+.EasyMDEContainer .CodeMirror-fullscreen,
+.EasyMDEContainer .editor-toolbar.fullscreen {
+	background: #1c1d26;
+}
+.EasyMDEContainer .editor-toolbar.fullscreen {
+	background: #272833;
 }
 #saveStatus {
 	margin-top: 15px;
