@@ -67,8 +67,8 @@ include 'includes/mheader.php';
 					<div class="container">
 
 						<header class="major">
-							<h2>StraboMicro Message Editor</h2>
-							<p>Edit the startup message displayed in StraboMicro2. A new UUID is generated on each save so the app knows to show the updated message.</p>
+							<h2>StraboMicro2 Startup Message</h2>
+							<p>Edit the startup message displayed in StraboMicro2.</p>
 						</header>
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
@@ -164,9 +164,6 @@ include 'includes/mheader.php';
 
 <div class="row gtr-uniform gtr-50">
 	<div class="col-12">
-		<?php if($existingUuid){ ?>
-		<div id="currentUuid">Current UUID: <strong><?php echo htmlspecialchars($existingUuid)?></strong></div>
-		<?php } ?>
 		<textarea id="messageEditor"><?php echo htmlspecialchars($existingMessage)?></textarea>
 	</div>
 	<div class="col-12">
@@ -220,7 +217,7 @@ function saveMessage(){
 				var resp = JSON.parse(xhr.responseText);
 				if(resp.success){
 					statusDiv.className = 'success';
-					statusDiv.innerHTML = 'Message saved successfully! New UUID: <strong>' + resp.uuid + '</strong>';
+					statusDiv.innerHTML = 'Message saved successfully!</strong>';
 					statusDiv.style.display = 'block';
 
 					var uuidDiv = document.getElementById('currentUuid');
