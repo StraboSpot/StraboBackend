@@ -74,12 +74,53 @@ include 'includes/mheader.php';
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/easymde@2.18.0/dist/easymde.min.css">
 
 <style>
+.EasyMDEContainer {
+	background: #fff;
+	border-radius: 6px;
+	overflow: hidden;
+}
 .editor-toolbar {
-	border-color: #ddd;
+	background: #f5f5f5;
+	border-color: #ccc;
+	border-bottom: 1px solid #ccc;
+}
+.editor-toolbar button {
+	color: #333 !important;
+}
+.editor-toolbar button:hover,
+.editor-toolbar button.active {
+	background: #ddd;
+}
+.editor-toolbar i.separator {
+	border-left-color: #ccc;
+	border-right-color: #ccc;
 }
 .CodeMirror {
-	border-color: #ddd;
+	background: #fff;
+	color: #333;
+	border-color: #ccc;
 	min-height: 300px;
+}
+.CodeMirror .CodeMirror-cursor {
+	border-left-color: #333;
+}
+.CodeMirror .cm-header {
+	color: #111;
+}
+.CodeMirror .cm-link {
+	color: #0366d6;
+}
+.CodeMirror .cm-url {
+	color: #0366d6;
+}
+.editor-statusbar {
+	background: #f5f5f5;
+	border-top: 1px solid #ccc;
+	color: #666;
+}
+.editor-preview {
+	background: #fff;
+	color: #333;
 }
 #saveStatus {
 	margin-top: 15px;
@@ -100,7 +141,7 @@ include 'includes/mheader.php';
 #currentUuid {
 	font-family: monospace;
 	font-size: 0.85em;
-	color: #666;
+	color: #aaa;
 	margin-bottom: 15px;
 }
 </style>
