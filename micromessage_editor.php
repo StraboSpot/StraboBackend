@@ -127,7 +127,7 @@ try {
 	easyMDE = new EasyMDE({
 		element: document.getElementById('messageEditor'),
 		spellChecker: false,
-		autosave: false,
+		autosave: { enabled: false },
 		toolbar: [
 			'bold', 'italic', 'heading', '|',
 			'unordered-list', 'ordered-list', '|',
@@ -135,7 +135,6 @@ try {
 			'preview', 'side-by-side', 'fullscreen', '|',
 			'guide'
 		],
-		status: [],
 		placeholder: 'Type your message here...'
 	});
 } catch(e) {
