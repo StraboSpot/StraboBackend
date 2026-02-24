@@ -33,7 +33,7 @@ if (!isset($input['email']) || !isset($input['password'])) {
     exit;
 }
 
-$email = trim($input['email']);
+$email = strtolower(trim($input['email']));
 $password = $input['password'];
 
 // Validate credentials using prepared statement
