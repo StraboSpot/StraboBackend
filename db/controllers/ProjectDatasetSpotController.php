@@ -88,7 +88,7 @@ class ProjectDatasetSpotController extends MyController
 
 			$injson = json_encode($upload['project']);
 			// Determine if this is a collaborative edit (user is collaborator, not owner)
-			$isCollaborativeEdit = ($context && $context->permissionLevel === 'edit' && !$context->isOwner);
+			$isCollaborativeEdit = ($context && $context->permissionLevel === 'edit' && !$context->isOwner());
 			$this->strabo->insertProject($injson, null, $isCollaborativeEdit, $userpkey);
 
 			if($datasetid!=""){

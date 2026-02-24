@@ -131,7 +131,7 @@ class ProjectController extends MyController
 
 				// Determine if this is a collaborative edit (user is collaborator, not owner)
 				$originalUserpkey = $this->strabo->userpkey;
-				$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner);
+				$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner());
 				$ownerPkey = $context->effectiveOwner;
 
 				// Set effective owner for the operation

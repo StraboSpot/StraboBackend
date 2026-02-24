@@ -37,7 +37,7 @@ class ProjectDatasetsController extends MyController
 			$data = $this->strabo->getProjectDatasets(
 				$projectId,
 				$originalUserpkey,
-				$context->isOwner,
+				$context->isOwner(),
 				$context->isHalted,
 				$context->permissionLevel
 			);
