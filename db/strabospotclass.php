@@ -4486,19 +4486,42 @@ public function getSpotName($id){
 
 		if($count > 0){
 
-			$x = 0;
+			// Collect unique owner pkeys for batch lookup
+			$ownerPkeys = array();
+			$datasetRows = array();
 
 			foreach($featuredata as $fd){
-
 				$fd = $fd->get("d")->values();
+				$datasetRows[] = $fd;
+				$ownerPkey = $fd['created_by'] ?? $fd['userpkey'];
+				if($ownerPkey !== null){
+					$ownerPkeys[$ownerPkey] = true;
+				}
+			}
+
+			// Batch lookup owner names and emails from PostgreSQL
+			$ownerInfo = array();
+			foreach(array_keys($ownerPkeys) as $pkey){
+				$user = $this->db->get_row_prepared("SELECT firstname, lastname, email FROM users WHERE pkey = $1", array($pkey));
+				if($user){
+					$ownerInfo[$pkey] = array(
+						'name' => trim($user->firstname . ' ' . $user->lastname),
+						'email' => $user->email
+					);
+				}
+			}
+
+			$x = 0;
+
+			foreach($datasetRows as $fd){
 
 				// Determine readonly status using new collaboration model
 				$readonly = true;
+				$datasetOwnerPkey = $fd['created_by'] ?? $fd['userpkey'];
 
 				if($isOwner){
 					// Owner can always edit their own datasets (created_by matches or no created_by)
-					$datasetCreatedBy = $fd['created_by'] ?? $fd['userpkey'];
-					if($datasetCreatedBy == $originalUserpkey || $isHalted){
+					if($datasetOwnerPkey == $originalUserpkey || $isHalted){
 						// Owner's dataset or halted project
 						$readonly = false;
 					}
@@ -4513,6 +4536,12 @@ public function getSpotName($id){
 
 				$data['datasets'][$x] = $this->singleDatasetJSON($fd);
 				$data['datasets'][$x]['isReadOnly'] = $readonly;
+
+				// Add dataset owner info
+				if($datasetOwnerPkey !== null && isset($ownerInfo[$datasetOwnerPkey])){
+					$data['datasets'][$x]['owner_name'] = $ownerInfo[$datasetOwnerPkey]['name'];
+					$data['datasets'][$x]['owner_email'] = $ownerInfo[$datasetOwnerPkey]['email'];
+				}
 
 				$x++;
 			}
