@@ -90,10 +90,12 @@ $notes = $pd->text($data->notes);
 									<!-- Figure out if there are any older "non beta" releases to show: -->
 									<?php
 										$showcount = 0;
+										$showrecords = [];
 										for($x = 1; $x < count($datas); $x++){
 											$adata = $datas[$x];
 											if (!$adata->prerelease) {
 												$showcount++;
+												$showrecords[] = $adata;
 											}
 										}
 									?>									
@@ -106,17 +108,17 @@ $notes = $pd->text($data->notes);
 										<summary><h3 style="display:inline;">Older Releases:</h3></summary>
 										<div style="margin-left:50px;">
 											<?php
-											for($x = 1; $x < count($datas); $x++){
-												$notes = $pd->text($datas[$x]->notes);
+											foreach($showrecords as $showrecord){
+												$notes = $pd->text($showrecord->notes);
 											?>
 
 											<div style="padding-top:40px;">
-												<h3>Release Date: <?php echo $datas[$x]->date?></h3>
+												<h3>Release Date: <?php echo $showrecord->date?></h3>
 												<h3>Downloads:</h3>
 												<div style="padding-left:20px;">
 													<ul>
 										<?php
-											foreach($datas[$x]->assets as $a){
+											foreach($showrecord->assets as $a){
 										?>
 														<li><?php echo $a->platform; ?>: <a href="<?php echo $a->url; ?>" target="_blank"><?php echo $a->name; ?></a></li>
 										<?php
