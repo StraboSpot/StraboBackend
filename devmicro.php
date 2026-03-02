@@ -6,6 +6,7 @@ function dumpVar($var){
 	echo "</pre>";
 }
 
+//Production: https://raw.githubusercontent.com/jasonash/StraboMicro2/refs/heads/main/releases.json
 
 $json = file_get_contents("https://raw.githubusercontent.com/jasonash/StraboMicro2/refs/heads/develop/dev-releases.json");
 $data = json_decode($json);
