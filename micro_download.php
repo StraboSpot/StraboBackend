@@ -22,6 +22,19 @@ $notes = $pd->text($data->notes);
 * {
   /*outline: 1px solid red;*/
 }
+li.recommended {
+  background: rgba(76, 232, 96, 0.15);
+  border: 1px solid #4ce860;
+  border-radius: 6px;
+  padding: 6px 10px !important;
+  margin-left: -10px;
+}
+li.recommended::after {
+  content: ' \2190 Recommended for your system';
+  color: #4ce860;
+  font-weight: bold;
+  font-size: 0.85em;
+}
 </style>
 
 
@@ -63,7 +76,7 @@ $notes = $pd->text($data->notes);
 							<?php
 								foreach($data->assets as $a){
 							?>
-											<li><?php echo $a->platform; ?>: <a href="<?php echo $a->url; ?>" target="_blank"><?php echo $a->name; ?></a></li>
+											<li data-platform="<?php echo htmlspecialchars($a->platform); ?>"><?php echo $a->platform; ?>: <a href="<?php echo $a->url; ?>" target="_blank"><?php echo $a->name; ?></a></li>
 							<?php
 							}
 							?>
@@ -157,6 +170,90 @@ $notes = $pd->text($data->notes);
 				</div>
 
 <div class="bottomSpacer"></div>
+
+<script>
+(function() {
+	var ua = navigator.userAgent;
+	var platform = navigator.platform || '';
+	var detected = '';
+
+	if (/Win/.test(platform)) {
+		detected = 'Windows';
+	} else if (/Mac/.test(platform)) {
+		// Try to detect Apple Silicon vs Intel
+		// navigator.userAgentData is Chromium-only but gives architecture
+		if (navigator.userAgentData && navigator.userAgentData.getHighEntropyValues) {
+			navigator.userAgentData.getHighEntropyValues(['architecture']).then(function(vals) {
+				if (vals.architecture === 'arm') {
+					highlight('macOS (Apple Silicon)');
+				} else {
+					highlight('macOS (Intel)');
+				}
+			}).catch(function() {
+				highlightBoth();
+			});
+			return; // async path handles it
+		}
+		// For Safari/Firefox on Apple Silicon, we can check WebGL renderer
+		try {
+			var canvas = document.createElement('canvas');
+			var gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
+			if (gl) {
+				var debugInfo = gl.getExtension('WEBGL_debug_renderer_info');
+				if (debugInfo) {
+					var renderer = gl.getParameter(debugInfo.UNMASKED_RENDERER_WEBGL);
+					if (/Apple M/.test(renderer) || /Apple GPU/.test(renderer)) {
+						detected = 'macOS (Apple Silicon)';
+					} else {
+						detected = 'macOS (Intel)';
+					}
+				}
+			}
+		} catch(e) {}
+		if (!detected) {
+			// Can't distinguish - highlight both macOS options
+			highlightBoth();
+			return;
+		}
+	} else if (/Linux/.test(platform)) {
+		detected = 'Linux';
+	}
+
+	if (detected) highlight(detected);
+
+	function highlight(name) {
+		// Only highlight in the first (latest release) download list
+		var mainSection = document.getElementById('content');
+		if (!mainSection) return;
+		var firstUl = mainSection.querySelector('ul');
+		if (!firstUl) return;
+		var items = firstUl.querySelectorAll('li[data-platform]');
+		for (var i = 0; i < items.length; i++) {
+			if (name === 'Linux') {
+				if (items[i].getAttribute('data-platform').indexOf('Linux') === 0) {
+					items[i].classList.add('recommended');
+				}
+			} else if (items[i].getAttribute('data-platform') === name) {
+				items[i].classList.add('recommended');
+			}
+		}
+	}
+
+	function highlightBoth() {
+		var mainSection = document.getElementById('content');
+		if (!mainSection) return;
+		var firstUl = mainSection.querySelector('ul');
+		if (!firstUl) return;
+		var items = firstUl.querySelectorAll('li[data-platform]');
+		for (var i = 0; i < items.length; i++) {
+			var p = items[i].getAttribute('data-platform');
+			if (p === 'macOS (Apple Silicon)' || p === 'macOS (Intel)') {
+				items[i].classList.add('recommended');
+			}
+		}
+	}
+})();
+</script>
 
 
 
