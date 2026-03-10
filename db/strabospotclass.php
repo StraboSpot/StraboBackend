@@ -4711,9 +4711,9 @@ public function getSpotName($id){
 					header("Dataset added to project", true, 201);
 					$data['message']="Dataset $datasetid added to project $feature_id.";
 				}else{
-					// Dataset already exists in this project - return success for idempotency
-					header("Dataset already in project", true, 200);
-					$data['message']="Dataset $datasetid already exists in project $feature_id.";
+					// Dataset already exists in this project - return same success for idempotency
+					header("Dataset added to project", true, 201);
+					$data['message']="Dataset $datasetid added to project $feature_id.";
 				}
 
 			}else{
