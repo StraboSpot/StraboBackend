@@ -1,15 +1,4 @@
-<?php
-/**
- * File: help.php
- * Description: Help documentation and user guide
- *
- * @package    StraboSpot Web Site
- * @author     Jason Ash <jasonash@ku.edu>
- * @copyright  2025 StraboSpot
- * @license    https://opensource.org/licenses/MIT MIT License
- * @link       https://strabospot.org
- */
-
+<?
 include 'includes/mheader.php';
 ?>
 
@@ -21,6 +10,10 @@ include 'includes/mheader.php';
 							<h2>Strabo Help</h2>
 						</header>
 
+
+
+
+
 <div class="medHeader" style="padding-top:20px;padding-bottom:20px;text-align:center;">
 Want in-person help?<br>Register for StraboSpot Help Office Hours held every Thursday between 1-3 pm CDT UTC-5
 <br>
@@ -28,9 +21,17 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 </div>
 <div class="medHeader" style="padding-top:10px;text-align:center;">QUESTIONS? CONTACT US AT <a href="mailto:strabospot@gmail.com?subject=Strabo Question">STRABOSPOT@GMAIL.COM</a></div>
 
+
+
+
+
+
+
+
+
 <h2 style="padding-top:30px;">STRABOFIELD</h2>
 <div style="padding-left:50px;">
-
+	
 	<!--
 	<div class="medHeader" style="padding-top:30px;">STRABOSPOT1 HELP DOCUMENTATION</div>
 	<div style="padding-left:40px;">
@@ -43,7 +44,7 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 		</div>
 	</div>
 	-->
-
+	
 	<div class="medHeader" style="padding-top:30px;">STRABOFIELD HELP DOCUMENTATION</div>
 	<div style="padding-left:40px;">
 		<div style="padding-left:30px;padding-top:5px;">
@@ -53,10 +54,11 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 				<li><a href="/files/helpFiles/Sharing_Projects_Between_Devices.pdf" target="_blank">Sharing Projects Between Devices</a>
 				<li><a href="/files/helpFiles/Moving_StraboField_Project_Backups.pdf" target="_blank">StraboField Moving Project Backups out of StraboField</a>
 				<li><a href="/exportproject2">StraboField Export StraboMobile Project to PC or Mac</a>
+				<li><a href="/StraboSpotOfflineManual">StraboSpot Offline Manual</a>
 			</ul>
 		</div>
 	</div>
-
+	
 	<div class="medHeader" style="padding-top:30px;">STRABOFIELD VIDEO TUTORIALS</div>
 	<a class="medHeader" href="https://youtube.com/playlist?list=PL3jEmSMv6rzHysg-mEVx_yhaXStgK8MV5&feature=shared" target="_blank">StraboField Basics Video Playlist</a>
 	<div style="padding-left:40px;">
@@ -83,6 +85,9 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 	</div>
 </div>
 
+
+
+
 <h2 style="padding-top:30px;">STRABOMICRO</h2>
 <div style="padding-left:50px;">
 	<div class="medHeader" style="padding-left:0px;"><a href="/manual/micro" target="_blank">StraboMicro User Guide</a></div>
@@ -105,11 +110,16 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 	</div>
 </div>
 
+
+
 <h2 style="padding-top:30px;">STRABOEXPERIMENTAL</h2>
 <div style="padding-left:50px;">
 	<!--<div class="medHeader" style="padding-top:30px;">STRABOEXPERIMENTAL VIDEO TUTORIALS</div>-->
-	<div class="medHeader" style="padding-left:20px;"><a href="/files/StraboExperimental_Manual.pdf" target="_blank">StraboExperimental Manual</a></div>
+	<div class="medHeader" style="padding-left:20px;"><a href="/manual/experimental" target="_blank">StraboExperimental Manual</a></div>
 </div>
+
+
+
 
 <h2 style="padding-top:30px;">STRABOTOOLS</h2>
 <div style="padding-left:50px;">
@@ -129,10 +139,12 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 	</div>
 </div>
 
+
+
 <h2 style="padding-top:30px;">ADDITIONAL HELP VIDEOS</h2>
 <div style="padding-left:50px;">
 	<div class="medHeader" style="padding-top:30px;">Handling StraboSpot Data:</div>
-
+	
 	<div style="padding-left:40px;">
 	<div style="padding-left:30px;padding-top:5px;">
 		<ul class="medHeader">
@@ -140,9 +152,13 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 		</ul>
 	</div>
 	</div>
-
+	
+	
+	
+	
+	
 	<div class="medHeader" style="padding-top:30px;">StraboSpot Online Search:</div>
-
+	
 	<div style="padding-left:40px;">
 	<div style="padding-left:30px;padding-top:5px;">
 		<ul class="medHeader">
@@ -151,20 +167,42 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 		</ul>
 	</div>
 	</div>
-
+	
+	
+	
+	
+	
+	
 	<div class="medHeader" style="padding-top:30px;">Strabo Sedimentary Workshop:</div>
-
+	
 	<div style="padding-left:40px;">
 	<div style="padding-left:30px;padding-top:5px;">
 		<ul class="medHeader">
 			<li><a href="https://youtu.be/xgqHj410MYA" target="_blank">Strabo Sedimentary Workshop - Day 1</a></li>
 			<li><a href="https://youtu.be/ls5DHWD8NW4" target="_blank">Strabo Sedimentary Workshop - Day 2</a></li>
 			<li><a href="https://youtu.be/oqcCptGIhIM" target="_blank">Strabo Sedimentary Workshop - Day 3</a></li>
-
+	
 		</ul>
 	</div>
 	</div>
 </div>
+	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 <a name="logos"></a>
 <h2 style="padding-top:30px;">LOGOS FOR PUBLICATION</h2>
@@ -187,6 +225,11 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 	</div>
 </div>
 
+
+
+
+
+
 <a name="citationinfo"></a>
 <br>
 <h2 style="padding-top:30px;">CITATION INFORMATION</h2>
@@ -204,6 +247,7 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 	</div>
 	</div>
 
+
 	<div class="medHeader" style="padding-top:30px;">In text MLA:</div>
 	<div style="padding-left:40px;">
 	<div style="padding-left:30px;padding-top:5px;">
@@ -212,6 +256,7 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 		</ul>
 	</div>
 	</div>
+
 
 	<div class="medHeader" style="padding-top:30px;">APA Format:</div>
 	<div style="padding-left:40px;">
@@ -224,6 +269,7 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 	</div>
 	</div>
 
+
 	<div class="medHeader" style="padding-top:30px;">In text APA:</div>
 	<div style="padding-left:40px;">
 	<div style="padding-left:30px;padding-top:5px;">
@@ -233,7 +279,69 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 	</div>
 	</div>
 
+
+
+
+
+
 </div>
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 <!--
 <div class="medHeader" style="padding-top:30px;text-align:center;">QUESTIONS? CONTACT US AT <a href="mailto:strabospot@gmail.com?subject=Strabo Question">STRABOSPOT@GMAIL.COM</a></div>
@@ -276,6 +384,7 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/tJModu2grzspEtVI7j
 			<li><a href="https://youtu.be/_LDcNATg0fc" target="blank">Getting started - All about StraboSpot Tags</a>
 		</ul>
 	</div>
+
 
 	<div class="medHeader" style="padding-top:30px;">Setting up StraboSpot before the field:</div>
 	<div style="padding-left:30px;padding-top:5px;">
@@ -324,11 +433,28 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/tJModu2grzspEtVI7j
 </div>
 -->
 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 					<div class="bottomSpacer"></div>
 
 					</div>
 				</div>
 
-<?php
+
+<?
 include 'includes/mfooter.php';
 ?>

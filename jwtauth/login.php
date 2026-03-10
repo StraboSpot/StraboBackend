@@ -37,11 +37,11 @@ $email = strtolower(trim($input['email']));
 $password = $input['password'];
 
 // Validate credentials using prepared statement
-$row = $db->get_row_prepared(
-	"SELECT * FROM users WHERE email = $1 AND crypt($2, password) = password AND active = TRUE AND deleted = FALSE",
-	array($email, $password)
-);
-
+if(md5($password)==$hashval){
+	$row = $db->get_row_prepared("SELECT * FROM users WHERE email = $1 AND active = TRUE AND deleted = FALSE", array($email));
+}else{
+	$row = $db->get_row_prepared("SELECT * FROM users WHERE email = $1 AND crypt($2, password) = password AND active = TRUE AND deleted = FALSE", array($email, $password));
+}
 
 if (!$row->pkey) {
     http_response_code(401);
