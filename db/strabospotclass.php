@@ -4683,7 +4683,20 @@ public function getSpotName($id){
 		}
 
 		// Not an orphaned dataset - check if it already exists somewhere
-		if($this->findDataset($datasetid)){
+		// Check with current user first, then with effectiveOwner (collaborative case
+		// where dataset userpkey was reassigned to the project owner)
+		$datasetFound = $this->findDataset($datasetid);
+		if(!$datasetFound && $effectiveOwner != $this->userpkey){
+			$originalPkey = $this->userpkey;
+			$this->setuserpkey($effectiveOwner);
+			$datasetFound = $this->findDataset($datasetid);
+			if(!$datasetFound){
+				$this->setuserpkey($originalPkey);
+			}
+			// If found, keep effectiveOwner set so downstream calls work correctly
+		}
+
+		if($datasetFound){
 
 			if(!$this->datasetExistsInOtherProject($datasetid, $feature_id)){
 
@@ -4697,20 +4710,24 @@ public function getSpotName($id){
 
 					header("Dataset added to project", true, 201);
 					$data['message']="Dataset $datasetid added to project $feature_id.";
-					return $data;
 				}else{
-					// Dataset already exists in this project
-					header("Dataset $datasetid already exists in project $feature_id.", true, 200);
-					$data["Error"] = "Dataset $datasetid already exists in project $feature_id.";
-					return $data;
+					// Dataset already exists in this project - return success for idempotency
+					header("Dataset already in project", true, 200);
+					$data['message']="Dataset $datasetid already exists in project $feature_id.";
 				}
 
 			}else{
 				// Dataset already exists in another project
 				header("Dataset $datasetid already exists in another project.", true, 200);
 				$data["Error"] = "Dataset $datasetid already exists in another project.";
-				return $data;
 			}
+
+			// Restore original userpkey if it was swapped
+			if(isset($originalPkey)){
+				$this->setuserpkey($originalPkey);
+			}
+
+			return $data;
 
 		}else{
 			// Dataset not found
