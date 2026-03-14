@@ -99,6 +99,24 @@ if($_POST['submit']!=""){
 	$userid = $neodb->get_var("match (a:User) where a.userpkey=".$userpkey." return id(a)");
 	$neodb->addRelationship($userid, $projectid, "HAS_PROJECT");
 
+	// Also insert into PostgreSQL project table (needed for collaboration invitations)
+	$strabo_project_id = json_decode($injson)->id;
+	$pg_project_name = pg_escape_string($projectname);
+	$pg_notes = pg_escape_string($notes);
+	$pg_project_pkey = $db->get_var("select nextval('project_project_pkey_seq')");
+	$db->query("insert into project values
+		(	$pg_project_pkey,
+			$userpkey,
+			'$pg_project_name',
+			'$strabo_project_id',
+			false,
+			null,
+			now(),
+			'$pg_notes',
+			to_tsvector('$pg_project_name $pg_notes')
+		)
+	");
+
 	//********************************************************************
 	// also create new dataset node, and link to project
 	//********************************************************************
