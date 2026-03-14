@@ -110,10 +110,16 @@ Register here: <a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8
 	</div>
 </div>
 
+<A name="strabomicro2" style="scroll-margin-top: 100px;"></A>
+<h2 style="padding-top:30px;">STRABOMICRO2</h2>
+<div style="padding-left:50px;padding-bottom:30px;">
+	<div class="medHeader" style="padding-left:0px;"><a href="/manual/micro2" target="_blank">StraboMicro2 User Guide</a></div>
+	<div class="medHeader" style="padding-left:0px;"><a href="/files/strabomicro2_improvements_over_legacy.pdf" target="_blank">StraboMicro2 Improvements Over StraboMicro</a></div>
+</div>
 
 
 <h2 style="padding-top:30px;">STRABOEXPERIMENTAL</h2>
-<div style="padding-left:50px;">
+<div style="padding-left:50px;padding-bottom:30px;">
 	<!--<div class="medHeader" style="padding-top:30px;">STRABOEXPERIMENTAL VIDEO TUTORIALS</div>-->
 	<div class="medHeader" style="padding-left:20px;"><a href="/manual/experimental" target="_blank">StraboExperimental Manual</a></div>
 </div>
