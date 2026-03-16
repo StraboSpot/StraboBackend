@@ -2136,7 +2136,7 @@ const VARIABLE_TO_CATEGORIES = {
   'Connected Porosity': ['percentage'],
   'Unconnected Porosity': ['percentage'],
   'Total Porosity': ['percentage'],
-  'Density': ['mass', 'volume'],
+  // Note: Density (mass/volume) has no matching compound unit in UNIT_TYPES, so it falls back to the full list
   'Permeability (Gas)': ['permeability'],
   'Permeability (Water)': ['permeability'],
   'Temperature': ['temperature'],
