@@ -72,7 +72,7 @@
           :options="unitOptions"
           placeholder="Select..."
           showClear
-          filter
+          :filter="unitOptions.length > 8"
           class="w-full"
         />
       </div>

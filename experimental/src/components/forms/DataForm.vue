@@ -31,6 +31,7 @@
                   :options="DATA_SOURCE_TYPES"
                   placeholder="Select..."
                   showClear
+                  filter
                   class="w-full"
                   @change="onDataSourceChange"
                 />
@@ -136,6 +137,7 @@
                       :options="DATA_PARAMETER_CONTROLS"
                       placeholder="Select..."
                       showClear
+                      filter
                       class="w-full"
                       @update:modelValue="(val) => { if (param.unit && !getUnitsForVariable(val).includes(param.unit)) param.unit = '' }"
                     />
@@ -152,6 +154,7 @@
                       :options="getUnitsForVariable(param.control)"
                       placeholder="Unit"
                       showClear
+                      :filter="getUnitsForVariable(param.control).length > 8"
                       class="w-full"
                     />
                   </div>
@@ -161,6 +164,7 @@
                       :options="UNIT_PREFIXES"
                       placeholder="-"
                       showClear
+                      filter
                       class="w-full"
                     />
                   </div>
@@ -231,6 +235,7 @@
                           :options="CHANNEL_HEADER_TYPES"
                           placeholder="Select..."
                           showClear
+                          filter
                           class="w-full"
                           @change="onHeaderTypeChange"
                         />
@@ -247,6 +252,7 @@
                           :options="specAOptions"
                           placeholder="Select..."
                           showClear
+                          :filter="specAOptions.length > 8"
                           class="w-full"
                         />
                         <InputText
@@ -263,6 +269,7 @@
                           :options="specBOptions"
                           placeholder="Select..."
                           showClear
+                          :filter="specBOptions.length > 8"
                           class="w-full"
                         />
                         <InputText
@@ -286,6 +293,7 @@
                           :options="unitOptions"
                           placeholder="Select..."
                           showClear
+                          :filter="unitOptions.length > 8"
                           class="w-full"
                         />
                         <InputText
@@ -315,6 +323,7 @@
                           :options="channelNumbers"
                           placeholder="Select..."
                           showClear
+                          filter
                           class="w-full"
                         />
                       </div>
@@ -481,6 +490,7 @@
                               :options="SOLUTE_COMPONENTS"
                               placeholder="Select..."
                               showClear
+                              filter
                               class="w-full"
                             />
                           </div>

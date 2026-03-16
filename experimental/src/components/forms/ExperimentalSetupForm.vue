@@ -120,6 +120,7 @@
                   :options="GEOMETRY_MATERIALS"
                   placeholder="Select..."
                   showClear
+                  filter
                 />
               </div>
             </div>
@@ -148,6 +149,7 @@
                       @update:modelValue="(val) => { const c = { variable: val }; if (dim.unit && !getUnitsForVariable(val).includes(dim.unit)) c.unit = ''; updateDimension(item, dimIdx, c, update) }"
                       :options="DIMENSION_VARIABLES"
                       placeholder="Select..."
+                      filter
                     />
                   </div>
                   <div class="field dim-value">
@@ -163,6 +165,7 @@
                       :modelValue="dim.unit"
                       @update:modelValue="updateDimension(item, dimIdx, 'unit', $event, update)"
                       :options="getUnitsForVariable(dim.variable)"
+                      :filter="getUnitsForVariable(dim.variable).length > 8"
                     />
                   </div>
                   <div class="field dim-prefix">
@@ -171,6 +174,7 @@
                       :modelValue="dim.prefix"
                       @update:modelValue="updateDimension(item, dimIdx, 'prefix', $event, update)"
                       :options="prefixOptions"
+                      filter
                     />
                   </div>
                   <div class="field flex-1">

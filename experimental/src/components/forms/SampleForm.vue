@@ -52,6 +52,7 @@
             :options="MATERIAL_TYPES"
             placeholder="Select..."
             showClear
+            filter
             :invalid="!form.material.material.type"
             @update:modelValue="handleMaterialTypeChange"
           />
@@ -115,6 +116,7 @@
                   :options="MINERAL_TYPES"
                   placeholder="Select..."
                   showClear
+                  filter
                 />
               </div>
               <div class="field flex-1" v-if="isOther(item.mineral)">
@@ -262,6 +264,7 @@
                   :options="SAMPLE_PARAMETER_TYPES"
                   placeholder="Select..."
                   showClear
+                  filter
                 />
               </div>
               <div class="field flex-1" v-if="isOther(item.control)">
@@ -286,6 +289,7 @@
                   @update:modelValue="update('unit', $event)"
                   :options="getUnitsForVariable(item.control)"
                   showClear
+                  :filter="getUnitsForVariable(item.control).length > 8"
                 />
               </div>
               <div class="field w-24">
@@ -294,6 +298,7 @@
                   :modelValue="item.prefix"
                   @update:modelValue="update('prefix', $event)"
                   :options="prefixOptions"
+                  filter
                 />
               </div>
             </div>

@@ -23,6 +23,7 @@
           :options="affiliationOptions"
           placeholder="Select..."
           showClear
+          filter
         />
       </div>
       <div class="field">

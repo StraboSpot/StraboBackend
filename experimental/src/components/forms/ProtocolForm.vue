@@ -33,6 +33,7 @@
                   optionValue="value"
                   placeholder="Select step type..."
                   showClear
+                  :filter="availableFeatures.length > 8"
                   class="w-full"
                 />
               </div>
@@ -84,6 +85,7 @@
                       :options="PROTOCOL_CONTROL_VARIABLES"
                       placeholder="Select..."
                       showClear
+                      filter
                       class="w-full"
                       @update:modelValue="(val) => { if (param.unit && !getUnitsForVariable(val).includes(param.unit)) param.unit = '' }"
                     />
@@ -101,6 +103,7 @@
                       :options="getUnitsForVariable(param.control)"
                       placeholder="Unit"
                       showClear
+                      :filter="getUnitsForVariable(param.control).length > 8"
                       class="w-full"
                     />
                   </div>
