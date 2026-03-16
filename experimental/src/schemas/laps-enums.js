@@ -328,23 +328,22 @@ export const GROUPED_FEATURES = [
 // ===== APPARATUS PARAMETER TYPES =====
 // From old app
 export const PARAMETER_TYPES = [
-  'Confining Pressure Pc',
-  'Pore Pressure Pp',
-  'Differential Stress σ1-σ3',
-  'Maximum Stress σ1',
-  'Intermediate Stress σ2',
-  'Minimum Stress σ3',
-  'Temperature T',
-  'Displacement',
-  'Strain Rate',
-  'Force',
-  'Torque',
-  'RPM',
-  'Frequency',
-  'Amplitude',
+  'Confining Pressure',
+  'Effective Pressure',
+  'Pore Pressure',
+  'Temperature',
+  'σ1-Displacement',
+  'σ2-Displacement',
+  'σ3-Displacement',
+  'σ1-Load',
+  'σ2-Load',
+  'σ3-Load',
+  'Displacement Rate',
+  'Loading Rate',
+  'Stiffness',
   'Sample Diameter',
   'Sample Length',
-  'Other'
+  'Permeability'
 ]
 
 // ===== UNIT TYPES =====
@@ -2114,22 +2113,21 @@ const UNIT_CATEGORIES = {
 // Variables not listed here fall back to the full UNIT_TYPES list
 const VARIABLE_TO_CATEGORIES = {
   // PARAMETER_TYPES (Apparatus)
-  'Confining Pressure Pc': ['pressure'],
-  'Pore Pressure Pp': ['pressure'],
-  'Differential Stress σ1-σ3': ['pressure'],
-  'Maximum Stress σ1': ['pressure'],
-  'Intermediate Stress σ2': ['pressure'],
-  'Minimum Stress σ3': ['pressure'],
-  'Temperature T': ['temperature'],
-  'Displacement': ['length'],
-  'Strain Rate': ['rate'],
-  'Force': ['force'],
-  'Torque': ['force', 'length'],
-  'RPM': ['count', 'frequency'],
-  'Frequency': ['frequency'],
-  'Amplitude': ['length'],
+  'Confining Pressure': ['pressure'],
+  'Effective Pressure': ['pressure'],
+  'Pore Pressure': ['pressure'],
+  'σ1-Displacement': ['length'],
+  'σ2-Displacement': ['length'],
+  'σ3-Displacement': ['length'],
+  'σ1-Load': ['force'],
+  'σ2-Load': ['force'],
+  'σ3-Load': ['force'],
+  'Displacement Rate': ['rate'],
+  'Loading Rate': ['rate'],
+  'Stiffness': ['stiffness'],
   'Sample Diameter': ['length'],
   'Sample Length': ['length'],
+  'Permeability': ['permeability'],
 
   // SAMPLE_PARAMETER_TYPES
   'Weight': ['mass'],
