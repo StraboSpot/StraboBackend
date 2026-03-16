@@ -85,6 +85,7 @@
                       placeholder="Select..."
                       showClear
                       class="w-full"
+                      @update:modelValue="(val) => { if (param.unit && !getUnitsForVariable(val).includes(param.unit)) param.unit = '' }"
                     />
                   </div>
                   <div class="param-col param-col-value">
@@ -97,7 +98,7 @@
                   <div class="param-col param-col-unit">
                     <Select
                       v-model="param.unit"
-                      :options="UNIT_TYPES"
+                      :options="getUnitsForVariable(param.control)"
                       placeholder="Unit"
                       showClear
                       class="w-full"
@@ -202,7 +203,7 @@ import { ref, computed, watch } from 'vue'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
-import { PROTOCOL_CONTROL_VARIABLES, UNIT_TYPES, APPARATUS_FEATURES } from '@/schemas/laps-enums.js'
+import { PROTOCOL_CONTROL_VARIABLES, UNIT_TYPES, APPARATUS_FEATURES, getUnitsForVariable } from '@/schemas/laps-enums.js'
 
 const props = defineProps({
   initialData: {

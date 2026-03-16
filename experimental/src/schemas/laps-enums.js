@@ -2084,3 +2084,132 @@ export const PROTOCOL_CONTROL_VARIABLES = [
   'Humidity',
   'Count'
 ]
+
+// ===== VARIABLE-TO-UNIT MAPPING =====
+// Maps physical quantity categories to applicable UNIT_TYPES values
+// Used to filter the unit dropdown based on the selected variable/parameter
+
+const UNIT_CATEGORIES = {
+  temperature: ['degC', 'degK'],
+  time: ['sec', 'min', 'hour'],
+  electrical: ['Volt', 'mV', 'Amperage', 'mA', 'Ohm'],
+  pressure: ['Pa', 'MPa', 'GPa', 'bar', 'kbar'],
+  force: ['N', 'kN'],
+  mass: ['g', 'mg', 'μg'],
+  length: ['m', 'cm', 'mm', 'μm'],
+  frequency: ['Hz', 'kHz', 'MHz'],
+  viscosity: ['Pa·s'],
+  permeability: ['Darcy', 'mDarcy'],
+  strain: ['milistrain', '%'],
+  rate: ['mm·sec-1', 'N·sec-1', 'sec-1'],
+  stiffness: ['kN·mm-1'],
+  percentage: ['%'],
+  count: ['count'],
+  volume: ['cc', 'mm3'],
+  area: ['m2'],
+  inverseLength: ['m-1']
+}
+
+// Maps variable/parameter names to their applicable unit categories
+// Variables not listed here fall back to the full UNIT_TYPES list
+const VARIABLE_TO_CATEGORIES = {
+  // PARAMETER_TYPES (Apparatus)
+  'Confining Pressure Pc': ['pressure'],
+  'Pore Pressure Pp': ['pressure'],
+  'Differential Stress σ1-σ3': ['pressure'],
+  'Maximum Stress σ1': ['pressure'],
+  'Intermediate Stress σ2': ['pressure'],
+  'Minimum Stress σ3': ['pressure'],
+  'Temperature T': ['temperature'],
+  'Displacement': ['length'],
+  'Strain Rate': ['rate'],
+  'Force': ['force'],
+  'Torque': ['force', 'length'],
+  'RPM': ['count', 'frequency'],
+  'Frequency': ['frequency'],
+  'Amplitude': ['length'],
+  'Sample Diameter': ['length'],
+  'Sample Length': ['length'],
+
+  // SAMPLE_PARAMETER_TYPES
+  'Weight': ['mass'],
+  'Connected Porosity': ['percentage'],
+  'Unconnected Porosity': ['percentage'],
+  'Total Porosity': ['percentage'],
+  'Density': ['mass', 'volume'],
+  'Permeability (Gas)': ['permeability'],
+  'Permeability (Water)': ['permeability'],
+  'Temperature': ['temperature'],
+  'Humidity': ['percentage'],
+  'Fluid Saturation': ['percentage'],
+  'Stress': ['pressure'],
+
+  // DIMENSION_VARIABLES
+  'Length': ['length'],
+  'Diameter': ['length'],
+  'Width': ['length'],
+  'Span': ['length'],
+  'Height': ['length'],
+  'Wall Thickness': ['length'],
+  'Bore Diameter': ['length'],
+
+  // PROTOCOL_CONTROL_VARIABLES
+  'Time t': ['time'],
+  'Stress σ1': ['pressure'],
+  'Strain ε1': ['strain'],
+  'Strain Rate ε1/dt': ['rate'],
+  'Displacement Δs1': ['length'],
+  'Force F2': ['force'],
+  'Stress σ2': ['pressure'],
+  'Strain ε2': ['strain'],
+  'Strain Rate ε2/dt': ['rate'],
+  'Displacement Δs2': ['length'],
+  'Stress σ3': ['pressure'],
+  'Strain ε3': ['strain'],
+  'Strain Rate ε3/dt': ['rate'],
+  'Displacement Δs3': ['length'],
+  'Force F3': ['force'],
+  'Saturation': ['percentage'],
+  'Count': ['count'],
+
+  // DATA_PARAMETER_CONTROLS
+  'Gas Permeability': ['permeability'],
+  'Fluid Permeability': ['permeability'],
+  'Final Strain ε': ['strain'],
+  'Corrected Strain Rate ε/dt': ['rate'],
+  'Final Displacement Δs': ['length'],
+  'Maximum Force F': ['force'],
+  'Maximum Stress σ': ['pressure'],
+  'Yield Stress σ': ['pressure'],
+  'Machine Stiffness N/mm': ['stiffness'],
+  'Roughness': ['length'],
+  'Friction Parameter': ['percentage', 'count'],
+  'Unconfined Compressive Strength (UCS)': ['pressure'],
+  'Ultimate Tensile Strength': ['pressure'],
+  'Ultimate Shear Strength': ['pressure'],
+  'True Tension Strength': ['pressure'],
+  'Compressive Strength (σ2=σ3)': ['pressure'],
+  'Compressive Strength (σ1=σ2)': ['pressure'],
+  'True Triaxial Strength': ['pressure'],
+  'Yield Strength': ['pressure'],
+  'Tensional Strength': ['pressure'],
+  'Torsion Strength': ['pressure'],
+  'Flow Strength': ['pressure'],
+  'Fracture Strength': ['pressure']
+}
+
+// Returns the applicable unit options for a given variable/parameter name.
+// Falls back to the full UNIT_TYPES list for unknown variables (e.g., "Other", "Fault Angle").
+export function getUnitsForVariable(variableName) {
+  if (!variableName) return UNIT_TYPES
+
+  const categories = VARIABLE_TO_CATEGORIES[variableName]
+  if (!categories) return UNIT_TYPES
+
+  const units = []
+  for (const cat of categories) {
+    const catUnits = UNIT_CATEGORIES[cat]
+    if (catUnits) units.push(...catUnits)
+  }
+  return [...new Set(units)]
+}

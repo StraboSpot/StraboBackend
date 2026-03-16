@@ -258,7 +258,7 @@
                 <label class="text-sm">Variable *</label>
                 <Select
                   :modelValue="item.control"
-                  @update:modelValue="update('control', $event)"
+                  @update:modelValue="(val) => { update('control', val); if (item.unit && !getUnitsForVariable(val).includes(item.unit)) update('unit', '') }"
                   :options="SAMPLE_PARAMETER_TYPES"
                   placeholder="Select..."
                   showClear
@@ -284,7 +284,7 @@
                 <Select
                   :modelValue="item.unit"
                   @update:modelValue="update('unit', $event)"
-                  :options="UNIT_TYPES"
+                  :options="getUnitsForVariable(item.control)"
                   showClear
                 />
               </div>
@@ -351,6 +351,7 @@ import {
   FRACTION_UNITS,
   UNIT_TYPES,
   UNIT_PREFIXES,
+  getUnitsForVariable,
   MATERIAL_STATES,
   TEXT_INPUT_MATERIAL_TYPES,
   MATERIAL_NAME_LABELS,

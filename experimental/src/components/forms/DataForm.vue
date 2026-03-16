@@ -137,6 +137,7 @@
                       placeholder="Select..."
                       showClear
                       class="w-full"
+                      @update:modelValue="(val) => { if (param.unit && !getUnitsForVariable(val).includes(param.unit)) param.unit = '' }"
                     />
                   </div>
                   <div class="param-col param-col-value">
@@ -148,7 +149,7 @@
                   <div class="param-col param-col-unit">
                     <Select
                       v-model="param.unit"
-                      :options="UNIT_TYPES"
+                      :options="getUnitsForVariable(param.control)"
                       placeholder="Unit"
                       showClear
                       class="w-full"
@@ -642,7 +643,8 @@ import {
   CHEMISTRY_DATA_OPTIONS,
   SOLUTE_COMPONENTS,
   SOLUTE_UNITS,
-  getDAQOptionsForHeader
+  getDAQOptionsForHeader,
+  getUnitsForVariable
 } from '@/schemas/laps-enums.js'
 
 const props = defineProps({

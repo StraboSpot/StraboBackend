@@ -145,7 +145,7 @@
                     <label class="text-xs" v-if="dimIdx === 0">Variable</label>
                     <Select
                       :modelValue="dim.variable"
-                      @update:modelValue="updateDimension(item, dimIdx, 'variable', $event, update)"
+                      @update:modelValue="(val) => { updateDimension(item, dimIdx, 'variable', val, update); if (dim.unit && !getUnitsForVariable(val).includes(dim.unit)) updateDimension(item, dimIdx, 'unit', '', update) }"
                       :options="DIMENSION_VARIABLES"
                       placeholder="Select..."
                     />
@@ -162,7 +162,7 @@
                     <Select
                       :modelValue="dim.unit"
                       @update:modelValue="updateDimension(item, dimIdx, 'unit', $event, update)"
-                      :options="UNIT_TYPES"
+                      :options="getUnitsForVariable(dim.variable)"
                     />
                   </div>
                   <div class="field dim-prefix">
@@ -242,7 +242,8 @@ import {
   GEOMETRY_MATERIALS,
   DIMENSION_VARIABLES,
   UNIT_TYPES,
-  UNIT_PREFIXES
+  UNIT_PREFIXES,
+  getUnitsForVariable
 } from '@/schemas/laps-enums'
 
 const props = defineProps({
