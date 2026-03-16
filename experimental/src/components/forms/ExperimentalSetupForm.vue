@@ -145,7 +145,7 @@
                     <label class="text-xs" v-if="dimIdx === 0">Variable</label>
                     <Select
                       :modelValue="dim.variable"
-                      @update:modelValue="(val) => { updateDimension(item, dimIdx, 'variable', val, update); if (dim.unit && !getUnitsForVariable(val).includes(dim.unit)) updateDimension(item, dimIdx, 'unit', '', update) }"
+                      @update:modelValue="(val) => { const c = { variable: val }; if (dim.unit && !getUnitsForVariable(val).includes(dim.unit)) c.unit = ''; updateDimension(item, dimIdx, c, update) }"
                       :options="DIMENSION_VARIABLES"
                       placeholder="Select..."
                     />
@@ -339,10 +339,17 @@ function addDimension(item, update) {
   update('dimensions', newDimensions)
 }
 
-function updateDimension(item, dimIdx, field, value, update) {
+function updateDimension(item, dimIdx, fieldOrObj, valueOrUpdate, maybeUpdate) {
   const newDimensions = [...item.dimensions]
-  newDimensions[dimIdx] = { ...newDimensions[dimIdx], [field]: value }
-  update('dimensions', newDimensions)
+  if (typeof fieldOrObj === 'object') {
+    // Batch update: updateDimension(item, dimIdx, { variable: 'x', unit: '' }, update)
+    newDimensions[dimIdx] = { ...newDimensions[dimIdx], ...fieldOrObj }
+    valueOrUpdate('dimensions', newDimensions)
+  } else {
+    // Single field: updateDimension(item, dimIdx, 'variable', 'x', update)
+    newDimensions[dimIdx] = { ...newDimensions[dimIdx], [fieldOrObj]: valueOrUpdate }
+    maybeUpdate('dimensions', newDimensions)
+  }
 }
 
 function removeDimension(item, dimIdx, update) {

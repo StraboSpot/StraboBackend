@@ -179,9 +179,15 @@ function moveItem(idx, direction) {
   selectedIndex.value = newIdx
 }
 
-function updateField(idx, field, value) {
+function updateField(idx, fieldOrObj, value) {
   const newItems = [...props.items]
-  newItems[idx] = { ...newItems[idx], [field]: value }
+  if (typeof fieldOrObj === 'object' && value === undefined) {
+    // Batch update: update({ control: 'x', unit: '' })
+    newItems[idx] = { ...newItems[idx], ...fieldOrObj }
+  } else {
+    // Single field update: update('control', 'x')
+    newItems[idx] = { ...newItems[idx], [fieldOrObj]: value }
+  }
   emit('update:items', newItems)
 }
 </script>
