@@ -21,6 +21,7 @@
                 :options="documentTypes"
                 placeholder="Select..."
                 filter
+                resetFilterOnHide
                 class="w-full"
               />
             </div>
@@ -34,6 +35,7 @@
                 :options="documentFormats"
                 placeholder="Select..."
                 filter
+                resetFilterOnHide
                 class="w-full"
               />
             </div>

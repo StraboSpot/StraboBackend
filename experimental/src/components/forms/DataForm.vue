@@ -32,6 +32,7 @@
                   placeholder="Select..."
                   showClear
                   filter
+                  resetFilterOnHide
                   class="w-full"
                   @change="onDataSourceChange"
                 />
@@ -138,6 +139,7 @@
                       placeholder="Select..."
                       showClear
                       filter
+                      resetFilterOnHide
                       class="w-full"
                       @update:modelValue="(val) => { if (param.unit && !getUnitsForVariable(val).includes(param.unit)) param.unit = '' }"
                     />
@@ -155,6 +157,7 @@
                       placeholder="Unit"
                       showClear
                       :filter="getUnitsForVariable(param.control).length > 8"
+                      resetFilterOnHide
                       class="w-full"
                     />
                   </div>
@@ -165,6 +168,7 @@
                       placeholder="-"
                       showClear
                       filter
+                      resetFilterOnHide
                       class="w-full"
                     />
                   </div>
@@ -236,6 +240,7 @@
                           placeholder="Select..."
                           showClear
                           filter
+                          resetFilterOnHide
                           class="w-full"
                           @change="onHeaderTypeChange"
                         />
@@ -253,6 +258,7 @@
                           placeholder="Select..."
                           showClear
                           :filter="specAOptions.length > 8"
+                          resetFilterOnHide
                           class="w-full"
                         />
                         <InputText
@@ -270,6 +276,7 @@
                           placeholder="Select..."
                           showClear
                           :filter="specBOptions.length > 8"
+                          resetFilterOnHide
                           class="w-full"
                         />
                         <InputText
@@ -294,6 +301,7 @@
                           placeholder="Select..."
                           showClear
                           :filter="unitOptions.length > 8"
+                          resetFilterOnHide
                           class="w-full"
                         />
                         <InputText
@@ -324,6 +332,7 @@
                           placeholder="Select..."
                           showClear
                           filter
+                          resetFilterOnHide
                           class="w-full"
                         />
                       </div>
@@ -491,6 +500,7 @@
                               placeholder="Select..."
                               showClear
                               filter
+                              resetFilterOnHide
                               class="w-full"
                             />
                           </div>

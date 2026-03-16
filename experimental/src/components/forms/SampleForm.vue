@@ -53,6 +53,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
             :invalid="!form.material.material.type"
             @update:modelValue="handleMaterialTypeChange"
           />
@@ -74,6 +75,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
             filterPlaceholder="Search..."
             :invalid="!form.material.material.name"
           />
@@ -117,6 +119,7 @@
                   placeholder="Select..."
                   showClear
                   filter
+                  resetFilterOnHide
                 />
               </div>
               <div class="field flex-1" v-if="isOther(item.mineral)">
@@ -265,6 +268,7 @@
                   placeholder="Select..."
                   showClear
                   filter
+                  resetFilterOnHide
                 />
               </div>
               <div class="field flex-1" v-if="isOther(item.control)">
@@ -290,6 +294,7 @@
                   :options="getUnitsForVariable(item.control)"
                   showClear
                   :filter="getUnitsForVariable(item.control).length > 8"
+                  resetFilterOnHide
                 />
               </div>
               <div class="field w-24">
@@ -299,6 +304,7 @@
                   @update:modelValue="update('prefix', $event)"
                   :options="prefixOptions"
                   filter
+                  resetFilterOnHide
                 />
               </div>
             </div>

@@ -24,6 +24,7 @@
           placeholder="Select..."
           showClear
           filter
+          resetFilterOnHide
         />
       </div>
       <div class="field">

@@ -34,6 +34,7 @@
                   placeholder="Select step type..."
                   showClear
                   :filter="availableFeatures.length > 8"
+                  resetFilterOnHide
                   class="w-full"
                 />
               </div>
@@ -86,6 +87,7 @@
                       placeholder="Select..."
                       showClear
                       filter
+                      resetFilterOnHide
                       class="w-full"
                       @update:modelValue="(val) => { if (param.unit && !getUnitsForVariable(val).includes(param.unit)) param.unit = '' }"
                     />
@@ -104,6 +106,7 @@
                       placeholder="Unit"
                       showClear
                       :filter="getUnitsForVariable(param.control).length > 8"
+                      resetFilterOnHide
                       class="w-full"
                     />
                   </div>

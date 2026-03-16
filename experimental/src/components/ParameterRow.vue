@@ -12,6 +12,7 @@
           :placeholder="namePlaceholder"
           showClear
           filter
+          resetFilterOnHide
           class="w-full"
         />
         <InputText
@@ -73,6 +74,7 @@
           placeholder="Select..."
           showClear
           :filter="unitOptions.length > 8"
+          resetFilterOnHide
           class="w-full"
         />
       </div>

@@ -121,6 +121,7 @@
                   placeholder="Select..."
                   showClear
                   filter
+                  resetFilterOnHide
                 />
               </div>
             </div>
@@ -150,6 +151,7 @@
                       :options="DIMENSION_VARIABLES"
                       placeholder="Select..."
                       filter
+                      resetFilterOnHide
                     />
                   </div>
                   <div class="field dim-value">
@@ -166,6 +168,7 @@
                       @update:modelValue="updateDimension(item, dimIdx, 'unit', $event, update)"
                       :options="getUnitsForVariable(dim.variable)"
                       :filter="getUnitsForVariable(dim.variable).length > 8"
+                      resetFilterOnHide
                     />
                   </div>
                   <div class="field dim-prefix">
@@ -175,6 +178,7 @@
                       @update:modelValue="updateDimension(item, dimIdx, 'prefix', $event, update)"
                       :options="prefixOptions"
                       filter
+                      resetFilterOnHide
                     />
                   </div>
                   <div class="field flex-1">

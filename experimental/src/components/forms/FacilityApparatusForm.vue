@@ -75,6 +75,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
             :invalid="!form.apparatus.type"
           />
         </div>

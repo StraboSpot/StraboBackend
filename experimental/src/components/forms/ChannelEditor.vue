@@ -13,6 +13,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
           />
         </div>
         <!-- Other Channel Header - shown when "Other" is selected -->
@@ -36,6 +37,7 @@
             placeholder="Select..."
             showClear
             :filter="specAOptions.length > 8"
+            resetFilterOnHide
           />
           <InputText
             v-else
@@ -54,6 +56,7 @@
             placeholder="Select..."
             showClear
             :filter="specBOptions.length > 8"
+            resetFilterOnHide
           />
           <InputText
             v-else
@@ -80,6 +83,7 @@
             placeholder="Select..."
             showClear
             :filter="unitOptions.length > 8"
+            resetFilterOnHide
           />
           <InputText
             v-else
@@ -103,6 +107,7 @@
             :options="CHANNEL_NUMBERS"
             placeholder="#"
             filter
+            resetFilterOnHide
           />
         </div>
         <div class="field">
@@ -124,6 +129,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
           />
         </div>
         <div class="field">
@@ -185,6 +191,7 @@
             placeholder="Gain"
             showClear
             filter
+            resetFilterOnHide
           />
         </div>
       </div>
@@ -203,6 +210,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
           />
         </div>
         <div class="field md:col-span-2">
@@ -214,6 +222,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
           />
         </div>
       </div>
@@ -299,6 +308,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
           />
         </div>
         <div class="field">
@@ -310,6 +320,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
           />
         </div>
         <div class="field">
