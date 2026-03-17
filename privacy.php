@@ -18,8 +18,18 @@ include("includes/mheader.php");
 					<div class="container">
 
 						<header class="major">
-							<h2>Privacy Policy</h2>
+							<h2>Privacy</h2>
 						</header>
+
+						<!-- Tagline -->
+						<section class="micro-section">
+							<h2 style="color: #ffffff; font-size: 1.6em; font-weight: 300; margin-bottom: 0.5em;">Using StraboSpot in your research?</h2>
+							<p style="color: rgba(255, 255, 255, 0.85); font-size: 1.05em; line-height: 1.7; margin-bottom: 2em;">
+								Understand how we protect your data.
+							</p>
+						</section>
+
+						<h2 style="color: #ffffff; font-size: 1.6em; font-weight: 300; margin-bottom: 1em;">Privacy Policy</h2>
 
 						<div class='innerText'>This privacy policy has been compiled to better serve those who are concerned with how their 'Personally Identifiable Information' (PII) is being used online. PII, as described in US privacy law and information security, is information that can be used on its own or with other information to identify, contact, or locate a single person, or to identify an individual in context. Please read our privacy policy carefully to get a clear understanding of how we collect, use, protect or otherwise handle your Personally Identifiable Information in accordance with our website.<br></div>
 						<span id='infoCo'></span><br>
@@ -112,7 +122,7 @@ include("includes/mheader.php");
 						<div class='innerText'>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; <strong>&bull;</strong> Follow the instructions at the bottom of each email.
 						and we will promptly remove you from <strong>ALL</strong> correspondence.</div>
 						<br>
-						<div class='blueText'><strong>Contacting Us</strong></div>
+						<div class='blueText'><strong>Contact Information</strong></div>
 						<br />
 						<div class='innerText'>If there are any questions regarding this privacy policy, you may contact us using the information below.<br><br></div>
 						<div class='innerText'>StraboSpot</div>
