@@ -35,7 +35,7 @@ include("includes/mheader.php");
 		<div class="landing-hero-buttons">
 			<a href="https://apps.apple.com/us/app/strabospot2/id1555903455" target="_blank" class="button primary small">App Store</a>
 			<a href="https://play.google.com/store/apps/details?id=com.strabospot2&pcampaignid=web_share" target="_blank" class="button primary small">Google Play</a>
-			<a href="https://docs.google.com/document/d/1_En1VlLOERqTog_-IstnEB5W91zputzQJGWjlcVvGFs/edit?usp=sharing" target="_blank" class="button primary small">Interoperability</a>
+			<a href="/interoperability" class="button primary small">Interoperability</a>
 			<a href="/whatisstrabospotoffline" class="button primary small">Offline</a>
 			<a href="/help" class="button primary small">Help</a>
 		</div>

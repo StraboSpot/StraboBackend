@@ -6114,7 +6114,7 @@ Download:
 	text-align: center;
 	color: #ffffff;
 	font-size: 3.5em;
-	font-weight: 700;
+	font-weight: 300;
 	margin: 0 0 0.1em 0;
 }
 
@@ -6124,7 +6124,7 @@ Download:
 	height: 0;
 	margin: 0 auto 1.5em auto;
 	border: none;
-	border-top: 2px dashed #e44c65;
+	border-top: 3px solid #e44c65;
 }
 
 .landing-hero-tagline {
