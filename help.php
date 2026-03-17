@@ -23,7 +23,7 @@ include("includes/mheader.php");
 
 		<!-- Tagline & Contact -->
 		<section class="micro-section">
-			<h2 class="exp-section-title" style="font-size: 1.6em;">Guidance, Resources, and Weekly Office Hours.</h2>
+			<h2 style="color: #ffffff; font-size: 1.6em; font-weight: 300; margin-bottom: 0.5em;">Guidance, Resources, and Weekly Office Hours.</h2>
 			<p style="color: rgba(255, 255, 255, 0.85); font-size: 1.05em; line-height: 1.7; margin-bottom: 1.5em;">
 				StraboSpot provides documentation, tutorials, and live weekly office hours to support your data
 				collection and management workflows. Whether you are getting started or troubleshooting a
@@ -46,7 +46,7 @@ include("includes/mheader.php");
 
 		<!-- StraboField Help -->
 		<section class="micro-section">
-			<h2 class="exp-section-title" style="font-size: 2em;">StraboField Help</h2>
+			<h2 style="color: #ffffff; font-size: 2em; font-weight: 300; margin-bottom: 0.5em;">StraboField Help</h2>
 
 			<div class="medHeader" style="padding-top:10px;">STRABOFIELD HELP DOCUMENTATION</div>
 			<div style="padding-left:40px;">
@@ -90,7 +90,7 @@ include("includes/mheader.php");
 
 		<!-- StraboMicro Help -->
 		<section class="micro-section">
-			<h2 class="exp-section-title" style="font-size: 2em;">StraboMicro Help</h2>
+			<h2 style="color: #ffffff; font-size: 2em; font-weight: 300; margin-bottom: 0.5em;">StraboMicro Help</h2>
 
 			<div style="padding-left:50px;">
 				<div class="medHeader" style="padding-left:0px;"><a href="/manual/micro" target="_blank">StraboMicro User Guide</a></div>
@@ -115,16 +115,18 @@ include("includes/mheader.php");
 			</div>
 
 			<a name="strabomicro2" style="scroll-margin-top: 100px;"></a>
-			<h3 style="color: #e44c65; font-weight: 700; font-size: 1.5em; padding-top: 20px;">StraboMicro2</h3>
-			<div style="padding-left:50px;padding-bottom:30px;">
+			<div style="padding-left:50px;">
+			<h3 style="color: #ffffff; font-weight: 300; font-size: 1.5em; padding-top: 20px;">StraboMicro2</h3>
+			<div style="padding-bottom:30px;">
 				<div class="medHeader" style="padding-left:0px;"><a href="/manual/micro2" target="_blank">StraboMicro2 User Guide</a></div>
 				<div class="medHeader" style="padding-left:0px;"><a href="/files/strabomicro2_improvements_over_legacy.pdf" target="_blank">StraboMicro2 Improvements Over StraboMicro</a></div>
+			</div>
 			</div>
 		</section>
 
 		<!-- StraboExperimental Help -->
 		<section class="micro-section">
-			<h2 class="exp-section-title" style="font-size: 2em;">StraboExperimental Help</h2>
+			<h2 style="color: #ffffff; font-size: 2em; font-weight: 300; margin-bottom: 0.5em;">StraboExperimental Help</h2>
 			<div style="padding-left:50px;padding-bottom:30px;">
 				<div class="medHeader" style="padding-left:20px;"><a href="/manual/experimental" target="_blank">StraboExperimental Manual</a></div>
 			</div>
@@ -189,7 +191,7 @@ include("includes/mheader.php");
 
 		<!-- Glossary -->
 		<section class="micro-section">
-			<h2 class="exp-section-title" style="font-size: 1.6em;">Glossary</h2>
+			<h2 style="color: #ffffff; font-size: 1.6em; font-weight: 300; margin-bottom: 0.5em;">Glossary</h2>
 			<h3 style="color: #ffffff; font-weight: 700; font-size: 1.3em; margin-bottom: 1em;">What StraboSpot Terms Mean</h3>
 
 			<ul style="list-style: none; padding-left: 0;">
