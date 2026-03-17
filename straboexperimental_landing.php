@@ -17,72 +17,113 @@ include("includes/mheader.php");
 <div id="main" class="wrapper style1">
 	<div class="container">
 
-		<header class="major">
-			<h2>StraboExperimental</h2>
-		</header>
+		<!-- Hero Section with Background Image -->
+		<section class="landing-hero" style="margin-top:20px;">
+			<div class="landing-hero-background" style="background-image: url('/includes/mimages/straboexperimental/landing/image7.webp');">
+				<div class="landing-hero-overlay">
+					<h1 class="landing-hero-title">StraboExperimental</h1>
+					<hr class="landing-hero-divider">
+					<h2 class="landing-hero-tagline">Experimental Data, Fully Contextualized.</h2>
+					<p class="landing-hero-description">
+						Document apparatus metadata, acquisition system (DAQ) variables, experimental setup, sample
+						information, and results in a standardized, reusable format.
+					</p>
+				</div>
+			</div>
+		</section>
 
-		<!-- Hero Section -->
-		<section id="exp-hero" class="exp-landing-hero">
+		<!-- CTA Button Bar -->
+		<div class="landing-hero-buttons">
+			<a href="/newexperimental/" class="button primary small">Get Started</a>
+			<a href="/newexperimental/apparatus_repository" class="button primary small">Apparatus Repository</a>
+			<a href="/help" class="button primary small">Help</a>
+		</div>
+
+		<!-- Annotated Screenshot -->
+		<section class="micro-section">
+			<div class="micro-screenshot-container">
+				<img src="/includes/mimages/straboexperimental/landing/image5.webp" alt="StraboExperimental Application Overview" class="micro-screenshot">
+			</div>
+		</section>
+
+		<!-- StraboExperimental Highlights -->
+		<section id="tools" class="micro-section">
+			<h2 class="landing-highlights-title">StraboExperimental Highlights</h2>
+
+			<!-- Feature Cards Grid (2x3) -->
 			<div class="row gtr-uniform">
-				<!--
-				<div class="col-2 col-12-medium">
-					<div class="exp-hero-logo">
-						<img src="/files/strabospot_pub_logo.png" alt="StraboSpot Logo">
-					</div>
-				</div>
-				-->
-				<div class="col-9 col-12-medium">
-					<div class="exp-hero-content">
-						<div class="exp-hero-text">
-							<h2 class="exp-hero-tagline exp-section-title">StraboExperimental helps researchers organize, document, and share experimental geoscience data in a structured, reproducible way.</h2>
-							<p class="exp-hero-description">
-								A free, open platform for documenting apparatus metadata, acquisition system (DAQ) variables, experimental setup, sample information, and results in a standardized, reusable format.
-							</p>
+
+				<!-- Card 1: Future-Proof Your Research -->
+				<div class="col-4 col-6-medium col-12-xsmall">
+					<div class="micro-feature-card">
+						<div class="micro-card-image">
+							<img src="/includes/mimages/straboexperimental/landing/image6.webp" alt="Future-Proof Your Research">
 						</div>
+						<h3 style="font-weight: bold;">Future-Proof Your Research</h3>
+						<p>Preserve experimental data and context so results remain understandable, reusable, and reproducible years later.</p>
 					</div>
 				</div>
-				<div class="col-3 col-12-medium" style="text-align: center;">
-					<a href="/experimental" class="button primary">Get Started</a>
-					<a href="#" class="button primary" style="margin-top: 12px;">Explore Example Experiment</a>
-					<a href="/manual/experimental" target="_blank" class="button primary" style="margin-top: 12px;">Read the Manual</a>
+
+				<!-- Card 2: Sample-Centered Organization -->
+				<div class="col-4 col-6-medium col-12-xsmall">
+					<div class="micro-feature-card">
+						<div class="micro-card-image">
+							<img src="/includes/mimages/straboexperimental/landing/image8.webp" alt="Sample-Centered Organization">
+						</div>
+						<h3 style="font-weight: bold;">Sample-Centered Organization</h3>
+						<p>Link every dataset directly to the physical sample it came from including provenance, preparation, and metadata.</p>
+					</div>
 				</div>
+
+				<!-- Card 3: Apparatus & Data Tracking -->
+				<div class="col-4 col-6-medium col-12-xsmall">
+					<div class="micro-feature-card">
+						<div class="micro-card-image">
+							<img src="/includes/mimages/straboexperimental/landing/image1.webp" alt="Apparatus and Data Tracking">
+						</div>
+						<h3 style="font-weight: bold;">Apparatus &amp; Data Tracking</h3>
+						<p>Capture instrument setups, hardware configurations, and acquisition parameters at the time of measurement.</p>
+					</div>
+				</div>
+
+				<!-- Card 4: Reusable Experimental Metadata -->
+				<div class="col-4 col-6-medium col-12-xsmall">
+					<div class="micro-feature-card">
+						<div class="micro-card-image">
+							<img src="/includes/mimages/straboexperimental/landing/image3.webp" alt="Reusable Experimental Metadata">
+						</div>
+						<h3 style="font-weight: bold;">Reusable Experimental Metadata</h3>
+						<p>Copy metadata from previous experiments and modify only what changed, making it easy to run a series of experiments with consistent setups.</p>
+					</div>
+				</div>
+
+				<!-- Card 5: Searchable, Structured Experiments -->
+				<div class="col-4 col-6-medium col-12-xsmall">
+					<div class="micro-feature-card">
+						<div class="micro-card-image">
+							<img src="/includes/mimages/straboexperimental/landing/image2.webp" alt="Searchable, Structured Experiments">
+						</div>
+						<h3 style="font-weight: bold;">Searchable, Structured Experiments</h3>
+						<p>Quickly find past experiments using metadata, samples, instruments, or acquisition conditions - not just filenames.</p>
+					</div>
+				</div>
+
+				<!-- Card 6: Context-Rich Data Storage -->
+				<div class="col-4 col-6-medium col-12-xsmall">
+					<div class="micro-feature-card">
+						<div class="micro-card-image">
+							<img src="/includes/mimages/straboexperimental/landing/image4.webp" alt="Context-Rich Data Storage">
+						</div>
+						<h3 style="font-weight: bold;">Context-Rich Data Storage</h3>
+						<p>Store experimental files alongside sample details, apparatus configurations, and DAQ settings so data never loses its meaning.</p>
+					</div>
+				</div>
+
 			</div>
 		</section>
 
-		<!-- How It Works Section -->
-		<section id="how-it-works" class="exp-section">
-			
-
-			<!-- Workflow Screenshot -->
-			<div class="exp-screenshot-container exp-community-section">
-				<img src="/includes/mimages/straboexperimental/Experimental_promo.jpg" alt="StraboExperimental Workflow" class="exp-screenshot">
-			</div>
-			
-			<h2 class="exp-section-title">How it works:</h2>
-
-			<!-- Steps -->
-			<div class="exp-steps">
-				<ol class="exp-steps-list">
-					<li><strong>Start a new project</strong></li>
-					<li><strong>Add an experiment</strong> <span class="exp-tip">(tip: load example data (green button) to explore)</span></li>
-					<li><strong>Describe experimental conditions</strong>, sample information, and acquisition systems</li>
-					<li><strong>Select your apparatus</strong> from the repository or add your facility's instrumentation</li>
-					<li><strong>Save, search, or share</strong> when ready</li>
-				</ol>
-			</div>
-		</section>
-
-		<h2 class="exp-section-title" style="border-top: 1px solid rgba(255, 255, 255, 0.1); padding-top: 25px;">View projects and experiments on the data page:</h2>
-
-		<!-- Project Example Screenshot -->
-		<section class="exp-section">
-			<div class="exp-screenshot-container">
-				<img src="/includes/mimages/straboexperimental/experiment_list.png" alt="StraboExperimental Project View" class="exp-screenshot">
-			</div>
-		</section>
-
-		<!-- Why StraboExperimental and Built For Section -->
-		<section class="exp-section">
+		<!-- Why StraboExperimental / Built For Section -->
+		<section class="landing-why-section">
 			<div class="row gtr-uniform">
 				<div class="col-6 col-12-medium">
 					<div class="exp-info-box">
@@ -107,45 +148,6 @@ include("includes/mheader.php");
 						</ul>
 					</div>
 				</div>
-			</div>
-		</section>
-
-		<!-- Community Statement -->
-		<section class="exp-section exp-community-section">
-			<h2 class="exp-community-title">Built by the experimental community for geoscientists.</h2>
-			<p class="exp-community-subtitle">Developed with researchers, educators, and students to support real scientific workflows.</p>
-		</section>
-
-		<!-- Three Feature Boxes -->
-		<section class="exp-section">
-			<div class="row gtr-uniform">
-				<div class="col-4 col-12-medium">
-					<div class="exp-feature-box">
-						<h4 style="font-weight: bold;">Free, open-source, and community designed</h4>
-						<p>Built with support from public research funding.</p>
-					</div>
-				</div>
-				<div class="col-4 col-12-medium">
-					<div class="exp-feature-box">
-						<h4 style="font-weight: bold;">Your data, your terms</h4>
-						<p>Keep experiments private, share with collaborators, or publish openly on your terms.</p>
-					</div>
-				</div>
-				<div class="col-4 col-12-medium">
-					<div class="exp-feature-box">
-						<h4 style="font-weight: bold;">FAIR data principles</h4>
-						<p>Supports FAIR data principles so experiments remain findable, accessible, and reusable.</p>
-					</div>
-				</div>
-			</div>
-		</section>
-
-		<!-- Call to Action -->
-		<section class="exp-section exp-cta-section">
-			<h2 class="exp-cta-title">Start documenting experiments clearly.</h2>
-			<div class="exp-cta-buttons">
-				<a href="/experimental" class="button primary">Get Started</a>
-				<a href="/manual/experimental" target="_blank" class="button">Read the Manual</a>
 			</div>
 		</section>
 
