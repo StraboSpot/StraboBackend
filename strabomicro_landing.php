@@ -17,10 +17,6 @@ include("includes/mheader.php");
 <div id="main" class="wrapper style1">
 	<div class="container">
 
-		<header class="major">
-			<h2>StraboMicro</h2>
-		</header>
-
 		<!-- Hero Section with Background Image -->
 		<section class="landing-hero" style="margin-top:20px;">
 			<div class="landing-hero-background" style="background-image: url('/includes/mimages/strabomicro/hero_background.webp');">
@@ -40,9 +36,9 @@ include("includes/mheader.php");
 
 		<!-- CTA Button Bar -->
 		<div class="landing-hero-buttons">
-			<a href="https://www.jdeploy.com/~strabomicro" target="_blank" class="landing-hero-btn">Download Now</a>
-			<a href="#" class="landing-hero-btn">Instrument Repository</a>
-			<a href="/help" class="landing-hero-btn">Help</a>
+			<a href="https://www.jdeploy.com/~strabomicro" target="_blank" class="button primary small">Download Now</a>
+			<a href="#" class="button primary small">Instrument Repository</a>
+			<a href="/help" class="button primary small">Help</a>
 		</div>
 
 		<!-- Annotated Screenshot -->

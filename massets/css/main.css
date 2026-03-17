@@ -5380,7 +5380,6 @@ Download:
 }
 
 .micro-feature-card:hover {
-	transform: translateY(-3px);
 	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
@@ -6125,7 +6124,7 @@ Download:
 	height: 0;
 	margin: 0 auto 1.5em auto;
 	border: none;
-	border-top: 2px dashed #cc3366;
+	border-top: 2px dashed #e44c65;
 }
 
 .landing-hero-tagline {
@@ -6173,7 +6172,7 @@ Download:
 
 /* Highlights Heading */
 .landing-highlights-title {
-	color: #cc3366;
+	color: #e44c65;
 	font-size: 2.2em;
 	font-weight: 700;
 	margin-bottom: 1.5em;
@@ -6187,7 +6186,7 @@ Download:
 }
 
 .landing-why-title {
-	color: #cc3366;
+	color: #e44c65;
 	font-size: 1.3em;
 	font-weight: 700;
 	margin-bottom: 0.75em;
