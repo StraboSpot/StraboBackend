@@ -3467,6 +3467,35 @@ input, select, textarea {
 			top: 0;
 		}
 
+		#header #nav-left {
+			position: absolute;
+			left: 10em;
+			top: 0;
+		}
+
+			#header #nav-left ul {
+				margin: 0;
+			}
+
+				#header #nav-left ul li {
+					display: inline-block;
+					margin-left: 1em;
+				}
+
+					#header #nav-left ul li a {
+						border: 0;
+						color: inherit;
+						display: inline-block;
+						height: inherit;
+						line-height: inherit;
+						outline: 0;
+						font-size: 0.85em;
+					}
+
+					#header #nav-left ul li a:hover {
+						color: #e44c65;
+					}
+
 		#header nav {
 			position: absolute;
 			right: 1em;

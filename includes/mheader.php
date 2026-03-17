@@ -125,59 +125,24 @@ if($userpkey == "adsf"){
 					}
 					?>
 					<h1 id="logo"><a href="/">STRABOSPOT<span id="titleEmail"><?php echo $showname?></span></a></h1>
+					<nav id="nav-left">
+						<ul>
+							<li><a href="/strabofield_landing">StraboField</a></li>
+							<li><a href="/strabomicro_landing">StraboMicro</a></li>
+							<li><a href="/straboexperimental_landing">StraboExperimental</a></li>
+						</ul>
+					</nav>
 					<nav id="nav">
 						<ul>
 							<li><a href="#">About</a>
 								<ul>
 									<li><a href="/overview">Overview</a></li>
+									<li><a href="/interoperability">Interoperability</a></li>
+									<li><a href="/api">API</a></li>
+									<li><a href="/citations">Citations</a></li>
 									<li><a href="/privacy">Privacy Policy</a></li>
 								</ul>
 							</li>
-
-
-
-							<li><a href="/api">API</a></li>
-
-							<li><a href="#">Software</a>
-								<ul>
-									<li>
-										<a href="#">StraboField</a>
-										<ul>
-											<li><a href="/supporteddevices">Supported Devices</a></li>
-											<li><a href="/downloadapp">Download StraboField</a></li>
-										</ul>
-									</li>
-
-									<li>
-										<a href="#">StraboTools</a>
-										<ul>
-											<li><a href="/strabotoolsdownload">What is StraboTools?</a></li>
-											<li><a href="https://apps.apple.com/us/app/strabotools/id1496239162?ls=1" target="_blank">Download StraboTools</a></li>
-										</ul>
-									</li>
-
-									<li>
-										<a href="#">StraboMicro</a>
-										<ul>
-											<li><a href="/whatisstrabomicro">What is StraboMicro?</a></li>
-											<li><a href="/micro">Download StraboMicro</a></li>
-										</ul>
-									</li>
-
-									<li>
-										<a href="/experimental">StraboExperimental (Beta)</a>
-									</li>
-
-									<li>
-										<a href="#">StraboSpot Offline</a>
-										<ul>
-											<li><a href="/whatisstrabospotoffline">What is StraboSpot Offline?</a></li>
-											<li><a href="/StraboSpotOffline.zip">Download StraboSpot Offline</a></li>
-										</ul>
-									</li>
-								</ul>
-							</li>
-
 
 							<li>
 								<a href="#">Search</a>
@@ -190,7 +155,23 @@ if($userpkey == "adsf"){
 
 							<li><a href="/help">Help</a></li>
 
-							<li><a href="/teaching">Teaching</a></li>
+							<li><a href="#">More</a>
+								<ul>
+									<li><a href="/teaching">Teaching</a></li>
+									<li><a href="#">Tools</a>
+										<ul>
+											<li><a href="/strabotoolsdownload">What is StraboTools?</a></li>
+											<li><a href="https://apps.apple.com/us/app/strabotools/id1496239162?ls=1" target="_blank">Download StraboTools</a></li>
+										</ul>
+									</li>
+									<li><a href="#">StraboSpot Offline</a>
+										<ul>
+											<li><a href="/whatisstrabospotoffline">What is StraboSpot Offline?</a></li>
+											<li><a href="/StraboSpotOffline.zip">Download StraboSpot Offline</a></li>
+										</ul>
+									</li>
+								</ul>
+							</li>
 
 							<li>
 								<a href="#"><?php echo $accountheader?></a>

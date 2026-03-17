@@ -52,9 +52,11 @@
 				.appendTo($body);
 
 		// Panel.
+			var navLeftHtml = $('#nav-left').length ? $('#nav-left').navList() : '';
 			$(
 				'<div id="navPanel">' +
 					'<nav>' +
+						navLeftHtml +
 						$('#nav').navList() +
 					'</nav>' +
 				'</div>'
