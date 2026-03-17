@@ -6084,31 +6084,31 @@ Download:
 }
 
 /* ============================================
-   Shared Landing Page Hero Styles (New Design)
+   Shared Landing Page Styles (New Design)
+   Used by StraboMicro, StraboField, StraboExperimental
    ============================================ */
 
-/* Hero Background Image Section */
+/* Hero with Background Image */
 .landing-hero {
-	position: relative;
-	overflow: hidden;
-	border-radius: 4px;
-	margin-bottom: 3em;
+	margin: -2em -2em 3em -2em;
 }
 
-.landing-hero-image {
-	width: 100%;
-	height: 500px;
-	object-fit: cover;
-	display: block;
+.landing-hero-background {
+	background-size: cover;
+	background-position: center top;
+	background-repeat: no-repeat;
+	min-height: 450px;
+	border-radius: 4px;
+	overflow: hidden;
 }
 
 .landing-hero-overlay {
-	position: absolute;
-	bottom: 0;
-	left: 0;
-	right: 0;
-	background: linear-gradient(to top, rgba(28, 29, 38, 0.95) 0%, rgba(28, 29, 38, 0.7) 60%, transparent 100%);
-	padding: 3em 3em 0 3em;
+	background: linear-gradient(to top, rgba(28, 29, 38, 0.95) 0%, rgba(28, 29, 38, 0.75) 50%, rgba(28, 29, 38, 0.3) 100%);
+	min-height: 450px;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding: 3em;
 }
 
 .landing-hero-title {
@@ -6117,16 +6117,15 @@ Download:
 	font-size: 3.5em;
 	font-weight: 700;
 	margin: 0 0 0.1em 0;
-	text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
 }
 
 .landing-hero-divider {
 	display: block;
 	width: 300px;
-	height: 2px;
-	margin: 0 auto 1em auto;
+	height: 0;
+	margin: 0 auto 1.5em auto;
 	border: none;
-	border-top: 2px dashed #e44c65;
+	border-top: 2px dashed #cc3366;
 }
 
 .landing-hero-tagline {
@@ -6141,17 +6140,18 @@ Download:
 	color: rgba(255, 255, 255, 0.85);
 	font-size: 1.05em;
 	line-height: 1.6;
-	margin-bottom: 1em;
+	margin-bottom: 0;
 }
 
-/* CTA Button Bar */
+/* CTA Button Bar (below hero image) */
 .landing-hero-buttons {
 	display: flex;
 	justify-content: center;
-	gap: 2em;
-	padding: 1.2em 0;
+	gap: 2.5em;
+	padding: 1em 0;
 	border-top: 1px solid rgba(255, 255, 255, 0.15);
-	margin-top: 1em;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+	margin-bottom: 3em;
 }
 
 .landing-hero-btn {
@@ -6160,25 +6160,15 @@ Download:
 	color: #ffffff !important;
 	font-size: 1em;
 	font-weight: 700;
-	padding: 0.5em 1.2em;
-	text-decoration: none;
+	padding: 0.5em 1.5em;
+	text-decoration: none !important;
+	border: none;
 	transition: background-color 0.2s ease;
 }
 
 .landing-hero-btn:hover {
 	background-color: #e44c65 !important;
-}
-
-/* Annotated Screenshot */
-.landing-screenshot-container {
-	margin-bottom: 2em;
-}
-
-.landing-screenshot {
-	width: 100%;
-	height: auto;
-	border-radius: 4px;
-	box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+	color: #ffffff !important;
 }
 
 /* Highlights Heading */
@@ -6187,49 +6177,6 @@ Download:
 	font-size: 2.2em;
 	font-weight: 700;
 	margin-bottom: 1.5em;
-}
-
-/* Feature Cards (with images) - New Design */
-.landing-feature-card {
-	background-color: #272833;
-	border: 1px solid rgba(255, 255, 255, 0.1);
-	border-radius: 4px;
-	padding: 0;
-	height: 100%;
-	overflow: hidden;
-	transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
-
-.landing-feature-card:hover {
-	transform: translateY(-3px);
-	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-}
-
-.landing-card-image {
-	width: 100%;
-	height: 160px;
-	overflow: hidden;
-}
-
-.landing-card-image img {
-	width: 100%;
-	height: 100%;
-	object-fit: cover;
-}
-
-.landing-feature-card h3 {
-	color: #cc3366;
-	font-size: 1.05em;
-	line-height: 1.4em;
-	margin: 1em 1em 0.5em 1em;
-	font-weight: 700;
-}
-
-.landing-feature-card p {
-	color: rgba(255, 255, 255, 0.8);
-	font-size: 0.9em;
-	line-height: 1.6em;
-	margin: 0 1em 1em 1em;
 }
 
 /* Why / Built For Section */
@@ -6258,7 +6205,7 @@ Download:
 	line-height: 1.5em;
 }
 
-/* Responsive adjustments for new landing hero */
+/* Responsive adjustments for new landing pages */
 @media screen and (max-width: 980px) {
 	.landing-hero-title {
 		font-size: 2.8em;
@@ -6268,14 +6215,24 @@ Download:
 		font-size: 1.5em;
 	}
 
-	.landing-hero-image {
-		height: 400px;
+	.landing-hero-background,
+	.landing-hero-overlay {
+		min-height: 380px;
 	}
 }
 
 @media screen and (max-width: 736px) {
+	.landing-hero {
+		margin: -1em -1em 2em -1em;
+	}
+
 	.landing-hero-overlay {
-		padding: 2em 1.5em 0 1.5em;
+		padding: 2em 1.5em;
+		min-height: 320px;
+	}
+
+	.landing-hero-background {
+		min-height: 320px;
 	}
 
 	.landing-hero-title {
@@ -6284,10 +6241,6 @@ Download:
 
 	.landing-hero-tagline {
 		font-size: 1.3em;
-	}
-
-	.landing-hero-image {
-		height: 300px;
 	}
 
 	.landing-hero-buttons {
@@ -6305,10 +6258,6 @@ Download:
 	.landing-highlights-title {
 		font-size: 1.8em;
 	}
-
-	.landing-card-image {
-		height: 130px;
-	}
 }
 
 @media screen and (max-width: 480px) {
@@ -6322,9 +6271,5 @@ Download:
 
 	.landing-highlights-title {
 		font-size: 1.5em;
-	}
-
-	.landing-feature-card h3 {
-		font-size: 0.95em;
 	}
 }
