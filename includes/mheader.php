@@ -164,12 +164,7 @@ if($userpkey == "adsf"){
 											<li><a href="https://apps.apple.com/us/app/strabotools/id1496239162?ls=1" target="_blank">Download StraboTools</a></li>
 										</ul>
 									</li>
-									<li><a href="#">StraboSpot Offline</a>
-										<ul>
-											<li><a href="/whatisstrabospotoffline">What is StraboSpot Offline?</a></li>
-											<li><a href="/StraboSpotOffline.zip">Download StraboSpot Offline</a></li>
-										</ul>
-									</li>
+									<li><a href="/whatisstrabospotoffline">StraboSpot Offline</a></li>
 								</ul>
 							</li>
 

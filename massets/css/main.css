@@ -3489,7 +3489,6 @@ input, select, textarea {
 						height: inherit;
 						line-height: inherit;
 						outline: 0;
-						font-size: 0.85em;
 					}
 
 					#header #nav-left ul li a:hover {
