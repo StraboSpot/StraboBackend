@@ -6300,3 +6300,38 @@ Download:
 		font-size: 1.5em;
 	}
 }
+
+/* ============================================
+   Return to Top Button
+   ============================================ */
+
+#return-to-top {
+	position: fixed;
+	bottom: 2em;
+	right: 2em;
+	z-index: 99;
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	background: rgba(39, 40, 51, 0.7);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	color: rgba(255, 255, 255, 0.5);
+	font-size: 14px;
+	line-height: 40px;
+	text-align: center;
+	text-decoration: none;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.3s ease, background 0.2s ease;
+}
+
+#return-to-top.visible {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+#return-to-top:hover {
+	background: rgba(39, 40, 51, 0.95);
+	color: rgba(255, 255, 255, 0.85);
+	border-color: rgba(255, 255, 255, 0.3);
+}

@@ -76,5 +76,19 @@
 		<script src="/geotiff/js/jquery.fileupload.js"></script>
 		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
 		<script src="//cdn.rawgit.com/noelboss/featherlight/1.7.13/release/featherlight.min.js" type="text/javascript" charset="utf-8"></script>
+		<!-- Return to Top Button -->
+		<a href="#" id="return-to-top" title="Return to top" aria-label="Return to top">&#9650;</a>
+		<script>
+		(function() {
+			var btn = document.getElementById('return-to-top');
+			window.addEventListener('scroll', function() {
+				btn.classList.toggle('visible', window.scrollY > 300);
+			});
+			btn.addEventListener('click', function(e) {
+				e.preventDefault();
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+			});
+		})();
+		</script>
 	</body>
 </html>
