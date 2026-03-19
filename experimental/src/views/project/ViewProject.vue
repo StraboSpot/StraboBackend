@@ -26,6 +26,9 @@
             </div>
           </div>
           <div v-if="project.can_edit" class="flex gap-2 ml-4">
+            <a v-if="project.uuid" :href="`/experimental/overview_project.php?u=${project.uuid}`" target="_blank" class="btn-secondary" title="Overview">
+              Overview
+            </a>
             <button @click="downloadProject" class="btn-secondary" title="Download as JSON">
               Download
             </button>
@@ -73,6 +76,9 @@
                   <router-link v-if="project.can_edit" :to="`/edit_experiment?e=${exp.pkey}`" class="text-strabo-accent hover:underline">
                     Edit
                   </router-link>
+                  <a v-if="exp.uuid" :href="`/experimental/overview_experiment.php?u=${exp.uuid}`" target="_blank" class="text-strabo-accent hover:underline">
+                    Overview
+                  </a>
                   <a :href="`/experimental/api/download_experiment.php?id=${exp.pkey}`" class="text-strabo-accent hover:underline">
                     Download
                   </a>

@@ -49,6 +49,9 @@ include("includes/mheader.php");
 			case "newexperiment":
 				window.location='/experimental/add_experiment?ppk='+pid;
 				break;
+			case "overview":
+				window.open('/experimental/overview_project.php?u='+puuid+'&from=mydata', '_blank');
+				break;
 			case "delete":
 				if (confirm("Are you sure you want to delete project "+projectname+"?") == true) {
 					window.location='/experimental/delete_project?ppk='+pid;
@@ -86,6 +89,9 @@ include("includes/mheader.php");
 				break;
 			case "edit":
 				window.location='/experimental/edit_experiment?e='+pkey;
+				break;
+			case "overview":
+				window.open('/experimental/overview_experiment.php?u='+euuid+'&from=mydata', '_blank');
 				break;
 			case "download":
 				window.location='/experimental/download_experiment.php?u='+euuid;
@@ -142,6 +148,7 @@ if(count($experimentalrows)==0){
 												<select class="myDataSelect" id="edl-<?php echo $er->pkey?>" onChange="doExperimentalProjectDownload(<?php echo $er->pkey?>,'<?php echo $projectname?>','<?php echo $er->uuid?>');">
 													<option value=""  style="display:none">Options...</option>
 													<option value="newexperiment">Add Experiment</option>
+													<option value="overview">Overview</option>
 													<option value="landing">Landing Page</option>
 													<option value="edit">Edit Project</option>
 													<option value="download">Download Project</option>
@@ -221,6 +228,7 @@ if(count($experimentalrows)==0){
 															<option value="" style="display:none;">Options...</option>
 															<option value="view">View</option>
 															<option value="edit">Edit</option>
+															<option value="overview">Overview</option>
 															<option value="download">Download</option>
 															<option value="delete">Delete</option>
 
