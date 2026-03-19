@@ -121,7 +121,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate title section
      */
-    protected function generateTitleSection()
+    public function generateTitleSection()
     {
         $this->SetFont('DejaVu', 'B', 20);
         $this->SetTextColor($this->textDark[0], $this->textDark[1], $this->textDark[2]);
@@ -237,7 +237,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate Sample section
      */
-    protected function generateSampleSection($sample)
+    public function generateSampleSection($sample)
     {
         $this->sectionHeader('Sample');
 
@@ -383,7 +383,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate Facility & Apparatus section
      */
-    protected function generateFacilityApparatusSection($facility, $apparatus)
+    public function generateFacilityApparatusSection($facility, $apparatus)
     {
         $this->sectionHeader('Facility & Apparatus');
 
@@ -462,7 +462,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate Experimental Setup section
      */
-    protected function generateExperimentalSetupSection($experiment)
+    public function generateExperimentalSetupSection($experiment)
     {
         // Skip if already shown in title
         // Just show geometry here
@@ -517,7 +517,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate DAQ section
      */
-    protected function generateDAQSection($daq)
+    public function generateDAQSection($daq)
     {
         $this->sectionHeader('Data Acquisition (DAQ)');
 
@@ -573,7 +573,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate Protocol section
      */
-    protected function generateProtocolSection($protocol)
+    public function generateProtocolSection($protocol)
     {
         $this->sectionHeader('Experimental Protocol');
 
@@ -614,7 +614,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate Data section
      */
-    protected function generateDataSection($data)
+    public function generateDataSection($data)
     {
         $this->sectionHeader('Data');
 
