@@ -124,7 +124,7 @@ if ($json_data) {
 include("includes/mheader.php");
 ?>
 
-<a href="/my_experimental_data" class="button small" style="position:fixed;top:60px;left:20px;z-index:100;">&larr; Back to My Data</a>
+<a href="/my_experimental_data" class="button small" style="position:fixed;top:90px;left:20px;z-index:100;">&larr; Back to My Data</a>
 
 <div id="main" class="wrapper style1">
     <div class="container">
