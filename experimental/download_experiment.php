@@ -124,6 +124,8 @@ if ($json_data) {
 include("includes/mheader.php");
 ?>
 
+<a href="/my_experimental_data" class="button small" style="position:fixed;top:60px;left:20px;z-index:100;">&larr; Back to My Data</a>
+
 <div id="main" class="wrapper style1">
     <div class="container">
 
@@ -165,10 +167,6 @@ include("includes/mheader.php");
                     <li><a href="/experimental/api/download_experiment.php?id=<?php echo (int)$row->pkey; ?>" class="button primary">Download JSON</a></li>
                     <li><a href="/experimental/api/download_pdf.php?id=<?php echo (int)$row->pkey; ?>" class="button">Download PDF</a></li>
                 </ul>
-
-                <div style="margin-top:3em;">
-                    <a href="/my_experimental_data" class="button small">&larr; Back to My Data</a>
-                </div>
 
             </div>
         </section>
