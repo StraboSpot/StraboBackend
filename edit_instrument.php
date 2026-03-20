@@ -96,6 +96,9 @@ if($_POST['submit']!=""){
 			<a href="view_instrument?ii=<?php echo (int)$instrument_pkey; ?>" class="button">View Instrument</a>
 		</div>
 
+		<div class="bottomSpacer"></div>
+	</div>
+</div>
 		<?php
 		include 'includes/mfooter.php';
 		exit();

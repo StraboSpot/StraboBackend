@@ -89,6 +89,10 @@ if($_POST['submit']!=""){
 			<p style="color: rgba(255,255,255,0.85); font-size: 1.1em; margin-bottom: 1.5em;">Institute has been successfully updated.</p>
 			<a href="instrumentcatalog" class="button primary">Continue to Catalog</a>
 		</div>
+
+		<div class="bottomSpacer"></div>
+	</div>
+</div>
 		<?php
 		include 'includes/mfooter.php';
 		exit();

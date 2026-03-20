@@ -99,6 +99,9 @@ if($_POST['submit']!=""){
 			<a href="instrumentcatalog" class="button primary">Continue to Catalog</a>
 		</div>
 
+		<div class="bottomSpacer"></div>
+	</div>
+</div>
 		<?php
 		include 'includes/mfooter.php';
 		exit();
