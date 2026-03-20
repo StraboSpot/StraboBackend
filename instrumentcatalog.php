@@ -128,7 +128,7 @@ include 'includes/mheader.php';
 				<!-- Institute Header (clickable) -->
 				<div class="institute-header" onclick="toggleInstitute(<?php echo $irow->pkey; ?>)">
 					<div style="flex: 1;">
-						<h3 style="color: #fff; font-size: 1.3em; margin: 0; font-weight: 600;"><?php echo htmlspecialchars($irow->institute_name); ?></h3>
+						<h3 style="color: #fff; font-size: 1.3em; margin: 0; font-weight: 400;"><?php echo htmlspecialchars($irow->institute_name); ?></h3>
 					</div>
 					<div style="display: flex; align-items: center; gap: 15px;">
 						<span style="color: rgba(255,255,255,0.6); font-size: 0.95em;">
@@ -141,7 +141,7 @@ include 'includes/mheader.php';
 				<!-- Institute Expanded Content -->
 				<div class="institute-body" id="institute-<?php echo $irow->pkey; ?>" style="display: none;">
 					<?php if ($can_manage) { ?>
-					<div style="margin-bottom: 1em;">
+					<div style="margin-top: 1em; margin-bottom: 1em;">
 						<a href="add_instrument?i=<?php echo $irow->pkey; ?>" class="button primary small">+ Add Instrument</a>
 					</div>
 					<?php } ?>
