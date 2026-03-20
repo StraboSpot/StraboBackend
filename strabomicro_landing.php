@@ -34,7 +34,7 @@ include("includes/mheader.php");
 		<!-- CTA Button Bar -->
 		<div class="landing-hero-buttons">
 			<a href="/micro_download" class="button primary small">Download Now</a>
-			<a href="#" onclick="alert('Coming Soon!'); return false;" class="button primary small">Instrument Repository</a>
+			<a href="/instrumentcatalog" class="button primary small">Instrument Repository</a>
 			<a href="/help#micro" class="button primary small">Help</a>
 		</div>
 
