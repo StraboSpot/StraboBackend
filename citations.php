@@ -85,6 +85,8 @@ include("includes/mheader.php");
 			<p style="color: rgba(255, 255, 255, 0.85);">Please cite the dataset DOI in addition to the general StraboSpot citation.</p>
 		</section>
 
+		<a name="logos" style="scroll-margin-top: 100px;"></a>
+
 		<!-- StraboSpot Logos -->
 		<section class="micro-section">
 			<h2 class="exp-section-title">StraboSpot Logos</h2>

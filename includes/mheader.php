@@ -187,7 +187,7 @@ if($showcollaborationsxxx){
 ?>
 									<li><a href="/load_shapefile">Load Shapefile</a></li>
 									<li><a href="/geotiff">My Maps</a></li>
-									<li><a href="/my_jwts">My JWTs</a></li>
+									<!--<li><a href="/my_jwts">My JWTs</a></li>-->
 									<li><a href="/versioning">Versioning</a></li>
 
 

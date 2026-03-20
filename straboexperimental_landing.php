@@ -31,9 +31,9 @@ include("includes/mheader.php");
 
 		<!-- CTA Button Bar -->
 		<div class="landing-hero-buttons">
-			<a href="/newexperimental/" class="button primary small">Get Started</a>
-			<a href="/newexperimental/apparatus_repository" class="button primary small">Apparatus Repository</a>
-			<a href="/help" class="button primary small">Help</a>
+			<a href="/experimental/" class="button primary small">Get Started</a>
+			<a href="/experimental/apparatus_repository" class="button primary small">Apparatus Repository</a>
+			<a href="/help#experimental" class="button primary small">Help</a>
 		</div>
 
 		<!-- Annotated Screenshot -->

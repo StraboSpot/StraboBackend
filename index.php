@@ -62,7 +62,7 @@ include 'includes/mheader.php';
 								<div class="col-4 col-12-medium">
 									<p>Try out StraboField for data collection or adapt our accessible virtual field courses.</p>
 						<ul class="actions">
-							<li><a href="/downloadapp" class="button">Learn More</a></li>
+							<li><a href="/strabofield_landing" class="button">Learn More</a></li>
 						</ul>
 								</div>
 							</div>
@@ -82,7 +82,7 @@ include 'includes/mheader.php';
 						<p>StraboMicro is a desktop application for managing microstructural images and data. StraboMicro uses a hierarchical organization scheme to enable seamless observations at multiple scales while preserving spatial context.
 						Nest various data types (e.g. optical and electron microscopy micrographs) and attach quantitative datafiles to samples and spots. Effortlessly link StraboField samples with StraboMicro for a continuous workflow.</p>
 						<ul class="actions">
-							<li><a href="/whatisstrabomicro" class="button">Learn More</a></li>
+							<li><a href="/strabomicro_landing" class="button">Learn More</a></li>
 						</ul>
 					</div>
 					<a href="#six" class="goto-next scrolly">Next</a>
@@ -107,7 +107,7 @@ include 'includes/mheader.php';
 								<div class="col-4 col-12-medium">
 									<p>Add images, files, and run data to your experiment.</p>
 						<ul class="actions">
-							<li><a href="/experimental" class="button">Try Now</a></li>
+							<li><a href="/straboexperimental_landing" class="button">Try Now</a></li>
 						</ul>
 								</div>
 							</div>
@@ -127,17 +127,17 @@ include 'includes/mheader.php';
 							<div class="row gtr-uniform">
 								<section class="col-4 col-6-medium col-12-xsmall">
 									<span class="icon solid alt major fa-chart-area"></span>
-									<h3><a href="javascript:alert('Coming Soon!');">Partnerships</a></h3>
-									<p>See what we are working on and with whom!</p>
+									<h3><a href="/interoperability">Interoperability</a></h3>
+									<p>See how we are working with others and their projects!</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
 									<span class="icon solid alt major fa-comment"></span>
-									<h3><a href="/help#citationinfo">Citations</a></h3>
+									<h3><a href="/citations">Citations</a></h3>
 									<p>How to cite StraboSpot in your research, posters, and presentations.</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
 									<span class="icon solid alt major fa-flask"></span>
-									<h3><a href="/help#logos">Logos and Brand</a></h3>
+									<h3><a href="/citations#logos">Logos and Brand</a></h3>
 									<p>Download logo files for your posters and presentations.</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">

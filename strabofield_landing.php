@@ -34,7 +34,7 @@ include("includes/mheader.php");
 			<a href="https://play.google.com/store/apps/details?id=com.strabospot2&pcampaignid=web_share" target="_blank" class="button primary small">Google Play</a>
 			<a href="/interoperability" class="button primary small">Interoperability</a>
 			<a href="/whatisstrabospotoffline" class="button primary small">Offline</a>
-			<a href="/help" class="button primary small">Help</a>
+			<a href="/help#field" class="button primary small">Help</a>
 		</div>
 
 		<!-- Annotated Screenshot -->

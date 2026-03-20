@@ -44,6 +44,8 @@ include("includes/mheader.php");
 			</p>
 		</section>
 
+		<a name="field" style="scroll-margin-top: 100px;"></a>
+
 		<!-- StraboField Help -->
 		<section class="micro-section">
 			<h2 style="color: #ffffff; font-size: 2em; font-weight: 300; margin-bottom: 0.5em;">StraboField Help</h2>
@@ -88,6 +90,8 @@ include("includes/mheader.php");
 			</div>
 		</section>
 
+		<a name="micro" style="scroll-margin-top: 100px;"></a>
+		
 		<!-- StraboMicro Help -->
 		<section class="micro-section">
 			<h2 style="color: #ffffff; font-size: 2em; font-weight: 300; margin-bottom: 0.5em;">StraboMicro Help</h2>
@@ -123,6 +127,8 @@ include("includes/mheader.php");
 			</div>
 			</div>
 		</section>
+
+		<a name="experimental" style="scroll-margin-top: 100px;"></a>
 
 		<!-- StraboExperimental Help -->
 		<section class="micro-section">
