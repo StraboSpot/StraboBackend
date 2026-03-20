@@ -17,18 +17,15 @@ include("includes/mheader.php");
 <div id="main" class="wrapper style1">
 	<div class="container">
 
-		<!-- Hero Section with Background Image -->
-		<section class="landing-hero" style="margin-top:20px;">
-			<div class="landing-hero-background" style="background-image: url('/includes/mimages/strabofield/landing/image4.webp');">
-				<div class="landing-hero-overlay">
-					<h1 class="landing-hero-title">StraboField</h1>
-					<hr class="landing-hero-divider">
-					<h2 class="landing-hero-tagline">From outcrop to insight.</h2>
-					<p class="landing-hero-description">
-						Go beyond digital mapping with data that stays organized, shareable, and scientifically meaningful.
-					</p>
-				</div>
-			</div>
+		<header class="major">
+			<h2>StraboField</h2>
+		</header>
+
+		<section class="micro-section">
+			<h2 style="color: #ffffff; font-size: 1.6em; font-weight: 300; margin-bottom: 0.5em;">From outcrop to insight.</h2>
+			<p style="color: rgba(255, 255, 255, 0.85); font-size: 1.05em; line-height: 1.7; margin-bottom: 1.5em;">
+				Go beyond digital mapping with data that stays organized, shareable, and scientifically meaningful.
+			</p>
 		</section>
 
 		<!-- CTA Button Bar -->

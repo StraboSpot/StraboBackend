@@ -17,21 +17,18 @@ include("includes/mheader.php");
 <div id="main" class="wrapper style1">
 	<div class="container">
 
-		<!-- Hero Section with Background Image -->
-		<section class="landing-hero" style="margin-top:20px;">
-			<div class="landing-hero-background" style="background-image: url('/includes/mimages/strabomicro/hero_background.webp');">
-				<div class="landing-hero-overlay">
-					<h1 class="landing-hero-title">StraboMicro</h1>
-					<hr class="landing-hero-divider">
-					<h2 class="landing-hero-tagline">Small scale. Big ideas.</h2>
-					<p class="landing-hero-description">
-						StraboMicro is a tool for managing images and reporting geologic data at the microstructural scale
-						(e.g., from thin sections). It is part of StraboSpot, a digital system for collecting, managing, and
-						sharing geologic data across scales. From field and laboratory observations to experimental rock
-						deformation data.
-					</p>
-				</div>
-			</div>
+		<header class="major">
+			<h2>StraboMicro</h2>
+		</header>
+
+		<section class="micro-section">
+			<h2 style="color: #ffffff; font-size: 1.6em; font-weight: 300; margin-bottom: 0.5em;">Small scale. Big ideas.</h2>
+			<p style="color: rgba(255, 255, 255, 0.85); font-size: 1.05em; line-height: 1.7; margin-bottom: 1.5em;">
+				StraboMicro is a tool for managing images and reporting geologic data at the microstructural scale
+				(e.g., from thin sections). It is part of StraboSpot, a digital system for collecting, managing, and
+				sharing geologic data across scales. From field and laboratory observations to experimental rock
+				deformation data.
+			</p>
 		</section>
 
 		<!-- CTA Button Bar -->
