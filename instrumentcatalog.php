@@ -94,13 +94,13 @@ include 'includes/mheader.php';
 	<div class="container">
 
 		<header class="major">
-			<h2>StraboMicro Instrument Catalog</h2>
+			<h2>StraboMicro Instrument Repository</h2>
 		</header>
 
 		<!-- Contact Link -->
 		<div style="text-align: center; margin-bottom: 1.5em;">
 			<p style="color: rgba(255, 255, 255, 0.85); font-size: 1.05em;">
-				If you need an institute added to the catalog, please
+				If you need an institute added to the repository, please
 				<a href="mailto:strabospot@gmail.com?subject=Need Institute Added to Strabo Micro Instrument Catalog&body=Hello%2C%0A%0APlease%20add%20the%20following%20institute%20to%20the%20Strabo%20Micro%20Instrument%20Catalog%3A%0A%0AInstitute%20Type%3A%20%28Government%20or%20Education%29%0AInstitute%20Name%3A%0A%0AStrabo%20Account%3A <?php echo urlencode($username); ?>%0A%0AThanks%2C%0A%0A<?php echo urlencode($firstname); ?>%20<?php echo urlencode($lastname); ?>%0A">click here</a>.
 			</p>
 		</div>
