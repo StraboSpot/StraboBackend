@@ -105,6 +105,13 @@ include 'includes/mheader.php';
 			</p>
 		</div>
 
+		<!-- Admin: Add Institute -->
+		<?php if ($is_admin) { ?>
+		<div style="text-align: center; margin-bottom: 1.5em;">
+			<a href="add_institute" class="button primary small">+ Add Institute</a>
+		</div>
+		<?php } ?>
+
 		<!-- Search Bar -->
 		<div style="max-width: 500px; margin: 0 auto 2em auto;">
 			<input type="text" id="instrumentSearch" placeholder="Search institutes or instruments..." style="width: 100%; padding: 10px 15px; border-radius: 4px; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.05); color: #fff; font-size: 1em;">
@@ -131,6 +138,10 @@ include 'includes/mheader.php';
 						<h3 style="color: #fff; font-size: 1.3em; margin: 0; font-weight: 400;"><?php echo htmlspecialchars($irow->institute_name); ?></h3>
 					</div>
 					<div style="display: flex; align-items: center; gap: 15px;">
+						<?php if ($is_admin) { ?>
+						<a href="edit_institute?p=<?php echo $irow->pkey; ?>" class="button small" style="padding: 4px 12px; font-size: 0.8em;" onclick="event.stopPropagation();">Edit</a>
+						<a href="delete_institute?p=<?php echo $irow->pkey; ?>" class="button small" style="padding: 4px 12px; font-size: 0.8em;" onclick="event.stopPropagation(); return confirm('Are you sure you want to delete this institute and all its instruments?');">Delete</a>
+						<?php } ?>
 						<span style="color: rgba(255,255,255,0.6); font-size: 0.95em;">
 							<?php echo $count; ?> instrument<?php echo $count !== 1 ? 's' : ''; ?>
 						</span>
