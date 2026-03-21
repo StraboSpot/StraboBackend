@@ -2539,6 +2539,17 @@ input, select, textarea {
 				text-shadow: 1px 0 0 #ffffff, -1px 0 0 #ffffff, 0 1px 0 #ffffff, 0 -1px 0 #ffffff;
 			}
 
+		a > .icon.major {
+			cursor: pointer;
+			-webkit-transition: background 0.2s ease-in-out;
+			-ms-transition: background 0.2s ease-in-out;
+			transition: background 0.2s ease-in-out;
+		}
+
+		a:hover > .icon.major {
+			background: #e44c65;
+		}
+
 		.icon.major {
 			background: #272833;
 			border-radius: 100%;

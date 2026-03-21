@@ -126,32 +126,32 @@ include 'includes/mheader.php';
 						<div class="box alt">
 							<div class="row gtr-uniform">
 								<section class="col-4 col-6-medium col-12-xsmall">
-									<span class="icon solid alt major fa-chart-area"></span>
+									<a href="/interoperability"><span class="icon solid alt major fa-chart-area"></span></a>
 									<h3><a href="/interoperability">Interoperability</a></h3>
 									<p>See how we are working with others and their projects!</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
-									<span class="icon solid alt major fa-comment"></span>
+									<a href="/citations"><span class="icon solid alt major fa-comment"></span></a>
 									<h3><a href="/citations">Citations</a></h3>
 									<p>How to cite StraboSpot in your research, posters, and presentations.</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
-									<span class="icon solid alt major fa-flask"></span>
+									<a href="/citations#logos"><span class="icon solid alt major fa-flask"></span></a>
 									<h3><a href="/citations#logos">Logos and Brand</a></h3>
 									<p>Download logo files for your posters and presentations.</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
-									<span class="icon solid alt major fa-paper-plane"></span>
+									<a href="/fullsearch"><span class="icon solid alt major fa-paper-plane"></span></a>
 									<h3><a href="/fullsearch">Search</a></h3>
 									<p>Review public datasets in StraboField, Micro, and Experimental.</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
-									<span class="icon solid alt major fa-file"></span>
+									<a href="javascript:alert('Coming Soon!');"><span class="icon solid alt major fa-file"></span></a>
 									<h3><a href="javascript:alert('Coming Soon!');">Statistics</a></h3>
 									<p>Geology is neverending, see where people are using StraboSpot across the globe!</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
-									<span class="icon solid alt major fa-lock"></span>
+									<a href="/privacy"><span class="icon solid alt major fa-lock"></span></a>
 									<h3><a href="/privacy">Data Privacy</a></h3>
 									<p>Review our data privacy and trust policies to see how your data is protected.</p>
 								</section>
