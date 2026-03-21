@@ -167,7 +167,7 @@ include("includes/mheader.php");
 			strabospot@gmail.com
 		</p>
 
-		<p style="color: rgba(255, 255, 255, 0.85); margin-top: 2em; font-weight: 700;">Last Edited on 2024-10-04</p>
+		<p style="color: rgba(255, 255, 255, 0.85); margin-top: 2em; font-weight: 700;">Last Edited on 2026-03-20</p>
 
 		<div class="bottomSpacer"></div>
 

@@ -56,7 +56,7 @@
 
 
 					<ul class="copyright">
-						<li>&copy; 2025 StraboSpot. All rights reserved.</li><!--<li>Design: <a href="http://html5up.net">HTML5 UP</a></li>-->
+						<li>&copy; 2026 StraboSpot. All rights reserved.</li><!--<li>Design: <a href="http://html5up.net">HTML5 UP</a></li>-->
 					</ul>
 				</footer>
 
