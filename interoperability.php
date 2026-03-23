@@ -71,7 +71,7 @@ include("includes/mheader.php");
 						<h3 class="exp-box-title">User Built Tools</h3>
 						<p style="color: rgba(255, 255, 255, 0.85); line-height: 1.6; margin-bottom: 1em;">
 							Translation Tool from StraboField to GeMS used by the USGS, Andrew Hoxey<br>
-							<a href="#">Link</a>
+							<a href="https://github.com/andrewkrh/StraboGeMSTranslator" target="_blank">More Info</a>
 						</p>
 						<p style="color: rgba(255, 255, 255, 0.85); line-height: 1.6; margin-bottom: 1em;">
 							StraboField Data Project compiling and sorting tool, J Schneider<br>

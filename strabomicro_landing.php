@@ -177,6 +177,7 @@ include("includes/mheader.php");
 							<li>Researchers</li>
 							<li>Educators</li>
 							<li>Students</li>
+							<li>Field and experimental geologists who study materials at the thin section scale and below</li>
 						</ul>
 					</div>
 				</div>
