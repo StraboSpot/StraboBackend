@@ -74,7 +74,7 @@ $ptTypeOptions = [
 					</header>
 					<section id="content">
 
-<p style="margin-bottom:25px;">This export tool is based on the work of <strong>Andrew Hoxey</strong> at the New Mexico Bureau of Geology and Mineral Resources. Original project: <a href="https://github.com/andrewkrh/StraboGeMSTranslator" target="_blank">StraboGeMSTranslator on GitHub</a>.</p>
+<div style="background:#333;padding:15px 20px;border-radius:8px;margin-bottom:25px;">This export tool is based on the work of <strong>Andrew Hoxey</strong> at the New Mexico Bureau of Geology and Mineral Resources. Original project: <a href="https://github.com/andrewkrh/StraboGeMSTranslator" target="_blank">StraboGeMSTranslator on GitHub</a>.</div>
 
 <?php if(empty($scanResult['lines']) && empty($scanResult['points'])): ?>
 	<p><em>No data found for this dataset. Please verify the dataset contains features.</em></p>
