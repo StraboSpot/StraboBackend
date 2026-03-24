@@ -75,20 +75,11 @@ $ptTypeOptions = [
 					<section id="content">
 
 <?php if(empty($scanResult['lines']) && empty($scanResult['points'])): ?>
-	<div style="background:#fff3cd;border:1px solid #ffc107;padding:15px;border-radius:4px;margin-bottom:20px;">
-		<strong>Warning:</strong> No data found for this dataset. Please verify the dataset contains features.
-	</div>
+	<p><em>No data found for this dataset. Please verify the dataset contains features.</em></p>
 <?php endif; ?>
 
 <?php if(!empty($scanResult['errors'])): ?>
-	<div style="background:#fff3cd;border:1px solid #ffc107;padding:15px;border-radius:4px;margin-bottom:20px;">
-		<strong>Warning:</strong> The following spots were skipped (lines without trace data or unsupported geometry):
-		<ul style="margin:5px 0 0 20px;">
-			<?php foreach($scanResult['errors'] as $errName): ?>
-				<li><?php echo htmlspecialchars($errName); ?></li>
-			<?php endforeach; ?>
-		</ul>
-	</div>
+	<p><em><?php echo count($scanResult['errors']); ?> line(s) without trace data were skipped.</em></p>
 <?php endif; ?>
 
 <form method="POST" action="/searchdownload" id="gemsForm">
@@ -128,39 +119,54 @@ $ptTypeOptions = [
 		<button type="button" class="gems-tab-btn" onclick="showTab('orientations')" id="tabBtnOrientations" style="padding:8px 16px;cursor:pointer;background:#ddd;color:#333;border:none;border-radius:4px 4px 0 0;">Orientation Attributes (<?php echo count($uniqueOrTypes); ?>)</button>
 	</div>
 
+	<style>
+		.gems-table { width:100%; table-layout:fixed; border-collapse:collapse; }
+		.gems-table th { text-align:left; padding:8px; border-bottom:2px solid #555; font-size:0.9em; }
+		.gems-table td { padding:8px; border-bottom:1px solid #444; vertical-align:middle; overflow:hidden; text-overflow:ellipsis; }
+		.gems-table td input[type="text"],
+		.gems-table td select { width:100%; box-sizing:border-box; padding:4px 6px; font-size:0.85em; }
+		.gems-tab-content { border:1px solid #555; padding:10px; border-radius:0 4px 4px 4px; max-height:450px; overflow-y:auto; }
+	</style>
+
 	<!-- Line Attributes Tab -->
-	<div id="tabLines" style="border:1px solid #ddd;padding:15px;border-radius:0 4px 4px 4px;max-height:400px;overflow-y:auto;">
+	<div id="tabLines" class="gems-tab-content">
 		<?php if(empty($uniqueLineTypes)): ?>
-			<p style="color:#666;"><em>No line features found in this dataset.</em></p>
+			<p><em>No line features found in this dataset.</em></p>
 		<?php else: ?>
-			<table style="width:100%;border-collapse:collapse;">
+			<table class="gems-table">
+				<colgroup>
+					<col style="width:30%;">
+					<col style="width:15%;">
+					<col style="width:25%;">
+					<col style="width:30%;">
+				</colgroup>
 				<thead>
-					<tr style="background:#f5f5f5;">
-						<th style="text-align:left;padding:8px;border-bottom:2px solid #ddd;color:#2196F3;">Strabo Input</th>
-						<th style="text-align:left;padding:8px;border-bottom:2px solid #ddd;color:#2196F3;">FGDC Symbol</th>
-						<th style="text-align:left;padding:8px;border-bottom:2px solid #ddd;color:#2196F3;">GeMS Sort</th>
-						<th style="text-align:left;padding:8px;border-bottom:2px solid #ddd;color:#2196F3;">GeMS Line Type</th>
+					<tr>
+						<th>Strabo Input</th>
+						<th>FGDC Symbol</th>
+						<th>GeMS Sort</th>
+						<th>GeMS Line Type</th>
 					</tr>
 				</thead>
 				<tbody>
 					<?php for($i = 0; $i < count($uniqueLineTypes); $i++): ?>
-					<tr style="border-bottom:1px solid #eee;">
-						<td style="padding:6px 8px;">
+					<tr>
+						<td title="<?php echo htmlspecialchars($lineMaps['sb'][$i]); ?>">
 							<?php echo htmlspecialchars($lineMaps['sb'][$i]); ?>
 							<input type="hidden" name="ln_sb[]" value="<?php echo htmlspecialchars($lineMaps['sb'][$i]); ?>">
 						</td>
-						<td style="padding:6px 8px;">
-							<input type="text" name="ln_symbol[]" value="<?php echo htmlspecialchars($lineMaps['symbol'][$i]); ?>" style="width:100px;">
+						<td>
+							<input type="text" name="ln_symbol[]" value="<?php echo htmlspecialchars($lineMaps['symbol'][$i]); ?>">
 						</td>
-						<td style="padding:6px 8px;">
-							<select name="ln_sort[]" style="width:180px;">
+						<td>
+							<select name="ln_sort[]">
 								<?php foreach($lnSortOptions as $opt): ?>
 									<option value="<?php echo htmlspecialchars($opt); ?>"<?php echo ($lineMaps['sort'][$i] === $opt) ? ' selected' : ''; ?>><?php echo htmlspecialchars($opt); ?></option>
 								<?php endforeach; ?>
 							</select>
 						</td>
-						<td style="padding:6px 8px;">
-							<select name="ln_type[]" style="width:250px;">
+						<td>
+							<select name="ln_type[]">
 								<?php foreach($lnTypeOptions as $opt): ?>
 									<option value="<?php echo htmlspecialchars($opt); ?>"<?php echo ($lineMaps['type'][$i] === $opt) ? ' selected' : ''; ?>><?php echo htmlspecialchars($opt); ?></option>
 								<?php endforeach; ?>
@@ -174,30 +180,35 @@ $ptTypeOptions = [
 	</div>
 
 	<!-- Orientation Attributes Tab -->
-	<div id="tabOrientations" style="border:1px solid #ddd;padding:15px;border-radius:0 4px 4px 4px;max-height:400px;overflow-y:auto;display:none;">
+	<div id="tabOrientations" class="gems-tab-content" style="display:none;">
 		<?php if(empty($uniqueOrTypes)): ?>
-			<p style="color:#666;"><em>No orientation data found in this dataset.</em></p>
+			<p><em>No orientation data found in this dataset.</em></p>
 		<?php else: ?>
-			<table style="width:100%;border-collapse:collapse;">
+			<table class="gems-table">
+				<colgroup>
+					<col style="width:40%;">
+					<col style="width:20%;">
+					<col style="width:40%;">
+				</colgroup>
 				<thead>
-					<tr style="background:#f5f5f5;">
-						<th style="text-align:left;padding:8px;border-bottom:2px solid #ddd;color:#2196F3;">Strabo Input</th>
-						<th style="text-align:left;padding:8px;border-bottom:2px solid #ddd;color:#2196F3;">FGDC Symbol</th>
-						<th style="text-align:left;padding:8px;border-bottom:2px solid #ddd;color:#2196F3;">GeMS Orientation Type</th>
+					<tr>
+						<th>Strabo Input</th>
+						<th>FGDC Symbol</th>
+						<th>GeMS Orientation Type</th>
 					</tr>
 				</thead>
 				<tbody>
 					<?php for($i = 0; $i < count($uniqueOrTypes); $i++): ?>
-					<tr style="border-bottom:1px solid #eee;">
-						<td style="padding:6px 8px;">
+					<tr>
+						<td title="<?php echo htmlspecialchars($orMaps['sb'][$i]); ?>">
 							<?php echo htmlspecialchars($orMaps['sb'][$i]); ?>
 							<input type="hidden" name="pt_sb[]" value="<?php echo htmlspecialchars($orMaps['sb'][$i]); ?>">
 						</td>
-						<td style="padding:6px 8px;">
-							<input type="text" name="pt_symbol[]" value="<?php echo htmlspecialchars($orMaps['symbol'][$i]); ?>" style="width:100px;">
+						<td>
+							<input type="text" name="pt_symbol[]" value="<?php echo htmlspecialchars($orMaps['symbol'][$i]); ?>">
 						</td>
-						<td style="padding:6px 8px;">
-							<select name="pt_type[]" style="width:250px;">
+						<td>
+							<select name="pt_type[]">
 								<?php foreach($ptTypeOptions as $opt): ?>
 									<option value="<?php echo htmlspecialchars($opt); ?>"<?php echo ($orMaps['type'][$i] === $opt) ? ' selected' : ''; ?>><?php echo htmlspecialchars($opt); ?></option>
 								<?php endforeach; ?>
@@ -216,7 +227,7 @@ $ptTypeOptions = [
 	<h3>Step 3: Run Translation</h3>
 	<p>Click the button below to generate 9 GeMS-compliant GeoJSON files packaged as a ZIP download.</p>
 	<div style="text-align:center;padding-top:10px;">
-		<input class="primary" type="submit" value="Run Translation &amp; Download" style="padding:10px 30px;font-size:16px;">
+		<input type="submit" class="button primary" value="Run Translation &amp; Download">
 	</div>
 
 </form>

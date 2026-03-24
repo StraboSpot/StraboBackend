@@ -27483,12 +27483,15 @@ QML;
 		$getParams = ['dsids' => $dsids, 'userpkey' => $this->get['userpkey']];
 		$json = $this->strabo->getDatasetSpotsSearch(null, $getParams);
 
+		// Convert stdClass objects to arrays recursively
+		$json = json_decode(json_encode($json), true);
+
 		if(!isset($json['features']) || empty($json['features'])){
 			return $result;
 		}
 
 		// Load tags for unit label lookups
-		$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+		$this->alltags = json_decode(json_encode($this->strabo->getTagsFromDatasetIds($dsids)), true);
 
 		foreach($json['features'] as $feature){
 			$geomType = $feature['geometry']['type'] ?? '';
@@ -27513,10 +27516,8 @@ QML;
 				}
 			} elseif($geomType === 'Point'){
 				$result['points'][] = $feature;
-			} else {
-				// Polygons and other geometry types are flagged
-				$result['errors'][] = $props['name'] ?? 'Unknown';
 			}
+			// Polygons and other geometry types are silently skipped (not used in GeMS)
 		}
 
 		return $result;
@@ -27943,6 +27944,7 @@ QML;
 			$sort[] = 2;
 		}
 		if(!empty($properties['orientation_data'])){
+			$sort[] = 1; // Also create a Station so OrientationPoints have valid StationsID
 			$sort[] = 3;
 		}
 		if(!empty($properties['tags'])){
@@ -27999,12 +28001,16 @@ QML;
 	public function gemsGetOrType($sbOrStr, $gmOrSym){
 		if(strpos($sbOrStr, 'fault') !== false) return 'fault';
 		if(strpos($sbOrStr, 'joint') !== false) return 'joint';
+		if(strpos($sbOrStr, 'fracture') !== false) return 'joint';
 		if(strpos($sbOrStr, 'fold hinge') !== false) return 'fold hinge';
 		if(strpos($sbOrStr, 'foliation') !== false) return 'foliation';
 		if(strpos($sbOrStr, 'mineral alignment') !== false) return 'mineral lineation';
 		if(strpos($sbOrStr, 'slickenlines') !== false) return 'slickenline';
+		if(strpos($sbOrStr, 'striation') !== false) return 'slickenline';
 		if(strpos($sbOrStr, 'bedding') !== false) return 'bedding';
-		return 'undefined';
+		if(strpos($sbOrStr, 'linear') !== false) return 'lineation';
+		if(strpos($sbOrStr, 'planar') !== false) return 'bedding';
+		return 'bedding';
 	}
 
 	/**
@@ -28496,29 +28502,23 @@ QML;
 
 		// Write to temp directory and zip
 		$randnum = $this->strabo->db->get_var("select nextval('file_seq')");
-		$tempDir = "ogrtemp/$randnum";
-		mkdir($tempDir, 0777, true);
+		mkdir("ogrtemp/$randnum");
+		mkdir("ogrtemp/$randnum/data");
 
-		$jsonFiles = [];
 		foreach($collections as $name => $collection){
 			$filename = $datasetName . '_' . $name . '.json';
-			$filepath = "$tempDir/$filename";
-			file_put_contents($filepath, json_encode($collection, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
-			$jsonFiles[] = $filepath;
+			file_put_contents("ogrtemp/$randnum/data/$filename", json_encode($collection, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
 		}
 
 		// Create zip
-		$zipFile = "$tempDir/{$datasetName}_GeMS.zip";
-		$zipCmd = 'cd ' . escapeshellarg($tempDir) . ' && zip -j ' . escapeshellarg($zipFile);
-		foreach($jsonFiles as $jf){
-			$zipCmd .= ' ' . escapeshellarg(basename($jf));
-		}
-		exec($zipCmd);
+		$zipName = $datasetName . '_GeMS.zip';
+		exec("zip -j ogrtemp/$randnum/$zipName ogrtemp/$randnum/data/* 2>&1", $results);
 
 		// Serve download
+		$zipFile = "ogrtemp/$randnum/$zipName";
 		if(file_exists($zipFile)){
 			header('Content-Type: application/zip');
-			header('Content-Disposition: attachment; filename="' . $datasetName . '_GeMS.zip"');
+			header('Content-Disposition: attachment; filename="' . $zipName . '"');
 			header('Content-Length: ' . filesize($zipFile));
 			readfile($zipFile);
 		} else {
@@ -28526,11 +28526,10 @@ QML;
 		}
 
 		// Cleanup
-		foreach($jsonFiles as $jf){
-			if(file_exists($jf)) unlink($jf);
-		}
+		array_map('unlink', glob("ogrtemp/$randnum/data/*"));
+		if(is_dir("ogrtemp/$randnum/data")) rmdir("ogrtemp/$randnum/data");
 		if(file_exists($zipFile)) unlink($zipFile);
-		if(is_dir($tempDir)) rmdir($tempDir);
+		if(is_dir("ogrtemp/$randnum")) rmdir("ogrtemp/$randnum");
 	}
 
 }
