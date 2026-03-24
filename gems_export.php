@@ -31,38 +31,63 @@ $datasetName = $datasetName ?: 'GeMS_Export';
 
 // Config options for dropdowns
 $lnSortOptions = ["ContactsAndFaults", "GeologicLines", "MapUnitLines", "CartographicLines"];
-$lnTypeOptions = [
-	"contact","igneous contact", "intrusive contact", "metamorphic contact",
-	"internal contact", "angular unconformity",
-	"disconformity", "nonconformity", "paraconformity",
-	"unconformity", "fault", "normal fault", "thrust fault",
-	"reverse fault","right-lateral strike-slip fault",
-	"left-lateral strike-slip fault", "right-lateral oblique-slip fault",
-	"left-lateral oblique-slip fault", "detachment fault",
-	"low-angle normal fault", "fault scarp", "scarp",
-	"elevation profile", "eolian", "escarpment", "geophysical fault",
-	"gradational contact", "headscarp", "joint", "breccia",
-	"miscellaneous map element", "map boundary",
-	"anticline", "asymmetric anticline", "syncline", "asymmetric syncline",
-	"crest", "escarpment", "geophysical boundary", "geophysical survey",
-	"headscarp", "landslide", "lineament", "lineation", "metamorphic facies",
-	"monocline", "monocline, anticlinal bend", "monocline, synclinal bend",
-	"overturned anticline", "overturned syncline", "sedimentary facies",
-	"shear zone",
-	"key bed", "dike", "clay bed", "coal bed", "N/A",
-	"analytical", "bedding line", "cross-section line",
-	"feature label", "leader", "measured-section line",
-	"scale change", "trench", "well"
+$lnTypeGroups = [
+	"Contacts &amp; Faults" => [
+		"angular unconformity", "breccia", "contact", "detachment fault",
+		"disconformity", "elevation profile", "eolian", "escarpment",
+		"fault", "fault scarp", "geophysical fault", "gradational contact",
+		"headscarp", "igneous contact", "internal contact", "intrusive contact",
+		"joint", "left-lateral oblique-slip fault", "left-lateral strike-slip fault",
+		"low-angle normal fault", "map boundary", "metamorphic contact",
+		"miscellaneous map element", "nonconformity", "normal fault",
+		"paraconformity", "reverse fault", "right-lateral oblique-slip fault",
+		"right-lateral strike-slip fault", "scarp", "thrust fault", "unconformity"
+	],
+	"Geologic Lines" => [
+		"anticline", "asymmetric anticline", "asymmetric syncline", "breccia",
+		"crest", "escarpment", "geophysical boundary", "geophysical survey",
+		"headscarp", "landslide", "lineament", "lineation", "metamorphic facies",
+		"monocline", "monocline, anticlinal bend", "monocline, synclinal bend",
+		"overturned anticline", "overturned syncline", "scarp",
+		"sedimentary facies", "shear zone", "syncline"
+	],
+	"Map Unit Lines" => [
+		"clay bed", "coal bed", "dike", "key bed", "N/A"
+	],
+	"Cartographic Lines" => [
+		"analytical", "bedding line", "cross-section line", "feature label",
+		"leader", "measured-section line", "scale change", "trench", "well"
+	]
 ];
-$ptTypeOptions = [
-	"anticline", "bedding", "crenulation lineation", "cumulate foliation", "dike inclination",
-	"eolian", "fault", "fault decoration", "fault inclination", "fault offset", "fluvial",
-	"fold decoration", "fold hinge", "foliation", "groundwater movement", "intersection lineation",
-	"joint", "landslide", "lineation", "local fault offset", "mineral lineation", "minor fault",
-	"minor fold", "modern current", "overturned bedding", "paleocurrent", "plunge",
-	"primary foliation", "secondary foliation", "slickenline", "spring", "stretching lineation",
-	"syncline", "Toreva block"
+// Flat list for value matching (preserves all options)
+$lnTypeOptions = [];
+foreach($lnTypeGroups as $opts){ $lnTypeOptions = array_merge($lnTypeOptions, $opts); }
+$ptTypeGroups = [
+	"Bedding" => [
+		"bedding", "overturned bedding"
+	],
+	"Foliation" => [
+		"cumulate foliation", "foliation", "primary foliation", "secondary foliation"
+	],
+	"Faults" => [
+		"fault", "fault decoration", "fault inclination", "fault offset",
+		"local fault offset", "minor fault", "slickenline"
+	],
+	"Folds" => [
+		"anticline", "fold decoration", "fold hinge", "minor fold", "syncline"
+	],
+	"Lineations" => [
+		"crenulation lineation", "intersection lineation", "lineation",
+		"mineral lineation", "plunge", "stretching lineation"
+	],
+	"Other" => [
+		"dike inclination", "eolian", "fluvial", "groundwater movement",
+		"joint", "landslide", "modern current", "paleocurrent",
+		"spring", "Toreva block"
+	]
 ];
+$ptTypeOptions = [];
+foreach($ptTypeGroups as $opts){ $ptTypeOptions = array_merge($ptTypeOptions, $opts); }
 ?>
 
 		<!-- Main -->
@@ -176,8 +201,12 @@ $ptTypeOptions = [
 						</td>
 						<td>
 							<select name="ln_type[]">
-								<?php foreach($lnTypeOptions as $opt): ?>
-									<option value="<?php echo htmlspecialchars($opt); ?>"<?php echo ($lineMaps['type'][$i] === $opt) ? ' selected' : ''; ?>><?php echo htmlspecialchars($opt); ?></option>
+								<?php foreach($lnTypeGroups as $groupLabel => $groupOpts): ?>
+									<optgroup label="<?php echo $groupLabel; ?>">
+										<?php foreach($groupOpts as $opt): ?>
+											<option value="<?php echo htmlspecialchars($opt); ?>"<?php echo ($lineMaps['type'][$i] === $opt) ? ' selected' : ''; ?>><?php echo htmlspecialchars($opt); ?></option>
+										<?php endforeach; ?>
+									</optgroup>
 								<?php endforeach; ?>
 							</select>
 						</td>
@@ -218,8 +247,12 @@ $ptTypeOptions = [
 						</td>
 						<td>
 							<select name="pt_type[]">
-								<?php foreach($ptTypeOptions as $opt): ?>
-									<option value="<?php echo htmlspecialchars($opt); ?>"<?php echo ($orMaps['type'][$i] === $opt) ? ' selected' : ''; ?>><?php echo htmlspecialchars($opt); ?></option>
+								<?php foreach($ptTypeGroups as $groupLabel => $groupOpts): ?>
+									<optgroup label="<?php echo htmlspecialchars($groupLabel); ?>">
+										<?php foreach($groupOpts as $opt): ?>
+											<option value="<?php echo htmlspecialchars($opt); ?>"<?php echo ($orMaps['type'][$i] === $opt) ? ' selected' : ''; ?>><?php echo htmlspecialchars($opt); ?></option>
+										<?php endforeach; ?>
+									</optgroup>
 								<?php endforeach; ?>
 							</select>
 						</td>
