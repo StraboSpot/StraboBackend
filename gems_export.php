@@ -159,6 +159,9 @@ foreach($ptTypeGroups as $opts){ $ptTypeOptions = array_merge($ptTypeOptions, $o
 		.gems-table td { padding:8px; border-bottom:1px solid #444; vertical-align:middle; overflow:hidden; text-overflow:ellipsis; }
 		.gems-table td input[type="text"],
 		.gems-table td select { width:100%; box-sizing:border-box; padding:4px 6px; font-size:0.85em; }
+		.gems-table td select { background:#2a2a2a; color:#eee; border:1px solid #555; }
+		.gems-table td select optgroup { background:#2a2a2a; color:#eee; }
+		.gems-table td select option { background:#2a2a2a; color:#eee; }
 		.gems-tab-content { border:1px solid #555; padding:10px; border-radius:0 4px 4px 4px; max-height:450px; overflow-y:auto; }
 	</style>
 
