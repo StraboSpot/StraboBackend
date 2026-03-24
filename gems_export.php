@@ -81,7 +81,14 @@ $ptTypeOptions = [
 <?php endif; ?>
 
 <?php if(!empty($scanResult['errors'])): ?>
-	<p><em><?php echo count($scanResult['errors']); ?> line(s) without trace data were skipped.</em></p>
+	<details style="margin-bottom:20px;">
+		<summary style="cursor:pointer;"><em><?php echo count($scanResult['errors']); ?> line(s) without trace data were skipped.</em></summary>
+		<ul style="margin-top:10px;">
+			<?php foreach($scanResult['errors'] as $errName): ?>
+				<li><?php echo htmlspecialchars($errName); ?></li>
+			<?php endforeach; ?>
+		</ul>
+	</details>
 <?php endif; ?>
 
 <form method="POST" action="/searchdownload" id="gemsForm">
