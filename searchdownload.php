@@ -16,10 +16,14 @@ include("prepare_connections.php");
 
 include("includes/straboClasses/straboOutputClass.php");
 
-$straboOut = new straboOutputClass($strabo,$_GET);
+$getParams = $_GET;
+if(!empty($_POST)){
+	$getParams = array_merge($getParams, $_POST);
+}
+$straboOut = new straboOutputClass($strabo,$getParams);
 
-$type=$_GET['type'];
-$dsids=$_GET['dsids'];
+$type = $_GET['type'] ?? ($_POST['type'] ?? '');
+$dsids = $_GET['dsids'] ?? ($_POST['dsids'] ?? '');
 
 if($type=="shapefile"){
 	$straboOut->shapefileOut();
@@ -71,6 +75,8 @@ if($type=="shapefile"){
 	$straboOut->devgeoJSONOut();
 }elseif($type=="hollytest"){
 	$straboOut->hollyTest();
+}elseif($type=="gems"){
+	$straboOut->gemsOut();
 }
 
 ?>

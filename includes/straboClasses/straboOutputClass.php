@@ -27400,5 +27400,1138 @@ QML;
 		}
 	}
 
+	// =========================================================================
+	// GeMS (Geologic Map Schema) Export Methods
+	// Ported from Python StraboGeMSTranslator by Andrew Hoxey (NM Bureau of Geology)
+	// =========================================================================
+
+	// GeMS config constants
+	private $gemsLnSortOptions = ["ContactsAndFaults", "GeologicLines", "MapUnitLines", "CartographicLines"];
+
+	private $gemsLnTypeOptions = [
+		// ContactsAndFaults
+		"contact","igneous contact", "intrusive contact", "metamorphic contact",
+		"internal contact", "angular unconformity",
+		"disconformity", "nonconformity", "paraconformity",
+		"unconformity", "fault", "normal fault", "thrust fault",
+		"reverse fault","right-lateral strike-slip fault",
+		"left-lateral strike-slip fault", "right-lateral oblique-slip fault",
+		"left-lateral oblique-slip fault", "detachment fault",
+		"low-angle normal fault", "fault scarp", "scarp",
+		"elevation profile", "eolian", "escarpment", "geophysical fault",
+		"gradational contact", "headscarp", "joint", "breccia",
+		"miscellaneous map element", "map boundary",
+		// GeologicLines
+		"anticline", "asymmetric anticline", "syncline", "asymmetric syncline", "breccia",
+		"crest", "escarpment", "geophysical boundary", "geophysical survey",
+		"headscarp", "landslide", "lineament", "lineation", "metamorphic facies",
+		"monocline", "monocline, anticlinal bend", "monocline, synclinal bend",
+		"overturned anticline", "overturned syncline", "scarp", "sedimentary facies",
+		"shear zone",
+		// MapUnitLines
+		"key bed", "dike", "clay bed", "coal bed", "N/A",
+		// CartographicLines
+		"analytical", "bedding line", "crest", "cross-section line",
+		"feature label", "geophysical survey", "leader", "measured-section line",
+		"miscellaneous map element", "scale change", "trench", "well"
+	];
+
+	private $gemsPtTypeOptions = [
+		"anticline", "bedding", "crenulation lineation", "cumulate foliation", "dike inclination",
+		"eolian", "fault", "fault decoration", "fault inclination", "fault offset", "fluvial",
+		"fold decoration", "fold hinge", "foliation", "groundwater movement", "intersection lineation",
+		"joint", "landslide", "lineation", "local fault offset", "mineral lineation", "minor fault",
+		"minor fold", "modern current", "overturned bedding", "paleocurrent", "plunge",
+		"primary foliation", "secondary foliation", "slickenline", "spring", "stretching lineation",
+		"syncline", "Toreva block"
+	];
+
+	private $gemsFgdcTable = null;
+
+	/**
+	 * Load the FGDC Symbols Table CSV into an associative array keyed by Symbol.
+	 */
+	public function gemsLoadFGDCTable(){
+		if($this->gemsFgdcTable !== null) return $this->gemsFgdcTable;
+
+		$this->gemsFgdcTable = [];
+		$csvPath = dirname(__FILE__) . '/../data/FGDC_Symbols_Table.csv';
+		if(($handle = fopen($csvPath, 'r')) !== false){
+			$headers = fgetcsv($handle);
+			while(($row = fgetcsv($handle)) !== false){
+				$assoc = array_combine($headers, $row);
+				$symbol = $assoc['Symbol'];
+				$this->gemsFgdcTable[$symbol] = $assoc;
+			}
+			fclose($handle);
+		}
+		return $this->gemsFgdcTable;
+	}
+
+	// =========================================================================
+	// GeMS Scanning Methods (called by gems_export.php)
+	// =========================================================================
+
+	/**
+	 * Scan a dataset and separate features into lines and points.
+	 * Returns raw (un-fixSpot'd) features so nested trace/orientation_data are intact.
+	 */
+	public function gemsScanDataset($dsids){
+		$result = ['lines' => [], 'points' => [], 'errors' => []];
+
+		// Fetch all spots for the dataset
+		$getParams = ['dsids' => $dsids, 'userpkey' => $this->get['userpkey']];
+		$json = $this->strabo->getDatasetSpotsSearch(null, $getParams);
+
+		if(!isset($json['features']) || empty($json['features'])){
+			return $result;
+		}
+
+		// Load tags for unit label lookups
+		$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+
+		foreach($json['features'] as $feature){
+			$geomType = $feature['geometry']['type'] ?? '';
+			$props = $feature['properties'] ?? [];
+
+			// Attach tags to properties
+			if(isset($this->alltags) && !empty($this->alltags)){
+				$spotId = $props['id'] ?? '';
+				foreach($this->alltags as $tag){
+					if(isset($tag['spots']) && in_array($spotId, $tag['spots'])){
+						$props['tags'][] = $tag;
+					}
+				}
+				$feature['properties'] = $props;
+			}
+
+			if($geomType === 'LineString'){
+				if(!isset($props['trace'])){
+					$result['errors'][] = $props['name'] ?? 'Unknown';
+				} else {
+					$result['lines'][] = $feature;
+				}
+			} elseif($geomType === 'Point'){
+				$result['points'][] = $feature;
+			} else {
+				// Polygons and other geometry types are flagged
+				$result['errors'][] = $props['name'] ?? 'Unknown';
+			}
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Extract unique line trace type strings from an array of line features.
+	 */
+	public function gemsGetUniqueLineTypes($lines){
+		$types = [];
+		$seen = [];
+		foreach($lines as $line){
+			$str = $this->gemsGetLineTraceString($line['properties']);
+			if(!in_array($str, $seen)){
+				$seen[] = $str;
+				$types[] = $str;
+			}
+		}
+		return $types;
+	}
+
+	/**
+	 * Extract unique orientation type strings from an array of point features.
+	 */
+	public function gemsGetUniqueOrientationTypes($points){
+		$types = [];
+		$seen = [];
+		foreach($points as $point){
+			$props = $point['properties'];
+			if(!isset($props['orientation_data']) || empty($props['orientation_data'])){
+				continue;
+			}
+			$orientations = $this->gemsOrientationParser($props['orientation_data']);
+			foreach($orientations as $orDict){
+				$str = $this->gemsGetOrientationString($orDict);
+				if(!in_array($str, $seen)){
+					$seen[] = $str;
+					$types[] = $str;
+				}
+			}
+		}
+		return $types;
+	}
+
+	/**
+	 * Auto-compute FGDC symbol, GeMS sort, and GeMS type for each unique line type.
+	 */
+	public function gemsAutoMapLines($uniqueLineTypes){
+		$this->gemsLoadFGDCTable();
+		$sb = [];
+		$symbols = [];
+		$sorts = [];
+		$types = [];
+		foreach($uniqueLineTypes as $lt){
+			$sb[] = $lt;
+			$sym = $this->gemsGetLineSymbol($lt);
+			$symbols[] = $sym;
+			$sorts[] = $this->gemsSortLineFeatureClass($lt);
+			$types[] = $this->gemsGetLineType($lt, $sym);
+		}
+		return ['sb' => $sb, 'symbol' => $symbols, 'sort' => $sorts, 'type' => $types];
+	}
+
+	/**
+	 * Auto-compute FGDC symbol and GeMS type for each unique orientation type.
+	 */
+	public function gemsAutoMapOrientations($uniqueOrTypes){
+		$sb = [];
+		$symbols = [];
+		$types = [];
+		foreach($uniqueOrTypes as $ot){
+			$sb[] = $ot;
+			$sym = $this->gemsGetOrSymbol($ot);
+			$symbols[] = $sym;
+			$types[] = $this->gemsGetOrType($ot, $sym);
+		}
+		return ['sb' => $sb, 'symbol' => $symbols, 'type' => $types];
+	}
+
+	// =========================================================================
+	// GeMS Line Translation Methods (ported from StraboLineAttributeTranslators.py)
+	// =========================================================================
+
+	/**
+	 * Build a trace type string from a line feature's properties.
+	 * Concatenates type/quality fields from the trace dict.
+	 */
+	public function gemsGetLineTraceString($properties){
+		$trace = $properties['trace'] ?? [];
+		$traceType = '';
+		foreach($trace as $key => $val){
+			if(strpos($key, 'type') !== false || strpos($key, 'quality') !== false){
+				$traceType .= $val . ' ';
+			}
+		}
+		return $traceType;
+	}
+
+	/**
+	 * Compute FGDC symbol code from a trace type string.
+	 * Port of Python getSymbol() - integer arithmetic approach.
+	 */
+	public function gemsGetLineSymbol($sbLineStr){
+		$gemSymbol = 0;
+
+		// Contacts
+		if(strpos($sbLineStr, 'contact') !== false || strpos($sbLineStr, 'bedding') !== false){
+			$gemSymbol += 10100;
+			if(strpos($sbLineStr, 'unconformity') !== false){
+				$gemSymbol += 24;
+			} elseif(strpos($sbLineStr, 'bedding') !== false){
+				$gemSymbol += 8;
+			} elseif(strpos($sbLineStr, 'gradational') !== false){
+				$gemSymbol += 16;
+			} elseif(strpos($sbLineStr, 'volcanic') !== false){
+				$gemSymbol += 723;
+			} elseif(strpos($sbLineStr, 'marker_layer') !== false){
+				$gemSymbol += 100;
+				if(strpos($sbLineStr, 'clay') !== false) $gemSymbol += 8;
+				if(strpos($sbLineStr, 'economic') !== false) $gemSymbol += 16;
+				if(strpos($sbLineStr, 'coal') !== false) $gemSymbol += 24;
+				if(strpos($sbLineStr, 'clinker') !== false) $gemSymbol += 32;
+			}
+		}
+
+		// Dikes
+		if(strpos($sbLineStr, 'dike') !== false){
+			$gemSymbol += 200;
+		}
+
+		// Faults
+		if(strpos($sbLineStr, 'fault') !== false){
+			$gemSymbol += 20000;
+			if(strpos($sbLineStr, 'dextral') !== false && strpos($sbLineStr, 'normal') === false && strpos($sbLineStr, 'reverse') === false){
+				$gemSymbol += 600;
+			} elseif(strpos($sbLineStr, 'sinistral') !== false && strpos($sbLineStr, 'normal') === false && strpos($sbLineStr, 'reverse') === false){
+				$gemSymbol += 608;
+			} elseif(strpos($sbLineStr, 'nomal') !== false && strpos($sbLineStr, 'low_angle') === false && strpos($sbLineStr, 'sinistral') === false && strpos($sbLineStr, 'dextral') === false){
+				$gemSymbol += 200;
+			} elseif(strpos($sbLineStr, 'low_angle_norm') !== false){
+				$gemSymbol += 1000;
+			} elseif(strpos($sbLineStr, 'reverse') !== false && strpos($sbLineStr, 'sinistral') === false && strpos($sbLineStr, 'dextral') === false){
+				$gemSymbol += 400;
+			} elseif(strpos($sbLineStr, 'thrust') !== false){
+				$gemSymbol += 800;
+			} elseif(strpos($sbLineStr, 'dextral_reverse') !== false || strpos($sbLineStr, 'dextral_normal') !== false){
+				$gemSymbol += 700;
+			} elseif(strpos($sbLineStr, 'sinistral_reverse') !== false || strpos($sbLineStr, 'sinistral_normal') !== false){
+				$gemSymbol += 708;
+			} else {
+				$gemSymbol += 100;
+			}
+		}
+
+		if(strpos($sbLineStr, 'fault') !== false && strpos($sbLineStr, 'scarp') !== false){
+			$gemSymbol = 1200;
+		}
+
+		// Folds
+		if(strpos($sbLineStr, 'fold_axial_tra') !== false){
+			$gemSymbol += 50000;
+			if(strpos($sbLineStr, 'syncline') !== false){
+				$gemSymbol += 500;
+			} elseif(strpos($sbLineStr, 'anticline') !== false){
+				$gemSymbol += 100;
+			} elseif(strpos($sbLineStr, 'monocline') !== false){
+				$gemSymbol += 900;
+			} elseif(strpos($sbLineStr, 'antiformal_syn') !== false){
+				$gemSymbol += 732;
+			} elseif(strpos($sbLineStr, 'synformal_anti') !== false){
+				$gemSymbol += 332;
+			} elseif(strpos($sbLineStr, 'synform') !== false){
+				$gemSymbol += 600;
+			} elseif(strpos($sbLineStr, 'antiform') !== false){
+				$gemSymbol += 200;
+			} elseif(strpos($sbLineStr, 's_fold') !== false || strpos($sbLineStr, 'z_fold') !== false || strpos($sbLineStr, 'm_fold') !== false){
+				$gemSymbol += 1100;
+			} elseif(strpos($sbLineStr, 'ptygmatic') !== false || strpos($sbLineStr, 'unknown') !== false){
+				$gemSymbol += 1000;
+			}
+		}
+
+		if(strpos($sbLineStr, 'sheath') !== false){
+			$gemSymbol += 200;
+		}
+
+		// Geomorphic
+		if(strpos($sbLineStr, 'geomorphic_fea') !== false){
+			$gemSymbol = 11000;
+			if(strpos($sbLineStr, 'glacial') !== false) $gemSymbol += 300;
+			elseif(strpos($sbLineStr, 'fluvial') !== false) $gemSymbol += 200;
+			elseif(strpos($sbLineStr, 'marine') !== false) $gemSymbol += 500;
+			elseif(strpos($sbLineStr, 'lacustine') !== false) $gemSymbol += 500;
+			elseif(strpos($sbLineStr, 'arid') !== false) $gemSymbol += 600;
+			elseif(strpos($sbLineStr, 'debris') !== false || strpos($sbLineStr, 'landslide') !== false) $gemSymbol += 700;
+			elseif(strpos($sbLineStr, 'volcanic') !== false) $gemSymbol += 801;
+
+			if(strpos($sbLineStr, 'ridge') !== false) $gemSymbol += 10;
+			elseif(strpos($sbLineStr, 'shoreline') !== false) $gemSymbol += 13;
+		}
+
+		// Anthropogenic
+		if(strpos($sbLineStr, 'anthropenic_fe') !== false){
+			$gemSymbol = 12800;
+			if(strpos($sbLineStr, 'fence_line') !== false) $gemSymbol += 107;
+			if(strpos($sbLineStr, 'property_line') !== false) $gemSymbol += 106;
+			if(strpos($sbLineStr, 'road') !== false) $gemSymbol += 2;
+			if(strpos($sbLineStr, 'trail') !== false) $gemSymbol += 15;
+			if(strpos($sbLineStr, 'other') !== false) $gemSymbol += 19;
+		}
+
+		// Final digit - accuracy/confidence
+		if(strpos($sbLineStr, 'known') !== false){
+			$gemSymbol += 1;
+		} elseif(strpos($sbLineStr, 'approximate(?)') !== false){
+			$gemSymbol += 4;
+		} elseif(strpos($sbLineStr, 'approximate') !== false){
+			$gemSymbol += 3;
+		} elseif(strpos($sbLineStr, 'inferred(?)') !== false){
+			$gemSymbol += 6;
+		} elseif(strpos($sbLineStr, 'inferred') !== false){
+			$gemSymbol += 5;
+		} elseif(strpos($sbLineStr, 'concealed') !== false){
+			$gemSymbol += 7;
+		} else {
+			$gemSymbol += 31;
+		}
+
+		// Convert integer to dotted string
+		$gemSymbol = '0' . strval($gemSymbol);
+		$gemSymbol = substr($gemSymbol, 0, 2) . '.' . substr($gemSymbol, 2, 2) . '.' . substr($gemSymbol, 4);
+
+		if(strpos($sbLineStr, 'anthropenic_fe') !== false || strpos($sbLineStr, 'geomorphic_fea') !== false){
+			$gemSymbol = substr($gemSymbol, 3);
+		}
+
+		// Special cases
+		if(strpos($sbLineStr, 'deformation_zo') !== false) $gemSymbol = '14.02';
+		if(strpos($sbLineStr, 'shear_zone') !== false) $gemSymbol = '14.01';
+		if(strpos($sbLineStr, 'plunging') !== false && strpos($sbLineStr, 'anticline') !== false) $gemSymbol = '05.10.05';
+		if(strpos($sbLineStr, 'plunging') !== false && strpos($sbLineStr, 'syncline') !== false) $gemSymbol = '05.10.06';
+		if(strpos($sbLineStr, 'other_feature') !== false && strpos($sbLineStr, 'extent_of_map') !== false) $gemSymbol = '31.08';
+		if(strpos($sbLineStr, 'cross_section') !== false) $gemSymbol = '31.10';
+		if(strpos($sbLineStr, 'stratigraphic_section') !== false) $gemSymbol = '31.05';
+
+		return $gemSymbol;
+	}
+
+	/**
+	 * Determine GeMS line type via fuzzy string matching against FGDC description.
+	 * Port of Python getType() using similar_text() instead of fuzzywuzzy.
+	 */
+	public function gemsGetLineType($sbLineStr, $gmSymbol){
+		$options = $this->gemsLnTypeOptions;
+		// Remove "fault scarp" temporarily to avoid fuzz issues
+		$options = array_values(array_filter($options, function($o){ return $o !== 'fault scarp'; }));
+
+		// Apply substitutions like the Python code
+		$sbStr = str_replace('sinistral', 'left-lateral', $sbLineStr);
+		$sbStr = str_replace('dextral', 'right-lateral', $sbStr);
+		$sbStr = str_replace('marker_layer', 'key bed', $sbStr);
+
+		// Get FGDC description for this symbol
+		$fgdcTable = $this->gemsLoadFGDCTable();
+		$fgdcDesc = isset($fgdcTable[$gmSymbol]) ? $fgdcTable[$gmSymbol]['Description'] : 'No description found';
+
+		// Compare first 10 chars of FGDC description against all options
+		$descPrefix = substr($fgdcDesc, 0, 10);
+		$ratios = [];
+		foreach($options as $opt){
+			similar_text($descPrefix, $opt, $pct);
+			$ratios[] = $pct;
+		}
+
+		// Get top 3 matches
+		$indexed = $ratios;
+		arsort($indexed);
+		$topIndices = array_slice(array_keys($indexed), 0, 3);
+		$bestMatches = [];
+		foreach($topIndices as $idx){
+			$bestMatches[] = $options[$idx];
+		}
+
+		// Compare top results against last 20 chars of Strabo string
+		$sbSuffix = substr($sbStr, -20);
+		$topRatios = [];
+		foreach($bestMatches as $match){
+			similar_text($sbSuffix, $match, $pct);
+			$topRatios[] = $pct;
+		}
+
+		$bestIdx = array_search(max($topRatios), $topRatios);
+		$gemType = $bestMatches[$bestIdx];
+
+		if(strpos($fgdcDesc, 'No description') !== false){
+			$gemType = 'miscellaneous map element';
+		}
+
+		return $gemType;
+	}
+
+	/**
+	 * Sort a line trace string into a GeMS feature class category.
+	 */
+	public function gemsSortLineFeatureClass($sbTraceStr){
+		if(strpos($sbTraceStr, 'contact') !== false || strpos($sbTraceStr, 'geologic_struc') !== false){
+			$sort = 'ContactsAndFaults';
+			if(strpos($sbTraceStr, 'dike') !== false || strpos($sbTraceStr, 'sill') !== false || strpos($sbTraceStr, 'marker_layer') !== false){
+				$sort = 'MapUnitLines';
+			} elseif(strpos($sbTraceStr, 'fold_axial_tra') !== false){
+				$sort = 'GeologicLines';
+			}
+		} elseif(strpos($sbTraceStr, 'geomorphic_fea') !== false){
+			$sort = 'GeologicLines';
+		} elseif(strpos($sbTraceStr, 'anthro') !== false){
+			$sort = 'DefaultUnsorted';
+		} elseif(strpos($sbTraceStr, 'scale_bar') !== false){
+			$sort = 'DefaultUnsorted';
+		} elseif(strpos($sbTraceStr, 'bedding') !== false){
+			$sort = 'DefaultUnsorted';
+		} elseif(strpos($sbTraceStr, 'geologic_cross') !== false){
+			$sort = 'CartographicLines';
+		} elseif(strpos($sbTraceStr, 'geophysical_cross') !== false){
+			$sort = 'CartographicLines';
+		} elseif(strpos($sbTraceStr, 'other_feature') !== false){
+			$sort = 'DefaultUnsorted';
+		} else {
+			$sort = 'DefaultUnsorted';
+		}
+		return $sort;
+	}
+
+	/**
+	 * Determine identity confidence from trace string keywords.
+	 */
+	public function gemsGetLineIdentity($sbLineStr){
+		if(strpos($sbLineStr, 'approximate(?)') !== false || strpos($sbLineStr, 'inferred(?)') !== false){
+			return 'questionable';
+		}
+		return 'certain';
+	}
+
+	/**
+	 * Determine existence confidence from trace string keywords.
+	 */
+	public function gemsGetLineExistence($sbLineStr){
+		if(strpos($sbLineStr, 'approximate(?)') !== false || strpos($sbLineStr, 'inferred(?)') !== false){
+			return 'questionable';
+		}
+		return 'certain';
+	}
+
+	/**
+	 * Determine if line is concealed from trace string keywords.
+	 */
+	public function gemsGetLineConcealed($sbLineStr){
+		return (strpos($sbLineStr, 'concealed') !== false) ? 'y' : 'n';
+	}
+
+	/**
+	 * Determine location confidence in meters from trace string keywords.
+	 */
+	public function gemsGetLineLocation($sbLineStr){
+		if(strpos($sbLineStr, 'known') !== false) return 5;
+		if(strpos($sbLineStr, 'concealed') !== false) return 100;
+		if(strpos($sbLineStr, 'approximate') !== false || strpos($sbLineStr, 'inferred') !== false) return 50;
+		return 5;
+	}
+
+	// =========================================================================
+	// GeMS Point Translation Methods (ported from StraboPointAttributeTranslators.py + StraboUtils.py)
+	// =========================================================================
+
+	/**
+	 * Flatten orientation_data array including associated orientations into a flat list.
+	 */
+	public function gemsOrientationParser($orientationData){
+		$orientationList = [];
+		if(!is_array($orientationData)) return $orientationList;
+
+		foreach($orientationData as $orItem){
+			if(isset($orItem['associated_orientation']) && is_array($orItem['associated_orientation'])){
+				foreach($orItem['associated_orientation'] as $assoc){
+					$orientationList[] = $assoc;
+				}
+				$copy = $orItem;
+				unset($copy['associated_orientation']);
+				$orientationList[] = $copy;
+			} else {
+				$orientationList[] = $orItem;
+			}
+		}
+		return $orientationList;
+	}
+
+	/**
+	 * Build an orientation type string from an orientation dict.
+	 */
+	public function gemsGetOrientationString($orDict){
+		$orType = '';
+		foreach($orDict as $key => $val){
+			if(strpos($key, 'type') !== false){
+				$orType .= $val . ' ';
+			}
+		}
+		return $orType;
+	}
+
+	/**
+	 * Sort a point into GeMS feature class categories.
+	 * Returns an array of sort codes (a single spot can produce multiple features).
+	 * 1=Station, 2=GenericSamples, 3=OrientationPoints, 5=MapUnitPolyLabels
+	 */
+	public function gemsSortPointFeatureClass($properties){
+		$sort = [];
+
+		if(!empty($properties['images'])){
+			$sort[] = 1;
+		}
+		if(!empty($properties['notes'])){
+			$sort[] = 1;
+		}
+		if(!empty($properties['samples'])){
+			$sort[] = 2;
+		}
+		if(!empty($properties['orientation_data'])){
+			$sort[] = 3;
+		}
+		if(!empty($properties['tags'])){
+			foreach($properties['tags'] as $tag){
+				if(isset($tag['type']) && $tag['type'] === 'concept'){
+					$sort[] = 1;
+				} else {
+					$sort[] = 5;
+				}
+			}
+		}
+		return array_unique($sort);
+	}
+
+	/**
+	 * Compute FGDC orientation symbol from an orientation type string.
+	 */
+	public function gemsGetOrSymbol($sbOrStr){
+		$gmOrSym = '';
+
+		if(strpos($sbOrStr, 'fault') !== false){
+			$gmOrSym = '02.11.';
+		} elseif(strpos($sbOrStr, 'joint') !== false){
+			$gmOrSym = '04.03.';
+		} elseif(strpos($sbOrStr, 'fold hinge') !== false){
+			$gmOrSym = '05.11.';
+		} elseif(strpos($sbOrStr, 'bedding') !== false){
+			$gmOrSym = '06.';
+		} elseif(strpos($sbOrStr, 'foliation') !== false){
+			$gmOrSym = '08.01.';
+		} elseif(strpos($sbOrStr, 'mineral alignment') !== false){
+			$gmOrSym = '09.001';
+		} elseif(strpos($sbOrStr, 'slickenlines') !== false){
+			$gmOrSym = '09.017';
+		} else {
+			$gmOrSym = '31.';
+		}
+
+		// Digit 3
+		if(strpos($sbOrStr, 'upright') !== false){
+			$gmOrSym .= '02';
+		} elseif(strpos($sbOrStr, 'overturned') !== false){
+			$gmOrSym .= '04';
+		} else {
+			$gmOrSym .= '01';
+		}
+
+		return $gmOrSym;
+	}
+
+	/**
+	 * Determine GeMS orientation type from an orientation type string.
+	 */
+	public function gemsGetOrType($sbOrStr, $gmOrSym){
+		if(strpos($sbOrStr, 'fault') !== false) return 'fault';
+		if(strpos($sbOrStr, 'joint') !== false) return 'joint';
+		if(strpos($sbOrStr, 'fold hinge') !== false) return 'fold hinge';
+		if(strpos($sbOrStr, 'foliation') !== false) return 'foliation';
+		if(strpos($sbOrStr, 'mineral alignment') !== false) return 'mineral lineation';
+		if(strpos($sbOrStr, 'slickenlines') !== false) return 'slickenline';
+		if(strpos($sbOrStr, 'bedding') !== false) return 'bedding';
+		return 'undefined';
+	}
+
+	/**
+	 * Convert orientation quality (1-5) to confidence in degrees.
+	 */
+	public function gemsGetOrConfidence($orDict){
+		$quality = isset($orDict['quality']) ? intval($orDict['quality']) : 5;
+		if($quality <= 0) $quality = 5;
+		return intdiv(15, $quality);
+	}
+
+	/**
+	 * Convert unit label abbreviation to FGDC font characters for geologic periods.
+	 */
+	public function gemsGetUnitLabel($tagDict){
+		$abbrev = $tagDict['unit_label_abbreviation'] ?? '';
+		$gmLabel = $abbrev;
+
+		// Build string from tag fields for period detection
+		$tagStr = '';
+		$excludeKeys = ['type', 'name', 'unit_label_abbreviation', 'map_unit_name', 'rock_type', 'id', 'continuousTagging'];
+		foreach($tagDict as $key => $val){
+			if(!in_array($key, $excludeKeys)){
+				if(is_array($val)){
+					$tagStr .= implode(' ', $val) . ' ';
+				} else {
+					$tagStr .= $val . ' ';
+				}
+			}
+		}
+		$tagStr = strtolower($tagStr);
+
+		if(strpos($tagStr, 'paleogene') !== false){
+			$gmLabel = str_replace('P', ':', $abbrev);
+		} elseif(strpos($tagStr, 'triassic') !== false){
+			$gmLabel = str_replace('Tr', '^', $abbrev);
+		} elseif(strpos($tagStr, 'pennsylvanian') !== false){
+			$gmLabel = str_replace('P', '*', $abbrev);
+		} elseif(strpos($tagStr, 'cambrian') !== false){
+			$gmLabel = str_replace('C', '_', $abbrev);
+		} elseif(strpos($tagStr, 'precambrian') !== false){
+			$gmLabel = str_replace('PC', '=', $abbrev);
+		}
+
+		return $gmLabel;
+	}
+
+	/**
+	 * Get sample type string (currently returns "field sample" as default).
+	 */
+	public function gemsGetSampleType($sampleDict){
+		return 'field sample';
+	}
+
+	/**
+	 * Extract the first geologic_unit tag from a properties dict.
+	 */
+	public function gemsGetUnitTag($properties){
+		if(!isset($properties['tags']) || !is_array($properties['tags'])){
+			return null;
+		}
+		foreach($properties['tags'] as $tag){
+			if(isset($tag['type']) && $tag['type'] === 'geologic_unit'){
+				return $tag;
+			}
+		}
+		return null;
+	}
+
+	// =========================================================================
+	// GeMS Feature Builder Methods (ported from StraboUtils.py)
+	// =========================================================================
+
+	/**
+	 * Build GeMS ContactsAndFaults properties for a line feature.
+	 */
+	public function gemsBuildContactsAndFaults($sbLineStr, $spotName, $traceNotes, $config){
+		$index = array_search($sbLineStr, $config['ln_sb']);
+		$props = [
+			'Type' => ($index !== false) ? $config['ln_type'][$index] : 'miscellaneous map element',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['ln_symbol'][$index] : '',
+			'IsConcealed' => $this->gemsGetLineConcealed($sbLineStr),
+			'IdentityConfidence' => $this->gemsGetLineIdentity($sbLineStr),
+			'ExistenceConfidence' => $this->gemsGetLineExistence($sbLineStr),
+			'LocationConfidenceMeters' => $this->gemsGetLineLocation($sbLineStr),
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => $spotName . ' Notes: ' . $traceNotes
+		];
+		return $props;
+	}
+
+	/**
+	 * Build GeMS GeologicLines properties for a line feature.
+	 */
+	public function gemsBuildGeologicLines($sbLineStr, $spotName, $traceNotes, $config){
+		$index = array_search($sbLineStr, $config['ln_sb']);
+		$props = [
+			'Type' => ($index !== false) ? $config['ln_type'][$index] : 'miscellaneous map element',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['ln_symbol'][$index] : '',
+			'IsConcealed' => $this->gemsGetLineConcealed($sbLineStr),
+			'IdentityConfidence' => $this->gemsGetLineIdentity($sbLineStr),
+			'ExistenceConfidence' => $this->gemsGetLineExistence($sbLineStr),
+			'LocationConfidenceMeters' => $this->gemsGetLineLocation($sbLineStr),
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => $spotName . ' Notes: ' . $traceNotes
+		];
+		return $props;
+	}
+
+	/**
+	 * Build GeMS MapUnitLines properties for a line feature.
+	 */
+	public function gemsBuildMapUnitLines($sbLineStr, $properties, $spotName, $traceNotes, $config){
+		$index = array_search($sbLineStr, $config['ln_sb']);
+		$props = [
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['ln_symbol'][$index] : '',
+			'IsConcealed' => $this->gemsGetLineConcealed($sbLineStr),
+			'IdentityConfidence' => $this->gemsGetLineIdentity($sbLineStr),
+			'ExistenceConfidence' => $this->gemsGetLineExistence($sbLineStr),
+			'LocationConfidenceMeters' => $this->gemsGetLineLocation($sbLineStr),
+			'PlotAtScale' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => $spotName . ' Notes: ' . $traceNotes
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+		} else {
+			$props['MapUnit'] = 'unassigned';
+		}
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS CartographicLines properties for a line feature.
+	 */
+	public function gemsBuildCartographicLines($sbLineStr, $spotName, $traceNotes, $config){
+		$index = array_search($sbLineStr, $config['ln_sb']);
+		$props = [
+			'Type' => ($index !== false) ? $config['ln_type'][$index] : 'miscellaneous map element',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['ln_symbol'][$index] : '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => $spotName . ' Notes: ' . $traceNotes
+		];
+		return $props;
+	}
+
+	/**
+	 * Build GeMS Station properties for a point feature.
+	 */
+	public function gemsBuildStation($properties){
+		$props = [
+			'FieldID' => $properties['name'] ?? '',
+			'ObservedMapUnit' => '',
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => '',
+			'LocationConfidenceMeters' => '',
+			'PlotAtScale' => '',
+			'LocationMethod' => '',
+			'GPSX' => '',
+			'GPSY' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => ''
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+			$props['Symbol'] = $unitTag['unit_label_abbreviation'] ?? '';
+		}
+
+		$notes = 'Notes: ' . ($properties['notes'] ?? '') . ' Images: ';
+		if(isset($properties['images']) && is_array($properties['images'])){
+			foreach($properties['images'] as $img){
+				$notes .= ($img['self'] ?? '') . ' ';
+			}
+		}
+		$props['Notes'] = $notes;
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS GenericSamples properties for a sample.
+	 */
+	public function gemsBuildSample($sampleDict, $properties){
+		$props = [
+			'Type' => $this->gemsGetSampleType($sampleDict),
+			'FieldSampleID' => $sampleDict['sample_id_name'] ?? '',
+			'AlternateSampleID' => '',
+			'ObservedMapUnit' => '',
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => '31.21',
+			'LocationConfidenceMeters' => '',
+			'PlotAtScale' => '',
+			'MaterialAnalyzed' => '',
+			'StationsID' => $properties['name'] ?? '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'AnalysisSourceID' => '',
+			'Notes' => 'Notes: ' . ($sampleDict['sample_description'] ?? '') . ' / ' . ($sampleDict['sample_notes'] ?? '')
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+		}
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS OrientationPoints properties for a single orientation measurement.
+	 */
+	public function gemsBuildOrientationPoint($orStr, $orDict, $properties, $config){
+		$index = array_search($orStr, $config['pt_sb']);
+		$props = [
+			'Type' => ($index !== false) ? $config['pt_type'][$index] : 'undefined',
+			'Azimuth' => '',
+			'Inclination' => '',
+			'ObservedMapUnit' => '',
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['pt_symbol'][$index] : '',
+			'LocationConfidenceMeters' => '',
+			'OrientationConfidenceDegrees' => $this->gemsGetOrConfidence($orDict),
+			'PlotAtScale' => '',
+			'StationsID' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'OrientationSourceID' => '',
+			'Notes' => ''
+		];
+
+		// Azimuth: strike+90 for planar, trend for linear
+		if(isset($orDict['strike'])){
+			$props['Azimuth'] = ($orDict['strike'] + 90) % 360;
+		} elseif(isset($orDict['trend'])){
+			$props['Azimuth'] = $orDict['trend'];
+		}
+
+		// Inclination: dip for planar, plunge for linear
+		if(isset($orDict['dip'])){
+			$props['Inclination'] = $orDict['dip'];
+		} elseif(isset($orDict['plunge'])){
+			$props['Inclination'] = $orDict['plunge'];
+		}
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+		}
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS MapUnitPoints properties for a point feature.
+	 */
+	public function gemsBuildMapUnitPoints($properties){
+		$props = [
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => '',
+			'IdentityConfidence' => '',
+			'ExistenceConfidence' => '',
+			'LocationConfidenceMeters' => '',
+			'PlotAtScale' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => 'Notes: ' . ($properties['notes'] ?? '')
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+			$props['Symbol'] = $unitTag['unit_label_abbreviation'] ?? '';
+		}
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS MapUnitPolyLabels properties for a point feature.
+	 */
+	public function gemsBuildMapUnitPolyLabels($properties){
+		$props = [
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => '',
+			'IdentityConfidence' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => ''
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+			$props['Symbol'] = $unitTag['unit_label_abbreviation'] ?? '';
+		}
+
+		return $props;
+	}
+
+	// =========================================================================
+	// GeMS Main Export Entry Point
+	// =========================================================================
+
+	/**
+	 * Main GeMS export method. Called from searchdownload.php.
+	 * Reads POST data with metadata and user-customized mappings,
+	 * fetches raw spots, runs translation, outputs zipped GeoJSON files.
+	 */
+	public function gemsOut(){
+		// Read metadata from POST
+		$dsids = $_POST['dsids'] ?? ($this->get['dsids'] ?? '');
+		$dsid = $_POST['gems_dsid'] ?? '';
+		$lsid = $_POST['gems_lsid'] ?? '';
+		$osid = $_POST['gems_osid'] ?? '';
+		$datasetName = $_POST['gems_dataset_name'] ?? 'GeMS_Export';
+		$datasetName = $this->fixFileName($datasetName);
+
+		if(empty($dsids)){
+			echo 'Error: No dataset specified.';
+			return;
+		}
+
+		// Build config from POST mapping arrays
+		$config = [
+			'ln_sb' => $_POST['ln_sb'] ?? [],
+			'ln_symbol' => $_POST['ln_symbol'] ?? [],
+			'ln_sort' => $_POST['ln_sort'] ?? [],
+			'ln_type' => $_POST['ln_type'] ?? [],
+			'pt_sb' => $_POST['pt_sb'] ?? [],
+			'pt_symbol' => $_POST['pt_symbol'] ?? [],
+			'pt_type' => $_POST['pt_type'] ?? [],
+		];
+
+		// Scan dataset
+		$scanResult = $this->gemsScanDataset($dsids);
+		$lines = $scanResult['lines'];
+		$points = $scanResult['points'];
+
+		// Initialize 9 feature collections
+		$contactsAndFaults = [];
+		$geologicLines = [];
+		$mapUnitLines = [];
+		$cartographicLines = [];
+		$stations = [];
+		$genericSamples = [];
+		$orientationPoints = [];
+		$mapUnitPoints = [];
+		$mapUnitPolyLabels = [];
+
+		// Process lines
+		foreach($lines as $line){
+			$props = $line['properties'];
+			$geometry = $line['geometry'];
+			$spotName = $props['name'] ?? '';
+			$traceNotes = $props['trace']['trace_notes'] ?? '';
+			$sbLineStr = $this->gemsGetLineTraceString($props);
+
+			$index = array_search($sbLineStr, $config['ln_sb']);
+			$sort = ($index !== false) ? ($config['ln_sort'][$index] ?? 'DefaultUnsorted') : 'DefaultUnsorted';
+
+			$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+
+			if($sort === 'ContactsAndFaults'){
+				$feature['properties'] = $this->gemsBuildContactsAndFaults($sbLineStr, $spotName, $traceNotes, $config);
+				$feature['properties']['DataSourceID'] = $dsid;
+				$feature['properties']['LocationSourceID'] = $lsid;
+				$contactsAndFaults[] = $feature;
+			} elseif($sort === 'GeologicLines'){
+				$feature['properties'] = $this->gemsBuildGeologicLines($sbLineStr, $spotName, $traceNotes, $config);
+				$feature['properties']['DataSourceID'] = $dsid;
+				$feature['properties']['LocationSourceID'] = $lsid;
+				$geologicLines[] = $feature;
+			} elseif($sort === 'MapUnitLines'){
+				$feature['properties'] = $this->gemsBuildMapUnitLines($sbLineStr, $props, $spotName, $traceNotes, $config);
+				$feature['properties']['DataSourceID'] = $dsid;
+				$feature['properties']['LocationSourceID'] = $lsid;
+				$mapUnitLines[] = $feature;
+			} elseif($sort === 'CartographicLines'){
+				$feature['properties'] = $this->gemsBuildCartographicLines($sbLineStr, $spotName, $traceNotes, $config);
+				$feature['properties']['DataSourceID'] = $dsid;
+				$feature['properties']['LocationSourceID'] = $lsid;
+				$cartographicLines[] = $feature;
+			}
+		}
+
+		// Process points
+		foreach($points as $point){
+			$props = $point['properties'];
+			$geometry = $point['geometry'];
+			$spotName = $props['name'] ?? '';
+			$daughterCount = 0;
+
+			$sortCodes = $this->gemsSortPointFeatureClass($props);
+
+			// Stations (sort code 1)
+			if(in_array(1, $sortCodes)){
+				$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+				$stProps = $this->gemsBuildStation($props);
+				$stProps['DataSourceID'] = $dsid;
+				$stProps['LocationSourceID'] = $lsid;
+				$stProps['Notes'] = $spotName . '_' . $daughterCount . ' ' . $stProps['Notes'];
+				$feature['properties'] = $stProps;
+				$stations[] = $feature;
+				$daughterCount++;
+			}
+
+			// GenericSamples (sort code 2)
+			if(in_array(2, $sortCodes) && !empty($props['samples'])){
+				foreach($props['samples'] as $sample){
+					$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+					$samProps = $this->gemsBuildSample($sample, $props);
+					$samProps['DataSourceID'] = $dsid;
+					$samProps['LocationSourceID'] = $lsid;
+					$samProps['Notes'] = $spotName . '_' . $daughterCount . ' ' . $samProps['Notes'];
+					$feature['properties'] = $samProps;
+					$genericSamples[] = $feature;
+					$daughterCount++;
+				}
+			}
+
+			// OrientationPoints (sort code 3)
+			if(in_array(3, $sortCodes) && !empty($props['orientation_data'])){
+				$orientations = $this->gemsOrientationParser($props['orientation_data']);
+				foreach($orientations as $orDict){
+					$orStr = $this->gemsGetOrientationString($orDict);
+					$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+					$orProps = $this->gemsBuildOrientationPoint($orStr, $orDict, $props, $config);
+					$orProps['DataSourceID'] = $dsid;
+					$orProps['LocationSourceID'] = $lsid;
+					$orProps['OrientationSourceID'] = $osid;
+					$orProps['StationsID'] = $spotName . '_' . $daughterCount;
+					$orProps['Notes'] = $spotName . '_' . $daughterCount;
+					$feature['properties'] = $orProps;
+					$orientationPoints[] = $feature;
+					$daughterCount++;
+				}
+			}
+
+			// MapUnitPolyLabels (sort code 5)
+			if(in_array(5, $sortCodes)){
+				$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+				$muplProps = $this->gemsBuildMapUnitPolyLabels($props);
+				$muplProps['DataSourceID'] = $dsid;
+				$muplProps['LocationSourceID'] = $lsid;
+				$muplProps['Notes'] = $spotName . '_' . $daughterCount;
+				$feature['properties'] = $muplProps;
+				$mapUnitPolyLabels[] = $feature;
+				$daughterCount++;
+			}
+		}
+
+		// Assemble 9 FeatureCollections
+		$collections = [
+			'ContactsAndFaults' => ['type' => 'FeatureCollection', 'features' => $contactsAndFaults],
+			'GeologicLines' => ['type' => 'FeatureCollection', 'features' => $geologicLines],
+			'MapUnitLines' => ['type' => 'FeatureCollection', 'features' => $mapUnitLines],
+			'CartographicLines' => ['type' => 'FeatureCollection', 'features' => $cartographicLines],
+			'Stations' => ['type' => 'FeatureCollection', 'features' => $stations],
+			'GenericSamples' => ['type' => 'FeatureCollection', 'features' => $genericSamples],
+			'OrientationPoints' => ['type' => 'FeatureCollection', 'features' => $orientationPoints],
+			'MapUnitPoints' => ['type' => 'FeatureCollection', 'features' => $mapUnitPoints],
+			'MapUnitPolyLabels' => ['type' => 'FeatureCollection', 'features' => $mapUnitPolyLabels],
+		];
+
+		// Write to temp directory and zip
+		$randnum = $this->strabo->db->get_var("select nextval('file_seq')");
+		$tempDir = "ogrtemp/$randnum";
+		mkdir($tempDir, 0777, true);
+
+		$jsonFiles = [];
+		foreach($collections as $name => $collection){
+			$filename = $datasetName . '_' . $name . '.json';
+			$filepath = "$tempDir/$filename";
+			file_put_contents($filepath, json_encode($collection, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+			$jsonFiles[] = $filepath;
+		}
+
+		// Create zip
+		$zipFile = "$tempDir/{$datasetName}_GeMS.zip";
+		$zipCmd = 'cd ' . escapeshellarg($tempDir) . ' && zip -j ' . escapeshellarg($zipFile);
+		foreach($jsonFiles as $jf){
+			$zipCmd .= ' ' . escapeshellarg(basename($jf));
+		}
+		exec($zipCmd);
+
+		// Serve download
+		if(file_exists($zipFile)){
+			header('Content-Type: application/zip');
+			header('Content-Disposition: attachment; filename="' . $datasetName . '_GeMS.zip"');
+			header('Content-Length: ' . filesize($zipFile));
+			readfile($zipFile);
+		} else {
+			echo 'Error: Failed to create zip file.';
+		}
+
+		// Cleanup
+		foreach($jsonFiles as $jf){
+			if(file_exists($jf)) unlink($jf);
+		}
+		if(file_exists($zipFile)) unlink($zipFile);
+		if(is_dir($tempDir)) rmdir($tempDir);
+	}
+
 }
 ?>
