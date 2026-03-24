@@ -63,6 +63,8 @@ if($type=="shapefile"){
 	$straboOut->doiPDFOut();
 }elseif($type=="doidata"){
 	$straboOut->doiDataOut();
+}elseif($type=="gpkg"){
+	$straboOut->gpkgOut();
 }elseif($type=="geojson"){
 	$straboOut->geoJSONOut();
 }elseif($type=="devgeojson"){
