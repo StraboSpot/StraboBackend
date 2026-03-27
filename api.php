@@ -207,7 +207,10 @@ will eventually require more attributes determined by a set of contrained vocabu
 					<span class="strong"><code class="literal"><strong>Accept:</strong> application/json; charset=UTF-8</code></span>
 				</li>
 				<li class="listitem">
-					<span class="strong"><code class="literal"><strong>Note:</strong> This function accepts a GeoJSON FeatureCollection and populates it as individual spot(s) for the given dataset. An existing dataset is required. <span style="color:#ed7287;">IMPORTANT!!! ALL spots for the given dataset will be overwritten! You must upload the entire feature collection each time you POST!</span></code></span>
+					<span class="strong"><code class="literal"><strong>Note:</strong> This function accepts a GeoJSON FeatureCollection and populates it as individual spot(s) for the given dataset. An existing dataset is required.</code></span>
+				</li>
+				<li class="listitem">
+					<span class="strong"><code class="literal"><strong><span style="color:#ed7287;">IMPORTANT!!! ALL spots for the given dataset will be overwritten! You must upload the entire feature collection each time you POST!</span></strong></code></span>
 				</li>
 			</ul>
 		</div>
