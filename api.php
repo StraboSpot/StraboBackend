@@ -720,7 +720,7 @@ will eventually require more attributes determined by a set of contrained vocabu
 			<ul class="itemizedlist" style="list-style-type: disc; ">
 
 				<li class="listitem">
-					<span class="strong"><code class="literal"><strong>201:</strong> Created</code></span>
+					<span class="strong"><code class="literal"><strong>20O:</strong> OK</code></span>
 				</li>
 				<li class="listitem">
 					<span class="strong"><code class="literal"><strong>Content-Type:</strong> application/json; charset=UTF-8</code></span>
