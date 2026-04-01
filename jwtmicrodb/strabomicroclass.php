@@ -1740,6 +1740,8 @@ class StraboMicro
 		return $data;
 	}
 
+
+
 		//First, check to see if project exists
 				//error here
 				//Delete project just in case
@@ -1751,7 +1753,7 @@ class StraboMicro
 
 	public function deleteTempFiles($project_metadata_id){
 		exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/compositeImages/");
-		exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/compositeThumbnails/");
+		//exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/compositeThumbnails/");
 		exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/thumbnailImages");
 		exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/uiImages");
 	}
@@ -2377,7 +2379,7 @@ class StraboMicro
 											$query = "";
 											$vars = ['id','graininfo_id'];
 											$vals = [$grainsize_id, $graininfo_id];
-											if($thisgrainsize->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainsize->phases); }
+											if($thisgrainsize->phases!=""){ $vars[]='phases'; $vals[]= "'".implode(", ", $thisgrainsize->phases)."'"; }
 											if($thisgrainsize->mean!=""){ $vars[]='mean'; $vals[]= $thisgrainsize->mean; }
 											if($thisgrainsize->median!=""){ $vars[]='median'; $vals[]= $thisgrainsize->median; }
 											if($thisgrainsize->mode!=""){ $vars[]='mode'; $vals[]= $thisgrainsize->mode; }
@@ -2403,7 +2405,7 @@ class StraboMicro
 											$query = "";
 											$vars = ['id','graininfo_id'];
 											$vals = [$grainshape_id, $graininfo_id];
-											if($thisgrainshape->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainshape->phases); }
+											if($thisgrainshape->phases!=""){ $vars[]='phases'; $vals[]= "'".implode(", ", $thisgrainshape->phases)."'"; }
 											if($thisgrainshape->shape!="") {$vars[]='shape'; $vals[]= "'".pg_escape_string($thisgrainshape->shape)."'"; }
 											$query = "insert into micro_grainshape (\n";
 											$query .= implode(",\n", $vars);
@@ -2425,7 +2427,7 @@ class StraboMicro
 											$query = "";
 											$vars = ['id','graininfo_id'];
 											$vals = [$grainorientation_id, $graininfo_id];
-											if($thisgrainorientation->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainorientation->phases); }
+											if($thisgrainorientation->phases!=""){ $vars[]='phases'; $vals[]= "'".implode(", ", $thisgrainorientation->phases)."'"; }
 											if($thisgrainorientation->meanOrientation!=""){ $vars[]='meanorientation'; $vals[]= $thisgrainorientation->meanOrientation; }
 											if($thisgrainorientation->relativeTo!="") {$vars[]='relativeto'; $vals[]= "'".pg_escape_string($thisgrainorientation->relativeTo)."'"; }
 											if($thisgrainorientation->software!="") {$vars[]='software'; $vals[]= "'".pg_escape_string($thisgrainorientation->software)."'"; }
