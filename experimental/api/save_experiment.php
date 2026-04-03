@@ -52,6 +52,7 @@ if (!$input) {
 include_once("adminkeys.php");
 include("prepare_connections.php");
 include_once("includes/UUID.php");
+include_once("experimental/api/update_keywords.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 $uuid_gen = new UUID();
@@ -121,6 +122,9 @@ if (!empty($input->pkey)) {
         ", array($experiment_id, $json_string, $experiment_pkey, $userpkey));
     }
 
+    // Update parent project's full-text search keywords
+    updateExpProjectKeywords($db, (int)$row->project_pkey);
+
     // Return updated experiment
     $result = new stdClass();
     $result->pkey = $experiment_pkey;
@@ -168,6 +172,9 @@ if (!empty($input->pkey)) {
         INSERT INTO straboexp.experiment (pkey, project_pkey, userpkey, id, created_timestamp, modified_timestamp, json, uuid)
         VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)
     ", array($experiment_pkey, $project_pkey, $userpkey, $experiment_id, $json_string, $uuid));
+
+    // Update parent project's full-text search keywords
+    updateExpProjectKeywords($db, $project_pkey);
 
     // Return created experiment
     $result = new stdClass();

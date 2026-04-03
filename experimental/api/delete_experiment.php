@@ -49,6 +49,7 @@ $userpkey = $_SESSION['userpkey'];
 
 include_once("adminkeys.php");
 include("prepare_connections.php");
+include_once("experimental/api/update_keywords.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 
@@ -86,6 +87,9 @@ if ($is_admin) {
 } else {
     $db->prepare_query("DELETE FROM straboexp.experiment WHERE pkey = $1 AND userpkey = $2", array($experiment_pkey, $userpkey));
 }
+
+// Regenerate parent project keywords after experiment removal
+updateExpProjectKeywords($db, $project_pkey);
 
 // Return success response
 $result = new stdClass();
