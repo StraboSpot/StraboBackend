@@ -146,9 +146,9 @@ include 'includes/mheader.php';
 									<p>Review public datasets in StraboField, Micro, and Experimental.</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
-									<a href="javascript:alert('Coming Soon!');"><span class="icon solid alt major fa-file"></span></a>
-									<h3><a href="javascript:alert('Coming Soon!');">Statistics</a></h3>
-									<p>Geology is neverending, see where people are using StraboSpot across the globe!</p>
+									<a href="/events"><span class="icon solid alt major fa-file"></span></a>
+									<h3><a href="/events">Events</a></h3>
+									<p>Keep track of the latest events with the StraboSpot system.</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
 									<a href="/privacy"><span class="icon solid alt major fa-lock"></span></a>

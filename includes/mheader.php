@@ -137,6 +137,7 @@ if($userpkey == "adsf"){
 							<li><a href="#">About</a>
 								<ul>
 									<li><a href="/overview">Overview</a></li>
+									<li><a href="/events">Events</a></li>
 									<li><a href="/interoperability">Interoperability</a></li>
 									<li><a href="/api">API</a></li>
 									<li><a href="/citations">Citations</a></li>
