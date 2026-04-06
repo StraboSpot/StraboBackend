@@ -678,6 +678,34 @@ function uploadImage(input){
 	margin-bottom: 0.4em;
 }
 
+.form-field input[type="number"],
+.form-field input[type="text"],
+.form-field input[type="file"],
+.form-field textarea,
+.form-field select {
+	width: 100%;
+	background: rgba(255, 255, 255, 0.08);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 4px;
+	color: #ffffff;
+	padding: 0.6em 0.8em;
+	font-size: 1em;
+	box-sizing: border-box;
+}
+
+.form-field input[type="number"]:focus,
+.form-field input[type="text"]:focus,
+.form-field textarea:focus,
+.form-field select:focus {
+	border-color: #e44c65;
+	outline: none;
+}
+
+.form-field select option {
+	background: #2a2a3a;
+	color: #ffffff;
+}
+
 .required {
 	color: #e44c65;
 }
