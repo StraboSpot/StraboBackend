@@ -334,8 +334,8 @@ include("includes/mheader.php");
 
 			<!-- Submit -->
 			<div style="text-align: center; padding-top: 1em; display: flex; justify-content: center; gap: 1em;">
-				<button type="button" class="primary" id="btnSave" onclick="saveEvent()">Add Event</button>
-				<button type="button" id="btnCancel" onclick="cancelEdit()" style="display:none;">Cancel</button>
+				<button type="button" class="button primary small" id="btnSave" onclick="saveEvent()">Add Event</button>
+				<button type="button" class="button small" id="btnCancel" onclick="cancelEdit()" style="display:none;">Cancel</button>
 			</div>
 		</div>
 
