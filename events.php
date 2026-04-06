@@ -11,6 +11,27 @@
  */
 
 include("includes/mheader.php");
+
+$tag_labels = array(
+	'inperson' => 'In Person',
+	'virtual' => 'Virtual',
+	'workshop' => 'Workshop',
+	'shortcourse' => 'Short Course',
+	'fieldtrip' => 'Field Trip',
+	'conference' => 'Conference',
+	'poster' => 'Poster',
+	'talk' => 'Talk'
+);
+
+$events = array();
+$jsonFile = __DIR__ . '/data/events.json';
+if(file_exists($jsonFile)){
+	$events_data = json_decode(file_get_contents($jsonFile), true);
+	$events = $events_data['events'] ?? array();
+	usort($events, function($a, $b){
+		return ($a['sort_order'] ?? 0) - ($b['sort_order'] ?? 0);
+	});
+}
 ?>
 
 <style>
@@ -109,6 +130,11 @@ include("includes/mheader.php");
 		border-radius: 4px;
 	}
 
+	.event-filter-btn {
+		cursor: pointer;
+		transition: opacity 0.2s;
+	}
+
 	@media screen and (max-width: 736px) {
 		.event-row {
 			flex-direction: column;
@@ -151,129 +177,91 @@ include("includes/mheader.php");
 		<section class="micro-section">
 			<p style="color: #ffffff; font-weight: 700; font-size: 1.1em; margin-bottom: 0.5em;">Filters:</p>
 			<div style="margin-bottom: 2em;">
-				<span class="event-tag event-tag-inperson">In Person</span>
-				<span class="event-tag event-tag-virtual">Virtual</span>
-				<span class="event-tag event-tag-workshop">Workshop</span>
-				<span class="event-tag event-tag-shortcourse">Short Course</span>
-				<span class="event-tag event-tag-fieldtrip">Field Trip</span>
-				<span class="event-tag event-tag-conference">Conference</span>
-				<span class="event-tag event-tag-poster">Poster</span>
-				<span class="event-tag event-tag-talk">Talk</span>
+				<?php foreach($tag_labels as $key => $label): ?>
+				<span class="event-tag event-tag-<?php echo $key; ?> event-filter-btn" data-tag="<?php echo $key; ?>"><?php echo htmlspecialchars($label); ?></span>
+				<?php endforeach; ?>
 			</div>
 		</section>
 
-		<!-- Event 1: GSA Cordilleran Short Course -->
-		<div class="event-row">
+		<?php if(empty($events)): ?>
+		<p style="color: rgba(255, 255, 255, 0.7); font-size: 1.1em;">No upcoming events at this time. Check back soon!</p>
+		<?php else: ?>
+		<?php foreach($events as $event): ?>
+		<div class="event-row" data-tags="<?php echo htmlspecialchars(implode(' ', $event['tags'] ?? array())); ?>">
 			<div class="event-date">
-				<span class="event-date-days">21-24</span>
-				<span class="event-date-month">April</span>
-				<span class="event-date-year">2026</span>
+				<span class="event-date-days"><?php echo htmlspecialchars($event['start_day'] . '-' . $event['end_day']); ?></span>
+				<span class="event-date-month"><?php echo htmlspecialchars($event['month']); ?></span>
+				<span class="event-date-year"><?php echo htmlspecialchars($event['year']); ?></span>
 			</div>
 			<div class="event-details">
-				<h3 class="event-title">GSA Cordilleran Short Course</h3>
+				<h3 class="event-title"><?php echo htmlspecialchars($event['title']); ?></h3>
 				<div class="event-tags">
-					<span class="event-tag event-tag-inperson">In Person</span>
-					<span class="event-tag event-tag-shortcourse">Short Course</span>
-					<span class="event-tag event-tag-conference">Conference</span>
+					<?php foreach(($event['tags'] ?? array()) as $tag): ?>
+					<span class="event-tag event-tag-<?php echo htmlspecialchars($tag); ?>"><?php echo htmlspecialchars($tag_labels[$tag] ?? $tag); ?></span>
+					<?php endforeach; ?>
 				</div>
-				<p class="event-description">Join us for a short course exploring _____ using the StraboField application!</p>
-				<p class="event-register">Register Here:</p>
+				<p class="event-description"><?php echo htmlspecialchars($event['description']); ?></p>
+				<?php if(!empty($event['register_url'])): ?>
+				<p class="event-register"><a href="<?php echo htmlspecialchars($event['register_url']); ?>" style="color: #e44c65;"><?php echo htmlspecialchars($event['register_text'] ?: 'Register Here:'); ?></a></p>
+				<?php elseif(!empty($event['register_text'])): ?>
+				<p class="event-register"><?php echo htmlspecialchars($event['register_text']); ?></p>
+				<?php endif; ?>
 			</div>
+			<?php if(!empty($event['image'])): ?>
 			<div class="event-image">
-				<img src="/includes/mimages/events/image2.webp" alt="GSA Cordilleran Section">
+				<img src="/includes/mimages/events/<?php echo htmlspecialchars($event['image']); ?>" alt="<?php echo htmlspecialchars($event['title']); ?>">
 			</div>
+			<?php endif; ?>
 		</div>
-
-		<!-- Event 2: SZ4D Community Meeting -->
-		<div class="event-row">
-			<div class="event-date">
-				<span class="event-date-days">20-22</span>
-				<span class="event-date-month">April</span>
-				<span class="event-date-year">2026</span>
-			</div>
-			<div class="event-details">
-				<h3 class="event-title">SZ4D Community Meeting</h3>
-				<div class="event-tags">
-					<span class="event-tag event-tag-inperson">In Person</span>
-					<span class="event-tag event-tag-conference">Conference</span>
-					<span class="event-tag event-tag-poster">Poster</span>
-				</div>
-				<p class="event-description">Check out our poster at ______</p>
-			</div>
-			<div class="event-image">
-				<img src="/includes/mimages/events/image1.webp" alt="SZ4D Community Meeting">
-			</div>
-		</div>
-
-		<!-- Event 3: Santa Catalina Field Trip -->
-		<div class="event-row">
-			<div class="event-date">
-				<span class="event-date-days">22-24</span>
-				<span class="event-date-month">April</span>
-				<span class="event-date-year">2026</span>
-			</div>
-			<div class="event-details">
-				<h3 class="event-title">Santa Catalina Field Trip</h3>
-				<div class="event-tags">
-					<span class="event-tag event-tag-inperson">In Person</span>
-					<span class="event-tag event-tag-fieldtrip">Field Trip</span>
-				</div>
-				<p class="event-description">Join the SZ4D Field Trip to Santa Catalina and optionally learn more about StraboSpot and StraboField</p>
-				<p class="event-register">Register Here:</p>
-			</div>
-			<div class="event-image">
-				<img src="/includes/mimages/events/image4.webp" alt="SZ4D">
-			</div>
-		</div>
-
-		<!-- Event 4: EGU Field Trip & Poster -->
-		<div class="event-row">
-			<div class="event-date">
-				<span class="event-date-days">3-8</span>
-				<span class="event-date-month">May</span>
-				<span class="event-date-year">2026</span>
-			</div>
-			<div class="event-details">
-				<h3 class="event-title">EGU Field Trip &amp; Poster</h3>
-				<div class="event-tags">
-					<span class="event-tag event-tag-inperson">In Person</span>
-					<span class="event-tag event-tag-fieldtrip">Field Trip</span>
-					<span class="event-tag event-tag-conference">Conference</span>
-					<span class="event-tag event-tag-poster">Poster</span>
-				</div>
-				<p class="event-description">Check out our Poster ___ or join our Field Trip with the Tephra community to learn about the new Tephra tools in StraboField</p>
-				<p class="event-register">Register Here:</p>
-			</div>
-			<div class="event-image">
-				<img src="/includes/mimages/events/image3.webp" alt="EGU">
-			</div>
-		</div>
-
-		<!-- Event 5: StraboField for Field Camp -->
-		<div class="event-row">
-			<div class="event-date">
-				<span class="event-date-days">6-9</span>
-				<span class="event-date-month">July</span>
-				<span class="event-date-year">2026</span>
-			</div>
-			<div class="event-details">
-				<h3 class="event-title">StraboField for Field Camp</h3>
-				<div class="event-tags">
-					<span class="event-tag event-tag-inperson">In Person</span>
-					<span class="event-tag event-tag-workshop">Workshop</span>
-				</div>
-				<p class="event-description">Join us for a short course exploring _____ using the StraboField application!</p>
-				<p class="event-register">Register Here:</p>
-			</div>
-			<div class="event-image">
-				<img src="/includes/mimages/events/image5.webp" alt="StraboSpot">
-			</div>
-		</div>
+		<?php endforeach; ?>
+		<?php endif; ?>
 
 		<div class="bottomSpacer"></div>
 
 	</div>
 </div>
+
+<script>
+$(function(){
+	// Track which filters are active (all start active)
+	var allTags = <?php echo json_encode(array_keys($tag_labels)); ?>;
+	var activeTags = allTags.slice();
+
+	$('.event-filter-btn').click(function(){
+		var tag = $(this).data('tag');
+		var idx = activeTags.indexOf(tag);
+
+		if(idx !== -1){
+			// Deselect this tag
+			activeTags.splice(idx, 1);
+			$(this).css('opacity', '0.35');
+		} else {
+			// Re-select this tag
+			activeTags.push(tag);
+			$(this).css('opacity', '1');
+		}
+
+		// If all tags are active again, show everything
+		if(activeTags.length === allTags.length){
+			$('.event-row').show();
+			return;
+		}
+
+		// Show events that have at least one active tag
+		$('.event-row').each(function(){
+			var rowTags = $(this).data('tags').toString().split(' ');
+			var match = false;
+			for(var i = 0; i < rowTags.length; i++){
+				if(activeTags.indexOf(rowTags[i]) !== -1){
+					match = true;
+					break;
+				}
+			}
+			$(this).toggle(match);
+		});
+	});
+});
+</script>
 
 <?php
 include("includes/mfooter.php");

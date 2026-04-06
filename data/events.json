@@ -1,0 +1,74 @@
+{
+    "events": [
+        {
+            "id": "evt_1743900001",
+            "title": "GSA Cordilleran Short Course",
+            "start_day": 21,
+            "end_day": 24,
+            "month": "April",
+            "year": 2026,
+            "tags": ["inperson", "shortcourse", "conference"],
+            "description": "Join us for a short course exploring _____ using the StraboField application!",
+            "register_text": "Register Here:",
+            "register_url": "",
+            "image": "image2.webp",
+            "sort_order": 0
+        },
+        {
+            "id": "evt_1743900002",
+            "title": "SZ4D Community Meeting",
+            "start_day": 20,
+            "end_day": 22,
+            "month": "April",
+            "year": 2026,
+            "tags": ["inperson", "conference", "poster"],
+            "description": "Check out our poster at ______",
+            "register_text": "",
+            "register_url": "",
+            "image": "image1.webp",
+            "sort_order": 1
+        },
+        {
+            "id": "evt_1743900003",
+            "title": "Santa Catalina Field Trip",
+            "start_day": 22,
+            "end_day": 24,
+            "month": "April",
+            "year": 2026,
+            "tags": ["inperson", "fieldtrip"],
+            "description": "Join the SZ4D Field Trip to Santa Catalina and optionally learn more about StraboSpot and StraboField",
+            "register_text": "Register Here:",
+            "register_url": "",
+            "image": "image4.webp",
+            "sort_order": 2
+        },
+        {
+            "id": "evt_1743900004",
+            "title": "EGU Field Trip & Poster",
+            "start_day": 3,
+            "end_day": 8,
+            "month": "May",
+            "year": 2026,
+            "tags": ["inperson", "fieldtrip", "conference", "poster"],
+            "description": "Check out our Poster ___ or join our Field Trip with the Tephra community to learn about the new Tephra tools in StraboField",
+            "register_text": "Register Here:",
+            "register_url": "",
+            "image": "image3.webp",
+            "sort_order": 3
+        },
+        {
+            "id": "evt_1743900005",
+            "title": "StraboField for Field Camp",
+            "start_day": 6,
+            "end_day": 9,
+            "month": "July",
+            "year": 2026,
+            "tags": ["inperson", "workshop"],
+            "description": "Join us for a short course exploring _____ using the StraboField application!",
+            "register_text": "Register Here:",
+            "register_url": "",
+            "image": "image5.webp",
+            "sort_order": 4
+        }
+    ]
+}
