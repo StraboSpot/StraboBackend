@@ -36,6 +36,7 @@ include("includes/mheader.php");
 			<a href="/micro_download" class="button primary small">Download Now</a>
 			<a href="/instrumentcatalog" class="button primary small">Instrument Repository</a>
 			<a href="/help#micro" class="button primary small">Help</a>
+			<a href="/my_micro_data" class="button primary small">My Micro Data</a>
 		</div>
 
 		<!-- Annotated Screenshot -->

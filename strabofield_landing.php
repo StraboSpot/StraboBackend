@@ -35,6 +35,7 @@ include("includes/mheader.php");
 			<a href="/interoperability" class="button primary small">Interoperability</a>
 			<a href="/whatisstrabospotoffline" class="button primary small">Offline</a>
 			<a href="/help#field" class="button primary small">Help</a>
+			<a href="/my_field_data" class="button primary small">My Field Data</a>
 		</div>
 
 		<!-- Annotated Screenshot -->

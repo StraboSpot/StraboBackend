@@ -34,6 +34,7 @@ include("includes/mheader.php");
 			<a href="/experimental/" class="button primary small">Get Started</a>
 			<a href="/experimental/apparatus_repository" class="button primary small">Apparatus Repository</a>
 			<a href="/help#experimental" class="button primary small">Help</a>
+			<a href="/my_experimental_data" class="button primary small">My Experimental Data</a>
 		</div>
 
 		<!-- Annotated Screenshot -->
