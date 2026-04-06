@@ -207,6 +207,7 @@ if($showinstrumentmenu){
 if($showadminmenu){
 ?>
 									<li><a href="/institutes">Institutes</a></li>
+									<li><a href="/events_admin">Events Admin</a></li>
 <?php
 }
 if($_SESSION['userpkey']=="3"){
