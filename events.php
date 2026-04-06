@@ -189,7 +189,7 @@ if(file_exists($jsonFile)){
 		<?php foreach($events as $event): ?>
 		<div class="event-row" data-tags="<?php echo htmlspecialchars(implode(' ', $event['tags'] ?? array())); ?>">
 			<div class="event-date">
-				<span class="event-date-days"><?php echo htmlspecialchars($event['start_day'] . '-' . $event['end_day']); ?></span>
+				<span class="event-date-days"><?php echo htmlspecialchars(!empty($event['end_day']) && $event['end_day'] != $event['start_day'] ? $event['start_day'] . '-' . $event['end_day'] : $event['start_day']); ?></span>
 				<span class="event-date-month"><?php echo htmlspecialchars($event['month']); ?></span>
 				<span class="event-date-year"><?php echo htmlspecialchars($event['year']); ?></span>
 			</div>

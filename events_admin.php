@@ -75,7 +75,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 				'id'            => !empty($input['id']) ? $input['id'] : 'evt_' . time(),
 				'title'         => trim($input['title'] ?? ''),
 				'start_day'     => (int)($input['start_day'] ?? 0),
-				'end_day'       => (int)($input['end_day'] ?? 0),
+				'end_day'       => ($input['end_day'] ?? '') !== '' ? (int)$input['end_day'] : '',
 				'month'         => trim($input['month'] ?? ''),
 				'year'          => (int)($input['year'] ?? date('Y')),
 				'tags'          => $input['tags'] ?? array(),
@@ -90,7 +90,7 @@ if($_SERVER['REQUEST_METHOD'] === 'POST'){
 			$errors = array();
 			if($event['title'] === '') $errors[] = 'Title is required.';
 			if($event['start_day'] < 1 || $event['start_day'] > 31) $errors[] = 'Valid start day is required.';
-			if($event['end_day'] < 1 || $event['end_day'] > 31) $errors[] = 'Valid end day is required.';
+			if($event['end_day'] !== '' && ($event['end_day'] < 1 || $event['end_day'] > 31)) $errors[] = 'Valid end day is required.';
 			if($event['month'] === '') $errors[] = 'Month is required.';
 			if($event['year'] < 2020) $errors[] = 'Valid year is required.';
 			if(empty($event['tags'])) $errors[] = 'At least one tag is required.';
@@ -253,7 +253,7 @@ include("includes/mheader.php");
 						<input type="number" id="event_start_day" min="1" max="31" placeholder="e.g. 21">
 					</div>
 					<div class="form-field">
-						<label>End Day <span class="required">*</span></label>
+						<label>End Day</label>
 						<input type="number" id="event_end_day" min="1" max="31" placeholder="e.g. 24">
 					</div>
 					<div class="form-field">
@@ -378,7 +378,8 @@ function renderEventList(){
 		html += '<div class="admin-event-info">';
 		html += '<div class="admin-event-title">' + escHtml(e.title) + '</div>';
 		html += '<div class="admin-event-meta">';
-		html += '<span>' + e.start_day + '-' + e.end_day + ' ' + escHtml(e.month) + ' ' + e.year + '</span> ';
+		var dayStr = (e.end_day && e.end_day != e.start_day) ? e.start_day + '-' + e.end_day : e.start_day;
+		html += '<span>' + dayStr + ' ' + escHtml(e.month) + ' ' + e.year + '</span> ';
 		for(var t = 0; t < e.tags.length; t++){
 			html += '<span class="event-tag event-tag-' + e.tags[t] + '" style="font-size:0.75em;">' + escHtml(tagLabels[e.tags[t]] || e.tags[t]) + '</span>';
 		}
@@ -412,7 +413,8 @@ function saveEvent(){
 	var errors = '';
 	if($('#event_title').val().trim() === '') errors += 'Title is required.\n';
 	if($('#event_start_day').val() === '' || $('#event_start_day').val() < 1) errors += 'Valid start day is required.\n';
-	if($('#event_end_day').val() === '' || $('#event_end_day').val() < 1) errors += 'Valid end day is required.\n';
+	var endDay = $('#event_end_day').val();
+	if(endDay !== '' && (parseInt(endDay) < 1 || parseInt(endDay) > 31)) errors += 'Valid end day is required.\n';
 	if($('#event_month').val() === '') errors += 'Month is required.\n';
 	if($('#event_year').val() === '' || $('#event_year').val() < 2020) errors += 'Valid year is required.\n';
 	if(tags.length === 0) errors += 'At least one tag is required.\n';
