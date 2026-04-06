@@ -362,6 +362,7 @@ function showStatus(msg, isError){
 		el.css({'background':'rgba(56,118,29,0.15)','border':'1px solid #38761d','color':'#8bc34a'});
 	}
 	el.show();
+	$('html, body').animate({ scrollTop: el.offset().top - 80 }, 300);
 	setTimeout(function(){ el.fadeOut(); }, 4000);
 }
 
@@ -524,6 +525,7 @@ function cancelEdit(){
 	$('#formTitle').text('Add New Event');
 	$('#btnSave').text('Add Event');
 	$('#btnCancel').hide();
+	$('html, body').animate({ scrollTop: 0 }, 300);
 }
 
 // ---- Delete ----
