@@ -198,7 +198,7 @@ if($showdois){
 <?php
 }
 
-if($showinstrumentmenu){
+if($showinstrumentmenuqqq){
 ?>
 									<li><a href="/instrumentcatalog">My Instruments</a></li>
 <?php
@@ -206,7 +206,7 @@ if($showinstrumentmenu){
 
 if($showadminmenu){
 ?>
-									<li><a href="/institutes">Institutes</a></li>
+									<li><a href="/micromessage_editor">Micro Startup Message</a></li>
 									<li><a href="/events_admin">Events Admin</a></li>
 <?php
 }
