@@ -7,7 +7,11 @@
             "end_day": 24,
             "month": "April",
             "year": 2026,
-            "tags": ["inperson", "shortcourse", "conference"],
+            "tags": [
+                "inperson",
+                "shortcourse",
+                "conference"
+            ],
             "description": "Join us for a short course exploring _____ using the StraboField application!",
             "register_text": "Register Here:",
             "register_url": "",
@@ -21,7 +25,11 @@
             "end_day": 22,
             "month": "April",
             "year": 2026,
-            "tags": ["inperson", "conference", "poster"],
+            "tags": [
+                "inperson",
+                "conference",
+                "poster"
+            ],
             "description": "Check out our poster at ______",
             "register_text": "",
             "register_url": "",
@@ -35,7 +43,10 @@
             "end_day": 24,
             "month": "April",
             "year": 2026,
-            "tags": ["inperson", "fieldtrip"],
+            "tags": [
+                "inperson",
+                "fieldtrip"
+            ],
             "description": "Join the SZ4D Field Trip to Santa Catalina and optionally learn more about StraboSpot and StraboField",
             "register_text": "Register Here:",
             "register_url": "",
@@ -49,7 +60,12 @@
             "end_day": 8,
             "month": "May",
             "year": 2026,
-            "tags": ["inperson", "fieldtrip", "conference", "poster"],
+            "tags": [
+                "inperson",
+                "fieldtrip",
+                "conference",
+                "poster"
+            ],
             "description": "Check out our Poster ___ or join our Field Trip with the Tephra community to learn about the new Tephra tools in StraboField",
             "register_text": "Register Here:",
             "register_url": "",
@@ -63,12 +79,32 @@
             "end_day": 9,
             "month": "July",
             "year": 2026,
-            "tags": ["inperson", "workshop"],
+            "tags": [
+                "inperson",
+                "workshop"
+            ],
             "description": "Join us for a short course exploring _____ using the StraboField application!",
             "register_text": "Register Here:",
             "register_url": "",
             "image": "image5.webp",
             "sort_order": 4
+        },
+        {
+            "id": "evt_1775579147",
+            "title": "Some Cool Event Here",
+            "start_day": 22,
+            "end_day": "",
+            "month": "February",
+            "year": 2027,
+            "tags": [
+                "inperson",
+                "virtual"
+            ],
+            "description": "Some description about the event...",
+            "register_text": "Click Here",
+            "register_url": "https://www.google.com",
+            "image": "event_1775579159.png",
+            "sort_order": 5
         }
     ]
 }

@@ -46,3 +46,5 @@ devnotes
 micromessage.json
 includes/mimages/_backup_originals
 microview
+includes/mimages/events/
+data/events.json

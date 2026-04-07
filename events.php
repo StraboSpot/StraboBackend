@@ -202,7 +202,7 @@ if(file_exists($jsonFile)){
 				</div>
 				<p class="event-description"><?php echo htmlspecialchars($event['description']); ?></p>
 				<?php if(!empty($event['register_url'])): ?>
-				<p class="event-register"><a href="<?php echo htmlspecialchars($event['register_url']); ?>" style="color: #e44c65;"><?php echo htmlspecialchars($event['register_text'] ?: 'Register Here:'); ?></a></p>
+				<p class="event-register"><a href="<?php echo htmlspecialchars($event['register_url']); ?>" target="_blank" style="color: #e44c65;"><?php echo htmlspecialchars($event['register_text'] ?: 'Register Here:'); ?></a></p>
 				<?php elseif(!empty($event['register_text'])): ?>
 				<p class="event-register"><?php echo htmlspecialchars($event['register_text']); ?></p>
 				<?php endif; ?>
