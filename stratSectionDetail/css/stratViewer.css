@@ -205,3 +205,15 @@
     color: #999;
     font-size: 0.95em;
 }
+
+/* Responsive */
+@media screen and (max-width: 736px) {
+    #detail-panel {
+        width: 260px;
+    }
+
+    #strat-toolbar {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+}
