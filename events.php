@@ -132,7 +132,17 @@ if(file_exists($jsonFile)){
 
 	.event-filter-btn {
 		cursor: pointer;
-		transition: opacity 0.2s;
+		transition: box-shadow 0.15s;
+		outline: 2px solid transparent;
+		outline-offset: 2px;
+	}
+	.event-filter-btn.filter-selected {
+		outline-color: #e44c65;
+	}
+	.event-filter-btn.filter-selected::after {
+		content: " \00d7";
+		font-weight: 700;
+		margin-left: 0.35em;
 	}
 
 	@media screen and (max-width: 736px) {
@@ -223,42 +233,42 @@ if(file_exists($jsonFile)){
 
 <script>
 $(function(){
-	// Track which filters are active (all start active)
 	var allTags = <?php echo json_encode(array_keys($tag_labels)); ?>;
-	var activeTags = allTags.slice();
+	var selectedTags = [];
 
-	$('.event-filter-btn').click(function(){
-		var tag = $(this).data('tag');
-		var idx = activeTags.indexOf(tag);
-
-		if(idx !== -1){
-			// Deselect this tag
-			activeTags.splice(idx, 1);
-			$(this).css('opacity', '0.35');
-		} else {
-			// Re-select this tag
-			activeTags.push(tag);
-			$(this).css('opacity', '1');
-		}
-
-		// If all tags are active again, show everything
-		if(activeTags.length === allTags.length){
+	function applyFilter(){
+		// Empty selection (or every tag selected) = show all events, no highlights
+		if(selectedTags.length === 0 || selectedTags.length === allTags.length){
+			selectedTags = [];
+			$('.event-filter-btn').removeClass('filter-selected');
 			$('.event-row').show();
 			return;
 		}
-
-		// Show events that have at least one active tag
+		$('.event-filter-btn').each(function(){
+			$(this).toggleClass('filter-selected', selectedTags.indexOf($(this).data('tag')) !== -1);
+		});
 		$('.event-row').each(function(){
 			var rowTags = $(this).data('tags').toString().split(' ');
 			var match = false;
 			for(var i = 0; i < rowTags.length; i++){
-				if(activeTags.indexOf(rowTags[i]) !== -1){
+				if(selectedTags.indexOf(rowTags[i]) !== -1){
 					match = true;
 					break;
 				}
 			}
 			$(this).toggle(match);
 		});
+	}
+
+	$('.event-filter-btn').click(function(){
+		var tag = $(this).data('tag');
+		var idx = selectedTags.indexOf(tag);
+		if(idx !== -1){
+			selectedTags.splice(idx, 1);
+		} else {
+			selectedTags.push(tag);
+		}
+		applyFilter();
 	});
 });
 </script>
