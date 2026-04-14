@@ -495,7 +495,13 @@ if(count($projectrows)==0){
 													<option value="edit">View/Edit/Add Data</option>
 													<option value="field">Download/Share StraboMobile Project File</option>
 													<option value="doi">Get DOI for Project</option>
+<?php
+if(in_array($userpkey, $admin_pkeys)){
+?>
 													<option value="collaborate">Invite Collaborators</option>
+<?php
+}
+?>													
 													<option value="json">Download Project in Strabo JSON Format</option>
 													<option value="geologic_units">Download Geologic Units</option>
 													<option value="delete">Delete Project</option>

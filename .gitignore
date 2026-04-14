@@ -47,3 +47,5 @@ micromessage.json
 includes/mimages/_backup_originals
 includes/mimages/events/
 data/events.json
+microview/smzFiles
+restore_symlinks.sh
