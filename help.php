@@ -97,7 +97,8 @@ include("includes/mheader.php");
 			<h2 style="color: #ffffff; font-size: 2em; font-weight: 300; margin-bottom: 0.5em;">StraboMicro Help</h2>
 
 			<div style="padding-left:50px;">
-				<div class="medHeader" style="padding-left:0px;"><a href="/manual/micro" target="_blank">StraboMicro User Guide</a></div>
+				<div class="medHeader" style="padding-left:0px;"><a href="/manual/micro2" target="_blank">StraboMicro User Guide</a></div>
+				<div class="medHeader" style="padding-left:0px;"><a href="/files/strabomicro2_improvements_over_legacy.pdf" target="_blank">StraboMicro2 Improvements Over StraboMicro</a></div>
 
 				<div class="medHeader" style="padding-top:30px;">STRABOMICRO VIDEO TUTORIALS</div>
 				<a class="medHeader" href="https://youtube.com/playlist?list=PL3jEmSMv6rzEJWjFTrKe9cu6YbMTFEXHQ&feature=shared" target="_blank">StraboMicro Basics Video Playlist</a>
@@ -120,10 +121,9 @@ include("includes/mheader.php");
 
 			<a name="strabomicro2" style="scroll-margin-top: 100px;"></a>
 			<div style="padding-left:50px;">
-			<h3 style="color: #ffffff; font-weight: 300; font-size: 1.5em; padding-top: 20px;">StraboMicro2</h3>
+			<h3 style="color: #ffffff; font-weight: 300; font-size: 1.5em; padding-top: 20px;">StraboMicro Version 1 (Legacy)</h3>
 			<div style="padding-bottom:30px;">
-				<div class="medHeader" style="padding-left:0px;"><a href="/manual/micro2" target="_blank">StraboMicro2 User Guide</a></div>
-				<div class="medHeader" style="padding-left:0px;"><a href="/files/strabomicro2_improvements_over_legacy.pdf" target="_blank">StraboMicro2 Improvements Over StraboMicro</a></div>
+				<div class="medHeader" style="padding-left:0px;"><a href="/manual/micro" target="_blank">StraboMicro Legacy User Guide - Version 1.2.18 (Deprecated)</a></div>
 			</div>
 			</div>
 		</section>
