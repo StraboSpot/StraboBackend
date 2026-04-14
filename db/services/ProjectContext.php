@@ -9,28 +9,28 @@
 class ProjectContext {
 
     /** @var int The user making the request */
-    public int $requestingUser;
+    public $requestingUser;
 
     /** @var int|null The project owner's pkey (use for all data queries) */
-    public ?int $effectiveOwner = null;
+    public $effectiveOwner = null;
 
     /** @var string The project ID */
-    public string $projectId;
+    public $projectId;
 
     /** @var string Permission level: 'owner', 'edit', 'readonly', 'none' */
-    public string $permissionLevel = 'none';
+    public $permissionLevel = 'none';
 
     /** @var bool Whether collaboration is halted */
-    public bool $isHalted = false;
+    public $isHalted = false;
 
     /** @var int|null The collaboration record pkey (if collaborator) */
-    public ?int $collaborationId = null;
+    public $collaborationId = null;
 
     /** @var string|null The dataset ID (when context was obtained via getDatasetContext) */
-    public ?string $datasetId = null;
+    public $datasetId = null;
 
     /** @var int|null Who created the dataset (when context was obtained via getDatasetContext) */
-    public ?int $datasetCreatedBy = null;
+    public $datasetCreatedBy = null;
 
     /**
      * Quick check: is user the owner?
