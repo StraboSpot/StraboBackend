@@ -5624,8 +5624,8 @@ public function getSpotName($id){
 							$image_type = $image['image_type'];
 							$strabo_image_id = $image['id'];
 
-							$image_title = $image['title'];
-							$image_caption = $image['caption'];
+							$image_title = pg_escape_string($image['title']);
+							$image_caption = pg_escape_string($image['caption']);
 
 							//Also put in image title and caption here 20241105
 

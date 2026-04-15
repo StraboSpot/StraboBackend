@@ -2,9 +2,9 @@
     "events": [
         {
             "id": "evt_1743900001",
-            "title": "GSA Cordilleran Short Course",
-            "start_day": 21,
-            "end_day": 24,
+            "title": "GSA Cordilleran Short Course: SC26CD08: Hands-On Experience Using the StraboField Application",
+            "start_day": 25,
+            "end_day": "",
             "month": "April",
             "year": 2026,
             "tags": [
@@ -12,65 +12,63 @@
                 "shortcourse",
                 "conference"
             ],
-            "description": "Join us for a short course exploring _____ using the StraboField application!",
-            "register_text": "Register Here:",
-            "register_url": "",
+            "description": "This short course will introduce participants to the newly expanded capabilities of the StraboField mobile/web application for field data collection, data storage, and open data sharing. Digital data curation is the new frontier for all geosciences, with an ultimate goal of a community data management and storage system. Inside demonstrations in the morning, connected to the internet, will show how to manage projects and download data for offline use. In the afternoon, we will go outside to collect field data. The focus is on using the application for teaching and research purposes. Boxed lunches will be provided.",
+            "register_text": "Sign Up",
+            "register_url": "https://store.geosociety.org/products/sC26CD08",
             "image": "image2.webp",
-            "sort_order": 0
+            "sort_order": 2
         },
         {
             "id": "evt_1743900002",
-            "title": "SZ4D Community Meeting",
+            "title": "2026 SZ4D Science Community Meeting",
             "start_day": 20,
             "end_day": 22,
             "month": "April",
             "year": 2026,
             "tags": [
                 "inperson",
-                "conference",
-                "poster"
+                "conference"
             ],
-            "description": "Check out our poster at ______",
-            "register_text": "",
-            "register_url": "",
+            "description": "A 3-day meeting to connect disciplines and facilitate collaborations across the geohazards community to advance subduction zone science. StraboSpot will be participating in the meeting with representatives available for questions and conversations.",
+            "register_text": "Learn More",
+            "register_url": "https://www.sz4d.org/events/2026-sz4d-science-community-meeting",
             "image": "image1.webp",
-            "sort_order": 1
+            "sort_order": 0
         },
         {
             "id": "evt_1743900003",
-            "title": "Santa Catalina Field Trip",
+            "title": "Field Trip to Catalina Island: Snapshots of the Subduction Environment at 30-50km depth",
             "start_day": 22,
             "end_day": 24,
             "month": "April",
             "year": 2026,
             "tags": [
                 "inperson",
-                "fieldtrip"
+                "fieldtrip",
+                "conference"
             ],
-            "description": "Join the SZ4D Field Trip to Santa Catalina and optionally learn more about StraboSpot and StraboField",
-            "register_text": "Register Here:",
-            "register_url": "",
+            "description": "The Catalina Schist on Pimu\u2019nga (Santa Catalina Island) consists of rocks derived from subduction settings from the mantle wedge to the paleomegathrust plate interface to subducted oceanic crust and metasedimentary sequences. The field trip will consist of 4-5 primary stops that will survey a range of easily accessible subduction-related rocks. These rocks record subduction processes at different temperatures and depths ranging from near the subarc to the base of the seismogenic zone during the construction of the Catalina Schist in a progressively-cooling Cretaceous subduction zone. We will explore exposures of subduction interface m\u00e9lange rock recording mechanical and chemical hybridization of subducted rocks and mantle wedge serpentinites, as well as outcrops of metasedimentary and metabasaltic rocks representing underplated slices of subducted oceanic crust.\n\nThe Catalina Schist is a classic exposure of subduction-related rocks that has expanded our understanding of complex chemical processes in the fluid-rich subduction forearc environment, and highlights the interrelations and feedbacks between chemical and mechanical processes in subduction zones that directly influence slip behaviors and seismic hazards. The field trip will also demonstrate the usage of tools from the StraboSpot ecosystem, and highlight the ways StraboSpot, in partnership with SZ4D in the GeoArray initiative, contributes to collaborative field-based science. We will navigate the island in vans and access outcrops on foot, usually within ~100 m of the road, with one stop involving a 2.5 mile round-trip hike on flat ground.",
+            "register_text": "Field Trip Program",
+            "register_url": "https://drive.google.com/file/d/1jmIuacY2vt8n-7OW3PUfVu-KYtoceTwR/view?usp=share_link",
             "image": "image4.webp",
-            "sort_order": 2
+            "sort_order": 1
         },
         {
             "id": "evt_1743900004",
-            "title": "EGU Field Trip & Poster",
-            "start_day": 3,
-            "end_day": 8,
+            "title": "EGU-SPM96: StraboField Tephra: A free field app to collect tephra stratigraphic data",
+            "start_day": 5,
+            "end_day": "",
             "month": "May",
             "year": 2026,
             "tags": [
                 "inperson",
-                "fieldtrip",
-                "conference",
-                "poster"
+                "conference"
             ],
-            "description": "Check out our Poster ___ or join our Field Trip with the Tephra community to learn about the new Tephra tools in StraboField",
-            "register_text": "Register Here:",
-            "register_url": "",
+            "description": "The global tephra community has rallied behind developing a framework of best practice recommendations and tephra data accessibility for the last decade (Wallace et al., 2022). To increase usability and to aid users in adopting the best practices into their workflow, we have collaborated with the developers of StraboSpot (https://www.strabospot.org/), a free, open- source tablet, phone, and web app for field data collection for the geologic community. The addition of tephra-specific fields to a new StraboSpot Tephra module enables users to consistently collect and report essential tephra data in the field which is then automatically saved to an online data repository. This meeting will provide hands-on training for setting up a field project using the Tephra module of StraboSpot. Room 2.42 Tue, 05 May, 16:15\u201318:00 CEST: Demo: Introduction to StraboField, Tephra Module Walkthrough, Hands-on Practice. Part 2: 19:00-20:00: Continue Practice Time, Troubleshooting, Questions & Discussions. See the event flyer here: https://drive.google.com/file/d/1GXbIi0m5LfU2O7Xyc9WFJ3H2OQc3u5lb/view?usp=sharing",
+            "register_text": "EGU Splinter Meeting Information",
+            "register_url": "https://webforms.copernicus.org/EGU26/splinter-meetings",
             "image": "image3.webp",
-            "sort_order": 3
+            "sort_order": 5
         },
         {
             "id": "evt_1743900005",
@@ -83,28 +81,47 @@
                 "inperson",
                 "workshop"
             ],
-            "description": "Join us for a short course exploring _____ using the StraboField application!",
-            "register_text": "Register Here:",
-            "register_url": "",
+            "description": "Field Camp & Mapping Workshop: StraboField for Field Camp\nJoin us in Canyon City, Colorado, July 6\u20139, 2026, for a hands-on workshop designed for geology field camp instructors who use (or plan to use) the StraboField app in teaching. This small, focused event will explore best practices, teaching strategies, and advanced features of StraboField to enhance digital mapping and data collection in field courses. Participants will share experiences, test field mapping exercises, and help shape future instructional resources for the Strabo platform.\nDates: July 6\u20139, 2026\n\nLocation: Canyon City, Colorado\n\nExpenses: $1,000 travel stipend. All on-site expenses covered (lodging, meals, and local transport)\n\nDevices: Bring your own phone or tablet with the latest StraboField version installed. Devices can be provided if needed",
+            "register_text": "More Information",
+            "register_url": "https://docs.google.com/document/d/1NNo60PxLKBI8BofRPb3rSq8axG0dL4drd7uCHg4LHq0/edit?usp=sharing",
             "image": "image5.webp",
-            "sort_order": 4
+            "sort_order": 6
         },
         {
-            "id": "evt_1775579147",
-            "title": "Some Cool Event Here",
-            "start_day": 22,
+            "id": "evt_1775571955",
+            "title": "EGU26-5938: Advancing community workflows, interdisciplinary collaboration, communication, and trust in field based geologic data systems",
+            "start_day": 4,
             "end_day": "",
-            "month": "February",
-            "year": 2027,
+            "month": "May",
+            "year": 2026,
             "tags": [
                 "inperson",
-                "virtual"
+                "conference",
+                "talk"
             ],
-            "description": "Some description about the event...",
-            "register_text": "Click Here",
-            "register_url": "https://www.google.com",
-            "image": "event_1775579159.png",
-            "sort_order": 5
+            "description": "StraboField \u2013 part of the StraboSpot digital data system \u2013 allows researchers to share primary field data and observations, provide a context for sampling, and plot geological maps.  This presentation details recent developments within StraboField to facilitate multi-disciplinary studies and increase trust in digital data system.  On the basis of community feedback, we have recently introduced Documents, of which there are three types: Outcrop Summaries, Memos, and Models.  All of these Documents are designed to establish trust in the digital data, by establishing why a particular decision was made.  Outcrop summaries put uncertainty evaluation in the workflow of a field-based geologist, and allow the researcher to designate a Critical Outcrop.  There are four different types of critical outcrops: Exemplar, Confuser, Disambiguator, and Anchor.  Further, geologists can report analogous features observed elsewhere in the world that are guiding their interpretation.  Memos consist of five types: 1) Idea; 2) Plan; 3) Question; 4) Summary; and 5) Other (User defined).  Users can specify an intended audience for each report: Anyone, Collaborators, or Individual scientist.  Memos both facilitate collaborative work on the same project and enhance communication between practitioners with different expertise, working on similar projects.  Models allow geologists to describe one or multiple models, so that future observations can be tested against these models.  Memos and Models enable users to link spots together and to add additional context through notes, photos, sketches, and tags.  By including this information in digital data systems, future practitioners working with these datasets will have a clear understanding of how the data were collected and where there may be gaps worth researching. Documents are designed to emphasize and summarize important observations and connections in a field area to aid collaborators or other practitioners.  Critically, Documents retain a temporal ordering that records the development of a particular idea or model throughout a field project. Oral | Monday, 04 May, 08:55\u201309:05 (CEST) Room -2.31",
+            "register_text": "Oral Presentation, more information...",
+            "register_url": "https://meetingorganizer.copernicus.org/EGU26/EGU26-5938.html",
+            "image": "event_1775583625.png",
+            "sort_order": 3
+        },
+        {
+            "id": "evt_1775573018",
+            "title": "Applying tephra stratigraphy best practices through integration of field collection forms, database archives, and open-source data visualization tools",
+            "start_day": 5,
+            "end_day": "",
+            "month": "May",
+            "year": 2026,
+            "tags": [
+                "inperson",
+                "conference",
+                "talk"
+            ],
+            "description": "Matthew LoewenORCID 0000-0002-5621-285X1, Kristi Wallace1, Abigail Nastan2, Cheryl Cameron2, Jessica Novak3, and Nathan NovakORCID 0009-0003-8474-21823\n1U.S. Geological Survey, Alaska Volcano Observatory\n2Alaska Division of Geological & Geophysical Surveys, Alaska Volcano Observatory\n3Department of Geology, University of Kansas\nBuilding interoperable data systems requires coordinated effort across the scientific community to establish common terms, definitions, and data structures. Within the diverse disciplines of the tephra community, more than a of decade of work has gone into standardizing field data collection, metadata, and terminology.  This effort culminated in the release of a formal best practices publication in 2022 (Wallace et al., 2022, Scientific Data). To put these principles into practice, we have adopted a three-pronged implementation.\n\nWe have developed a dedicated tephra module within the StraboField app to streamline tephra data collection in the field. This module includes predefined fields and picklists designed to capture the core tephra layer metadata outlined in community best practices. The tephra module is part of the StraboSpot ecosystem\u2014a suite of interconnected data collection applications built to support FAIR data principles across the geosciences. Because of this integration, the module works seamlessly with field projects beyond tephra stratigraphy, including mapping or structural geology.\n\nAt the same time, we built a data structure within the Alaska Volcano Observatory\u2019s geologic database, \u201cGeoDIVA,\u201d to archive essential tephra metadata in a relational format.  A key enhancement is the addition of a \u201clayer data\u201d component, which captures key attributes such as thickness, type, grainsize, and other aspects of stratigraphic layers in order to capture the full context and complete assembled of a measured section. This layer data is also linked to an integrated framework for samples, stations, source volcanoes, eruptions, field projects, and publications.\n\nFinally, we have released an open-source R package, avstrat, that enables data processing and visualization of data collected with the StraboField application or stored in the database structure. This package produces graphical outputs comparable to tools such as SedLog or SDAR, but allows for more flexible data inputs, including describing stratigraphy by layer thickness and relative order or by absolute depths within a section. Avstrat integrates easily with age-depth models like rbacon and Bchron, and its source code will be freely available on GitLab for user modification.\n\nHow to cite: Loewen, M., Wallace, K., Nastan, A., Cameron, C., Novak, J., and Novak, N.: Applying tephra stratigraphy best practices through integration of field collection forms, database archives, and open-source data visualization tools, EGU General Assembly 2026, Vienna, Austria, 3\u20138 May 2026, EGU26-6045, https://doi.org/10.5194/egusphere-egu26-6045, 2026.",
+            "register_text": "Oral Session, more information...",
+            "register_url": "https://meetingorganizer.copernicus.org/EGU26/EGU26-6045.html",
+            "image": "event_1775583637.png",
+            "sort_order": 4
         }
     ]
 }
