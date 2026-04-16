@@ -23,6 +23,9 @@ class ProjectContext {
     /** @var bool Whether collaboration is halted */
     public $isHalted = false;
 
+    /** @var bool Whether any collaborator rows exist for this project (accepted or not) */
+    public $hasCollaborators = false;
+
     /** @var int|null The collaboration record pkey (if collaborator) */
     public $collaborationId = null;
 
