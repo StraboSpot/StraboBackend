@@ -75,7 +75,7 @@ class DatasetSpotsController extends MyController
 			// Check if user can edit this dataset
 			// Uses created_by field to determine who can edit (new model)
 			if (!$this->auth->canEditDataset($context, $context->datasetCreatedBy)) {
-				return $this->forbidden("You don't have permission to edit this dataset");
+				return $this->forbidden("You don't have permission to edit this dataset: $datasetid");
 			}
 
 			// Save original uploader for image ownership tracking (before any userpkey swap)
