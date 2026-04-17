@@ -1,0 +1,399 @@
+/* StraboField Dataset Detail Landing Page */
+
+#dataset-detail-root {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+	height: calc(100vh - 80px);
+	min-height: 500px;
+	background: #fff;
+	position: relative;
+	color: #333;
+}
+
+#dataset-detail-header {
+	flex: 0 0 auto;
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	padding: 12px 20px;
+	background: rgba(39, 40, 51, 0.965);
+	color: #e8e8ea;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+	gap: 16px;
+}
+
+#dataset-detail-header .ddh-title h2 {
+	margin: 0;
+	font-size: 1.05em;
+	font-weight: 500;
+	line-height: 1.3;
+	color: inherit;
+}
+
+#dataset-detail-header .ddh-prefix { font-weight: 400; color: #9a9da9; margin-right: 4px; }
+#dataset-detail-header .ddh-dataset { font-weight: 600; color: #fff; }
+#dataset-detail-header .ddh-project { font-weight: 400; color: #b5b7c0; }
+#dataset-detail-header .ddh-sep { color: #6b6e7c; margin: 0 6px; }
+
+#dataset-detail-header .ddh-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+}
+
+/* Styling is inherited from the site-wide .myDataSelect class in
+   massets/css/main.css (background #e44c65, border-radius 4px, fixed 110x35
+   size, responsive breakpoints). Just ensure the <option> list renders with
+   readable dark text on a white menu — the parent sets color:#fff. */
+#dataset-detail-header .ddh-download {
+	cursor: pointer;
+	margin-bottom: 0;
+}
+#dataset-detail-header .ddh-download option {
+	background: #fff;
+	color: #222;
+}
+
+#dataset-detail-body {
+	flex: 1 1 auto;
+	position: relative;
+	overflow: hidden;
+}
+
+#map {
+	width: 100%;
+	height: 100%;
+	background: #e8eef3;
+}
+
+.dataset-sidebar {
+	position: absolute;
+	top: 0;
+	right: -440px;
+	width: 440px;
+	max-width: 100%;
+	height: 100%;
+	background: #fff;
+	color: #222;
+	box-shadow: -2px 0 10px rgba(0, 0, 0, 0.18);
+	transition: right 0.3s ease;
+	overflow-y: auto;
+	z-index: 10;
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+.dataset-sidebar.open {
+	right: 0;
+}
+
+.dataset-sidebar * { color: inherit; }
+
+.dataset-sidebar .ds-header {
+	position: sticky;
+	top: 0;
+	z-index: 2;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 10px 14px;
+	background: rgba(39, 40, 51, 0.965);
+	color: #fff;
+	box-shadow: 0 1px 0 rgba(0,0,0,0.12);
+}
+.dataset-sidebar .ds-title {
+	font-weight: 600;
+	font-size: 14px;
+	line-height: 1.3;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+	margin-right: 8px;
+	color: #fff;
+}
+.dataset-sidebar .ds-close {
+	background: transparent;
+	border: none;
+	color: #fff;
+	font-size: 24px;
+	line-height: 1;
+	cursor: pointer;
+	padding: 0 4px;
+	opacity: 0.8;
+}
+.dataset-sidebar .ds-close:hover { opacity: 1; }
+
+.dataset-sidebar .ds-body { padding: 0; }
+
+.dataset-sidebar .ds-section { border-bottom: 1px solid #e4e4e8; }
+.dataset-sidebar .ds-section-header {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	padding: 10px 14px;
+	cursor: pointer;
+	user-select: none;
+	background: #f7f7fa;
+	font-weight: 600;
+	font-size: 13px;
+	color: #222;
+	transition: background 0.15s;
+}
+.dataset-sidebar .ds-section-header:hover { background: #eef0f4; }
+.dataset-sidebar .ds-chev {
+	display: inline-block;
+	transition: transform 0.15s;
+	font-size: 10px;
+	color: #666;
+	transform: rotate(90deg);
+}
+.dataset-sidebar .ds-section.ds-collapsed .ds-chev { transform: rotate(0deg); }
+.dataset-sidebar .ds-section.ds-collapsed .ds-section-body { display: none; }
+
+.dataset-sidebar .ds-section-body { padding: 10px 14px 14px 14px; }
+
+.dataset-sidebar .ds-kv {
+	margin: 0;
+	display: grid;
+	grid-template-columns: minmax(120px, 40%) 1fr;
+	gap: 3px 10px;
+}
+.dataset-sidebar .ds-kv dt {
+	color: #666;
+	font-weight: 500;
+	font-size: 12px;
+	padding: 2px 0;
+}
+.dataset-sidebar .ds-kv dd {
+	margin: 0;
+	padding: 2px 0;
+	word-break: break-word;
+}
+
+.dataset-sidebar .ds-item {
+	padding: 8px 10px;
+	margin: 6px 0;
+	background: #fafafc;
+	border: 1px solid #e6e6ec;
+	border-radius: 4px;
+}
+.dataset-sidebar .ds-item.ds-sub { background: #fff; margin-left: 10px; }
+.dataset-sidebar .ds-item-title {
+	font-weight: 600;
+	margin-bottom: 6px;
+	font-size: 12.5px;
+	color: #333;
+}
+
+.dataset-sidebar .ds-sub-section { margin-bottom: 10px; }
+.dataset-sidebar .ds-sub-title {
+	font-weight: 600;
+	color: #444;
+	margin-bottom: 4px;
+	padding-bottom: 2px;
+	border-bottom: 1px solid #eee;
+}
+
+.dataset-sidebar .ds-nested {
+	margin: 4px 0;
+	padding-left: 8px;
+	border-left: 2px solid #e6e6ec;
+}
+.dataset-sidebar .ds-nested-item { margin: 4px 0 8px 0; }
+.dataset-sidebar .ds-nested-title {
+	font-size: 11px;
+	color: #999;
+	margin-bottom: 2px;
+}
+.dataset-sidebar .ds-nested-obj { padding-left: 6px; }
+
+.dataset-sidebar .ds-notes {
+	white-space: pre-wrap;
+	margin: 0;
+	font-family: inherit;
+}
+
+.dataset-sidebar .ds-images {
+	display: grid;
+	grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+	gap: 8px;
+}
+.dataset-sidebar .ds-image {
+	margin: 0;
+	border: 1px solid #e6e6ec;
+	border-radius: 4px;
+	overflow: hidden;
+	background: #fff;
+}
+.dataset-sidebar .ds-image img {
+	width: 100%;
+	height: 90px;
+	object-fit: cover;
+	display: block;
+}
+.dataset-sidebar .ds-image figcaption {
+	padding: 4px 6px;
+	font-size: 11px;
+	color: #555;
+	word-break: break-word;
+}
+
+/* The site's main.css nukes margins on all block elements — restore minimal
+   spacing inside the sidebar. */
+.dataset-sidebar h1, .dataset-sidebar h2, .dataset-sidebar h3,
+.dataset-sidebar h4, .dataset-sidebar h5, .dataset-sidebar h6,
+.dataset-sidebar p, .dataset-sidebar dl, .dataset-sidebar dt,
+.dataset-sidebar dd, .dataset-sidebar ul, .dataset-sidebar ol, .dataset-sidebar li {
+	font-family: inherit;
+	font-size: inherit;
+	font-weight: inherit;
+	color: inherit;
+	line-height: inherit;
+}
+
+/* OL zoom controls — top-left (default) */
+#dataset-detail-body .ol-zoom {
+	top: 0.5em;
+	left: 0.5em;
+}
+
+/* Layer switcher — move to top-left, below the zoom controls */
+#dataset-detail-body .layer-switcher {
+	top: 5.5em;
+	left: 0.5em;
+	right: auto;
+}
+
+#dataset-detail-body .layer-switcher.shown.layer-switcher-activation-mode-click > button {
+	right: auto;
+	left: 2px;
+}
+
+/* The site's main.css sets body text to pure white, which makes the
+   layer switcher's labels invisible on its white panel. Re-scope colors
+   inside the control to dark. */
+#dataset-detail-body .layer-switcher,
+#dataset-detail-body .layer-switcher .panel,
+#dataset-detail-body .layer-switcher label,
+#dataset-detail-body .layer-switcher li,
+#dataset-detail-body .layer-switcher a {
+	color: #222;
+	font-family: inherit;
+	font-weight: 400;
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+#dataset-detail-body .layer-switcher .panel {
+	padding: 4px 10px 10px 10px;
+}
+
+#dataset-detail-body .layer-switcher li.group > label {
+	font-weight: 600;
+}
+
+/* main.css hides all checkboxes/radios globally and swaps in a custom
+   label::before indicator. Inside the switcher we want the native
+   checkbox/radio back so users can see which layer is active. */
+#dataset-detail-body .layer-switcher input[type="checkbox"],
+#dataset-detail-body .layer-switcher input[type="radio"] {
+	-webkit-appearance: auto;
+	-moz-appearance: auto;
+	appearance: auto;
+	opacity: 1;
+	z-index: auto;
+	display: inline-block;
+	float: none;
+	margin: 0;
+	width: 1em;
+	height: 1em;
+	position: absolute;
+	left: 0.6em;
+	top: 0.25em;
+}
+
+#dataset-detail-body .layer-switcher li {
+	position: relative;
+	padding-left: 1.8em;
+	margin-top: 0.3em;
+}
+
+#dataset-detail-body .layer-switcher label {
+	padding-left: 0;
+	padding-right: 0;
+	font-weight: 400;
+	position: static;
+	display: inline-block;
+}
+
+/* Suppress the site's custom label::before indicator inside the switcher. */
+#dataset-detail-body .layer-switcher input[type="checkbox"] + label:before,
+#dataset-detail-body .layer-switcher input[type="radio"] + label:before,
+#dataset-detail-body .layer-switcher input[type="checkbox"]:checked + label:before,
+#dataset-detail-body .layer-switcher input[type="radio"]:checked + label:before {
+	display: none;
+	content: none;
+}
+
+/* In pixel-space modes (image basemap / strat section) the geographic
+   basemap layer list is irrelevant — hide the layer switcher. */
+#dataset-detail-root.ds-pixel-mode .layer-switcher { display: none; }
+
+/* Back-to-map button overlay shown when in image-basemap / strat-section mode.
+   Placed on the left, below the zoom controls (top:0.5em) and the layer
+   switcher (top:5.5em), so it never overlaps the sidebar's close button. */
+.ds-back-to-map {
+	position: absolute;
+	top: 9.5em;
+	left: 0.5em;
+	z-index: 12;
+	background: rgba(39, 40, 51, 0.965);
+	color: #fff;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	padding: 6px 12px;
+	border-radius: 4px;
+	font-size: 13px;
+	font-family: inherit;
+	font-weight: 500;
+	cursor: pointer;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.ds-back-to-map:hover { background: rgba(55, 58, 75, 0.98); }
+
+/* "View as basemap" button below image thumbnails in the sidebar */
+.dataset-sidebar .ds-image-action {
+	display: block;
+	width: 100%;
+	padding: 4px 6px;
+	border: none;
+	border-top: 1px solid #e6e6ec;
+	background: #eef3fb;
+	color: #1a4a8a;
+	font-family: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.dataset-sidebar .ds-image-action:hover { background: #d9e5f7; }
+
+.dataset-sidebar .ds-strat-action {
+	display: inline-block;
+	padding: 6px 12px;
+	border: 1px solid #1a4a8a;
+	background: #eef3fb;
+	color: #1a4a8a;
+	font-family: inherit;
+	font-size: 12px;
+	font-weight: 600;
+	border-radius: 4px;
+	cursor: pointer;
+	margin-bottom: 10px;
+}
+.dataset-sidebar .ds-strat-action:hover { background: #d9e5f7; }
+
+@media (max-width: 640px) {
+	#dataset-detail-root { height: calc(100vh - 60px); }
+	.dataset-sidebar { width: 100%; right: -100%; }
+}
