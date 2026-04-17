@@ -36,7 +36,7 @@
 				new ol.layer.Tile({
 					title: 'Mapbox Satellite',
 					type: 'base',
-					visible: true,
+					visible: false,
 					source: new ol.source.XYZ({
 						url: 'https://tiles.strabospot.org/v5/mapbox.satellite/{z}/{x}/{y}.png'
 					})
@@ -44,7 +44,7 @@
 				new ol.layer.Tile({
 					title: 'Mapbox Outdoors',
 					type: 'base',
-					visible: false,
+					visible: true,
 					source: new ol.source.XYZ({
 						url: 'https://tiles.strabospot.org/v5/mapbox.outdoors/{z}/{x}/{y}.png'
 					})

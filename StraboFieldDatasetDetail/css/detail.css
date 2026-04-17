@@ -94,16 +94,45 @@
 	right: 0;
 }
 
-/* OL layer switcher polish */
-.ol-control.layer-switcher {
-	top: 0.5em;
-	right: 0.5em;
-}
-
-/* Keep the OL zoom controls clear of the site header and sidebar */
-.ol-zoom {
+/* OL zoom controls — top-left (default) */
+#dataset-detail-body .ol-zoom {
 	top: 0.5em;
 	left: 0.5em;
+}
+
+/* Layer switcher — move to top-left, below the zoom controls */
+#dataset-detail-body .layer-switcher {
+	top: 4em;
+	left: 0.5em;
+	right: auto;
+}
+
+#dataset-detail-body .layer-switcher.shown.layer-switcher-activation-mode-click > button {
+	right: auto;
+	left: 2px;
+}
+
+/* The site's main.css sets body text to pure white, which makes the
+   layer switcher's labels invisible on its white panel. Re-scope colors
+   inside the control to dark. */
+#dataset-detail-body .layer-switcher,
+#dataset-detail-body .layer-switcher .panel,
+#dataset-detail-body .layer-switcher label,
+#dataset-detail-body .layer-switcher li,
+#dataset-detail-body .layer-switcher a {
+	color: #222;
+	font-family: inherit;
+	font-weight: 400;
+	font-size: 13px;
+	line-height: 1.4;
+}
+
+#dataset-detail-body .layer-switcher .panel {
+	padding: 4px 6px 8px 6px;
+}
+
+#dataset-detail-body .layer-switcher li.group > label {
+	font-weight: 600;
 }
 
 @media (max-width: 640px) {
