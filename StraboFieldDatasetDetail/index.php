@@ -75,16 +75,11 @@ endif;
 	<div id="dataset-detail-header">
 		<div class="ddh-title">
 			<h2>
+				<span class="ddh-prefix">Dataset Details:</span>
 				<span class="ddh-dataset"><?= htmlspecialchars($dataset_name ?: 'Untitled dataset') ?></span>
-				<span class="ddh-sep">&mdash;</span>
+				<span class="ddh-sep">&ndash;</span>
 				<span class="ddh-project"><?= htmlspecialchars($project_name ?: 'Untitled project') ?></span>
 			</h2>
-			<div class="ddh-meta">
-				Dataset <?= (int)$dataset_id ?>
-				<span class="ddh-pub <?= $is_public ? 'is-public' : 'is-private' ?>">
-					<?= $is_public ? 'public' : 'private' ?>
-				</span>
-			</div>
 		</div>
 		<div class="ddh-actions">
 			<select class="ddh-download" id="ddh-download-select" aria-label="Download dataset">

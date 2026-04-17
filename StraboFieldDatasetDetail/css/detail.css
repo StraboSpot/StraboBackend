@@ -31,38 +31,10 @@
 	color: inherit;
 }
 
+#dataset-detail-header .ddh-prefix { font-weight: 400; color: #9a9da9; margin-right: 4px; }
 #dataset-detail-header .ddh-dataset { font-weight: 600; color: #fff; }
 #dataset-detail-header .ddh-project { font-weight: 400; color: #b5b7c0; }
 #dataset-detail-header .ddh-sep { color: #6b6e7c; margin: 0 6px; }
-
-#dataset-detail-header .ddh-meta {
-	font-size: 0.78em;
-	color: #9a9da9;
-	margin-top: 4px;
-}
-
-#dataset-detail-header .ddh-pub {
-	display: inline-block;
-	padding: 1px 8px;
-	margin-left: 6px;
-	border-radius: 10px;
-	font-size: 0.9em;
-	text-transform: uppercase;
-	letter-spacing: 0.5px;
-	font-weight: 600;
-}
-
-#dataset-detail-header .ddh-pub.is-public {
-	background: rgba(72, 187, 120, 0.2);
-	color: #6ddba0;
-	border: 1px solid rgba(72, 187, 120, 0.4);
-}
-
-#dataset-detail-header .ddh-pub.is-private {
-	background: rgba(229, 83, 83, 0.2);
-	color: #f08a8a;
-	border: 1px solid rgba(229, 83, 83, 0.4);
-}
 
 #dataset-detail-header .ddh-actions {
 	display: flex;
