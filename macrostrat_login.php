@@ -11,10 +11,6 @@
  */
 
 session_start();
-
-//include_once "./includes/config.inc.php";
-//include("db.php");
-//include("neodb.php");
 include("./prepare_connections.php");
 include_once('./includes/jwt/quick-jwt.php');
 $qjt = new QuickJWT();
@@ -59,18 +55,7 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 		}
 		
 		if ($row->pkey) {
-
-
-
-
-
-
-
-
-
-
 			// User authenticated successfully!
-			
 			// 1. Generate JWT Access Token
 			$issuedAt = time();
 			$expirationTime = $issuedAt + ACCESS_TOKEN_EXPIRY;
@@ -125,10 +110,6 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 			$db->prepare_query("INSERT INTO macrostrat_logins (userpkey, email, uuid, json) VALUES ($1, $2, $3, $4);",
 				array($row->pkey, $row->email, $uuid, $json));
 
-
-
-
-
 			// 6. For now, just show some information until Macrostrat has their end ready
 
 			include("includes/mheader.php");
@@ -160,19 +141,6 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 			
 			<?php
 			include("includes/mfooter.php");
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 			exit();
 
