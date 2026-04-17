@@ -45,4 +45,8 @@
 		baseLayers: baseLayers,
 		config: cfg
 	};
+
+	if (cfg.dataset_id && window.DatasetDetailSpots) {
+		DatasetDetailSpots.loadSpots(map, cfg.dataset_id);
+	}
 })();

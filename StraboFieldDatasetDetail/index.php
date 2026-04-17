@@ -111,6 +111,8 @@ window.DATASET_DETAIL_CONFIG = {
 <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
 <script src="https://unpkg.com/ol-layerswitcher@4.1.2/dist/ol-layerswitcher.js"></script>
 <script src="/StraboFieldDatasetDetail/js/basemaps.js"></script>
+<script src="/StraboFieldDatasetDetail/js/symbology.js"></script>
+<script src="/StraboFieldDatasetDetail/js/spots.js"></script>
 <script src="/StraboFieldDatasetDetail/js/detail.js"></script>
 
 <?php
