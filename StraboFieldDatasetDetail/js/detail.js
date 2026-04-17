@@ -49,4 +49,32 @@
 	if (cfg.dataset_id && window.DatasetDetailSpots) {
 		DatasetDetailSpots.loadSpots(map, cfg.dataset_id);
 	}
+
+	// Open the metadata sidebar when a spot is clicked. Hit-test only the
+	// spots layer to avoid swallowing basemap clicks.
+	map.on('singleclick', function (evt) {
+		var hit = null;
+		map.forEachFeatureAtPixel(evt.pixel, function (feature, layer) {
+			if (layer && layer === window.DatasetDetail.spotsLayer) {
+				hit = feature;
+				return true;
+			}
+		});
+		if (!hit) return;
+		var spotId = hit.get('id');
+		var spot = window.DatasetDetail.spotsById && window.DatasetDetail.spotsById[spotId];
+		if (spot && window.DatasetDetailSidebar) {
+			window.DatasetDetailSidebar.open(spot);
+		}
+	});
+
+	// Pointer cursor over clickable spots.
+	map.on('pointermove', function (evt) {
+		if (evt.dragging) return;
+		var pixel = map.getEventPixel(evt.originalEvent);
+		var overSpot = map.hasFeatureAtPixel(pixel, {
+			layerFilter: function (l) { return l === window.DatasetDetail.spotsLayer; }
+		});
+		map.getTargetElement().style.cursor = overSpot ? 'pointer' : '';
+	});
 })();

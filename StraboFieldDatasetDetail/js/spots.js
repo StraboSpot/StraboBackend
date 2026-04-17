@@ -28,6 +28,17 @@
 	}
 
 	function renderSpots(map, data) {
+		// Index all spots (including strat + image-basemap spots) by id so
+		// the sidebar can look up the original spot on click regardless of
+		// which exploded orientation feature was hit.
+		var spotsById = {};
+		(data.features || []).forEach(function (spot) {
+			if (spot && spot.properties && spot.properties.id != null) {
+				spotsById[spot.properties.id] = spot;
+			}
+		});
+		global.DatasetDetail.spotsById = spotsById;
+
 		var geographicFeatures = [];
 		(data.features || []).forEach(function (spot) {
 			// Skip spots that live on an image basemap or strat section —
