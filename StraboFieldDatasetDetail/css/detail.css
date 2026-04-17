@@ -377,6 +377,10 @@
 	content: none;
 }
 
+/* In pixel-space modes (image basemap / strat section) the geographic
+   basemap layer list is irrelevant — hide the layer switcher. */
+#dataset-detail-root.ds-pixel-mode .layer-switcher { display: none; }
+
 /* Back-to-map button overlay shown when in image-basemap / strat-section mode.
    Placed on the left, below the zoom controls (top:0.5em) and the layer
    switcher (top:5.5em), so it never overlaps the sidebar's close button. */

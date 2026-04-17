@@ -42,6 +42,12 @@
 			return;
 		}
 
+		// If the strat-section viewer is active, unwind it first so we don't
+		// end up with two pixel-space modes layered on top of each other.
+		if (global.DatasetDetailStratSection && global.DatasetDetailStratSection.isActive()) {
+			global.DatasetDetailStratSection.exit();
+		}
+
 		if (!state.active) {
 			var view = map.getView();
 			state.savedView = {
@@ -50,6 +56,7 @@
 				resolution: view.getResolution()
 			};
 			hideGeographicLayers(map);
+			setPixelModeClass(true);
 		} else {
 			removeImageModeLayers(map);
 		}
@@ -111,7 +118,13 @@
 			if (state.savedView.zoom != null) view.setZoom(state.savedView.zoom);
 		}
 
+		setPixelModeClass(false);
 		if (state.backButton) state.backButton.style.display = 'none';
+	}
+
+	function setPixelModeClass(on) {
+		var root = document.getElementById('dataset-detail-root');
+		if (root) root.classList.toggle('ds-pixel-mode', !!on);
 	}
 
 	function goBackOne() {
