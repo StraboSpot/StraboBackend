@@ -393,7 +393,7 @@
 
 		ctx.save();
 		ctx.lineWidth = 1;
-		ctx.font = (12 * pixelRatio) + 'px Arial';
+		ctx.font = (14 * pixelRatio) + 'px Arial';
 		ctx.strokeStyle = '#222';
 		ctx.fillStyle = '#222';
 		ctx.textBaseline = 'middle';
@@ -472,9 +472,9 @@
 		ctx.fillText(profileLabel, 0, 0);
 		ctx.restore();
 
-		// Column labels (rotated 45°).
+		// Column labels (rotated 60°).
 		ctx.textAlign = 'left';
-		ctx.font = (10 * pixelRatio) + 'px Arial';
+		ctx.font = (13 * pixelRatio) + 'px Arial';
 		for (var i = 0; i < labels.length; i++) {
 			var colX = spacing * X_INTERVAL + i * X_INTERVAL;
 
