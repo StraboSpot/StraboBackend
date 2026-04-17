@@ -52,7 +52,8 @@
 
 	function isSpotsLayer(layer) {
 		if (!layer) return false;
-		return layer.get && (layer.get('name') === 'spotsLayer' || layer.get('name') === 'ibSpotsLayer');
+		var name = layer.get && layer.get('name');
+		return name === 'spotsLayer' || name === 'ibSpotsLayer' || name === 'stratLayer';
 	}
 
 	// Open the metadata sidebar when a spot is clicked. Hit-test only the

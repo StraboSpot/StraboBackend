@@ -80,6 +80,15 @@
 				}
 			});
 		});
+
+		Array.prototype.forEach.call(root.querySelectorAll('.ds-strat-action'), function (btn) {
+			btn.addEventListener('click', function () {
+				var id = btn.getAttribute('data-strat-id');
+				if (id && global.DatasetDetailStratSection) {
+					global.DatasetDetailStratSection.enter(id);
+				}
+			});
+		});
 	}
 
 	function renderSidebar(spot) {
@@ -138,7 +147,7 @@
 		var igmet = buildObject(props.pet);
 		if (igmet) sections.push({ title: 'Igneous / Metamorphic', html: igmet });
 
-		var strat = buildObject(props.sed && props.sed.strat_section);
+		var strat = buildStratSection(props.sed && props.sed.strat_section);
 		if (strat) sections.push({ title: 'Strat Section', html: strat });
 
 		var sed = buildSed(props.sed);
@@ -271,6 +280,17 @@
 		if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return null;
 		var rows = objectToRows(obj);
 		return rows.length ? renderKVList(rows) : null;
+	}
+
+	function buildStratSection(ss) {
+		if (!ss || typeof ss !== 'object' || Array.isArray(ss)) return null;
+		var rows = objectToRows(ss);
+		var body = rows.length ? renderKVList(rows) : '';
+		var id = ss.strat_section_id;
+		if (id) {
+			body = '<button type="button" class="ds-strat-action" data-strat-id="' + escapeHtml(String(id)) + '">View strat section</button>' + body;
+		}
+		return body || null;
 	}
 
 	function buildSed(sed) {
