@@ -345,11 +345,13 @@
 	content: none;
 }
 
-/* Back-to-map button overlay shown when in image-basemap / strat-section mode */
+/* Back-to-map button overlay shown when in image-basemap / strat-section mode.
+   Placed on the left, below the zoom controls (top:0.5em) and the layer
+   switcher (top:5.5em), so it never overlaps the sidebar's close button. */
 .ds-back-to-map {
 	position: absolute;
-	top: 0.5em;
-	right: 0.5em;
+	top: 9.5em;
+	left: 0.5em;
 	z-index: 12;
 	background: rgba(39, 40, 51, 0.965);
 	color: #fff;
