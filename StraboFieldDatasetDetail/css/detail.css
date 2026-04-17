@@ -64,6 +64,38 @@
 	border: 1px solid rgba(229, 83, 83, 0.4);
 }
 
+#dataset-detail-header .ddh-actions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-shrink: 0;
+}
+
+#dataset-detail-header .ddh-download {
+	background: #c0392b;
+	color: #fff;
+	border: 1px solid #a93024;
+	padding: 6px 14px;
+	border-radius: 4px;
+	font-family: inherit;
+	font-size: 13px;
+	font-weight: 600;
+	cursor: pointer;
+	-webkit-appearance: none;
+	-moz-appearance: none;
+	appearance: none;
+	background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%);
+	background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
+	background-size: 5px 5px, 5px 5px;
+	background-repeat: no-repeat;
+	padding-right: 28px;
+}
+#dataset-detail-header .ddh-download:hover { background-color: #a93024; }
+#dataset-detail-header .ddh-download option {
+	background: #fff;
+	color: #222;
+}
+
 #dataset-detail-body {
 	flex: 1 1 auto;
 	position: relative;

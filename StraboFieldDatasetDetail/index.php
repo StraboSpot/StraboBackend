@@ -87,7 +87,24 @@ endif;
 			</div>
 		</div>
 		<div class="ddh-actions">
-			<!-- Phase 6 will place the Download dropdown here -->
+			<select class="ddh-download" id="ddh-download-select" aria-label="Download dataset">
+				<option value="" style="display:none;">Download</option>
+				<option value="shapefile">Shapefile</option>
+				<option value="kml">KMZ</option>
+				<option value="xls">XLS</option>
+				<option value="stereonet">Stereonet Mobile</option>
+				<option value="fieldbook">Field Book</option>
+				<option value="strat_sections">Strat Section(s)</option>
+				<option value="download_images">Download Photos</option>
+				<option value="sample_list">Sample List</option>
+				<?php if ((int)$_SESSION['userpkey'] === 3): ?>
+				<option value="dev_sample_list">Dev Sample List</option>
+				<?php endif; ?>
+				<option value="gpkg">GeoPackage</option>
+				<option value="geojson">GeoJSON</option>
+				<option value="gems">USGS GeMS</option>
+				<option value="image_basemaps">Image Basemaps</option>
+			</select>
 		</div>
 	</div>
 	<div id="dataset-detail-body">
@@ -116,6 +133,7 @@ window.DATASET_DETAIL_CONFIG = {
 <script src="/StraboFieldDatasetDetail/js/spots.js"></script>
 <script src="/StraboFieldDatasetDetail/js/image_basemap.js"></script>
 <script src="/StraboFieldDatasetDetail/js/strat_section.js"></script>
+<script src="/StraboFieldDatasetDetail/js/downloads.js"></script>
 <script src="/StraboFieldDatasetDetail/js/detail.js"></script>
 
 <?php
