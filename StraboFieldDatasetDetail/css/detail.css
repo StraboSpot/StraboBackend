@@ -102,7 +102,7 @@
 
 /* Layer switcher — move to top-left, below the zoom controls */
 #dataset-detail-body .layer-switcher {
-	top: 4em;
+	top: 5.5em;
 	left: 0.5em;
 	right: auto;
 }
@@ -128,11 +128,54 @@
 }
 
 #dataset-detail-body .layer-switcher .panel {
-	padding: 4px 6px 8px 6px;
+	padding: 4px 10px 10px 10px;
 }
 
 #dataset-detail-body .layer-switcher li.group > label {
 	font-weight: 600;
+}
+
+/* main.css hides all checkboxes/radios globally and swaps in a custom
+   label::before indicator. Inside the switcher we want the native
+   checkbox/radio back so users can see which layer is active. */
+#dataset-detail-body .layer-switcher input[type="checkbox"],
+#dataset-detail-body .layer-switcher input[type="radio"] {
+	-webkit-appearance: auto;
+	-moz-appearance: auto;
+	appearance: auto;
+	opacity: 1;
+	z-index: auto;
+	display: inline-block;
+	float: none;
+	margin: 0;
+	width: 1em;
+	height: 1em;
+	position: absolute;
+	left: 0.6em;
+	top: 0.25em;
+}
+
+#dataset-detail-body .layer-switcher li {
+	position: relative;
+	padding-left: 1.8em;
+	margin-top: 0.3em;
+}
+
+#dataset-detail-body .layer-switcher label {
+	padding-left: 0;
+	padding-right: 0;
+	font-weight: 400;
+	position: static;
+	display: inline-block;
+}
+
+/* Suppress the site's custom label::before indicator inside the switcher. */
+#dataset-detail-body .layer-switcher input[type="checkbox"] + label:before,
+#dataset-detail-body .layer-switcher input[type="radio"] + label:before,
+#dataset-detail-body .layer-switcher input[type="checkbox"]:checked + label:before,
+#dataset-detail-body .layer-switcher input[type="radio"]:checked + label:before {
+	display: none;
+	content: none;
 }
 
 @media (max-width: 640px) {
