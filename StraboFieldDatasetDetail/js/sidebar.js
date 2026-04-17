@@ -71,6 +71,15 @@
 				}
 			});
 		});
+
+		Array.prototype.forEach.call(root.querySelectorAll('.ds-image-action'), function (btn) {
+			btn.addEventListener('click', function () {
+				var id = btn.getAttribute('data-basemap-id');
+				if (id && global.DatasetDetailImageBasemap) {
+					global.DatasetDetailImageBasemap.enter(id);
+				}
+			});
+		});
 	}
 
 	function renderSidebar(spot) {
@@ -221,17 +230,22 @@
 
 	function buildImages(images) {
 		if (!Array.isArray(images) || images.length === 0) return null;
+		var basemapIds = (global.DatasetDetail && global.DatasetDetail.imageBasemapIds) || {};
 		var html = '<div class="ds-images">';
 		images.forEach(function (img) {
 			var id = img && img.id;
 			if (!id) return;
 			var src = IMAGE_CDN + id + '.jpg';
 			var title = img.title || img.caption || '';
-			html += '<figure class="ds-image">';
+			var isBasemap = !!basemapIds[String(id)];
+			html += '<figure class="ds-image' + (isBasemap ? ' ds-image-basemap' : '') + '">';
 			html += '  <a href="' + src + '" target="_blank" rel="noopener">';
 			html += '    <img loading="lazy" src="' + src + '" alt="' + escapeHtml(title) + '">';
 			html += '  </a>';
 			if (title) html += '<figcaption>' + escapeHtml(title) + '</figcaption>';
+			if (isBasemap) {
+				html += '<button type="button" class="ds-image-action" data-basemap-id="' + escapeHtml(String(id)) + '">View as basemap</button>';
+			}
 			html += '</figure>';
 		});
 		html += '</div>';

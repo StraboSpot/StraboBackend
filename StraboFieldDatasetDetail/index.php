@@ -114,6 +114,7 @@ window.DATASET_DETAIL_CONFIG = {
 <script src="/StraboFieldDatasetDetail/js/symbology.js"></script>
 <script src="/StraboFieldDatasetDetail/js/sidebar.js"></script>
 <script src="/StraboFieldDatasetDetail/js/spots.js"></script>
+<script src="/StraboFieldDatasetDetail/js/image_basemap.js"></script>
 <script src="/StraboFieldDatasetDetail/js/detail.js"></script>
 
 <?php

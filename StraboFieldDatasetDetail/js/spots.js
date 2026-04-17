@@ -32,12 +32,25 @@
 		// the sidebar can look up the original spot on click regardless of
 		// which exploded orientation feature was hit.
 		var spotsById = {};
+		var imagesById = {};
 		(data.features || []).forEach(function (spot) {
-			if (spot && spot.properties && spot.properties.id != null) {
-				spotsById[spot.properties.id] = spot;
+			if (spot && spot.properties) {
+				if (spot.properties.id != null) {
+					spotsById[spot.properties.id] = spot;
+				}
+				if (Array.isArray(spot.properties.images)) {
+					spot.properties.images.forEach(function (img) {
+						if (img && img.id != null) imagesById[String(img.id)] = img;
+					});
+				}
 			}
 		});
 		global.DatasetDetail.spotsById = spotsById;
+		global.DatasetDetail.imagesById = imagesById;
+		global.DatasetDetail.imageBasemapIds = {};
+		(data.image_basemap_ids || []).forEach(function (id) {
+			global.DatasetDetail.imageBasemapIds[String(id)] = true;
+		});
 
 		var geographicFeatures = [];
 		(data.features || []).forEach(function (spot) {
@@ -67,9 +80,9 @@
 		var vectorLayer = new ol.layer.Vector({
 			source: source,
 			style: styleForFeature,
-			title: 'Spots',
-			name: 'spotsLayer'
+			title: 'Spots'
 		});
+		vectorLayer.set('name', 'spotsLayer');
 
 		map.addLayer(vectorLayer);
 
@@ -151,5 +164,8 @@
 		return new ol.style.Stroke({ color: color, width: width, lineDash: lineDash });
 	}
 
-	global.DatasetDetailSpots = { loadSpots: loadSpots };
+	global.DatasetDetailSpots = {
+		loadSpots: loadSpots,
+		styleForFeature: styleForFeature
+	};
 })(window);

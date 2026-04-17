@@ -345,6 +345,41 @@
 	content: none;
 }
 
+/* Back-to-map button overlay shown when in image-basemap / strat-section mode */
+.ds-back-to-map {
+	position: absolute;
+	top: 0.5em;
+	right: 0.5em;
+	z-index: 12;
+	background: rgba(39, 40, 51, 0.965);
+	color: #fff;
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	padding: 6px 12px;
+	border-radius: 4px;
+	font-size: 13px;
+	font-family: inherit;
+	font-weight: 500;
+	cursor: pointer;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+}
+.ds-back-to-map:hover { background: rgba(55, 58, 75, 0.98); }
+
+/* "View as basemap" button below image thumbnails in the sidebar */
+.dataset-sidebar .ds-image-action {
+	display: block;
+	width: 100%;
+	padding: 4px 6px;
+	border: none;
+	border-top: 1px solid #e6e6ec;
+	background: #eef3fb;
+	color: #1a4a8a;
+	font-family: inherit;
+	font-size: 11px;
+	font-weight: 600;
+	cursor: pointer;
+}
+.dataset-sidebar .ds-image-action:hover { background: #d9e5f7; }
+
 @media (max-width: 640px) {
 	#dataset-detail-root { height: calc(100vh - 60px); }
 	.dataset-sidebar { width: 100%; right: -100%; }

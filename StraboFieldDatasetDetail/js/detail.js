@@ -50,12 +50,17 @@
 		DatasetDetailSpots.loadSpots(map, cfg.dataset_id);
 	}
 
+	function isSpotsLayer(layer) {
+		if (!layer) return false;
+		return layer.get && (layer.get('name') === 'spotsLayer' || layer.get('name') === 'ibSpotsLayer');
+	}
+
 	// Open the metadata sidebar when a spot is clicked. Hit-test only the
-	// spots layer to avoid swallowing basemap clicks.
+	// spots layer(s) to avoid swallowing basemap clicks.
 	map.on('singleclick', function (evt) {
 		var hit = null;
 		map.forEachFeatureAtPixel(evt.pixel, function (feature, layer) {
-			if (layer && layer === window.DatasetDetail.spotsLayer) {
+			if (isSpotsLayer(layer)) {
 				hit = feature;
 				return true;
 			}
@@ -72,9 +77,7 @@
 	map.on('pointermove', function (evt) {
 		if (evt.dragging) return;
 		var pixel = map.getEventPixel(evt.originalEvent);
-		var overSpot = map.hasFeatureAtPixel(pixel, {
-			layerFilter: function (l) { return l === window.DatasetDetail.spotsLayer; }
-		});
+		var overSpot = map.hasFeatureAtPixel(pixel, { layerFilter: isSpotsLayer });
 		map.getTargetElement().style.cursor = overSpot ? 'pointer' : '';
 	});
 })();
