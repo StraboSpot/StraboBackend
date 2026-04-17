@@ -22,6 +22,11 @@
 
 	var IMAGE_CDN = 'https://strabospot.org/mapimage/';
 
+	// Remember which accordion sections the user has opened so their choice
+	// carries across spot selections. Seeded with "Spot Info" so the first
+	// click on any spot opens with at least that section expanded.
+	var openSections = { 'Spot Info': true };
+
 	// Fields we never want to render as generic rows (shown in their own section
 	// or structurally uninteresting). Keep in sync with the section builders.
 	var HIDDEN_FIELDS = {
@@ -54,7 +59,16 @@
 
 		Array.prototype.forEach.call(root.querySelectorAll('.ds-section > .ds-section-header'), function (h) {
 			h.addEventListener('click', function () {
-				h.parentElement.classList.toggle('ds-collapsed');
+				var section = h.parentElement;
+				section.classList.toggle('ds-collapsed');
+				var title = section.getAttribute('data-title');
+				if (title) {
+					if (section.classList.contains('ds-collapsed')) {
+						delete openSections[title];
+					} else {
+						openSections[title] = true;
+					}
+				}
 			});
 		});
 	}
@@ -69,8 +83,9 @@
 		html += '  <button type="button" class="ds-close" aria-label="Close">&times;</button>';
 		html += '</div>';
 		html += '<div class="ds-body">';
-		sections.forEach(function (s, i) {
-			html += '<section class="ds-section' + (i > 0 ? ' ds-collapsed' : '') + '">';
+		sections.forEach(function (s) {
+			var isOpen = !!openSections[s.title];
+			html += '<section class="ds-section' + (isOpen ? '' : ' ds-collapsed') + '" data-title="' + escapeHtml(s.title) + '">';
 			html += '  <header class="ds-section-header"><span class="ds-chev">▸</span>' + escapeHtml(s.title) + '</header>';
 			html += '  <div class="ds-section-body">' + s.html + '</div>';
 			html += '</section>';
