@@ -101,7 +101,7 @@
 			map.getView().fit(extent, {
 				padding: [60, 60, 60, 60],
 				maxZoom: 18,
-				duration: 400
+				duration: 1500
 			});
 		}
 
