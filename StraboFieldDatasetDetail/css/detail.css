@@ -43,26 +43,14 @@
 	flex-shrink: 0;
 }
 
+/* Styling is inherited from the site-wide .myDataSelect class in
+   massets/css/main.css (background #e44c65, border-radius 4px, fixed 110x35
+   size, responsive breakpoints). Just ensure the <option> list renders with
+   readable dark text on a white menu — the parent sets color:#fff. */
 #dataset-detail-header .ddh-download {
-	background: #c0392b;
-	color: #fff;
-	border: 1px solid #a93024;
-	padding: 6px 14px;
-	border-radius: 4px;
-	font-family: inherit;
-	font-size: 13px;
-	font-weight: 600;
 	cursor: pointer;
-	-webkit-appearance: none;
-	-moz-appearance: none;
-	appearance: none;
-	background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%);
-	background-position: calc(100% - 15px) 50%, calc(100% - 10px) 50%;
-	background-size: 5px 5px, 5px 5px;
-	background-repeat: no-repeat;
-	padding-right: 28px;
+	margin-bottom: 0;
 }
-#dataset-detail-header .ddh-download:hover { background-color: #a93024; }
 #dataset-detail-header .ddh-download option {
 	background: #fff;
 	color: #222;

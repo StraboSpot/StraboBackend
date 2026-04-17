@@ -82,7 +82,7 @@ endif;
 			</h2>
 		</div>
 		<div class="ddh-actions">
-			<select class="ddh-download" id="ddh-download-select" aria-label="Download dataset">
+			<select class="myDataSelect ddh-download" id="ddh-download-select" aria-label="Download dataset">
 				<option value="" style="display:none;">Download</option>
 				<option value="shapefile">Shapefile</option>
 				<option value="kml">KMZ</option>
