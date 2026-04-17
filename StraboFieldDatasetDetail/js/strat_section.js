@@ -18,6 +18,82 @@
 	var Y_MULTIPLIER = 20;
 	var X_INTERVAL   = 10;
 
+	// USGS-derived lithology colors, ported verbatim from
+	// search/includes/strat.js:getStratIntervalFill(). Keyed by grain size
+	// token — the caller maps a spot's sed.lithologies[0] to a grain-size
+	// token via the same getGrainSize() precedence the legacy uses.
+	var GRAIN_COLORS = {
+		// mudstone/shale
+		clay:             'rgba(128, 222, 77, 1)',
+		mud:              'rgba(77, 255, 0, 1)',
+		silt:             'rgba(153, 255, 102, 1)',
+		// sandstone
+		sand_very_fin:    'rgba(255, 255, 179, 1)',
+		sand_fine_low:    'rgba(255, 255, 153, 1)',
+		sand_fine_upp:    'rgba(255, 255, 128, 1)',
+		sand_medium_l:    'rgba(255, 255, 102, 1)',
+		sand_medium_u:    'rgba(255, 255, 77, 1)',
+		sand_coarse_l:    'rgba(255, 255, 0, 1)',
+		sand_coarse_u:    'rgba(255, 235, 0, 1)',
+		sand_very_coa:    'rgba(255, 222, 0, 1)',
+		// carbonate
+		mudstone:         'rgba(77, 255, 128, 1)',
+		wackestone:       'rgba(77, 255, 179, 1)',
+		packstone:        'rgba(77, 255, 222, 1)',
+		grainstone:       'rgba(179, 255, 255, 1)',
+		boundstone:       'rgba(77, 128, 255, 1)',
+		cementstone:      'rgba(0, 179, 179, 1)',
+		recrystallized:   'rgba(0, 102, 222, 1)',
+		floatstone:       'rgba(77, 255, 255, 1)',
+		rudstone:         'rgba(77, 204, 255, 1)',
+		framestone:       'rgba(77, 128, 255, 1)',
+		bafflestone:      'rgba(77, 128, 255, 1)',
+		bindstone:        'rgba(77, 128, 255, 1)',
+		// misc
+		evaporite:        'rgba(153, 77, 255, 1)',
+		chert:            'rgba(102, 77, 77, 1)',
+		ironstone:        'rgba(153, 0, 0, 1)',
+		phosphatic:       'rgba(153, 255, 179, 1)',
+		volcaniclastic:   'rgba(255, 128, 255, 1)',
+		organic_coal:     'rgba(0, 0, 0, 1)'
+	};
+
+	// Siliciclastic-type colors driven by primary_lithology+siliciclastic_type
+	// on top of grain-size lookup (conglomerate and breccia override the sand
+	// palette with orange/red at pebble/cobble/boulder scale).
+	var SILICICLASTIC_COLORS = {
+		conglomerate: {
+			granule: 'rgba(255, 153, 0, 1)',
+			pebble:  'rgba(255, 128, 0, 1)',
+			cobble:  'rgba(255, 102, 0, 1)',
+			boulder: 'rgba(255, 77, 0, 1)'
+		},
+		breccia: {
+			granule: 'rgba(230, 0, 0, 1)',
+			pebble:  'rgba(204, 0, 0, 1)',
+			cobble:  'rgba(179, 0, 0, 1)',
+			boulder: 'rgba(153, 0, 0, 1)'
+		}
+	};
+
+	// Basic-lithologies column profile uses a coarser palette keyed by
+	// primary_lithology plus grain-size bucket flags (mud_silt_grain_size
+	// etc.). Ported from strat.js getStratIntervalFill() basic branch.
+	var BASIC_LITHOLOGY_COLORS = {
+		limestone:       'rgba(77, 255, 222, 1)',
+		dolostone:       'rgba(77, 255, 179, 1)',
+		organic_coal:    'rgba(0, 0, 0, 1)',
+		evaporite:       'rgba(153, 77, 255, 1)',
+		chert:           'rgba(102, 77, 77, 1)',
+		ironstone:       'rgba(153, 0, 0, 1)',
+		phosphatic:      'rgba(153, 255, 179, 1)',
+		volcaniclastic:  'rgba(255, 128, 255, 1)',
+		mud_silt:        'rgba(128, 222, 77, 1)',
+		sand:            'rgba(255, 255, 77, 1)',
+		conglomerate:    'rgba(255, 102, 0, 1)',
+		breccia:         'rgba(213, 0, 0, 1)'
+	};
+
 	var GRAIN_SIZES = {
 		clastic: [
 			'clay', 'silt', 'sand- very fine', 'sand- fine lower', 'sand- fine upper',
@@ -91,21 +167,29 @@
 		map.setView(stratView);
 
 		state.stratLayer = buildStratLayer(stratSectionId, projection);
-		if (state.stratLayer) map.addLayer(state.stratLayer);
+		if (state.stratLayer) {
+			map.addLayer(state.stratLayer);
+			state.postrenderKey = state.stratLayer.on('postrender', function (evt) {
+				if (!state.active) return;
+				drawAxes(evt, map, state.stratSectionSpot);
+			});
+		}
 
 		// Fit to the spots' extent if we have any; otherwise use projExtent.
+		// Force x=0 (Y-axis) and y=0 (X-axis baseline) into view, and leave
+		// gutter space on the left and top for axis tick labels.
 		var fitExtent = state.stratLayer && state.stratLayer.getSource().getExtent();
 		if (fitExtent && isFinite(fitExtent[0]) && isFinite(fitExtent[2])) {
-			// Expand slightly to leave room for axes.
-			stratView.fit(padExtent(fitExtent, 40), { padding: [40, 40, 60, 80] });
+			var ext = [
+				Math.min(fitExtent[0], -30),
+				Math.min(fitExtent[1], -20),
+				Math.max(fitExtent[2] + 20, 40),
+				fitExtent[3] + 60
+			];
+			stratView.fit(ext, { padding: [20, 20, 20, 20] });
 		} else {
 			stratView.fit(projExtent, { padding: [40, 40, 40, 40] });
 		}
-
-		state.postrenderKey = map.on('postrender', function (evt) {
-			if (!state.active) return;
-			drawAxes(evt, parent);
-		});
 
 		ensureBackButton();
 		if (global.DatasetDetailSidebar) global.DatasetDetailSidebar.close();
@@ -200,7 +284,7 @@
 
 		var layer = new ol.layer.Vector({
 			source: source,
-			style: global.DatasetDetailSpots.styleForFeature
+			style: styleForStratFeature
 		});
 		layer.set('name', 'stratLayer');
 		layer.set('title', 'Strat Section');
@@ -209,12 +293,84 @@
 
 	function padExtent(e, m) { return [e[0] - m, e[1] - m, e[2] + m, e[3] + m]; }
 
+	/* ---------------- lithology-aware styling ------------------------- */
+
+	function styleForStratFeature(feature) {
+		var geomType = feature.getGeometry().getType();
+
+		if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
+			var fillColor = getStratIntervalFillColor(feature);
+			return new ol.style.Style({
+				fill: new ol.style.Fill({ color: fillColor }),
+				stroke: new ol.style.Stroke({ color: '#000', width: 0.8 })
+			});
+		}
+
+		// Points + lines: reuse the geographic styler (icons + trace colors).
+		return global.DatasetDetailSpots.styleForFeature(feature);
+	}
+
+	function getStratIntervalFillColor(feature) {
+		var surface = feature.get('surface_feature');
+		if (!surface || surface.surface_feature_type !== 'strat_interval') {
+			return 'rgba(0, 0, 255, 0.4)';
+		}
+		var sed = feature.get('sed');
+		var lithologies = sed && sed.lithologies;
+		if (!Array.isArray(lithologies) || lithologies.length === 0) {
+			return 'rgba(255, 255, 255, 1)';
+		}
+
+		var lith = lithologies[0];
+		var parent = state.stratSectionSpot;
+		var stratSettings = parent && parent.properties && parent.properties.sed && parent.properties.sed.strat_section;
+		var profile = stratSettings && stratSettings.column_profile;
+		var primary = lith.primary_lithology;
+		var grainSize = getGrainSize(lith);
+
+		// Basic-lithologies profile uses the coarser color set.
+		if (profile === 'basic_lithologies') {
+			if (primary === 'limestone')        return BASIC_LITHOLOGY_COLORS.limestone;
+			if (primary === 'dolostone')        return BASIC_LITHOLOGY_COLORS.dolostone;
+			if (primary === 'organic_coal')     return BASIC_LITHOLOGY_COLORS.organic_coal;
+			if (primary === 'evaporite')        return BASIC_LITHOLOGY_COLORS.evaporite;
+			if (primary === 'chert')            return BASIC_LITHOLOGY_COLORS.chert;
+			if (primary === 'ironstone')        return BASIC_LITHOLOGY_COLORS.ironstone;
+			if (primary === 'phosphatic')       return BASIC_LITHOLOGY_COLORS.phosphatic;
+			if (primary === 'volcaniclastic')   return BASIC_LITHOLOGY_COLORS.volcaniclastic;
+			if (lith.mud_silt_grain_size)       return BASIC_LITHOLOGY_COLORS.mud_silt;
+			if (lith.sand_grain_size)           return BASIC_LITHOLOGY_COLORS.sand;
+			if (lith.congl_grain_size)          return BASIC_LITHOLOGY_COLORS.conglomerate;
+			if (lith.breccia_grain_size)        return BASIC_LITHOLOGY_COLORS.breccia;
+			return 'rgba(255, 255, 255, 1)';
+		}
+
+		// Grain-size profile (clastic / carbonate / mixed_clastic).
+		// Siliciclastic conglomerate / breccia override the sand palette at
+		// granule+ grain sizes.
+		if (primary === 'siliciclastic' && lith.siliciclastic_type) {
+			var st = SILICICLASTIC_COLORS[lith.siliciclastic_type];
+			if (st && st[grainSize]) return st[grainSize];
+		}
+		if (GRAIN_COLORS[grainSize]) return GRAIN_COLORS[grainSize];
+		if (GRAIN_COLORS[primary])   return GRAIN_COLORS[primary];
+		return 'rgba(255, 255, 255, 1)';
+	}
+
+	function getGrainSize(lith) {
+		return lith.mud_silt_grain_size
+			|| lith.sand_grain_size
+			|| lith.congl_grain_size
+			|| lith.breccia_grain_size
+			|| lith.dunham_classification
+			|| lith.primary_lithology;
+	}
+
 	/* ---------------- axes rendering --------------------------------- */
 
-	function drawAxes(evt, parentSpot) {
+	function drawAxes(evt, map, parentSpot) {
 		var ctx = evt.context;
 		if (!ctx) return;
-		var map = evt.target || global.DatasetDetail.map;
 		var pixelRatio = (evt.frameState && evt.frameState.pixelRatio) || 1;
 		var stratMeta = parentSpot.properties.sed && parentSpot.properties.sed.strat_section;
 		if (!stratMeta) return;
