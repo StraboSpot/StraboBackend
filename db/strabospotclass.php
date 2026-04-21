@@ -1690,14 +1690,18 @@ class StraboSpot
 	}
 
 	/**
-	 * Get a dataset by ID without userpkey filtering.
-	 * Used internally when we need to find a dataset regardless of ownership.
+	 * Get the current user's dataset by ID.
+	 *
+	 * Scoped to $this->userpkey so insertDataset can never accidentally
+	 * overwrite another user's dataset node when two users hold datasets with
+	 * the same ID. For collaborative edits, the caller is expected to have
+	 * swapped $this->userpkey to the project owner's pkey before calling.
 	 *
 	 * @param int $feature_id The dataset ID
 	 * @return object|null The dataset data or null if not found
 	 */
 	private function getDatasetById($feature_id){
-		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id RETURN n, id(n) as id;";
+		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id AND n.userpkey = $this->userpkey RETURN n, id(n) as id;";
 		$records = $this->neodb->query($querystring);
 
 		if(count($records) > 0){
