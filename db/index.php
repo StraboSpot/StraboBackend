@@ -72,8 +72,8 @@ if(file_exists("log.txt")){
 			file_put_contents ("log.txt", "REQUEST_URI: ".$_SERVER["REQUEST_URI"]."\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "username: $username\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "Raw Input:\n\n".$rawinput."\n\n", FILE_APPEND);
-			file_put_contents ("log.txt", "Request Method: ".$_SERVER['REQUEST_METHOD'], FILE_APPEND);
-			file_put_contents ("log.txt", "Server: ".$serv, FILE_APPEND);
+			//file_put_contents ("log.txt", "Request Method: ".$_SERVER['REQUEST_METHOD'], FILE_APPEND);
+			//file_put_contents ("log.txt", "Server: ".$serv, FILE_APPEND);
 		}
 	}
 }
