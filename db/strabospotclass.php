@@ -2920,9 +2920,13 @@ class StraboSpot
 
 	public function getMyProjects(){ //order by p.uploaddate desc
 
-		
+
 		$x=0;
-		
+
+		// Track owner pkey per project index for batch lookup after both loops
+		$ownerPkeys = array();
+		$ownerByIdx = array();
+
 		$collabs = $this->getCollaborationProjects();
 		
 /*
@@ -2988,14 +2992,20 @@ stdClass Object
 			}else{
 				$data['projects'][$x]['isReadOnly'] = TRUE;
 			}
-			
+
 			$data['projects'][$x]['isOwner'] = FALSE;
+
+			$ownerPkey = $fd->userpkey;
+			if($ownerPkey !== null && $ownerPkey !== ""){
+				$ownerPkeys[$ownerPkey] = true;
+				$ownerByIdx[$x] = $ownerPkey;
+			}
 
 			$x++;
 
 		}
-		
-		
+
+
 		//get the feature from neo4j
 		$querystring = "MATCH (n:Project) WHERE n.userpkey = $this->userpkey RETURN n order by n.uploaddate desc;";
 		$rows = $this->neodb->get_results($querystring);
@@ -3043,13 +3053,40 @@ stdClass Object
 				$mod = $fd->modified_timestamp;
 
 				$data['projects'][$x]['modified_timestamp'] = (int) $mod;
-				
+
 				$data['projects'][$x]['isOwner'] = TRUE;
 				$data['projects'][$x]['isReadOnly'] = FALSE;
+
+				$ownerPkey = $fd->userpkey;
+				if($ownerPkey !== null && $ownerPkey !== ""){
+					$ownerPkeys[$ownerPkey] = true;
+					$ownerByIdx[$x] = $ownerPkey;
+				}
 
 				$x++;
 			}
 
+		}
+
+		// Batch lookup owner names and emails from PostgreSQL
+		if(count($ownerPkeys) > 0){
+			$ownerInfo = array();
+			foreach(array_keys($ownerPkeys) as $pkey){
+				$user = $this->db->get_row_prepared("SELECT firstname, lastname, email FROM users WHERE pkey = $1", array($pkey));
+				if($user){
+					$ownerInfo[$pkey] = array(
+						'name' => trim($user->firstname . ' ' . $user->lastname),
+						'email' => $user->email
+					);
+				}
+			}
+
+			foreach($ownerByIdx as $idx => $pkey){
+				if(isset($ownerInfo[$pkey])){
+					$data['projects'][$idx]['owner_name'] = $ownerInfo[$pkey]['name'];
+					$data['projects'][$idx]['owner_email'] = $ownerInfo[$pkey]['email'];
+				}
+			}
 		}
 
 		return $data;
@@ -4358,6 +4395,16 @@ public function getSpotName($id){
 			
 			$data->isReadOnly = $readonly;
 			$data->isOwner = $isowner;
+
+			// Attach project owner name/email
+			$ownerPkey = $properties['userpkey'];
+			if($ownerPkey !== null && $ownerPkey !== ""){
+				$user = $this->db->get_row_prepared("SELECT firstname, lastname, email FROM users WHERE pkey = $1", array($ownerPkey));
+				if($user){
+					$data->owner_name = trim($user->firstname . ' ' . $user->lastname);
+					$data->owner_email = $user->email;
+				}
+			}
 
 		}else{
 			//Error, sample not found
