@@ -110,12 +110,23 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 			$db->prepare_query("INSERT INTO macrostrat_logins (userpkey, email, uuid, json) VALUES ($1, $2, $3, $4);",
 				array($row->pkey, $row->email, $uuid, $json));
 
-			// 6. For now, just show some information until Macrostrat has their end ready
+			// 6. Show a brief success message, then redirect to the Macrostrat callback URL with the UUID.
+
+			$redirectUrl = 'https://strabospot.org?uuid=' . urlencode($uuid);
 
 			include("includes/mheader.php");
-			
+
 			?>
 						<!-- Main -->
+
+
+
+
+
+
+
+
+							<?php // Remove this section and replace with section below when Macrostrat is ready ?>
 							<div id="main" class="wrapper style1">
 								<div class="container">
 			
@@ -138,7 +149,41 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 			
 								</div>
 							</div>
-			
+
+
+
+
+
+<?php
+/* Uncomment this stuff when Macrostrat is ready
+							<div id="main" class="wrapper style1">
+								<div class="container">
+
+									<header class="major">
+										<h2>StraboSpot/Macrostrat Login</h2>
+									</header>
+
+									<div style="background-color:#30ae4f;color:#fff;padding:20px 25px;border-radius:6px;margin-top:10px;">
+										<div style="font-size:1.5em;font-weight:bold;">Login Successful!</div>
+										<div style="padding-top:8px;">Redirecting you to Macrostrat...</div>
+									</div>
+
+								<div class="bottomSpacer"></div>
+
+								</div>
+							</div>
+
+			<script>
+				setTimeout(function () {
+					window.location.href = <?php echo json_encode($redirectUrl); ?>;
+				}, 2000);
+			</script>
+*/
+?>
+
+
+
+
 			<?php
 			include("includes/mfooter.php");
 
