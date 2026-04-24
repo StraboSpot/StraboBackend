@@ -112,7 +112,7 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 
 			// 6. Show a brief success message, then redirect to the Macrostrat callback URL with the UUID.
 
-			$redirectUrl = 'https://strabospot.org?uuid=' . urlencode($uuid);
+			$redirectUrl = 'https://dev.rockd.org/dev/strabospot?u=' . urlencode($uuid);
 
 			include("includes/mheader.php");
 
@@ -126,7 +126,8 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 
 
 
-							<?php // Remove this section and replace with section below when Macrostrat is ready ?>
+<?php // Remove this section and replace with section below when Macrostrat is ready 
+/*
 							<div id="main" class="wrapper style1">
 								<div class="container">
 			
@@ -149,13 +150,12 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 			
 								</div>
 							</div>
+*/
+?>
 
 
 
 
-
-<?php
-/* Uncomment this stuff when Macrostrat is ready
 							<div id="main" class="wrapper style1">
 								<div class="container">
 
@@ -178,8 +178,7 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 					window.location.href = <?php echo json_encode($redirectUrl); ?>;
 				}, 2000);
 			</script>
-*/
-?>
+
 
 
 
