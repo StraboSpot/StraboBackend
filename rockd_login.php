@@ -99,7 +99,7 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 
 			$json = pg_escape_string($json);
 
-			// 5. Now put uuid and JSON string in database so that Macrostrat can come and get it.
+			// 5. Now put uuid and JSON string in database so that Rockd can come and get it.
 			
 			//$db->dumpVar($json);
 			
@@ -110,7 +110,7 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 			$db->prepare_query("INSERT INTO macrostrat_logins (userpkey, email, uuid, json) VALUES ($1, $2, $3, $4);",
 				array($row->pkey, $row->email, $uuid, $json));
 
-			// 6. Show a brief success message, then redirect to the Macrostrat callback URL with the UUID.
+			// 6. Show a brief success message, then redirect to the Rockd callback URL with the UUID.
 
 			$redirectUrl = 'https://dev.rockd.org/dev/strabospot?u=' . urlencode($uuid);
 
@@ -126,24 +126,24 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 
 
 
-<?php // Remove this section and replace with section below when Macrostrat is ready 
+<?php // Remove this section and replace with section below when Rockd is ready 
 /*
 							<div id="main" class="wrapper style1">
 								<div class="container">
 			
 									<header class="major">
-										<h2>StraboSpot/Macrostrat Login</h2>
+										<h2>StraboSpot/Rockd Login</h2>
 									</header>
 			
 									<div style="font-size:1.5em;">Login Successful!</div>
-									<div style="padding-top:10px;">With a successful login, this page will eventually redirect to the Macrostrat callback page with a UUID.</div>
+									<div style="padding-top:10px;">With a successful login, this page will eventually redirect to the Rockd callback page with a UUID.</div>
 									<div>For example:</div>
-									<div style="padding-top:5px;padding-left:20px;">https://macrostrat.org/strabospot_callback?u=<?php echo $uuid;?></div>
-									<div style="padding-top:5px;">The Macrostrat callback page will then retrieve the JWT (JSON Web Token) by CURLing a GET back to the StraboSpot Macrostrat login page using the provided UUID:</div>
-									<div style="padding-top:5px;padding-left:20px;"><a href="https://strabospot.org/macrostrat_login?u=<?php echo $uuid;?>" target="_blank">https://strabospot.org/macrostrat_login?u=<?php echo $uuid;?></a></div>
+									<div style="padding-top:5px;padding-left:20px;">https://rockd.org/strabospot_callback?u=<?php echo $uuid;?></div>
+									<div style="padding-top:5px;">The Rockd callback page will then retrieve the JWT (JSON Web Token) by CURLing a GET back to the StraboSpot Rockd login page using the provided UUID:</div>
+									<div style="padding-top:5px;padding-left:20px;"><a href="https://strabospot.org/rockd_login?u=<?php echo $uuid;?>" target="_blank">https://strabospot.org/rockd_login?u=<?php echo $uuid;?></a></div>
 									<div style="padding-top:15px;">
 										This workflow is necessary to prevent passing JWTs in cruft and risking them showing up in web browser histories, Apache logs, etc...<br>
-										When the Macrostrat callback page GETs the token from StraboSpot, the GET callback URL is deleted from the database so that it can only be called once.
+										When the Rockd callback page GETs the token from StraboSpot, the GET callback URL is deleted from the database so that it can only be called once.
 									</div>
 			
 								<div class="bottomSpacer"></div>
@@ -160,12 +160,12 @@ $db->query("DELETE FROM macrostrat_logins WHERE datecreated < NOW() - INTERVAL '
 								<div class="container">
 
 									<header class="major">
-										<h2>StraboSpot/Macrostrat Login</h2>
+										<h2>StraboSpot/Rockd Login</h2>
 									</header>
 
 									<div style="background-color:#30ae4f;color:#fff;padding:20px 25px;border-radius:6px;margin-top:10px;">
 										<div style="font-size:1.5em;font-weight:bold;">Login Successful!</div>
-										<div style="padding-top:8px;">Redirecting you to Macrostrat...</div>
+										<div style="padding-top:8px;">Redirecting you to Rockd...</div>
 									</div>
 
 								<div class="bottomSpacer"></div>
@@ -214,7 +214,7 @@ include("includes/mheader.php");
 					<div class="container">
 
 						<header class="major">
-							<h2>StraboSpot/Macrostrat Login</h2>
+							<h2>StraboSpot/Rockd Login</h2>
 						</header>
 
 						<?php
