@@ -184,6 +184,36 @@ class CollaborationAuth {
     }
 
     /**
+     * Get collaboration status booleans for a project.
+     *
+     * isCollaborative: true iff any collaborator row exists for (projectId, ownerPkey).
+     * isHalted: true iff collaborators exist AND all are currently disabled.
+     *
+     * Matches the semantics used internally by getProjectContext().
+     *
+     * @param string $projectId
+     * @param int $ownerPkey
+     * @return array ['isCollaborative' => bool, 'isHalted' => bool]
+     */
+    public function getCollaborationStatus(string $projectId, int $ownerPkey): array {
+        $row = $this->db->get_row_prepared(
+            "SELECT COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE disabled = false) AS enabled_count
+             FROM collaborators
+             WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2",
+            array($projectId, $ownerPkey)
+        );
+
+        $total = $row ? (int)$row->total : 0;
+        $enabled = $row ? (int)$row->enabled_count : 0;
+
+        return array(
+            'isCollaborative' => $total > 0,
+            'isHalted' => $total > 0 && $enabled === 0,
+        );
+    }
+
+    /**
      * Check if any collaborator rows exist for a project (accepted or not, enabled or not)
      *
      * @param string $projectId

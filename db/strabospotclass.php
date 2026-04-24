@@ -2927,6 +2927,9 @@ class StraboSpot
 		$ownerPkeys = array();
 		$ownerByIdx = array();
 
+		require_once(__DIR__ . '/services/CollaborationAuth.php');
+		$collabAuth = new CollaborationAuth($this->db, $this->neodb);
+
 		$collabs = $this->getCollaborationProjects();
 		
 /*
@@ -2999,6 +3002,12 @@ stdClass Object
 			if($ownerPkey !== null && $ownerPkey !== ""){
 				$ownerPkeys[$ownerPkey] = true;
 				$ownerByIdx[$x] = $ownerPkey;
+
+				$status = $collabAuth->getCollaborationStatus((string)$id, (int)$ownerPkey);
+				$data['projects'][$x]['isCollaborativeProject'] = $status['isCollaborative'];
+				if($status['isCollaborative']){
+					$data['projects'][$x]['isCollaborationHalted'] = $status['isHalted'];
+				}
 			}
 
 			$x++;
@@ -3061,6 +3070,12 @@ stdClass Object
 				if($ownerPkey !== null && $ownerPkey !== ""){
 					$ownerPkeys[$ownerPkey] = true;
 					$ownerByIdx[$x] = $ownerPkey;
+				}
+
+				$status = $collabAuth->getCollaborationStatus((string)$id, (int)$this->userpkey);
+				$data['projects'][$x]['isCollaborativeProject'] = $status['isCollaborative'];
+				if($status['isCollaborative']){
+					$data['projects'][$x]['isCollaborationHalted'] = $status['isHalted'];
 				}
 
 				$x++;
@@ -4403,6 +4418,14 @@ public function getSpotName($id){
 				if($user){
 					$data->owner_name = trim($user->firstname . ' ' . $user->lastname);
 					$data->owner_email = $user->email;
+				}
+
+				require_once(__DIR__ . '/services/CollaborationAuth.php');
+				$collabAuth = new CollaborationAuth($this->db, $this->neodb);
+				$status = $collabAuth->getCollaborationStatus((string)$feature_id, (int)$ownerPkey);
+				$data->isCollaborativeProject = $status['isCollaborative'];
+				if($status['isCollaborative']){
+					$data->isCollaborationHalted = $status['isHalted'];
 				}
 			}
 
