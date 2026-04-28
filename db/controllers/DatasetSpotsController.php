@@ -51,13 +51,19 @@ class DatasetSpotsController extends MyController
 
 	public function postAction($request) {
 
+		// Large dataset uploads can exceed default PHP CPU-time limits and may
+		// outlast a flaky client connection. Disable the script timeout and keep
+		// running on client disconnect so partial inserts don't get stranded.
+		set_time_limit(0);
+		ignore_user_abort(true);
+
 		if(isset($request->url_elements[2])) {
 
 			//*******************************************************************************
 			//update attributes for feature
 
 
-			
+
 			$feature_id = $request->url_elements[2];
 			$datasetid = $feature_id;
 
