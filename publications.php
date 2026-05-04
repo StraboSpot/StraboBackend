@@ -39,7 +39,9 @@ if(file_exists($csvFile)){
 		display: flex;
 		flex-wrap: wrap;
 		gap: 1em;
-		margin-bottom: 1.5em;
+		margin: 0 auto 1.5em auto;
+		max-width: 640px;
+		justify-content: center;
 		align-items: center;
 	}
 	.pub-controls input[type="text"],
@@ -58,8 +60,9 @@ if(file_exists($csvFile)){
 		outline: none;
 	}
 	.pub-controls input[type="text"] {
-		flex: 1 1 280px;
+		flex: 1 1 320px;
 		min-width: 220px;
+		max-width: 380px;
 	}
 	.pub-controls select {
 		flex: 0 0 auto;
@@ -73,45 +76,65 @@ if(file_exists($csvFile)){
 		color: rgba(255, 255, 255, 0.6);
 		font-size: 0.95em;
 		margin-bottom: 1em;
+		text-align: center;
 	}
 
 	.pub-card {
+		position: relative;
 		display: flex;
 		gap: 1.25em;
-		background: rgba(255, 255, 255, 0.04);
-		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: #ffffff;
+		border: 1px solid rgba(0, 0, 0, 0.08);
 		border-radius: 6px;
-		padding: 1.25em 1.5em;
+		padding: 1.5em 1.75em;
 		margin-bottom: 1em;
+		overflow: hidden;
+	}
+
+	.pub-card::after {
+		content: '\201D';
+		position: absolute;
+		top: -0.45em;
+		right: 0.15em;
+		font-size: 9em;
+		line-height: 1;
+		color: rgba(0, 0, 0, 0.06);
+		font-family: Georgia, "Times New Roman", serif;
+		pointer-events: none;
+		user-select: none;
 	}
 
 	.pub-icon {
-		flex: 0 0 48px;
-		width: 48px;
-		height: 48px;
+		flex: 0 0 44px;
+		width: 44px;
+		height: 44px;
 		border-radius: 50%;
-		background: rgba(40, 90, 110, 0.5);
+		background: rgba(79, 168, 193, 0.12);
 		border: 2px solid #4fa8c1;
 		color: #4fa8c1;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		position: relative;
+		z-index: 1;
 	}
 	.pub-icon svg {
-		width: 22px;
-		height: 22px;
+		width: 20px;
+		height: 20px;
 	}
 
 	.pub-body {
 		flex: 1;
 		min-width: 0;
+		position: relative;
+		z-index: 1;
 	}
 
 	.pub-title {
-		color: #ffffff;
+		color: #1a1a1a;
 		font-weight: 700;
 		font-size: 1.1em;
-		margin-bottom: 0.35em;
+		margin-bottom: 0.4em;
 		line-height: 1.35;
 	}
 
@@ -124,7 +147,7 @@ if(file_exists($csvFile)){
 	}
 
 	.pub-citation {
-		color: rgba(255, 255, 255, 0.7);
+		color: #555555;
 		font-size: 0.95em;
 		line-height: 1.55;
 	}
