@@ -47,5 +47,7 @@ micromessage.json
 includes/mimages/_backup_originals
 includes/mimages/events/
 data/events.json
+data/publications.csv
+data/publications.csv.bak
 microview/smzFiles
 restore_symlinks.sh
