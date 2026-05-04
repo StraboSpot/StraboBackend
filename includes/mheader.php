@@ -138,6 +138,7 @@ if($userpkey == "adsf"){
 								<ul>
 									<li><a href="/overview">Overview</a></li>
 									<li><a href="/events">Events</a></li>
+									<li><a href="/publications">Publications</a></li>
 									<li><a href="/interoperability">Interoperability</a></li>
 									<li><a href="/api">API</a></li>
 									<li><a href="/citations">Citations</a></li>
@@ -204,10 +205,12 @@ if($showinstrumentmenuqqq){
 <?php
 }
 
-if($showadminmenu){
+//if($showadminmenu){
+if(in_array($userpkey, array(3, 7217))){
 ?>
 									<li><a href="/micromessage_editor">Micro Startup Message</a></li>
 									<li><a href="/events_admin">Events Admin</a></li>
+									<li><a href="/publications_admin">Publications Admin</a></li>
 <?php
 }
 if($_SESSION['userpkey']=="3"){
