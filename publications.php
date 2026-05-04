@@ -92,14 +92,15 @@ if(file_exists($csvFile)){
 	}
 
 	.pub-card::after {
-		content: '\201D';
+		content: '\201C';
 		position: absolute;
-		top: -0.45em;
-		right: 0.15em;
-		font-size: 9em;
-		line-height: 1;
-		color: rgba(0, 0, 0, 0.06);
+		top: 0.05em;
+		right: 0.18em;
+		font-size: 7em;
+		line-height: 0.85;
+		color: rgba(0, 0, 0, 0.10);
 		font-family: Georgia, "Times New Roman", serif;
+		font-weight: 700;
 		pointer-events: none;
 		user-select: none;
 	}
