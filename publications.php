@@ -78,6 +78,18 @@ if(file_exists($csvFile)){
 		margin-bottom: 1em;
 		text-align: center;
 	}
+	.pub-download-link {
+		color: #e44c65;
+		cursor: pointer;
+		text-decoration: underline;
+	}
+	.pub-download-link:hover {
+		color: #f06880;
+	}
+	.pub-result-sep {
+		color: rgba(255, 255, 255, 0.3);
+		margin: 0 0.5em;
+	}
 
 	.pub-card {
 		position: relative;
@@ -258,6 +270,32 @@ function highlight(escapedText, escapedTerm){
 	return escapedText.replace(new RegExp('(' + safe + ')', 'gi'), '<mark>$1</mark>');
 }
 
+function csvEscape(v){
+	var s = (v == null) ? '' : String(v);
+	if(/[",\n\r]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
+	return s;
+}
+
+function downloadCsv(){
+	if(!filteredPubs.length) return;
+	var headers = ['Authors','Title','Publication','Volume','Number','Pages','Year','Publisher','URL','DOI'];
+	var lines = [headers.map(csvEscape).join(',')];
+	for(var i = 0; i < filteredPubs.length; i++){
+		var p = filteredPubs[i];
+		lines.push(headers.map(function(h){ return csvEscape(p[h]); }).join(','));
+	}
+	// Prepend UTF-8 BOM so Excel reads accented characters correctly
+	var blob = new Blob(['﻿' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8' });
+	var url = URL.createObjectURL(blob);
+	var a = document.createElement('a');
+	a.href = url;
+	a.download = ($('#pubSearch').val().trim() === '') ? 'publications.csv' : 'publications-filtered.csv';
+	document.body.appendChild(a);
+	a.click();
+	document.body.removeChild(a);
+	URL.revokeObjectURL(url);
+}
+
 // "Walker, J Douglas; Tikoff, Basil; " → "Walker, J. D., Tikoff, B."
 function formatAuthors(authors){
 	if(!authors) return '';
@@ -368,15 +406,21 @@ function render(){
 	var start = (currentPage - 1) * pageSize;
 	var end = Math.min(total, start + pageSize);
 
+	var rawTerm = $('#pubSearch').val().trim();
+	var escapedTerm = escHtml(rawTerm);
+
 	if(total === 0){
-		$('#pubResultCount').text('No publications match your search.');
+		$('#pubResultCount').html('No publications match your search.');
 	} else {
-		$('#pubResultCount').text('Showing ' + (start + 1) + '–' + end + ' of ' + total);
+		var label = (rawTerm === '') ? 'Download all as CSV' : 'Download these ' + total + ' as CSV';
+		$('#pubResultCount').html(
+			'Showing ' + (start + 1) + '–' + end + ' of ' + total +
+			'<span class="pub-result-sep">·</span>' +
+			'<a class="pub-download-link" id="pubDownload">' + label + '</a>'
+		);
 	}
 
 	var iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>';
-	var rawTerm = $('#pubSearch').val().trim();
-	var escapedTerm = escHtml(rawTerm);
 	var html = '';
 	for(var i = start; i < end; i++){
 		var p = filteredPubs[i];
@@ -413,6 +457,10 @@ function render(){
 $(function(){
 	$('#pubSearch').on('input', applyFilter);
 	$('#pubSort').on('change', applySort);
+	$(document).on('click', '#pubDownload', function(e){
+		e.preventDefault();
+		downloadCsv();
+	});
 	$(document).on('click', '.pub-page-btn', function(){
 		if($(this).is(':disabled')) return;
 		var p = $(this).data('page');
