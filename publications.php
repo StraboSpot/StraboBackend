@@ -153,6 +153,13 @@ if(file_exists($csvFile)){
 		line-height: 1.55;
 	}
 
+	.pub-card mark {
+		background: #fff3a3;
+		color: inherit;
+		padding: 0 1px;
+		border-radius: 2px;
+	}
+
 	.pub-pagination {
 		display: flex;
 		flex-wrap: wrap;
@@ -242,6 +249,13 @@ function escHtml(s){
 	var d = document.createElement('div');
 	d.appendChild(document.createTextNode(s == null ? '' : String(s)));
 	return d.innerHTML;
+}
+
+// Wrap case-insensitive matches of `term` (already HTML-escaped) in <mark> tags
+function highlight(escapedText, escapedTerm){
+	if(!escapedTerm) return escapedText;
+	var safe = escapedTerm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+	return escapedText.replace(new RegExp('(' + safe + ')', 'gi'), '<mark>$1</mark>');
 }
 
 // "Walker, J Douglas; Tikoff, Basil; " → "Walker, J. D., Tikoff, B."
@@ -361,18 +375,20 @@ function render(){
 	}
 
 	var iconSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>';
+	var rawTerm = $('#pubSearch').val().trim();
+	var escapedTerm = escHtml(rawTerm);
 	var html = '';
 	for(var i = start; i < end; i++){
 		var p = filteredPubs[i];
 		html += '<div class="pub-card">';
 		html += '<div class="pub-icon">' + iconSvg + '</div>';
 		html += '<div class="pub-body">';
-		html += '<div class="pub-title">' + escHtml(p.Title || '(Untitled)') + '</div>';
+		html += '<div class="pub-title">' + highlight(escHtml(p.Title || '(Untitled)'), escapedTerm) + '</div>';
 		var link = pubLink(p);
 		if(link){
 			html += '<div class="pub-link"><a href="' + escHtml(link) + '" target="_blank" rel="noopener">Link to Publication</a></div>';
 		}
-		html += '<div class="pub-citation">' + escHtml(buildCitation(p)) + '</div>';
+		html += '<div class="pub-citation">' + highlight(escHtml(buildCitation(p)), escapedTerm) + '</div>';
 		html += '</div></div>';
 	}
 	$('#pubList').html(html);
