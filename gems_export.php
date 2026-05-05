@@ -99,7 +99,29 @@ foreach($ptTypeGroups as $opts){ $ptTypeOptions = array_merge($ptTypeOptions, $o
 					</header>
 					<section id="content">
 
-<div style="background:#333;padding:15px 20px;border-radius:8px;margin-bottom:25px;text-align:center;">This export tool is based on the work of <strong>Andrew Hoxey</strong> at the New Mexico Bureau of Geology and Mineral Resources.<br>Original project: <a href="https://github.com/andrewkrh/StraboGeMSTranslator" target="_blank">StraboGeMSTranslator on GitHub</a>.</div>
+					<div style="background:#333;padding-left:10px;padding-top:15px;padding-right:10px;padding-bottom:5px;border-radius:8px;margin-bottom:10px;text-align:center;">
+						This export tool is based on the work of <strong>Andrew Hoxey</strong> at the New Mexico Bureau of Geology and Mineral Resources.<br>
+						Original project: <a href="https://github.com/andrewkrh/StraboGeMSTranslator" target="_blank">StraboGeMSTranslator on GitHub</a>.<br>
+						
+						<div style="text-align:left;padding-left:20px;">
+							The tables below reflect how StraboSpot feature attributes will be mapped into a GeMS-compliant feature attribute table. Users should review the tables carefully and consider modifying fields when necessary.<br>
+					
+							The resulting export will include 9 different GeoJSON files with GeMS-compliant feature attributes. Each of the 9 GeoJSONs represent a different feature class within a GeMS geodatabase and users can assign the feature class by modifying the “GeMS Sort” option.<br>
+					
+							<div style="padding-left:20px;">
+								Suggested workflow:<br>
+								
+								<ul style="margin-left:20px;">
+									<li>Review the automatically generated attribute mapping within the tables below</li>
+									<li>Export translated GeMS JSONs from Strabo</li>
+									<li>Import data to a scratch Geodatabase using JSON to Feature conversion tool (ArcPro or similar)</li>
+									<li>Review features in GIS software</li>
+									<li>Copy features from scratch Geodatabase to primary Geodatabase</li>
+								</ul>
+							</div>
+						</div>
+						
+					</div>
 
 <?php if(empty($scanResult['lines']) && empty($scanResult['points'])): ?>
 	<p><em>No data found for this dataset. Please verify the dataset contains features.</em></p>
