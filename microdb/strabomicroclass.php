@@ -325,7 +325,7 @@ class StraboMicro
 										id,
 										strabo_id,
 										name,
-										round(extract(epoch from uploaddate)*1000) as modifiedtimestamp,
+										round(extract(epoch from modifiedtimestamp)*1000) as modifiedtimestamp,
 										TO_CHAR(uploaddate, 'mm/dd/yyyy HH:MMPM TZ OF') as uploaddate
 										from micro_projectmetadata where userpkey = $this->userpkey order by id desc");
 		foreach($rows as $row){
