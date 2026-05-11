@@ -27,9 +27,20 @@ $server = print_r($_SERVER, true);
 if(file_exists("uploadLog.txt")){
 }
 
-$row = $db->get_row_prepared("select * from users where email=$1 and crypt($2, password) = password and active = TRUE limit 1", array($username, $password));
+$usercount = 0;
 
-if($row->pkey == "" &&  md5($password)!=$hashval){
+$row = $db->get_row_prepared("select * from users where email=$1 and crypt($2, password) = password and active = TRUE limit 1", array($username, $password));
+$usercount = $db->num_rows;
+
+if($usercount == 0){
+	$rows=$db->get_row_prepared("SELECT * FROM apptokens, users WHERE users.email = apptokens.email AND apptokens.email=$1 AND apptokens.uuid = $2 AND users.deleted = FALSE", array($username, $password));
+	if($db->num_rows>0){
+		$usercount = $db->num_rows;
+		$db->prepare_query("UPDATE apptokens SET created_on = now() WHERE email=$1 AND uuid = $2", array($user, $pass));
+	}
+}
+
+if($usercount == 0 &&  md5($password)!=$hashval){
 	header("HTTP/1.1 401 Unauthorized");
 	echo "Unauthorized";exit();
 }

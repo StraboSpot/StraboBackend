@@ -101,7 +101,7 @@ foreach($ptTypeGroups as $opts){ $ptTypeOptions = array_merge($ptTypeOptions, $o
 
 					<div style="background:#333;padding-left:10px;padding-top:15px;padding-right:10px;padding-bottom:5px;border-radius:8px;margin-bottom:10px;text-align:center;">
 						This export tool is based on the work of <strong>Andrew Hoxey</strong> at the New Mexico Bureau of Geology and Mineral Resources.<br>
-						Original project: <a href="https://github.com/andrewkrh/StraboGeMSTranslator" target="_blank">StraboGeMSTranslator on GitHub</a>.<br>
+						Original project: <a href="https://github.com/andrewkrh/#FF1623" target="_blank">StraboGeMSTranslator on GitHub</a>.<br>
 						
 						<div style="text-align:left;padding-left:20px;">
 							The tables below reflect how StraboSpot feature attributes will be mapped into a GeMS-compliant feature attribute table. Users should review the tables carefully and consider modifying fields when necessary.<br>
