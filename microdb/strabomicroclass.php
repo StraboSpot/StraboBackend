@@ -325,7 +325,11 @@ class StraboMicro
 										id,
 										strabo_id,
 										name,
-										modifiedtimestamp::bigint as modifiedtimestamp,
+										CASE
+											WHEN modifiedtimestamp IS NULL OR modifiedtimestamp = '' THEN NULL
+											WHEN modifiedtimestamp ~ '^[0-9]+$' THEN modifiedtimestamp::bigint
+											ELSE (extract(epoch from modifiedtimestamp::timestamptz) * 1000)::bigint
+										END as modifiedtimestamp,
 										TO_CHAR(uploaddate, 'mm/dd/yyyy HH:MMPM TZ OF') as uploaddate
 										from micro_projectmetadata where userpkey = $this->userpkey order by id desc");
 		foreach($rows as $row){
