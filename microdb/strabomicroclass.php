@@ -166,7 +166,14 @@ class StraboMicro
 			mkdir("$docRoot/ziptemp/$uuid");
 			mkdir("$docRoot/ziptemp/$uuid/$project_id");
 
-			$mod = $this->db->get_var("select round(extract(epoch from uploaddate)*1000) as modifiedtimestamp from micro_projectmetadata where strabo_id = '$project_id'");
+			$mod = $this->db->get_var("select
+										CASE
+											WHEN modifiedtimestamp IS NULL OR modifiedtimestamp = '' THEN NULL
+											WHEN modifiedtimestamp ~ '^[0-9]+$' THEN modifiedtimestamp::bigint
+											ELSE (extract(epoch from modifiedtimestamp::timestamptz) * 1000)::bigint
+										END as modifiedtimestamp 
+							
+							from micro_projectmetadata where userpkey = $this->userpkey and strabo_id = '$project_id'");
 
 			$json = file_get_contents("$docRoot/straboMicroFiles/$pkey/project.json");
 			$json = json_decode($json);
