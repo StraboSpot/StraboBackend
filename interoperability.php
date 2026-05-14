@@ -75,9 +75,8 @@ include("includes/mheader.php");
 						</p>
 						<p style="color: rgba(255, 255, 255, 0.85); line-height: 1.6; margin-bottom: 1em;">
 							StraboField Data Project compiling and sorting tool, J Schneider<br>
-							<a href="#">Link</a>
+							<a href="https://gsameetings.secure-platform.com/connects25/solicitations/103002/sessiongallery/schedule/items/95202/application/5306" target="_blank">More Info</a>
 						</p>
-						<p style="color: rgba(255, 255, 255, 0.85);"><em>Others?</em></p>
 					</div>
 				</div>
 
