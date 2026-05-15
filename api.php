@@ -33,9 +33,7 @@ include("includes/mheader.php");
 The StraboSpot REST API uses HTTP Basic Auth for authentication. An account can be obtained
 by clicking on the "<a href="register">ACCOUNT->REGISTER</a>" link above. Once an account is created, it will need
 to be validated by email. When using the StraboSpot REST API, you will use your email address as the username and your
-password as entered during registration. Alternatively, the StraboSpot system also supports JWT (JSON Web Tokens) for
-access all API endpoints. The path for JWT access is "/jwtdb/" instead of "/db/" for all requests. JSON web tokens can
-be acquired by clicking <a href="/my_jwts">here</a>.
+password as entered during registration.
 </div>
 
 <!--
