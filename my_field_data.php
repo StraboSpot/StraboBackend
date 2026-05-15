@@ -496,7 +496,7 @@ if(count($projectrows)==0){
 													<option value="field">Download/Share StraboMobile Project File</option>
 													<option value="doi">Get DOI for Project</option>
 <?php
-if(in_array($userpkey, $admin_pkeys)){
+if(in_array($userpkey, $acollaboration_testing_pkeys)){
 ?>
 													<option value="collaborate">Invite Collaborators</option>
 <?php
