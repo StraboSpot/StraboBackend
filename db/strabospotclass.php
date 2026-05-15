@@ -4238,6 +4238,13 @@ public function getSpotName($id){
 			//$this->buildProjectRelationships($thisid);
 		}
 
+		// Ensure Postgres has a project row mirroring Neo4j. This was previously only
+		// written from buildPgDataset, which never fires for empty projects (no spots
+		// -> no centroid -> guarded query short-circuits), leaving the collaboration
+		// flow unable to find the project. Runs on every project POST so updates
+		// flow through to PG too.
+		$this->buildPgProject($thisid, $ownerPkey);
+
 		$this->setProjectCenter($thisid, $ownerPkey);
 
 		$totalprojecttime = microtime(true)-$projectstarttime;
@@ -5365,6 +5372,93 @@ public function getSpotName($id){
 
 	}
 
+	public function buildPgProject($projectid, $ownerPkey = null){
+		// Insert/update the Postgres `project` row from current Neo4j state.
+		// Runs on every project upload (including empty projects with no spots),
+		// which is what the collaboration flow needs to find the project in PG.
+		// $ownerPkey: pass the project owner's pkey when collaborating; defaults to current user.
+
+		$thisuserpkey = $ownerPkey ?? $this->userpkey;
+
+		$userrow = $this->db->get_row("select * from users where pkey = $thisuserpkey");
+		if(!$userrow){
+			return;
+		}
+		$firstname = pg_escape_string($userrow->firstname);
+		$lastname  = pg_escape_string($userrow->lastname);
+
+		$neo_project = (object)$this->neodb->getNode("match (p:Project {id:$projectid, userpkey:$thisuserpkey}) return p limit 1");
+		if(empty($neo_project->id)){
+			return;
+		}
+
+		$strabo_project_id = $neo_project->id;
+		$project_name = pg_escape_string($neo_project->desc_project_name);
+		$notes = pg_escape_string($neo_project->desc_notes);
+
+		$ispublic = "false";
+		$prefs = $neo_project->preferences;
+		if($prefs != ""){
+			$prefs = json_decode($prefs);
+			if($prefs->public){
+				$ispublic = "true";
+			}
+		}
+		if($neo_project->public == 1){
+			$ispublic = "true";
+		}
+
+		$projectkeywords = "";
+		$projectkeywords .= " ".$project_name;
+		$projectkeywords .= " ".$notes;
+		$projectkeywords .= " ".$firstname;
+		$projectkeywords .= " ".$lastname;
+
+		if($projectkeywords!=""){
+			$projectvectors = "to_tsvector('$projectkeywords')";
+		}else{
+			$projectvectors = "null";
+		}
+
+		$pg_project = $this->db->get_row("select project_pkey from project where strabo_project_id='$strabo_project_id' and user_pkey = $thisuserpkey limit 1");
+
+		if($pg_project && $pg_project->project_pkey != ""){
+			// Refresh name, public flag, notes, vectors. Location is owned by
+			// setProjectCenter — leave it alone so we don't wipe a good centroid
+			// from a re-upload that has no spots.
+			$this->db->query("update project set
+									project_name = '$project_name',
+									ispublic = $ispublic,
+									notes = '$notes',
+									keywords = $projectvectors,
+									last_modified = now()
+								where strabo_project_id = '$strabo_project_id'
+								  and user_pkey = $thisuserpkey");
+		}else{
+			$project_pkey = $this->db->get_var("select nextval('project_project_pkey_seq')");
+
+			$project_location = trim($neo_project->centroid);
+			if($project_location!=""){
+				$project_location = "ST_GeomFromText('$project_location')";
+			}else{
+				$project_location = "null";
+			}
+
+			$this->db->query("insert into project values
+									(	$project_pkey,
+										$thisuserpkey,
+										'$project_name',
+										'$strabo_project_id',
+										$ispublic,
+										$project_location,
+										now(),
+										'$notes',
+										$projectvectors
+									)
+								");
+		}
+	}
+
 	public function buildPgDataset($datasetid, $ownerPkey = null){
 		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
 
@@ -5398,63 +5492,14 @@ public function getSpotName($id){
 		}
 
 		if($projectid){
-			//first, check postgres to see if project for this dataset exists
-			$pg_project = $this->db->get_row("select * from project where strabo_project_id='$projectid' and user_pkey = $thisuserpkey limit 1");
+			// Make sure the PG project row exists & is current before we hang a
+			// dataset off it. buildPgProject handles both insert and update paths.
+			$this->buildPgProject($projectid, $thisuserpkey);
+
+			$pg_project = $this->db->get_row("select project_pkey, project_name from project where strabo_project_id='$projectid' and user_pkey = $thisuserpkey limit 1");
 
 			$project_pkey = $pg_project->project_pkey;
 			$project_name = $pg_project->project_name;
-
-			//Need to update project here if already exists...
-			if($project_pkey == ""){
-
-				//project doesn't exist, we need to put it in.
-				$project_pkey = $this->db->get_var("select nextval('project_project_pkey_seq')");
-				$project_name = pg_escape_string($neo_project->desc_project_name);
-				$strabo_project_id = $neo_project->id;
-				$project_location = trim($neo_project->centroid);
-
-				if($neo_project->public == 1){
-					$ispublic = "true";
-				}else{
-					$ispublic = "false";
-				}
-
-				$notes = pg_escape_string($neo_project->desc_notes) ;
-
-				if($project_location!=""){
-					$project_location = "ST_GeomFromText('$project_location')";
-				}else{
-					$project_location = "null";
-				}
-
-				$projectkeywords = "";
-				$projectkeywords .= " ".$project_name;
-				$projectkeywords .= " ".$notes;
-				$projectkeywords .= " ".$firstname;
-				$projectkeywords .= " ".$lastname;
-
-				if($projectkeywords!=""){
-					$projectvectors = "to_tsvector('$projectkeywords')";
-				}else{
-					$projectvectors = "null";
-				}
-
-				//Add vectors?
-				$this->db->query("insert into project values
-										(	$project_pkey,
-											$thisuserpkey,
-											'$project_name',
-											'$strabo_project_id',
-											$ispublic,
-											$project_location,
-											now(),
-											'$notes',
-											$projectvectors
-										)
-									");
-
-				
-			}
 
 			//OK, now we have project and project_pkey... let's move on to dataset
 			//first, delete existing.
