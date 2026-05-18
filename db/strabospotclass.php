@@ -3072,7 +3072,7 @@ stdClass Object
 					$ownerByIdx[$x] = $ownerPkey;
 				}
 
-				$status = $collabAuth->getCollaborationStatus((string)$id, (int)$this->userpkey);
+				$status = $collabAuth->getCollaborationStatus((string)$id, (int)$this->userpkey); //race condition?
 				$data['projects'][$x]['isCollaborativeProject'] = $status['isCollaborative'];
 				if($status['isCollaborative']){
 					$data['projects'][$x]['isCollaborationHalted'] = $status['isHalted'];
@@ -3087,11 +3087,12 @@ stdClass Object
 		if(count($ownerPkeys) > 0){
 			$ownerInfo = array();
 			foreach(array_keys($ownerPkeys) as $pkey){
-				$user = $this->db->get_row_prepared("SELECT firstname, lastname, email FROM users WHERE pkey = $1", array($pkey));
+				$user = $this->db->get_row_prepared("SELECT pkey, firstname, lastname, email FROM users WHERE pkey = $1", array($pkey));
 				if($user){
 					$ownerInfo[$pkey] = array(
 						'name' => trim($user->firstname . ' ' . $user->lastname),
-						'email' => $user->email
+						'email' => $user->email,
+						'userpkey' => $user->pkey
 					);
 				}
 			}
@@ -3100,6 +3101,7 @@ stdClass Object
 				if(isset($ownerInfo[$pkey])){
 					$data['projects'][$idx]['owner_name'] = $ownerInfo[$pkey]['name'];
 					$data['projects'][$idx]['owner_email'] = $ownerInfo[$pkey]['email'];
+					$data['projects'][$idx]['owner_straboUserId'] = $ownerInfo[$pkey]['userpkey'];
 				}
 			}
 		}
@@ -3206,7 +3208,10 @@ stdClass Object
 					}
 				}
 			}
+
 		}
+
+		$data->straboUserId = $u['userpkey'];
 
 		$pgrow = $this->db->get_row("select orcid_token from users where pkey = $this->userpkey");
 
@@ -4425,6 +4430,7 @@ public function getSpotName($id){
 				if($user){
 					$data->owner_name = trim($user->firstname . ' ' . $user->lastname);
 					$data->owner_email = $user->email;
+					$data->owner_straboUserId = $ownerPkey;
 				}
 
 				require_once(__DIR__ . '/services/CollaborationAuth.php');
@@ -4587,7 +4593,8 @@ public function getSpotName($id){
 				if($user){
 					$ownerInfo[$pkey] = array(
 						'name' => trim($user->firstname . ' ' . $user->lastname),
-						'email' => $user->email
+						'email' => $user->email,
+						'userpkey' => $pkey
 					);
 				}
 			}
@@ -4622,6 +4629,7 @@ public function getSpotName($id){
 				if($datasetOwnerPkey !== null && isset($ownerInfo[$datasetOwnerPkey])){
 					$data['datasets'][$x]['owner_name'] = $ownerInfo[$datasetOwnerPkey]['name'];
 					$data['datasets'][$x]['owner_email'] = $ownerInfo[$datasetOwnerPkey]['email'];
+					$data['datasets'][$x]['owner_straboUserId'] = $ownerInfo[$datasetOwnerPkey]['userpkey'];
 				}
 
 				$x++;
