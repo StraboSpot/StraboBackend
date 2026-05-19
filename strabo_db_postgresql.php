@@ -322,8 +322,14 @@
 				$this->connect($this->dbuser, $this->dbpassword, $this->dbname, $this->dbhost, $this->port);
 			}
 
-			// Generate unique statement name
-			$stmt_name = 'stmt_' . md5($query . microtime(true));
+			// Generate unique statement name.
+			// microtime(true) is a PHP double with ~14 significant digits, so consecutive
+			// calls inside a tight loop can return the same float and collide with a
+			// previously prepared statement on the same connection (pg_prepare then fails
+			// with "prepared statement already exists"). Use a per-process counter so the
+			// name is guaranteed unique for the lifetime of the request.
+			static $stmt_counter = 0;
+			$stmt_name = 'stmt_' . md5($query) . '_' . (++$stmt_counter);
 
 			// Prepare the statement
 			$prep_result = @pg_prepare($this->dbh, $stmt_name, $query);
