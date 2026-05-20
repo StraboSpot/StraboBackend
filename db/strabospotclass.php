@@ -3586,7 +3586,7 @@ public function getSpotName($id){
 
 		}
 
-		
+
 
 		unset($injson->tags);
 
@@ -3596,20 +3596,12 @@ public function getSpotName($id){
 
 		//tags done, now reports!!
 
-		$in_reports = $injson->reports;
-		$in_report_ids = [];
-		foreach($in_reports as $inr){
-			$in_report_ids[] = $inr->id;
-		}
-
-		$ex_reports = $ex_project->reports;
-		foreach($ex_reports as $exr){
-			if(!in_array($exr->id, $in_report_ids)){
-				$in_reports[] = $exr;
-			}
-		}
-
-		$injson->reports = $in_reports;
+		$injson->reports = $this->mergeReports(
+			$injson->reports,
+			$ex_project->reports,
+			$this->userpkey,
+			$this->userpkey
+		);
 
 		
 
@@ -3748,21 +3740,14 @@ public function getSpotName($id){
 		}
 
 		//tags done, now reports!!
+		// In this function $ex_project is the incoming upload and $injson is the server copy.
 
-		$in_reports = $injson->reports;
-		$in_report_ids = [];
-		foreach($in_reports as $inr){
-			$in_report_ids[] = $inr->id;
-		}
-
-		$ex_reports = $ex_project->reports;
-		foreach($ex_reports as $exr){
-			if(!in_array($exr->id, $in_report_ids)){
-				$in_reports[] = $exr;
-			}
-		}
-
-		$injson->reports = $in_reports;
+		$injson->reports = $this->mergeReports(
+			$ex_project->reports,
+			$injson->reports,
+			$this->userpkey,
+			$collabuserpkey
+		);
 
 		
 
@@ -3842,6 +3827,85 @@ public function getSpotName($id){
 
 		return $outproject;
 
+	}
+
+	// Per-report merge with per-section ownership rules:
+	//   - If uploader owns the report (report.straboUserId === uploader pkey),
+	//     the incoming report wins everywhere except comments, which are merged.
+	//   - Otherwise the server's report wins everywhere except comments.
+	// Reports missing straboUserId are treated as owned by the project owner so
+	// legacy data behaves the same as it did before this rule existed (owner
+	// uploads still fully overwrite their own reports; collaborators stay locked
+	// out of them).
+	private function mergeReports($incoming_reports, $server_reports, $uploader_pkey, $project_owner_pkey){
+		if(!is_array($incoming_reports) && !is_object($incoming_reports)){
+			$incoming_reports = [];
+		}
+		if(!is_array($server_reports) && !is_object($server_reports)){
+			$server_reports = [];
+		}
+
+		$server_by_id = [];
+		foreach($server_reports as $sr){
+			$server_by_id[$sr->id] = $sr;
+		}
+
+		$out = [];
+		$seen_ids = [];
+
+		foreach($incoming_reports as $in_r){
+			$seen_ids[$in_r->id] = true;
+			$server_r = isset($server_by_id[$in_r->id]) ? $server_by_id[$in_r->id] : null;
+
+			if($server_r === null){
+				$out[] = $in_r;
+				continue;
+			}
+
+			$report_owner_pkey = $in_r->straboUserId ?? $server_r->straboUserId ?? $project_owner_pkey;
+			$uploader_is_owner = ((int)$uploader_pkey === (int)$report_owner_pkey);
+
+			$base = $uploader_is_owner ? $in_r : $server_r;
+			$base->comments = $this->mergeReportComments(
+				$in_r->comments ?? [],
+				$server_r->comments ?? []
+			);
+
+			$out[] = $base;
+		}
+
+		foreach($server_reports as $sr){
+			if(!isset($seen_ids[$sr->id])){
+				$out[] = $sr;
+			}
+		}
+
+		return $out;
+	}
+
+	private function mergeReportComments($incoming_comments, $server_comments){
+		if(!is_array($incoming_comments) && !is_object($incoming_comments)){
+			$incoming_comments = [];
+		}
+		if(!is_array($server_comments) && !is_object($server_comments)){
+			$server_comments = [];
+		}
+
+		$incoming_ids = [];
+		foreach($incoming_comments as $c){
+			$incoming_ids[$c->id] = true;
+		}
+
+		$out = [];
+		foreach($incoming_comments as $c){
+			$out[] = $c;
+		}
+		foreach($server_comments as $c){
+			if(!isset($incoming_ids[$c->id])){
+				$out[] = $c;
+			}
+		}
+		return $out;
 	}
 
 	/**
