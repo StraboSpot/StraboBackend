@@ -3685,7 +3685,7 @@ public function getSpotName($id){
 
 
 
-	public function combineCollaborativeProject($injson, $collabuserpkey){ //Accepts JSON and combines incoming project tags with project in server and returns JSON string with combined based on server (only changes tags).
+	public function combineCollaborativeProject($injson, $collabuserpkey, $uploader_pkey = null){ //Accepts JSON and combines incoming project tags with project in server and returns JSON string with combined based on server (only changes tags). $uploader_pkey identifies the actual uploader for per-report ownership checks; falls back to $this->userpkey for callers that haven't swapped it.
 
 		$ex_project = json_decode($injson);
 		
@@ -3742,10 +3742,14 @@ public function getSpotName($id){
 		//tags done, now reports!!
 		// In this function $ex_project is the incoming upload and $injson is the server copy.
 
+		// Controllers swap $this->userpkey to the project owner before calling
+		// insertProject. Use the explicit $uploader_pkey when provided so the
+		// per-report ownership check sees the real uploader, not the owner.
+		$effective_uploader = $uploader_pkey ?? $this->userpkey;
 		$injson->reports = $this->mergeReports(
 			$ex_project->reports,
 			$injson->reports,
-			$this->userpkey,
+			$effective_uploader,
 			$collabuserpkey
 		);
 
@@ -4008,9 +4012,10 @@ public function getSpotName($id){
 	 * @param int|null $thisid Project ID (optional, can be in JSON)
 	 * @param bool $isCollaborativeEdit If true, merge data using combineCollaborativeProject
 	 * @param int|null $ownerPkeyOverride Override the owner pkey (for collaborative edits)
+	 * @param int|null $uploaderPkey The real uploading user's pkey, before any controller-side userpkey swap. Used by the per-report ownership check in combineCollaborativeProject; falls back to $this->userpkey when not provided.
 	 * @return object The created/updated project data
 	 */
-	public function insertProject($injson, $thisid=null, $isCollaborativeEdit=false, $ownerPkeyOverride=null){
+	public function insertProject($injson, $thisid=null, $isCollaborativeEdit=false, $ownerPkeyOverride=null, $uploaderPkey=null){
 
 		if($thisid != ""){
 			$thisid = (int) $thisid;
@@ -4028,7 +4033,7 @@ public function getSpotName($id){
 		// For collaborative edits: merge tags, reports, etc. with existing project
 		// For normal edits: standard combination
 		if($isCollaborativeEdit && $ownerPkeyOverride !== null){
-			$injson = $this->combineCollaborativeProject($injson, $ownerPkeyOverride);
+			$injson = $this->combineCollaborativeProject($injson, $ownerPkeyOverride, $uploaderPkey);
 		}else{
 			$injson = $this->combineNormalProject($injson);
 		}

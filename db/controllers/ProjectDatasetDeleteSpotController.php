@@ -110,7 +110,7 @@ class ProjectDatasetDeleteSpotController extends MyController
 			$injson = json_encode($upload['project']);
 			// Determine if this is a collaborative edit (user is collaborator, not owner)
 			$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner());
-			$this->strabo->insertProject($injson, null, $isCollaborativeEdit, $ownerPkey);
+			$this->strabo->insertProject($injson, null, $isCollaborativeEdit, $ownerPkey, $originaluserpkey);
 
 			foreach($datasets as $d){
 				$datasetid = $d->id;

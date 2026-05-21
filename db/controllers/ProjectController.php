@@ -148,7 +148,7 @@ class ProjectController extends MyController
 				$injson = json_encode($upload);
 
 				// Pass collaborative edit flag and owner pkey
-				$data = $this->strabo->insertProject($injson, $thisid, $isCollaborativeEdit, $ownerPkey);
+				$data = $this->strabo->insertProject($injson, $thisid, $isCollaborativeEdit, $ownerPkey, $originalUserpkey);
 
 				// Restore original userpkey if changed
 				if ($ownerPkey !== $originalUserpkey) {
