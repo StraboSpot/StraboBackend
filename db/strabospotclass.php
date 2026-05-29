@@ -1614,8 +1614,14 @@ class StraboSpot
 			$injson['datecreated'] = $datecreated;
 			$injson['datasettype'] = "app";
 
-			// Preserve existing userpkey and created_by
-			$injson['userpkey'] = $dataset->userpkey ?? $this->userpkey;
+			// Normalize ownership to the acting user. getDatasetById only returns
+			// a node the acting user owns or that lives in a project they own, so
+			// $this->userpkey is always the rightful owner here (the project owner
+			// during a collaborative upload — controllers swap it before calling).
+			// Assigning it heals any node whose userpkey was left as the
+			// collaborator's, which is the state that produced duplicate dataset
+			// nodes. created_by is preserved so the original creator is retained.
+			$injson['userpkey'] = $this->userpkey;
 			if(isset($dataset->created_by)){
 				$injson['created_by'] = $dataset->created_by;
 			}
@@ -1690,18 +1696,30 @@ class StraboSpot
 	}
 
 	/**
-	 * Get the current user's dataset by ID.
+	 * Get the dataset the current user is authorized to upsert, by ID.
 	 *
-	 * Scoped to $this->userpkey so insertDataset can never accidentally
-	 * overwrite another user's dataset node when two users hold datasets with
-	 * the same ID. For collaborative edits, the caller is expected to have
-	 * swapped $this->userpkey to the project owner's pkey before calling.
+	 * Matches a node in either of two cases:
+	 *   (a) the current user directly owns it (n.userpkey == $this->userpkey), or
+	 *   (b) it is linked to a project the current user owns. During a
+	 *       collaborative upload the controller swaps $this->userpkey to the
+	 *       project owner, so case (b) resolves to the collaborator's dataset
+	 *       sitting in the owner's project — even though that node's userpkey is
+	 *       still the collaborator's.
+	 *
+	 * Case (b) is what stops insertDataset from creating a parallel
+	 * owner-userpkey node on every collaborator upload (the duplicate-datasets
+	 * bug). Scoping case (b) to a project OWNED by the current user keeps the
+	 * non-collaborative file-sharing fix intact: a same-id dataset living in
+	 * some other user's separate project is never matched.
+	 *
+	 * When several nodes match (an already-corrupted project), the node the
+	 * current user directly owns is preferred for a deterministic result.
 	 *
 	 * @param int $feature_id The dataset ID
 	 * @return object|null The dataset data or null if not found
 	 */
 	private function getDatasetById($feature_id){
-		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id AND n.userpkey = $this->userpkey RETURN n, id(n) as id;";
+		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id AND (n.userpkey = $this->userpkey OR (:Project {userpkey: $this->userpkey})-[:HAS_DATASET]->(n)) RETURN n, id(n) as id ORDER BY CASE WHEN n.userpkey = $this->userpkey THEN 0 ELSE 1 END;";
 		$records = $this->neodb->query($querystring);
 
 		if(count($records) > 0){
