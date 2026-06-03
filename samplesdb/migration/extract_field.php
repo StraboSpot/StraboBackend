@@ -35,47 +35,53 @@ function migration_extract_field($neodb, $opts = array(), $emit = null) {
     $rows = array();
     $emitRow = $emit ?: function($r) use (&$rows) { $rows[] = $r; };
 
-    // Pull every Dataset → Spot pair in one shot. Project: dataset id +
-    // userpkey, spot, plus a flag for whether this spot is itself a rich
-    // sample-spot. Datasets without spots are uninteresting.
-    $cypher = "MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot)
-               RETURN d.id AS dataset_id, d.userpkey AS dataset_userpkey, s AS spot";
-    if (!empty($opts['limit_spots'])) {
-        $cypher .= " LIMIT " . (int)$opts['limit_spots'];
+    // Two-stage fetch so memory stays bounded per dataset rather than
+    // loading 38k+ spots-with-samples (with full `json_samples` strings)
+    // into one PHP array. Stage 1: cheap listing of datasets that own at
+    // least one spot. Stage 2: per-dataset query for spots-with-samples.
+    // Use DISTINCT over Dataset-HAS_SPOT-Spot rather than EXISTS, which is
+    // a Neo4j 5+ construct. Datasets with no spots are filtered implicitly.
+    $datasets = $neodb->query("
+        MATCH (d:Dataset)-[:HAS_SPOT]->(:Spot)
+        RETURN DISTINCT d.id AS dataset_id, d.userpkey AS dataset_userpkey
+        ORDER BY d.userpkey, d.id
+    ");
+    if (!$datasets) {
+        return $emit ? array() : $rows;
     }
 
-    $records = $neodb->query($cypher);
-    if (!$records) {
-        return $rows;
-    }
+    $remainingSpots = isset($opts['limit_spots']) ? (int)$opts['limit_spots'] : null;
+    foreach ($datasets as $drec) {
+        $dsId    = (string)$drec->value('dataset_id');
+        $dsOwner = (int)$drec->value('dataset_userpkey');
 
-    // Pass 1 — bucket spots by dataset so the per-dataset rich/legacy
-    // de-dup runs against a contained id space (matches §9.1 algorithm).
-    $byDataset = array();
-    foreach ($records as $rec) {
-        $dsId    = (string)$rec->value('dataset_id');
-        $dsOwner = (int)$rec->value('dataset_userpkey');
-        $spot    = $rec->get('spot');
-        $props   = $spot->values();
-        $key = $dsId . ':' . $dsOwner;
-        if (!isset($byDataset[$key])) {
-            $byDataset[$key] = array(
-                'dataset_id' => $dsId,
-                'dataset_userpkey' => $dsOwner,
-                'spots' => array(),
-            );
+        // Per-dataset spot fetch. We only need spots that either:
+        //   (a) carry samples (json_samples is set), or
+        //   (b) are sample-spots themselves (isSample = 1).
+        // (b) is a subset of (a) in practice, but guard for safety.
+        $perDsCypher = "MATCH (d:Dataset {id: $dsId, userpkey: $dsOwner})-[:HAS_SPOT]->(s:Spot)
+                        WHERE s.json_samples IS NOT NULL OR s.isSample = 1
+                        RETURN s";
+        if ($remainingSpots !== null) {
+            if ($remainingSpots <= 0) break;
+            $perDsCypher .= " LIMIT $remainingSpots";
         }
-        $byDataset[$key]['spots'][] = $props;
-    }
 
-    // Pass 2 — per dataset, build richIds then emit rows.
-    foreach ($byDataset as $bucket) {
-        _migration_extract_field_dataset(
-            $bucket['dataset_id'],
-            $bucket['dataset_userpkey'],
-            $bucket['spots'],
-            $emitRow
-        );
+        $spotRecords = $neodb->query($perDsCypher);
+        if (!$spotRecords) continue;
+
+        $spots = array();
+        foreach ($spotRecords as $sr) {
+            $spots[] = $sr->get('s')->values();
+        }
+        unset($spotRecords);  // free the bolt-driver buffer eagerly
+
+        if ($remainingSpots !== null) {
+            $remainingSpots -= count($spots);
+        }
+
+        _migration_extract_field_dataset($dsId, $dsOwner, $spots, $emitRow);
+        unset($spots);
     }
 
     return $emit ? array() : $rows;
