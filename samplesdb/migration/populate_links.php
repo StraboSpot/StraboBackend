@@ -47,9 +47,11 @@ function migration_upsert_link($db, $row, $dryRun = false) {
         return $existing ? 'exists' : 'dry_run';
     }
 
-    // Use ON CONFLICT DO NOTHING + RETURNING to distinguish insert vs no-op
-    // in one round-trip.
-    $result = $db->get_var_prepared("
+    // prepare_query short-circuits INSERT queries and discards the RETURNING
+    // payload (strabo_db_postgresql.php:356-361 only retains rows_affected
+    // for write verbs). So we rely on the rows_affected return value:
+    // 1 = inserted, 0 = ON CONFLICT triggered → row already existed.
+    $affected = $db->prepare_query("
         INSERT INTO strabosamples.sample_subsystem_links
             (sample_id, sample_userpkey, subsystem,
              reference_id, reference_userpkey, reference_metadata,
@@ -58,7 +60,6 @@ function migration_upsert_link($db, $row, $dryRun = false) {
         ON CONFLICT (sample_id, sample_userpkey, subsystem,
                      reference_id, reference_userpkey)
         DO NOTHING
-        RETURNING 1
     ", array(
         $row['sample_id'],
         $row['sample_userpkey'],
@@ -68,7 +69,7 @@ function migration_upsert_link($db, $row, $dryRun = false) {
         json_encode($row['reference_metadata']),
     ));
 
-    return $result ? 'inserted' : 'exists';
+    return ((int)$affected === 1) ? 'inserted' : 'exists';
 }
 
 }

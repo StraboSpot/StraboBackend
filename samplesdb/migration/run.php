@@ -288,14 +288,26 @@ function migration_process_row($db, $row, $runId, $dryRun) {
         return array('action' => 'created', 'conflicts' => null);
     }
 
-    // EXISTING — this is a lower-priority source merging in (or a re-run).
-    // Spine cols are preserved; *_data is overwritten for THIS subsystem;
-    // dates roll MIN(created) / MAX(modified); conflicts on spine cols
-    // are logged when both sides are non-null and differ.
+    // EXISTING — this is a lower-priority source merging in (or a re-run,
+    // or a later within-source row pointing at the same (id, userpkey)).
+    //
+    // Rules:
+    //   - Spine cols: never overwritten. Conflicts (both non-null + differ)
+    //     are logged.
+    //   - *_data JSONB: FIRST writer wins per subsystem. Once a column is
+    //     non-null, later touches of the same subsystem do not overwrite —
+    //     this is what makes re-runs zero-write. Without first-writer-wins
+    //     two same-source rows with differing inline payloads (e.g. two
+    //     legacy Field references to the same sample id from different
+    //     spots whose inline copies drifted) would flip-flop the column on
+    //     every run.
+    //   - created_at = MIN(existing, source); modified_at = MAX(.., ..).
+    //   - created_by tracks the earliest creator.
 
     $dataKey = migration_data_column_for_source($row['source']);
     $existingJsonb = isset($existing->{$dataKey}) ? $existing->{$dataKey} : null;
     $newJsonbStr   = json_encode($row['subsystem_data']);
+    $jsonbAlreadyClaimed = ($existingJsonb !== null);
 
     $existingCreated  = isset($existing->created_at_epoch)  ? (int)$existing->created_at_epoch  : null;
     $existingModified = isset($existing->modified_at_epoch) ? (int)$existing->modified_at_epoch : null;
@@ -328,44 +340,55 @@ function migration_process_row($db, $row, $runId, $dryRun) {
         }
     }
 
-    // Determine whether this is a true no-op (re-run with identical state).
-    $unchangedJsonb = ($existingJsonb !== null)
-        && (migration_canonical_json($existingJsonb) === migration_canonical_json($newJsonbStr));
-    $unchangedTs    = ($existingCreated === $newCreated)
-                   && ($existingModified === $newModified)
-                   && ((int)$existing->created_by === $newCreatedBy);
-    $isNoop = $unchangedJsonb && $unchangedTs && empty($conflicts);
+    // Decide what to write. JSONB writes only happen on the FIRST claim
+    // for this subsystem; subsequent same-subsystem rows skip the write
+    // entirely (first-writer-wins) so re-runs are zero-write.
+    $writeJsonb = !$jsonbAlreadyClaimed;
+    $writeTs    = ($existingCreated !== $newCreated)
+               || ($existingModified !== $newModified)
+               || ((int)$existing->created_by !== $newCreatedBy);
 
-    if ($isNoop) {
-        migration_log_action($db, $runId, $row, $sampleId, $userpkey,
-            'skipped_duplicate', null, null, $dryRun);
-        return array('action' => 'skipped_duplicate', 'conflicts' => null);
+    $hadConflicts = !empty($conflicts);
+
+    if (!$writeJsonb && !$writeTs) {
+        // No DB write would occur. Suppress the migration_log row too —
+        // §10.3 calls for "zero new audit-log entries beyond a
+        // 'ran-with-no-changes' marker" on identical re-runs. The first run
+        // already recorded any conflicts here.
+        return array(
+            'action'    => 'skipped_duplicate',
+            'conflicts' => $hadConflicts ? $conflicts : null,
+        );
     }
 
     if (!$dryRun) {
-        // UPDATE only the subsystem JSONB column, the timestamps, and
-        // created_by. Spine cols are NEVER overwritten on merge (§10.4).
-        $db->prepare_query("
-            UPDATE strabosamples.samples SET
-                {$dataKey} = \$1::jsonb,
-                created_at  = TO_TIMESTAMP(\$2),
-                modified_at = TO_TIMESTAMP(\$3),
-                created_by  = \$4
-            WHERE id = \$5 AND userpkey = \$6
-        ", array(
-            $newJsonbStr,
-            $newCreated,
-            $newModified,
-            $newCreatedBy,
-            $sampleId, $userpkey,
-        ));
+        // Build the SET clause dynamically — UPDATE only the columns that
+        // actually changed. Spine cols are NEVER overwritten on merge (§10.4).
+        $setParts = array();
+        $params   = array();
+        $idx = 1;
+        if ($writeJsonb) {
+            $setParts[] = "{$dataKey} = \${$idx}::jsonb";
+            $params[]   = $newJsonbStr;
+            $idx++;
+        }
+        if ($writeTs) {
+            $setParts[] = "created_at  = TO_TIMESTAMP(\${$idx})"; $params[] = $newCreated;  $idx++;
+            $setParts[] = "modified_at = TO_TIMESTAMP(\${$idx})"; $params[] = $newModified; $idx++;
+            $setParts[] = "created_by  = \${$idx}";               $params[] = $newCreatedBy; $idx++;
+        }
+        $params[] = $sampleId;
+        $params[] = $userpkey;
+        $sql = "UPDATE strabosamples.samples SET " . implode(', ', $setParts)
+             . " WHERE id = \${$idx} AND userpkey = \$" . ($idx + 1);
+        $db->prepare_query($sql, $params);
     }
 
-    $action = empty($conflicts) ? 'merged' : 'conflict_logged';
+    $action = $hadConflicts ? 'conflict_logged' : 'merged';
     migration_log_action($db, $runId, $row, $sampleId, $userpkey,
-        $action, $conflicts ?: null, null, $dryRun);
+        $action, $hadConflicts ? $conflicts : null, null, $dryRun);
 
-    return array('action' => 'merged', 'conflicts' => $conflicts ?: null);
+    return array('action' => 'merged', 'conflicts' => $hadConflicts ? $conflicts : null);
 }
 
 /**
