@@ -53,6 +53,7 @@ include_once("adminkeys.php");
 include("prepare_connections.php");
 include_once("includes/UUID.php");
 include_once("experimental/api/update_keywords.php");
+include_once("experimental/lib/sample_sync.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 $uuid_gen = new UUID();
@@ -78,8 +79,6 @@ if (!empty($input->data)) {
     if (isset($input->data->data)) $json_data->data = $input->data->data;
 }
 
-$json_string = pg_escape_string(json_encode($json_data));
-
 // Check if updating existing experiment
 if (!empty($input->pkey)) {
     $experiment_pkey = (int)$input->pkey;
@@ -102,6 +101,17 @@ if (!empty($input->pkey)) {
         echo json_encode(['error' => 'Experiment not found or access denied']);
         exit;
     }
+
+    // Sync the normalized sample rows (1:1 with experiment). Preserves strabo_id
+    // across edits by anchoring on experiment_pkey; mints fresh only on first
+    // appearance of a sample for this experiment.
+    $sample_obj = isset($json_data->sample) ? $json_data->sample : null;
+    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj);
+    if ($strabo_id !== null && is_object($json_data->sample)) {
+        $json_data->sample->strabo_id = $strabo_id;
+    }
+
+    $json_string = json_encode($json_data);
 
     // Update experiment - include userpkey in WHERE for extra security
     if ($is_admin) {
@@ -131,6 +141,7 @@ if (!empty($input->pkey)) {
     $result->experiment_id = $experiment_id;
     $result->uuid = $row->uuid;
     $result->project_pkey = (int)$row->project_pkey;
+    $result->strabo_id = $strabo_id;
     $result->success = true;
     $result->message = 'Experiment updated successfully';
 
@@ -164,8 +175,18 @@ if (!empty($input->pkey)) {
     }
 
     // Generate new pkey and uuid
-    $experiment_pkey = $db->get_var("SELECT nextval('straboexp.experiment_pkey_seq')");
+    $experiment_pkey = (int)$db->get_var("SELECT nextval('straboexp.experiment_pkey_seq')");
     $uuid = $uuid_gen->v4();
+
+    // Mint normalized sample rows up front so strabo_id can be embedded in the
+    // experiment JSON before the experiment row is written. Single write per table.
+    $sample_obj = isset($json_data->sample) ? $json_data->sample : null;
+    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj);
+    if ($strabo_id !== null && is_object($json_data->sample)) {
+        $json_data->sample->strabo_id = $strabo_id;
+    }
+
+    $json_string = json_encode($json_data);
 
     // Insert new experiment
     $db->prepare_query("
@@ -182,6 +203,7 @@ if (!empty($input->pkey)) {
     $result->experiment_id = $experiment_id;
     $result->uuid = $uuid;
     $result->project_pkey = $project_pkey;
+    $result->strabo_id = $strabo_id;
     $result->success = true;
     $result->message = 'Experiment created successfully';
 }

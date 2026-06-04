@@ -36,7 +36,7 @@ if($usercount == 0){
 	$rows=$db->get_row_prepared("SELECT * FROM apptokens, users WHERE users.email = apptokens.email AND apptokens.email=$1 AND apptokens.uuid = $2 AND users.deleted = FALSE", array($username, $password));
 	if($db->num_rows>0){
 		$usercount = $db->num_rows;
-		$db->prepare_query("UPDATE apptokens SET created_on = now() WHERE email=$1 AND uuid = $2", array($user, $pass));
+		$db->prepare_query("UPDATE apptokens SET created_on = now() WHERE email=$1 AND uuid = $2", array($username, $password));
 	}
 }
 

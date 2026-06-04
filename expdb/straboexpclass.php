@@ -1712,6 +1712,11 @@ note
 			$id = pg_escape_string($sample->id);
 			$description = pg_escape_string($sample->description);
 
+			// Preserve strabo_id across delete-then-recreate edits if the client
+			// round-trips it; otherwise mint a fresh one. Required by the
+			// NOT NULL constraint on straboexp.sample.strabo_id.
+			$strabo_id = ($sample->strabo_id != "") ? pg_escape_string($sample->strabo_id) : $this->uuid->v4();
+
 			$sample_json = pg_escape_string(json_encode($sample, JSON_PRETTY_PRINT));
 
 			if($sample->parent != ""){
@@ -1779,7 +1784,8 @@ note
 					'$texture_lineation',
 					'$texture_foliation',
 					'$texture_fault',
-					'$sample_json'
+					'$sample_json',
+					'$strabo_id'
 				)
 			");
 
