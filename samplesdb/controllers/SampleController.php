@@ -2,26 +2,33 @@
 /**
  * File: SampleController.php
  * Description: /samplesdb/sample/{id}[/sub-resource[/...]] — CRUD on a
- *              single sample plus the §8.2 collaboration sub-resources.
+ *              single sample plus the §8.2 collaboration and §8.3
+ *              parent/child sub-resources.
  *
  *              Sub-resource routing dispatches on $request->url_elements[3]:
  *                empty            — CRUD on the sample itself
  *                collaborators    — list (GET) / invite (POST)
  *                collaborator/{p} — change level (PUT) / remove (DELETE)
  *                collaboration/{accept|deny} — accept / deny (POST)
+ *                parent           — get (GET) / set (PUT) / clear (DELETE)
+ *                children         — list (GET)
  *
- *              URL conventions (per design §8.1, §8.2):
+ *              URL conventions (per design §8.1, §8.2, §8.3):
  *                GET    /samplesdb/sample/{id}                              read sample
  *                GET    /samplesdb/sample/{id}?owner={pkey}                 read collab-on sample
- *                POST   /samplesdb/sample                                   create (501 stub)
- *                PUT    /samplesdb/sample/{id}                              update (501 stub)
- *                DELETE /samplesdb/sample/{id}                              delete (501 stub)
+ *                POST   /samplesdb/sample                                   create
+ *                PUT    /samplesdb/sample/{id}                              partial spine + JSONB update
+ *                DELETE /samplesdb/sample/{id}                              hard delete (CASCADE clears children)
  *                GET    /samplesdb/sample/{id}/collaborators
  *                POST   /samplesdb/sample/{id}/collaborators       body: { emails: [...], permission_level: 'edit'|'readonly' }
  *                PUT    /samplesdb/sample/{id}/collaborator/{pkey} body: { permission_level: 'edit'|'readonly' }
  *                DELETE /samplesdb/sample/{id}/collaborator/{pkey}
  *                POST   /samplesdb/sample/{id}/collaboration/accept body: { uuid: '...' }
  *                POST   /samplesdb/sample/{id}/collaboration/deny   body: { uuid: '...' }
+ *                GET    /samplesdb/sample/{id}/parent                       get parent (null / full / orphaned)
+ *                PUT    /samplesdb/sample/{id}/parent               body: { parent_sample_id, parent_userpkey }
+ *                DELETE /samplesdb/sample/{id}/parent                       clear parent
+ *                GET    /samplesdb/sample/{id}/children                     list children (light spine)
  *
  *              Returning 404 for "not found" and "no access" is intentional
  *              (defensive — doesn't leak existence of other users' samples).
@@ -61,6 +68,22 @@ class SampleController extends MyController
                     return $this->notFound("Sample not found.");
                 }
                 return array('collaborators' => $list, 'count' => count($list));
+
+            case 'parent':
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                $parent = $this->svc->getParent($id, $effectiveOwner);
+                if ($parent === null) {
+                    return $this->notFound("Sample not found.");
+                }
+                return $parent;
+
+            case 'children':
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                $children = $this->svc->getChildren($id, $effectiveOwner);
+                if ($children === null) {
+                    return $this->notFound("Sample not found.");
+                }
+                return $children;
 
             default:
                 return $this->badRequest($sub . " not supported.");
@@ -142,6 +165,15 @@ class SampleController extends MyController
                 $res = $this->svc->updateCollaboratorLevel($id, $effectiveOwner, $pkey, $level);
                 return $this->handleMutationResult($res);
 
+            case 'parent':
+                $parentSampleId = isset($params['parent_sample_id']) ? $params['parent_sample_id'] : null;
+                $parentUserpkey = isset($params['parent_userpkey']) ? (int)$params['parent_userpkey'] : 0;
+                $ownerPkey = $this->extractOwnerParam($request);
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                return $this->handleMutationResult(
+                    $this->svc->setParent($id, $effectiveOwner, $parentSampleId, $parentUserpkey)
+                );
+
             default:
                 return $this->badRequest($sub . " not supported.");
         }
@@ -172,6 +204,13 @@ class SampleController extends MyController
                 $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
                 $res = $this->svc->removeCollaborator($id, $effectiveOwner, $pkey);
                 return $this->handleMutationResult($res);
+
+            case 'parent':
+                $ownerPkey = $this->extractOwnerParam($request);
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                return $this->handleMutationResult(
+                    $this->svc->clearParent($id, $effectiveOwner)
+                );
 
             default:
                 return $this->badRequest($sub . " not supported.");
@@ -245,6 +284,7 @@ class SampleController extends MyController
             case 'duplicate_id':
             case 'duplicate_id_conflict':
             case 'field_link_read_only':
+            case 'cycle_detected':
                 header("Conflict", true, 409);
                 break;
             default:
