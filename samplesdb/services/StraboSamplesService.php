@@ -894,10 +894,12 @@ class StraboSamplesService
      * must have canEdit (owner or accepted edit collaborator).
      *
      * Field-linked samples reject latitude/longitude updates with
-     * 'field_link_read_only' per design §6.1 (lat/lng is spot geometry,
-     * owned by Neo4j). Until samples/field-integration wires up the
-     * writeback, the safest behavior is to refuse those changes
-     * rather than let strabosamples and Neo4j drift.
+     * 'field_link_read_only' per design §6.1 — lat/lng is the Spot's
+     * geometry, owned by Neo4j. The samples/field-writeback path pushes
+     * the OTHER spine fields (name, igsn, description, notes,
+     * display_sample_type, display_sample_purpose) back into the linked
+     * Spot's `samples[]` JSON via writeBackFieldSpot() after the spine
+     * UPDATE succeeds.
      */
     public function updateSample($id, $ownerPkey, array $input)
     {
@@ -984,6 +986,14 @@ class StraboSamplesService
         }
         if (!empty($changes)) {
             $this->logChange($id, $ownerPkey, 'update', $changes);
+        }
+
+        // Field writeback (samples/field-writeback): push spine edits back
+        // into the linked Neo4j Spot's samples[] JSON. No-op when no Field
+        // link exists, when only JSONB fields were updated, or when the
+        // linked spot can't be located (drift logged as a no-op).
+        if (!empty($spineUpdates)) {
+            $this->writeBackFieldSpot($id, $ownerPkey, $spineUpdates);
         }
 
         return array('ok' => true, 'sample' => $this->getSample($id, $ownerPkey));
@@ -1800,5 +1810,150 @@ class StraboSamplesService
                 $params
             );
         }
+    }
+
+    // ---- field writeback (samples/field-writeback) ----
+
+    /**
+     * Inverse of the field-integration spine projection: maps strabosamples
+     * spine column names back to the StraboField sample-object key names.
+     * Keys absent from this map are not pushed back. latitude/longitude are
+     * NOT writable for Field-linked samples (rejected upstream — lat/lng is
+     * the Spot's geometry, not a sample property).
+     */
+    private static $FIELD_SPINE_INVERSE = array(
+        'name'                   => 'sample_id_name',
+        'igsn'                   => 'Sample_IGSN',
+        'description'            => 'sample_description',
+        'notes'                  => 'sample_notes',
+        'display_sample_type'    => 'material_type',
+        'display_sample_purpose' => 'main_sampling_purpose',
+    );
+
+    /**
+     * Push spine edits from a StraboSamples API update back into the linked
+     * Neo4j Spot's `samples[]` JSON-string property (§9.1 writeback).
+     *
+     * Rich link (reference_metadata.rich === true): the holder spot IS the
+     * sample-spot — samples[0] gets the inverse-mapped fields, and the spot's
+     * own `name` + `modified_timestamp` are bumped so Field clients see the
+     * change on next sync.
+     *
+     * Legacy link (rich === false / absent): the sample lives inline in a
+     * parent spot's samples[]. The matching entry (by id) gets the inverse-
+     * mapped fields. spot.name is the parent spot's name and is left alone;
+     * only modified_timestamp bumps.
+     *
+     * When the link points at a spot that's no longer in Neo4j, or the
+     * samples[] payload doesn't contain a matching entry, the helper returns
+     * without touching anything and returns null — the spine update in
+     * strabosamples still stands. This is a known v1 gap (drift).
+     *
+     * material_type vs other_material_type: v1 sets material_type = the
+     * display value verbatim. Any pre-existing other_material_type field is
+     * left in place but no longer load-bearing (the migration's fall-through
+     * rule kicks in only when material_type === 'other').
+     *
+     * @return array|null  array('ok'=>true,'wrote'=>bool,'reference_id'=>string,'rich'=>bool)
+     *                     on writeback attempt, or null when there is no
+     *                     Field link to write to (caller treats both as
+     *                     success — non-Field-linked samples are no-ops).
+     */
+    protected function writeBackFieldSpot($sampleId, $ownerPkey, array $spineUpdates)
+    {
+        if ($this->neodb === null) return null;
+        // Only push fields covered by the inverse map.
+        $pushable = array();
+        foreach (self::$FIELD_SPINE_INVERSE as $col => $fieldKey) {
+            if (array_key_exists($col, $spineUpdates)) {
+                $pushable[$fieldKey] = $spineUpdates[$col];
+            }
+        }
+        if (empty($pushable)) return null;
+
+        // Look up the Field link. Only the first row matters — a sample id
+        // resolves to exactly one Field source row (the migration + live
+        // hook both write one Field link per sample).
+        $link = $this->db->get_row_prepared(
+            "SELECT reference_id, reference_userpkey, reference_metadata::text AS rm
+               FROM strabosamples.sample_subsystem_links
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND subsystem='field'
+              LIMIT 1",
+            array($sampleId, (int)$ownerPkey)
+        );
+        if ($link === null) return null;
+
+        $referenceId       = (string)$link->reference_id;
+        $referenceUserpkey = (int)$link->reference_userpkey;
+        $meta = ($link->rm !== null && $link->rm !== '') ? json_decode($link->rm, true) : array();
+        $isRich = is_array($meta) && !empty($meta['rich']);
+
+        if (!ctype_digit($referenceId)) return null;  // can't address a Spot without a numeric id
+        $spotId = (int)$referenceId;
+
+        $rec = $this->neodb->getRecord(
+            "MATCH (s:Spot {id:$spotId, userpkey:$referenceUserpkey}) RETURN s LIMIT 1"
+        );
+        if (!$rec) return null;
+        $props = $rec->get('s')->values();
+        if (!is_array($props)) return null;
+
+        $rawSamples = isset($props['json_samples']) ? $props['json_samples'] : null;
+        if (!is_string($rawSamples) || $rawSamples === '') return null;
+        $samples = json_decode($rawSamples, true);
+        if (!is_array($samples) || empty($samples)) return null;
+
+        // Locate the entry to mutate. Rich → index 0 (authoritative); legacy
+        // → first entry whose id matches the sample id.
+        $targetIdx = null;
+        if ($isRich) {
+            $targetIdx = 0;
+        } else {
+            foreach ($samples as $i => $entry) {
+                $entry = (array)$entry;
+                if (isset($entry['id']) && (string)$entry['id'] === (string)$sampleId) {
+                    $targetIdx = $i;
+                    break;
+                }
+            }
+        }
+        if ($targetIdx === null) return null;
+
+        $entry = (array)$samples[$targetIdx];
+        foreach ($pushable as $k => $v) {
+            if ($v === null || $v === '') {
+                // Drop the key on null/empty rather than leave a stale value.
+                unset($entry[$k]);
+            } else {
+                $entry[$k] = $v;
+            }
+        }
+        $samples[$targetIdx] = $entry;
+
+        $newJsonSamples = json_encode($samples);
+
+        // Build a minimal merge map for Cypher SET s += {...}. We update
+        // json_samples + modified_timestamp always, plus spot.name for rich
+        // when name changed.
+        $nowMs = (int)round(microtime(true) * 1000);
+        $merge = array(
+            'json_samples'        => $newJsonSamples,
+            'modified_timestamp'  => $nowMs,
+        );
+        if ($isRich && array_key_exists('sample_id_name', $pushable) && $pushable['sample_id_name'] !== null && $pushable['sample_id_name'] !== '') {
+            $merge['name'] = (string)$pushable['sample_id_name'];
+        }
+
+        $cypherMap = $this->neodb->escape(json_encode($merge));
+        $this->neodb->query(
+            "MATCH (s:Spot {id:$spotId, userpkey:$referenceUserpkey}) SET s += $cypherMap RETURN id(s)"
+        );
+
+        return array(
+            'ok'           => true,
+            'wrote'        => true,
+            'reference_id' => $referenceId,
+            'rich'         => $isRich,
+        );
     }
 }
