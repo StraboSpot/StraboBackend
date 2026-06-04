@@ -814,9 +814,16 @@ include("includes/mheader.php");
         // visibility (see samples_detail.php's link-resolution block).
         // Null means the viewer can't reach the host page; render a
         // disabled button with the reason so the UX is honest.
+        //
+        // target=_blank because these jump out of the samples system into
+        // a subsystem page that has no back-link home — opening in a new
+        // tab keeps the Sample Overview as the user's anchor point.
+        // rel=noopener prevents the opened page from manipulating
+        // window.opener (defensive — the linked pages are first-party,
+        // but the rel hardening is cheap).
         var viewBtnHtml;
         if (link.view_href) {
-            viewBtnHtml = '<a class="sd-view-btn" href="' + escapeHtml(link.view_href) + '">View ' + escapeHtml(label) + '</a>';
+            viewBtnHtml = '<a class="sd-view-btn" target="_blank" rel="noopener" href="' + escapeHtml(link.view_href) + '">View ' + escapeHtml(label) + '</a>';
         } else {
             var reason = link.view_unavailable || 'View page is not available for this link.';
             viewBtnHtml = '<span class="sd-view-btn sd-view-btn-disabled" title="' + escapeHtml(reason) + '">View ' + escapeHtml(label) + '</span>';
