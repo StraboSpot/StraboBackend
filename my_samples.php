@@ -230,9 +230,11 @@ include("includes/mheader.php");
     gap: 0.35em;
 }
 .ms-badge .ms-badge-icon {
-    width: 18px;
-    height: 18px;
+    width: 22px;
+    height: 22px;
     opacity: 0.9;
+    object-fit: contain;
+    vertical-align: middle;
 }
 .ms-description {
     color: rgba(255, 255, 255, 0.78);
@@ -392,15 +394,15 @@ include("includes/mheader.php");
         return d.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'});
     }
     function badgeIcon(kind) {
-        // Inline SVGs so we don't depend on /assets reorg. Field = arrow,
-        // Micro = ring, Experimental = beaker — matches mockup glyphs.
-        if (kind === 'field') {
-            return '<svg class="ms-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19l14-14M5 19h6M5 19v-6"/></svg>';
-        }
-        if (kind === 'micro') {
-            return '<svg class="ms-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>';
-        }
-        return '<svg class="ms-badge-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L6 18a3 3 0 0 0 3 4h6a3 3 0 0 0 3-4l-4-9V3"/></svg>';
+        // Canonical subsystem icons used across the site (also in
+        // /fullsearch as .pickaxe-image / .microscope-image / .beaker-image).
+        var src = kind === 'field' ? '/fullsearch/images/pickaxe.png'
+                : kind === 'micro' ? '/fullsearch/images/microscope.png'
+                :                    '/fullsearch/images/beaker.png';
+        var alt = kind === 'field' ? 'StraboField'
+                : kind === 'micro' ? 'StraboMicro'
+                :                    'StraboExperimental';
+        return '<img class="ms-badge-icon" src="' + src + '" alt="' + alt + '">';
     }
     function matchesType(sample, type) {
         if (type === 'all') return true;
