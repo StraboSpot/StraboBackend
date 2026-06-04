@@ -123,6 +123,13 @@ if (!$notFound) {
     $viewerPkey = (int)$userpkey;
 
     // Batch-lookup micro_projectmetadata for every micro link's project.
+    // IMPORTANT: micro_projectmetadata.strabo_id is NOT unique — when
+    // multiple users upload the same project file, each gets a row with
+    // the same strabo_id but a different (id, userpkey). The link's
+    // reference_userpkey identifies which user's copy of the project
+    // this link points at, so we key the index on (strabo_id, userpkey)
+    // and resolve using that composite. Keying on strabo_id alone would
+    // arbitrarily collapse copies and produce wrong auth verdicts.
     $microProjectIndex = array();
     $microStraboIds = array();
     foreach ($links as $l) {
@@ -131,8 +138,6 @@ if (!$notFound) {
         if ($sid !== null && $sid !== '') $microStraboIds[$sid] = true;
     }
     if ($microStraboIds) {
-        // strabo_db_postgresql wraps pg_query_params; build an IN clause manually
-        // for the unique strabo_id list.
         $params = array_keys($microStraboIds);
         $placeholders = array();
         foreach ($params as $i => $_) $placeholders[] = '$' . ($i + 1);
@@ -142,7 +147,7 @@ if (!$notFound) {
         $rows = $db->get_results_prepared($sql, $params);
         if (is_array($rows)) {
             foreach ($rows as $pr) {
-                $microProjectIndex[$pr->strabo_id] = $pr;
+                $microProjectIndex[$pr->strabo_id . '|' . (int)$pr->userpkey] = $pr;
             }
         }
     }
@@ -182,8 +187,9 @@ if (!$notFound) {
             }
         } elseif ($l['subsystem'] === 'micro') {
             $sid = isset($meta['project_strabo_id']) ? $meta['project_strabo_id'] : null;
-            if ($sid !== null && isset($microProjectIndex[$sid])) {
-                $pr = $microProjectIndex[$sid];
+            $key = ($sid !== null) ? ($sid . '|' . (int)$l['reference_userpkey']) : null;
+            if ($key !== null && isset($microProjectIndex[$key])) {
+                $pr = $microProjectIndex[$key];
                 $isPublic = ($pr->ispublic === 't' || $pr->ispublic === true || $pr->ispublic === 'true');
                 $isOwner  = ((int)$pr->userpkey === $viewerPkey);
                 if ($isPublic || $isOwner) {
