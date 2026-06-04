@@ -21,6 +21,10 @@
  */
 
 
+require_once __DIR__ . '/SampleCollabAuth.php';
+require_once __DIR__ . '/../../includes/UUID.php';
+
+
 class StraboSamplesService
 {
     protected $db;
@@ -28,10 +32,14 @@ class StraboSamplesService
     protected $userpkey;
     protected $uuid;
 
+    /** @var SampleCollabAuth */
+    protected $auth;
+
     public function __construct($db, $neodb)
     {
         $this->db = $db;
         $this->neodb = $neodb;
+        $this->auth = new SampleCollabAuth($db);
     }
 
     public function setUserpkey($pkey)
@@ -50,32 +58,30 @@ class StraboSamplesService
     }
 
     /**
-     * Returns true if the caller (userpkey) can read the sample identified
-     * by ($id, $ownerPkey). Read access = owner OR accepted, non-removed
-     * collaborator grant (edit or readonly). Per design §7.1.
+     * Returns the SampleContext for ($sampleId, $ownerPkey) from the caller's
+     * perspective. Resolves permission_level via SampleCollabAuth. Per §7.1.
      */
+    public function getContext($sampleId, $ownerPkey)
+    {
+        return $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
+    }
+
+    /** Read access: owner OR accepted, non-removed grant (edit/readonly). */
     public function canRead($id, $ownerPkey)
     {
-        $ownerPkey = (int)$ownerPkey;
-        if ($ownerPkey === $this->userpkey) {
-            // Caller owns this sample — read access is implicit. Confirm
-            // the row exists.
-            $exists = $this->db->get_var_prepared(
-                "SELECT 1 FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
-                array($id, $ownerPkey)
-            );
-            return $exists ? true : false;
-        }
+        return $this->auth->getSampleContext($this->userpkey, $id, $ownerPkey)->canRead();
+    }
 
-        $grant = $this->db->get_var_prepared(
-            "SELECT 1 FROM strabosamples.sample_collaborators
-              WHERE sample_id=$1 AND sample_userpkey=$2
-                AND collaborator_pkey=$3
-                AND accepted = TRUE AND removed_at IS NULL
-              LIMIT 1",
-            array($id, $ownerPkey, $this->userpkey)
-        );
-        return $grant ? true : false;
+    /** Edit access: owner OR accepted edit grant. */
+    public function canEdit($id, $ownerPkey)
+    {
+        return $this->auth->getSampleContext($this->userpkey, $id, $ownerPkey)->canEdit();
+    }
+
+    /** Manage access: owner only. */
+    public function canManage($id, $ownerPkey)
+    {
+        return $this->auth->getSampleContext($this->userpkey, $id, $ownerPkey)->canManage();
     }
 
     /**
@@ -300,7 +306,7 @@ class StraboSamplesService
                 $out[] = array(
                     'collaborator_pkey' => (int)$r->collaborator_pkey,
                     'permission_level'  => $r->permission_level,
-                    'accepted'          => (bool)$r->accepted,
+                    'accepted'          => $this->pgBool($r->accepted),
                     'accepted_at'       => $r->accepted_at,
                     'added_by'          => (int)$r->added_by,
                     'added_at'          => $r->added_at,
@@ -366,5 +372,399 @@ class StraboSamplesService
             }
         }
         return $out;
+    }
+
+    /**
+     * Convert a Postgres BOOLEAN value to PHP bool. pg_fetch_object returns
+     * boolean columns as the string 't' or 'f', and PHP's `(bool)` cast on
+     * a non-empty string is always true — so `(bool)'f'` is `true`. This
+     * helper handles both the string and the native-bool forms.
+     */
+    protected function pgBool($val)
+    {
+        if (is_bool($val)) return $val;
+        if ($val === 't' || $val === 'true' || $val === '1' || $val === 1) return true;
+        return false;
+    }
+
+    // ============================================================
+    // Collaboration (design §7, §8.2)
+    // ============================================================
+
+    /**
+     * Owner sees all active grants (accepted + pending). Edit/readonly
+     * collaborators see accepted grants only. Strangers get null.
+     *
+     * @return array|null
+     */
+    public function listCollaborators($sampleId, $ownerPkey)
+    {
+        $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, (int)$ownerPkey);
+        if (!$ctx->canRead()) {
+            return null;
+        }
+
+        $sql = "SELECT pkey, collaborator_pkey, permission_level,
+                       uuid, accepted, accepted_at,
+                       added_by, added_at
+                  FROM strabosamples.sample_collaborators
+                 WHERE sample_id=$1 AND sample_userpkey=$2
+                   AND removed_at IS NULL";
+        if (!$ctx->isOwner()) {
+            $sql .= " AND accepted = TRUE";
+        }
+        $sql .= " ORDER BY added_at";
+
+        $rows = $this->db->get_results_prepared($sql, array($sampleId, (int)$ownerPkey));
+        $out = array();
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                $entry = array(
+                    'pkey'             => (int)$r->pkey,
+                    'collaborator_pkey' => (int)$r->collaborator_pkey,
+                    'permission_level' => $r->permission_level,
+                    'accepted'         => $this->pgBool($r->accepted),
+                    'accepted_at'      => $r->accepted_at,
+                    'added_by'         => (int)$r->added_by,
+                    'added_at'         => $r->added_at,
+                );
+                // Owner needs the uuid (to share with the invitee out-of-band);
+                // collaborators don't.
+                if ($ctx->isOwner()) {
+                    $entry['uuid'] = $r->uuid;
+                }
+                $out[] = $entry;
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Invite one or more users by email. Owner-only. Per §7.3:
+     *   - new email + no prior grant         → insert pending row + fresh uuid
+     *   - email with soft-removed grant      → clear removed_at, set level, fresh uuid
+     *   - email with active grant            → no-op (returned as 'already_active')
+     *   - email is the sample owner          → no-op (returned as 'is_owner')
+     *   - email not found / deleted user     → 'unknown'
+     *
+     * Returns ['ok' => bool, 'error' => ?, 'results' => [{email, status, ...}]].
+     */
+    public function inviteCollaborators($sampleId, $ownerPkey, array $emails, $permissionLevel)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
+        if (!$ctx->exists) {
+            return array('ok' => false, 'error' => 'not_found');
+        }
+        if (!$ctx->canManage()) {
+            return array('ok' => false, 'error' => 'forbidden');
+        }
+        if (!in_array($permissionLevel, array('edit', 'readonly'), true)) {
+            return array('ok' => false, 'error' => 'invalid_permission_level');
+        }
+        if (empty($emails)) {
+            return array('ok' => false, 'error' => 'no_emails');
+        }
+
+        $results = array();
+        foreach ($emails as $email) {
+            $email = strtolower(trim($email));
+            if ($email === '') {
+                continue;
+            }
+
+            // Resolve email → pkey
+            $row = $this->db->get_row_prepared(
+                "SELECT pkey FROM users WHERE email=$1 AND deleted = FALSE LIMIT 1",
+                array($email)
+            );
+            if (!$row) {
+                $results[] = array('email' => $email, 'status' => 'unknown');
+                continue;
+            }
+            $inviteePkey = (int)$row->pkey;
+
+            if ($inviteePkey === $ownerPkey) {
+                $results[] = array('email' => $email, 'status' => 'is_owner');
+                continue;
+            }
+
+            // Check for any existing grant (active or soft-removed)
+            $existing = $this->db->get_row_prepared(
+                "SELECT pkey, accepted, removed_at, permission_level
+                   FROM strabosamples.sample_collaborators
+                  WHERE sample_id=$1 AND sample_userpkey=$2 AND collaborator_pkey=$3
+                  ORDER BY pkey DESC LIMIT 1",
+                array($sampleId, $ownerPkey, $inviteePkey)
+            );
+
+            if ($existing && $existing->removed_at === null) {
+                // Active grant — no-op
+                $results[] = array(
+                    'email'             => $email,
+                    'status'            => 'already_active',
+                    'collaborator_pkey' => $inviteePkey,
+                );
+                continue;
+            }
+
+            $newUuid = UUID::v4();
+
+            if ($existing && $existing->removed_at !== null) {
+                // Re-enable a soft-removed grant. Per §7.3 we clear removed_at,
+                // refresh uuid, and reset to pending so the invitee can accept again.
+                $this->db->prepare_query(
+                    "UPDATE strabosamples.sample_collaborators
+                        SET removed_at = NULL,
+                            permission_level = $1,
+                            uuid = $2,
+                            accepted = FALSE,
+                            accepted_at = NULL,
+                            added_by = $3,
+                            added_at = now()
+                      WHERE pkey = $4",
+                    array($permissionLevel, $newUuid, $this->userpkey, (int)$existing->pkey)
+                );
+                $results[] = array(
+                    'email'             => $email,
+                    'status'            => 're_enabled',
+                    'collaborator_pkey' => $inviteePkey,
+                    'uuid'              => $newUuid,
+                );
+                continue;
+            }
+
+            // Fresh insert
+            $this->db->prepare_query(
+                "INSERT INTO strabosamples.sample_collaborators
+                   (sample_id, sample_userpkey, collaborator_pkey, permission_level,
+                    uuid, accepted, added_by)
+                 VALUES ($1, $2, $3, $4, $5, FALSE, $6)",
+                array($sampleId, $ownerPkey, $inviteePkey, $permissionLevel, $newUuid, $this->userpkey)
+            );
+            $results[] = array(
+                'email'             => $email,
+                'status'            => 'invited',
+                'collaborator_pkey' => $inviteePkey,
+                'uuid'              => $newUuid,
+            );
+        }
+
+        return array('ok' => true, 'results' => $results);
+    }
+
+    /** Change a collaborator's permission level. Owner-only. */
+    public function updateCollaboratorLevel($sampleId, $ownerPkey, $collaboratorPkey, $newLevel)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        $collaboratorPkey = (int)$collaboratorPkey;
+        $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
+        if (!$ctx->exists) {
+            return array('ok' => false, 'error' => 'not_found');
+        }
+        if (!$ctx->canManage()) {
+            return array('ok' => false, 'error' => 'forbidden');
+        }
+        if (!in_array($newLevel, array('edit', 'readonly'), true)) {
+            return array('ok' => false, 'error' => 'invalid_permission_level');
+        }
+
+        $exists = $this->db->get_var_prepared(
+            "SELECT 1 FROM strabosamples.sample_collaborators
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND collaborator_pkey=$3
+                AND removed_at IS NULL LIMIT 1",
+            array($sampleId, $ownerPkey, $collaboratorPkey)
+        );
+        if (!$exists) {
+            return array('ok' => false, 'error' => 'grant_not_found');
+        }
+
+        $this->db->prepare_query(
+            "UPDATE strabosamples.sample_collaborators
+                SET permission_level = $1
+              WHERE sample_id=$2 AND sample_userpkey=$3 AND collaborator_pkey=$4
+                AND removed_at IS NULL",
+            array($newLevel, $sampleId, $ownerPkey, $collaboratorPkey)
+        );
+        return array('ok' => true);
+    }
+
+    /** Soft-remove a collaborator grant. Owner-only. */
+    public function removeCollaborator($sampleId, $ownerPkey, $collaboratorPkey)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        $collaboratorPkey = (int)$collaboratorPkey;
+        $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
+        if (!$ctx->exists) {
+            return array('ok' => false, 'error' => 'not_found');
+        }
+        if (!$ctx->canManage()) {
+            return array('ok' => false, 'error' => 'forbidden');
+        }
+
+        $exists = $this->db->get_var_prepared(
+            "SELECT 1 FROM strabosamples.sample_collaborators
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND collaborator_pkey=$3
+                AND removed_at IS NULL LIMIT 1",
+            array($sampleId, $ownerPkey, $collaboratorPkey)
+        );
+        if (!$exists) {
+            return array('ok' => false, 'error' => 'grant_not_found');
+        }
+
+        $this->db->prepare_query(
+            "UPDATE strabosamples.sample_collaborators
+                SET removed_at = now()
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND collaborator_pkey=$3
+                AND removed_at IS NULL",
+            array($sampleId, $ownerPkey, $collaboratorPkey)
+        );
+        return array('ok' => true);
+    }
+
+    /**
+     * Caller's pending sample invitations (accepted=false, removed_at IS NULL).
+     * Joined with samples for owner/name display.
+     */
+    public function listMyInvitations()
+    {
+        $rows = $this->db->get_results_prepared(
+            "SELECT c.pkey, c.sample_id, c.sample_userpkey, c.permission_level,
+                    c.uuid, c.added_by, c.added_at,
+                    s.name AS sample_name, s.display_sample_type
+               FROM strabosamples.sample_collaborators c
+               JOIN strabosamples.samples s
+                 ON s.id = c.sample_id AND s.userpkey = c.sample_userpkey
+              WHERE c.collaborator_pkey = $1
+                AND c.accepted = FALSE
+                AND c.removed_at IS NULL
+              ORDER BY c.added_at DESC",
+            array($this->userpkey)
+        );
+        $out = array();
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                $out[] = array(
+                    'pkey'                 => (int)$r->pkey,
+                    'sample_id'            => $r->sample_id,
+                    'sample_userpkey'      => (int)$r->sample_userpkey,
+                    'sample_name'          => $r->sample_name,
+                    'display_sample_type'  => $r->display_sample_type,
+                    'permission_level'     => $r->permission_level,
+                    'uuid'                 => $r->uuid,
+                    'added_by'             => (int)$r->added_by,
+                    'added_at'             => $r->added_at,
+                );
+            }
+        }
+        return $out;
+    }
+
+    /**
+     * Accept a pending invite. Invitee-only (the caller). §7.3 duplicate-id
+     * guard: refuse if the invitee already owns a sample with the same id.
+     *
+     * The owner pkey is derived from the grant row, so callers only need
+     * the sample id (URL-level) and the per-invite uuid (out-of-band /
+     * from listMyInvitations).
+     */
+    public function acceptInvitation($sampleId, $uuid)
+    {
+        $grant = $this->db->get_row_prepared(
+            "SELECT pkey, sample_userpkey, accepted
+               FROM strabosamples.sample_collaborators
+              WHERE sample_id=$1 AND collaborator_pkey=$2
+                AND uuid=$3 AND removed_at IS NULL LIMIT 1",
+            array($sampleId, $this->userpkey, $uuid)
+        );
+        if (!$grant) {
+            return array('ok' => false, 'error' => 'invitation_not_found');
+        }
+        if ($this->pgBool($grant->accepted)) {
+            return array('ok' => false, 'error' => 'already_accepted');
+        }
+        if ($this->auth->hasDuplicateIdConflict($this->userpkey, $sampleId)) {
+            return array('ok' => false, 'error' => 'duplicate_id_conflict');
+        }
+
+        $this->db->prepare_query(
+            "UPDATE strabosamples.sample_collaborators
+                SET accepted = TRUE, accepted_at = now()
+              WHERE pkey = $1",
+            array((int)$grant->pkey)
+        );
+        return array('ok' => true, 'sample_userpkey' => (int)$grant->sample_userpkey);
+    }
+
+    /** Deny a pending invite. Invitee-only. Soft-removes the row. */
+    public function denyInvitation($sampleId, $uuid)
+    {
+        $grant = $this->db->get_row_prepared(
+            "SELECT pkey, sample_userpkey, accepted
+               FROM strabosamples.sample_collaborators
+              WHERE sample_id=$1 AND collaborator_pkey=$2
+                AND uuid=$3 AND removed_at IS NULL LIMIT 1",
+            array($sampleId, $this->userpkey, $uuid)
+        );
+        if (!$grant) {
+            return array('ok' => false, 'error' => 'invitation_not_found');
+        }
+        if ($this->pgBool($grant->accepted)) {
+            return array('ok' => false, 'error' => 'already_accepted');
+        }
+
+        $this->db->prepare_query(
+            "UPDATE strabosamples.sample_collaborators
+                SET removed_at = now()
+              WHERE pkey = $1",
+            array((int)$grant->pkey)
+        );
+        return array('ok' => true, 'sample_userpkey' => (int)$grant->sample_userpkey);
+    }
+
+    /**
+     * §7.3.1 auto-seed. Called by subsystem upload paths (Field/Micro/Exp)
+     * when creating a sample from inside a collaborative project — pre-accepts
+     * the project's collaborators as sample collaborators at the matching
+     * permission level. Skips the owner and already-active grants. No caller
+     * in api-collab; landing here so the future integration sub-branches just
+     * call this method instead of re-implementing.
+     *
+     * @param int[] $collaboratorPkeys
+     * @param string $permissionLevel 'edit' or 'readonly'
+     * @return int number of rows inserted
+     */
+    public function autoSeedProjectCollaborators($sampleId, $ownerPkey, array $collaboratorPkeys, $permissionLevel)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        if (!in_array($permissionLevel, array('edit', 'readonly'), true)) {
+            return 0;
+        }
+        $inserted = 0;
+        foreach ($collaboratorPkeys as $pkey) {
+            $pkey = (int)$pkey;
+            if ($pkey === $ownerPkey || $pkey <= 0) {
+                continue;
+            }
+            $exists = $this->db->get_var_prepared(
+                "SELECT 1 FROM strabosamples.sample_collaborators
+                  WHERE sample_id=$1 AND sample_userpkey=$2 AND collaborator_pkey=$3
+                    AND removed_at IS NULL LIMIT 1",
+                array($sampleId, $ownerPkey, $pkey)
+            );
+            if ($exists) {
+                continue;
+            }
+            $newUuid = UUID::v4();
+            $this->db->prepare_query(
+                "INSERT INTO strabosamples.sample_collaborators
+                   (sample_id, sample_userpkey, collaborator_pkey, permission_level,
+                    uuid, accepted, accepted_at, added_by)
+                 VALUES ($1, $2, $3, $4, $5, TRUE, now(), $6)",
+                array($sampleId, $ownerPkey, $pkey, $permissionLevel, $newUuid, $this->userpkey)
+            );
+            $inserted++;
+        }
+        return $inserted;
     }
 }
