@@ -1503,4 +1503,302 @@ class StraboSamplesService
             'offset'    => $offset,
         );
     }
+
+    // ============================================================
+    // Subsystem integration (design §8.6, §10.4)
+    //
+    // upsertSample is the server-internal entry point invoked by Field /
+    // Micro / Experimental upload paths. It is auth-free — the caller has
+    // already validated the actor via the subsystem's own auth path, and
+    // the sample is being written under the project owner's pkey per
+    // §7.3.1. The user-facing /samplesdb/ endpoints go through
+    // createSample/updateSample with the canEdit gate; only this method
+    // skips the gate.
+    //
+    // Runtime application of §10.4 spine-priority rules:
+    //   - On a NEW row, the source writes the spine and its *_data JSONB.
+    //   - On an EXISTING row, the per-source JSONB is always overwritten;
+    //     spine columns are overwritten only when no HIGHER-priority
+    //     source has already touched the row.
+    //   - Priority order: Field > Micro > Experimental.
+    //   - When spine is skipped, the new values are still preserved
+    //     verbatim in the *_data JSONB so they aren't lost.
+    // ============================================================
+
+    const SOURCE_PRIORITY = array('field' => 0, 'micro' => 1, 'experimental' => 2);
+
+    /**
+     * Upsert a sample on behalf of a subsystem (Experimental for now;
+     * Micro and Field follow). Internal-facing, no canEdit/canManage gate.
+     *
+     * Required: source ('field'/'micro'/'experimental'), id, owner_pkey.
+     * Spine fields (name, igsn, description, notes, latitude, longitude,
+     * display_sample_type, display_sample_purpose) and subsystem_data are
+     * the projected source values. reference describes the source's link
+     * (reference_id + reference_userpkey + reference_metadata). children
+     * is an array with optional composition/parameters/documents arrays.
+     * opts may include 'autoSeedCollaborators' (array of pkeys to seed as
+     * accepted edit collaborators on first creation only).
+     *
+     * The actor (modified_by / changed_by) is $this->userpkey; falls back
+     * to $ownerPkey when unset (server-internal callers can either
+     * setUserpkey beforehand or rely on owner-attribution).
+     *
+     * @return array {ok, sample_id, created (bool), source}
+     */
+    public function upsertSample($source, $sampleId, $ownerPkey, array $spineFields, $subsystemData, array $reference, array $children = array(), array $opts = array())
+    {
+        if (!isset(self::SOURCE_PRIORITY[$source])) {
+            return array('ok' => false, 'error' => 'invalid_source');
+        }
+        $ownerPkey = (int)$ownerPkey;
+        $actorPkey = ($this->userpkey !== null && $this->userpkey > 0) ? (int)$this->userpkey : $ownerPkey;
+        $jsonbCol  = $source . '_data';   // field_data, micro_data, experimental_data
+
+        // Existence + higher-priority-source check.
+        $existing = $this->db->get_row_prepared(
+            "SELECT id, field_data, micro_data, experimental_data
+               FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+        $created = ($existing === null);
+
+        // Decide spine application per §10.4.
+        $writeSpine = true;
+        if ($existing !== null) {
+            foreach (self::SOURCE_PRIORITY as $otherSource => $priority) {
+                if ($priority >= self::SOURCE_PRIORITY[$source]) continue;
+                $otherCol = $otherSource . '_data';
+                if ($existing->$otherCol !== null) {
+                    $writeSpine = false;
+                    break;
+                }
+            }
+        }
+
+        $this->db->query("BEGIN");
+
+        if ($created) {
+            $this->upsertSample_insertNew($source, $sampleId, $ownerPkey, $actorPkey, $spineFields, $subsystemData, $jsonbCol);
+        } else {
+            $this->upsertSample_updateExisting($sampleId, $ownerPkey, $actorPkey, $spineFields, $subsystemData, $jsonbCol, $writeSpine);
+        }
+
+        // Children — replace per-resource only when this source supplied them.
+        if (array_key_exists('composition', $children)) {
+            $this->upsertSample_replaceChildren('composition', $sampleId, $ownerPkey, $children['composition']);
+        }
+        if (array_key_exists('parameters', $children)) {
+            $this->upsertSample_replaceChildren('parameters', $sampleId, $ownerPkey, $children['parameters']);
+        }
+        if (array_key_exists('documents', $children)) {
+            $this->upsertSample_replaceChildren('documents', $sampleId, $ownerPkey, $children['documents']);
+        }
+
+        // Subsystem link — UPSERT on the table's UNIQUE (sample_id, sample_userpkey,
+        // subsystem, reference_id, reference_userpkey) tuple.
+        $refId    = isset($reference['reference_id']) ? (string)$reference['reference_id'] : '';
+        $refUpk   = isset($reference['reference_userpkey']) ? (int)$reference['reference_userpkey'] : $ownerPkey;
+        $refMeta  = isset($reference['reference_metadata']) ? $reference['reference_metadata'] : null;
+        if ($refId !== '') {
+            $this->db->prepare_query(
+                "INSERT INTO strabosamples.sample_subsystem_links
+                   (sample_id, sample_userpkey, subsystem, reference_id, reference_userpkey, reference_metadata)
+                 VALUES ($1, $2, $3, $4, $5, $6)
+                 ON CONFLICT (sample_id, sample_userpkey, subsystem, reference_id, reference_userpkey)
+                 DO UPDATE SET reference_metadata = EXCLUDED.reference_metadata,
+                               modified_at = now()",
+                array($sampleId, $ownerPkey, $source, $refId, $refUpk, $this->encodeJsonOrNull($refMeta))
+            );
+        }
+
+        $this->db->query("COMMIT");
+
+        // Changelog (outside the transaction — failure here doesn't roll back the upsert).
+        if ($created) {
+            $this->logChange($sampleId, $ownerPkey, 'create', array(
+                'source' => $source,
+                'spine_written' => $writeSpine,
+            ), $source);
+
+            // Auto-seed project collaborators on first creation only (§7.3.1).
+            $seedList = isset($opts['autoSeedCollaborators']) ? (array)$opts['autoSeedCollaborators'] : array();
+            $seedLevel = isset($opts['autoSeedLevel']) && in_array($opts['autoSeedLevel'], array('edit', 'readonly'), true)
+                ? $opts['autoSeedLevel'] : 'edit';
+            if (!empty($seedList)) {
+                $this->autoSeedProjectCollaborators($sampleId, $ownerPkey, $seedList, $seedLevel);
+            }
+        } else {
+            $this->logChange($sampleId, $ownerPkey, 'update', array(
+                'source' => $source,
+                'spine_written' => $writeSpine,
+                $jsonbCol => array('updated' => true),
+            ), $source);
+        }
+
+        return array(
+            'ok'        => true,
+            'sample_id' => $sampleId,
+            'created'   => $created,
+            'source'    => $source,
+        );
+    }
+
+    /**
+     * Counterpart to upsertSample for the empty-sample case: the subsystem
+     * deleted its sample data and we should mirror the removal into
+     * strabosamples — but only when no HIGHER-priority source still
+     * references the row, and we always clear THIS source's JSONB + links +
+     * children regardless.
+     */
+    public function removeSubsystemSample($source, $sampleId, $ownerPkey)
+    {
+        if (!isset(self::SOURCE_PRIORITY[$source])) {
+            return array('ok' => false, 'error' => 'invalid_source');
+        }
+        $ownerPkey = (int)$ownerPkey;
+
+        $existing = $this->db->get_row_prepared(
+            "SELECT field_data, micro_data, experimental_data
+               FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+        if ($existing === null) {
+            return array('ok' => true, 'removed' => false);
+        }
+
+        $this->db->query("BEGIN");
+
+        // Drop this source's link rows + child rows.
+        $this->db->prepare_query(
+            "DELETE FROM strabosamples.sample_subsystem_links
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND subsystem=$3",
+            array($sampleId, $ownerPkey, $source)
+        );
+
+        // Check if any other source still has data for this row.
+        $otherSourceHasData = false;
+        foreach (self::SOURCE_PRIORITY as $other => $_) {
+            if ($other === $source) continue;
+            $col = $other . '_data';
+            if ($existing->$col !== null) { $otherSourceHasData = true; break; }
+        }
+        $otherLinkRemains = (bool)$this->db->get_var_prepared(
+            "SELECT 1 FROM strabosamples.sample_subsystem_links
+              WHERE sample_id=$1 AND sample_userpkey=$2 LIMIT 1",
+            array($sampleId, $ownerPkey)
+        );
+
+        if (!$otherSourceHasData && !$otherLinkRemains) {
+            // Nothing else cares — drop the whole sample (CASCADE handles children).
+            $this->db->prepare_query(
+                "DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+                array($sampleId, $ownerPkey)
+            );
+            $this->db->query("COMMIT");
+            return array('ok' => true, 'removed' => true);
+        }
+
+        // Other sources still in play — null out THIS source's JSONB column
+        // and the per-source children (composition/parameters/documents are
+        // shared across sources today; we don't currently track origin per
+        // child row, so we leave the existing rows alone unless this branch
+        // is rewritten). For Experimental, the children correspond to the
+        // experimental upload; leaving them in place is the safe choice.
+        $jsonbCol = $source . '_data';
+        $this->db->prepare_query(
+            "UPDATE strabosamples.samples SET {$jsonbCol} = NULL, modified_at = now() WHERE id=$1 AND userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+
+        $this->db->query("COMMIT");
+        return array('ok' => true, 'removed' => false);
+    }
+
+    // ---- upsertSample internals ----
+
+    protected function upsertSample_insertNew($source, $sampleId, $ownerPkey, $actorPkey, array $spineFields, $subsystemData, $jsonbCol)
+    {
+        $cols   = array('id', 'userpkey', 'created_by', 'modified_by', $jsonbCol);
+        $params = array($sampleId, $ownerPkey, $ownerPkey, $actorPkey, $this->encodeJsonOrNull($subsystemData));
+        foreach (self::$WRITABLE_SPINE_FIELDS as $f) {
+            if (array_key_exists($f, $spineFields)) {
+                $cols[]   = $f;
+                $params[] = $spineFields[$f];
+            }
+        }
+        $placeholders = array();
+        for ($i = 1; $i <= count($params); $i++) { $placeholders[] = '$' . $i; }
+        $this->db->prepare_query(
+            "INSERT INTO strabosamples.samples (" . implode(', ', $cols) . ")
+             VALUES (" . implode(', ', $placeholders) . ")",
+            $params
+        );
+    }
+
+    protected function upsertSample_updateExisting($sampleId, $ownerPkey, $actorPkey, array $spineFields, $subsystemData, $jsonbCol, $writeSpine)
+    {
+        $setParts = array();
+        $params   = array();
+        $idx      = 1;
+        // Per-source JSONB is always overwritten.
+        $setParts[] = "$jsonbCol = \$$idx"; $params[] = $this->encodeJsonOrNull($subsystemData); $idx++;
+        if ($writeSpine) {
+            foreach (self::$WRITABLE_SPINE_FIELDS as $f) {
+                if (array_key_exists($f, $spineFields)) {
+                    $setParts[] = "$f = \$$idx"; $params[] = $spineFields[$f]; $idx++;
+                }
+            }
+        }
+        $setParts[] = "modified_at = now()";
+        $setParts[] = "modified_by = \$$idx"; $params[] = $actorPkey; $idx++;
+        $whereId  = '$' . $idx++; $params[] = $sampleId;
+        $whereUpk = '$' . $idx++; $params[] = $ownerPkey;
+        $this->db->prepare_query(
+            "UPDATE strabosamples.samples SET " . implode(', ', $setParts) .
+            " WHERE id=$whereId AND userpkey=$whereUpk",
+            $params
+        );
+    }
+
+    protected function upsertSample_replaceChildren($resource, $sampleId, $ownerPkey, $items)
+    {
+        $cfg = self::$SUB_ARRAY_TABLES[$resource];
+        $items = is_array($items) ? $items : array();
+
+        $this->db->prepare_query(
+            "DELETE FROM {$cfg['table']} WHERE sample_id=$1 AND sample_userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+        if (empty($items)) return;
+
+        $cols    = $cfg['cols'];
+        $colList = 'sample_id, sample_userpkey, ' . implode(', ', $cols);
+        $totalParamsPerRow = 2 + count($cols);
+        $placeholders = array();
+        for ($p = 1; $p <= $totalParamsPerRow; $p++) { $placeholders[] = '$' . $p; }
+        $placeholdersStr = implode(', ', $placeholders);
+
+        foreach ($items as $i => $item) {
+            $item = (array)$item;
+            $required = $item[$cfg['required']] ?? null;
+            if ($required === null || $required === '') {
+                continue;  // Skip rows missing the required field rather than
+                           // abort the whole upsert (the user-facing PUT
+                           // endpoint validates up front; this path is best-
+                           // effort for migrated/legacy data shapes).
+            }
+            if (!array_key_exists('ordering', $item) || $item['ordering'] === null) {
+                $item['ordering'] = $i;
+            }
+            $params = array($sampleId, $ownerPkey);
+            foreach ($cols as $c) {
+                $params[] = array_key_exists($c, $item) ? $item[$c] : null;
+            }
+            $this->db->prepare_query(
+                "INSERT INTO {$cfg['table']} ($colList) VALUES ($placeholdersStr)",
+                $params
+            );
+        }
+    }
 }
