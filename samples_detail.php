@@ -109,6 +109,109 @@ if (!$notFound) {
         }
     }
 
+    // ---- Resolve View <Subsystem> URL server-side. ----
+    // Cross-system auth model: a sample is mirrored from a host project
+    // whose visibility is owned by THAT subsystem, not by StraboSamples.
+    // If the page viewer isn't the host project owner AND the project
+    // isn't public, the existing subsystem pages will show "Project Not
+    // Found" — better UX to disable the button up front and tell the
+    // user why than to dangle a link that goes nowhere.
+    //
+    // Field detail page does its own session/owner check; let it through.
+    // Micro + Experimental gate explicitly here so the button hides when
+    // the viewer genuinely can't reach the page.
+    $viewerPkey = (int)$userpkey;
+
+    // Batch-lookup micro_projectmetadata for every micro link's project.
+    $microProjectIndex = array();
+    $microStraboIds = array();
+    foreach ($links as $l) {
+        if ($l['subsystem'] !== 'micro') continue;
+        $sid = isset($l['reference_metadata']['project_strabo_id']) ? $l['reference_metadata']['project_strabo_id'] : null;
+        if ($sid !== null && $sid !== '') $microStraboIds[$sid] = true;
+    }
+    if ($microStraboIds) {
+        // strabo_db_postgresql wraps pg_query_params; build an IN clause manually
+        // for the unique strabo_id list.
+        $params = array_keys($microStraboIds);
+        $placeholders = array();
+        foreach ($params as $i => $_) $placeholders[] = '$' . ($i + 1);
+        $sql = "SELECT id, strabo_id, ispublic, userpkey
+                  FROM micro_projectmetadata
+                 WHERE strabo_id IN (" . implode(',', $placeholders) . ")";
+        $rows = $db->get_results_prepared($sql, $params);
+        if (is_array($rows)) {
+            foreach ($rows as $pr) {
+                $microProjectIndex[$pr->strabo_id] = $pr;
+            }
+        }
+    }
+
+    // Batch-lookup straboexp.experiment + project.ispublic for every exp link.
+    $expIndex = array();
+    $expUuids = array();
+    foreach ($links as $l) {
+        if ($l['subsystem'] !== 'experimental') continue;
+        $u = isset($l['reference_metadata']['experiment_uuid']) ? $l['reference_metadata']['experiment_uuid'] : null;
+        if ($u !== null && $u !== '') $expUuids[$u] = true;
+    }
+    if ($expUuids) {
+        $params = array_keys($expUuids);
+        $placeholders = array();
+        foreach ($params as $i => $_) $placeholders[] = '$' . ($i + 1);
+        $sql = "SELECT e.uuid AS experiment_uuid, e.userpkey AS experiment_userpkey,
+                       COALESCE(p.ispublic, FALSE) AS project_ispublic
+                  FROM straboexp.experiment e
+             LEFT JOIN straboexp.project p ON p.pkey = e.project_pkey
+                 WHERE e.uuid IN (" . implode(',', $placeholders) . ")";
+        $rows = $db->get_results_prepared($sql, $params);
+        if (is_array($rows)) {
+            foreach ($rows as $er) {
+                $expIndex[$er->experiment_uuid] = $er;
+            }
+        }
+    }
+
+    foreach ($links as &$l) {
+        $l['view_href']        = null;
+        $l['view_unavailable'] = null;
+        $meta = $l['reference_metadata'] ?: array();
+        if ($l['subsystem'] === 'field') {
+            if (!empty($meta['dataset_id'])) {
+                $l['view_href'] = '/StraboFieldDatasetDetail/?dataset_id=' . rawurlencode((string)$meta['dataset_id']);
+            }
+        } elseif ($l['subsystem'] === 'micro') {
+            $sid = isset($meta['project_strabo_id']) ? $meta['project_strabo_id'] : null;
+            if ($sid !== null && isset($microProjectIndex[$sid])) {
+                $pr = $microProjectIndex[$sid];
+                $isPublic = ($pr->ispublic === 't' || $pr->ispublic === true || $pr->ispublic === 'true');
+                $isOwner  = ((int)$pr->userpkey === $viewerPkey);
+                if ($isPublic || $isOwner) {
+                    $l['view_href'] = '/microproject?id=' . (int)$pr->id;
+                } else {
+                    $l['view_unavailable'] = 'Host StraboMicro project is private and owned by another user.';
+                }
+            } else {
+                $l['view_unavailable'] = 'Host StraboMicro project not found.';
+            }
+        } elseif ($l['subsystem'] === 'experimental') {
+            $u = isset($meta['experiment_uuid']) ? $meta['experiment_uuid'] : null;
+            if ($u !== null && isset($expIndex[$u])) {
+                $er = $expIndex[$u];
+                $isPublic = ($er->project_ispublic === 't' || $er->project_ispublic === true || $er->project_ispublic === 'true');
+                $isOwner  = ((int)$er->experiment_userpkey === $viewerPkey);
+                if ($isPublic || $isOwner) {
+                    $l['view_href'] = '/experimental/overview_experiment.php?u=' . rawurlencode($u);
+                } else {
+                    $l['view_unavailable'] = 'Host StraboExperimental project is private and owned by another user.';
+                }
+            } else {
+                $l['view_unavailable'] = 'Host StraboExperimental experiment not found.';
+            }
+        }
+    }
+    unset($l);
+
     // Collaborators (accepted only — pending invites stay private to the owner).
     $collabRows = $db->get_results_prepared(
         "SELECT c.collaborator_pkey, c.permission_level, c.accepted, c.accepted_at,
@@ -422,6 +525,16 @@ include("includes/mheader.php");
     text-decoration: none;
 }
 .sd-view-btn:hover { background: #f06880; color: #ffffff; }
+.sd-view-btn-disabled {
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.45);
+    cursor: not-allowed;
+    text-decoration: none;
+}
+.sd-view-btn-disabled:hover {
+    background: rgba(255,255,255,0.08);
+    color: rgba(255,255,255,0.45);
+}
 
 .sd-empty-cards {
     text-align: center;
@@ -696,19 +809,17 @@ include("includes/mheader.php");
                     : link.subsystem === 'micro'        ? (sample.micro_data || {})
                     :                                     (sample.experimental_data || {});
         var label = subsystemLabel(link.subsystem);
-        var viewHref = '#';
-        var viewText = 'View ' + label;
-        // Deep links into the existing subsystem pages. The metadata keys
-        // are whatever the sample_sync layer recorded at upsert time —
-        // see {db,microdb,experimental}/lib/sample_sync.php for the
-        // canonical shapes. If a metadata key is missing the link falls
-        // back to '#' rather than producing a broken URL.
-        if (link.subsystem === 'field' && meta.dataset_id) {
-            viewHref = '/StraboFieldDatasetDetail/?dataset_id=' + encodeURIComponent(meta.dataset_id);
-        } else if (link.subsystem === 'micro' && meta.project_strabo_id) {
-            viewHref = '/mpl/' + encodeURIComponent(meta.project_strabo_id);
-        } else if (link.subsystem === 'experimental' && meta.experiment_uuid) {
-            viewHref = '/experimental/overview_experiment.php?u=' + encodeURIComponent(meta.experiment_uuid);
+
+        // view_href is resolved server-side against the host project's
+        // visibility (see samples_detail.php's link-resolution block).
+        // Null means the viewer can't reach the host page; render a
+        // disabled button with the reason so the UX is honest.
+        var viewBtnHtml;
+        if (link.view_href) {
+            viewBtnHtml = '<a class="sd-view-btn" href="' + escapeHtml(link.view_href) + '">View ' + escapeHtml(label) + '</a>';
+        } else {
+            var reason = link.view_unavailable || 'View page is not available for this link.';
+            viewBtnHtml = '<span class="sd-view-btn sd-view-btn-disabled" title="' + escapeHtml(reason) + '">View ' + escapeHtml(label) + '</span>';
         }
 
         var fieldsHtml = '';
@@ -726,7 +837,7 @@ include("includes/mheader.php");
             +   '<div class="sd-link-card-head">'
             +     subsystemIcon(link.subsystem)
             +     '<span>' + escapeHtml(label) + ' &middot; Last Updated ' + escapeHtml(fmtDate(link.modified_at)) + '</span>'
-            +     '<a class="sd-view-btn" href="' + escapeHtml(viewHref) + '">' + escapeHtml(viewText) + '</a>'
+            +     viewBtnHtml
             +   '</div>'
             +   '<div class="sd-link-fields">' + fieldsHtml + '</div>'
             + '</div>';
