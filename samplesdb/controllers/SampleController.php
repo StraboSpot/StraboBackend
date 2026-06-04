@@ -12,6 +12,7 @@
  *                collaboration/{accept|deny} — accept / deny (POST)
  *                parent           — get (GET) / set (PUT) / clear (DELETE)
  *                children         — list (GET)
+ *                family           — one-hop family snapshot for the §12.2.1 widget (GET)
  *                composition      — list (GET) / full-replace (PUT)
  *                parameters       — list (GET) / full-replace (PUT)
  *                documents        — list (GET) / full-replace (PUT)
@@ -33,6 +34,7 @@
  *                PUT    /samplesdb/sample/{id}/parent               body: { parent_sample_id, parent_userpkey }
  *                DELETE /samplesdb/sample/{id}/parent                       clear parent
  *                GET    /samplesdb/sample/{id}/children                     list children (light spine)
+ *                GET    /samplesdb/sample/{id}/family                       focus + parent + children (light spine; §12.2.1)
  *                GET    /samplesdb/sample/{id}/{composition|parameters|documents}        list rows
  *                PUT    /samplesdb/sample/{id}/{composition|parameters|documents} body: { items: [...] }  full-replace
  *                GET    /samplesdb/sample/{id}/changelog?limit=N&offset=M             paginated audit log
@@ -91,6 +93,14 @@ class SampleController extends MyController
                     return $this->notFound("Sample not found.");
                 }
                 return $children;
+
+            case 'family':
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                $family = $this->svc->getFamily($id, $effectiveOwner);
+                if ($family === null) {
+                    return $this->notFound("Sample not found.");
+                }
+                return $family;
 
             case 'composition':
             case 'parameters':

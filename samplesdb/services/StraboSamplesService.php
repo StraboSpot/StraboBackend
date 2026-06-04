@@ -1140,6 +1140,71 @@ class StraboSamplesService
     }
 
     /**
+     * One-hop family snapshot for the Sample Overview family-tree widget
+     * (design §12.2.1). Light spine shape only; the widget renders nodes
+     * on the focus sample, its parent, and its direct children.
+     *
+     * Orphaned parent (caller can read focus but not the parent) returns
+     * the §7.5 orphaned shape — the widget should still render the edge
+     * with an "inaccessible" marker rather than hiding lineage entirely.
+     *
+     * Returns null when the caller has no read access to the focus.
+     */
+    public function getFamily($sampleId, $ownerPkey = null)
+    {
+        if ($ownerPkey === null) {
+            $ownerPkey = $this->userpkey;
+        }
+        $ownerPkey = (int)$ownerPkey;
+
+        if (!$this->canRead($sampleId, $ownerPkey)) {
+            return null;
+        }
+
+        $row = $this->db->get_row_prepared(
+            "SELECT id, userpkey, name, display_sample_type, display_sample_purpose,
+                    parent_sample_id, parent_userpkey
+               FROM strabosamples.samples
+              WHERE id=$1 AND userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+        if (!$row) {
+            return null;
+        }
+
+        $focus = array(
+            'id'                     => $row->id,
+            'userpkey'               => (int)$row->userpkey,
+            'name'                   => $row->name,
+            'display_sample_type'    => $row->display_sample_type,
+            'display_sample_purpose' => $row->display_sample_purpose,
+        );
+
+        $parent = null;
+        if ($row->parent_sample_id !== null && $row->parent_userpkey !== null) {
+            $parentId      = $row->parent_sample_id;
+            $parentUserpkey = (int)$row->parent_userpkey;
+            if ($this->canRead($parentId, $parentUserpkey)) {
+                $parent = $this->fetchParent($parentId, $parentUserpkey);
+            } else {
+                $parent = array(
+                    'orphaned'         => true,
+                    'parent_sample_id' => $parentId,
+                    'parent_userpkey'  => $parentUserpkey,
+                );
+            }
+        }
+
+        $children = $this->fetchChildren($sampleId, $ownerPkey);
+
+        return array(
+            'focus'    => $focus,
+            'parent'   => $parent,
+            'children' => $children,
+        );
+    }
+
+    /**
      * Set or change a sample's parent. canEdit on the child sample;
      * canRead on the proposed parent (§7.5). Cycle detection walks up
      * from the proposed parent; rejects 'cycle_detected' if the chain
