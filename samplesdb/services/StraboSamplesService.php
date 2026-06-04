@@ -1047,4 +1047,226 @@ class StraboSamplesService
         }
         return json_encode($val);
     }
+
+    // ============================================================
+    // Parent / child (design §4.3, §7.5, §8.3)
+    //
+    // Single-parent tree. Brand-new capability — not back-filled at
+    // migration. Cross-user parent/child is allowed; if access to the
+    // parent is later revoked, the link "soft-nulls" in the response
+    // (orphaned marker) while the stored pointer is preserved.
+    // ============================================================
+
+    /** Cap parent-chain walks at this depth in detectCycle. */
+    const PARENT_CHAIN_MAX_DEPTH = 100;
+
+    /**
+     * Get the parent of a sample. Three response shapes:
+     *   - sample not readable / not found            → null (controller → 404)
+     *   - sample has no parent                        → ['parent' => null]
+     *   - parent readable                             → ['parent' => assembledParent]
+     *   - parent not readable (revoked) / missing     → ['parent' => ['orphaned' => true, ...]]
+     *
+     * The orphaned shape per §7.5: the stored pointer is preserved even
+     * when read access drops, so the UI can show "this had a parent" with
+     * an orphaned indicator.
+     */
+    public function getParent($sampleId, $ownerPkey)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        if (!$this->canRead($sampleId, $ownerPkey)) {
+            return null;
+        }
+        $row = $this->db->get_row_prepared(
+            "SELECT parent_sample_id, parent_userpkey
+               FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+        if (!$row || $row->parent_sample_id === null) {
+            return array('parent' => null);
+        }
+        $parentId      = $row->parent_sample_id;
+        $parentOwner   = (int)$row->parent_userpkey;
+        if ($this->canRead($parentId, $parentOwner)) {
+            return array('parent' => $this->getSample($parentId, $parentOwner));
+        }
+        return array('parent' => array(
+            'orphaned'         => true,
+            'parent_sample_id' => $parentId,
+            'parent_userpkey'  => $parentOwner,
+        ));
+    }
+
+    /**
+     * List children of a sample (those whose parent pointer matches).
+     * Light spine info only — id, userpkey, name, display columns.
+     */
+    public function getChildren($sampleId, $ownerPkey)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        if (!$this->canRead($sampleId, $ownerPkey)) {
+            return null;
+        }
+        $rows = $this->db->get_results_prepared(
+            "SELECT id, userpkey, name, display_sample_type, display_sample_purpose
+               FROM strabosamples.samples
+              WHERE parent_sample_id=$1 AND parent_userpkey=$2
+              ORDER BY created_at",
+            array($sampleId, $ownerPkey)
+        );
+        $out = array();
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                $out[] = array(
+                    'id'                     => $r->id,
+                    'userpkey'               => (int)$r->userpkey,
+                    'name'                   => $r->name,
+                    'display_sample_type'    => $r->display_sample_type,
+                    'display_sample_purpose' => $r->display_sample_purpose,
+                );
+            }
+        }
+        return array('children' => $out, 'count' => count($out));
+    }
+
+    /**
+     * Set or change a sample's parent. canEdit on the child sample;
+     * canRead on the proposed parent (§7.5). Cycle detection walks up
+     * from the proposed parent; rejects 'cycle_detected' if the chain
+     * reaches the child itself (or hits PARENT_CHAIN_MAX_DEPTH, which
+     * should never occur on clean data but is a defensive bound).
+     */
+    public function setParent($sampleId, $ownerPkey, $parentSampleId, $parentUserpkey)
+    {
+        $ownerPkey      = (int)$ownerPkey;
+        $parentUserpkey = (int)$parentUserpkey;
+
+        $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
+        if (!$ctx->exists) {
+            return array('ok' => false, 'error' => 'not_found');
+        }
+        if (!$ctx->canEdit()) {
+            return array('ok' => false, 'error' => 'forbidden');
+        }
+        if ($parentSampleId === null || $parentSampleId === '' || $parentUserpkey <= 0) {
+            return array('ok' => false, 'error' => 'parent_pair_required');
+        }
+        if (!$this->canRead($parentSampleId, $parentUserpkey)) {
+            return array('ok' => false, 'error' => 'parent_not_accessible');
+        }
+        if ($this->detectCycle($sampleId, $ownerPkey, $parentSampleId, $parentUserpkey)) {
+            return array('ok' => false, 'error' => 'cycle_detected');
+        }
+
+        // Capture old parent for changelog.
+        $old = $this->db->get_row_prepared(
+            "SELECT parent_sample_id, parent_userpkey FROM strabosamples.samples
+              WHERE id=$1 AND userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+
+        $this->db->prepare_query(
+            "UPDATE strabosamples.samples
+                SET parent_sample_id = $1,
+                    parent_userpkey  = $2,
+                    modified_at      = now(),
+                    modified_by      = $3
+              WHERE id=$4 AND userpkey=$5",
+            array($parentSampleId, $parentUserpkey, $this->userpkey, $sampleId, $ownerPkey)
+        );
+
+        $this->logChange($sampleId, $ownerPkey, 'parent_set', array(
+            'parent' => array(
+                'old' => array(
+                    'parent_sample_id' => $old ? $old->parent_sample_id : null,
+                    'parent_userpkey'  => $old && $old->parent_userpkey !== null ? (int)$old->parent_userpkey : null,
+                ),
+                'new' => array(
+                    'parent_sample_id' => $parentSampleId,
+                    'parent_userpkey'  => $parentUserpkey,
+                ),
+            ),
+        ));
+
+        return array('ok' => true);
+    }
+
+    /**
+     * Clear a sample's parent pointer. canEdit on the sample. No-op if
+     * the sample had no parent (still returns ok). Logs to changelog
+     * when the cleared pointer was non-null.
+     */
+    public function clearParent($sampleId, $ownerPkey)
+    {
+        $ownerPkey = (int)$ownerPkey;
+
+        $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
+        if (!$ctx->exists) {
+            return array('ok' => false, 'error' => 'not_found');
+        }
+        if (!$ctx->canEdit()) {
+            return array('ok' => false, 'error' => 'forbidden');
+        }
+
+        $old = $this->db->get_row_prepared(
+            "SELECT parent_sample_id, parent_userpkey FROM strabosamples.samples
+              WHERE id=$1 AND userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+
+        $this->db->prepare_query(
+            "UPDATE strabosamples.samples
+                SET parent_sample_id = NULL,
+                    parent_userpkey  = NULL,
+                    modified_at      = now(),
+                    modified_by      = $1
+              WHERE id=$2 AND userpkey=$3",
+            array($this->userpkey, $sampleId, $ownerPkey)
+        );
+
+        if ($old && $old->parent_sample_id !== null) {
+            $this->logChange($sampleId, $ownerPkey, 'parent_clear', array(
+                'parent' => array(
+                    'old' => array(
+                        'parent_sample_id' => $old->parent_sample_id,
+                        'parent_userpkey'  => $old->parent_userpkey !== null ? (int)$old->parent_userpkey : null,
+                    ),
+                    'new' => null,
+                ),
+            ));
+        }
+
+        return array('ok' => true);
+    }
+
+    /**
+     * Walks the parent chain from a proposed-parent (id, userpkey) upward,
+     * returning true if the chain reaches ($childId, $childUserpkey) (or
+     * exceeds the depth cap). Self-parent is a cycle of length 1.
+     */
+    protected function detectCycle($childId, $childUserpkey, $proposedParentId, $proposedParentUserpkey)
+    {
+        if ($proposedParentId === $childId && (int)$proposedParentUserpkey === (int)$childUserpkey) {
+            return true;
+        }
+        $curId   = $proposedParentId;
+        $curUpk  = (int)$proposedParentUserpkey;
+        for ($depth = 0; $depth < self::PARENT_CHAIN_MAX_DEPTH; $depth++) {
+            $row = $this->db->get_row_prepared(
+                "SELECT parent_sample_id, parent_userpkey
+                   FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+                array($curId, $curUpk)
+            );
+            if (!$row || $row->parent_sample_id === null) {
+                return false;  // reached a root before hitting child
+            }
+            if ($row->parent_sample_id === $childId && (int)$row->parent_userpkey === (int)$childUserpkey) {
+                return true;
+            }
+            $curId  = $row->parent_sample_id;
+            $curUpk = (int)$row->parent_userpkey;
+        }
+        // Hit depth cap — treat as cycle to be safe.
+        return true;
+    }
 }
