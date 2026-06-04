@@ -1269,4 +1269,165 @@ class StraboSamplesService
         // Hit depth cap — treat as cycle to be safe.
         return true;
     }
+
+    // ============================================================
+    // Sub-arrays (design §8.4, §16 item 2)
+    //
+    // Resolves §16 item 2: PUT semantics are full-replace, matching the
+    // existing Experimental upload conventions. Delta semantics can be
+    // added later under a different endpoint shape (e.g., PATCH) without
+    // breaking the replace path.
+    // ============================================================
+
+    /** Per-table config: which columns to read/write and the required field. */
+    private static $SUB_ARRAY_TABLES = array(
+        'composition' => array(
+            'table'    => 'strabosamples.sample_composition',
+            'required' => 'mineral',
+            'cols'     => array('mineral', 'other_mineral', 'fraction', 'unit', 'grainsize', 'ordering'),
+            'log_type' => 'composition_change',
+        ),
+        'parameters' => array(
+            'table'    => 'strabosamples.sample_parameters',
+            'required' => 'control',
+            'cols'     => array('control', 'other_control', 'value', 'unit', 'prefix', 'note', 'ordering'),
+            'log_type' => 'parameters_change',
+        ),
+        'documents' => array(
+            'table'    => 'strabosamples.sample_documents',
+            'required' => 'uuid',
+            'cols'     => array('uuid', 'type', 'other_type', 'format', 'other_format', 'path', 'document_id', 'original_filename', 'description', 'ordering'),
+            'log_type' => 'documents_change',
+        ),
+    );
+
+    public function listComposition($sampleId, $ownerPkey) { return $this->listSubArray('composition', $sampleId, $ownerPkey); }
+    public function listParameters($sampleId, $ownerPkey)  { return $this->listSubArray('parameters',  $sampleId, $ownerPkey); }
+    public function listDocuments($sampleId, $ownerPkey)   { return $this->listSubArray('documents',   $sampleId, $ownerPkey); }
+
+    public function replaceComposition($sampleId, $ownerPkey, array $items) { return $this->replaceSubArray('composition', $sampleId, $ownerPkey, $items); }
+    public function replaceParameters($sampleId, $ownerPkey, array $items)  { return $this->replaceSubArray('parameters',  $sampleId, $ownerPkey, $items); }
+    public function replaceDocuments($sampleId, $ownerPkey, array $items)   { return $this->replaceSubArray('documents',   $sampleId, $ownerPkey, $items); }
+
+    /**
+     * Read the sub-array. canRead gate. Returns:
+     *   - null on no read access / not found
+     *   - ['<resource>' => [...], 'count' => N]
+     */
+    protected function listSubArray($resource, $sampleId, $ownerPkey)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        if (!$this->canRead($sampleId, $ownerPkey)) {
+            return null;
+        }
+        $items = $this->fetchSubArrayRows($resource, $sampleId, $ownerPkey);
+        return array($resource => $items, 'count' => count($items));
+    }
+
+    /**
+     * Full-replace the sub-array in a single transaction. canEdit gate.
+     * Items are validated (required field per table) before any write so
+     * partial replacements aren't possible. `ordering` is taken from each
+     * item if present, otherwise from its zero-based index in the input.
+     */
+    protected function replaceSubArray($resource, $sampleId, $ownerPkey, array $items)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        $cfg = self::$SUB_ARRAY_TABLES[$resource];
+
+        $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
+        if (!$ctx->exists) {
+            return array('ok' => false, 'error' => 'not_found');
+        }
+        if (!$ctx->canEdit()) {
+            return array('ok' => false, 'error' => 'forbidden');
+        }
+
+        // Normalize + validate up front so any partial-write is impossible.
+        $normalized = array();
+        foreach ($items as $i => $item) {
+            $item = (array)$item;
+            $required = $item[$cfg['required']] ?? null;
+            if ($required === null || $required === '') {
+                return array(
+                    'ok'    => false,
+                    'error' => 'missing_required_field',
+                    'detail' => array('index' => $i, 'field' => $cfg['required']),
+                );
+            }
+            if (!array_key_exists('ordering', $item) || $item['ordering'] === null) {
+                $item['ordering'] = $i;
+            }
+            $normalized[] = $item;
+        }
+
+        // Snapshot old counts for the changelog.
+        $oldCount = (int)$this->db->get_var_prepared(
+            "SELECT count(*) FROM {$cfg['table']} WHERE sample_id=$1 AND sample_userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+
+        // Transactional DELETE + INSERTs.
+        $this->db->query("BEGIN");
+        $this->db->prepare_query(
+            "DELETE FROM {$cfg['table']} WHERE sample_id=$1 AND sample_userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+        $cols    = $cfg['cols'];
+        $colList = 'sample_id, sample_userpkey, ' . implode(', ', $cols);
+        // Build "$1, $2, $3, ..., $N" placeholder list once.
+        $totalParamsPerRow = 2 + count($cols);  // sample_id, sample_userpkey, + each col
+        foreach ($normalized as $item) {
+            $params = array($sampleId, $ownerPkey);
+            foreach ($cols as $c) {
+                $params[] = array_key_exists($c, $item) ? $item[$c] : null;
+            }
+            $placeholders = array();
+            for ($p = 1; $p <= $totalParamsPerRow; $p++) { $placeholders[] = '$' . $p; }
+            $this->db->prepare_query(
+                "INSERT INTO {$cfg['table']} ($colList) VALUES (" . implode(', ', $placeholders) . ")",
+                $params
+            );
+        }
+
+        // Bump sample's modified_at/modified_by — the row contents changed
+        // semantically even if no column on the spine row did.
+        $this->db->prepare_query(
+            "UPDATE strabosamples.samples SET modified_at = now(), modified_by = $1
+              WHERE id=$2 AND userpkey=$3",
+            array($this->userpkey, $sampleId, $ownerPkey)
+        );
+
+        $this->db->query("COMMIT");
+
+        // Changelog. Diff shape mirrors the spine 'update' diff:
+        // {resource: {old_count, new_count}}.
+        $this->logChange($sampleId, $ownerPkey, $cfg['log_type'], array(
+            $resource => array(
+                'old_count' => $oldCount,
+                'new_count' => count($normalized),
+            ),
+        ));
+
+        return array(
+            'ok'       => true,
+            $resource  => $this->fetchSubArrayRows($resource, $sampleId, $ownerPkey),
+            'count'    => count($normalized),
+        );
+    }
+
+    /**
+     * Underlying row fetch — delegates to the per-resource protected helper
+     * that's already used by getSample. Keeps the read shape consistent
+     * between the assembled-sample view and the sub-resource endpoint.
+     */
+    protected function fetchSubArrayRows($resource, $sampleId, $ownerPkey)
+    {
+        switch ($resource) {
+            case 'composition': return $this->fetchComposition($sampleId, $ownerPkey);
+            case 'parameters':  return $this->fetchParameters($sampleId, $ownerPkey);
+            case 'documents':   return $this->fetchDocuments($sampleId, $ownerPkey);
+        }
+        return array();
+    }
 }

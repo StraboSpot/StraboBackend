@@ -2,8 +2,8 @@
 /**
  * File: SampleController.php
  * Description: /samplesdb/sample/{id}[/sub-resource[/...]] — CRUD on a
- *              single sample plus the §8.2 collaboration and §8.3
- *              parent/child sub-resources.
+ *              single sample plus the §8.2 collaboration, §8.3
+ *              parent/child, and §8.4 sub-array sub-resources.
  *
  *              Sub-resource routing dispatches on $request->url_elements[3]:
  *                empty            — CRUD on the sample itself
@@ -12,6 +12,9 @@
  *                collaboration/{accept|deny} — accept / deny (POST)
  *                parent           — get (GET) / set (PUT) / clear (DELETE)
  *                children         — list (GET)
+ *                composition      — list (GET) / full-replace (PUT)
+ *                parameters       — list (GET) / full-replace (PUT)
+ *                documents        — list (GET) / full-replace (PUT)
  *
  *              URL conventions (per design §8.1, §8.2, §8.3):
  *                GET    /samplesdb/sample/{id}                              read sample
@@ -29,6 +32,8 @@
  *                PUT    /samplesdb/sample/{id}/parent               body: { parent_sample_id, parent_userpkey }
  *                DELETE /samplesdb/sample/{id}/parent                       clear parent
  *                GET    /samplesdb/sample/{id}/children                     list children (light spine)
+ *                GET    /samplesdb/sample/{id}/{composition|parameters|documents}        list rows
+ *                PUT    /samplesdb/sample/{id}/{composition|parameters|documents} body: { items: [...] }  full-replace
  *
  *              Returning 404 for "not found" and "no access" is intentional
  *              (defensive — doesn't leak existence of other users' samples).
@@ -84,6 +89,17 @@ class SampleController extends MyController
                     return $this->notFound("Sample not found.");
                 }
                 return $children;
+
+            case 'composition':
+            case 'parameters':
+            case 'documents':
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                $method = 'list' . ucfirst($sub);
+                $result = $this->svc->$method($id, $effectiveOwner);
+                if ($result === null) {
+                    return $this->notFound("Sample not found.");
+                }
+                return $result;
 
             default:
                 return $this->badRequest($sub . " not supported.");
@@ -172,6 +188,20 @@ class SampleController extends MyController
                 $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
                 return $this->handleMutationResult(
                     $this->svc->setParent($id, $effectiveOwner, $parentSampleId, $parentUserpkey)
+                );
+
+            case 'composition':
+            case 'parameters':
+            case 'documents':
+                $items = isset($params['items']) ? $params['items'] : null;
+                if (!is_array($items)) {
+                    return $this->badRequest("Missing or invalid 'items' array in body.");
+                }
+                $ownerPkey = $this->extractOwnerParam($request);
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                $method = 'replace' . ucfirst($sub);
+                return $this->handleMutationResult(
+                    $this->svc->$method($id, $effectiveOwner, $items)
                 );
 
             default:
@@ -279,6 +309,7 @@ class SampleController extends MyController
             case 'no_writable_fields':
             case 'parent_pair_required':
             case 'already_accepted':
+            case 'missing_required_field':
                 header("Bad Request", true, 400);
                 break;
             case 'duplicate_id':
