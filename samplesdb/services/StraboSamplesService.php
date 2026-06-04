@@ -767,4 +767,284 @@ class StraboSamplesService
         }
         return $inserted;
     }
+
+    // ============================================================
+    // Write operations (design §8.1)
+    //
+    // Hard delete is the chosen semantic for v1 (§16 item 5 was open;
+    // resolving here). DELETE removes the row; CASCADE on the child FKs
+    // wipes children/collabs/links/changelog with it. Soft delete can be
+    // added later via a `deleted_at` column without breaking these
+    // endpoints (callers just keep using DELETE).
+    // ============================================================
+
+    /**
+     * Fields a client can write via createSample / updateSample. Each field
+     * maps to a column in strabosamples.samples. id and userpkey are
+     * managed by the service (PK is the caller for direct creates;
+     * read-only on update). parent_sample_id / parent_userpkey are managed
+     * via the /sample/{id}/parent sub-resource (samples/api-parent).
+     */
+    private static $WRITABLE_SPINE_FIELDS = array(
+        'name', 'igsn', 'description', 'notes',
+        'latitude', 'longitude',
+        'display_sample_type', 'display_sample_purpose',
+    );
+    private static $WRITABLE_JSONB_FIELDS = array(
+        'field_data', 'micro_data', 'experimental_data',
+    );
+
+    /**
+     * Create a new sample owned by the caller. The id may be supplied
+     * (legacy/grandfathered case) or minted (v4 UUID). userpkey is always
+     * the caller — direct API creation makes the caller both owner and
+     * creator.
+     *
+     * @param array $input  See $WRITABLE_SPINE_FIELDS + $WRITABLE_JSONB_FIELDS.
+     *                      May also include 'id', 'parent_sample_id',
+     *                      'parent_userpkey'.
+     * @return array ['ok' => true, 'sample' => assembled] on success;
+     *               ['ok' => false, 'error' => code] on failure.
+     */
+    public function createSample(array $input)
+    {
+        if ($this->userpkey === null || $this->userpkey <= 0) {
+            return array('ok' => false, 'error' => 'not_authenticated');
+        }
+
+        $id = isset($input['id']) && $input['id'] !== '' ? (string)$input['id'] : UUID::v4();
+        $ownerPkey = (int)$this->userpkey;
+
+        // PK collision guard.
+        $exists = $this->db->get_var_prepared(
+            "SELECT 1 FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+            array($id, $ownerPkey)
+        );
+        if ($exists) {
+            return array('ok' => false, 'error' => 'duplicate_id');
+        }
+
+        // Parent validation (both-or-neither; caller must have read access).
+        $parentSampleId = isset($input['parent_sample_id']) && $input['parent_sample_id'] !== '' ? (string)$input['parent_sample_id'] : null;
+        $parentUserpkey = isset($input['parent_userpkey']) && $input['parent_userpkey'] !== '' ? (int)$input['parent_userpkey'] : null;
+        if (($parentSampleId === null) !== ($parentUserpkey === null)) {
+            return array('ok' => false, 'error' => 'parent_pair_required');
+        }
+        if ($parentSampleId !== null) {
+            if (!$this->canRead($parentSampleId, $parentUserpkey)) {
+                return array('ok' => false, 'error' => 'parent_not_accessible');
+            }
+        }
+
+        // Build column + value lists.
+        $cols   = array('id', 'userpkey', 'created_by', 'modified_by');
+        $params = array($id, $ownerPkey, $ownerPkey, $ownerPkey);
+        $idx    = 5;
+        $placeholders = array('$1', '$2', '$3', '$4');
+
+        foreach (self::$WRITABLE_SPINE_FIELDS as $f) {
+            if (array_key_exists($f, $input)) {
+                $cols[]         = $f;
+                $params[]       = $input[$f];
+                $placeholders[] = '$' . $idx++;
+            }
+        }
+        foreach (self::$WRITABLE_JSONB_FIELDS as $f) {
+            if (array_key_exists($f, $input)) {
+                $cols[]         = $f;
+                $params[]       = $this->encodeJsonOrNull($input[$f]);
+                $placeholders[] = '$' . $idx++;
+            }
+        }
+        if ($parentSampleId !== null) {
+            $cols[]   = 'parent_sample_id';   $params[] = $parentSampleId;
+            $placeholders[] = '$' . $idx++;
+            $cols[]   = 'parent_userpkey';    $params[] = $parentUserpkey;
+            $placeholders[] = '$' . $idx++;
+        }
+
+        $sql = "INSERT INTO strabosamples.samples (" . implode(', ', $cols) . ")
+                VALUES (" . implode(', ', $placeholders) . ")";
+        $this->db->prepare_query($sql, $params);
+
+        // Changelog
+        $initial = array();
+        foreach (self::$WRITABLE_SPINE_FIELDS as $f) {
+            if (array_key_exists($f, $input)) {
+                $initial[$f] = $input[$f];
+            }
+        }
+        foreach (self::$WRITABLE_JSONB_FIELDS as $f) {
+            if (array_key_exists($f, $input)) {
+                $initial[$f] = $input[$f];
+            }
+        }
+        if ($parentSampleId !== null) {
+            $initial['parent_sample_id'] = $parentSampleId;
+            $initial['parent_userpkey']  = $parentUserpkey;
+        }
+        $this->logChange($id, $ownerPkey, 'create', array('created' => $initial));
+
+        return array('ok' => true, 'sample' => $this->getSample($id, $ownerPkey));
+    }
+
+    /**
+     * Update a sample's spine and/or per-subsystem JSONB. Partial update —
+     * only fields present in $input are touched. Permission gate: caller
+     * must have canEdit (owner or accepted edit collaborator).
+     *
+     * Field-linked samples reject latitude/longitude updates with
+     * 'field_link_read_only' per design §6.1 (lat/lng is spot geometry,
+     * owned by Neo4j). Until samples/field-integration wires up the
+     * writeback, the safest behavior is to refuse those changes
+     * rather than let strabosamples and Neo4j drift.
+     */
+    public function updateSample($id, $ownerPkey, array $input)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        $ctx = $this->auth->getSampleContext($this->userpkey, $id, $ownerPkey);
+        if (!$ctx->exists) {
+            return array('ok' => false, 'error' => 'not_found');
+        }
+        if (!$ctx->canEdit()) {
+            return array('ok' => false, 'error' => 'forbidden');
+        }
+
+        // Filter to writable fields actually present.
+        $spineUpdates = array();
+        foreach (self::$WRITABLE_SPINE_FIELDS as $f) {
+            if (array_key_exists($f, $input)) {
+                $spineUpdates[$f] = $input[$f];
+            }
+        }
+        $jsonbUpdates = array();
+        foreach (self::$WRITABLE_JSONB_FIELDS as $f) {
+            if (array_key_exists($f, $input)) {
+                $jsonbUpdates[$f] = $input[$f];
+            }
+        }
+        if (empty($spineUpdates) && empty($jsonbUpdates)) {
+            return array('ok' => false, 'error' => 'no_writable_fields');
+        }
+
+        // Field-link lat/lng read-only guard.
+        if (array_key_exists('latitude', $spineUpdates) || array_key_exists('longitude', $spineUpdates)) {
+            $hasFieldLink = $this->db->get_var_prepared(
+                "SELECT 1 FROM strabosamples.sample_subsystem_links
+                  WHERE sample_id=$1 AND sample_userpkey=$2 AND subsystem='field' LIMIT 1",
+                array($id, $ownerPkey)
+            );
+            if ($hasFieldLink) {
+                return array('ok' => false, 'error' => 'field_link_read_only');
+            }
+        }
+
+        // Capture old values for changelog (only the fields we're about to change).
+        $oldValuesNeeded = array_merge(array_keys($spineUpdates), array_keys($jsonbUpdates));
+        $oldRow = $this->db->get_row_prepared(
+            "SELECT " . implode(', ', $oldValuesNeeded) . "
+               FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+            array($id, $ownerPkey)
+        );
+
+        // Build SET clause.
+        $setParts = array();
+        $params   = array();
+        $idx      = 1;
+        foreach ($spineUpdates as $f => $v) {
+            $setParts[] = "$f = \$$idx";  $params[] = $v;  $idx++;
+        }
+        foreach ($jsonbUpdates as $f => $v) {
+            $setParts[] = "$f = \$$idx";  $params[] = $this->encodeJsonOrNull($v);  $idx++;
+        }
+        $setParts[] = "modified_at = now()";
+        $setParts[] = "modified_by = \$$idx";  $params[] = $this->userpkey;  $idx++;
+
+        $whereId        = '$' . $idx++;
+        $whereUserpkey  = '$' . $idx++;
+        $params[] = $id;
+        $params[] = $ownerPkey;
+
+        $sql = "UPDATE strabosamples.samples
+                   SET " . implode(', ', $setParts) . "
+                 WHERE id=$whereId AND userpkey=$whereUserpkey";
+        $this->db->prepare_query($sql, $params);
+
+        // Build changelog diff.
+        $changes = array();
+        foreach ($spineUpdates as $f => $v) {
+            $old = ($oldRow !== null && isset($oldRow->$f)) ? $oldRow->$f : null;
+            if ($old !== $v) {
+                $changes[$f] = array('old' => $old, 'new' => $v);
+            }
+        }
+        foreach ($jsonbUpdates as $f => $v) {
+            // JSONB diffs would be noisy; log presence + new value only.
+            $changes[$f] = array('updated' => true);
+        }
+        if (!empty($changes)) {
+            $this->logChange($id, $ownerPkey, 'update', $changes);
+        }
+
+        return array('ok' => true, 'sample' => $this->getSample($id, $ownerPkey));
+    }
+
+    /**
+     * Hard-delete a sample. Owner-only. Cascades children/collabs/links/
+     * changelog/composition/parameters/documents via FK CASCADE.
+     *
+     * Note: the changelog row for the delete itself would be cascade-
+     * deleted in the same transaction, so it's not appended. Audit of the
+     * deletion is delegated to higher-level operational logging.
+     */
+    public function deleteSample($id, $ownerPkey)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        $ctx = $this->auth->getSampleContext($this->userpkey, $id, $ownerPkey);
+        if (!$ctx->exists) {
+            return array('ok' => false, 'error' => 'not_found');
+        }
+        if (!$ctx->canManage()) {
+            return array('ok' => false, 'error' => 'forbidden');
+        }
+        $this->db->prepare_query(
+            "DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+            array($id, $ownerPkey)
+        );
+        return array('ok' => true);
+    }
+
+    /**
+     * Append a row to strabosamples.sample_changelog. Source subsystem is
+     * always 'samples_api' when invoked through the StraboSamples API path.
+     * Subsystem integration sub-branches will call this with their own
+     * 'field' / 'micro' / 'experimental' source labels.
+     */
+    protected function logChange($sampleId, $ownerPkey, $changeType, $changes, $sourceSubsystem = 'samples_api')
+    {
+        $this->db->prepare_query(
+            "INSERT INTO strabosamples.sample_changelog
+               (sample_id, sample_userpkey, changed_by, change_type, source_subsystem, changes)
+             VALUES ($1, $2, $3, $4, $5, $6)",
+            array(
+                $sampleId,
+                (int)$ownerPkey,
+                (int)$this->userpkey,
+                $changeType,
+                $sourceSubsystem,
+                $changes === null ? null : json_encode($changes),
+            )
+        );
+    }
+
+    protected function encodeJsonOrNull($val)
+    {
+        if ($val === null) return null;
+        if (is_string($val)) {
+            // Caller already encoded — trust it. (Lets clients pass already-
+            // serialized JSONB when convenient.)
+            return $val;
+        }
+        return json_encode($val);
+    }
 }

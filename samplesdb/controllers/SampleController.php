@@ -74,8 +74,8 @@ class SampleController extends MyController
 
         if ($sub === '' && $id === null) {
             // POST /samplesdb/sample — create
-            header("Not Implemented", true, 501);
-            return array("Error" => "POST /samplesdb/sample not yet implemented.");
+            $input = (array)$request->parameters;
+            return $this->handleMutationResult($this->svc->createSample($input));
         }
 
         if ($id === null) {
@@ -123,8 +123,13 @@ class SampleController extends MyController
 
         switch ($sub) {
             case '':
-                header("Not Implemented", true, 501);
-                return array("Error" => "PUT /samplesdb/sample/{id} not yet implemented.");
+                // Filter URL-level keys out of the input payload.
+                unset($params['owner'], $params['apiformat']);
+                $ownerPkey = $this->extractOwnerParam($request);
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                return $this->handleMutationResult(
+                    $this->svc->updateSample($id, $effectiveOwner, $params)
+                );
 
             case 'collaborator':
                 $pkey  = isset($request->url_elements[4]) ? (int)$request->url_elements[4] : 0;
@@ -152,8 +157,11 @@ class SampleController extends MyController
 
         switch ($sub) {
             case '':
-                header("Not Implemented", true, 501);
-                return array("Error" => "DELETE /samplesdb/sample/{id} not yet implemented.");
+                $ownerPkey = $this->extractOwnerParam($request);
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                return $this->handleMutationResult(
+                    $this->svc->deleteSample($id, $effectiveOwner)
+                );
 
             case 'collaborator':
                 $pkey = isset($request->url_elements[4]) ? (int)$request->url_elements[4] : 0;
@@ -218,17 +226,25 @@ class SampleController extends MyController
             case 'not_found':
             case 'grant_not_found':
             case 'invitation_not_found':
+            case 'parent_not_accessible':
                 header("Not Found", true, 404);
                 break;
             case 'forbidden':
                 header("Forbidden", true, 403);
                 break;
+            case 'not_authenticated':
+                header("Unauthorized", true, 401);
+                break;
             case 'invalid_permission_level':
             case 'no_emails':
+            case 'no_writable_fields':
+            case 'parent_pair_required':
             case 'already_accepted':
                 header("Bad Request", true, 400);
                 break;
+            case 'duplicate_id':
             case 'duplicate_id_conflict':
+            case 'field_link_read_only':
                 header("Conflict", true, 409);
                 break;
             default:
