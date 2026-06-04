@@ -394,9 +394,11 @@ include("includes/mheader.php");
     margin-bottom: 0.6em;
 }
 .sd-link-card-head .sd-link-icon {
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
     opacity: 0.9;
+    object-fit: contain;
+    vertical-align: middle;
 }
 .sd-link-card-head .sd-view-btn { margin-left: auto; }
 .sd-link-fields {
@@ -531,13 +533,13 @@ include("includes/mheader.php");
         return s;
     }
     function subsystemIcon(s) {
-        if (s === 'field') {
-            return '<svg class="sd-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 19l14-14M5 19h6M5 19v-6"/></svg>';
-        }
-        if (s === 'micro') {
-            return '<svg class="sd-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/></svg>';
-        }
-        return '<svg class="sd-link-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3h6M10 3v6L6 18a3 3 0 0 0 3 4h6a3 3 0 0 0 3-4l-4-9V3"/></svg>';
+        // Canonical subsystem icons used across the site (also in
+        // /fullsearch as .pickaxe-image / .microscope-image / .beaker-image).
+        var src = s === 'field' ? '/fullsearch/images/pickaxe.png'
+                : s === 'micro' ? '/fullsearch/images/microscope.png'
+                :                 '/fullsearch/images/beaker.png';
+        var alt = subsystemLabel(s);
+        return '<img class="sd-link-icon" src="' + src + '" alt="' + alt + '">';
     }
 
     function viewSampleHref(node) {
