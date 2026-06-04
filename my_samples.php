@@ -357,6 +357,35 @@ include("includes/mheader.php");
         return !(s.parent_sample_id && s.parent_userpkey && visibleKey.has(s.parent_sample_id + '|' + s.parent_userpkey));
     });
 
+    // Scroll-position restore: when the user returns from a sample
+    // detail page (browser back OR explicit Back link), put them back
+    // at the same scroll position. We save on `pagehide` (fires on any
+    // navigation away, including bfcache transitions) and restore on
+    // load, gated by document.referrer pointing at /samples/{owner}/{id}
+    // so unrelated navigations to MySamples don't scroll-jump from a
+    // stale value. The sessionStorage entry is always cleared after the
+    // read so subsequent visits start fresh.
+    var pendingScroll = null;
+    try {
+        var stored = sessionStorage.getItem('my_samples_scroll');
+        if (stored !== null) {
+            sessionStorage.removeItem('my_samples_scroll');
+            var ref = document.referrer || '';
+            if (ref) {
+                var refUrl = new URL(ref, window.location.origin);
+                if (refUrl.origin === window.location.origin
+                    && /^\/samples\/[^/]+\/[^/]+\/?$/.test(refUrl.pathname)) {
+                    var n = parseInt(stored, 10);
+                    if (!isNaN(n)) pendingScroll = n;
+                }
+            }
+        }
+    } catch (_) { /* sessionStorage may be unavailable; degrade gracefully */ }
+
+    window.addEventListener('pagehide', function() {
+        try { sessionStorage.setItem('my_samples_scroll', String(window.scrollY)); } catch (_) {}
+    });
+
     // Read initial state from URL params so the page restores correctly
     // when the user navigates back from a sample detail page. Defaults
     // apply when params are absent.
@@ -567,6 +596,15 @@ include("includes/mheader.php");
     });
 
     render();
+
+    // Apply the pending scroll position AFTER the initial render so the
+    // cards are in the DOM before we ask the browser to scroll. Defer to
+    // the next animation frame for layout to settle.
+    if (pendingScroll !== null) {
+        requestAnimationFrame(function() {
+            window.scrollTo(0, pendingScroll);
+        });
+    }
 })();
 </script>
 
