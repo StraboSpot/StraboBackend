@@ -83,7 +83,10 @@ class DatasetSingleSpotController extends MyController
 
 					$injson = json_encode($upload,JSON_PRETTY_PRINT);
 
+					$projectStraboIdForSync = $this->strabo->getProjectId($feature_id);
+					$this->strabo->setSampleSyncContext($projectStraboIdForSync, $feature_id);
 					$thisdata = $this->strabo->insertSpot($injson, null, "", $originalUploader);
+					$this->strabo->clearSampleSyncContext();
 
 					$parts = $thisdata->properties->self;
 

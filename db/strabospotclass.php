@@ -24,9 +24,25 @@ class StraboSpot
 	 public function setuserpkey($userpkey){
 		 $this->userpkey=$userpkey;
 	 }
-	 
+
 	 public function getuserpkey(){
 		 return $this->userpkey;
+	 }
+
+	 /**
+	  * Inject project/dataset context for the strabosamples mirror hook
+	  * inside insertSpot / deleteSingleSpot. Bulk controllers should call
+	  * this before their spot loops so auto-seed collaborators and link
+	  * metadata get populated on first write. Single-spot edit paths can
+	  * skip it — insertSpot falls back to a Cypher lookup.
+	  */
+	 public function setSampleSyncContext($projectStraboId, $datasetStraboId){
+		 $this->currentProjectStraboId = $projectStraboId !== null && $projectStraboId !== '' ? (string)$projectStraboId : null;
+		 $this->currentDatasetStraboId = $datasetStraboId !== null && $datasetStraboId !== '' ? (string)$datasetStraboId : null;
+	 }
+	 public function clearSampleSyncContext(){
+		 $this->currentProjectStraboId = null;
+		 $this->currentDatasetStraboId = null;
 	 }
 
 	 public function settesting($testing){
@@ -197,7 +213,12 @@ class StraboSpot
 		}else{
 			$userpkey = $this->userpkey;
 		}
-		
+
+		// Mirror sample removal into strabosamples.* BEFORE the Neo4j delete
+		// so we can still read json_samples + isSample (samples/field-integration).
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_spot($this->db, $this->neodb, $id, $userpkey);
+
 		$this->neodb->query("MATCH (s:Spot {id: $id,userpkey:$userpkey})-[*0..]->(downstreamNode) DETACH DELETE s, downstreamNode");
 		
 		/*
@@ -753,6 +774,16 @@ class StraboSpot
 
 			$upload->properties->id=$thisid;
 
+			// Mirror sample writes into strabosamples.* (samples/field-integration).
+			// Helper handles rich/legacy detection, stub-skipping, and idempotent upsert.
+			require_once __DIR__ . '/lib/sample_sync.php';
+			field_sample_sync_spot(
+				$this->db, $this->neodb,
+				$upload->properties, $thisid, $newspot['userpkey'],
+				isset($this->currentProjectStraboId) ? $this->currentProjectStraboId : null,
+				isset($this->currentDatasetStraboId) ? $this->currentDatasetStraboId : null
+			);
+
 			$data=$upload;
 
 		}elseif($dbaction=="update"){
@@ -849,6 +880,15 @@ class StraboSpot
 
 					$upload->properties->self="https://strabospot.org/db/feature/$thisid";
 					$data=$upload;
+
+					// Mirror sample writes into strabosamples.* (samples/field-integration).
+					require_once __DIR__ . '/lib/sample_sync.php';
+					field_sample_sync_spot(
+						$this->db, $this->neodb,
+						$upload->properties, $thisid, $newspot['userpkey'],
+						isset($this->currentProjectStraboId) ? $this->currentProjectStraboId : null,
+						isset($this->currentDatasetStraboId) ? $this->currentDatasetStraboId : null
+					);
 
 				}
 
@@ -5219,6 +5259,8 @@ public function getSpotName($id){
 
 					$this->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
 
+					$this->setSampleSyncContext($projectid, $datasetid);
+
 					//loop over spots and put in images first, then spot
 					foreach($spots as $spot){
 
@@ -5255,6 +5297,8 @@ public function getSpotName($id){
 						$this->addSpotToDataset($datasetid,$spotid);
 
 					}
+
+					$this->clearSampleSyncContext();
 
 					//$this->buildDatasetRelationships($datasetid); 20251205
 					$this->setDatasetCenter($datasetid);
