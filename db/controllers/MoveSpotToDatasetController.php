@@ -238,6 +238,11 @@ class MoveSpotToDatasetController extends MyController
 						//this turns pixel coordinates into real-world coordinates so we can do spatial searches
 						$features=$this->strabo->fixIncomingBasemaps($features);
 
+						// Resolve project context for the strabosamples mirror hook
+						// (samples/field-integration).
+						$projectStraboIdForSync = $this->strabo->getProjectId($feature_id);
+						$this->strabo->setSampleSyncContext($projectStraboIdForSync, $feature_id);
+
 						foreach($features as $feature){
 
 							$spotid = $feature->properties->id;
@@ -272,6 +277,7 @@ class MoveSpotToDatasetController extends MyController
 							}
 
 						}
+						$this->strabo->clearSampleSyncContext();
 
 						//now look on server to see if any spots need to be deleted
 						$serverspots = $this->strabo->getDatasetSpotIds($feature_id);
