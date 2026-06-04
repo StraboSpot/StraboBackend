@@ -698,13 +698,17 @@ include("includes/mheader.php");
         var label = subsystemLabel(link.subsystem);
         var viewHref = '#';
         var viewText = 'View ' + label;
-        // Best-effort deep links into existing subsystem pages.
+        // Deep links into the existing subsystem pages. The metadata keys
+        // are whatever the sample_sync layer recorded at upsert time —
+        // see {db,microdb,experimental}/lib/sample_sync.php for the
+        // canonical shapes. If a metadata key is missing the link falls
+        // back to '#' rather than producing a broken URL.
         if (link.subsystem === 'field' && meta.dataset_id) {
             viewHref = '/StraboFieldDatasetDetail/?dataset_id=' + encodeURIComponent(meta.dataset_id);
-        } else if (link.subsystem === 'micro' && meta.project_id) {
-            viewHref = '/microproject?id=' + encodeURIComponent(meta.project_id);
-        } else if (link.subsystem === 'experimental' && meta.experiment_pkey) {
-            viewHref = '/experimental/view_experiment.php?pkey=' + encodeURIComponent(meta.experiment_pkey);
+        } else if (link.subsystem === 'micro' && meta.project_strabo_id) {
+            viewHref = '/mpl/' + encodeURIComponent(meta.project_strabo_id);
+        } else if (link.subsystem === 'experimental' && meta.experiment_uuid) {
+            viewHref = '/experimental/overview_experiment.php?u=' + encodeURIComponent(meta.experiment_uuid);
         }
 
         var fieldsHtml = '';
