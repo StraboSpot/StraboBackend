@@ -1430,4 +1430,77 @@ class StraboSamplesService
         }
         return array();
     }
+
+    // ============================================================
+    // Changelog (design §8.5, §16 item 3)
+    //
+    // Resolves §16 item 3 pagination defaults: limit defaults to 50,
+    // clamped to [1, 500]; offset defaults to 0 (no negative). Ordering
+    // is newest first (changed_at DESC, pkey DESC as a tiebreaker for
+    // same-timestamp writes within a single second). Revisitable when
+    // a UI consumer's actual scroll patterns are known.
+    // ============================================================
+
+    const CHANGELOG_DEFAULT_LIMIT = 50;
+    const CHANGELOG_MAX_LIMIT     = 500;
+
+    /**
+     * Paginated changelog for one sample. canRead gate — collaborators
+     * (edit or readonly) see the same audit history the owner does.
+     *
+     * @return array|null  null on no read access / not found.
+     *                     Otherwise: {changelog: [...], count, total, limit, offset}
+     */
+    public function listChangelog($sampleId, $ownerPkey, $limit = null, $offset = null)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        if (!$this->canRead($sampleId, $ownerPkey)) {
+            return null;
+        }
+
+        // Sanitize pagination.
+        $limit  = (int)($limit  ?? self::CHANGELOG_DEFAULT_LIMIT);
+        $offset = (int)($offset ?? 0);
+        if ($limit  < 1)                              $limit  = self::CHANGELOG_DEFAULT_LIMIT;
+        if ($limit  > self::CHANGELOG_MAX_LIMIT)      $limit  = self::CHANGELOG_MAX_LIMIT;
+        if ($offset < 0)                              $offset = 0;
+
+        $total = (int)$this->db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.sample_changelog
+              WHERE sample_id=$1 AND sample_userpkey=$2",
+            array($sampleId, $ownerPkey)
+        );
+
+        $rows = $this->db->get_results_prepared(
+            "SELECT pkey, changed_by, changed_at, change_type, source_subsystem,
+                    changes::text AS changes_text
+               FROM strabosamples.sample_changelog
+              WHERE sample_id=$1 AND sample_userpkey=$2
+              ORDER BY changed_at DESC, pkey DESC
+              LIMIT $3 OFFSET $4",
+            array($sampleId, $ownerPkey, $limit, $offset)
+        );
+
+        $out = array();
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                $out[] = array(
+                    'pkey'             => (int)$r->pkey,
+                    'changed_by'       => (int)$r->changed_by,
+                    'changed_at'       => $r->changed_at,
+                    'change_type'      => $r->change_type,
+                    'source_subsystem' => $r->source_subsystem,
+                    'changes'          => $r->changes_text === null ? null : json_decode($r->changes_text, true),
+                );
+            }
+        }
+
+        return array(
+            'changelog' => $out,
+            'count'     => count($out),
+            'total'     => $total,
+            'limit'     => $limit,
+            'offset'    => $offset,
+        );
+    }
 }
