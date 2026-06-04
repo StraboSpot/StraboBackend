@@ -345,6 +345,18 @@ include("includes/mheader.php");
     text-align: center;
     margin-bottom: 1em;
 }
+.sd-back-link {
+    display: block;
+    text-align: left;
+    margin: 0 0 0.4em 0;
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.9em;
+    text-decoration: none;
+}
+.sd-back-link:hover {
+    color: #e44c65;
+    text-decoration: none;
+}
 .sd-header h1 {
     color: #ffffff;
     margin-bottom: 0.5em;
@@ -571,6 +583,7 @@ include("includes/mheader.php");
         </div>
 <?php else: ?>
         <div class="sd-wrap">
+            <a class="sd-back-link" id="sd-back-link" href="/my_samples.php">← Back to My Samples</a>
             <div class="sd-header">
                 <h1 id="sd-title"></h1>
             </div>
@@ -664,6 +677,25 @@ include("includes/mheader.php");
     function viewSampleHref(node) {
         return '/samples/' + encodeURIComponent(node.userpkey) + '/' + encodeURIComponent(node.id);
     }
+
+    // ---- Back-to-MySamples link ----
+    // If the viewer came from /my_samples.php (with any query state),
+    // point the explicit Back link at that exact URL so filter/sort/
+    // search are preserved. Otherwise leave the default. The browser
+    // back button already restores state correctly via MySamples's
+    // history.replaceState-driven URL sync; this is for users who don't
+    // reach for the browser back.
+    (function() {
+        try {
+            var ref = document.referrer || '';
+            if (ref) {
+                var u = new URL(ref, window.location.origin);
+                if (u.origin === window.location.origin && u.pathname === '/my_samples.php') {
+                    document.getElementById('sd-back-link').href = u.pathname + u.search + u.hash;
+                }
+            }
+        } catch (_) { /* leave default */ }
+    })();
 
     // ---- Header + metadata block ----
     document.getElementById('sd-title').textContent = 'Sample: ' + (sample.name || sample.id);
