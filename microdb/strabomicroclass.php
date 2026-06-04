@@ -2207,6 +2207,24 @@ class StraboMicro
 
 						$this->db->query($query);
 
+						// Mirror into strabosamples.* via the unified sync helper
+						// (samples/micro-integration). Auto-seeds project
+						// collaborators on first creation per §7.3.1. Bridge id
+						// is the sample's strabo_id ($thissamplemetadata->id).
+						require_once __DIR__ . '/lib/sample_sync.php';
+						$thisMicrographCount = (is_array($thissamplemetadata->micrographs ?? null) || (is_object($thissamplemetadata->micrographs ?? null)))
+							? count((array)$thissamplemetadata->micrographs)
+							: 0;
+						micro_sample_sync(
+							$this->db,
+							$thissamplemetadata,
+							(string)$thisprojectmetadata->id,
+							(int)$project_metadata_id,
+							(int)$userpkey,
+							(int)$datasetmetadata_id,
+							$thisMicrographCount
+						);
+
 						if($thissamplemetadata->micrographs != ""){
 
 							foreach($thissamplemetadata->micrographs as $thismicrographmetadata){
@@ -4853,6 +4871,12 @@ class StraboMicro
 		$pkey = $this->db->get_var("select id from micro_projectmetadata where strabo_id='$projectid' and userpkey=$this->userpkey");
 
 		if($pkey != ""){
+			// Mirror sample removals into strabosamples.* BEFORE the cascade
+			// DELETE runs against the source tables — once those rows are
+			// gone, we can no longer resolve the strabo_ids.
+			require_once __DIR__ . '/lib/sample_sync.php';
+			micro_sample_sync_remove_project($this->db, $projectid, (int)$this->userpkey);
+
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey);
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey.".zip");
 
