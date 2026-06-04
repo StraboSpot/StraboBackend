@@ -357,12 +357,41 @@ include("includes/mheader.php");
         return !(s.parent_sample_id && s.parent_userpkey && visibleKey.has(s.parent_sample_id + '|' + s.parent_userpkey));
     });
 
+    // Read initial state from URL params so the page restores correctly
+    // when the user navigates back from a sample detail page. Defaults
+    // apply when params are absent.
+    var urlParams = new URLSearchParams(window.location.search);
+    var validSorts = {modified_desc: 1, modified_asc: 1, purpose: 1, type: 1, id_asc: 1};
+    var validTypes = {all: 1, field: 1, micro: 1, experimental: 1};
+    var initialSort = urlParams.get('sort');
+    var initialType = urlParams.get('type');
     var state = {
-        type:   'all',
-        sort:   'modified_desc',
-        search: '',
+        type:   (initialType && validTypes[initialType]) ? initialType : 'all',
+        sort:   (initialSort && validSorts[initialSort]) ? initialSort : 'modified_desc',
+        search: urlParams.get('search') || '',
         expanded: {},  // key → bool
     };
+
+    // Reflect URL-derived state into the controls before first render so
+    // the inputs/dropdowns/tabs match what the user is seeing.
+    document.getElementById('ms-search').value = state.search;
+    document.getElementById('ms-sort').value = state.sort;
+    document.querySelectorAll('.ms-tab').forEach(function(b) {
+        b.classList.toggle('active', b.getAttribute('data-type') === state.type);
+    });
+
+    // Mirror current state into the URL via replaceState — we don't want
+    // every keystroke to add a back-stack entry, just to keep the URL in
+    // sync so browser back from a detail page restores the view.
+    function syncUrl() {
+        var p = new URLSearchParams();
+        if (state.search)                              p.set('search', state.search);
+        if (state.sort && state.sort !== 'modified_desc') p.set('sort', state.sort);
+        if (state.type && state.type !== 'all')        p.set('type', state.type);
+        var qs = p.toString();
+        var newUrl = window.location.pathname + (qs ? '?' + qs : '');
+        history.replaceState({}, '', newUrl);
+    }
 
     var $cards   = document.getElementById('ms-cards');
     var $count   = document.getElementById('ms-result-count');
@@ -505,19 +534,23 @@ include("includes/mheader.php");
         $cards.innerHTML = filtered.map(function(s) { return renderCard(s, q); }).join('');
     }
 
-    // Event wiring.
+    // Event wiring. Every state-changing handler also syncs URL so a
+    // subsequent navigate-away → browser-back lands on the same view.
     $search.addEventListener('input', function(e) {
         state.search = e.target.value;
+        syncUrl();
         render();
     });
     $sort.addEventListener('change', function(e) {
         state.sort = e.target.value;
+        syncUrl();
         render();
     });
     $tabs.forEach(function(btn) {
         btn.addEventListener('click', function() {
             state.type = btn.getAttribute('data-type');
             $tabs.forEach(function(b) { b.classList.toggle('active', b === btn); });
+            syncUrl();
             render();
         });
     });
