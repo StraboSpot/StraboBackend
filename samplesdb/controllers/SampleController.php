@@ -15,6 +15,7 @@
  *                composition      — list (GET) / full-replace (PUT)
  *                parameters       — list (GET) / full-replace (PUT)
  *                documents        — list (GET) / full-replace (PUT)
+ *                changelog        — paginated audit log (GET)
  *
  *              URL conventions (per design §8.1, §8.2, §8.3):
  *                GET    /samplesdb/sample/{id}                              read sample
@@ -34,6 +35,7 @@
  *                GET    /samplesdb/sample/{id}/children                     list children (light spine)
  *                GET    /samplesdb/sample/{id}/{composition|parameters|documents}        list rows
  *                PUT    /samplesdb/sample/{id}/{composition|parameters|documents} body: { items: [...] }  full-replace
+ *                GET    /samplesdb/sample/{id}/changelog?limit=N&offset=M             paginated audit log
  *
  *              Returning 404 for "not found" and "no access" is intentional
  *              (defensive — doesn't leak existence of other users' samples).
@@ -96,6 +98,16 @@ class SampleController extends MyController
                 $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
                 $method = 'list' . ucfirst($sub);
                 $result = $this->svc->$method($id, $effectiveOwner);
+                if ($result === null) {
+                    return $this->notFound("Sample not found.");
+                }
+                return $result;
+
+            case 'changelog':
+                $effectiveOwner = $ownerPkey !== null ? $ownerPkey : $this->svc->getUserpkey();
+                $limit  = isset($request->parameters['limit'])  ? (int)$request->parameters['limit']  : null;
+                $offset = isset($request->parameters['offset']) ? (int)$request->parameters['offset'] : null;
+                $result = $this->svc->listChangelog($id, $effectiveOwner, $limit, $offset);
                 if ($result === null) {
                     return $this->notFound("Sample not found.");
                 }
