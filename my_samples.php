@@ -12,9 +12,12 @@
  *              filter client-side without round-trips. Mirrors the
  *              publications.php "embed and render" pattern.
  *
- *              Phase 4 scaffolding. The "New Sample" button is a stub
- *              that points at a future Sample-create modal (deferred to
- *              a follow-on sub-branch).
+ *              Phase 4. The "+ New Sample" button opens an in-page modal
+ *              that POSTs to /samples_create.php (session-authed proxy
+ *              over StraboSamplesService::createSample). On success the
+ *              new sample splices into the local list AND opens in a new
+ *              tab so the user can fill in subsystem links / parent /
+ *              etc. without losing their place in the list.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -295,6 +298,172 @@ include("includes/mheader.php");
         flex: 0 0 auto;
     }
 }
+
+/* ---- Create-sample modal ---- */
+.ms-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 9999;
+    padding: 4em 1em 2em 1em;
+    overflow-y: auto;
+}
+.ms-modal {
+    background: #1f1f2e;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 640px;
+    color: #ffffff;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+.ms-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1em 1.25em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.ms-modal-header h3 {
+    margin: 0;
+    font-size: 1.15em;
+    color: #ffffff;
+}
+.ms-modal-close {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.6em;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.3em;
+}
+.ms-modal-close:hover { color: #ffffff; }
+.ms-modal-form { padding: 1em 1.25em 1.25em 1.25em; }
+.ms-modal-form .ms-form-row { margin-bottom: 0.9em; }
+.ms-modal-form label {
+    display: block;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.9em;
+    margin-bottom: 0.3em;
+}
+.ms-required { color: #e44c65; }
+.ms-modal-form input[type="text"],
+.ms-modal-form input[type="number"],
+.ms-modal-form textarea {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #ffffff;
+    padding: 0.55em 0.7em;
+    font-size: 0.95em;
+    font-family: inherit;
+}
+.ms-modal-form input:focus,
+.ms-modal-form textarea:focus {
+    border-color: #e44c65;
+    outline: none;
+}
+.ms-modal-form textarea { resize: vertical; min-height: 4em; }
+.ms-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 1em;
+}
+.ms-parent-picker { position: relative; }
+.ms-parent-clear {
+    position: absolute;
+    right: 0.4em;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.3em;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.3em;
+}
+.ms-parent-clear:hover { color: #ffffff; }
+.ms-parent-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #2a2a3a;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 1;
+}
+.ms-parent-hit {
+    padding: 0.45em 0.7em;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.92em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.ms-parent-hit:last-child { border-bottom: none; }
+.ms-parent-hit:hover { background: rgba(228, 76, 101, 0.2); }
+.ms-parent-noresults {
+    padding: 0.5em 0.7em;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9em;
+    font-style: italic;
+}
+.ms-parent-selected {
+    margin-top: 0.4em;
+    padding: 0.4em 0.7em;
+    background: rgba(228, 76, 101, 0.15);
+    border-left: 3px solid #e44c65;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.9);
+}
+.ms-modal-error {
+    background: rgba(228, 76, 101, 0.18);
+    border-left: 3px solid #e44c65;
+    padding: 0.55em 0.8em;
+    border-radius: 3px;
+    margin: 0.4em 0 0.8em 0;
+    color: #ffffff;
+    font-size: 0.92em;
+}
+.ms-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6em;
+    margin-top: 1em;
+}
+.ms-btn-cancel, .ms-btn-submit {
+    border: none;
+    border-radius: 4px;
+    padding: 0.55em 1em;
+    font-size: 0.95em;
+    cursor: pointer;
+}
+.ms-btn-cancel {
+    background: rgba(255, 255, 255, 0.1);
+    color: rgba(255, 255, 255, 0.85);
+}
+.ms-btn-cancel:hover { background: rgba(255, 255, 255, 0.18); }
+.ms-btn-submit {
+    background: #e44c65;
+    color: #ffffff;
+}
+.ms-btn-submit:hover:not(:disabled) { background: #f06880; }
+.ms-btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+
+@media (max-width: 640px) {
+    .ms-form-grid { grid-template-columns: 1fr; }
+}
 </style>
 
 <div id="main" class="wrapper style1">
@@ -328,6 +497,66 @@ include("includes/mheader.php");
         <div id="ms-cards"></div>
 
         <div class="bottomSpacer"></div>
+    </div>
+</div>
+
+<!-- Create-sample modal. Hidden until +New Sample is clicked. Driven by JS below. -->
+<div id="ms-modal-overlay" class="ms-modal-overlay" hidden>
+    <div class="ms-modal" role="dialog" aria-modal="true" aria-labelledby="ms-modal-title">
+        <div class="ms-modal-header">
+            <h3 id="ms-modal-title">Create Sample</h3>
+            <button type="button" class="ms-modal-close" id="ms-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="ms-modal-form" class="ms-modal-form" novalidate>
+            <div class="ms-form-row">
+                <label for="ms-f-name">Name <span class="ms-required">*</span></label>
+                <input type="text" id="ms-f-name" maxlength="500" autocomplete="off">
+            </div>
+            <div class="ms-form-row">
+                <label for="ms-f-igsn">IGSN</label>
+                <input type="text" id="ms-f-igsn" maxlength="500" autocomplete="off">
+            </div>
+            <div class="ms-form-grid">
+                <div class="ms-form-row">
+                    <label for="ms-f-type">Sample Type</label>
+                    <input type="text" id="ms-f-type" maxlength="500" autocomplete="off">
+                </div>
+                <div class="ms-form-row">
+                    <label for="ms-f-purpose">Sample Purpose</label>
+                    <input type="text" id="ms-f-purpose" maxlength="500" autocomplete="off">
+                </div>
+                <div class="ms-form-row">
+                    <label for="ms-f-lat">Latitude</label>
+                    <input type="number" id="ms-f-lat" step="any" autocomplete="off">
+                </div>
+                <div class="ms-form-row">
+                    <label for="ms-f-lng">Longitude</label>
+                    <input type="number" id="ms-f-lng" step="any" autocomplete="off">
+                </div>
+            </div>
+            <div class="ms-form-row">
+                <label for="ms-f-desc">Description</label>
+                <textarea id="ms-f-desc" rows="2" maxlength="4000"></textarea>
+            </div>
+            <div class="ms-form-row">
+                <label for="ms-f-notes">Notes</label>
+                <textarea id="ms-f-notes" rows="2" maxlength="4000"></textarea>
+            </div>
+            <div class="ms-form-row">
+                <label for="ms-f-parent">Parent Sample (optional)</label>
+                <div class="ms-parent-picker">
+                    <input type="text" id="ms-f-parent" autocomplete="off" placeholder="Type to search your samples&hellip;">
+                    <button type="button" class="ms-parent-clear" id="ms-parent-clear" aria-label="Clear parent" hidden>&times;</button>
+                    <div class="ms-parent-results" id="ms-parent-results" hidden></div>
+                </div>
+                <div class="ms-parent-selected" id="ms-parent-selected" hidden></div>
+            </div>
+            <div class="ms-modal-error" id="ms-modal-error" hidden></div>
+            <div class="ms-modal-footer">
+                <button type="button" class="ms-btn-cancel" id="ms-modal-cancel">Cancel</button>
+                <button type="submit" class="ms-btn-submit" id="ms-modal-submit">Create Sample</button>
+            </div>
+        </form>
     </div>
 </div>
 
@@ -590,10 +819,261 @@ include("includes/mheader.php");
         state.expanded[key] = !state.expanded[key];
         render();
     });
-    $newBtn.addEventListener('click', function() {
-        // Sample creation UI ships in a follow-on Phase 4 sub-branch.
-        alert('Sample creation UI is on its way — for now, samples populate from Field / Micro / Experimental project uploads.');
+    $newBtn.addEventListener('click', function() { openModal(); });
+
+    // ---- Create-sample modal ----
+    var $modal         = document.getElementById('ms-modal-overlay');
+    var $modalForm     = document.getElementById('ms-modal-form');
+    var $modalClose    = document.getElementById('ms-modal-close');
+    var $modalCancel   = document.getElementById('ms-modal-cancel');
+    var $modalSubmit   = document.getElementById('ms-modal-submit');
+    var $modalError    = document.getElementById('ms-modal-error');
+    var $fName         = document.getElementById('ms-f-name');
+    var $parentInput   = document.getElementById('ms-f-parent');
+    var $parentResults = document.getElementById('ms-parent-results');
+    var $parentClear   = document.getElementById('ms-parent-clear');
+    var $parentSelected= document.getElementById('ms-parent-selected');
+
+    var selectedParent = null;  // {id, userpkey, name} or null
+    var escHandler = null;
+
+    function openModal() {
+        $modal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        setTimeout(function() { $fName.focus(); }, 0);
+        escHandler = function(e) { if (e.key === 'Escape') closeModal(); };
+        document.addEventListener('keydown', escHandler);
+    }
+
+    function closeModal() {
+        $modal.hidden = true;
+        document.body.style.overflow = '';
+        $modalForm.reset();
+        selectedParent = null;
+        $parentResults.hidden = true;
+        $parentResults.innerHTML = '';
+        $parentClear.hidden = true;
+        $parentSelected.hidden = true;
+        $parentSelected.textContent = '';
+        $modalError.hidden = true;
+        $modalError.textContent = '';
+        $modalSubmit.disabled = false;
+        $modalSubmit.textContent = 'Create Sample';
+        if (escHandler) {
+            document.removeEventListener('keydown', escHandler);
+            escHandler = null;
+        }
+    }
+
+    // Click on the overlay backdrop (not the panel) closes.
+    $modal.addEventListener('click', function(e) {
+        if (e.target === $modal) closeModal();
     });
+    $modalClose.addEventListener('click', closeModal);
+    $modalCancel.addEventListener('click', closeModal);
+
+    // Parent autocomplete: searches the rawData already on the page
+    // (which already represents the full set of samples this user can
+    // read — same visibility predicate the createSample parent_accessible
+    // check uses, so a hit here will pass server-side validation).
+    $parentInput.addEventListener('input', function(e) {
+        // Typing invalidates any prior selection.
+        selectedParent = null;
+        $parentSelected.hidden = true;
+        $parentSelected.textContent = '';
+        var v = e.target.value;
+        $parentClear.hidden = !v;
+        var q = v.trim().toLowerCase();
+        if (!q) { $parentResults.hidden = true; return; }
+        var hits = rawData.filter(function(s) {
+            var hay = ((s.name || '') + ' ' + s.id).toLowerCase();
+            return hay.indexOf(q) !== -1;
+        }).slice(0, 10);
+        if (!hits.length) {
+            $parentResults.innerHTML = '<div class="ms-parent-noresults">No matches.</div>';
+            $parentResults.hidden = false;
+            return;
+        }
+        $parentResults.innerHTML = hits.map(function(s) {
+            return '<div class="ms-parent-hit" data-id="' + escapeHtml(s.id) + '" data-uk="' + s.userpkey + '">'
+                 + '<strong>' + escapeHtml(s.name || s.id) + '</strong>'
+                 + (s.display_sample_type ? ' <span style="opacity:.7">' + escapeHtml(s.display_sample_type) + '</span>' : '')
+                 + '</div>';
+        }).join('');
+        $parentResults.hidden = false;
+    });
+    $parentResults.addEventListener('click', function(e) {
+        var hit = e.target.closest && e.target.closest('[data-id]');
+        if (!hit) return;
+        var id = hit.getAttribute('data-id');
+        var uk = parseInt(hit.getAttribute('data-uk'), 10);
+        var match = rawData.find(function(s) { return s.id === id && s.userpkey === uk; });
+        if (!match) return;
+        selectedParent = {id: id, userpkey: uk, name: match.name || id};
+        $parentInput.value = '';
+        $parentResults.hidden = true;
+        $parentResults.innerHTML = '';
+        $parentClear.hidden = false;
+        $parentSelected.textContent = 'Selected parent: ' + selectedParent.name;
+        $parentSelected.hidden = false;
+    });
+    $parentClear.addEventListener('click', function() {
+        selectedParent = null;
+        $parentInput.value = '';
+        $parentClear.hidden = true;
+        $parentResults.hidden = true;
+        $parentResults.innerHTML = '';
+        $parentSelected.hidden = true;
+        $parentSelected.textContent = '';
+    });
+    // Click outside the picker hides results.
+    document.addEventListener('click', function(e) {
+        if (!$modal || $modal.hidden) return;
+        if (!$parentResults.contains(e.target) && e.target !== $parentInput) {
+            $parentResults.hidden = true;
+        }
+    });
+
+    $modalForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        $modalError.hidden = true;
+        $modalError.textContent = '';
+
+        var name = $fName.value.trim();
+        if (!name) {
+            $modalError.textContent = 'Name is required.';
+            $modalError.hidden = false;
+            $fName.focus();
+            return;
+        }
+
+        var body = {name: name};
+        var optionalText = [
+            ['ms-f-igsn',    'igsn'],
+            ['ms-f-type',    'display_sample_type'],
+            ['ms-f-purpose', 'display_sample_purpose'],
+            ['ms-f-desc',    'description'],
+            ['ms-f-notes',   'notes'],
+        ];
+        optionalText.forEach(function(pair) {
+            var v = document.getElementById(pair[0]).value.trim();
+            if (v) body[pair[1]] = v;
+        });
+        var latRaw = document.getElementById('ms-f-lat').value.trim();
+        var lngRaw = document.getElementById('ms-f-lng').value.trim();
+        if (latRaw !== '') {
+            var lat = parseFloat(latRaw);
+            if (isNaN(lat)) {
+                $modalError.textContent = 'Latitude must be a number.';
+                $modalError.hidden = false;
+                return;
+            }
+            body.latitude = lat;
+        }
+        if (lngRaw !== '') {
+            var lng = parseFloat(lngRaw);
+            if (isNaN(lng)) {
+                $modalError.textContent = 'Longitude must be a number.';
+                $modalError.hidden = false;
+                return;
+            }
+            body.longitude = lng;
+        }
+        if (selectedParent) {
+            body.parent_sample_id = selectedParent.id;
+            body.parent_userpkey  = selectedParent.userpkey;
+        }
+
+        $modalSubmit.disabled = true;
+        $modalSubmit.textContent = 'Creating…';
+
+        fetch('/samples_create.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        }).then(function(r) {
+            return r.json().then(
+                function(j) { return {status: r.status, body: j}; },
+                function()  { return {status: r.status, body: null}; }
+            );
+        }).then(function(res) {
+            if (res.body && res.body.ok && res.body.sample) {
+                onCreateSuccess(res.body.sample);
+                return;
+            }
+            var code = res.body && res.body.error ? res.body.error : 'unknown';
+            var msg;
+            switch (code) {
+                case 'duplicate_id':
+                    msg = 'A sample with that ID already exists. Please try again.'; break;
+                case 'parent_not_accessible':
+                    msg = 'The selected parent sample is not accessible.'; break;
+                case 'parent_pair_required':
+                    msg = 'Parent selection is incomplete — clear and re-select.'; break;
+                case 'not_authenticated':
+                    msg = 'Your session has expired. Please reload the page and sign in again.'; break;
+                case 'invalid_json':
+                    msg = 'The server could not read the request. Please reload and try again.'; break;
+                default:
+                    msg = 'Could not create sample (' + code + ').';
+            }
+            $modalError.textContent = msg;
+            $modalError.hidden = false;
+            $modalSubmit.disabled = false;
+            $modalSubmit.textContent = 'Create Sample';
+        }).catch(function() {
+            $modalError.textContent = 'Network error — please try again.';
+            $modalError.hidden = false;
+            $modalSubmit.disabled = false;
+            $modalSubmit.textContent = 'Create Sample';
+        });
+    });
+
+    function onCreateSuccess(sample) {
+        // New samples have no subsystem links yet — badges all zero. We
+        // mirror only the spine fields the list renderer needs; the API's
+        // richer response (composition / subsystem_links / etc.) is
+        // already covered by the sample's own Overview page.
+        var spine = {
+            id: sample.id,
+            userpkey: sample.userpkey,
+            name: sample.name,
+            igsn: sample.igsn,
+            description: sample.description,
+            notes: sample.notes,
+            latitude: sample.latitude,
+            longitude: sample.longitude,
+            display_sample_type: sample.display_sample_type,
+            display_sample_purpose: sample.display_sample_purpose,
+            parent_sample_id: sample.parent_sample_id,
+            parent_userpkey: sample.parent_userpkey,
+            created_at: sample.created_at,
+            created_by: sample.created_by,
+            modified_at: sample.modified_at,
+            modified_by: sample.modified_by,
+            badges: {field: 0, micro: 0, experimental: 0},
+        };
+        rawData.unshift(spine);
+        visibleKey.add(spine.id + '|' + spine.userpkey);
+        if (spine.parent_sample_id && spine.parent_userpkey
+            && visibleKey.has(spine.parent_sample_id + '|' + spine.parent_userpkey)) {
+            var pk = spine.parent_sample_id + '|' + spine.parent_userpkey;
+            if (!childrenByParent[pk]) childrenByParent[pk] = [];
+            childrenByParent[pk].push(spine);
+            // Child of a visible parent — only surfaces via the parent's
+            // expand toggle, so leave topLevel alone.
+        } else {
+            topLevel.unshift(spine);
+        }
+        // Open the new sample's overview in a new tab. The MySamples
+        // list stays as the user's anchor (matches the "View Subsystem
+        // …" new-tab convention from samples/ui-newtab-subsystem-views).
+        var href = '/samples/' + encodeURIComponent(spine.userpkey) + '/' + encodeURIComponent(spine.id);
+        window.open(href, '_blank', 'noopener');
+        closeModal();
+        render();
+    }
 
     render();
 
