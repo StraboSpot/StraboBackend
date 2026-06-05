@@ -76,13 +76,16 @@ $richSampleObj = array(
     'main_sampling_purpose' => 'petrology',
 );
 $richJsonSamples = json_encode(array($richSampleObj));
-$richGeom = json_encode(array('type' => 'Point', 'coordinates' => array(-120.5, 45.5)));
+// Spots store geometry as a WKT POINT string in `wkt` — there's no
+// `geometry` JSON object. Per samples_field_extract_geom_from_spot()
+// the helper reads wkt and applies a geographic range guard.
+$richWkt = 'POINT (-120.5 45.5)';
 $neodb->query("CREATE (s:Spot {
     id: $spotRichId,
     userpkey: $ownerPkey,
     isSample: 1,
     json_samples: '" . addslashes($richJsonSamples) . "',
-    geometry: '" . addslashes($richGeom) . "'
+    wkt: '" . addslashes($richWkt) . "'
 })");
 $neodb->query("MATCH (d:Dataset {id:$datasetStraboId, userpkey:$ownerPkey}),
                      (s:Spot {id:$spotRichId, userpkey:$ownerPkey})
@@ -113,7 +116,7 @@ try {
         'id'        => $spotRichId,
         'samples'   => array((object)$richSampleObj),
         'isSample'  => 1,
-        'geometry'  => (object)array('type' => 'Point', 'coordinates' => array(-120.5, 45.5)),
+        'wkt'       => 'POINT (-120.5 45.5)',
     );
     $mirrored = field_sample_sync_spot(
         $db, $neodb, $richProps, $spotRichId, $ownerPkey,
@@ -135,8 +138,8 @@ try {
     check("notes matches sample_notes",                        $row && $row->notes === 'rich sample notes');
     check("display_sample_type='igneous'",                     $row && $row->display_sample_type === 'igneous');
     check("display_sample_purpose='petrology'",                $row && $row->display_sample_purpose === 'petrology');
-    check("latitude pulled from geometry Point",               $row && abs((float)$row->latitude - 45.5) < 0.0001);
-    check("longitude pulled from geometry Point",              $row && abs((float)$row->longitude - (-120.5)) < 0.0001);
+    check("latitude pulled from wkt Point",                    $row && abs((float)$row->latitude - 45.5) < 0.0001);
+    check("longitude pulled from wkt Point",                   $row && abs((float)$row->longitude - (-120.5)) < 0.0001);
     $fd = $row && $row->fd ? json_decode($row->fd, true) : null;
     check("field_data preserves full sample sub-object",        is_array($fd) && isset($fd['sample_id_name']) && $fd['sample_id_name'] === 'Rich-A');
 
@@ -214,22 +217,22 @@ try {
         'other_material_type'   => 'shale (other)',
     );
     $stubSampleObj = array('id' => $richSampleId);  // points at rich → should be skipped
-    $legacyHolderGeom = json_encode(array('type' => 'Point', 'coordinates' => array(-100.0, 40.0)));
+    $legacyHolderWkt = 'POINT (-100.0 40.0)';
     $legacyJsonSamples = json_encode(array($legacySampleObj, $stubSampleObj));
     $neodb->query("CREATE (s:Spot {
         id: $spotLegacyHolder,
         userpkey: $ownerPkey,
         json_samples: '" . addslashes($legacyJsonSamples) . "',
-        geometry: '" . addslashes($legacyHolderGeom) . "'
+        wkt: '" . addslashes($legacyHolderWkt) . "'
     })");
     $neodb->query("MATCH (d:Dataset {id:$datasetStraboId, userpkey:$ownerPkey}),
                          (s:Spot {id:$spotLegacyHolder, userpkey:$ownerPkey})
                    CREATE (d)-[:HAS_SPOT]->(s)");
 
     $legacyProps = (object)array(
-        'id'       => $spotLegacyHolder,
-        'samples'  => array((object)$legacySampleObj, (object)$stubSampleObj),
-        'geometry' => (object)array('type' => 'Point', 'coordinates' => array(-100.0, 40.0)),
+        'id'      => $spotLegacyHolder,
+        'samples' => array((object)$legacySampleObj, (object)$stubSampleObj),
+        'wkt'     => 'POINT (-100.0 40.0)',
     );
     $mirrored = field_sample_sync_spot(
         $db, $neodb, $legacyProps, $spotLegacyHolder, $ownerPkey,
@@ -254,7 +257,7 @@ try {
     );
     check("legacy sample row created",                         $legRow !== null);
     check("legacy display_sample_type = 'shale (other)'",      $legRow && $legRow->display_sample_type === 'shale (other)');
-    check("legacy latitude pulled from holder geometry",       $legRow && abs((float)$legRow->latitude - 40.0) < 0.0001);
+    check("legacy latitude pulled from holder wkt",            $legRow && abs((float)$legRow->latitude - 40.0) < 0.0001);
     $legFd = $legRow && $legRow->fd ? json_decode($legRow->fd, true) : null;
     check("legacy field_data preserved",                       is_array($legFd) && isset($legFd['sample_id_name']) && $legFd['sample_id_name'] === 'Legacy-One');
 
@@ -289,6 +292,100 @@ try {
     check("Cypher fallback found project_id",                  is_array($rmAfter) && isset($rmAfter['project_id']) && (string)$rmAfter['project_id'] === $projectStraboId);
 
     // -------------------------------------------------------------------
+    // PART 4.5: wkt extractor — Point + range guard.
+    //
+    // Direct unit-style coverage of the canonical helper in
+    // samplesdb/lib/field_geom.php, which feeds both the live sync
+    // (db/lib/sample_sync.php) and the cutover migration
+    // (samplesdb/migration/extract_field.php). Plus one full e2e sync
+    // through a pixel-range holding spot to confirm the strabosamples
+    // row gets NULL lat/lng end-to-end.
+    // -------------------------------------------------------------------
+    echo "\n=== Part 4.5: wkt extractor (Point + range guard) ===\n";
+    require_once '/srv/app/www/samplesdb/lib/field_geom.php';
+
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'POINT (-122.5 47.5)'));
+    check("real-world Point: lat populated",                   abs($lat - 47.5) < 0.0001);
+    check("real-world Point: lng populated",                   abs($lng - (-122.5)) < 0.0001);
+
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'POINT (-180 -90)'));
+    check("edge of range (-180, -90): accepted",               $lat === -90.0 && $lng === -180.0);
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'POINT (180 90)'));
+    check("edge of range (180, 90): accepted",                 $lat === 90.0  && $lng === 180.0);
+
+    // Pixel-range cases — both with and without a hypothetical image_basemap
+    // tag, since the audit found ~169 dev spots with pixel coords that have
+    // NO image_basemap set, so the tag isn't a reliable signal.
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'POINT (1454.7 656.1)'));
+    check("pixel-range (1454, 656): rejected → null lat",       $lat === null);
+    check("pixel-range (1454, 656): rejected → null lng",       $lng === null);
+
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'POINT (20.69 354.68)'));
+    check("lat past 90 (354.68): rejected → null",              $lat === null && $lng === null);
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'POINT (-181 0)'));
+    check("lng past -180: rejected → null",                     $lat === null && $lng === null);
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'POINT (0 -90.001)'));
+    check("lat past -90: rejected → null",                      $lat === null && $lng === null);
+
+    // Non-Point geometry — LineString and Polygon both stay null.
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'LINESTRING (-100 40, -101 41)'));
+    check("LINESTRING wkt: null lat/lng",                       $lat === null && $lng === null);
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'POLYGON ((0 0, 1 0, 1 1, 0 1, 0 0))'));
+    check("POLYGON wkt: null lat/lng",                          $lat === null && $lng === null);
+
+    // Degenerate inputs: empty / missing / wrong type.
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => ''));
+    check("empty wkt string: null",                             $lat === null && $lng === null);
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array());
+    check("missing wkt key: null",                              $lat === null && $lng === null);
+    list($lat, $lng) = samples_field_extract_geom_from_spot(array('wkt' => 'POINT (not a number 0)'));
+    check("unparsable wkt: null",                               $lat === null && $lng === null);
+
+    // Object-form spot props (the live sync passes the JSON-decoded
+    // properties as either array or stdClass depending on caller).
+    $objProps = (object)array('wkt' => 'POINT (5.5 -10.25)');
+    list($lat, $lng) = samples_field_extract_geom_from_spot($objProps);
+    check("object-form spot props: works",                      abs($lat - (-10.25)) < 0.0001 && abs($lng - 5.5) < 0.0001);
+
+    // e2e: a holding spot with pixel-range wkt → strabosamples lat/lng stay NULL.
+    $spotPixelHolder = (int)($stamp * 100 + 33);   // distinct from rich (31) / legacy holder (32)
+    $pixelSampleId   = (int)($stamp * 100 + 34);
+    $pixelSampleStr  = (string)$pixelSampleId;
+    $pixelSampleObj  = array(
+        'sample_id_name' => 'Pixel-One',
+        'id'             => $pixelSampleId,
+        'material_type'  => 'sediment',
+    );
+    $pixelJsonSamples = json_encode(array($pixelSampleObj));
+    $pixelWkt = 'POINT (1500.123 800.456)';  // pixel coords — should be rejected
+    $neodb->query("CREATE (s:Spot {
+        id: $spotPixelHolder,
+        userpkey: $ownerPkey,
+        json_samples: '" . addslashes($pixelJsonSamples) . "',
+        wkt: '" . addslashes($pixelWkt) . "'
+    })");
+    $neodb->query("MATCH (d:Dataset {id:$datasetStraboId, userpkey:$ownerPkey}),
+                         (s:Spot {id:$spotPixelHolder, userpkey:$ownerPkey})
+                   CREATE (d)-[:HAS_SPOT]->(s)");
+
+    $pixelProps = (object)array(
+        'id'      => $spotPixelHolder,
+        'samples' => array((object)$pixelSampleObj),
+        'wkt'     => 'POINT (1500.123 800.456)',
+    );
+    field_sample_sync_spot(
+        $db, $neodb, $pixelProps, $spotPixelHolder, $ownerPkey,
+        $projectStraboId, $datasetStraboId
+    );
+    $pixelRow = $db->get_row_prepared(
+        "SELECT latitude, longitude FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+        array($pixelSampleStr, $ownerPkey)
+    );
+    check("e2e pixel-range sync: row created",                  $pixelRow !== null);
+    check("e2e pixel-range sync: latitude NULL",                $pixelRow && $pixelRow->latitude  === null);
+    check("e2e pixel-range sync: longitude NULL",               $pixelRow && $pixelRow->longitude === null);
+
+    // -------------------------------------------------------------------
     // PART 5: removal — _remove_spot mirrors deleteSingleSpot's intent.
     // -------------------------------------------------------------------
     echo "\n=== Part 5: remove paths ===\n";
@@ -316,11 +413,14 @@ try {
     // Cleanup. Order: strabosamples → Neo4j → collaborators.
     // -------------------------------------------------------------------
     $db->prepare_query(
-        "DELETE FROM strabosamples.samples WHERE id IN ($1, $2) AND userpkey=$3",
-        array($richSampleId, $legacySampleStr, $ownerPkey)
+        "DELETE FROM strabosamples.samples WHERE id IN ($1, $2, $3) AND userpkey=$4",
+        array($richSampleId, $legacySampleStr, isset($pixelSampleStr) ? $pixelSampleStr : '', $ownerPkey)
     );
     $neodb->query("MATCH (s:Spot {id:$spotRichId, userpkey:$ownerPkey}) DETACH DELETE s");
     $neodb->query("MATCH (s:Spot {id:$spotLegacyHolder, userpkey:$ownerPkey}) DETACH DELETE s");
+    if (isset($spotPixelHolder)) {
+        $neodb->query("MATCH (s:Spot {id:$spotPixelHolder, userpkey:$ownerPkey}) DETACH DELETE s");
+    }
     $neodb->query("MATCH (d:Dataset {id:$datasetStraboId, userpkey:$ownerPkey}) DETACH DELETE d");
     $neodb->query("MATCH (p:Project {id:$projectStraboId, userpkey:$ownerPkey}) DETACH DELETE p");
     $db->prepare_query(

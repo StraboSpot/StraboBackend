@@ -372,23 +372,13 @@ function _field_sample_sync_emit_one($db, $neodb, $sampleObj, $spotProps, $sampl
 }
 
 /**
- * @internal — pull lat/lng from the spot's geometry only when it's a Point.
- * Non-Point spots leave lat/lng NULL. Mirrors extract_field's geom logic.
+ * @internal — thin pass-through to the canonical lat/lng extractor in
+ * samplesdb/lib/field_geom.php. See that file for the full rule + history.
+ * Kept as a wrapper so existing callers don't need to change name.
  */
 function _field_sample_sync_extract_geom($spotProps) {
-    $g = is_object($spotProps) ? (isset($spotProps->geometry) ? $spotProps->geometry : null)
-                                : (isset($spotProps['geometry']) ? $spotProps['geometry'] : null);
-    if ($g === null) return array(null, null);
-    if (is_string($g)) {
-        $g = json_decode($g, true);
-    } else if (is_object($g) || is_array($g)) {
-        $g = json_decode(json_encode($g), true);
-    }
-    if (!is_array($g) || !isset($g['type'], $g['coordinates'])) return array(null, null);
-    if ($g['type'] !== 'Point') return array(null, null);
-    $c = $g['coordinates'];
-    if (!is_array($c) || !isset($c[0], $c[1])) return array(null, null);
-    return array((float)$c[1], (float)$c[0]);  // GeoJSON is [lng, lat]
+    require_once __DIR__ . '/../../samplesdb/lib/field_geom.php';
+    return samples_field_extract_geom_from_spot($spotProps);
 }
 
 }
