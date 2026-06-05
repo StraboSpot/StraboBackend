@@ -80,7 +80,7 @@ $richSampleObj = array(
     'Sample_IGSN'           => 'IGSN-orig',
     'sample_description'    => 'orig desc',
     'sample_notes'          => 'orig notes',
-    'material_type'         => 'igneous',
+    'material_type'         => 'intact_rock',
     'main_sampling_purpose' => 'petrology',
 );
 $richJsonSamples = json_encode(array($richSampleObj));
@@ -103,7 +103,7 @@ $legacySampleObj = array(
     'id'                    => $legacySampleStr,
     'sample_id_name'        => 'OrigLegacyName',
     'sample_description'    => 'legacy orig desc',
-    'material_type'         => 'sedimentary',
+    'material_type'         => 'sediment',
 );
 $legJsonSamples = json_encode(array($legacySampleObj));
 $legGeom = json_encode(array('type' => 'Point', 'coordinates' => array(-100.0, 40.0)));
@@ -160,7 +160,7 @@ try {
         'igsn'                   => 'IGSN-new',
         'description'            => 'updated desc',
         'notes'                  => 'updated notes',
-        'display_sample_type'    => 'granite',
+        'display_sample_type'    => 'tephra',
         'display_sample_purpose' => 'geochronology',
     ));
     check("rich update returned ok=true",                      isset($res['ok']) && $res['ok'] === true);
@@ -173,7 +173,7 @@ try {
     check("samples[0].Sample_IGSN = 'IGSN-new'",               isset($samplesArr[0]['Sample_IGSN']) && $samplesArr[0]['Sample_IGSN'] === 'IGSN-new');
     check("samples[0].sample_description updated",             isset($samplesArr[0]['sample_description']) && $samplesArr[0]['sample_description'] === 'updated desc');
     check("samples[0].sample_notes updated",                   isset($samplesArr[0]['sample_notes']) && $samplesArr[0]['sample_notes'] === 'updated notes');
-    check("samples[0].material_type = 'granite'",              isset($samplesArr[0]['material_type']) && $samplesArr[0]['material_type'] === 'granite');
+    check("samples[0].material_type = 'tephra'",              isset($samplesArr[0]['material_type']) && $samplesArr[0]['material_type'] === 'tephra');
     check("samples[0].main_sampling_purpose = 'geochronology'", isset($samplesArr[0]['main_sampling_purpose']) && $samplesArr[0]['main_sampling_purpose'] === 'geochronology');
     check("spot.name = 'NewRichName' (rich sync)",             isset($afterRich['name']) && $afterRich['name'] === 'NewRichName');
     check("spot.modified_timestamp bumped",                    isset($afterRich['modified_timestamp']) && (int)$afterRich['modified_timestamp'] > $tsBeforeMs);
@@ -184,7 +184,7 @@ try {
         array($richSampleId, $ownerPkey)
     );
     check("strabosamples spine name updated",                  $sgRow && $sgRow->name === 'NewRichName');
-    check("strabosamples display_sample_type updated",         $sgRow && $sgRow->display_sample_type === 'granite');
+    check("strabosamples display_sample_type updated",         $sgRow && $sgRow->display_sample_type === 'tephra');
 
     // -------------------------------------------------------------------
     // PART 2: legacy-linked spine update.
@@ -280,12 +280,12 @@ try {
     echo "\n=== Part 7: idempotent re-call writes same end state, no drift ===\n";
     $svc->updateSample($richSampleId, $ownerPkey, array(
         'name' => 'NewRichName',
-        'display_sample_type' => 'granite',
+        'display_sample_type' => 'tephra',
     ));
     $afterIdem = readSpotProps($neodb, $spotRichId, $ownerPkey);
     $samplesArr = json_decode($afterIdem['json_samples'], true);
     check("samples[0].sample_id_name still 'NewRichName' after idempotent re-call", $samplesArr[0]['sample_id_name'] === 'NewRichName');
-    check("samples[0].material_type still 'granite' after idempotent re-call",    $samplesArr[0]['material_type'] === 'granite');
+    check("samples[0].material_type still 'tephra' after idempotent re-call",    $samplesArr[0]['material_type'] === 'tephra');
 
 } finally {
     // -------------------------------------------------------------------

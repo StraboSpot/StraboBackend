@@ -1966,14 +1966,57 @@ class StraboSamplesService
     protected function writeBackFieldSpot($sampleId, $ownerPkey, array $spineUpdates)
     {
         if ($this->neodb === null) return null;
-        // Only push fields covered by the inverse map.
-        $pushable = array();
+
+        // Run enum-bound spine columns through the cross-vocab translator
+        // before pushing them into Field. Experimental "Igneous Rock" /
+        // "Soil" / "Mineral" bucket to Field enum values; "Glass" / "Ice"
+        // / etc. have no Field bucket and are dropped from the push; free
+        // text from the modal's "Other" escape is also dropped. Skipped
+        // keys produce a 'writeback_translation' changelog note appended
+        // after the Cypher write so the user (and any future audit
+        // tooling) can see which keys didn't make it.
+        require_once __DIR__ . '/../lib/vocab_translate.php';
+
+        $pushable          = array();
+        $translationNotes  = array();
         foreach (self::$FIELD_SPINE_INVERSE as $col => $fieldKey) {
-            if (array_key_exists($col, $spineUpdates)) {
-                $pushable[$fieldKey] = $spineUpdates[$col];
+            if (!array_key_exists($col, $spineUpdates)) continue;
+            $value = $spineUpdates[$col];
+            $tr    = samples_vocab_translate_to_field($col, $value);
+            if ($tr['status'] === 'passthrough') {
+                $pushable[$fieldKey] = $tr['value'];
+            } elseif ($tr['status'] === 'translated') {
+                $pushable[$fieldKey] = $tr['value'];
+                $translationNotes[]  = array(
+                    'spine_column' => $col,
+                    'field_key'    => $fieldKey,
+                    'original'     => $tr['from'],
+                    'translated'   => $tr['value'],
+                );
+            } else {
+                $translationNotes[] = array(
+                    'spine_column' => $col,
+                    'field_key'    => $fieldKey,
+                    'skipped'      => $value,
+                    'reason'       => $tr['status'] === 'no_mapping'
+                                      ? (isset($tr['reason']) ? $tr['reason'] : 'no_mapping')
+                                      : 'free_text',
+                );
             }
         }
-        if (empty($pushable)) return null;
+        if (empty($pushable)) {
+            // Edge case: only translation skips, nothing left to push to
+            // Field. Still log the notes — the user's modal edit was a
+            // legitimate change to the spine, but Field can't represent
+            // it. Logging the translation context here is the audit trail
+            // for "you changed material_type but Field still shows
+            // intact_rock because Glass has no Field bucket."
+            if (!empty($translationNotes)) {
+                $this->logChange($sampleId, $ownerPkey, 'writeback_translation',
+                    array('skipped_only' => true, 'notes' => $translationNotes), 'samples_api');
+            }
+            return null;
+        }
 
         // Look up the Field link. Only the first row matters — a sample id
         // resolves to exactly one Field source row (the migration + live
@@ -2053,11 +2096,17 @@ class StraboSamplesService
             "MATCH (s:Spot {id:$spotId, userpkey:$referenceUserpkey}) SET s += $cypherMap RETURN id(s)"
         );
 
+        if (!empty($translationNotes)) {
+            $this->logChange($sampleId, $ownerPkey, 'writeback_translation',
+                array('notes' => $translationNotes), 'samples_api');
+        }
+
         return array(
-            'ok'           => true,
-            'wrote'        => true,
-            'reference_id' => $referenceId,
-            'rich'         => $isRich,
+            'ok'                => true,
+            'wrote'             => true,
+            'reference_id'      => $referenceId,
+            'rich'              => $isRich,
+            'translation_notes' => $translationNotes,
         );
     }
 }
