@@ -1653,10 +1653,11 @@ class StraboSamplesService
 
         $this->db->query("BEGIN");
 
+        $spineDiff = array();
         if ($created) {
             $this->upsertSample_insertNew($source, $sampleId, $ownerPkey, $actorPkey, $spineFields, $subsystemData, $jsonbCol);
         } else {
-            $this->upsertSample_updateExisting($sampleId, $ownerPkey, $actorPkey, $spineFields, $subsystemData, $jsonbCol, $writeSpine);
+            $spineDiff = $this->upsertSample_updateExisting($sampleId, $ownerPkey, $actorPkey, $spineFields, $subsystemData, $jsonbCol, $writeSpine);
         }
 
         // Children — replace per-resource only when this source supplied them.
@@ -1704,11 +1705,15 @@ class StraboSamplesService
                 $this->autoSeedProjectCollaborators($sampleId, $ownerPkey, $seedList, $seedLevel);
             }
         } else {
-            $this->logChange($sampleId, $ownerPkey, 'update', array(
+            $updatePayload = array(
                 'source' => $source,
                 'spine_written' => $writeSpine,
                 $jsonbCol => array('updated' => true),
-            ), $source);
+            );
+            if (!empty($spineDiff)) {
+                $updatePayload['spine_diff'] = $spineDiff;
+            }
+            $this->logChange($sampleId, $ownerPkey, 'update', $updatePayload, $source);
         }
 
         return array(
@@ -1813,6 +1818,29 @@ class StraboSamplesService
 
     protected function upsertSample_updateExisting($sampleId, $ownerPkey, $actorPkey, array $spineFields, $subsystemData, $jsonbCol, $writeSpine)
     {
+        // When spine is being written, snapshot the prior values of the spine
+        // fields the source is supplying so the caller can build a {old,new}
+        // diff for the changelog. Matches updateSample's pattern at the modal
+        // path, so subsystem-upload audit rows carry the same shape as user
+        // edits.
+        $spineDiff   = array();
+        $diffTargets = array();
+        if ($writeSpine) {
+            foreach (self::$WRITABLE_SPINE_FIELDS as $f) {
+                if (array_key_exists($f, $spineFields)) {
+                    $diffTargets[] = $f;
+                }
+            }
+        }
+        $oldRow = null;
+        if (!empty($diffTargets)) {
+            $oldRow = $this->db->get_row_prepared(
+                "SELECT " . implode(', ', $diffTargets) . "
+                   FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+                array($sampleId, $ownerPkey)
+            );
+        }
+
         $setParts = array();
         $params   = array();
         $idx      = 1;
@@ -1834,6 +1862,17 @@ class StraboSamplesService
             " WHERE id=$whereId AND userpkey=$whereUpk",
             $params
         );
+
+        if ($oldRow !== null) {
+            foreach ($diffTargets as $f) {
+                $old = isset($oldRow->$f) ? $oldRow->$f : null;
+                $new = $spineFields[$f];
+                if ($old !== $new) {
+                    $spineDiff[$f] = array('old' => $old, 'new' => $new);
+                }
+            }
+        }
+        return $spineDiff;
     }
 
     protected function upsertSample_replaceChildren($resource, $sampleId, $ownerPkey, $items)
