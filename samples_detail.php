@@ -38,6 +38,7 @@
 include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . "/samplesdb/services/StraboSamplesService.php";
+require_once __DIR__ . "/samplesdb/lib/vocab.php";
 
 $ownerPkey = isset($_GET['owner']) ? (int)$_GET['owner'] : 0;
 $sampleId  = isset($_GET['id'])    ? trim((string)$_GET['id']) : '';
@@ -955,6 +956,145 @@ include("includes/mheader.php");
     font-size: 0.92em;
     margin-top: 0.6em;
 }
+
+/* ===== Edit Metadata modal ===== */
+.em-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 9999;
+    padding: 4em 1em 2em 1em;
+    overflow-y: auto;
+}
+.em-modal-overlay[hidden] { display: none; }
+.em-modal {
+    background: #1f1f2e;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 640px;
+    color: #fff;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+.em-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1em 1.25em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.em-modal-header h3 { margin: 0; color: #fff; font-size: 1.15em; }
+.em-modal-close {
+    background: none; border: none; color: rgba(255, 255, 255, 0.7);
+    font-size: 1.6em; line-height: 1; cursor: pointer;
+    padding: 0 0.3em;
+}
+.em-modal-close:hover { color: #fff; }
+.em-modal-form { padding: 1em 1.25em 1.25em 1.25em; }
+.em-form-row { margin-bottom: 0.9em; }
+.em-form-row label {
+    display: block;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.9em;
+    margin-bottom: 0.3em;
+}
+.em-required { color: #e44c65; }
+/* Override site-wide form rules (select height:3em, input width:100% etc.)
+   inside the modal scope only. Same recipe as ms-modal-form / cm-modal. */
+.em-modal-form input[type="text"],
+.em-modal-form input[type="number"],
+.em-modal-form textarea,
+.em-modal-form select {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    color: #fff;
+    padding: 0.55em 0.7em;
+    font-size: 0.95em;
+    font-family: inherit;
+    height: auto;
+    line-height: 1.4;
+    background-image: none;
+}
+.em-modal-form select {
+    padding-right: 2.2em;
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cpath d='M9.4,12.3l10.4,10.4l10.4-10.4c0.2-0.2,0.5-0.4,0.9-0.4c0.3,0,0.6,0.1,0.9,0.4l3.3,3.3c0.2,0.2,0.4,0.5,0.4,0.9 c0,0.4-0.1,0.6-0.4,0.9L20.7,31.9c-0.2,0.2-0.5,0.4-0.9,0.4c-0.3,0-0.6-0.1-0.9-0.4L4.3,17.3c-0.2-0.2-0.4-0.5-0.4-0.9 c0-0.4,0.1-0.6,0.4-0.9l3.3-3.3c0.2-0.2,0.5-0.4,0.9-0.4S9.1,12.1,9.4,12.3z' fill='rgba(255,255,255,0.55)' /%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.55em center;
+    background-size: 0.9em;
+    appearance: auto;
+}
+.em-modal-form select option,
+.em-modal-form select optgroup {
+    background: #2a2a3a;
+    color: #fff;
+}
+.em-modal-form input:focus,
+.em-modal-form textarea:focus,
+.em-modal-form select:focus {
+    border-color: #e44c65;
+    outline: none;
+}
+.em-modal-form textarea { resize: vertical; min-height: 4em; }
+.em-modal-form input:disabled {
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.5);
+    cursor: not-allowed;
+}
+.em-vocab-other { margin-top: 0.4em; }
+.em-vocab-other[hidden] { display: none; }
+.em-form-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 1em;
+}
+.em-readonly-note {
+    margin-top: 0.35em;
+    color: rgba(255, 200, 100, 0.85);
+    font-size: 0.82em;
+    font-style: italic;
+    line-height: 1.35;
+}
+.em-readonly-note[hidden] { display: none; }
+.em-modal-error {
+    background: rgba(228, 76, 101, 0.18);
+    border-left: 3px solid #e44c65;
+    padding: 0.55em 0.8em;
+    border-radius: 3px;
+    margin: 0.4em 0 0.8em 0;
+    color: #fff;
+    font-size: 0.92em;
+}
+.em-modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 0.6em;
+    margin-top: 1em;
+}
+.em-btn-cancel,
+.em-btn-submit {
+    border: none;
+    border-radius: 4px;
+    padding: 0.55em 1.2em;
+    font-size: 0.95em;
+    cursor: pointer;
+}
+.em-btn-cancel {
+    background: rgba(255, 255, 255, 0.10);
+    color: #fff;
+}
+.em-btn-cancel:hover { background: rgba(255, 255, 255, 0.16); }
+.em-btn-submit {
+    background: #e44c65;
+    color: #fff;
+}
+.em-btn-submit:hover:not(:disabled) { background: #f06880; }
+.em-btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
 </style>
 
 <div id="main" class="wrapper style1">
@@ -1071,6 +1211,67 @@ include("includes/mheader.php");
     </div>
 </div>
 
+<!-- Edit Metadata modal. Visible to owner + accepted-edit collaborators
+     (gated by perms.canEdit). Opened from the Edit Metadata button under
+     Sample Metadata. Edits writable spine fields only — parent management
+     is the separate /sample/{id}/parent sub-resource. Lat/lng inputs are
+     disabled when the sample has a Field link (the Spot's geometry is
+     authoritative per §6.1; the API would 409 the request anyway). -->
+<div id="em-modal-overlay" class="em-modal-overlay" hidden>
+    <div class="em-modal" role="dialog" aria-modal="true" aria-labelledby="em-modal-title">
+        <div class="em-modal-header">
+            <h3 id="em-modal-title">Edit Sample Metadata</h3>
+            <button type="button" class="em-modal-close" id="em-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <form id="em-modal-form" class="em-modal-form" novalidate>
+            <div class="em-form-row">
+                <label for="em-f-name">Sample ID <span class="em-required">*</span></label>
+                <input type="text" id="em-f-name" maxlength="500" autocomplete="off">
+            </div>
+            <div class="em-form-row">
+                <label for="em-f-igsn">IGSN</label>
+                <input type="text" id="em-f-igsn" maxlength="500" autocomplete="off">
+            </div>
+            <div class="em-form-grid">
+                <div class="em-form-row">
+                    <label for="em-f-type">Material Type</label>
+                    <?php echo samples_vocab_render_material_select('em-f-type'); ?>
+                    <input type="text" id="em-f-type-other" class="em-vocab-other" maxlength="500" autocomplete="off" placeholder="Enter material type" hidden>
+                </div>
+                <div class="em-form-row">
+                    <label for="em-f-purpose">Sampling Purpose</label>
+                    <?php echo samples_vocab_render_purpose_select('em-f-purpose'); ?>
+                    <input type="text" id="em-f-purpose-other" class="em-vocab-other" maxlength="500" autocomplete="off" placeholder="Enter sampling purpose" hidden>
+                </div>
+                <div class="em-form-row">
+                    <label for="em-f-lat">Latitude</label>
+                    <input type="text" id="em-f-lat" inputmode="decimal" autocomplete="off" placeholder="-90 to 90">
+                    <div class="em-readonly-note" id="em-readonly-note" hidden>
+                        Location is managed by StraboField &mdash; edit the Spot's geometry in the StraboField project.
+                    </div>
+                </div>
+                <div class="em-form-row">
+                    <label for="em-f-lng">Longitude</label>
+                    <input type="text" id="em-f-lng" inputmode="decimal" autocomplete="off" placeholder="-180 to 180">
+                </div>
+            </div>
+            <div class="em-form-row">
+                <label for="em-f-desc">Description</label>
+                <textarea id="em-f-desc" rows="2" maxlength="4000"></textarea>
+            </div>
+            <div class="em-form-row">
+                <label for="em-f-notes">Notes</label>
+                <textarea id="em-f-notes" rows="2" maxlength="4000"></textarea>
+            </div>
+            <div class="em-modal-error" id="em-modal-error" hidden></div>
+            <div class="em-modal-footer">
+                <button type="button" class="em-btn-cancel" id="em-modal-cancel">Cancel</button>
+                <button type="submit" class="em-btn-submit" id="em-modal-submit">Save Changes</button>
+            </div>
+        </form>
+    </div>
+</div>
+
 <script type="application/json" id="sd-data"><?php echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <script type="application/json" id="sd-share-url-data"><?php echo json_encode($shareUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <script type="text/javascript">
@@ -1175,7 +1376,7 @@ include("includes/mheader.php");
     if (perms.isOwner) document.getElementById('sd-collab-btn').style.display  = 'inline-block';
     document.getElementById('sd-edit-btn').addEventListener('click', function(e) {
         e.preventDefault();
-        alert('Sample editing UI is on its way — the API endpoints are live (PUT /samplesdb/sample/{id}).');
+        openEditModal();
     });
     document.getElementById('sd-collab-btn').addEventListener('click', function(e) {
         e.preventDefault();
@@ -1906,6 +2107,288 @@ include("includes/mheader.php");
              + escapeHtml(JSON.stringify(c, null, 2))
              + '</pre>';
     }
+
+    // ---- Edit Metadata modal ----
+    // Edits the writable spine fields (name, igsn, description, notes,
+    // latitude, longitude, display_sample_type, display_sample_purpose).
+    // Parent management lives on /sample/{id}/parent and is out of scope
+    // for this modal. Lat/lng inputs disable when the sample has a Field
+    // link — the Spot's geometry is authoritative (§6.1) and the API
+    // would 409 'field_link_read_only' on a lat/lng PUT anyway.
+    var VOCAB_OTHER_SENTINEL = '__other__';
+    var $emModal       = document.getElementById('em-modal-overlay');
+    var $emForm        = document.getElementById('em-modal-form');
+    var $emClose       = document.getElementById('em-modal-close');
+    var $emCancel      = document.getElementById('em-modal-cancel');
+    var $emSubmit      = document.getElementById('em-modal-submit');
+    var $emError       = document.getElementById('em-modal-error');
+    var $emName        = document.getElementById('em-f-name');
+    var $emIgsn        = document.getElementById('em-f-igsn');
+    var $emType        = document.getElementById('em-f-type');
+    var $emTypeOther   = document.getElementById('em-f-type-other');
+    var $emPurpose     = document.getElementById('em-f-purpose');
+    var $emPurposeOther= document.getElementById('em-f-purpose-other');
+    var $emLat         = document.getElementById('em-f-lat');
+    var $emLng         = document.getElementById('em-f-lng');
+    var $emDesc        = document.getElementById('em-f-desc');
+    var $emNotes       = document.getElementById('em-f-notes');
+    var $emReadonlyNote= document.getElementById('em-readonly-note');
+    var emEscHandler   = null;
+
+    // Pre-fill a vocab <select>: try to match an option's value; if no
+    // match (i.e., the stored value is free-text), select the Other
+    // sentinel and pre-fill the companion text input. Cleanly handles
+    // null/empty (no selection, no other-input shown).
+    function setVocabValue($sel, $other, current) {
+        current = (current === null || current === undefined) ? '' : String(current);
+        $sel.value = current;
+        // If the assignment didn't take, value will revert (most browsers
+        // fall through to the first option, '', when no match exists).
+        if (current !== '' && $sel.value !== current) {
+            $sel.value = VOCAB_OTHER_SENTINEL;
+            $other.value = current;
+            $other.hidden = false;
+        } else {
+            $other.value = '';
+            $other.hidden = true;
+        }
+    }
+
+    function readVocabField($sel, $other) {
+        if ($sel.value === VOCAB_OTHER_SENTINEL) return ($other.value || '').trim();
+        return $sel.value;
+    }
+
+    function bindVocabOther($sel, $other) {
+        $sel.addEventListener('change', function() {
+            var isOther = $sel.value === VOCAB_OTHER_SENTINEL;
+            $other.hidden = !isOther;
+            if (isOther) $other.focus();
+            else         $other.value = '';
+        });
+    }
+    bindVocabOther($emType,    $emTypeOther);
+    bindVocabOther($emPurpose, $emPurposeOther);
+
+    // Same numeric-input constraint as the create modal: type="text" with
+    // an oninput filter so what the user sees matches what .value returns
+    // (type="number" diverges on Firefox + Safari).
+    function emConstrainNumeric(input) {
+        input.addEventListener('input', function(e) {
+            var v = e.target.value;
+            var m = v.match(/^-?\d*\.?\d*/);
+            var stripped = m ? m[0] : '';
+            if (v !== stripped) {
+                e.target.value = stripped;
+                try { e.target.setSelectionRange(stripped.length, stripped.length); } catch (_) {}
+            }
+        });
+    }
+    emConstrainNumeric($emLat);
+    emConstrainNumeric($emLng);
+
+    function hasFieldLink() {
+        for (var i = 0; i < links.length; i++) {
+            if (links[i].subsystem === 'field') return true;
+        }
+        return false;
+    }
+
+    function openEditModal() {
+        // Pre-fill from the in-memory sample. Re-prefilling on every open
+        // means a successful save followed by reopen shows the fresh values.
+        $emName.value  = (sample.name        || '');
+        $emIgsn.value  = (sample.igsn        || '');
+        $emDesc.value  = (sample.description || '');
+        $emNotes.value = (sample.notes       || '');
+        setVocabValue($emType,    $emTypeOther,    sample.display_sample_type    || '');
+        setVocabValue($emPurpose, $emPurposeOther, sample.display_sample_purpose || '');
+        $emLat.value = (sample.latitude  === null || sample.latitude  === undefined) ? '' : String(sample.latitude);
+        $emLng.value = (sample.longitude === null || sample.longitude === undefined) ? '' : String(sample.longitude);
+
+        // Lat/lng disabled when a Field link exists. Visible note explains why.
+        var fieldLinked = hasFieldLink();
+        $emLat.disabled = fieldLinked;
+        $emLng.disabled = fieldLinked;
+        $emReadonlyNote.hidden = !fieldLinked;
+        if (fieldLinked) {
+            $emLat.title = 'Managed by StraboField — edit the Spot\'s geometry there.';
+            $emLng.title = 'Managed by StraboField — edit the Spot\'s geometry there.';
+        } else {
+            $emLat.title = '';
+            $emLng.title = '';
+        }
+
+        $emError.hidden = true;
+        $emError.textContent = '';
+        $emSubmit.disabled = false;
+        $emSubmit.textContent = 'Save Changes';
+
+        $emModal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        setTimeout(function() { $emName.focus(); }, 0);
+        emEscHandler = function(e) { if (e.key === 'Escape') closeEditModal(); };
+        document.addEventListener('keydown', emEscHandler);
+    }
+
+    function closeEditModal() {
+        $emModal.hidden = true;
+        document.body.style.overflow = '';
+        if (emEscHandler) {
+            document.removeEventListener('keydown', emEscHandler);
+            emEscHandler = null;
+        }
+    }
+
+    $emModal.addEventListener('click', function(e) {
+        if (e.target === $emModal) closeEditModal();
+    });
+    $emClose.addEventListener('click', closeEditModal);
+    $emCancel.addEventListener('click', closeEditModal);
+
+    // Apply the API response back into the in-memory sample + the rendered
+    // metadata block + the page title so the user sees the change without
+    // a full reload. The api-core-writes path returns the assembled sample
+    // (spine + JSONB + parent if any) on success.
+    function applyEditedSample(updated) {
+        // Mirror spine fields the page renders.
+        sample.name                   = updated.name;
+        sample.igsn                   = updated.igsn;
+        sample.description            = updated.description;
+        sample.notes                  = updated.notes;
+        sample.latitude               = updated.latitude;
+        sample.longitude              = updated.longitude;
+        sample.display_sample_type    = updated.display_sample_type;
+        sample.display_sample_purpose = updated.display_sample_purpose;
+        sample.modified_at            = updated.modified_at;
+
+        // Re-render the metadata block. Identical recipe to the initial
+        // server render at page load (label sequence + render predicates).
+        var metaHtml = '';
+        metaHtml += field('Sample ID',                    sample.name || sample.id);
+        metaHtml += field('Sample Owner',                 owner && owner.name);
+        metaHtml += field('Last Updated',                 fmtDate(sample.modified_at));
+        metaHtml += field('Material Type',                sample.display_sample_type);
+        metaHtml += field('Sample Purpose',               sample.display_sample_purpose);
+        if (sample.latitude !== null && sample.longitude !== null) {
+            metaHtml += field('Current Sample Location', sample.latitude.toFixed(6) + ', ' + sample.longitude.toFixed(6));
+        }
+        metaHtml += field('IGSN',                         sample.igsn);
+        metaHtml += field('Description',                  sample.description);
+        metaHtml += field('Notes',                        sample.notes);
+        document.getElementById('sd-metadata-fields').innerHTML = metaHtml || '<div style="opacity:.6">No metadata recorded.</div>';
+
+        // Update page title (renders the same name-fallback as the metadata row).
+        document.getElementById('sd-title').textContent = 'Sample: ' + (sample.name || sample.id);
+    }
+
+    $emForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        $emError.hidden = true;
+        $emError.textContent = '';
+
+        var name = $emName.value.trim();
+        if (!name) {
+            $emError.textContent = 'Sample ID is required.';
+            $emError.hidden = false;
+            $emName.focus();
+            return;
+        }
+
+        // Build body. Send empty strings for text fields so the user can
+        // clear them server-side (PUT semantics — present-with-value
+        // replaces the column, absent means "don't touch").
+        var body = {
+            sample_id:    sample.id,
+            owner_pkey:   owner.pkey,
+            name:         name,
+            igsn:         $emIgsn.value.trim(),
+            description:  $emDesc.value.trim(),
+            notes:        $emNotes.value.trim(),
+            display_sample_type:    readVocabField($emType,    $emTypeOther),
+            display_sample_purpose: readVocabField($emPurpose, $emPurposeOther),
+        };
+
+        // Lat/lng only included if NOT disabled — the disabled state means
+        // the Field link owns geometry, and even sending them as null would
+        // trigger the 409 guard server-side.
+        if (!$emLat.disabled) {
+            var latRaw = $emLat.value.trim();
+            if (latRaw === '') {
+                body.latitude = null;
+            } else {
+                var lat = Number(latRaw);
+                if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+                    $emError.textContent = 'Latitude must be a number between -90 and 90.';
+                    $emError.hidden = false;
+                    return;
+                }
+                body.latitude = lat;
+            }
+        }
+        if (!$emLng.disabled) {
+            var lngRaw = $emLng.value.trim();
+            if (lngRaw === '') {
+                body.longitude = null;
+            } else {
+                var lng = Number(lngRaw);
+                if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+                    $emError.textContent = 'Longitude must be a number between -180 and 180.';
+                    $emError.hidden = false;
+                    return;
+                }
+                body.longitude = lng;
+            }
+        }
+
+        $emSubmit.disabled = true;
+        $emSubmit.textContent = 'Saving…';
+
+        fetch('/samples_edit.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(body),
+        }).then(function(r) {
+            return r.json().then(
+                function(j) { return {status: r.status, body: j}; },
+                function()  { return {status: r.status, body: null}; }
+            );
+        }).then(function(res) {
+            if (res.body && res.body.ok && res.body.sample) {
+                applyEditedSample(res.body.sample);
+                closeEditModal();
+                return;
+            }
+            var code = res.body && res.body.error ? res.body.error : 'unknown';
+            var msg;
+            switch (code) {
+                case 'not_found':
+                    msg = 'Sample not found (may have been deleted). Reload the page.'; break;
+                case 'forbidden':
+                    msg = 'You do not have permission to edit this sample.'; break;
+                case 'field_link_read_only':
+                    msg = 'Latitude/Longitude are managed by StraboField for this sample.'; break;
+                case 'no_writable_fields':
+                    msg = 'Nothing to save.'; break;
+                case 'not_authenticated':
+                    msg = 'Your session has expired. Please reload the page and sign in again.'; break;
+                case 'invalid_json':
+                    msg = 'The server could not read the request. Please reload and try again.'; break;
+                default:
+                    msg = 'Could not save changes (' + code + ').';
+            }
+            $emError.textContent = msg;
+            $emError.hidden = false;
+            $emSubmit.disabled = false;
+            $emSubmit.textContent = 'Save Changes';
+        }).catch(function() {
+            $emError.textContent = 'Network error — please try again.';
+            $emError.hidden = false;
+            $emSubmit.disabled = false;
+            $emSubmit.textContent = 'Save Changes';
+        });
+    });
 })();
 </script>
 <?php endif; ?>
