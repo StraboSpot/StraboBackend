@@ -29,6 +29,7 @@
 include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . "/samplesdb/services/StraboSamplesService.php";
+require_once __DIR__ . "/samplesdb/lib/vocab.php";
 
 $svc = new StraboSamplesService($db, $neodb);
 $svc->setUserpkey($userpkey);
@@ -465,7 +466,8 @@ include("includes/mheader.php");
 .ms-required { color: #e44c65; }
 .ms-modal-form input[type="text"],
 .ms-modal-form input[type="number"],
-.ms-modal-form textarea {
+.ms-modal-form textarea,
+.ms-modal-form select {
     width: 100%;
     box-sizing: border-box;
     background: rgba(255, 255, 255, 0.08);
@@ -476,12 +478,28 @@ include("includes/mheader.php");
     font-size: 0.95em;
     font-family: inherit;
 }
+/* Override site-wide select { height: 3em; padding-right: 3em; background-image: <arrow> } from massets/css/main.css. */
+.ms-modal-form select {
+    height: auto;
+    padding-right: 2.2em;
+    background-position: right 0.55em center;
+    background-size: 0.9em;
+    appearance: auto;
+}
+.ms-modal-form select option,
+.ms-modal-form select optgroup {
+    background: #2a2a3a;
+    color: #ffffff;
+}
 .ms-modal-form input:focus,
-.ms-modal-form textarea:focus {
+.ms-modal-form textarea:focus,
+.ms-modal-form select:focus {
     border-color: #e44c65;
     outline: none;
 }
 .ms-modal-form textarea { resize: vertical; min-height: 4em; }
+.ms-modal-form .ms-vocab-other { margin-top: 0.4em; }
+.ms-modal-form .ms-vocab-other[hidden] { display: none; }
 .ms-form-grid {
     display: grid;
     grid-template-columns: 1fr 1fr;
@@ -696,7 +714,7 @@ include("includes/mheader.php");
                 <option value="modified_desc">Sort: Most recent</option>
                 <option value="modified_asc">Sort: Oldest</option>
                 <option value="purpose">Sort: Purpose</option>
-                <option value="type">Sort: Type</option>
+                <option value="type">Sort: Material</option>
                 <option value="id_asc">Sort: Sample ID</option>
             </select>
         </div>
@@ -743,12 +761,14 @@ include("includes/mheader.php");
             </div>
             <div class="ms-form-grid">
                 <div class="ms-form-row">
-                    <label for="ms-f-type">Sample Type</label>
-                    <input type="text" id="ms-f-type" maxlength="500" autocomplete="off">
+                    <label for="ms-f-type">Material Type</label>
+                    <?php echo samples_vocab_render_material_select('ms-f-type'); ?>
+                    <input type="text" id="ms-f-type-other" class="ms-vocab-other" maxlength="500" autocomplete="off" placeholder="Enter material type" hidden>
                 </div>
                 <div class="ms-form-row">
                     <label for="ms-f-purpose">Sample Purpose</label>
-                    <input type="text" id="ms-f-purpose" maxlength="500" autocomplete="off">
+                    <?php echo samples_vocab_render_purpose_select('ms-f-purpose'); ?>
+                    <input type="text" id="ms-f-purpose-other" class="ms-vocab-other" maxlength="500" autocomplete="off" placeholder="Enter sample purpose" hidden>
                 </div>
                 <div class="ms-form-row">
                     <label for="ms-f-lat">Latitude</label>
@@ -994,7 +1014,7 @@ include("includes/mheader.php");
         html += '    <div class="ms-card-meta">';
         html += '      <div class="ms-sample-id">' + highlight(sample.name || sample.id, q) + '</div>';
         html += '      ' + pillHtml;
-        html += '      <div class="ms-row"><strong>Type:</strong> ' + highlight(sample.display_sample_type || '—', q) + '</div>';
+        html += '      <div class="ms-row"><strong>Material:</strong> ' + highlight(sample.display_sample_type || '—', q) + '</div>';
         html += '      <div class="ms-row"><strong>Purpose:</strong> ' + highlight(sample.display_sample_purpose || '—', q) + '</div>';
         html += '      <div class="ms-row"><strong>Updated:</strong> ' + fmtDate(sample.modified_at) + '</div>';
         html += '      <a class="ms-view-btn" href="' + escapeHtml(viewSampleHref(sample)) + '">View Sample</a>';
@@ -1219,6 +1239,33 @@ include("includes/mheader.php");
     constrainNumericInput(document.getElementById('ms-f-lat'));
     constrainNumericInput(document.getElementById('ms-f-lng'));
 
+    // Vocab "Other (free text)" toggle: when select === sentinel, reveal
+    // the companion <input> for free-text entry. Sentinel kept in sync
+    // with samples_vocab_render_*_select() server-side.
+    var VOCAB_OTHER_SENTINEL = '__other__';
+    function bindVocabOther(selectId, otherId) {
+        var sel = document.getElementById(selectId);
+        var oth = document.getElementById(otherId);
+        if (!sel || !oth) return;
+        sel.addEventListener('change', function() {
+            var isOther = sel.value === VOCAB_OTHER_SENTINEL;
+            oth.hidden = !isOther;
+            if (isOther) oth.focus();
+        });
+    }
+    bindVocabOther('ms-f-type',    'ms-f-type-other');
+    bindVocabOther('ms-f-purpose', 'ms-f-purpose-other');
+
+    // Read a vocab-with-Other field: returns the typed text when the
+    // sentinel is selected, otherwise the selected option value.
+    function readVocabField(selectId, otherId) {
+        var sel = document.getElementById(selectId);
+        var oth = document.getElementById(otherId);
+        if (!sel) return '';
+        if (sel.value === VOCAB_OTHER_SENTINEL) return (oth ? oth.value.trim() : '');
+        return sel.value;
+    }
+
     $modalForm.addEventListener('submit', function(e) {
         e.preventDefault();
         $modalError.hidden = true;
@@ -1235,8 +1282,6 @@ include("includes/mheader.php");
         var body = {name: name};
         var optionalText = [
             ['ms-f-igsn',    'igsn'],
-            ['ms-f-type',    'display_sample_type'],
-            ['ms-f-purpose', 'display_sample_purpose'],
             ['ms-f-desc',    'description'],
             ['ms-f-notes',   'notes'],
         ];
@@ -1244,6 +1289,10 @@ include("includes/mheader.php");
             var v = document.getElementById(pair[0]).value.trim();
             if (v) body[pair[1]] = v;
         });
+        var typeVal    = readVocabField('ms-f-type',    'ms-f-type-other');
+        var purposeVal = readVocabField('ms-f-purpose', 'ms-f-purpose-other');
+        if (typeVal)    body.display_sample_type    = typeVal;
+        if (purposeVal) body.display_sample_purpose = purposeVal;
         // Number() rather than parseFloat — parseFloat('12abc') returns 12,
         // which would silently accept garbage. Number('12abc') returns NaN.
         var latRaw = document.getElementById('ms-f-lat').value.trim();
