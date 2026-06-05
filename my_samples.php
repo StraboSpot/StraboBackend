@@ -74,6 +74,49 @@ foreach ($samples as &$s) {
 }
 unset($s);
 
+// Pending sample-collaboration invitations for the current user.
+// Server-rendered above the controls — same embed-JSON + render-client-side
+// pattern as the sample list itself. Same inviter-info enrichment as
+// samples_invitations.php's `list` action; duplicated rather than abstracted
+// because the proxy and the page are the only two sites today.
+$invitations = $svc->listMyInvitations();
+if (!empty($invitations)) {
+    $inviterPkeys = array();
+    foreach ($invitations as $inv) {
+        $inviterPkeys[(int)$inv['added_by']] = true;
+    }
+    $inviterPkeys = array_keys($inviterPkeys);
+    $placeholders = array();
+    for ($i = 0; $i < count($inviterPkeys); $i++) {
+        $placeholders[] = '$' . ($i + 1);
+    }
+    $userRows = $db->get_results_prepared(
+        "SELECT pkey, firstname, lastname, email FROM users WHERE pkey IN (" . implode(',', $placeholders) . ")",
+        $inviterPkeys
+    );
+    $inviterInfo = array();
+    if (is_array($userRows)) {
+        foreach ($userRows as $u) {
+            $inviterInfo[(int)$u->pkey] = $u;
+        }
+    }
+    foreach ($invitations as &$inv) {
+        $u = isset($inviterInfo[(int)$inv['added_by']]) ? $inviterInfo[(int)$inv['added_by']] : null;
+        if ($u) {
+            $name = trim(($u->firstname ?: '') . ' ' . ($u->lastname ?: ''));
+            $inv['inviter_name']     = $name !== '' ? $name : $u->email;
+            $inv['inviter_initials'] = strtoupper(
+                substr($u->firstname ?: $u->email, 0, 1) .
+                substr($u->lastname  ?: '', 0, 1)
+            );
+        } else {
+            $inv['inviter_name']     = '(unknown user)';
+            $inv['inviter_initials'] = '?';
+        }
+    }
+    unset($inv);
+}
+
 include("includes/mheader.php");
 ?>
 
@@ -468,6 +511,65 @@ include("includes/mheader.php");
 @media (max-width: 640px) {
     .ms-form-grid { grid-template-columns: 1fr; }
 }
+
+/* ---- Pending-invitations banner ---- */
+.ms-invitations {
+    background: rgba(255, 200, 80, 0.10);
+    border: 1px solid rgba(255, 200, 80, 0.35);
+    border-radius: 6px;
+    padding: 1em 1.25em;
+    margin: 0 auto 1.5em auto;
+    max-width: 760px;
+    color: #fff;
+}
+.ms-invitations[hidden] { display: none; }
+.ms-invitations-header {
+    margin: 0 0 0.6em 0;
+    color: #f5dc99;
+    font-size: 0.95em;
+    font-weight: 600;
+}
+.ms-invitation-row {
+    display: flex;
+    align-items: center;
+    gap: 0.7em;
+    padding: 0.6em 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+}
+.ms-invitation-row:first-child { border-top: none; padding-top: 0.4em; }
+.ms-invitation-avatar {
+    width: 32px; height: 32px; flex: 0 0 32px;
+    background: rgba(228, 76, 101, 0.6);
+    color: #fff;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.82em; font-weight: 700;
+}
+.ms-invitation-text {
+    flex: 1; min-width: 0;
+    font-size: 0.93em;
+    color: rgba(255, 255, 255, 0.85);
+    line-height: 1.4;
+}
+.ms-invitation-text strong { color: #fff; }
+.ms-invitation-text .ms-invitation-level {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.88em;
+}
+.ms-invitation-btn {
+    border: none;
+    padding: 6px 12px;
+    border-radius: 4px;
+    font-size: 0.85em;
+    cursor: pointer;
+    flex: 0 0 auto;
+    font-family: inherit;
+}
+.ms-invitation-btn.accept { background: #4cc86e; color: #fff; }
+.ms-invitation-btn.accept:hover:not(:disabled) { background: #5ed583; }
+.ms-invitation-btn.deny   { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.ms-invitation-btn.deny:hover:not(:disabled)   { background: rgba(255, 255, 255, 0.20); }
+.ms-invitation-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 </style>
 
 <div id="main" class="wrapper style1">
@@ -475,6 +577,15 @@ include("includes/mheader.php");
         <header class="major">
             <h2>My Samples</h2>
         </header>
+
+        <?php if (!empty($invitations)): ?>
+        <div class="ms-invitations" id="ms-invitations">
+            <div class="ms-invitations-header">
+                You have <?= count($invitations) ?> pending sample invitation<?= count($invitations) === 1 ? '' : 's' ?>.
+            </div>
+            <div class="ms-invitations-list" id="ms-invitations-list"></div>
+        </div>
+        <?php endif; ?>
 
         <div class="ms-controls">
             <button type="button" class="ms-new-btn" id="ms-new-sample-btn">+ New Sample</button>
@@ -565,6 +676,7 @@ include("includes/mheader.php");
 </div>
 
 <script type="application/json" id="ms-data"><?php echo json_encode($samples, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
+<script type="application/json" id="ms-invitations-data"><?php echo json_encode(!empty($invitations) ? $invitations : array(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 
 <script type="text/javascript">
 (function() {
@@ -1101,6 +1213,99 @@ include("includes/mheader.php");
         window.open(href, '_blank', 'noopener');
         closeModal();
         render();
+    }
+
+    // ---- Pending invitations banner ----
+    // The banner wrapper only exists in the DOM when the server saw at
+    // least one pending invitation. The data tag is always present (may
+    // be []), so we read it once and rebuild the list as the user accepts
+    // or denies. Accept reloads the page to surface the newly-accessible
+    // sample in the list (server-side filter is the source of truth).
+    var rawInvitations = JSON.parse(document.getElementById('ms-invitations-data').textContent || '[]');
+    var $invitationsWrap = document.getElementById('ms-invitations');
+    var $invitationsList = document.getElementById('ms-invitations-list');
+
+    function renderInvitations() {
+        if (!$invitationsWrap || !$invitationsList) return;
+        if (!rawInvitations.length) {
+            $invitationsWrap.hidden = true;
+            return;
+        }
+        $invitationsList.innerHTML = rawInvitations.map(function(inv) {
+            var levelLabel = inv.permission_level === 'edit' ? 'Edit' : 'Read-only';
+            return '<div class="ms-invitation-row" data-uuid="' + escapeHtml(inv.uuid) + '" data-sample-id="' + escapeHtml(inv.sample_id) + '">'
+                 +   '<div class="ms-invitation-avatar">' + escapeHtml(inv.inviter_initials || '?') + '</div>'
+                 +   '<div class="ms-invitation-text">'
+                 +     '<strong>' + escapeHtml(inv.inviter_name || '(unknown)') + '</strong>'
+                 +     ' invited you to collaborate on '
+                 +     '<strong>' + escapeHtml(inv.sample_name || inv.sample_id) + '</strong>'
+                 +     ' <span class="ms-invitation-level">(' + escapeHtml(levelLabel) + ')</span>'
+                 +   '</div>'
+                 +   '<button type="button" class="ms-invitation-btn accept" data-action="accept">Accept</button>'
+                 +   '<button type="button" class="ms-invitation-btn deny"   data-action="deny">Decline</button>'
+                 + '</div>';
+        }).join('');
+    }
+
+    if ($invitationsList) {
+        $invitationsList.addEventListener('click', function(e) {
+            if (!e.target.classList || !e.target.classList.contains('ms-invitation-btn')) return;
+            var row    = e.target.closest('.ms-invitation-row');
+            var action = e.target.getAttribute('data-action');
+            var uuid   = row.getAttribute('data-uuid');
+            var sid    = row.getAttribute('data-sample-id');
+            var siblings = row.querySelectorAll('.ms-invitation-btn');
+            siblings.forEach(function(b) { b.disabled = true; });
+
+            fetch('/samples_invitations.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({action: action, sample_id: sid, uuid: uuid}),
+            }).then(function(r) {
+                return r.json().then(
+                    function(j) { return {status: r.status, body: j}; },
+                    function()  { return {status: r.status, body: null}; }
+                );
+            }).then(function(res) {
+                if (res.body && res.body.ok) {
+                    if (action === 'accept') {
+                        // Page reload surfaces the new sample in the list +
+                        // updates the badge counts. Cheaper than threading
+                        // a second listMySamples + listMyInvitations round-trip
+                        // into the existing render path.
+                        window.location.reload();
+                    } else {
+                        rawInvitations = rawInvitations.filter(function(i) { return i.uuid !== uuid; });
+                        renderInvitations();
+                    }
+                    return;
+                }
+                siblings.forEach(function(b) { b.disabled = false; });
+                var err = res.body && res.body.error ? res.body.error : 'unknown';
+                var msg;
+                switch (err) {
+                    case 'duplicate_id_conflict':
+                        msg = 'You already own a sample with this ID. Cannot accept this invitation.'; break;
+                    case 'already_accepted':
+                        msg = 'This invitation has already been accepted.'; break;
+                    case 'invitation_not_found':
+                        msg = 'This invitation no longer exists. Refreshing the page.'; break;
+                    case 'not_authenticated':
+                        msg = 'Your session has expired. Please reload and sign in.'; break;
+                    default:
+                        msg = 'Could not ' + action + ' (' + err + ').';
+                }
+                alert(msg);
+                if (err === 'invitation_not_found' || err === 'already_accepted') {
+                    window.location.reload();
+                }
+            }).catch(function() {
+                siblings.forEach(function(b) { b.disabled = false; });
+                alert('Network error — please try again.');
+            });
+        });
+        renderInvitations();
     }
 
     render();
