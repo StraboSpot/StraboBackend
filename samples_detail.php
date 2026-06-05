@@ -447,35 +447,122 @@ include("includes/mheader.php");
     padding: 0.5em;
     height: 240px;
     position: relative;
+    display: flex;
+    flex-direction: column;
 }
-.sd-family-widget svg { width: 100%; height: 100%; display: block; }
-.sd-family-node { cursor: pointer; transition: transform 0.15s ease; }
-.sd-family-node:hover { transform: scale(1.05); transform-origin: center; }
-.sd-family-node.focus circle { fill: #e44c65; stroke: rgba(255,255,255,0.5); }
-.sd-family-node circle { fill: rgba(255,255,255,0.85); stroke: rgba(255,255,255,0.35); stroke-width: 2; }
-.sd-family-node text { font-size: 11px; fill: #ffffff; text-anchor: middle; pointer-events: none; }
-.sd-family-edge { stroke: rgba(255,255,255,0.45); stroke-width: 1.5; fill: none; }
-.sd-family-detail {
-    position: absolute;
-    top: 12px;
-    left: 12px;
-    right: 12px;
-    background: rgba(30, 30, 45, 0.96);
-    border: 1px solid rgba(255,255,255,0.15);
-    border-radius: 4px;
-    padding: 0.7em 0.85em;
-    font-size: 0.85em;
-    color: #ffffff;
-    display: none;
+.sd-family-widget svg {
+    flex: 1;
+    width: 100%;
+    height: 100%;
+    display: block;
+    transition: opacity 0.18s ease;
 }
-.sd-family-detail.visible { display: block; }
-.sd-family-detail .sd-family-close {
-    float: right;
+.sd-family-widget.sd-family-loading svg { opacity: 0.35; }
+
+/* Node groups translate to position; CSS transition on transform animates
+   the position change when the user re-focuses on a different node. */
+.sd-family-node {
     cursor: pointer;
-    color: rgba(255,255,255,0.6);
-    margin-left: 0.6em;
+    transition: transform 0.45s cubic-bezier(0.3, 0.65, 0.4, 1);
 }
-.sd-family-detail .sd-action-btn { margin-top: 0.5em; display: inline-block; }
+.sd-family-node circle {
+    fill: rgba(255,255,255,0.85);
+    stroke: rgba(255,255,255,0.35);
+    stroke-width: 2;
+    transition: r 0.18s ease, fill 0.18s ease, stroke 0.18s ease;
+}
+.sd-family-node text {
+    font-size: 11px;
+    fill: #ffffff;
+    text-anchor: middle;
+    pointer-events: none;
+    transition: font-weight 0.15s ease;
+}
+.sd-family-node.focus circle { fill: #e44c65; stroke: rgba(255,255,255,0.55); }
+.sd-family-node.orphan circle { fill: rgba(180,180,180,0.55); stroke: rgba(255,255,255,0.25); stroke-dasharray: 3 3; }
+.sd-family-node.hovered circle { r: 22; stroke: rgba(255, 200, 110, 0.95); stroke-width: 3; }
+.sd-family-node.hovered text { font-weight: 700; }
+
+.sd-family-edge {
+    stroke: rgba(255,255,255,0.45);
+    stroke-width: 1.5;
+    fill: none;
+    transition: stroke 0.18s ease, stroke-width 0.18s ease, opacity 0.18s ease;
+}
+.sd-family-edge.highlighted { stroke: rgba(255, 200, 110, 0.95); stroke-width: 2.5; }
+
+/* Initial fade-in / scale-in. Each node gets an animation-delay set via
+   inline style so the group appears to assemble rather than pop. Edges
+   fade in slightly behind. */
+@keyframes sd-family-node-in {
+    from { opacity: 0; transform: var(--sd-from, translate(140px, 120px)) scale(0.4); }
+    to   { opacity: 1; }
+}
+@keyframes sd-family-edge-in {
+    from { opacity: 0; }
+    to   { opacity: 1; }
+}
+.sd-family-node.entering { animation: sd-family-node-in 0.45s cubic-bezier(0.2, 0.7, 0.4, 1) backwards; }
+.sd-family-edge.entering { animation: sd-family-edge-in 0.4s ease-out 0.15s backwards; }
+
+/* Breadcrumb bar — surfaces only while the user has drifted from the
+   URL-driven sample via mini-explorer navigation. */
+.sd-family-breadcrumb {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5em;
+    padding: 0.35em 0.5em;
+    font-size: 0.82em;
+    color: rgba(255,255,255,0.85);
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+    margin-bottom: 0.25em;
+}
+.sd-family-breadcrumb[hidden] { display: none; }
+.sd-family-back {
+    background: none;
+    border: none;
+    color: rgba(255,255,255,0.85);
+    cursor: pointer;
+    padding: 0;
+    font: inherit;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+}
+.sd-family-back:hover { color: #fff; }
+.sd-family-open {
+    background: rgba(228, 76, 101, 0.85);
+    color: #fff;
+    border: none;
+    border-radius: 3px;
+    padding: 0.18em 0.6em;
+    font-size: 0.95em;
+    cursor: pointer;
+    text-decoration: none;
+}
+.sd-family-open:hover { background: #e44c65; }
+
+/* Hover tooltip — replaces the click-driven detail card with a lighter-
+   weight quick-recon affordance. */
+.sd-family-tooltip {
+    position: absolute;
+    pointer-events: none;
+    background: rgba(28, 28, 42, 0.96);
+    border: 1px solid rgba(255,255,255,0.18);
+    border-radius: 4px;
+    padding: 0.45em 0.65em;
+    font-size: 0.82em;
+    color: #fff;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    max-width: 220px;
+    z-index: 2;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+}
+.sd-family-tooltip.visible { opacity: 1; }
+.sd-family-tooltip-name { font-weight: 600; margin-bottom: 0.2em; }
+.sd-family-tooltip-meta { color: rgba(255,255,255,0.65); font-size: 0.95em; }
+.sd-family-tooltip-hint { color: rgba(255,200,110,0.85); font-size: 0.9em; margin-top: 0.25em; font-style: italic; }
 
 .sd-type-tabs {
     display: flex;
@@ -1131,8 +1218,12 @@ include("includes/mheader.php");
                         </div>
                     </div>
                     <div class="sd-family-widget" id="sd-family-widget">
+                        <div class="sd-family-breadcrumb" id="sd-family-breadcrumb" hidden>
+                            <button type="button" class="sd-family-back" id="sd-family-back" aria-label="Return to original sample">&larr; Return to <span id="sd-family-back-label"></span></button>
+                            <a class="sd-family-open" id="sd-family-open" href="#">Open</a>
+                        </div>
                         <svg viewBox="0 0 280 220" id="sd-family-svg"></svg>
-                        <div class="sd-family-detail" id="sd-family-detail"></div>
+                        <div class="sd-family-tooltip" id="sd-family-tooltip" aria-hidden="true"></div>
                     </div>
                 </div>
             </div>
@@ -1395,79 +1486,270 @@ include("includes/mheader.php");
     document.getElementById('sd-avatars').innerHTML = avatarsHtml;
 
     // ---- Family tree widget (simple radial; §12.2.1 v1) ----
-    (function renderFamily() {
-        var svg = document.getElementById('sd-family-svg');
-        var detail = document.getElementById('sd-family-detail');
+    // ---- Family-tree mini-explorer (samples/ui-family-explorer) ----
+    // Click a non-focus node to re-center the widget on that sample. The
+    // /samples_family.php proxy re-fetches the 1-hop family payload and
+    // the widget re-renders centered on the new focus. The "Sample
+    // Metadata" block above the widget stays put — it's the URL-driven
+    // sample. Breadcrumb surfaces while exploring + "Open" button lets
+    // the user actually navigate to whichever sample they're viewing.
+    //
+    // Hover affordances: node hover highlights the node + its connecting
+    // edge and shows a floating tooltip with full name + material/purpose
+    // (replaces the v1 click-driven detail card).
+    //
+    // Initial render plays a staggered fade-in so the graph appears to
+    // assemble rather than pop.
+    (function familyExplorer() {
+        var svg          = document.getElementById('sd-family-svg');
+        var widget       = document.getElementById('sd-family-widget');
+        var breadcrumb   = document.getElementById('sd-family-breadcrumb');
+        var backBtn      = document.getElementById('sd-family-back');
+        var backLabel    = document.getElementById('sd-family-back-label');
+        var openLink     = document.getElementById('sd-family-open');
+        var tooltip      = document.getElementById('sd-family-tooltip');
+
         var W = 280, H = 220, cx = W/2, cy = H/2 + 10;
-        var children = family.children || [];
-        var parent = family.parent;
 
-        var positions = [];
-        positions.push({key: 'focus', x: cx, y: cy, label: family.focus && (family.focus.name || family.focus.id) || sample.id, node: family.focus});
+        var originalFamily = family;      // server-rendered; never mutated
+        var currentFamily  = family;
+        var positions      = [];
 
-        if (parent) {
-            positions.push({
-                key: 'parent', x: cx, y: 30,
-                label: parent.orphaned ? '(inaccessible)' : (parent.name || parent.id),
-                node: parent,
-            });
-        }
+        function computePositions(fam) {
+            var children = fam && fam.children ? fam.children : [];
+            var parent   = fam && fam.parent  ? fam.parent  : null;
+            var out = [];
 
-        if (children.length) {
-            // Arc the children below the focus.
-            var arcR = 70, spanDeg = Math.min(180, 30 * children.length + 60);
-            var startDeg = 90 + spanDeg/2, stepDeg = children.length > 1 ? spanDeg / (children.length - 1) : 0;
-            children.forEach(function(c, i) {
-                var deg = children.length === 1 ? 90 : (startDeg - stepDeg * i);
-                var rad = deg * Math.PI / 180;
-                positions.push({
-                    key: 'child-' + i, x: cx + arcR * Math.cos(rad), y: cy + arcR * Math.sin(rad),
-                    label: c.name || c.id, node: c,
+            var focusLabel = (fam && fam.focus && (fam.focus.name || fam.focus.id)) || sample.id;
+            out.push({key: 'focus', x: cx, y: cy, label: focusLabel, node: fam && fam.focus ? fam.focus : null});
+
+            if (parent) {
+                out.push({
+                    key: 'parent',
+                    x: cx, y: 30,
+                    label: parent.orphaned ? '(inaccessible)' : (parent.name || parent.id),
+                    node: parent,
                 });
+            }
+            if (children.length) {
+                var arcR = 70, spanDeg = Math.min(180, 30 * children.length + 60);
+                var startDeg = 90 + spanDeg/2;
+                var stepDeg  = children.length > 1 ? spanDeg / (children.length - 1) : 0;
+                children.forEach(function(c, i) {
+                    var deg = children.length === 1 ? 90 : (startDeg - stepDeg * i);
+                    var rad = deg * Math.PI / 180;
+                    out.push({
+                        key: 'child-' + i,
+                        x: cx + arcR * Math.cos(rad),
+                        y: cy + arcR * Math.sin(rad),
+                        label: c.name || c.id,
+                        node: c,
+                    });
+                });
+            }
+            return out;
+        }
+
+        function renderFamily(fam, isInitial) {
+            positions = computePositions(fam);
+
+            // Edges first (drawn under nodes). data-idx points at the
+            // far-side node so hover can highlight the matching edge.
+            var edgesHtml = '';
+            positions.forEach(function(p, i) {
+                if (p.key === 'focus') return;
+                var enterCls = isInitial ? ' entering' : '';
+                edgesHtml += '<line class="sd-family-edge' + enterCls + '" data-idx="' + i + '"'
+                          +  ' x1="' + cx + '" y1="' + cy + '" x2="' + p.x + '" y2="' + p.y + '"/>';
+            });
+
+            var nodesHtml = positions.map(function(p, i) {
+                var safe = escapeHtml((p.label || '').toString()).substring(0, 18);
+                var cls = 'sd-family-node';
+                if (p.key === 'focus')            cls += ' focus';
+                if (p.node && p.node.orphaned)    cls += ' orphan';
+                if (isInitial)                    cls += ' entering';
+                // Initial: each node tweens from a position near focus to its target.
+                var fromTransform = isInitial ? 'translate(' + cx + 'px,' + cy + 'px)' : '';
+                var delay = isInitial ? (i * 0.05) + 's' : '';
+                var style = '';
+                if (isInitial) {
+                    style = 'style="--sd-from: translate(' + cx + 'px,' + cy + 'px); animation-delay: ' + delay + ';"';
+                }
+                return '<g class="' + cls + '" data-idx="' + i + '" transform="translate(' + p.x + ',' + p.y + ')" ' + style + '>'
+                    +    '<circle r="18"/>'
+                    +    '<text y="32">' + safe + '</text>'
+                    +  '</g>';
+            }).join('');
+
+            svg.innerHTML = edgesHtml + nodesHtml;
+        }
+
+        function updateBreadcrumb() {
+            var f = currentFamily && currentFamily.focus;
+            var orig = originalFamily && originalFamily.focus;
+            var isExploring = !!(f && orig && (f.id !== orig.id || f.userpkey !== orig.userpkey));
+
+            if (!isExploring) {
+                breadcrumb.hidden = true;
+                openLink.removeAttribute('href');
+                return;
+            }
+            breadcrumb.hidden = false;
+            backLabel.textContent = (orig.name || orig.id);
+            openLink.textContent  = 'Open ' + (f.name || f.id);
+            openLink.href = viewSampleHref(f);
+        }
+
+        function fetchFamily(sampleId, ownerPkey, cb) {
+            widget.classList.add('sd-family-loading');
+            fetch('/samples_family.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({sample_id: sampleId, owner_pkey: ownerPkey}),
+            }).then(function(r) {
+                return r.json().then(
+                    function(j) { return {status: r.status, body: j}; },
+                    function()  { return {status: r.status, body: null}; }
+                );
+            }).then(function(res) {
+                widget.classList.remove('sd-family-loading');
+                if (res.body && res.body.ok && res.body.family) {
+                    cb(res.body.family);
+                } else {
+                    cb(null);
+                }
+            }).catch(function() {
+                widget.classList.remove('sd-family-loading');
+                cb(null);
             });
         }
 
-        // Edges from focus.
-        var edges = '';
-        positions.forEach(function(p) {
-            if (p.key === 'focus') return;
-            edges += '<line class="sd-family-edge" x1="' + cx + '" y1="' + cy + '" x2="' + p.x + '" y2="' + p.y + '"/>';
-        });
+        function focusOn(node) {
+            // Orphaned parents have no readable focus to navigate to;
+            // ignore the click rather than fetching with bad params.
+            if (!node || node.orphaned) return;
+            var id  = node.id;
+            var upk = node.userpkey;
+            if (!id || !upk) return;
+            // No-op if it's already the focus.
+            var cf = currentFamily && currentFamily.focus;
+            if (cf && cf.id === id && cf.userpkey === upk) return;
 
-        var nodes = positions.map(function(p, i) {
-            var safe = escapeHtml(p.label).substring(0, 18);
-            return '<g class="sd-family-node ' + (p.key === 'focus' ? 'focus' : '') + '" data-idx="' + i + '">'
-                + '<circle cx="' + p.x + '" cy="' + p.y + '" r="18"/>'
-                + '<text x="' + p.x + '" y="' + (p.y + 32) + '">' + safe + '</text>'
-                + '</g>';
-        }).join('');
+            fetchFamily(id, upk, function(newFam) {
+                if (!newFam) return;
+                currentFamily = newFam;
+                updateBreadcrumb();
+                renderFamily(currentFamily, false);
+            });
+        }
 
-        svg.innerHTML = edges + nodes;
+        function resetToOriginal() {
+            currentFamily = originalFamily;
+            updateBreadcrumb();
+            renderFamily(currentFamily, false);
+        }
 
-        svg.addEventListener('click', function(e) {
+        // ---- Hover affordances + floating tooltip ----
+        var widgetRect = null;
+        function refreshWidgetRect() { widgetRect = widget.getBoundingClientRect(); }
+
+        function showTooltip(node, key, clientX, clientY) {
+            if (!widgetRect) refreshWidgetRect();
+            var html = '';
+            if (node && node.orphaned) {
+                html += '<div class="sd-family-tooltip-name">Parent (inaccessible)</div>';
+                html += '<div class="sd-family-tooltip-meta">id: ' + escapeHtml(node.parent_sample_id || '?') + '</div>';
+            } else if (node) {
+                html += '<div class="sd-family-tooltip-name">' + escapeHtml(node.name || node.id) + '</div>';
+                var t = node.display_sample_type || '—';
+                var p = node.display_sample_purpose || '—';
+                html += '<div class="sd-family-tooltip-meta">' + escapeHtml(t) + ' / ' + escapeHtml(p) + '</div>';
+                if (key !== 'focus') {
+                    html += '<div class="sd-family-tooltip-hint">Click to explore</div>';
+                }
+            } else {
+                return;
+            }
+            tooltip.innerHTML = html;
+            // Position slightly offset from cursor; keep within widget.
+            var x = clientX - widgetRect.left + 12;
+            var y = clientY - widgetRect.top + 12;
+            // Clamp so the tooltip doesn't spill off the right edge of the widget.
+            var maxX = widget.clientWidth - 230;  // tooltip max-width + margin
+            if (x > maxX) x = maxX;
+            if (x < 4) x = 4;
+            tooltip.style.left = x + 'px';
+            tooltip.style.top  = y + 'px';
+            tooltip.classList.add('visible');
+        }
+        function hideTooltip() {
+            tooltip.classList.remove('visible');
+        }
+
+        function highlightEdgeForNode(idx, on) {
+            var sel = svg.querySelectorAll('.sd-family-edge[data-idx="' + idx + '"]');
+            for (var i = 0; i < sel.length; i++) {
+                if (on) sel[i].classList.add('highlighted');
+                else    sel[i].classList.remove('highlighted');
+            }
+        }
+
+        // ---- Event delegation on the SVG ----
+        svg.addEventListener('mousemove', function(e) {
             var g = e.target.closest && e.target.closest('.sd-family-node');
-            if (!g) { detail.classList.remove('visible'); return; }
+            if (!g) {
+                hideTooltip();
+                // Remove any lingering hover state.
+                var hovered = svg.querySelector('.sd-family-node.hovered');
+                if (hovered) {
+                    hovered.classList.remove('hovered');
+                    highlightEdgeForNode(parseInt(hovered.getAttribute('data-idx'), 10), false);
+                }
+                return;
+            }
             var idx = parseInt(g.getAttribute('data-idx'), 10);
             var p = positions[idx];
-            if (!p || !p.node) return;
-            if (p.key === 'focus') { detail.classList.remove('visible'); return; }
-            var n = p.node;
-            var html = '';
-            html += '<span class="sd-family-close" data-close="1">×</span>';
-            if (n.orphaned) {
-                html += '<div><strong>Parent (inaccessible)</strong></div>';
-                html += '<div style="opacity:.7">id: ' + escapeHtml(n.parent_sample_id) + ' / userpkey: ' + n.parent_userpkey + '</div>';
-            } else {
-                html += '<div><strong>' + escapeHtml(n.name || n.id) + '</strong></div>';
-                html += '<div style="opacity:.75">' + escapeHtml(n.display_sample_type || '—') + ' / ' + escapeHtml(n.display_sample_purpose || '—') + '</div>';
-                html += '<a class="sd-action-btn" href="' + escapeHtml(viewSampleHref(n)) + '">View Sample</a>';
+            if (!p) return;
+            // Set hover class — clear any previously-hovered node first.
+            var prev = svg.querySelector('.sd-family-node.hovered');
+            if (prev && prev !== g) {
+                prev.classList.remove('hovered');
+                highlightEdgeForNode(parseInt(prev.getAttribute('data-idx'), 10), false);
             }
-            detail.innerHTML = html;
-            detail.classList.add('visible');
+            g.classList.add('hovered');
+            highlightEdgeForNode(idx, true);
+            showTooltip(p.node, p.key, e.clientX, e.clientY);
         });
-        detail.addEventListener('click', function(e) {
-            if (e.target.getAttribute('data-close')) detail.classList.remove('visible');
+        svg.addEventListener('mouseleave', function() {
+            hideTooltip();
+            var hovered = svg.querySelector('.sd-family-node.hovered');
+            if (hovered) {
+                hovered.classList.remove('hovered');
+                highlightEdgeForNode(parseInt(hovered.getAttribute('data-idx'), 10), false);
+            }
         });
+        svg.addEventListener('click', function(e) {
+            var g = e.target.closest && e.target.closest('.sd-family-node');
+            if (!g) return;
+            var idx = parseInt(g.getAttribute('data-idx'), 10);
+            var p = positions[idx];
+            if (!p) return;
+            if (p.key === 'focus') return;   // re-clicking focus is a no-op
+            focusOn(p.node);
+            // Hide tooltip during the transition so it doesn't trail.
+            hideTooltip();
+        });
+
+        backBtn.addEventListener('click', resetToOriginal);
+
+        window.addEventListener('resize', refreshWidgetRect);
+
+        // ---- Initial render ----
+        renderFamily(currentFamily, /*isInitial*/ true);
+        updateBreadcrumb();
+        refreshWidgetRect();
     })();
 
     // ---- Subsystem cards (card-per-link, §16 #9 v1) ----
