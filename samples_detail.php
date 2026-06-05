@@ -764,6 +764,199 @@ include("includes/mheader.php");
     font-size: 0.92em;
     margin-top: 0.6em;
 }
+
+/* ===== Changelog viewer modal ===== */
+.cl-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 9999;
+    padding: 4em 1em 2em 1em;
+    overflow-y: auto;
+}
+.cl-modal-overlay[hidden] { display: none; }
+.cl-modal {
+    background: #1f1f2e;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 760px;
+    color: #fff;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+.cl-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1em 1.25em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.cl-modal-header h3 { margin: 0; color: #fff; font-size: 1.15em; }
+.cl-modal-close {
+    background: none; border: none; color: rgba(255, 255, 255, 0.7);
+    font-size: 1.6em; line-height: 1; cursor: pointer;
+    padding: 0 0.3em;
+}
+.cl-modal-close:hover { color: #fff; }
+.cl-modal-body { padding: 0.5em 1.25em 1.25em 1.25em; }
+.cl-list { padding: 0.4em 0; }
+.cl-row {
+    display: flex;
+    gap: 0.75em;
+    padding: 0.85em 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cl-row:last-child { border-bottom: none; }
+.cl-avatar {
+    width: 32px; height: 32px; flex: 0 0 32px;
+    background: rgba(120, 140, 200, 0.45);
+    color: #fff;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.78em; font-weight: 700;
+}
+.cl-row-meta { flex: 1; min-width: 0; }
+.cl-row-head {
+    display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em;
+    margin-bottom: 0.35em;
+}
+.cl-actor {
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95em;
+}
+.cl-time {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.78em;
+    margin-left: auto;
+    white-space: nowrap;
+}
+.cl-source {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    background: rgba(255, 255, 255, 0.08);
+    color: rgba(255, 255, 255, 0.75);
+}
+.cl-type {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 700;
+    padding: 1px 7px;
+    border-radius: 999px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.cl-type-create               { background: rgba(76, 200, 110, 0.25); color: #cfe9d4; }
+.cl-type-update               { background: rgba(80, 150, 230, 0.25); color: #c9def0; }
+.cl-type-parent_set,
+.cl-type-parent_clear         { background: rgba(180, 130, 220, 0.25); color: #ddc9f0; }
+.cl-type-composition_change,
+.cl-type-parameters_change,
+.cl-type-documents_change     { background: rgba(255, 170, 70, 0.22); color: #f6dcb0; }
+.cl-type-writeback_translation{ background: rgba(228, 100, 170, 0.28); color: #f3c9e0; }
+.cl-row-body {
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.9em;
+    line-height: 1.45;
+}
+.cl-summary {
+    margin-bottom: 0.25em;
+}
+.cl-diff-list {
+    margin: 0.25em 0 0 0;
+    padding: 0;
+    list-style: none;
+}
+.cl-diff-row {
+    display: flex; flex-wrap: wrap; gap: 0.35em;
+    padding: 0.2em 0;
+    font-size: 0.88em;
+    line-height: 1.4;
+}
+.cl-diff-field {
+    color: rgba(255, 255, 255, 0.65);
+    font-weight: 600;
+    min-width: 7em;
+}
+.cl-diff-old {
+    color: #f0a5a5;
+    text-decoration: line-through;
+    text-decoration-color: rgba(240, 165, 165, 0.5);
+    word-break: break-word;
+}
+.cl-diff-new {
+    color: #b8e0c0;
+    word-break: break-word;
+}
+.cl-diff-arrow {
+    color: rgba(255, 255, 255, 0.4);
+    flex: 0 0 auto;
+}
+.cl-diff-noop {
+    color: rgba(255, 255, 255, 0.55);
+    font-style: italic;
+}
+.cl-wbnote {
+    padding: 0.3em 0;
+    font-size: 0.88em;
+}
+.cl-wbnote-translated {
+    color: rgba(200, 230, 210, 0.95);
+}
+.cl-wbnote-skipped {
+    color: rgba(240, 200, 130, 0.95);
+}
+.cl-wbnote-reason {
+    color: rgba(255, 255, 255, 0.5);
+    font-style: italic;
+    margin-left: 0.4em;
+}
+.cl-empty,
+.cl-loading {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.9em;
+    padding: 1.2em 0.6em;
+    font-style: italic;
+    text-align: center;
+}
+.cl-pagination {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-top: 1em;
+    padding-top: 0.8em;
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.cl-counter {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85em;
+}
+.cl-btn-more {
+    background: rgba(255, 255, 255, 0.10);
+    color: #fff;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 0.45em 1em;
+    font-size: 0.9em;
+    cursor: pointer;
+}
+.cl-btn-more:hover:not(:disabled) { background: rgba(255, 255, 255, 0.16); }
+.cl-btn-more:disabled { opacity: 0.6; cursor: not-allowed; }
+.cl-modal-error {
+    background: rgba(228, 76, 101, 0.18);
+    border-left: 3px solid #e44c65;
+    padding: 0.55em 0.8em;
+    border-radius: 3px;
+    color: #fff;
+    font-size: 0.92em;
+    margin-top: 0.6em;
+}
 </style>
 
 <div id="main" class="wrapper style1">
@@ -853,6 +1046,29 @@ include("includes/mheader.php");
                 <div id="cm-invite-results" class="cm-invite-results" hidden></div>
             </div>
             <div class="cm-modal-error" id="cm-modal-error" hidden></div>
+        </div>
+    </div>
+</div>
+
+<!-- Changelog viewer modal. Visible to anyone who can read the sample
+     (owner + accepted collaborators incl. readonly). Opened from the
+     View Changelog button under Sample Metadata. Drives /samples_changelog.php
+     with a single 'list' action; renders distinct shapes per change_type
+     (incl. the spine_diff payload from upload updates and the
+     writeback_translation note shape from cross-vocab pushes). -->
+<div id="cl-modal-overlay" class="cl-modal-overlay" hidden>
+    <div class="cl-modal" role="dialog" aria-modal="true" aria-labelledby="cl-modal-title">
+        <div class="cl-modal-header">
+            <h3 id="cl-modal-title">Changelog</h3>
+            <button type="button" class="cl-modal-close" id="cl-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="cl-modal-body">
+            <div id="cl-list" class="cl-list"><div class="cl-loading">Loading&hellip;</div></div>
+            <div class="cl-pagination" id="cl-pagination" hidden>
+                <span class="cl-counter" id="cl-counter"></span>
+                <button type="button" class="cl-btn-more" id="cl-load-more">Load more</button>
+            </div>
+            <div class="cl-modal-error" id="cl-modal-error" hidden></div>
         </div>
     </div>
 </div>
@@ -969,7 +1185,7 @@ include("includes/mheader.php");
     });
     document.getElementById('sd-changelog-btn').addEventListener('click', function(e) {
         e.preventDefault();
-        alert('Changelog viewer is on its way — feed available at GET /samplesdb/sample/' + sample.id + '/changelog?owner=' + owner.pkey);
+        openChangelogModal();
     });
 
     // ---- Collaborator avatars ----
@@ -1337,6 +1553,352 @@ include("includes/mheader.php");
             $cmError.hidden = false;
         });
     });
+
+    // ---- Changelog viewer modal ----
+    // Pulls /samples_changelog.php with action=list, render distinct shapes
+    // per change_type. Pagination is a "Load more" button that grows the
+    // accumulated list — newest-first ordering is preserved across pages.
+    var $clModal    = document.getElementById('cl-modal-overlay');
+    var $clClose    = document.getElementById('cl-modal-close');
+    var $clList     = document.getElementById('cl-list');
+    var $clPager    = document.getElementById('cl-pagination');
+    var $clCounter  = document.getElementById('cl-counter');
+    var $clMore     = document.getElementById('cl-load-more');
+    var $clError    = document.getElementById('cl-modal-error');
+    var clEscHandler = null;
+    var CL_PAGE_SIZE = 50;
+    var clState = { entries: [], total: 0, offset: 0 };
+
+    function openChangelogModal() {
+        $clModal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        clEscHandler = function(e) { if (e.key === 'Escape') closeChangelogModal(); };
+        document.addEventListener('keydown', clEscHandler);
+        clState = { entries: [], total: 0, offset: 0 };
+        $clList.innerHTML = '<div class="cl-loading">Loading&hellip;</div>';
+        $clPager.hidden = true;
+        $clError.hidden = true;
+        fetchChangelogPage();
+    }
+    function closeChangelogModal() {
+        $clModal.hidden = true;
+        document.body.style.overflow = '';
+        if (clEscHandler) {
+            document.removeEventListener('keydown', clEscHandler);
+            clEscHandler = null;
+        }
+    }
+    $clModal.addEventListener('click', function(e) {
+        if (e.target === $clModal) closeChangelogModal();
+    });
+    $clClose.addEventListener('click', closeChangelogModal);
+    $clMore.addEventListener('click', function() { fetchChangelogPage(); });
+
+    function fetchChangelogPage() {
+        $clMore.disabled = true;
+        fetch('/samples_changelog.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({
+                action:     'list',
+                sample_id:  sample.id,
+                owner_pkey: owner.pkey,
+                limit:      CL_PAGE_SIZE,
+                offset:     clState.offset,
+            }),
+        }).then(function(r) {
+            return r.json().then(
+                function(j) { return {status: r.status, body: j}; },
+                function()  { return {status: r.status, body: null}; }
+            );
+        }).then(function(res) {
+            $clMore.disabled = false;
+            if (!res.body || !res.body.ok) {
+                var err = res.body && res.body.error ? res.body.error : 'unknown';
+                if (clState.entries.length === 0) {
+                    $clList.innerHTML = '<div class="cl-empty">Could not load changelog (' + escapeHtml(err) + ').</div>';
+                } else {
+                    $clError.textContent = 'Could not load more entries (' + err + ').';
+                    $clError.hidden = false;
+                }
+                return;
+            }
+            clState.entries = clState.entries.concat(res.body.changelog || []);
+            clState.total   = res.body.total || 0;
+            clState.offset  = clState.entries.length;
+            renderChangelogList();
+        }).catch(function() {
+            $clMore.disabled = false;
+            if (clState.entries.length === 0) {
+                $clList.innerHTML = '<div class="cl-empty">Network error loading changelog.</div>';
+            } else {
+                $clError.textContent = 'Network error loading more entries.';
+                $clError.hidden = false;
+            }
+        });
+    }
+
+    function renderChangelogList() {
+        if (!clState.entries.length) {
+            $clList.innerHTML = '<div class="cl-empty">No history recorded for this sample.</div>';
+            $clPager.hidden = true;
+            return;
+        }
+        $clList.innerHTML = clState.entries.map(renderChangelogEntry).join('');
+        if (clState.entries.length < clState.total) {
+            $clCounter.textContent = 'Showing ' + clState.entries.length + ' of ' + clState.total;
+            $clMore.hidden = false;
+            $clPager.hidden = false;
+        } else {
+            $clCounter.textContent = clState.total + ' entr' + (clState.total === 1 ? 'y' : 'ies');
+            $clMore.hidden = true;
+            $clPager.hidden = false;
+        }
+    }
+
+    function fmtDateTime(ts) {
+        if (!ts) return '';
+        var d = new Date(ts);
+        if (isNaN(d.getTime())) return ts;
+        return d.toLocaleString(undefined, {
+            year: 'numeric', month: 'short', day: 'numeric',
+            hour: 'numeric', minute: '2-digit',
+        });
+    }
+    function typeBadgeLabel(t) {
+        switch (t) {
+            case 'create':                  return 'Created';
+            case 'update':                  return 'Updated';
+            case 'parent_set':              return 'Parent set';
+            case 'parent_clear':            return 'Parent cleared';
+            case 'composition_change':      return 'Composition';
+            case 'parameters_change':       return 'Parameters';
+            case 'documents_change':        return 'Documents';
+            case 'writeback_translation':   return 'Field writeback';
+            default:                         return t;
+        }
+    }
+    function fmtValue(v) {
+        if (v === null || v === undefined || v === '') return '(empty)';
+        if (typeof v === 'object') return JSON.stringify(v);
+        return String(v);
+    }
+
+    function renderChangelogEntry(entry) {
+        var typeClass = 'cl-type-' + (entry.change_type || '').replace(/[^a-z_]/gi, '_');
+        return ''
+            + '<div class="cl-row">'
+            +   '<div class="cl-avatar" title="' + escapeHtml(entry.actor_name || '') + '">'
+            +     escapeHtml(entry.actor_initials || '?')
+            +   '</div>'
+            +   '<div class="cl-row-meta">'
+            +     '<div class="cl-row-head">'
+            +       '<span class="cl-actor">' + escapeHtml(entry.actor_name || '(unknown)') + '</span>'
+            +       '<span class="cl-type ' + typeClass + '">' + escapeHtml(typeBadgeLabel(entry.change_type)) + '</span>'
+            +       (entry.source_subsystem ? '<span class="cl-source">' + escapeHtml(entry.source_subsystem) + '</span>' : '')
+            +       '<span class="cl-time">' + escapeHtml(fmtDateTime(entry.changed_at)) + '</span>'
+            +     '</div>'
+            +     '<div class="cl-row-body">' + renderEntryBody(entry) + '</div>'
+            +   '</div>'
+            + '</div>';
+    }
+
+    function renderEntryBody(entry) {
+        var c = entry.changes || {};
+        switch (entry.change_type) {
+            case 'create':
+                return renderCreateBody(c, entry);
+            case 'update':
+                return renderUpdateBody(c, entry);
+            case 'parent_set':
+                return renderParentBody(c, /*cleared*/false);
+            case 'parent_clear':
+                return renderParentBody(c, /*cleared*/true);
+            case 'composition_change':
+                return renderCountChangeBody(c, 'composition');
+            case 'parameters_change':
+                return renderCountChangeBody(c, 'parameters');
+            case 'documents_change':
+                return renderCountChangeBody(c, 'documents');
+            case 'writeback_translation':
+                return renderWritebackBody(c);
+            default:
+                return renderFallbackBody(c);
+        }
+    }
+
+    // create has two shapes — modal {created: {...spine fields...}} vs.
+    // upload {source, spine_written}. Render both clearly.
+    function renderCreateBody(c, entry) {
+        if (c && c.source) {
+            var subsystemLabel =
+                  c.source === 'field'        ? 'StraboField'
+                : c.source === 'micro'        ? 'StraboMicro'
+                : c.source === 'experimental' ? 'StraboExperimental'
+                : c.source;
+            var spineNote = c.spine_written
+                ? ' Spine fields populated from this source.'
+                : ' Spine fields preserved from a higher-priority source.';
+            return '<div class="cl-summary">Sample created via ' + escapeHtml(subsystemLabel) + ' upload.'
+                 + escapeHtml(spineNote) + '</div>';
+        }
+        // Modal-created sample. The 'created' payload is the initial spine
+        // dict — surface the few keys the user cares about.
+        var initial = c && c.created ? c.created : {};
+        var keys = Object.keys(initial);
+        if (!keys.length) {
+            return '<div class="cl-summary">Sample created.</div>';
+        }
+        var items = keys.map(function(k) {
+            return ''
+                + '<li class="cl-diff-row">'
+                +   '<span class="cl-diff-field">' + escapeHtml(k) + '</span>'
+                +   '<span class="cl-diff-arrow">=</span>'
+                +   '<span class="cl-diff-new">' + escapeHtml(fmtValue(initial[k])) + '</span>'
+                + '</li>';
+        }).join('');
+        return '<div class="cl-summary">Sample created.</div>'
+             + '<ul class="cl-diff-list">' + items + '</ul>';
+    }
+
+    // update has two shapes:
+    //   modal:  {fieldA: {old, new}, fieldB: {updated: true}}
+    //   upload: {source, spine_written, *_data: {updated: true}, spine_diff?: {field: {old, new}}}
+    // The spine_diff under upload-updates is exactly the same shape as the
+    // modal's per-field diff, so we render both with the same row.
+    function renderUpdateBody(c, entry) {
+        c = c || {};
+        var html = '';
+        var diffEntries = [];
+
+        if (c.source) {
+            // Upload update — surface source + spine_diff (if present).
+            var subsystemLabel =
+                  c.source === 'field'        ? 'StraboField'
+                : c.source === 'micro'        ? 'StraboMicro'
+                : c.source === 'experimental' ? 'StraboExperimental'
+                : c.source;
+            var summary = 'Updated via ' + subsystemLabel + ' upload.';
+            if (!c.spine_written) summary += ' Spine fields skipped (higher-priority source already wrote them).';
+            html += '<div class="cl-summary">' + escapeHtml(summary) + '</div>';
+            if (c.spine_diff && typeof c.spine_diff === 'object') {
+                Object.keys(c.spine_diff).forEach(function(k) {
+                    diffEntries.push([k, c.spine_diff[k]]);
+                });
+            }
+        } else {
+            // Modal update — top-level keys are the diff.
+            Object.keys(c).forEach(function(k) {
+                diffEntries.push([k, c[k]]);
+            });
+        }
+
+        if (!diffEntries.length) {
+            if (!html) html = '<div class="cl-diff-noop">No spine fields changed.</div>';
+            return html;
+        }
+
+        html += '<ul class="cl-diff-list">';
+        diffEntries.forEach(function(pair) {
+            var field = pair[0], delta = pair[1] || {};
+            if (delta.updated === true) {
+                html += ''
+                    + '<li class="cl-diff-row">'
+                    +   '<span class="cl-diff-field">' + escapeHtml(field) + '</span>'
+                    +   '<span class="cl-diff-noop">(JSONB updated)</span>'
+                    + '</li>';
+            } else {
+                html += ''
+                    + '<li class="cl-diff-row">'
+                    +   '<span class="cl-diff-field">' + escapeHtml(field) + '</span>'
+                    +   '<span class="cl-diff-old">' + escapeHtml(fmtValue(delta.old)) + '</span>'
+                    +   '<span class="cl-diff-arrow">→</span>'
+                    +   '<span class="cl-diff-new">' + escapeHtml(fmtValue(delta.new)) + '</span>'
+                    + '</li>';
+            }
+        });
+        html += '</ul>';
+        return html;
+    }
+
+    function renderParentBody(c, cleared) {
+        var p = (c && c.parent) || {};
+        var oldId = p.old && p.old.parent_sample_id ? p.old.parent_sample_id : null;
+        var newId = p.new && p.new.parent_sample_id ? p.new.parent_sample_id : null;
+        if (cleared) {
+            return '<div class="cl-summary">Parent link cleared'
+                 + (oldId ? ' (was <code>' + escapeHtml(oldId) + '</code>)' : '')
+                 + '.</div>';
+        }
+        if (oldId && newId) {
+            return ''
+                + '<div class="cl-summary">Parent changed.</div>'
+                + '<ul class="cl-diff-list"><li class="cl-diff-row">'
+                +   '<span class="cl-diff-field">parent</span>'
+                +   '<span class="cl-diff-old">' + escapeHtml(oldId) + '</span>'
+                +   '<span class="cl-diff-arrow">→</span>'
+                +   '<span class="cl-diff-new">' + escapeHtml(newId) + '</span>'
+                + '</li></ul>';
+        }
+        return '<div class="cl-summary">Parent set to <code>' + escapeHtml(newId || '?') + '</code>.</div>';
+    }
+
+    function renderCountChangeBody(c, key) {
+        var delta = (c && c[key]) || {};
+        var oldN = delta.old_count === undefined ? '?' : delta.old_count;
+        var newN = delta.new_count === undefined ? '?' : delta.new_count;
+        var label = key.charAt(0).toUpperCase() + key.slice(1);
+        return '<div class="cl-summary">'
+             + escapeHtml(label) + ' replaced: '
+             + '<span class="cl-diff-old">' + oldN + ' entr' + (oldN === 1 ? 'y' : 'ies') + '</span>'
+             + ' <span class="cl-diff-arrow">→</span> '
+             + '<span class="cl-diff-new">' + newN + ' entr' + (newN === 1 ? 'y' : 'ies') + '</span>'
+             + '.</div>';
+    }
+
+    // writeback_translation has two payload variants from
+    // StraboSamplesService::writeBackFieldSpot:
+    //   {notes: [...]}                                  — mixed push + skips
+    //   {skipped_only: true, notes: [...]}              — all-skipped, nothing pushed
+    // Each note is either translated ({spine_column, field_key, original, translated})
+    // or skipped ({spine_column, field_key, skipped, reason}).
+    function renderWritebackBody(c) {
+        c = c || {};
+        var notes = Array.isArray(c.notes) ? c.notes : [];
+        var summary = c.skipped_only
+            ? 'Spine edits could not be written back to StraboField — no representable values.'
+            : 'Spine edits translated for StraboField writeback.';
+        var html = '<div class="cl-summary">' + escapeHtml(summary) + '</div>';
+        if (!notes.length) return html;
+        html += notes.map(function(n) {
+            if (n.skipped !== undefined) {
+                return ''
+                    + '<div class="cl-wbnote cl-wbnote-skipped">'
+                    +   '<strong>' + escapeHtml(n.spine_column || n.field_key || '?') + '</strong>: skipped '
+                    +   '<code>' + escapeHtml(fmtValue(n.skipped)) + '</code>'
+                    +   '<span class="cl-wbnote-reason">(' + escapeHtml(n.reason || 'no mapping') + ')</span>'
+                    + '</div>';
+            }
+            return ''
+                + '<div class="cl-wbnote cl-wbnote-translated">'
+                +   '<strong>' + escapeHtml(n.spine_column || n.field_key || '?') + '</strong>: '
+                +   '<code>' + escapeHtml(fmtValue(n.original)) + '</code>'
+                +   ' <span class="cl-diff-arrow">→</span> '
+                +   '<code>' + escapeHtml(fmtValue(n.translated)) + '</code>'
+                + '</div>';
+        }).join('');
+        return html;
+    }
+
+    function renderFallbackBody(c) {
+        // Unknown change_type — surface raw JSON so the user/dev can still
+        // see something. Cheap defensive default; no need to be pretty.
+        if (!c) return '<div class="cl-diff-noop">(no detail)</div>';
+        return '<pre style="margin:0;padding:0.4em 0.6em;background:rgba(255,255,255,0.05);border-radius:3px;font-size:0.82em;overflow-x:auto;">'
+             + escapeHtml(JSON.stringify(c, null, 2))
+             + '</pre>';
+    }
 })();
 </script>
 <?php endif; ?>
