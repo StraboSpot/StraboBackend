@@ -530,7 +530,14 @@ include("includes/mheader.php");
     text-underline-offset: 2px;
 }
 .sd-family-back:hover { color: #fff; }
-.sd-family-open {
+/* Lock color / decoration across all link states — site-wide a:hover
+   in massets/css/main.css otherwise wipes the text on hover. */
+.sd-family-open,
+.sd-family-open:link,
+.sd-family-open:visited,
+.sd-family-open:hover,
+.sd-family-open:focus,
+.sd-family-open:active {
     background: rgba(228, 76, 101, 0.85);
     color: #fff;
     border: none;
@@ -540,7 +547,8 @@ include("includes/mheader.php");
     cursor: pointer;
     text-decoration: none;
 }
-.sd-family-open:hover { background: #e44c65; }
+.sd-family-open:hover,
+.sd-family-open:focus { background: #e44c65; }
 
 /* Hover tooltip — replaces the click-driven detail card with a lighter-
    weight quick-recon affordance. */
