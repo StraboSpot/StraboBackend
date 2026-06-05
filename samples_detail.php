@@ -836,12 +836,10 @@ include("includes/mheader.php");
 }
 .cl-source {
     display: inline-block;
-    font-size: 0.7em;
-    font-weight: 700;
+    font-size: 0.75em;
+    font-weight: 600;
     padding: 1px 7px;
     border-radius: 999px;
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
     background: rgba(255, 255, 255, 0.08);
     color: rgba(255, 255, 255, 0.75);
 }
@@ -1679,6 +1677,15 @@ include("includes/mheader.php");
             default:                         return t;
         }
     }
+    function sourceBadgeLabel(s) {
+        switch (s) {
+            case 'samples_api':   return 'Samples app';
+            case 'field':         return 'StraboField';
+            case 'micro':         return 'StraboMicro';
+            case 'experimental':  return 'StraboExperimental';
+            default:               return s;
+        }
+    }
     function fmtValue(v) {
         if (v === null || v === undefined || v === '') return '(empty)';
         if (typeof v === 'object') return JSON.stringify(v);
@@ -1696,7 +1703,7 @@ include("includes/mheader.php");
             +     '<div class="cl-row-head">'
             +       '<span class="cl-actor">' + escapeHtml(entry.actor_name || '(unknown)') + '</span>'
             +       '<span class="cl-type ' + typeClass + '">' + escapeHtml(typeBadgeLabel(entry.change_type)) + '</span>'
-            +       (entry.source_subsystem ? '<span class="cl-source">' + escapeHtml(entry.source_subsystem) + '</span>' : '')
+            +       (entry.source_subsystem ? '<span class="cl-source">' + escapeHtml(sourceBadgeLabel(entry.source_subsystem)) + '</span>' : '')
             +       '<span class="cl-time">' + escapeHtml(fmtDateTime(entry.changed_at)) + '</span>'
             +     '</div>'
             +     '<div class="cl-row-body">' + renderEntryBody(entry) + '</div>'
