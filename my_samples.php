@@ -531,11 +531,11 @@ include("includes/mheader.php");
                 </div>
                 <div class="ms-form-row">
                     <label for="ms-f-lat">Latitude</label>
-                    <input type="number" id="ms-f-lat" step="any" autocomplete="off">
+                    <input type="text" id="ms-f-lat" inputmode="decimal" autocomplete="off" placeholder="-90 to 90">
                 </div>
                 <div class="ms-form-row">
                     <label for="ms-f-lng">Longitude</label>
-                    <input type="number" id="ms-f-lng" step="any" autocomplete="off">
+                    <input type="text" id="ms-f-lng" inputmode="decimal" autocomplete="off" placeholder="-180 to 180">
                 </div>
             </div>
             <div class="ms-form-row">
@@ -938,6 +938,28 @@ include("includes/mheader.php");
         }
     });
 
+    // Lat/lng are type="text" with inputmode="decimal" (not type="number"):
+    // both Firefox and Safari accept arbitrary typed text into type="number"
+    // visually while returning '' from .value — so an oninput filter on
+    // .value has nothing to clean up and the garbage stays on-screen.
+    // type="text" guarantees .value matches what the user sees. We then
+    // strip non-numeric chars on every input, allowing '-' / '.' / '-.'
+    // mid-typing so users can build negative decimals without fighting
+    // the cursor.
+    function constrainNumericInput(input) {
+        input.addEventListener('input', function(e) {
+            var v = e.target.value;
+            var m = v.match(/^-?\d*\.?\d*/);
+            var stripped = m ? m[0] : '';
+            if (v !== stripped) {
+                e.target.value = stripped;
+                try { e.target.setSelectionRange(stripped.length, stripped.length); } catch (_) {}
+            }
+        });
+    }
+    constrainNumericInput(document.getElementById('ms-f-lat'));
+    constrainNumericInput(document.getElementById('ms-f-lng'));
+
     $modalForm.addEventListener('submit', function(e) {
         e.preventDefault();
         $modalError.hidden = true;
@@ -963,21 +985,23 @@ include("includes/mheader.php");
             var v = document.getElementById(pair[0]).value.trim();
             if (v) body[pair[1]] = v;
         });
+        // Number() rather than parseFloat — parseFloat('12abc') returns 12,
+        // which would silently accept garbage. Number('12abc') returns NaN.
         var latRaw = document.getElementById('ms-f-lat').value.trim();
         var lngRaw = document.getElementById('ms-f-lng').value.trim();
         if (latRaw !== '') {
-            var lat = parseFloat(latRaw);
-            if (isNaN(lat)) {
-                $modalError.textContent = 'Latitude must be a number.';
+            var lat = Number(latRaw);
+            if (!Number.isFinite(lat) || lat < -90 || lat > 90) {
+                $modalError.textContent = 'Latitude must be a number between -90 and 90.';
                 $modalError.hidden = false;
                 return;
             }
             body.latitude = lat;
         }
         if (lngRaw !== '') {
-            var lng = parseFloat(lngRaw);
-            if (isNaN(lng)) {
-                $modalError.textContent = 'Longitude must be a number.';
+            var lng = Number(lngRaw);
+            if (!Number.isFinite(lng) || lng < -180 || lng > 180) {
+                $modalError.textContent = 'Longitude must be a number between -180 and 180.';
                 $modalError.hidden = false;
                 return;
             }
