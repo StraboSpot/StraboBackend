@@ -946,7 +946,7 @@ include("includes/mheader.php");
     metaHtml += field('Sample ID',                    sample.name || sample.id);
     metaHtml += field('Sample Owner',                 owner && owner.name);
     metaHtml += field('Last Updated',                 fmtDate(sample.modified_at));
-    metaHtml += field('Sample Type',                  sample.display_sample_type);
+    metaHtml += field('Material Type',                sample.display_sample_type);
     metaHtml += field('Sample Purpose',               sample.display_sample_purpose);
     if (sample.latitude !== null && sample.longitude !== null) {
         metaHtml += field('Current Sample Location', sample.latitude.toFixed(6) + ', ' + sample.longitude.toFixed(6));
