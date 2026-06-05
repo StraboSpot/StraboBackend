@@ -572,6 +572,23 @@ include("includes/mheader.php");
 }
 
 /* ---- Collaborator-management modal ---- */
+/* Defensive overrides: massets/css/main.css has site-wide
+   `select { width: 100%; height: 3em; padding: 0 1em; padding-right: 3em;
+            background-image: <arrow> }` and `input/textarea { display: block;
+   width: 100%; padding: 0 1em; height: 3em }`. Without these resets the
+   inline cm-row-level select would expand to fill the row and the inputs
+   would all be ~3em tall full-width form fields. The .cm-modal scope
+   keeps the override contained. */
+.cm-modal input[type="text"],
+.cm-modal input[type="number"],
+.cm-modal input[type="email"],
+.cm-modal select,
+.cm-modal textarea {
+    height: auto;
+    line-height: 1.4;
+    background-image: none;
+}
+
 .cm-modal-overlay {
     position: fixed;
     inset: 0;
@@ -660,13 +677,21 @@ include("includes/mheader.php");
 .cm-status-badge.accepted { background: rgba(76, 200, 110, 0.25); color: #cfe9d4; }
 .cm-status-badge.pending  { background: rgba(255, 200, 80, 0.20); color: #f5dc99; }
 .cm-row-level {
+    /* The site-wide select rule sets width:100% which would expand this
+       inline control to fill the entire row — explicit override required. */
+    width: auto;
     background: rgba(255, 255, 255, 0.08);
     border: 1px solid rgba(255, 255, 255, 0.2);
     color: #fff;
     border-radius: 3px;
-    padding: 4px 6px;
+    padding: 4px 22px 4px 8px;
     font-size: 0.85em;
     flex: 0 0 auto;
+    /* Small custom arrow since appearance:none hides the native one. */
+    background-image: url("data:image/svg+xml;charset=utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='40' height='40' viewBox='0 0 40 40'%3E%3Cpath d='M9.4,12.3l10.4,10.4l10.4-10.4c0.2-0.2,0.5-0.4,0.9-0.4c0.3,0,0.6,0.1,0.9,0.4l3.3,3.3c0.2,0.2,0.4,0.5,0.4,0.9 c0,0.4-0.1,0.6-0.4,0.9L20.7,31.9c-0.2,0.2-0.5,0.4-0.9,0.4c-0.3,0-0.6-0.1-0.9-0.4L4.3,17.3c-0.2-0.2-0.4-0.5-0.4-0.9 c0-0.4,0.1-0.6,0.4-0.9l3.3-3.3c0.2-0.2,0.5-0.4,0.9-0.4S9.1,12.1,9.4,12.3z' fill='rgba(255,255,255,0.55)' /%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: calc(100% - 5px) center;
+    background-size: 0.7rem;
 }
 .cm-row-level option { background: #2a2a3a; }
 .cm-row-remove {
