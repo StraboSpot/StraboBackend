@@ -513,8 +513,8 @@ include("includes/mheader.php");
         </div>
         <form id="ms-modal-form" class="ms-modal-form" novalidate>
             <div class="ms-form-row">
-                <label for="ms-f-name">Name <span class="ms-required">*</span></label>
-                <input type="text" id="ms-f-name" maxlength="500" autocomplete="off">
+                <label for="ms-f-name">Sample ID <span class="ms-required">*</span></label>
+                <input type="text" id="ms-f-name" maxlength="500" autocomplete="off" placeholder="e.g. PF-5">
             </div>
             <div class="ms-form-row">
                 <label for="ms-f-igsn">IGSN</label>
@@ -711,7 +711,7 @@ include("includes/mheader.php");
         if (mode === 'modified_asc')  return function(a, b) { return (a.modified_at || '').localeCompare(b.modified_at || ''); };
         if (mode === 'purpose')       return function(a, b) { return (a.display_sample_purpose || '').localeCompare(b.display_sample_purpose || ''); };
         if (mode === 'type')          return function(a, b) { return (a.display_sample_type    || '').localeCompare(b.display_sample_type    || ''); };
-        if (mode === 'id_asc')        return function(a, b) { return (a.id || '').localeCompare(b.id || ''); };
+        if (mode === 'id_asc')        return function(a, b) { return (a.name || a.id || '').localeCompare(b.name || b.id || ''); };
         return function(a, b) { return (b.modified_at || '').localeCompare(a.modified_at || ''); };  // modified_desc default
     }
 
@@ -967,7 +967,7 @@ include("includes/mheader.php");
 
         var name = $fName.value.trim();
         if (!name) {
-            $modalError.textContent = 'Name is required.';
+            $modalError.textContent = 'Sample ID is required.';
             $modalError.hidden = false;
             $fName.focus();
             return;

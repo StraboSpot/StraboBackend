@@ -711,8 +711,12 @@ include("includes/mheader.php");
         }
     });
 
+    // 'Sample ID' is the scientific identifier (sample.name) — the canonical
+    // user-facing label. sample.id is the technical PK / URL token and only
+    // surfaces in the share URL above. Falls back to sample.id when name is
+    // null (legacy/migrated rows without a populated name).
     var metaHtml = '';
-    metaHtml += field('Sample ID',                    sample.id);
+    metaHtml += field('Sample ID',                    sample.name || sample.id);
     metaHtml += field('Sample Owner',                 owner && owner.name);
     metaHtml += field('Last Updated',                 fmtDate(sample.modified_at));
     metaHtml += field('Sample Type',                  sample.display_sample_type);
