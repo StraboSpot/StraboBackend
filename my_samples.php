@@ -74,6 +74,71 @@ foreach ($samples as &$s) {
 }
 unset($s);
 
+// Ownership-cue enrichment: each row gets a `relationship` of
+//   - 'mine_private'    = I own it, no accepted collaborators
+//   - 'mine_shared'     = I own it, ≥1 accepted collaborator (collab_count populated)
+//   - 'shared_with_me'  = I don't own it (owner_name populated)
+// Drives the Show: tabs + the relationship pill on each card.
+
+// Owner-name batched lookup for the not-owned rows.
+$nonOwnedOwnerPkeys = array();
+foreach ($samples as $s) {
+    if ((int)$s['userpkey'] !== $userpkey) {
+        $nonOwnedOwnerPkeys[(int)$s['userpkey']] = true;
+    }
+}
+$ownerNames = array();
+if (!empty($nonOwnedOwnerPkeys)) {
+    $pkeys = array_keys($nonOwnedOwnerPkeys);
+    $placeholders = array();
+    for ($i = 0; $i < count($pkeys); $i++) {
+        $placeholders[] = '$' . ($i + 1);
+    }
+    $rows = $db->get_results_prepared(
+        "SELECT pkey, firstname, lastname, email FROM users WHERE pkey IN (" . implode(',', $placeholders) . ")",
+        $pkeys
+    );
+    if (is_array($rows)) {
+        foreach ($rows as $u) {
+            $name = trim(($u->firstname ?: '') . ' ' . ($u->lastname ?: ''));
+            $ownerNames[(int)$u->pkey] = $name !== '' ? $name : $u->email;
+        }
+    }
+}
+
+// Accepted-collaborator counts for my-owned samples (one GROUP BY).
+$collabRows = $db->get_results_prepared(
+    "SELECT sample_id, sample_userpkey, COUNT(*)::int AS n
+       FROM strabosamples.sample_collaborators
+      WHERE sample_userpkey = $1 AND accepted = TRUE AND removed_at IS NULL
+      GROUP BY sample_id, sample_userpkey",
+    array($userpkey)
+);
+$collabCounts = array();
+if (is_array($collabRows)) {
+    foreach ($collabRows as $c) {
+        $k = $c->sample_id . '|' . (int)$c->sample_userpkey;
+        $collabCounts[$k] = (int)$c->n;
+    }
+}
+
+foreach ($samples as &$s) {
+    if ((int)$s['userpkey'] === $userpkey) {
+        $k = $s['id'] . '|' . (int)$s['userpkey'];
+        $count = isset($collabCounts[$k]) ? $collabCounts[$k] : 0;
+        $s['relationship'] = $count > 0 ? 'mine_shared' : 'mine_private';
+        $s['collab_count'] = $count;
+        $s['owner_name']   = null;
+    } else {
+        $s['relationship'] = 'shared_with_me';
+        $s['collab_count'] = 0;
+        $s['owner_name']   = isset($ownerNames[(int)$s['userpkey']])
+            ? $ownerNames[(int)$s['userpkey']]
+            : '(unknown user)';
+    }
+}
+unset($s);
+
 // Pending sample-collaboration invitations for the current user.
 // Server-rendered above the controls — same embed-JSON + render-client-side
 // pattern as the sample list itself. Same inviter-info enrichment as
@@ -570,6 +635,43 @@ include("includes/mheader.php");
 .ms-invitation-btn.deny   { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .ms-invitation-btn.deny:hover:not(:disabled)   { background: rgba(255, 255, 255, 0.20); }
 .ms-invitation-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ---- Show: ownership filter tabs + relationship pills ---- */
+.ms-show-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4em;
+    justify-content: center;
+    align-items: center;
+    margin-bottom: 0.8em;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 0.95em;
+}
+.ms-show-tabs .ms-type-label { margin-right: 0.6em; font-weight: 600; }
+
+.ms-relationship-pill {
+    display: inline-block;
+    max-width: 100%;
+    box-sizing: border-box;
+    margin-top: 0.35em;
+    padding: 2px 10px;
+    border-radius: 999px;
+    font-size: 0.78em;
+    font-weight: 600;
+    line-height: 1.5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+.ms-relationship-pill.mine-shared {
+    background: rgba(228, 76, 101, 0.22);
+    color: #f5a3b3;
+}
+.ms-relationship-pill.shared-with-me {
+    background: rgba(120, 170, 230, 0.20);
+    color: #b6d6f4;
+}
 </style>
 
 <div id="main" class="wrapper style1">
@@ -597,6 +699,14 @@ include("includes/mheader.php");
                 <option value="type">Sort: Type</option>
                 <option value="id_asc">Sort: Sample ID</option>
             </select>
+        </div>
+
+        <div class="ms-show-tabs">
+            <span class="ms-type-label">Collaboration:</span>
+            <button type="button" class="ms-tab ms-show-tab active" data-show="all">All</button>
+            <button type="button" class="ms-tab ms-show-tab" data-show="mine">Mine</button>
+            <button type="button" class="ms-tab ms-show-tab" data-show="shared_by_me">Shared by me</button>
+            <button type="button" class="ms-tab ms-show-tab" data-show="shared_with_me">Shared with me</button>
         </div>
 
         <div class="ms-type-tabs">
@@ -737,10 +847,13 @@ include("includes/mheader.php");
     var urlParams = new URLSearchParams(window.location.search);
     var validSorts = {modified_desc: 1, modified_asc: 1, purpose: 1, type: 1, id_asc: 1};
     var validTypes = {all: 1, field: 1, micro: 1, experimental: 1};
+    var validShows = {all: 1, mine: 1, shared_by_me: 1, shared_with_me: 1};
     var initialSort = urlParams.get('sort');
     var initialType = urlParams.get('type');
+    var initialShow = urlParams.get('show');
     var state = {
         type:   (initialType && validTypes[initialType]) ? initialType : 'all',
+        show:   (initialShow && validShows[initialShow]) ? initialShow : 'all',
         sort:   (initialSort && validSorts[initialSort]) ? initialSort : 'modified_desc',
         search: urlParams.get('search') || '',
         expanded: {},  // key → bool
@@ -750,8 +863,11 @@ include("includes/mheader.php");
     // the inputs/dropdowns/tabs match what the user is seeing.
     document.getElementById('ms-search').value = state.search;
     document.getElementById('ms-sort').value = state.sort;
-    document.querySelectorAll('.ms-tab').forEach(function(b) {
+    document.querySelectorAll('.ms-tab[data-type]').forEach(function(b) {
         b.classList.toggle('active', b.getAttribute('data-type') === state.type);
+    });
+    document.querySelectorAll('.ms-tab[data-show]').forEach(function(b) {
+        b.classList.toggle('active', b.getAttribute('data-show') === state.show);
     });
 
     // Mirror current state into the URL via replaceState — we don't want
@@ -762,17 +878,19 @@ include("includes/mheader.php");
         if (state.search)                              p.set('search', state.search);
         if (state.sort && state.sort !== 'modified_desc') p.set('sort', state.sort);
         if (state.type && state.type !== 'all')        p.set('type', state.type);
+        if (state.show && state.show !== 'all')        p.set('show', state.show);
         var qs = p.toString();
         var newUrl = window.location.pathname + (qs ? '?' + qs : '');
         history.replaceState({}, '', newUrl);
     }
 
-    var $cards   = document.getElementById('ms-cards');
-    var $count   = document.getElementById('ms-result-count');
-    var $search  = document.getElementById('ms-search');
-    var $sort    = document.getElementById('ms-sort');
-    var $tabs    = document.querySelectorAll('.ms-tab');
-    var $newBtn  = document.getElementById('ms-new-sample-btn');
+    var $cards     = document.getElementById('ms-cards');
+    var $count     = document.getElementById('ms-result-count');
+    var $search    = document.getElementById('ms-search');
+    var $sort      = document.getElementById('ms-sort');
+    var $typeTabs  = document.querySelectorAll('.ms-tab[data-type]');
+    var $showTabs  = document.querySelectorAll('.ms-tab[data-show]');
+    var $newBtn    = document.getElementById('ms-new-sample-btn');
 
     function escapeHtml(s) {
         if (s == null) return '';
@@ -810,6 +928,13 @@ include("includes/mheader.php");
     function matchesType(sample, type) {
         if (type === 'all') return true;
         return (sample.badges[type] || 0) > 0;
+    }
+    function matchesShow(sample, show) {
+        if (show === 'all') return true;
+        if (show === 'mine')           return sample.relationship === 'mine_private' || sample.relationship === 'mine_shared';
+        if (show === 'shared_by_me')   return sample.relationship === 'mine_shared';
+        if (show === 'shared_with_me') return sample.relationship === 'shared_with_me';
+        return true;
     }
     function matchesSearch(sample, q) {
         if (!q) return true;
@@ -851,11 +976,24 @@ include("includes/mheader.php");
         var descRaw = sample.description || sample.notes || '';
         var desc = descRaw.length > 320 ? descRaw.substring(0, 320) + '…' : descRaw;
 
+        // Relationship pill: collab cue near the Sample ID. mine_private gets
+        // nothing (the absence is itself the cue — "no pill = just mine").
+        var pillHtml = '';
+        if (sample.relationship === 'mine_shared') {
+            var n = sample.collab_count || 0;
+            var label = 'Shared with ' + n + ' Collaborator' + (n === 1 ? '' : 's');
+            pillHtml = '<div class="ms-relationship-pill mine-shared" title="' + escapeHtml(label) + '">' + label + '</div>';
+        } else if (sample.relationship === 'shared_with_me') {
+            var ownerName = sample.owner_name || 'someone';
+            pillHtml = '<div class="ms-relationship-pill shared-with-me" title="' + escapeHtml('Shared by ' + ownerName) + '">Shared by ' + escapeHtml(ownerName) + '</div>';
+        }
+
         var html = '';
         html += '<div class="ms-card">';
         html += '  <div class="ms-card-row">';
         html += '    <div class="ms-card-meta">';
         html += '      <div class="ms-sample-id">' + highlight(sample.name || sample.id, q) + '</div>';
+        html += '      ' + pillHtml;
         html += '      <div class="ms-row"><strong>Type:</strong> ' + highlight(sample.display_sample_type || '—', q) + '</div>';
         html += '      <div class="ms-row"><strong>Purpose:</strong> ' + highlight(sample.display_sample_purpose || '—', q) + '</div>';
         html += '      <div class="ms-row"><strong>Updated:</strong> ' + fmtDate(sample.modified_at) + '</div>';
@@ -889,6 +1027,7 @@ include("includes/mheader.php");
     function render() {
         var q = state.search.trim();
         var filtered = topLevel
+            .filter(function(s) { return matchesShow(s, state.show); })
             .filter(function(s) { return matchesType(s, state.type); })
             .filter(function(s) { return matchesSearch(s, q); })
             .sort(sortFn(state.sort));
@@ -920,10 +1059,18 @@ include("includes/mheader.php");
         syncUrl();
         render();
     });
-    $tabs.forEach(function(btn) {
+    $typeTabs.forEach(function(btn) {
         btn.addEventListener('click', function() {
             state.type = btn.getAttribute('data-type');
-            $tabs.forEach(function(b) { b.classList.toggle('active', b === btn); });
+            $typeTabs.forEach(function(b) { b.classList.toggle('active', b === btn); });
+            syncUrl();
+            render();
+        });
+    });
+    $showTabs.forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            state.show = btn.getAttribute('data-show');
+            $showTabs.forEach(function(b) { b.classList.toggle('active', b === btn); });
             syncUrl();
             render();
         });
