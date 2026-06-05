@@ -570,6 +570,175 @@ include("includes/mheader.php");
     .sd-metadata-row { grid-template-columns: 1fr; }
     .sd-family-widget { height: 280px; }
 }
+
+/* ---- Collaborator-management modal ---- */
+.cm-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    z-index: 9999;
+    padding: 4em 1em 2em 1em;
+    overflow-y: auto;
+}
+/* Same trap as ms-modal-overlay: class display:flex defeats the UA
+   stylesheet's [hidden] rule, so we re-assert it explicitly. */
+.cm-modal-overlay[hidden] { display: none; }
+.cm-modal {
+    background: #1f1f2e;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px;
+    width: 100%;
+    max-width: 640px;
+    color: #fff;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
+}
+.cm-modal-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1em 1.25em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+.cm-modal-header h3 { margin: 0; color: #fff; font-size: 1.15em; }
+.cm-modal-close {
+    background: none; border: none; color: rgba(255, 255, 255, 0.7);
+    font-size: 1.6em; line-height: 1; cursor: pointer;
+    padding: 0 0.3em;
+}
+.cm-modal-close:hover { color: #fff; }
+.cm-modal-body { padding: 1em 1.25em 1.25em 1.25em; }
+.cm-section { margin-bottom: 1.5em; }
+.cm-section:last-child { margin-bottom: 0; }
+.cm-section h4 {
+    margin: 0 0 0.6em 0;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 1em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 0.4em;
+}
+.cm-row {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    padding: 0.55em 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.cm-row:last-child { border-bottom: none; }
+.cm-avatar {
+    width: 32px; height: 32px; flex: 0 0 32px;
+    background: rgba(228, 76, 101, 0.6);
+    color: #fff;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.82em; font-weight: 700;
+}
+.cm-row-meta { flex: 1; min-width: 0; }
+.cm-row-name {
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.95em;
+}
+.cm-row-email {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 0.85em;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cm-status-badge {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 999px;
+    margin-left: 0.4em;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+.cm-status-badge.accepted { background: rgba(76, 200, 110, 0.25); color: #cfe9d4; }
+.cm-status-badge.pending  { background: rgba(255, 200, 80, 0.20); color: #f5dc99; }
+.cm-row-level {
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border-radius: 3px;
+    padding: 4px 6px;
+    font-size: 0.85em;
+    flex: 0 0 auto;
+}
+.cm-row-level option { background: #2a2a3a; }
+.cm-row-remove {
+    background: none; border: none; color: rgba(255, 255, 255, 0.5);
+    font-size: 1.3em; line-height: 1; cursor: pointer;
+    padding: 0 0.3em;
+}
+.cm-row-remove:hover { color: #e44c65; }
+.cm-empty,
+.cm-loading {
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.9em;
+    padding: 0.6em 0;
+    font-style: italic;
+}
+.cm-invite-form label {
+    display: block;
+    color: rgba(255, 255, 255, 0.85);
+    font-size: 0.9em;
+    margin: 0.5em 0 0.3em 0;
+}
+.cm-invite-form textarea,
+.cm-invite-form select {
+    width: 100%;
+    box-sizing: border-box;
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: #fff;
+    border-radius: 4px;
+    padding: 0.55em 0.7em;
+    font-size: 0.95em;
+    font-family: inherit;
+}
+.cm-invite-form textarea { resize: vertical; min-height: 4em; }
+.cm-invite-form select option { background: #2a2a3a; }
+.cm-btn-submit {
+    margin-top: 0.7em;
+    background: #e44c65;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    padding: 0.55em 1em;
+    font-size: 0.95em;
+    cursor: pointer;
+}
+.cm-btn-submit:hover:not(:disabled) { background: #f06880; }
+.cm-btn-submit:disabled { opacity: 0.6; cursor: not-allowed; }
+.cm-invite-results {
+    margin-top: 0.8em;
+    border-radius: 4px;
+    overflow: hidden;
+}
+.cm-invite-result {
+    padding: 0.4em 0.7em;
+    font-size: 0.9em;
+    border-left: 3px solid transparent;
+    margin-bottom: 1px;
+}
+.cm-invite-result.invited        { background: rgba(76, 200, 110, 0.15); border-color: #4cc86e; }
+.cm-invite-result.re_enabled     { background: rgba(76, 200, 110, 0.15); border-color: #4cc86e; }
+.cm-invite-result.already_active { background: rgba(180, 180, 180, 0.10); border-color: #888; }
+.cm-invite-result.unknown        { background: rgba(228, 76, 101, 0.18); border-color: #e44c65; }
+.cm-invite-result.is_owner       { background: rgba(228, 76, 101, 0.18); border-color: #e44c65; }
+.cm-modal-error {
+    background: rgba(228, 76, 101, 0.18);
+    border-left: 3px solid #e44c65;
+    padding: 0.55em 0.8em;
+    border-radius: 3px;
+    color: #fff;
+    font-size: 0.92em;
+    margin-top: 0.6em;
+}
 </style>
 
 <div id="main" class="wrapper style1">
@@ -630,6 +799,39 @@ include("includes/mheader.php");
 </div>
 
 <?php if (!$notFound): ?>
+<!-- Collaborator-management modal. Owner-only — opened from the Collaborate
+     button. Hidden by default; the JS below toggles visibility and drives
+     the API via /samples_collab.php. -->
+<div id="cm-modal-overlay" class="cm-modal-overlay" hidden>
+    <div class="cm-modal" role="dialog" aria-modal="true" aria-labelledby="cm-modal-title">
+        <div class="cm-modal-header">
+            <h3 id="cm-modal-title">Manage Collaborators</h3>
+            <button type="button" class="cm-modal-close" id="cm-modal-close" aria-label="Close">&times;</button>
+        </div>
+        <div class="cm-modal-body">
+            <div class="cm-section">
+                <h4>Current Collaborators</h4>
+                <div id="cm-list"><div class="cm-loading">Loading&hellip;</div></div>
+            </div>
+            <div class="cm-section">
+                <h4>Invite New Collaborators</h4>
+                <div class="cm-invite-form">
+                    <label for="cm-invite-emails">Email addresses</label>
+                    <textarea id="cm-invite-emails" rows="2" placeholder="One per line, or comma-separated"></textarea>
+                    <label for="cm-invite-level">Permission level</label>
+                    <select id="cm-invite-level">
+                        <option value="edit">Can edit</option>
+                        <option value="readonly">Read-only</option>
+                    </select>
+                    <button type="button" class="cm-btn-submit" id="cm-invite-btn">Send Invites</button>
+                </div>
+                <div id="cm-invite-results" class="cm-invite-results" hidden></div>
+            </div>
+            <div class="cm-modal-error" id="cm-modal-error" hidden></div>
+        </div>
+    </div>
+</div>
+
 <script type="application/json" id="sd-data"><?php echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <script type="application/json" id="sd-share-url-data"><?php echo json_encode($shareUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <script type="text/javascript">
@@ -738,7 +940,7 @@ include("includes/mheader.php");
     });
     document.getElementById('sd-collab-btn').addEventListener('click', function(e) {
         e.preventDefault();
-        alert('Collaborator management UI is on its way — the API endpoints are live (POST /samplesdb/sample/{id}/collaborators).');
+        openCollabModal();
     });
     document.getElementById('sd-changelog-btn').addEventListener('click', function(e) {
         e.preventDefault();
@@ -902,6 +1104,214 @@ include("includes/mheader.php");
         b.addEventListener('click', function() { applyFilter(b.getAttribute('data-type')); });
     });
     applyFilter('all');
+
+    // ---- Collaborator-management modal ----
+    var $cmModal     = document.getElementById('cm-modal-overlay');
+    var $cmClose     = document.getElementById('cm-modal-close');
+    var $cmList      = document.getElementById('cm-list');
+    var $cmInviteBtn = document.getElementById('cm-invite-btn');
+    var $cmEmails    = document.getElementById('cm-invite-emails');
+    var $cmLevel     = document.getElementById('cm-invite-level');
+    var $cmResults   = document.getElementById('cm-invite-results');
+    var $cmError     = document.getElementById('cm-modal-error');
+    var cmEscHandler = null;
+
+    function openCollabModal() {
+        $cmModal.hidden = false;
+        document.body.style.overflow = 'hidden';
+        cmEscHandler = function(e) { if (e.key === 'Escape') closeCollabModal(); };
+        document.addEventListener('keydown', cmEscHandler);
+        fetchAndRenderCollaborators();
+    }
+    function closeCollabModal() {
+        $cmModal.hidden = true;
+        document.body.style.overflow = '';
+        $cmList.innerHTML = '<div class="cm-loading">Loading&hellip;</div>';
+        $cmEmails.value = '';
+        $cmLevel.value = 'edit';
+        $cmResults.hidden = true;
+        $cmResults.innerHTML = '';
+        $cmError.hidden = true;
+        $cmError.textContent = '';
+        $cmInviteBtn.disabled = false;
+        $cmInviteBtn.textContent = 'Send Invites';
+        if (cmEscHandler) {
+            document.removeEventListener('keydown', cmEscHandler);
+            cmEscHandler = null;
+        }
+    }
+    $cmModal.addEventListener('click', function(e) {
+        if (e.target === $cmModal) closeCollabModal();
+    });
+    $cmClose.addEventListener('click', closeCollabModal);
+
+    function postCollab(payload) {
+        return fetch('/samples_collab.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        }).then(function(r) {
+            return r.json().then(
+                function(j) { return {status: r.status, body: j}; },
+                function()  { return {status: r.status, body: null}; }
+            );
+        });
+    }
+
+    function fetchAndRenderCollaborators() {
+        postCollab({
+            sample_id:  sample.id,
+            owner_pkey: owner.pkey,
+            action:     'list',
+        }).then(function(res) {
+            if (!res.body || !res.body.ok) {
+                var err = res.body && res.body.error ? res.body.error : 'unknown';
+                $cmList.innerHTML = '<div class="cm-empty">Could not load collaborators (' + escapeHtml(err) + ').</div>';
+                return;
+            }
+            renderCollaboratorList(res.body.collaborators || []);
+        }).catch(function() {
+            $cmList.innerHTML = '<div class="cm-empty">Network error loading collaborators.</div>';
+        });
+    }
+
+    function renderCollaboratorList(rows) {
+        if (!rows.length) {
+            $cmList.innerHTML = '<div class="cm-empty">No collaborators yet. Invite someone below.</div>';
+            return;
+        }
+        $cmList.innerHTML = rows.map(function(r) {
+            var statusClass = r.accepted ? 'accepted' : 'pending';
+            var statusText  = r.accepted ? 'Accepted'  : 'Pending';
+            return ''
+                + '<div class="cm-row" data-pkey="' + r.collaborator_pkey + '">'
+                +   '<div class="cm-avatar">' + escapeHtml(r.initials || '?') + '</div>'
+                +   '<div class="cm-row-meta">'
+                +     '<div class="cm-row-name">' + escapeHtml(r.name || '(unknown)')
+                +       '<span class="cm-status-badge ' + statusClass + '">' + statusText + '</span>'
+                +     '</div>'
+                +     '<div class="cm-row-email">' + escapeHtml(r.email || '') + '</div>'
+                +   '</div>'
+                +   '<select class="cm-row-level" data-pkey="' + r.collaborator_pkey + '">'
+                +     '<option value="edit"'     + (r.permission_level === 'edit'     ? ' selected' : '') + '>Edit</option>'
+                +     '<option value="readonly"' + (r.permission_level === 'readonly' ? ' selected' : '') + '>Read-only</option>'
+                +   '</select>'
+                +   '<button type="button" class="cm-row-remove" data-pkey="' + r.collaborator_pkey + '" aria-label="Remove" title="Remove">&times;</button>'
+                + '</div>';
+        }).join('');
+    }
+
+    $cmList.addEventListener('change', function(e) {
+        if (!e.target.classList || !e.target.classList.contains('cm-row-level')) return;
+        var pkey = parseInt(e.target.getAttribute('data-pkey'), 10);
+        var level = e.target.value;
+        e.target.disabled = true;
+        postCollab({
+            sample_id:         sample.id,
+            owner_pkey:        owner.pkey,
+            action:            'update_level',
+            collaborator_pkey: pkey,
+            permission_level:  level,
+        }).then(function(res) {
+            e.target.disabled = false;
+            if (!res.body || !res.body.ok) {
+                var err = res.body && res.body.error ? res.body.error : 'unknown';
+                $cmError.textContent = 'Could not change permission level (' + err + ').';
+                $cmError.hidden = false;
+                fetchAndRenderCollaborators();  // revert visually by reload
+            } else {
+                $cmError.hidden = true;
+            }
+        }).catch(function() {
+            e.target.disabled = false;
+            $cmError.textContent = 'Network error changing permission level.';
+            $cmError.hidden = false;
+        });
+    });
+
+    $cmList.addEventListener('click', function(e) {
+        if (!e.target.classList || !e.target.classList.contains('cm-row-remove')) return;
+        var pkey = parseInt(e.target.getAttribute('data-pkey'), 10);
+        var row  = e.target.closest('.cm-row');
+        var name = row && row.querySelector('.cm-row-name')
+                   ? row.querySelector('.cm-row-name').textContent.replace(/(Accepted|Pending)\s*$/, '').trim()
+                   : 'this collaborator';
+        if (!confirm('Remove ' + name + '?')) return;
+        e.target.disabled = true;
+        postCollab({
+            sample_id:         sample.id,
+            owner_pkey:        owner.pkey,
+            action:            'remove',
+            collaborator_pkey: pkey,
+        }).then(function(res) {
+            if (res.body && res.body.ok) {
+                $cmError.hidden = true;
+                fetchAndRenderCollaborators();
+            } else {
+                e.target.disabled = false;
+                var err = res.body && res.body.error ? res.body.error : 'unknown';
+                $cmError.textContent = 'Could not remove (' + err + ').';
+                $cmError.hidden = false;
+            }
+        }).catch(function() {
+            e.target.disabled = false;
+            $cmError.textContent = 'Network error removing collaborator.';
+            $cmError.hidden = false;
+        });
+    });
+
+    $cmInviteBtn.addEventListener('click', function() {
+        $cmError.hidden = true;
+        $cmResults.hidden = true;
+        $cmResults.innerHTML = '';
+        var raw = $cmEmails.value;
+        // Allow any whitespace, comma, or semicolon as separators.
+        var emails = raw.split(/[\s,;]+/).filter(function(e) { return e.length > 0; });
+        if (!emails.length) {
+            $cmError.textContent = 'Please enter at least one email address.';
+            $cmError.hidden = false;
+            return;
+        }
+        $cmInviteBtn.disabled = true;
+        $cmInviteBtn.textContent = 'Sending&hellip;';
+        postCollab({
+            sample_id:        sample.id,
+            owner_pkey:       owner.pkey,
+            action:           'invite',
+            emails:           emails,
+            permission_level: $cmLevel.value,
+        }).then(function(res) {
+            $cmInviteBtn.disabled = false;
+            $cmInviteBtn.textContent = 'Send Invites';
+            if (!res.body || !res.body.ok) {
+                var err = res.body && res.body.error ? res.body.error : 'unknown';
+                $cmError.textContent = 'Invite failed (' + err + ').';
+                $cmError.hidden = false;
+                return;
+            }
+            var statusMsg = {
+                invited:        'Invited',
+                re_enabled:     'Re-invited (was previously removed)',
+                already_active: 'Already a collaborator',
+                unknown:        'No StraboSpot user with this email',
+                is_owner:       'Cannot invite the owner',
+            };
+            $cmResults.innerHTML = (res.body.results || []).map(function(r) {
+                var label = statusMsg[r.status] || r.status;
+                return '<div class="cm-invite-result ' + escapeHtml(r.status) + '"><strong>'
+                     + escapeHtml(r.email) + '</strong>: ' + escapeHtml(label) + '</div>';
+            }).join('');
+            $cmResults.hidden = false;
+            $cmEmails.value = '';
+            fetchAndRenderCollaborators();  // refresh roster
+        }).catch(function() {
+            $cmInviteBtn.disabled = false;
+            $cmInviteBtn.textContent = 'Send Invites';
+            $cmError.textContent = 'Network error sending invites.';
+            $cmError.hidden = false;
+        });
+    });
 })();
 </script>
 <?php endif; ?>
