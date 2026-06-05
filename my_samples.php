@@ -311,6 +311,10 @@ include("includes/mheader.php");
     padding: 4em 1em 2em 1em;
     overflow-y: auto;
 }
+/* Class display:flex above defeats the UA stylesheet's [hidden] rule,
+   so we re-assert it explicitly. Same trap applies to any future
+   overlay with an explicit display value. */
+.ms-modal-overlay[hidden] { display: none; }
 .ms-modal {
     background: #1f1f2e;
     border: 1px solid rgba(255, 255, 255, 0.2);
