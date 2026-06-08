@@ -45,12 +45,15 @@ include("prepare_connections.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 
-// Query experiment - must be owned by user, parent project is public, or user is admin
+// Query experiment - must be owned by user, parent project is public, or user is admin.
+// e.userpkey is selected for the spine-overlay lookup (samples-app edits flow
+// back via strabosamples.* spine, keyed on owner).
 if ($is_admin) {
     $row = $db->get_row_prepared("
         SELECT
             e.pkey,
             e.project_pkey,
+            e.userpkey,
             e.id as experiment_id,
             e.uuid,
             e.json,
@@ -64,6 +67,7 @@ if ($is_admin) {
         SELECT
             e.pkey,
             e.project_pkey,
+            e.userpkey,
             e.id as experiment_id,
             e.uuid,
             e.json,
@@ -93,6 +97,12 @@ if (empty($experimentData)) {
     echo json_encode(['error' => 'No experiment data available']);
     exit;
 }
+
+// Overlay strabosamples spine onto the embedded sample block BEFORE PDF
+// rendering, so the generated PDF reflects any Samples-app spine edits.
+// See experimental/lib/sample_overlay.php for the spine → JSON path mapping.
+require_once(__DIR__ . '/../lib/sample_overlay.php');
+experimental_sample_overlay_apply($experimentData, $db, (int)$row->userpkey);
 
 // Include the PDF generator
 require_once(__DIR__ . '/../lib/ExperimentPDF.php');
