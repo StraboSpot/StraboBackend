@@ -45,12 +45,15 @@ include("prepare_connections.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 
-// Query experiment - must be owned by user, parent project is public, or user is admin
+// Query experiment - must be owned by user, parent project is public, or user is admin.
+// e.userpkey is selected for the spine-overlay lookup at render time
+// (samples-app edits flow back via strabosamples.* spine, keyed on owner).
 if ($is_admin) {
     $row = $db->get_row_prepared("
         SELECT
             e.pkey,
             e.project_pkey,
+            e.userpkey,
             e.id as experiment_id,
             e.uuid,
             e.json,
@@ -64,6 +67,7 @@ if ($is_admin) {
         SELECT
             e.pkey,
             e.project_pkey,
+            e.userpkey,
             e.id as experiment_id,
             e.uuid,
             e.json,
@@ -92,6 +96,14 @@ $export->exported_at = date('c');
 if (!empty($row->json)) {
     $json_data = json_decode($row->json);
     if ($json_data) {
+        // Overlay strabosamples spine onto the embedded sample block so any
+        // Samples-app edit made after this experiment was last saved is
+        // reflected in the JSON download. The owner pkey is e.userpkey
+        // (the experiment's owner). See experimental/lib/sample_overlay.php
+        // for the spine → JSON path mapping + v1 limitations.
+        require_once(__DIR__ . '/../lib/sample_overlay.php');
+        experimental_sample_overlay_apply($json_data, $db, (int)$row->userpkey);
+
         // Merge LAPS sections into export
         if (isset($json_data->facility)) $export->facility = $json_data->facility;
         if (isset($json_data->apparatus)) $export->apparatus = $json_data->apparatus;

@@ -81,17 +81,32 @@ $project->last_modified_timestamp = $row->modified_timestamp;
 $project->notes = $row->notes;
 $project->uuid = $row->uuid;
 
-// Get all experiments for this project
+// Get all experiments for this project. e.userpkey is selected for the
+// per-experiment spine-overlay lookup — experiments within a project can
+// in principle be owned by different users, so we don't assume project
+// owner == experiment owner.
 $exp_rows = $db->get_results_prepared(
-    "SELECT json FROM straboexp.experiment WHERE project_pkey = $1",
+    "SELECT json, userpkey FROM straboexp.experiment WHERE project_pkey = $1",
     array($project_pkey)
 );
 
 $experiments = [];
+$overlayTuples = array();
 foreach ($exp_rows as $exp_row) {
     if (!empty($exp_row->json)) {
-        $experiments[] = json_decode($exp_row->json);
+        $decoded = json_decode($exp_row->json);
+        if ($decoded) {
+            $experiments[] = $decoded;
+            $overlayTuples[] = array($decoded, (int)$exp_row->userpkey);
+        }
     }
+}
+
+// Overlay strabosamples spine onto every experiment's embedded sample in
+// one batched lookup. See experimental/lib/sample_overlay.php.
+if (!empty($overlayTuples)) {
+    require_once(__DIR__ . '/../lib/sample_overlay.php');
+    experimental_sample_overlay_apply_batch($overlayTuples, $db);
 }
 
 $project->experiments = $experiments;
