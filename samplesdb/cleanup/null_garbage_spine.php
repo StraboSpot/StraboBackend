@@ -42,6 +42,12 @@ $apply = in_array('--apply', $argv ?? array(), true);
 // decimal). These can never be a valid material type.
 $NUMERIC_PATTERN = '^[0-9]+(\.[0-9]+)?$';
 
+// Pattern for empty/whitespace-only values. Applies to both columns —
+// no semantic content, only takes up index space. Captured here because
+// the 2026-06-08 verify_extended.php caught a row with display_sample_purpose=''
+// that the prior cleanup's exact-match junk list had missed.
+$EMPTY_PATTERN = '^\s*$';
+
 // Hand-picked junk purposes. NOT a regex pattern — exact-match list so
 // any future drift in the column doesn't accidentally null real data.
 $PURPOSE_JUNK = array('bar', 'asdfbefgvb', 'test sample purpose');
@@ -56,19 +62,20 @@ echo "Mode: " . ($apply ? 'APPLY (rows will be NULLed)' : 'DRY-RUN (no writes)')
 $preflightType = $db->get_row_prepared(
     "SELECT count(*) AS rows, count(DISTINCT display_sample_type) AS distinct_values
        FROM strabosamples.samples
-      WHERE display_sample_type ~ $1",
-    array($NUMERIC_PATTERN)
+      WHERE display_sample_type ~ $1 OR display_sample_type ~ $2",
+    array($NUMERIC_PATTERN, $EMPTY_PATTERN)
 );
 
-// Build a placeholder list for the IN clause.
+// Build a placeholder list for the IN clause. Param numbering picks up
+// after $1 = $EMPTY_PATTERN.
 $placeholders = array();
-for ($i = 1; $i <= count($PURPOSE_JUNK); $i++) { $placeholders[] = '$' . $i; }
+for ($i = 2; $i <= count($PURPOSE_JUNK) + 1; $i++) { $placeholders[] = '$' . $i; }
 $inList = implode(', ', $placeholders);
 $preflightPurpose = $db->get_row_prepared(
     "SELECT count(*) AS rows, count(DISTINCT display_sample_purpose) AS distinct_values
        FROM strabosamples.samples
-      WHERE display_sample_purpose IN ($inList)",
-    $PURPOSE_JUNK
+      WHERE display_sample_purpose ~ $1 OR display_sample_purpose IN ($inList)",
+    array_merge(array($EMPTY_PATTERN), $PURPOSE_JUNK)
 );
 
 echo "display_sample_type   — purely-numeric rows: "
@@ -86,23 +93,23 @@ echo "\n--- Top type values to be NULLed ---\n";
 $sampleType = $db->get_results_prepared(
     "SELECT display_sample_type AS value, count(*) AS cnt
        FROM strabosamples.samples
-      WHERE display_sample_type ~ $1
+      WHERE display_sample_type ~ $1 OR display_sample_type ~ $2
       GROUP BY display_sample_type
       ORDER BY cnt DESC, value LIMIT 10",
-    array($NUMERIC_PATTERN)
+    array($NUMERIC_PATTERN, $EMPTY_PATTERN)
 );
-foreach ($sampleType as $r) printf("  %6d  %s\n", (int)$r->cnt, $r->value);
+foreach ($sampleType as $r) printf("  %6d  %s\n", (int)$r->cnt, $r->value === '' ? '(empty)' : $r->value);
 
 echo "\n--- Purpose values to be NULLed ---\n";
 $samplePurpose = $db->get_results_prepared(
     "SELECT display_sample_purpose AS value, count(*) AS cnt
        FROM strabosamples.samples
-      WHERE display_sample_purpose IN ($inList)
+      WHERE display_sample_purpose ~ $1 OR display_sample_purpose IN ($inList)
       GROUP BY display_sample_purpose
       ORDER BY cnt DESC, value",
-    $PURPOSE_JUNK
+    array_merge(array($EMPTY_PATTERN), $PURPOSE_JUNK)
 );
-foreach ($samplePurpose as $r) printf("  %6d  %s\n", (int)$r->cnt, $r->value);
+foreach ($samplePurpose as $r) printf("  %6d  %s\n", (int)$r->cnt, $r->value === '' ? '(empty)' : $r->value);
 
 if (!$apply) {
     echo "\nDRY-RUN complete. Re-run with --apply to perform the NULL updates.\n";
@@ -115,31 +122,35 @@ echo "\n--- Applying ---\n";
 $db->query("BEGIN");
 
 $beforeType = (int)$db->get_var_prepared(
-    "SELECT count(*) FROM strabosamples.samples WHERE display_sample_type ~ $1",
-    array($NUMERIC_PATTERN)
+    "SELECT count(*) FROM strabosamples.samples
+      WHERE display_sample_type ~ $1 OR display_sample_type ~ $2",
+    array($NUMERIC_PATTERN, $EMPTY_PATTERN)
 );
 $db->prepare_query(
     "UPDATE strabosamples.samples SET display_sample_type = NULL, modified_at = now()
-      WHERE display_sample_type ~ $1",
-    array($NUMERIC_PATTERN)
+      WHERE display_sample_type ~ $1 OR display_sample_type ~ $2",
+    array($NUMERIC_PATTERN, $EMPTY_PATTERN)
 );
 $afterType = (int)$db->get_var_prepared(
-    "SELECT count(*) FROM strabosamples.samples WHERE display_sample_type ~ $1",
-    array($NUMERIC_PATTERN)
+    "SELECT count(*) FROM strabosamples.samples
+      WHERE display_sample_type ~ $1 OR display_sample_type ~ $2",
+    array($NUMERIC_PATTERN, $EMPTY_PATTERN)
 );
 
 $beforePurpose = (int)$db->get_var_prepared(
-    "SELECT count(*) FROM strabosamples.samples WHERE display_sample_purpose IN ($inList)",
-    $PURPOSE_JUNK
+    "SELECT count(*) FROM strabosamples.samples
+      WHERE display_sample_purpose ~ $1 OR display_sample_purpose IN ($inList)",
+    array_merge(array($EMPTY_PATTERN), $PURPOSE_JUNK)
 );
 $db->prepare_query(
     "UPDATE strabosamples.samples SET display_sample_purpose = NULL, modified_at = now()
-      WHERE display_sample_purpose IN ($inList)",
-    $PURPOSE_JUNK
+      WHERE display_sample_purpose ~ $1 OR display_sample_purpose IN ($inList)",
+    array_merge(array($EMPTY_PATTERN), $PURPOSE_JUNK)
 );
 $afterPurpose = (int)$db->get_var_prepared(
-    "SELECT count(*) FROM strabosamples.samples WHERE display_sample_purpose IN ($inList)",
-    $PURPOSE_JUNK
+    "SELECT count(*) FROM strabosamples.samples
+      WHERE display_sample_purpose ~ $1 OR display_sample_purpose IN ($inList)",
+    array_merge(array($EMPTY_PATTERN), $PURPOSE_JUNK)
 );
 
 $db->query("COMMIT");
