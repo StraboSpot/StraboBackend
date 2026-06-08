@@ -86,11 +86,44 @@ class StraboMicro
 		return $out;
 	}
 
+	/**
+	 * Lazily regenerate straboMicroFiles/<pkey>/project.pdf via the
+	 * server-side MicroProjectPDF when pdf_dirty=TRUE for the project.
+	 * Called by every Micro download path (getProjectPDF / getProjectURL /
+	 * getWebProject / getSharedURL) before the PDF is read/copied. No-op
+	 * when the flag is FALSE — the desktop client's uploaded PDF stays
+	 * authoritative until a Samples-app spine edit flips the flag (see
+	 * StraboSamplesService::markMicroProjectPdfsDirty in samples/micro-
+	 * server-pdf). Errors are swallowed: a stale PDF is preferable to a
+	 * 500 on a successful download.
+	 */
+	protected function regenerateProjectPdfIfDirty($project_internal_id, $owner_pkey) {
+		try {
+			$row = $this->db->get_row_prepared(
+				"SELECT pdf_dirty FROM micro_projectmetadata WHERE id = $1 LIMIT 1",
+				array((int)$project_internal_id)
+			);
+			if (!$row || $row->pdf_dirty !== 't') return;
+			require_once __DIR__ . '/lib/MicroProjectPDF.php';
+			$docRoot = $_SERVER['DOCUMENT_ROOT'];
+			$pdfPath = "$docRoot/straboMicroFiles/$project_internal_id/project.pdf";
+			$pdf = new MicroProjectPDF($this->db, (int)$project_internal_id, (int)$owner_pkey);
+			$pdf->generateToFile($pdfPath);
+			$this->db->prepare_query(
+				"UPDATE micro_projectmetadata SET pdf_dirty = FALSE WHERE id = $1",
+				array((int)$project_internal_id)
+			);
+		} catch (\Throwable $e) {
+			// Swallow — see docblock. A stale PDF is better than a 500.
+		}
+	}
+
 	public function getWebProject($project_id){
 		$project = $this->db->get_row("select * from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='$project_id'");
 		$out = new stdClass();
 		if($project->id != ""){
 			$pkey = $project->id;
+			$this->regenerateProjectPdfIfDirty($pkey, $this->userpkey);
 			$uuid = $this->uuid->v4();
 
 			$docRoot = $_SERVER['DOCUMENT_ROOT'];
@@ -168,6 +201,7 @@ class StraboMicro
 		$out = new stdClass();
 		if($project->id != ""){
 			$pkey = $project->id;
+			$this->regenerateProjectPdfIfDirty($pkey, $this->userpkey);
 			$uuid = $this->uuid->v4();
 
 			$docRoot = $_SERVER['DOCUMENT_ROOT'];
@@ -222,6 +256,7 @@ class StraboMicro
 		if($project->id != ""){
 
 			$id = $project->id;
+			$this->regenerateProjectPdfIfDirty($id, $this->userpkey);
 			// Build a fresh ZIP into ziptemp with the strabosamples.* spine
 			// overlay applied to project.json. The previous implementation
 			// returned a URL to the static, upload-frozen project.zip; that
@@ -327,6 +362,7 @@ class StraboMicro
 		$ownerPkey = (int)$meta->userpkey;
 		$strabo_project_id = (string)$meta->strabo_id;
 
+		$this->regenerateProjectPdfIfDirty($id, $ownerPkey);
 		$uuid = $this->uuid->v4();
 		$docRoot = $_SERVER['DOCUMENT_ROOT'];
 		mkdir("$docRoot/ziptemp/$uuid");

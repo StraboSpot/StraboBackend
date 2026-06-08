@@ -996,7 +996,51 @@ class StraboSamplesService
             $this->writeBackFieldSpot($id, $ownerPkey, $spineUpdates);
         }
 
+        // Micro server-PDF cache invalidation (samples/micro-server-pdf):
+        // flip pdf_dirty=TRUE on any micro_projectmetadata row whose
+        // project hosts a copy of this sample, so the next download via
+        // microdb/strabomicroclass.php lazily regenerates the PDF via
+        // microdb/lib/MicroProjectPDF.php with the fresh spine values.
+        // No-op when there's no Micro link and when no spine fields
+        // actually changed.
+        if (!empty($spineUpdates)) {
+            $this->markMicroProjectPdfsDirty($id, $ownerPkey);
+        }
+
         return array('ok' => true, 'sample' => $this->getSample($id, $ownerPkey));
+    }
+
+    /**
+     * Mark every Micro project whose JSON references this sample as
+     * pdf_dirty=TRUE, so the next Micro download triggers a server-side
+     * MicroProjectPDF regeneration. Best-effort; swallows DB errors
+     * (the canonical write — strabosamples spine — has already succeeded
+     * and shouldn't be lost on a flag-flip failure).
+     */
+    protected function markMicroProjectPdfsDirty($sampleId, $ownerPkey)
+    {
+        try {
+            // sample_subsystem_links.reference_id for Micro = the
+            // project's internal pkey (set by micro_sample_sync). Flip
+            // pdf_dirty on every such row. The link table is small per
+            // sample (a Micro sample appears in 1 project today; the
+            // schema doesn't preclude N).
+            $this->db->prepare_query(
+                "UPDATE micro_projectmetadata
+                    SET pdf_dirty = TRUE
+                  WHERE id IN (
+                    SELECT CAST(reference_id AS INTEGER)
+                      FROM strabosamples.sample_subsystem_links
+                     WHERE sample_id = $1
+                       AND sample_userpkey = $2
+                       AND subsystem = 'micro'
+                       AND reference_id ~ '^[0-9]+$'
+                  )",
+                array($sampleId, (int)$ownerPkey)
+            );
+        } catch (\Throwable $e) {
+            // Swallowed by design — see method docblock.
+        }
     }
 
     /**
