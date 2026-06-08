@@ -98,7 +98,16 @@ class StraboMicro
 			mkdir("$docRoot/ziptemp/$uuid");
 			mkdir("$docRoot/ziptemp/$uuid/$project_id");
 
-			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.json $docRoot/ziptemp/$uuid/$project_id/");
+			// Write project.json with strabosamples.* spine overlay so the
+			// download reflects any Samples-app edits made after upload.
+			// See microdb/lib/sample_overlay.php for the mapping + v1 notes.
+			require_once __DIR__ . '/lib/sample_overlay.php';
+			micro_sample_overlay_write_json(
+				$this->db,
+				"$docRoot/straboMicroFiles/$pkey/project.json",
+				"$docRoot/ziptemp/$uuid/$project_id/project.json",
+				(int)$this->userpkey
+			);
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/associatedFiles $docRoot/ziptemp/$uuid/$project_id/");
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/webImages $docRoot/ziptemp/$uuid/$project_id/");
@@ -171,18 +180,21 @@ class StraboMicro
 											WHEN modifiedtimestamp IS NULL OR modifiedtimestamp = '' THEN NULL
 											WHEN modifiedtimestamp ~ '^[0-9]+$' THEN modifiedtimestamp::bigint
 											ELSE (extract(epoch from modifiedtimestamp::timestamptz) * 1000)::bigint
-										END as modifiedtimestamp 
-							
+										END as modifiedtimestamp
+
 							from micro_projectmetadata where userpkey = $this->userpkey and strabo_id = '$project_id'");
 
-			$json = file_get_contents("$docRoot/straboMicroFiles/$pkey/project.json");
-			$json = json_decode($json);
-
-			unset($json->modifiedTimestamp);
-			$json->modifiedtimestamp = (int)$mod;
-
-			$json = json_encode($json, JSON_PRETTY_PRINT);
-			file_put_contents("$docRoot/ziptemp/$uuid/$project_id/project.json", $json);
+			// Write project.json with strabosamples.* spine overlay + the
+			// existing modifiedtimestamp patch. See microdb/lib/sample_overlay.php
+			// for the mapping + v1 notes.
+			require_once __DIR__ . '/lib/sample_overlay.php';
+			micro_sample_overlay_write_json(
+				$this->db,
+				"$docRoot/straboMicroFiles/$pkey/project.json",
+				"$docRoot/ziptemp/$uuid/$project_id/project.json",
+				(int)$this->userpkey,
+				(int)$mod
+			);
 
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
 			//Just using the PDF for now. We can re-implement these later if the web viewer is needed. JMA 20241121
@@ -210,8 +222,40 @@ class StraboMicro
 		if($project->id != ""){
 
 			$id = $project->id;
-			$out->url = "/straboMicroFiles/".$id."/project.zip";
-			$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");
+			// Build a fresh ZIP into ziptemp with the strabosamples.* spine
+			// overlay applied to project.json. The previous implementation
+			// returned a URL to the static, upload-frozen project.zip; that
+			// went stale on any Samples-app spine edit. The URL contract
+			// (return-then-fetch) is preserved — only the path under
+			// DOCUMENT_ROOT changes. See microdb/lib/sample_overlay.php.
+			require_once __DIR__ . '/lib/sample_overlay.php';
+			$uuid = $this->uuid->v4();
+			$docRoot = $_SERVER['DOCUMENT_ROOT'];
+			mkdir("$docRoot/ziptemp/$uuid");
+			mkdir("$docRoot/ziptemp/$uuid/$project_id");
+
+			micro_sample_overlay_write_json(
+				$this->db,
+				"$docRoot/straboMicroFiles/$id/project.json",
+				"$docRoot/ziptemp/$uuid/$project_id/project.json",
+				(int)$this->userpkey
+			);
+			if (file_exists("$docRoot/straboMicroFiles/$id/project.pdf")) {
+				exec("cp -rp $docRoot/straboMicroFiles/$id/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
+			}
+			if (is_dir("$docRoot/straboMicroFiles/$id/associatedFiles")) {
+				exec("cp -rp $docRoot/straboMicroFiles/$id/associatedFiles $docRoot/ziptemp/$uuid/$project_id/");
+			}
+			if (is_dir("$docRoot/straboMicroFiles/$id/webImages")) {
+				exec("cp -rp $docRoot/straboMicroFiles/$id/webImages $docRoot/ziptemp/$uuid/$project_id/");
+			}
+			if (is_dir("$docRoot/straboMicroFiles/$id/webThumbnails")) {
+				exec("cp -rp $docRoot/straboMicroFiles/$id/webThumbnails $docRoot/ziptemp/$uuid/$project_id/");
+			}
+			exec("cd $docRoot/ziptemp/$uuid; zip -r $project_id.zip $project_id");
+
+			$out->url = "/ziptemp/$uuid/$project_id.zip";
+			$out->bytes = filesize("$docRoot/ziptemp/$uuid/$project_id.zip");
 
 			$out->micrograph_count = $this->db->get_var("
 				select count(mg.id)
@@ -265,8 +309,52 @@ class StraboMicro
 
 		$out = new stdClass();
 
-		$out->url = "/straboMicroFiles/".$id."/project.zip";
-		$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");
+		// Build a fresh ZIP into ziptemp with strabosamples.* spine overlay.
+		// Share URLs don't carry $this->userpkey (the share may be accessed
+		// by someone other than the owner), so the owner's pkey is looked
+		// up from micro_projectmetadata via the internal id passed in. The
+		// strabo_id is also needed to construct the in-zip folder name to
+		// preserve the desktop client's existing extract path convention.
+		require_once __DIR__ . '/lib/sample_overlay.php';
+		$meta = $this->db->get_row_prepared(
+			"SELECT userpkey, strabo_id FROM micro_projectmetadata WHERE id = $1 LIMIT 1",
+			array((int)$id)
+		);
+		if (!$meta || $meta->strabo_id === null || $meta->strabo_id === '') {
+			$out->bytes = 0;
+			return $out;
+		}
+		$ownerPkey = (int)$meta->userpkey;
+		$strabo_project_id = (string)$meta->strabo_id;
+
+		$uuid = $this->uuid->v4();
+		$docRoot = $_SERVER['DOCUMENT_ROOT'];
+		mkdir("$docRoot/ziptemp/$uuid");
+		mkdir("$docRoot/ziptemp/$uuid/$strabo_project_id");
+
+		micro_sample_overlay_write_json(
+			$this->db,
+			"$docRoot/straboMicroFiles/$id/project.json",
+			"$docRoot/ziptemp/$uuid/$strabo_project_id/project.json",
+			$ownerPkey
+		);
+		if (file_exists("$docRoot/straboMicroFiles/$id/project.pdf")) {
+			exec("cp -rp $docRoot/straboMicroFiles/$id/project.pdf $docRoot/ziptemp/$uuid/$strabo_project_id/");
+		}
+		if (is_dir("$docRoot/straboMicroFiles/$id/associatedFiles")) {
+			exec("cp -rp $docRoot/straboMicroFiles/$id/associatedFiles $docRoot/ziptemp/$uuid/$strabo_project_id/");
+		}
+		if (is_dir("$docRoot/straboMicroFiles/$id/webImages")) {
+			exec("cp -rp $docRoot/straboMicroFiles/$id/webImages $docRoot/ziptemp/$uuid/$strabo_project_id/");
+		}
+		if (is_dir("$docRoot/straboMicroFiles/$id/webThumbnails")) {
+			exec("cp -rp $docRoot/straboMicroFiles/$id/webThumbnails $docRoot/ziptemp/$uuid/$strabo_project_id/");
+		}
+		$safeProjectId = escapeshellarg($strabo_project_id);
+		exec("cd $docRoot/ziptemp/$uuid; zip -r {$safeProjectId}.zip $safeProjectId");
+
+		$out->url = "/ziptemp/$uuid/$strabo_project_id.zip";
+		$out->bytes = filesize("$docRoot/ziptemp/$uuid/$strabo_project_id.zip");
 
 		return $out;
 	}
