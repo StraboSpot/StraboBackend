@@ -2096,6 +2096,14 @@ class StraboSamplesService
             "MATCH (s:Spot {id:$spotId, userpkey:$referenceUserpkey}) SET s += $cypherMap RETURN id(s)"
         );
 
+        // Rebuild the Postgres `spot` mirror for the dataset that holds this
+        // Spot. The mirror powers search hit cards + the full-text vectors
+        // and is normally rebuilt from buildPgDataset() in the 8 Field upload
+        // controller paths; writeback was the gap. Without this call, a
+        // Samples-app spine edit leaves spot.spotjson + spot.vectors stale
+        // until the next subsystem upload.
+        $this->rebuildFieldPgMirror($spotId, $referenceUserpkey, $meta);
+
         if (!empty($translationNotes)) {
             $this->logChange($sampleId, $ownerPkey, 'writeback_translation',
                 array('notes' => $translationNotes), 'samples_api');
@@ -2108,5 +2116,48 @@ class StraboSamplesService
             'rich'              => $isRich,
             'translation_notes' => $translationNotes,
         );
+    }
+
+    /**
+     * Best-effort rebuild of the PG `spot` mirror for the dataset that holds
+     * a writeback-touched Spot. Pulls dataset_id from reference_metadata
+     * first (set by db/lib/sample_sync.php at first-upload time), falls back
+     * to a Cypher lookup. Failures are swallowed: the 8 existing upload-path
+     * callers of buildPgDataset() don't propagate errors either, and a stale
+     * search row is preferable to a 500 on a successful writeback.
+     */
+    protected function rebuildFieldPgMirror($spotId, $referenceUserpkey, $meta)
+    {
+        $datasetId = null;
+        if (is_array($meta) && isset($meta['dataset_id']) && $meta['dataset_id'] !== '' && $meta['dataset_id'] !== null) {
+            $datasetId = (string)$meta['dataset_id'];
+        }
+        if ($datasetId === null) {
+            $rec = $this->neodb->getRecord(
+                "MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot {id:$spotId, userpkey:$referenceUserpkey}) RETURN d.id AS did LIMIT 1"
+            );
+            if ($rec) {
+                $did = $rec->get('did');
+                if ($did !== null && $did !== '') $datasetId = (string)$did;
+            }
+        }
+        if ($datasetId === null || !ctype_digit($datasetId)) return;
+
+        try {
+            require_once __DIR__ . '/../../db/strabospotclass.php';
+            // buildPgDataset uses geoPHP for WKT parsing. The legacy /db/
+            // entry point loads geoPHP via prepare_connections.php, but the
+            // samplesdb/ entry points don't — so pull it in defensively.
+            if (!class_exists('geoPHP')) {
+                require_once __DIR__ . '/../../includes/geophp/geoPHP.inc';
+            }
+            // userpkey arg is ignored when ownerPkey is passed explicitly to
+            // buildPgDataset; pass 0 placeholder.
+            $strabo = new StraboSpot($this->neodb, 0, $this->db);
+            $strabo->buildPgDataset((int)$datasetId, (int)$referenceUserpkey);
+        } catch (\Throwable $e) {
+            // Intentionally swallowed — match the no-error-propagation behavior
+            // of the existing upload-path callers.
+        }
     }
 }
