@@ -12,14 +12,18 @@
  *                  Layout primitives + the cover / TOC / Project Details /
  *                  per-Dataset / per-Sample sections fully ported. Per-
  *                  Micrograph and per-Spot rendered as placeholder pages.
- *              Phase 2 (THIS branch — samples/micro-server-pdf-micrographs):
+ *              Phase 2 (samples/micro-server-pdf-micrographs):
  *                  Per-Micrograph section with composite image embed from
  *                  straboMicroFiles/<project_internal_id>/images/{strabo_id}.jpg
  *                  + Instrument Information sub-section (with detector list) +
  *                  Orientation Information sub-section + addFeatureInfoSections
  *                  helper (mineralogy / grain info / fabric) shared with Phase 3.
- *              Phase 3 (samples/micro-server-pdf-spots):
- *                  Per-Spot section + remaining feature-info renderers.
+ *              Phase 3 (THIS branch — samples/micro-server-pdf-spots):
+ *                  Per-Spot section ported from pdfProjectExport.js lines
+ *                  815-859: basic fields (name/geometryType/color/labelColor/
+ *                  date/time/modifiedTimestamp/notes) + tags + reuse of
+ *                  addFeatureInfoSections via the polymorphic loadFeatureInfo
+ *                  hook on spot_id.
  *
  *              Data source: micro_projectmetadata + micro_datasetmetadata
  *              + micro_samplemetadata + micro_micrographmetadata. The
@@ -164,7 +168,6 @@ class MicroProjectPDF extends tFPDF
             $this->generateSampleSectionContent($sample, $dataset);
         }
 
-        // Per-Spot remains stubbed until Phase 3.
         foreach ($this->allMicrographs as $row) {
             $micrograph = $row['micrograph'];
             $sample     = $row['sample'];
@@ -181,7 +184,7 @@ class MicroProjectPDF extends tFPDF
             $dataset    = $row['dataset'];
             $this->AddPage();
             $this->bindTocLink('Spot: ' . ($spot->name ?: 'Unnamed'));
-            $this->generateSpotSectionContent_phase1Stub($spot, $micrograph, $sample, $dataset);
+            $this->generateSpotSectionContent($spot, $micrograph, $sample, $dataset);
         }
 
         $this->Output('F', $outputPath);
@@ -240,9 +243,17 @@ class MicroProjectPDF extends tFPDF
                 );
                 $s->micrographs = is_array($mRows) ? $mRows : array();
                 foreach ($s->micrographs as $m) {
-                    // Phase 3 will load spots — Phase 2 just stubs the list so
-                    // the per-micrograph "Spots" summary renders nothing.
-                    $m->spots = array();
+                    $spotRows = $this->db->get_results_prepared(
+                        "SELECT id, strabo_id, name, geometrytype, color, labelcolor,
+                                date, time, modifiedtimestamp, notes
+                           FROM micro_spotmetadata WHERE micrograph_id = $1 ORDER BY id",
+                        array($m->id)
+                    );
+                    $m->spots = is_array($spotRows) ? $spotRows : array();
+                    foreach ($m->spots as $spot) {
+                        $spot->tags = $this->loadSpotTagNames($spot->id);
+                        $this->loadFeatureInfo($spot, 'spot_id');
+                    }
                     $this->loadMicrographSubresources($m);
                 }
             }
@@ -905,6 +916,28 @@ class MicroProjectPDF extends tFPDF
     }
 
     /**
+     * Tag names for a spot — join micro_spot_tag → micro_tag. Returns an
+     * array of strings (empty if none); flat list, no de-dup needed since
+     * the join table is keyed (spot_id, tag_id).
+     */
+    protected function loadSpotTagNames($spotInternalId)
+    {
+        $rows = $this->db->get_results_prepared(
+            "SELECT t.name FROM micro_spot_tag st
+              JOIN micro_tag t ON t.id = st.tag_id
+             WHERE st.spot_id = $1 ORDER BY t.id",
+            array($spotInternalId)
+        );
+        $out = array();
+        if (is_array($rows)) {
+            foreach ($rows as $r) {
+                if ($this->hasValue($r->name)) $out[] = $r->name;
+            }
+        }
+        return $out;
+    }
+
+    /**
      * Render Mineralogy + Grain Information + Fabric Information for either
      * a micrograph or a spot row. Shared with Phase 3 — the structures hang
      * off both via the polymorphic (micrograph_id, spot_id) parent columns.
@@ -1035,23 +1068,58 @@ class MicroProjectPDF extends tFPDF
     }
 
     // -----------------------------------------------------------------
-    // Phase 1 STUBS — Phase 3 will replace.
+    // Per-Spot (Phase 3)
     // -----------------------------------------------------------------
 
-    protected function generateSpotSectionContent_phase1Stub($spot, $micrograph, $sample, $dataset)
+    protected function generateSpotSectionContent($spot, $micrograph, $sample, $dataset)
     {
         $name = $spot->name ?: 'Unnamed';
+
         $this->addBreadcrumb(array(
             $dataset->name ?: 'Dataset',
             $this->sampleDisplayName($sample),
             $micrograph->name ?: 'Micrograph',
         ));
         $this->addSectionHeader('Spot: ' . $name);
-        $this->SetFont('DejaVu', 'I', self::FS_SMALL);
-        $this->setColor(self::C_LIGHT_TEXT, 'text');
-        $this->MultiCell(0, 5,
-            'Spot detail layout pending Phase 3 of samples/micro-server-pdf-*.',
-            0, 'L');
+
+        $this->startCard();
+        $this->addFieldList($spot, array(
+            array('key' => 'name',              'label' => 'Name'),
+            array('key' => 'geometrytype',      'label' => 'Geometry Type'),
+            array('key' => 'color',             'label' => 'Color'),
+            array('key' => 'labelcolor',        'label' => 'Label Color'),
+            array('key' => 'date',              'label' => 'Date',
+                  'format' => array($this, 'formatLooseDate')),
+            array('key' => 'time',              'label' => 'Time'),
+            array('key' => 'modifiedtimestamp', 'label' => 'Last Modified',
+                  'format' => array($this, 'formatModifiedTimestamp')),
+            array('key' => 'notes',             'label' => 'Notes'),
+        ));
+
+        if (!empty($spot->tags)) {
+            $this->SetFont('DejaVu', 'B', self::FS_BODY);
+            $this->setColor(self::C_PRIMARY, 'text');
+            $this->MultiCell(0, 5, 'Tags: ' . implode(', ', $spot->tags), 0, 'L');
+        }
+
+        $this->endCard();
+
+        $this->addFeatureInfoSections($spot);
+    }
+
+    /**
+     * Spots store `date` as a varchar — either an ISO 8601 timestamp from
+     * recent uploads, or a free-form display string from older clients.
+     * Try strict ISO parsing first; fall back to passing through if it's
+     * not parseable.
+     */
+    public function formatLooseDate($v)
+    {
+        if ($v === null || $v === '') return null;
+        if (is_numeric($v)) return $this->formatModifiedTimestamp($v);
+        $ts = strtotime((string)$v);
+        if ($ts === false) return (string)$v;
+        return date('F j, Y', $ts);
     }
 
     // -----------------------------------------------------------------
