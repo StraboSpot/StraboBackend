@@ -1,7 +1,8 @@
 <?php
 /**
  * File: smoke_test_micro_server_pdf.php
- * Description: Phase 1 smoke for samples/micro-server-pdf. Verifies:
+ * Description: Smoke for samples/micro-server-pdf (Phase 1) + samples/micro-
+ *              server-pdf-micrographs (Phase 2). Verifies:
  *
  *                Part 1: MicroProjectPDF generates a non-trivial PDF on disk
  *                        from seeded PG fixtures + an upload-time on-disk
@@ -17,10 +18,17 @@
  *                Part 5: API-only sample (no Micro link) → updateSample
  *                        leaves pdf_dirty FALSE on any Micro project (clean
  *                        no-op in markMicroProjectPdfsDirty).
- *                Part 6: TOC structure — generated PDF contains the expected
- *                        section headers (cover stats / 'Table of Contents' /
- *                        'Project Details' / 'Dataset:' / 'Sample:'). Phase 1
- *                        layout grep — Phase 2/3 will tighten.
+ *                Part 6: PDF structural smoke + Phase 2 header verification.
+ *                        The PDF embeds DejaVu Unicode fonts so text is
+ *                        glyph-encoded — can't grep "Instrument Information"
+ *                        in the raw bytes (pdftotext is not in the container).
+ *                        Instead use MicroProjectPDF::getRenderedSectionHeaders()
+ *                        to confirm every Phase 2 sub-section header is
+ *                        actually rendered.
+ *                Part 7: Phase 2 composite image embed — the seeded JPEG at
+ *                        straboMicroFiles/<pkey>/images/{strabo_id}.jpg lands
+ *                        in the PDF (search for /DCTDecode + JPEG SOI marker
+ *                        in the stream payload).
  *
  *              Hermetic: seeds micro_*metadata + on-disk straboMicroFiles
  *              dir + strabosamples row, then tears down in finally{}.
@@ -136,11 +144,118 @@ try {
                                 'project_strabo_id' => $projectStraboId)))
     );
 
+    // Phase 2 fixtures: micrograph + instrument + 2 detectors + orientation +
+    // mineralogy (with 2 minerals) + grain info (size/shape) + fabric info
+    // (with 1 fabric). Lets Part 6 confirm every Phase 2 sub-section header
+    // is actually rendered.
+    $micrographStraboId = "smoketest-mspdf-micro-$stamp";
+    $micrographInternalId = (int)$db->get_var("select nextval('micro_micrographmetadata_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_micrographmetadata
+            (id, sample_id, strabo_id, name, imagetype, width, height,
+             scalepixelspercentimeter, scale, description, notes, polish, polishdescription)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+        array($micrographInternalId, $sampleInternalId, $micrographStraboId,
+              'Smoketest Micrograph', 'BSE', 4096, 3072,
+              5000.0, 'scale bar = 100um', 'micrograph description',
+              'micrograph notes', true, 'mechanical polish')
+    );
+
+    $instrumentInternalId = (int)$db->get_var("select nextval('micro_instrument_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_instrument
+            (id, micrograph_id, instrumenttype, datatype, instrumentbrand,
+             instrumentmodel, university, laboratory, datacollectionsoftware,
+             filamenttype, accelerationvoltage, beamcurrent, spotsize, workingdistance,
+             instrumentnotes)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)",
+        array($instrumentInternalId, $micrographInternalId,
+              'SEM', 'image', 'JEOL', 'JSM-7100F',
+              'Test University', 'Microscopy Lab', 'Aztec 4.0',
+              'tungsten', 15.0, 2.5, 4.0, 10.0, 'instrument notes for smoke test')
+    );
+
+    $db->prepare_query(
+        "INSERT INTO micro_instrumentdetector
+            (instrument_id, detectortype, detectormake, detectormodel)
+         VALUES ($1, $2, $3, $4)",
+        array($instrumentInternalId, 'BSE', 'Oxford', 'AZtecOne')
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_instrumentdetector
+            (instrument_id, detectortype, detectormake, detectormodel)
+         VALUES ($1, $2, $3, $4)",
+        array($instrumentInternalId, 'EDS', 'Oxford', 'X-Max 50')
+    );
+
+    $db->prepare_query(
+        "INSERT INTO micro_micrographorientation
+            (micrographmetadata_id, orientationmethod, toptrend, topplunge,
+             topreferencecorner, sidetrend, sideplunge, sidereferencecorner,
+             fabricreference, fabricstrike, fabricdip, lookdirection, topcorner)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)",
+        array($micrographInternalId,
+              'compass-clinometer', 45.0, 30.0, 'NW',
+              135.0, 60.0, 'SE',
+              'bedding', 90.0, 45.0, 'down', 'NE')
+    );
+
+    $mineralogyInternalId = (int)$db->get_var("select nextval('micro_mineralogy_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_mineralogy (id, micrograph_id, mineralogymethod, notes)
+         VALUES ($1, $2, $3, $4)",
+        array($mineralogyInternalId, $micrographInternalId, 'point counting', 'mineralogy smoke notes')
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_mineral (mineralogy_id, name, operator, percentage)
+         VALUES ($1, $2, $3, $4)",
+        array($mineralogyInternalId, 'quartz', '~', 35.0)
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_mineral (mineralogy_id, name, operator, percentage)
+         VALUES ($1, $2, $3, $4)",
+        array($mineralogyInternalId, 'feldspar', '=', 25.0)
+    );
+
+    $graininfoInternalId = (int)$db->get_var("select nextval('micro_graininfo_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_graininfo
+            (id, micrograph_id, grainsizenotes, grainshapenotes, grainorientationnotes)
+         VALUES ($1, $2, $3, $4, $5)",
+        array($graininfoInternalId, $micrographInternalId,
+              'grain size smoke notes', 'grain shape smoke notes', null)
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_grainsize
+            (graininfo_id, phases, mean, median, mode, standarddeviation, sizeunit)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        array($graininfoInternalId, 'quartz', 50.0, 48.0, 45.0, 12.5, 'um')
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_grainshape (graininfo_id, phases, shape)
+         VALUES ($1, $2, $3)",
+        array($graininfoInternalId, 'quartz', 'subhedral')
+    );
+
+    $fabricinfoInternalId = (int)$db->get_var("select nextval('micro_fabricinfo_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_fabricinfo (id, micrograph_id, notes) VALUES ($1, $2, $3)",
+        array($fabricinfoInternalId, $micrographInternalId, 'fabric smoke notes')
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_fabric
+            (fabric_info_id, fabriclabel, fabricelement, fabriccategory,
+             fabricspacing, fabricdefinedby)
+         VALUES ($1, $2, $3, $4, $5, $6)",
+        array($fabricinfoInternalId, 'S1', 'foliation', 'planar', 'penetrative', 'mica')
+    );
+
     // Pretend the desktop client uploaded the project — create the on-disk
     // dir + a placeholder client PDF (which we'll later overwrite via regen).
     $docRoot = '/srv/app/www';
     $straboFilesDir = "$docRoot/straboMicroFiles/$projectInternalId";
     if (!is_dir($straboFilesDir)) mkdir($straboFilesDir, 0755, true);
+    if (!is_dir("$straboFilesDir/images")) mkdir("$straboFilesDir/images", 0755, true);
     file_put_contents("$straboFilesDir/project.json", json_encode(array(
         'datasets' => array(
             array('samples' => array(
@@ -151,10 +266,19 @@ try {
         )
     )));
     file_put_contents("$straboFilesDir/project.pdf", "%PDF-1.4 placeholder\n%%EOF\n");
-    $clientPdfMtime = filemtime("$straboFilesDir/project.pdf");
+
+    // Composite image for the Phase 2 embed (mirrors what createProjectImages
+    // writes server-side at upload time). 200x150 solid color so the JPEG is
+    // small but unmistakably a JPEG (SOI/EOI markers + JFIF header).
+    $imgPath = "$straboFilesDir/images/$micrographStraboId.jpg";
+    $gd = imagecreatetruecolor(200, 150);
+    imagefilledrectangle($gd, 0, 0, 199, 149, imagecolorallocate($gd, 70, 130, 180));
+    imagejpeg($gd, $imgPath, 85);
+    imagedestroy($gd);
 
     echo "owner=$ownerPkey  project=$projectStraboId (internal id $projectInternalId)\n";
-    echo "sample=$sampleStraboId  ds=$datasetStraboId (internal id $datasetInternalId)\n\n";
+    echo "sample=$sampleStraboId  ds=$datasetStraboId (internal id $datasetInternalId)\n";
+    echo "micrograph=$micrographStraboId (internal id $micrographInternalId)\n\n";
 
     // -------------------------------------------------------------------
     // PART 1: MicroProjectPDF generates a real PDF file.
@@ -249,33 +373,104 @@ try {
     check("api-only updateSample left pdf_dirty FALSE",                   $afterApiOnly === 'f');
 
     // -------------------------------------------------------------------
-    // PART 6: TOC + section structure visible in generated PDF.
-    // PDF binaries have compressed streams — we can't grep DejaVu-encoded
-    // text reliably, but pdftotext isn't in the container. Instead
-    // assert the document has the structural hallmarks we'd expect:
-    // enough pages, page contents reference DejaVu fonts (which only
-    // happens when we emit text), and the doc has multiple top-level
-    // objects (project + dataset + sample, at minimum). Tightened in
-    // Phase 2/3 when pdftotext becomes available.
+    // PART 6: PDF structural smoke + Phase 2 section header verification.
+    // tFPDF + DejaVu embeds Unicode text as glyph IDs (not ASCII) so the
+    // raw bytes are not searchable for "Instrument Information" et al.
+    // pdftotext is not in the container. Use the test-only
+    // getRenderedSectionHeaders() accessor on MicroProjectPDF to confirm
+    // each Phase 2 sub-section header was rendered, then back it up with
+    // structural checks on the binary.
     // -------------------------------------------------------------------
-    echo "\n=== Part 6: PDF structural smoke ===\n";
+    echo "\n=== Part 6: PDF structural + Phase 2 header verification ===\n";
     $direct = file_get_contents($directOut);
-    // pdfkit/pdfkit-compatible PDFs end with %%EOF after the trailer.
     check("PDF ends with %%EOF",                                          substr_count($direct, '%%EOF') >= 1);
-    // tFPDF embeds Font/F1, Font/F2 ... resource refs once per font;
-    // confirm a DejaVu reference exists.
     check("PDF references DejaVu font",                                   stripos($direct, 'DejaVu') !== false);
-    // Page count — Cover + TOC + Project Details + 1 Dataset + 1 Sample
-    // + 0 Micrographs + 0 Spots = at least 5 pages. /Type /Page (not
-    // /Type /Pages) counts pages.
+    // Cover + TOC + Project Details + 1 Dataset + 1 Sample + 1 Micrograph
+    // = at least 6 pages (image embed may bump to 7 if it page-breaks).
     $pageCount = preg_match_all('|/Type\s*/Page[^s]|', $direct, $m);
-    check("PDF has at least 5 pages (Cover, TOC, Project, Dataset, Sample)", $pageCount >= 5);
+    check("PDF has at least 6 pages (Cover, TOC, Project, Dataset, Sample, Micrograph)", $pageCount >= 6);
+
+    $headers = $gen->getRenderedSectionHeaders();
+    check("rendered headers include 'Project Details'",                   in_array('Project Details', $headers, true));
+    check("rendered headers include the seeded Dataset section",          in_array('Dataset: Smoketest Dataset', $headers, true));
+    check("rendered headers include a Sample section",
+          (bool) array_filter($headers, function ($h) { return strpos($h, 'Sample: ') === 0; }));
+    check("rendered headers include the seeded Micrograph section",       in_array('Micrograph: Smoketest Micrograph', $headers, true));
+    check("rendered headers include 'Instrument Information'",            in_array('Instrument Information', $headers, true));
+    check("rendered headers include 'Orientation Information'",           in_array('Orientation Information', $headers, true));
+    check("rendered headers include 'Mineralogy'",                        in_array('Mineralogy', $headers, true));
+    check("rendered headers include 'Grain Information'",                 in_array('Grain Information', $headers, true));
+    check("rendered headers include 'Fabric Information'",                in_array('Fabric Information', $headers, true));
+
+    // -------------------------------------------------------------------
+    // PART 7: Phase 2 composite image embed.
+    // The seeded JPEG should land in the PDF as a DCTDecode-filtered
+    // stream object. Both the DCTDecode filter mention and the JPEG
+    // start-of-image marker (FFD8) should be present in the body.
+    // -------------------------------------------------------------------
+    echo "\n=== Part 7: Phase 2 composite image embed ===\n";
+    check("PDF declares a DCTDecode filter (embedded JPEG)",              strpos($direct, '/DCTDecode') !== false);
+    check("PDF body contains JPEG SOI marker (FFD8FFE0 — JFIF header)",   strpos($direct, "\xFF\xD8\xFF\xE0") !== false);
+    // Direct sanity: the seeded JPEG file is non-trivial in size, and the
+    // PDF must be at least that large since the JPEG is embedded verbatim.
+    check("PDF size >= seeded image size + base structure",                filesize($directOut) > filesize($imgPath));
 
 } finally {
     if ($projectInternalId !== null) {
         $db->prepare_query("DELETE FROM strabosamples.sample_subsystem_links
                             WHERE sample_id=$1 AND sample_userpkey=$2",
                            array($sampleStraboId, $ownerPkey));
+        // Phase 2 micrograph child rows must come down before the parent.
+        $db->prepare_query(
+            "DELETE FROM micro_instrumentdetector
+              WHERE instrument_id IN (SELECT id FROM micro_instrument WHERE micrograph_id IN
+                  (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_instrument WHERE micrograph_id IN
+                (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_micrographorientation WHERE micrographmetadata_id IN
+                (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_mineral
+              WHERE mineralogy_id IN (SELECT id FROM micro_mineralogy WHERE micrograph_id IN
+                  (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_mineralogy WHERE micrograph_id IN
+                (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_grainsize
+              WHERE graininfo_id IN (SELECT id FROM micro_graininfo WHERE micrograph_id IN
+                  (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_grainshape
+              WHERE graininfo_id IN (SELECT id FROM micro_graininfo WHERE micrograph_id IN
+                  (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_grainorientation
+              WHERE graininfo_id IN (SELECT id FROM micro_graininfo WHERE micrograph_id IN
+                  (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_graininfo WHERE micrograph_id IN
+                (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_fabric
+              WHERE fabric_info_id IN (SELECT id FROM micro_fabricinfo WHERE micrograph_id IN
+                  (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_fabricinfo WHERE micrograph_id IN
+                (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)",
+            array($sampleInternalId));
         $db->prepare_query("DELETE FROM micro_micrographmetadata WHERE sample_id=$1",
                            array($sampleInternalId));
         $db->prepare_query("DELETE FROM micro_samplemetadata WHERE id=$1",

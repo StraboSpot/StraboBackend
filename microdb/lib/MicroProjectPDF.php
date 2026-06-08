@@ -8,16 +8,16 @@
  *              regenerate the artifact when a Samples-app spine edit
  *              flips micro_projectmetadata.pdf_dirty.
  *
- *              Phase 1 (THIS branch — samples/micro-server-pdf):
+ *              Phase 1 (samples/micro-server-pdf):
  *                  Layout primitives + the cover / TOC / Project Details /
  *                  per-Dataset / per-Sample sections fully ported. Per-
- *                  Micrograph and per-Spot rendered as placeholder pages
- *                  ("Full layout pending Phase 2/3 of samples/micro-
- *                  server-pdf-*").
- *              Phase 2 (samples/micro-server-pdf-micrographs):
+ *                  Micrograph and per-Spot rendered as placeholder pages.
+ *              Phase 2 (THIS branch — samples/micro-server-pdf-micrographs):
  *                  Per-Micrograph section with composite image embed from
- *                  straboMicroFiles/<pkey>/images/{uuid}.jpg + instrument /
- *                  orientation / feature-info sub-sections.
+ *                  straboMicroFiles/<project_internal_id>/images/{strabo_id}.jpg
+ *                  + Instrument Information sub-section (with detector list) +
+ *                  Orientation Information sub-section + addFeatureInfoSections
+ *                  helper (mineralogy / grain info / fabric) shared with Phase 3.
  *              Phase 3 (samples/micro-server-pdf-spots):
  *                  Per-Spot section + remaining feature-info renderers.
  *
@@ -88,6 +88,16 @@ class MicroProjectPDF extends tFPDF
     /** @var array TOC entries: [{ title, link, level }] — link is the tFPDF AddLink() id */
     protected $tocEntries = array();
 
+    /** @var array Flat list of every section/subsection header rendered.
+     *  Lets callers verify layout presence without parsing the glyph-encoded
+     *  PDF text. Captured at render time; production code paths ignore it. */
+    protected $renderedSectionHeaders = array();
+
+    public function getRenderedSectionHeaders()
+    {
+        return $this->renderedSectionHeaders;
+    }
+
     public function __construct($db, $projectInternalId, $ownerPkey)
     {
         // 'P'ortrait, 'mm' units, 'Letter' size — matches PDF Letter at 612x792pt.
@@ -154,15 +164,14 @@ class MicroProjectPDF extends tFPDF
             $this->generateSampleSectionContent($sample, $dataset);
         }
 
-        // Per-Micrograph and per-Spot are stubbed in Phase 1 — Phase 2/3
-        // will replace these implementations.
+        // Per-Spot remains stubbed until Phase 3.
         foreach ($this->allMicrographs as $row) {
             $micrograph = $row['micrograph'];
             $sample     = $row['sample'];
             $dataset    = $row['dataset'];
             $this->AddPage();
             $this->bindTocLink('Micrograph: ' . ($micrograph->name ?: 'Unnamed'));
-            $this->generateMicrographSectionContent_phase1Stub($micrograph, $sample, $dataset);
+            $this->generateMicrographSectionContent($micrograph, $sample, $dataset);
         }
 
         foreach ($this->allSpots as $row) {
@@ -225,14 +234,17 @@ class MicroProjectPDF extends tFPDF
                 $mRows = $this->db->get_results_prepared(
                     "SELECT id, strabo_id, name, parentid, imagetype,
                             width, height, scalepixelspercentimeter,
-                            scale, description, notes
+                            scale, description, notes, polish, polishdescription
                        FROM micro_micrographmetadata WHERE sample_id = $1 ORDER BY id",
                     array($s->id)
                 );
                 $s->micrographs = is_array($mRows) ? $mRows : array();
-                // Phase 1: spots are not loaded — they're rendered as the
-                // stub. Phase 3 will add the spot query.
-                foreach ($s->micrographs as $m) $m->spots = array();
+                foreach ($s->micrographs as $m) {
+                    // Phase 3 will load spots — Phase 2 just stubs the list so
+                    // the per-micrograph "Spots" summary renders nothing.
+                    $m->spots = array();
+                    $this->loadMicrographSubresources($m);
+                }
             }
         }
 
@@ -278,6 +290,99 @@ class MicroProjectPDF extends tFPDF
                 if (isset($fakeS->mainSamplingPurpose)) $src->mainsamplingpurpose = $fakeS->mainSamplingPurpose;
             }
         }
+    }
+
+    /**
+     * Load instrument + orientation per micrograph, plus the feature-info
+     * children (mineralogy + grain info + fabric info) that addFeatureInfoSections
+     * renders. Stays inside Phase 2's scope — the other feature-info types
+     * (fracture/fold/vein/etc.) are not surfaced today.
+     */
+    protected function loadMicrographSubresources($m)
+    {
+        $instr = $this->db->get_row_prepared(
+            "SELECT * FROM micro_instrument WHERE micrograph_id = $1 ORDER BY id LIMIT 1",
+            array($m->id)
+        );
+        if ($instr) {
+            $detRows = $this->db->get_results_prepared(
+                "SELECT detectortype, detectormake, detectormodel
+                   FROM micro_instrumentdetector WHERE instrument_id = $1 ORDER BY id",
+                array($instr->id)
+            );
+            $instr->detectors = is_array($detRows) ? $detRows : array();
+        }
+        $m->instrument = $instr ?: null;
+
+        $orient = $this->db->get_row_prepared(
+            "SELECT * FROM micro_micrographorientation
+              WHERE micrographmetadata_id = $1 ORDER BY id LIMIT 1",
+            array($m->id)
+        );
+        $m->orientation = $orient ?: null;
+
+        $this->loadFeatureInfo($m, 'micrograph_id');
+    }
+
+    /**
+     * Load mineralogy + grain info + fabric info onto $entity. $fkColumn is
+     * either 'micrograph_id' or 'spot_id' — the three feature-info parent tables
+     * are polymorphic over micrograph/spot.
+     */
+    protected function loadFeatureInfo($entity, $fkColumn)
+    {
+        $miner = $this->db->get_row_prepared(
+            "SELECT id, mineralogymethod, notes
+               FROM micro_mineralogy WHERE $fkColumn = $1 ORDER BY id LIMIT 1",
+            array($entity->id)
+        );
+        if ($miner) {
+            $mRows = $this->db->get_results_prepared(
+                "SELECT name, operator, percentage
+                   FROM micro_mineral WHERE mineralogy_id = $1 ORDER BY id",
+                array($miner->id)
+            );
+            $miner->minerals = is_array($mRows) ? $mRows : array();
+        }
+        $entity->mineralogy = $miner ?: null;
+
+        $grain = $this->db->get_row_prepared(
+            "SELECT id, grainsizenotes, grainshapenotes, grainorientationnotes
+               FROM micro_graininfo WHERE $fkColumn = $1 ORDER BY id LIMIT 1",
+            array($entity->id)
+        );
+        if ($grain) {
+            $grain->grainsize = $this->db->get_results_prepared(
+                "SELECT phases, mean, median, mode, standarddeviation, sizeunit
+                   FROM micro_grainsize WHERE graininfo_id = $1 ORDER BY id",
+                array($grain->id)
+            ) ?: array();
+            $grain->grainshape = $this->db->get_results_prepared(
+                "SELECT phases, shape
+                   FROM micro_grainshape WHERE graininfo_id = $1 ORDER BY id",
+                array($grain->id)
+            ) ?: array();
+            $grain->grainorientation = $this->db->get_results_prepared(
+                "SELECT phases, meanorientation, relativeto, software
+                   FROM micro_grainorientation WHERE graininfo_id = $1 ORDER BY id",
+                array($grain->id)
+            ) ?: array();
+        }
+        $entity->graininfo = $grain ?: null;
+
+        $fab = $this->db->get_row_prepared(
+            "SELECT id, notes FROM micro_fabricinfo WHERE $fkColumn = $1 ORDER BY id LIMIT 1",
+            array($entity->id)
+        );
+        if ($fab) {
+            $fab->fabrics = $this->db->get_results_prepared(
+                "SELECT fabriclabel, fabricelement, fabriccategory,
+                        fabricspacing, fabricdefinedby
+                   FROM micro_fabric WHERE fabric_info_id = $1 ORDER BY id",
+                array($fab->id)
+            ) ?: array();
+        }
+        $entity->fabricinfo = $fab ?: null;
     }
 
     protected function collectFlatLists()
@@ -354,6 +459,7 @@ class MicroProjectPDF extends tFPDF
 
     protected function addSectionHeader($text)
     {
+        $this->renderedSectionHeaders[] = $text;
         $this->SetFont('DejaVu', 'B', self::FS_HEADING1);
         $this->setColor(self::C_PRIMARY, 'text');
         $this->MultiCell(0, 9, $text, 0, 'L');
@@ -366,6 +472,7 @@ class MicroProjectPDF extends tFPDF
 
     protected function addSubsectionHeader($text)
     {
+        $this->renderedSectionHeaders[] = $text;
         $this->SetFont('DejaVu', 'B', self::FS_HEADING2);
         $this->setColor(self::C_PRIMARY, 'text');
         $this->MultiCell(0, 7, $text, 0, 'L');
@@ -621,17 +728,31 @@ class MicroProjectPDF extends tFPDF
     }
 
     // -----------------------------------------------------------------
-    // Phase 1 STUBS — replaced by Phase 2 / 3 follow-on branches.
+    // Per-Micrograph (Phase 2)
     // -----------------------------------------------------------------
 
-    protected function generateMicrographSectionContent_phase1Stub($micrograph, $sample, $dataset)
+    protected function generateMicrographSectionContent($micrograph, $sample, $dataset)
     {
         $name = $micrograph->name ?: 'Unnamed';
-        $this->addBreadcrumb(array(
-            $dataset->name ?: 'Dataset',
-            $this->sampleDisplayName($sample),
-        ));
+
+        $crumbs = array($dataset->name ?: 'Dataset', $this->sampleDisplayName($sample));
+        if (!empty($micrograph->parentid)) {
+            foreach ($this->getMicrographParentChain($micrograph->parentid, $sample) as $p) {
+                $crumbs[] = $p;
+            }
+        }
+        $this->addBreadcrumb($crumbs);
         $this->addSectionHeader('Micrograph: ' . $name);
+
+        $this->SetFont('DejaVu', 'I', self::FS_SMALL);
+        $this->setColor(self::C_SECONDARY, 'text');
+        $this->MultiCell(0, 5,
+            empty($micrograph->parentid) ? 'Reference Micrograph' : 'Associated Micrograph',
+            0, 'L');
+        $this->Ln(2);
+
+        $this->embedCompositeImage($micrograph);
+
         $this->startCard();
         $this->addFieldList($micrograph, array(
             array('key' => 'name',                     'label' => 'Name'),
@@ -642,15 +763,280 @@ class MicroProjectPDF extends tFPDF
             array('key' => 'scale',                    'label' => 'Scale Description'),
             array('key' => 'description',              'label' => 'Description'),
             array('key' => 'notes',                    'label' => 'Notes'),
+            array('key' => 'polish',                   'label' => 'Polish',
+                  'format' => array($this, 'formatYesNo')),
+            array('key' => 'polishdescription',        'label' => 'Polish Description'),
         ));
         $this->endCard();
-        $this->Ln(2);
-        $this->SetFont('DejaVu', 'I', self::FS_SMALL);
-        $this->setColor(self::C_LIGHT_TEXT, 'text');
-        $this->MultiCell(0, 5,
-            'Composite image, instrument metadata, orientation, and feature-info sections pending Phase 2 of samples/micro-server-pdf-*.',
-            0, 'L');
+
+        if (!empty($micrograph->instrument)) {
+            $this->checkPageBreak(150);
+            $this->addSubsectionHeader('Instrument Information');
+            $this->startCard();
+            $this->addFieldList($micrograph->instrument, array(
+                array('key' => 'instrumenttype',                'label' => 'Instrument Type'),
+                array('key' => 'datatype',                      'label' => 'Data Type'),
+                array('key' => 'instrumentbrand',               'label' => 'Brand'),
+                array('key' => 'instrumentmodel',               'label' => 'Model'),
+                array('key' => 'university',                    'label' => 'University'),
+                array('key' => 'laboratory',                    'label' => 'Laboratory'),
+                array('key' => 'datacollectionsoftware',        'label' => 'Collection Software'),
+                array('key' => 'datacollectionsoftwareversion', 'label' => 'Software Version'),
+                array('key' => 'postprocessingsoftware',        'label' => 'Post Processing Software'),
+                array('key' => 'postprocessingsoftwareversion', 'label' => 'Post Processing Version'),
+                array('key' => 'filamenttype',                  'label' => 'Filament Type'),
+                array('key' => 'accelerationvoltage',           'label' => 'Acceleration Voltage'),
+                array('key' => 'beamcurrent',                   'label' => 'Beam Current'),
+                array('key' => 'spotsize',                      'label' => 'Spot Size'),
+                array('key' => 'workingdistance',               'label' => 'Working Distance'),
+                array('key' => 'instrumentnotes',               'label' => 'Notes'),
+            ));
+
+            if (!empty($micrograph->instrument->detectors)) {
+                $this->SetFont('DejaVu', 'B', self::FS_BODY);
+                $this->setColor(self::C_PRIMARY, 'text');
+                $this->MultiCell(0, 5, 'Detectors:', 0, 'L');
+                $this->SetFont('DejaVu', '', self::FS_SMALL);
+                $this->setColor(self::C_TEXT, 'text');
+                foreach ($micrograph->instrument->detectors as $det) {
+                    $type = $this->hasValue($det->detectortype) ? $det->detectortype : 'Unknown';
+                    $make = $this->hasValue($det->detectormake) ? " ($det->detectormake)" : '';
+                    $this->MultiCell(0, 5, "  - $type$make", 0, 'L');
+                }
+            }
+            $this->endCard();
+        }
+
+        if (!empty($micrograph->orientation)) {
+            $this->checkPageBreak(100);
+            $this->addSubsectionHeader('Orientation Information');
+            $this->startCard();
+            $this->addFieldList($micrograph->orientation, array(
+                array('key' => 'orientationmethod',  'label' => 'Method'),
+                array('key' => 'toptrend',           'label' => 'Top Trend'),
+                array('key' => 'topplunge',          'label' => 'Top Plunge'),
+                array('key' => 'topreferencecorner', 'label' => 'Top Reference Corner'),
+                array('key' => 'sidetrend',          'label' => 'Side Trend'),
+                array('key' => 'sideplunge',         'label' => 'Side Plunge'),
+                array('key' => 'sidereferencecorner','label' => 'Side Reference Corner'),
+                array('key' => 'fabricreference',    'label' => 'Fabric Reference'),
+                array('key' => 'fabricstrike',       'label' => 'Fabric Strike'),
+                array('key' => 'fabricdip',          'label' => 'Fabric Dip'),
+                array('key' => 'lookdirection',      'label' => 'Look Direction'),
+                array('key' => 'topcorner',          'label' => 'Top Corner'),
+            ));
+            $this->endCard();
+        }
+
+        $this->addFeatureInfoSections($micrograph);
+
+        if (!empty($micrograph->spots)) {
+            $this->checkPageBreak(80);
+            $this->addSubsectionHeader('Spots');
+            $n = count($micrograph->spots);
+            $this->SetFont('DejaVu', '', self::FS_BODY);
+            $this->setColor(self::C_TEXT, 'text');
+            $this->MultiCell(0, 5,
+                sprintf('This micrograph contains %d spot%s:', $n, $n === 1 ? '' : 's'),
+                0, 'L');
+            $this->SetFont('DejaVu', '', self::FS_SMALL);
+            $this->setColor(self::C_ACCENT, 'text');
+            foreach ($micrograph->spots as $spot) {
+                $this->MultiCell(0, 5, '  - ' . ($spot->name ?: 'Unnamed Spot'), 0, 'L');
+            }
+        }
     }
+
+    /**
+     * Embed straboMicroFiles/<project_internal_id>/images/<strabo_id>.jpg —
+     * the composite written server-side by StraboMicro::createProjectImages
+     * at upload time. Scales to fit page width up to ~120mm tall.
+     */
+    protected function embedCompositeImage($micrograph)
+    {
+        if (empty($micrograph->strabo_id)) return;
+        $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : '/srv/app/www';
+        $imgPath = "$docRoot/straboMicroFiles/$this->projectInternalId/images/$micrograph->strabo_id.jpg";
+        if (!is_file($imgPath)) return;
+
+        $size = @getimagesize($imgPath);
+        if ($size === false) return;
+        $imgW = $size[0] ?: 1;
+        $imgH = $size[1] ?: 1;
+
+        $maxW = self::PAGE_WIDTH_MM - 2 * self::MARGIN_MM;
+        $maxH = 120;
+        $dispW = $imgW;
+        $dispH = $imgH;
+        if ($dispW > $maxW) {
+            $scale = $maxW / $dispW;
+            $dispW = $maxW;
+            $dispH = $imgH * $scale;
+        }
+        if ($dispH > $maxH) {
+            $scale = $maxH / $dispH;
+            $dispH = $maxH;
+            $dispW = $dispW * $scale;
+        }
+
+        if ($this->GetY() + $dispH > self::PAGE_HEIGHT_MM - self::MARGIN_MM - 10) {
+            $this->AddPage();
+        }
+        $y = $this->GetY();
+        $this->Image($imgPath, self::MARGIN_MM, $y, $dispW, $dispH, 'JPG');
+        $this->SetY($y + $dispH + 4);
+    }
+
+    protected function getMicrographParentChain($parentStraboId, $sample)
+    {
+        $chain = array();
+        $current = $parentStraboId;
+        $guard = 0;
+        while ($current && $guard++ < 100) {
+            $found = null;
+            foreach ($sample->micrographs as $m) {
+                if ((string)$m->strabo_id === (string)$current) { $found = $m; break; }
+            }
+            if (!$found) break;
+            array_unshift($chain, $found->name ?: 'Micrograph');
+            $current = $found->parentid;
+        }
+        return $chain;
+    }
+
+    /**
+     * Render Mineralogy + Grain Information + Fabric Information for either
+     * a micrograph or a spot row. Shared with Phase 3 — the structures hang
+     * off both via the polymorphic (micrograph_id, spot_id) parent columns.
+     */
+    protected function addFeatureInfoSections($entity)
+    {
+        $miner = isset($entity->mineralogy) ? $entity->mineralogy : null;
+        if ($miner && (!empty($miner->minerals) || $this->hasValue($miner->notes))) {
+            $this->checkPageBreak(100);
+            $this->addSubsectionHeader('Mineralogy');
+            $this->startCard();
+            if ($this->hasValue($miner->mineralogymethod)) {
+                $this->SetFont('DejaVu', '', self::FS_BODY);
+                $this->setColor(self::C_TEXT, 'text');
+                $this->MultiCell(0, 5, 'Method: ' . $miner->mineralogymethod, 0, 'L');
+            }
+            if (!empty($miner->minerals)) {
+                $this->SetFont('DejaVu', 'B', self::FS_BODY);
+                $this->setColor(self::C_PRIMARY, 'text');
+                $this->MultiCell(0, 5, 'Minerals:', 0, 'L');
+                $this->SetFont('DejaVu', '', self::FS_SMALL);
+                $this->setColor(self::C_TEXT, 'text');
+                foreach ($miner->minerals as $mineral) {
+                    $pct = $this->hasValue($mineral->percentage)
+                        ? ' (' . ($this->hasValue($mineral->operator) ? $mineral->operator : '')
+                          . $mineral->percentage . '%)'
+                        : '';
+                    $nm = $this->hasValue($mineral->name) ? $mineral->name : 'Unknown';
+                    $this->MultiCell(0, 5, "  - $nm$pct", 0, 'L');
+                }
+            }
+            if ($this->hasValue($miner->notes)) {
+                $this->SetFont('DejaVu', 'I', self::FS_SMALL);
+                $this->setColor(self::C_LIGHT_TEXT, 'text');
+                $this->MultiCell(0, 5, 'Notes: ' . $miner->notes, 0, 'L');
+            }
+            $this->endCard();
+        }
+
+        $grain = isset($entity->graininfo) ? $entity->graininfo : null;
+        if ($grain) {
+            $hasGrain = !empty($grain->grainsize) || !empty($grain->grainshape) ||
+                        !empty($grain->grainorientation) ||
+                        $this->hasValue($grain->grainsizenotes) ||
+                        $this->hasValue($grain->grainshapenotes) ||
+                        $this->hasValue($grain->grainorientationnotes);
+            if ($hasGrain) {
+                $this->checkPageBreak(100);
+                $this->addSubsectionHeader('Grain Information');
+                $this->startCard();
+
+                if (!empty($grain->grainsize)) {
+                    $this->SetFont('DejaVu', 'B', self::FS_BODY);
+                    $this->setColor(self::C_PRIMARY, 'text');
+                    $this->MultiCell(0, 5, 'Grain Size:', 0, 'L');
+                    $this->SetFont('DejaVu', '', self::FS_SMALL);
+                    $this->setColor(self::C_TEXT, 'text');
+                    foreach ($grain->grainsize as $size) {
+                        $stats = array();
+                        if ($this->hasValue($size->mean))              $stats[] = "Mean: $size->mean";
+                        if ($this->hasValue($size->median))            $stats[] = "Median: $size->median";
+                        if ($this->hasValue($size->mode))              $stats[] = "Mode: $size->mode";
+                        if ($this->hasValue($size->standarddeviation)) $stats[] = "StdDev: $size->standarddeviation";
+                        $phases = $this->hasValue($size->phases) ? $size->phases : 'All phases';
+                        $unit = $this->hasValue($size->sizeunit) ? " $size->sizeunit" : '';
+                        $this->MultiCell(0, 5, "  $phases: " . implode(', ', $stats) . $unit, 0, 'L');
+                    }
+                }
+                if (!empty($grain->grainshape)) {
+                    $this->SetFont('DejaVu', 'B', self::FS_BODY);
+                    $this->setColor(self::C_PRIMARY, 'text');
+                    $this->MultiCell(0, 5, 'Grain Shape:', 0, 'L');
+                    $this->SetFont('DejaVu', '', self::FS_SMALL);
+                    $this->setColor(self::C_TEXT, 'text');
+                    foreach ($grain->grainshape as $sh) {
+                        $phases = $this->hasValue($sh->phases) ? $sh->phases : 'All phases';
+                        $shape = $this->hasValue($sh->shape) ? $sh->shape : 'Not specified';
+                        $this->MultiCell(0, 5, "  $phases: $shape", 0, 'L');
+                    }
+                }
+                if ($this->hasValue($grain->grainsizenotes)) {
+                    $this->SetFont('DejaVu', 'I', self::FS_SMALL);
+                    $this->setColor(self::C_LIGHT_TEXT, 'text');
+                    $this->MultiCell(0, 5, 'Size Notes: ' . $grain->grainsizenotes, 0, 'L');
+                }
+                if ($this->hasValue($grain->grainshapenotes)) {
+                    $this->SetFont('DejaVu', 'I', self::FS_SMALL);
+                    $this->setColor(self::C_LIGHT_TEXT, 'text');
+                    $this->MultiCell(0, 5, 'Shape Notes: ' . $grain->grainshapenotes, 0, 'L');
+                }
+                $this->endCard();
+            }
+        }
+
+        $fab = isset($entity->fabricinfo) ? $entity->fabricinfo : null;
+        if ($fab && (!empty($fab->fabrics) || $this->hasValue($fab->notes))) {
+            $this->checkPageBreak(100);
+            $this->addSubsectionHeader('Fabric Information');
+            $this->startCard();
+            if (!empty($fab->fabrics)) {
+                foreach ($fab->fabrics as $fabric) {
+                    $this->SetFont('DejaVu', 'B', self::FS_BODY);
+                    $this->setColor(self::C_PRIMARY, 'text');
+                    $this->MultiCell(0, 5, $this->hasValue($fabric->fabriclabel) ? $fabric->fabriclabel : 'Fabric', 0, 'L');
+                    $this->SetFont('DejaVu', '', self::FS_SMALL);
+                    $this->setColor(self::C_TEXT, 'text');
+                    if ($this->hasValue($fabric->fabricelement))  $this->MultiCell(0, 5, "  Element: $fabric->fabricelement",  0, 'L');
+                    if ($this->hasValue($fabric->fabriccategory)) $this->MultiCell(0, 5, "  Category: $fabric->fabriccategory", 0, 'L');
+                    if ($this->hasValue($fabric->fabricspacing))  $this->MultiCell(0, 5, "  Spacing: $fabric->fabricspacing",   0, 'L');
+                    if ($this->hasValue($fabric->fabricdefinedby))$this->MultiCell(0, 5, "  Defined By: $fabric->fabricdefinedby", 0, 'L');
+                }
+            }
+            if ($this->hasValue($fab->notes)) {
+                $this->SetFont('DejaVu', 'I', self::FS_SMALL);
+                $this->setColor(self::C_LIGHT_TEXT, 'text');
+                $this->MultiCell(0, 5, 'Notes: ' . $fab->notes, 0, 'L');
+            }
+            $this->endCard();
+        }
+    }
+
+    public function formatYesNo($v)
+    {
+        if ($v === null || $v === '') return null;
+        if ($v === true  || $v === 't' || $v === 1 || $v === '1' || $v === 'true')  return 'Yes';
+        if ($v === false || $v === 'f' || $v === 0 || $v === '0' || $v === 'false') return 'No';
+        return (string)$v;
+    }
+
+    // -----------------------------------------------------------------
+    // Phase 1 STUBS — Phase 3 will replace.
+    // -----------------------------------------------------------------
 
     protected function generateSpotSectionContent_phase1Stub($spot, $micrograph, $sample, $dataset)
     {
