@@ -1630,8 +1630,11 @@ class StraboSpot
 
 			$injson = json_encode($injson);
 
-			$modified_timestamp = 0;
-
+			// $modified_timestamp holds the EXISTING server timestamp (extracted
+			// from the dataset node above). Only overwrite when the incoming copy
+			// is strictly newer; otherwise leave the server copy untouched and
+			// return it. Do NOT reset $modified_timestamp to 0 here — that made the
+			// comparison always true and overwrote the dataset regardless of age.
 			if($inmodified_timestamp > $modified_timestamp){
 				$self = $this->neodb->updateNode($neoid, $injson, "Dataset");
 				$upload->modified_on_server = true;
