@@ -2,7 +2,8 @@
 /**
  * File: smoke_test_micro_server_pdf.php
  * Description: Smoke for samples/micro-server-pdf (Phase 1) + samples/micro-
- *              server-pdf-micrographs (Phase 2). Verifies:
+ *              server-pdf-micrographs (Phase 2) + samples/micro-server-pdf-
+ *              spots (Phase 3). Verifies:
  *
  *                Part 1: MicroProjectPDF generates a non-trivial PDF on disk
  *                        from seeded PG fixtures + an upload-time on-disk
@@ -29,6 +30,13 @@
  *                        straboMicroFiles/<pkey>/images/{strabo_id}.jpg lands
  *                        in the PDF (search for /DCTDecode + JPEG SOI marker
  *                        in the stream payload).
+ *                Part 8: Phase 3 per-Spot section — getRenderedSectionHeaders()
+ *                        contains the 'Spot: …' header, tag list rendered,
+ *                        seeded spot-level feature info (Mineralogy + Grain +
+ *                        Fabric) rendered (each header appears EXACTLY twice
+ *                        in the final list — once for the micrograph, once for
+ *                        the spot — proving the helper fired against the spot
+ *                        entity).
  *
  *              Hermetic: seeds micro_*metadata + on-disk straboMicroFiles
  *              dir + strabosamples row, then tears down in finally{}.
@@ -250,6 +258,86 @@ try {
         array($fabricinfoInternalId, 'S1', 'foliation', 'planar', 'penetrative', 'mica')
     );
 
+    // Phase 3 fixtures: 1 spot under the micrograph + 2 tags + 1 spot-level
+    // feature-info row in each of mineralogy / grain / fabric so Part 8 can
+    // observe the helper firing against the spot entity (not just the
+    // micrograph). Tag plumbing: micro_tag (rows) + micro_spot_tag (junction).
+    $spotStraboId = "smoketest-mspdf-spot-$stamp";
+    $spotInternalId = (int)$db->get_var("select nextval('micro_spotmetadata_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_spotmetadata
+            (id, micrograph_id, strabo_id, name, geometrytype, color, labelcolor,
+             date, time, notes, modifiedtimestamp)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+        array($spotInternalId, $micrographInternalId, $spotStraboId,
+              'Smoketest Spot', 'point', '#FF0000', '#FFFFFF',
+              '2026-03-15', '14:30', 'spot smoke notes',
+              (string)(int)(microtime(true) * 1000))
+    );
+
+    $tagAInternalId = (int)$db->get_var("select nextval('micro_tag_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_tag (id, project_id, strabo_id, name, tagtype)
+         VALUES ($1, $2, $3, $4, $5)",
+        array($tagAInternalId, $projectInternalId,
+              "smoketest-tag-a-$stamp", 'porphyroclast', 'concept')
+    );
+    $tagBInternalId = (int)$db->get_var("select nextval('micro_tag_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_tag (id, project_id, strabo_id, name, tagtype)
+         VALUES ($1, $2, $3, $4, $5)",
+        array($tagBInternalId, $projectInternalId,
+              "smoketest-tag-b-$stamp", 'fractured', 'concept')
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_spot_tag (spot_id, tag_id, project_id) VALUES ($1, $2, $3)",
+        array($spotInternalId, $tagAInternalId, $projectInternalId)
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_spot_tag (spot_id, tag_id, project_id) VALUES ($1, $2, $3)",
+        array($spotInternalId, $tagBInternalId, $projectInternalId)
+    );
+
+    $spotMineralogyId = (int)$db->get_var("select nextval('micro_mineralogy_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_mineralogy (id, spot_id, mineralogymethod, notes)
+         VALUES ($1, $2, $3, $4)",
+        array($spotMineralogyId, $spotInternalId, 'visual', 'spot mineralogy notes')
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_mineral (mineralogy_id, name, operator, percentage)
+         VALUES ($1, $2, $3, $4)",
+        array($spotMineralogyId, 'plagioclase', '~', 60.0)
+    );
+
+    $spotGrainInfoId = (int)$db->get_var("select nextval('micro_graininfo_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_graininfo
+            (id, spot_id, grainsizenotes, grainshapenotes, grainorientationnotes)
+         VALUES ($1, $2, $3, $4, $5)",
+        array($spotGrainInfoId, $spotInternalId,
+              'spot grain size notes', null, null)
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_grainsize
+            (graininfo_id, phases, mean, median, mode, standarddeviation, sizeunit)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        array($spotGrainInfoId, 'plagioclase', 25.0, 24.0, 23.0, 5.5, 'um')
+    );
+
+    $spotFabricInfoId = (int)$db->get_var("select nextval('micro_fabricinfo_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_fabricinfo (id, spot_id, notes) VALUES ($1, $2, $3)",
+        array($spotFabricInfoId, $spotInternalId, 'spot fabric notes')
+    );
+    $db->prepare_query(
+        "INSERT INTO micro_fabric
+            (fabric_info_id, fabriclabel, fabricelement, fabriccategory,
+             fabricspacing, fabricdefinedby)
+         VALUES ($1, $2, $3, $4, $5, $6)",
+        array($spotFabricInfoId, 'S2', 'lineation', 'linear', 'discrete', 'quartz')
+    );
+
     // Pretend the desktop client uploaded the project — create the on-disk
     // dir + a placeholder client PDF (which we'll later overwrite via regen).
     $docRoot = '/srv/app/www';
@@ -278,7 +366,8 @@ try {
 
     echo "owner=$ownerPkey  project=$projectStraboId (internal id $projectInternalId)\n";
     echo "sample=$sampleStraboId  ds=$datasetStraboId (internal id $datasetInternalId)\n";
-    echo "micrograph=$micrographStraboId (internal id $micrographInternalId)\n\n";
+    echo "micrograph=$micrographStraboId (internal id $micrographInternalId)\n";
+    echo "spot=$spotStraboId (internal id $spotInternalId)\n\n";
 
     // -------------------------------------------------------------------
     // PART 1: MicroProjectPDF generates a real PDF file.
@@ -386,9 +475,9 @@ try {
     check("PDF ends with %%EOF",                                          substr_count($direct, '%%EOF') >= 1);
     check("PDF references DejaVu font",                                   stripos($direct, 'DejaVu') !== false);
     // Cover + TOC + Project Details + 1 Dataset + 1 Sample + 1 Micrograph
-    // = at least 6 pages (image embed may bump to 7 if it page-breaks).
+    // + 1 Spot = at least 7 pages (image embed may bump higher if it page-breaks).
     $pageCount = preg_match_all('|/Type\s*/Page[^s]|', $direct, $m);
-    check("PDF has at least 6 pages (Cover, TOC, Project, Dataset, Sample, Micrograph)", $pageCount >= 6);
+    check("PDF has at least 7 pages (Cover, TOC, Project, Dataset, Sample, Micrograph, Spot)", $pageCount >= 7);
 
     $headers = $gen->getRenderedSectionHeaders();
     check("rendered headers include 'Project Details'",                   in_array('Project Details', $headers, true));
@@ -415,11 +504,85 @@ try {
     // PDF must be at least that large since the JPEG is embedded verbatim.
     check("PDF size >= seeded image size + base structure",                filesize($directOut) > filesize($imgPath));
 
+    // -------------------------------------------------------------------
+    // PART 8: Phase 3 per-Spot section.
+    // The micrograph fixture seeded mineralogy + grain info + fabric info
+    // at the MICROGRAPH level. The spot fixture seeds another set at the
+    // SPOT level. Every subsection header appears in $headers in order of
+    // render, so each of Mineralogy / Grain Information / Fabric Information
+    // should appear EXACTLY twice — once when fired against the micrograph,
+    // once when fired against the spot — proving addFeatureInfoSections is
+    // being called on the spot entity (not just the micrograph).
+    // -------------------------------------------------------------------
+    echo "\n=== Part 8: Phase 3 per-Spot section + feature-info reuse ===\n";
+    check("rendered headers include the seeded Spot section",             in_array('Spot: Smoketest Spot', $headers, true));
+    check("'Mineralogy' rendered for BOTH micrograph and spot",            count(array_keys($headers, 'Mineralogy', true)) === 2);
+    check("'Grain Information' rendered for BOTH micrograph and spot",     count(array_keys($headers, 'Grain Information', true)) === 2);
+    check("'Fabric Information' rendered for BOTH micrograph and spot",    count(array_keys($headers, 'Fabric Information', true)) === 2);
+
 } finally {
     if ($projectInternalId !== null) {
         $db->prepare_query("DELETE FROM strabosamples.sample_subsystem_links
                             WHERE sample_id=$1 AND sample_userpkey=$2",
                            array($sampleStraboId, $ownerPkey));
+        // Phase 3 spot child rows must come down before the spot.
+        $db->prepare_query(
+            "DELETE FROM micro_spot_tag WHERE spot_id IN
+                (SELECT id FROM micro_spotmetadata WHERE micrograph_id IN
+                    (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_tag WHERE project_id=$1",
+            array($projectInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_mineral
+              WHERE mineralogy_id IN (SELECT id FROM micro_mineralogy WHERE spot_id IN
+                  (SELECT id FROM micro_spotmetadata WHERE micrograph_id IN
+                      (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_mineralogy WHERE spot_id IN
+                (SELECT id FROM micro_spotmetadata WHERE micrograph_id IN
+                    (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_grainsize
+              WHERE graininfo_id IN (SELECT id FROM micro_graininfo WHERE spot_id IN
+                  (SELECT id FROM micro_spotmetadata WHERE micrograph_id IN
+                      (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_grainshape
+              WHERE graininfo_id IN (SELECT id FROM micro_graininfo WHERE spot_id IN
+                  (SELECT id FROM micro_spotmetadata WHERE micrograph_id IN
+                      (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_grainorientation
+              WHERE graininfo_id IN (SELECT id FROM micro_graininfo WHERE spot_id IN
+                  (SELECT id FROM micro_spotmetadata WHERE micrograph_id IN
+                      (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_graininfo WHERE spot_id IN
+                (SELECT id FROM micro_spotmetadata WHERE micrograph_id IN
+                    (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_fabric
+              WHERE fabric_info_id IN (SELECT id FROM micro_fabricinfo WHERE spot_id IN
+                  (SELECT id FROM micro_spotmetadata WHERE micrograph_id IN
+                      (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_fabricinfo WHERE spot_id IN
+                (SELECT id FROM micro_spotmetadata WHERE micrograph_id IN
+                    (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1))",
+            array($sampleInternalId));
+        $db->prepare_query(
+            "DELETE FROM micro_spotmetadata WHERE micrograph_id IN
+                (SELECT id FROM micro_micrographmetadata WHERE sample_id=$1)",
+            array($sampleInternalId));
         // Phase 2 micrograph child rows must come down before the parent.
         $db->prepare_query(
             "DELETE FROM micro_instrumentdetector
