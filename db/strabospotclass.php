@@ -697,6 +697,19 @@ class StraboSpot
 
 		}
 
+		// Mirror the computed wkt onto the properties object so the
+		// strabosamples sample-sync helper (field_sample_sync_spot →
+		// samples_field_extract_geom_from_spot) can extract lat/lng. The
+		// sync is invoked AFTER Neo4j writes with $upload->properties as
+		// its input, and the input rarely carries wkt — geometry comes
+		// in as a GeoJSON object. Without this assignment, every new
+		// Field upload would produce strabosamples rows with NULL
+		// lat/lng. The 2026-06-05 fix corrected the migration path but
+		// missed this live path; e2e_workflows.php B.1 surfaced it.
+		if ($hasgeometry === "yes") {
+			$upload->properties->wkt = $wkt;
+		}
+
 		if($properties->origwkt!=""){
 			$newspot["origwkt"]=$properties->origwkt;
 		}else{
