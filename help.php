@@ -35,6 +35,7 @@ include("includes/mheader.php");
 			</p>
 
 			<!-- Office Hours Banner -->
+			<!--
 			<div style="text-align: center; margin-bottom: 1em;">
 				<img src="/includes/mimages/help_office_hours.jpg" alt="Weekly Office Hours - Every Thursday 1-3 pm CDT UTC-5" style="max-width: 640px; width: 100%; border-radius: 4px;">
 			</div>
@@ -42,6 +43,17 @@ include("includes/mheader.php");
 				<span style="color: #ffffff; font-size: 1.05em;">Registration Link: </span>
 				<a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8wmLA" target="_blank">https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8wmLA</a>
 			</p>
+			-->
+			
+			
+			<div style="text-align: center; margin-bottom: 1em;">
+				<iframe src="https://scheduler.zoom.us/martin-claire-tzug8y/strabospot-office-hours?embed=true" frameborder="0" style="width: 100%; max-width: 1000px; height: 760px; border: 0;"></iframe>
+			</div>
+			<div style="display: flex; justify-content: center; align-items: center; ">
+				<p style="text-align: center; margin-bottom: 2em; width: 100%; max-width: 1000px;">
+					To make your time more valuable, office hours are now held by appointment only via Zoom. Sign up for a dedicated time slot and get one-on-one help focused entirely on your questions.
+				</p>
+			</div>
 		</section>
 
 		<a name="field" style="scroll-margin-top: 100px;"></a>
