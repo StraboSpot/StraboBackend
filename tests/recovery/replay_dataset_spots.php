@@ -19,9 +19,11 @@
  *
  * After a successful apply the dataset's modified_timestamp is bumped to now
  * (unless --no-bump) so the restored state wins the upload gate against any
- * device still carrying a stale copy. IMPORTANT: have every device download
- * the project after the replay, before anyone uploads again — a device that
- * edits a stale local copy can still replace the dataset wholesale.
+ * device still carrying a stale copy. IMPORTANT: after the replay each device
+ * should UPLOAD its own new work first, THEN download the project (download is
+ * a full local replace — downloading first destroys unsynced spots). A device
+ * that locally edits its stale copy of THIS dataset before downloading can
+ * still replace it wholesale, so download promptly after uploading.
  *
  * Usage:
  *   php replay_dataset_spots.php --file=<payload.json> --dataset=<id> --userpkey=<pkey> [options]
@@ -159,5 +161,5 @@ $finalIds = $strabo->getDatasetSpotIds($datasetid);
 $finalIds = is_array($finalIds) ? $finalIds : [];
 line();
 line("Restored $restored spot(s). Dataset now has " . count($finalIds) . " spots on the server.");
-line("Remind all devices to DOWNLOAD the project before their next upload.");
+line("Remind all devices: UPLOAD their own new work first, THEN download the project.");
 exit(0);
