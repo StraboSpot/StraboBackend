@@ -362,23 +362,34 @@ try {
 
     // =====================================================================
     // E.1b — UPDATE race: rows exist; both users re-upload the IDENTICAL
-    // payload (same bumped timestamp) simultaneously. Pure idempotency
-    // under simultaneity. 3 iterations.
+    // payload (same bumped timestamp) simultaneously. 3 iterations.
+    //
+    // Auth model note: during active collaboration only the dataset's
+    // CREATOR may edit it, and which racer created it in E.1a is
+    // inherently racy. The non-creator's bulk upload is deterministically
+    // 403'd — the sensible-error half of the pass criteria. (Pre-fix, the
+    // duplicate nodes made getDatasetContext resolve an arbitrary copy,
+    // so the SAME request would randomly succeed or 403.)
     // =====================================================================
     echo "\n=== E.1b: parallel UPDATE race (identical re-upload) ===\n";
+
+    $createdBy = (int)$neodb->get_var("MATCH (d:Dataset {id:$datasetId}) RETURN d.created_by");
+    $creatorAuth    = ($createdBy === $editorPkey) ? $editorAuth : $ownerAuth;
+    $nonCreatorAuth = ($createdBy === $editorPkey) ? $ownerAuth : $editorAuth;
+    note("dataset created_by=$createdBy");
 
     for ($iter = 1; $iter <= 3; $iter++) {
         $ts = (int)(microtime(true) * 1000);
         $payload = buildFieldPayload($projectId, $datasetId, e12Spots("e1b$iter"), $ts);
 
-        $hA = curlAsync('POST', '/db/projectdatasetsspots', $payload, $ownerAuth);
-        $hB = curlAsync('POST', '/db/projectdatasetsspots', $payload, $editorAuth);
+        $hA = curlAsync('POST', '/db/projectdatasetsspots', $payload, $creatorAuth);
+        $hB = curlAsync('POST', '/db/projectdatasetsspots', $payload, $nonCreatorAuth);
         $rA = curlWait($hA);
         $rB = curlWait($hB);
-        note("iter $iter HTTP: owner={$rA['status']} editor={$rB['status']}");
+        note("iter $iter HTTP: creator={$rA['status']} non-creator={$rB['status']}");
 
-        $ok2xx = ($rA['status'] >= 200 && $rA['status'] < 300) && ($rB['status'] >= 200 && $rB['status'] < 300);
-        check("E.1b iter $iter: both uploads returned 2xx", $ok2xx);
+        check("E.1b iter $iter: creator 2xx, non-creator clean 403",
+              $rA['status'] >= 200 && $rA['status'] < 300 && $rB['status'] === 403);
 
         $bad = array_merge(
             neoSingletons($neodb, $projectId, $datasetId, array($richAId, $richBId, $legHoldId)),
@@ -427,7 +438,7 @@ try {
     // Upload re-mirrors with a newer timestamp → upload wins.
     $ts = (int)(microtime(true) * 1000);
     $rUp = curlWait(curlAsync('POST', '/db/projectdatasetsspots',
-        buildFieldPayload($projectId, $datasetId, e12Spots("e2a"), $ts), $ownerAuth));
+        buildFieldPayload($projectId, $datasetId, e12Spots("e2a"), $ts), $creatorAuth));
     check("E.2a re-upload returned 2xx", $rUp['status'] >= 200 && $rUp['status'] < 300);
 
     $name = (string)$db->get_var_prepared(
@@ -457,18 +468,33 @@ try {
 
     // =====================================================================
     // E.2b — concurrent chaos: upload + modal edit fired simultaneously.
-    // Hard-assert: single rows, both changelog rows, spine value belongs to
-    // one writer (no torn cross-field mix). Report cross-store agreement.
+    // Hard-assert: single rows, spine value belongs to one writer (no torn
+    // cross-field mix), and GATE-AWARE outcome consistency:
+    //
+    //   The modal edit's Neo4j writeback stamps modified_timestamp with
+    //   the edit moment. If it lands before the upload reaches the spot
+    //   write, the upload's payload timestamp (captured earlier) is now
+    //   OLDER than the server's, so insertSpot's timestamp gate rejects
+    //   the spot write and the sync never fires — by design (§10.4
+    //   last-writer-wins BY TIMESTAMP). In that outcome the changelog has
+    //   only the modal row and BOTH stores must hold the modal value.
+    //   If the upload's spot write does land, the changelog has both rows
+    //   and final state belongs to whichever wrote last.
+    //
+    // Rounds 1-3 race with a "now" upload timestamp (gate usually rejects
+    // the upload). Rounds 4-6 use a far-future upload timestamp so the
+    // gate always lets the upload through and both writers always land.
     // =====================================================================
-    echo "\n=== E.2b: modal edit DURING upload (true race, 3 rounds) ===\n";
+    echo "\n=== E.2b: modal edit DURING upload (true race, 6 rounds) ===\n";
 
     $driftRounds = 0;
-    for ($iter = 1; $iter <= 3; $iter++) {
+    for ($iter = 1; $iter <= 6; $iter++) {
         $maxPkeyBefore = (int)$db->get_var_prepared(
             "SELECT COALESCE(max(pkey),0) FROM strabosamples.sample_changelog WHERE sample_id=$1",
             array((string)$richAId));
 
-        $ts = (int)(microtime(true) * 1000);
+        $forceThroughGate = ($iter >= 4);
+        $ts = (int)(microtime(true) * 1000) + ($forceThroughGate ? 120000 : 0);
         $upName  = "CHAOS-RA-e2b{$iter}up";
         $modName = "CHAOS-RA-e2b{$iter}mod";
 
@@ -478,7 +504,7 @@ try {
                       'sample' => array('id' => (string)$richAId, 'sample_id_name' => $upName,
                                         'sample_description' => "upload desc e2b$iter",
                                         'material_type' => 'intact_rock', 'main_sampling_purpose' => 'petrology')),
-            ), $ts), $ownerAuth);
+            ), $ts), $creatorAuth);
         $hMod = curlAsync('POST', '/samples_edit.php', json_encode(array(
             'sample_id'   => (string)$richAId,
             'owner_pkey'  => $ownerPkey,
@@ -506,28 +532,44 @@ try {
         check("E.2b iter $iter: spine is wholly one writer's (no torn mix)", $fromUpload || $fromModal);
         if (!$fromUpload && !$fromModal && $row) note("TORN: name='{$row->name}' desc='{$row->description}'");
 
-        // Both changelog rows landed.
-        $n = (int)$db->get_var_prepared(
-            "SELECT count(DISTINCT source_subsystem) FROM strabosamples.sample_changelog
-              WHERE sample_id=$1 AND sample_userpkey=$2 AND pkey > $3
-                AND source_subsystem IN ('field','samples_api')",
+        // Gate-aware changelog + final-state consistency.
+        $fieldRows = (int)$db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.sample_changelog
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND pkey > $3 AND source_subsystem='field'",
             array((string)$richAId, $ownerPkey, $maxPkeyBefore));
-        check("E.2b iter $iter: changelog captured both writers", $n === 2);
+        $modalRows = (int)$db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.sample_changelog
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND pkey > $3 AND source_subsystem='samples_api'",
+            array((string)$richAId, $ownerPkey, $maxPkeyBefore));
+        check("E.2b iter $iter: modal changelog row landed", $modalRows >= 1);
 
-        // Cross-store agreement — informational (the modal→writeback and
-        // upload→sync paths cross in opposite directions; divergence here
-        // is the documented §10.4 drift window, healed by the next write).
+        if ($forceThroughGate) {
+            // Future-stamped upload can never be gated off — both writers
+            // must appear in the changelog.
+            check("E.2b iter $iter: upload changelog row landed (gate forced open)", $fieldRows >= 1);
+        } else {
+            note("iter $iter upload sync " . ($fieldRows >= 1 ? "LANDED" : "GATED OFF (modal timestamp newer — §10.4 by design)"));
+        }
+
+        // Cross-store consistency, conditioned on the observed outcome:
+        // gated-off upload → both stores must hold the modal value;
+        // upload landed → stores may legitimately diverge only in the
+        // crossing window (modal→writeback vs upload→sync run in opposite
+        // directions) — count that as drift, informational.
         $jsRaw = (string)$neodb->get_var("MATCH (s:Spot {id:$richAId, userpkey:$ownerPkey}) RETURN s.json_samples");
         $js = json_decode($jsRaw, true);
         $neoName = is_array($js) && isset($js[0]['sample_id_name']) ? $js[0]['sample_id_name'] : '(unreadable)';
-        if ($row && $neoName !== $row->name) {
+        if ($fieldRows === 0) {
+            check("E.2b iter $iter: gated outcome is modal-everywhere",
+                  $row && $row->name === $modName && $neoName === $modName);
+        } elseif ($row && $neoName !== $row->name) {
             $driftRounds++;
             note("iter $iter cross-store DRIFT: pg='{$row->name}' neo4j='$neoName' (self-heals on next write)");
         } else {
             note("iter $iter cross-store agreement: '$neoName'");
         }
     }
-    note("cross-store drift observed in $driftRounds/3 rounds (informational)");
+    note("cross-store drift observed in $driftRounds/6 rounds (informational)");
 
     // =====================================================================
     // E.3 — migration --apply re-run while a 120-spot upload is in flight.
@@ -541,7 +583,7 @@ try {
 
     $ts = (int)(microtime(true) * 1000);
     $rUp = curlWait(curlAsync('POST', '/db/projectdatasetsspots',
-        buildFieldPayload($projectId, $datasetId, e3Spots('e3'), $ts), $ownerAuth));
+        buildFieldPayload($projectId, $datasetId, e3Spots('e3'), $ts), $creatorAuth));
     note("upload HTTP status: {$rUp['status']}");
     check("E.3 upload during migration returned 2xx", $rUp['status'] >= 200 && $rUp['status'] < 300);
 
@@ -588,7 +630,7 @@ try {
     $hBf = phpAsync('/srv/app/www/samplesdb/backfill/backfill_field_geom.php --apply');
     $ts = (int)(microtime(true) * 1000);
     $hUp = curlAsync('POST', '/db/projectdatasetsspots',
-        buildFieldPayload($projectId, $datasetId, e3Spots('e4', 0.5), $ts), $ownerAuth);
+        buildFieldPayload($projectId, $datasetId, e3Spots('e4', 0.5), $ts), $creatorAuth);
 
     $rUp = curlWait($hUp);
     $bf  = phpWait($hBf);
@@ -628,7 +670,7 @@ try {
     if ($stale > 0) {
         $ts = (int)(microtime(true) * 1000);
         $rUp = curlWait(curlAsync('POST', '/db/projectdatasetsspots',
-            buildFieldPayload($projectId, $datasetId, e3Spots('e4heal', 0.5), $ts), $ownerAuth));
+            buildFieldPayload($projectId, $datasetId, e3Spots('e4heal', 0.5), $ts), $creatorAuth));
         $n = 0;
         foreach ($e4Ids as $ix => $sid) {
             $row = $db->get_row_prepared(
