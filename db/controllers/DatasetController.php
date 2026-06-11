@@ -148,6 +148,19 @@ class DatasetController extends MyController
 		$upload = $request->parameters;
 		unset($upload['apiformat']);
 
+		// The Field client's sync posts datasets to bare /db/dataset with the
+		// id only in the JSON body. Resolve it here so the collaboration
+		// context check below covers that path too. Without this, a
+		// collaborator re-uploading an owner-linked dataset runs insertDataset
+		// under their own userpkey, misses the owner-scoped lookup, and
+		// creates an ORPHAN copy — which addDatasetToProject then links into
+		// the owner's project alongside the original (duplicate dataset).
+		// Observed on prod 2026-06-08: dataset 17794144325906 duplicated 4x
+		// by exactly this sequence.
+		if (!$thisid && isset($upload['id']) && $upload['id'] != "") {
+			$thisid = $upload['id'];
+		}
+
 		// Check if this is an update to an existing linked dataset
 		if ($thisid) {
 			$context = $this->auth->getDatasetContext($this->strabo->userpkey, $thisid);
