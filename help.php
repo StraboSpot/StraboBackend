@@ -35,6 +35,7 @@ include("includes/mheader.php");
 			</p>
 
 			<!-- Office Hours Banner -->
+			<!--
 			<div style="text-align: center; margin-bottom: 1em;">
 				<img src="/includes/mimages/help_office_hours.jpg" alt="Weekly Office Hours - Every Thursday 1-3 pm CDT UTC-5" style="max-width: 640px; width: 100%; border-radius: 4px;">
 			</div>
@@ -42,6 +43,17 @@ include("includes/mheader.php");
 				<span style="color: #ffffff; font-size: 1.05em;">Registration Link: </span>
 				<a href="https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8wmLA" target="_blank">https://tamu.zoom.us/meeting/register/aChcKx33St6BsdguY8wmLA</a>
 			</p>
+			-->
+			
+			
+			<div style="text-align: center; margin-bottom: 1em;">
+				<iframe src="https://scheduler.zoom.us/martin-claire-tzug8y/strabospot-office-hours?embed=true" frameborder="0" style="width: 100%; max-width: 1000px; height: 760px; border: 0;"></iframe>
+			</div>
+			<div style="display: flex; justify-content: center; align-items: center; ">
+				<p style="text-align: center; margin-bottom: 2em; width: 100%; max-width: 1000px;">
+					To make your time more valuable, office hours are now held by appointment only via Zoom. Sign up for a dedicated time slot and get one-on-one help focused entirely on your questions.
+				</p>
+			</div>
 		</section>
 
 		<a name="field" style="scroll-margin-top: 100px;"></a>
@@ -101,19 +113,16 @@ include("includes/mheader.php");
 				<div class="medHeader" style="padding-left:0px;"><a href="/files/strabomicro2_improvements_over_legacy.pdf" target="_blank">StraboMicro2 Improvements Over StraboMicro</a></div>
 
 				<div class="medHeader" style="padding-top:30px;">STRABOMICRO VIDEO TUTORIALS</div>
-				<a class="medHeader" href="https://youtube.com/playlist?list=PL3jEmSMv6rzEJWjFTrKe9cu6YbMTFEXHQ&feature=shared" target="_blank">StraboMicro Basics Video Playlist</a>
+				<a class="medHeader" href="https://youtube.com/playlist?list=PL3jEmSMv6rzHGV47_HH5jOnAChwPKl5E1&si=lSuQ6TffsuWpyNqG" target="_blank">StraboMicro Basics Video Playlist</a>
 				<div style="padding-left:40px;">
 					<div style="padding-left:30px;padding-top:5px;">
 						<ul class="medHeader">
-							<li><a href="https://youtu.be/05pdL-9Ii4Q?feature=shared" target="_blank">Introduction to StraboMicro</a></li>
-							<li><a href="https://youtu.be/ohiu-UH2Qac?feature=shared" target="_blank">Downloading the Desktop Application</a></li>
-							<li><a href="https://youtu.be/vpWJvQUq-yo?feature=shared" target="_blank">Creating a Project and Importing a Sample</a></li>
-							<li><a href="https://youtu.be/-3JcDsxiQMs?feature=shared" target="_blank">Importing Samples from StraboField</a></li>
-							<li><a href="https://youtu.be/KyQV3wIpDjA?feature=shared" target="_blank">Adding Associated Images</a></li>
-							<li><a href="https://youtu.be/AMOXOGBFwsU?feature=shared" target="_blank">Adding Data to StraboMicro</a></li>
-							<li><a href="https://youtu.be/uS9leeOeg9E?feature=shared" target="_blank">Associated Files and Links</a></li>
-							<li><a href="https://youtu.be/Y5dxdweXYdU?feature=shared" target="_blank">Groups and Tags in StraboMicro</a></li>
-							<li><a href="https://youtu.be/INEijAquwFg?feature=shared" target="_blank">Backup and Share Projects</a></li>
+							<li><a href="https://youtu.be/FuOlFdnWXHo" target="_blank">Introduction to StraboMicro</a></li>
+							<li><a href="https://youtu.be/gOUOaymTkA8" target="_blank">Downloading the Desktop Application</a></li>
+							<li><a href="https://youtu.be/KH6UrSAXpQw" target="_blank">Projects: How to Create New, Open, Save, Export, and Upload</a></li>
+							<li><a href="https://youtu.be/z2hhF7SEW44" target="_blank">Samples: How to Create New, Edit, and Link to StraboField </a></li>
+							<li><a href="https://youtu.be/2G_lV9wIrlM" target="_blank">Micrographs: Reference and Associated</a></li>
+							<li><a href="https://youtu.be/mI3HuN_pjzE" target="_blank">Spots: How to Add, Edit, Merge, Split, Quick Edit, and Use Spot Presets </a></li>
 						</ul>
 					</div>
 				</div>
@@ -121,9 +130,10 @@ include("includes/mheader.php");
 
 			<a name="strabomicro2" style="scroll-margin-top: 100px;"></a>
 			<div style="padding-left:50px;">
-			<h3 style="color: #ffffff; font-weight: 300; font-size: 1.5em; padding-top: 20px;">StraboMicro Version 1 (Legacy)</h3>
+			<h3 style="color: #ffffff; font-weight: 300; font-size: 1.0em; padding-top: 20px;">StraboMicro Version 1 (Legacy)</h3>
 			<div style="padding-bottom:30px;">
 				<div class="medHeader" style="padding-left:0px;"><a href="/manual/micro" target="_blank">StraboMicro Legacy User Guide - Version 1.2.18 (Deprecated)</a></div>
+				<div class="medHeader" style="padding-left:0px;"><a href="https://youtube.com/playlist?list=PL3jEmSMv6rzEJWjFTrKe9cu6YbMTFEXHQ&feature=shared" target="_blank">StraboMicro Legacy Video Tutorials (Deprecated)</a></div>
 			</div>
 			</div>
 		</section>

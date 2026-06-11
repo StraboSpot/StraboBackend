@@ -130,6 +130,33 @@ class StraboSpot
 		return $id;
 	}
 
+	/**
+	 * Serialize the check-then-create sections of insertSpot /
+	 * insertDataset / insertProject across concurrent API requests.
+	 *
+	 * Neo4j has no uniqueness constraint on (id, userpkey) — two
+	 * simultaneous uploads of the same entity (e.g. two collaborators
+	 * syncing the same project at once) both miss the existence probe and
+	 * both CREATE, leaving duplicate nodes. The duplicates then poison
+	 * collaboration auth (getDatasetContext resolves an arbitrary copy, so
+	 * collaborators draw spurious 403s) and double every export.
+	 *
+	 * A PostgreSQL advisory lock keyed on (entity class, id, userpkey)
+	 * makes probe+create mutually exclusive. PG releases advisory locks
+	 * automatically when the connection closes, so a fatal mid-request
+	 * cannot leak the lock beyond that request's lifetime. Lock class
+	 * 7501 namespaces these away from any other advisory-lock use.
+	 * hashtext() collisions across distinct keys only cause harmless
+	 * extra serialization, never missed mutual exclusion for the same key.
+	 */
+	private function lockUploadKey($key){
+		$this->db->prepare_query("SELECT pg_advisory_lock(7501, hashtext($1))", array($key));
+	}
+
+	private function unlockUploadKey($key){
+		$this->db->prepare_query("SELECT pg_advisory_unlock(7501, hashtext($1))", array($key));
+	}
+
 	public function getSingleSpot($feature_id){
 
 		$querystring="MATCH (s:Spot {id:$feature_id,userpkey:$this->userpkey}) optional match (s)-[b:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
@@ -641,11 +668,21 @@ class StraboSpot
 
 		}
 
+		// Mutual exclusion for the findSpot-probe → createNode window; see
+		// lockUploadKey. Keyed per (spot id, acting userpkey) — collaborative
+		// controllers swap userpkey to the project owner before this call, so
+		// concurrent owner+collaborator uploads of the same spot contend on
+		// the same key. Released at the single return at the method tail.
+		$spotLockKey = null;
+
 		if(!is_int($thisid)){
 
 			$dbaction = "interror";
 
 		}elseif($thisid != ""){
+
+			$spotLockKey = "spot:" . $thisid . ":" . $this->userpkey;
+			$this->lockUploadKey($spotLockKey);
 
 			$spotid=$this->findSpot($thisid);
 			if($spotid){
@@ -911,6 +948,10 @@ class StraboSpot
 
 			$data["Error"] = "Feature ID must be integer.";
 
+		}
+
+		if($spotLockKey !== null){
+			$this->unlockUploadKey($spotLockKey);
 		}
 
 		$totalspottime = microtime(true)-$spotstarttime;
@@ -1615,11 +1656,18 @@ class StraboSpot
 			$feature_id = $thisjson->id;
 		}
 
+		// Mutual exclusion for the getDatasetById-probe → createNode window;
+		// see lockUploadKey. Released at the single return at the method tail.
+		$datasetLockKey = null;
+
 		// Look for existing dataset by ID
 		// New model: userpkey = project owner, created_by = who can edit
 		// Look for dataset where userpkey matches OR created_by matches current user
 		$dataset = null;
 		if($feature_id != ""){
+			$datasetLockKey = "dataset:" . (int)$feature_id . ":" . $this->userpkey;
+			$this->lockUploadKey($datasetLockKey);
+
 			// First try by userpkey (owner's dataset)
 			$dataset = $this->getDatasetById($feature_id);
 		}
@@ -1683,8 +1731,11 @@ class StraboSpot
 
 			$injson = json_encode($injson);
 
-			$modified_timestamp = 0;
-
+			// $modified_timestamp holds the EXISTING server timestamp (extracted
+			// from the dataset node above). Only overwrite when the incoming copy
+			// is strictly newer; otherwise leave the server copy untouched and
+			// return it. Do NOT reset $modified_timestamp to 0 here — that made the
+			// comparison always true and overwrote the dataset regardless of age.
 			if($inmodified_timestamp > $modified_timestamp){
 				$self = $this->neodb->updateNode($neoid, $injson, "Dataset");
 				$upload->modified_on_server = true;
@@ -1742,6 +1793,10 @@ class StraboSpot
 			header("Feature created", true, 201);
 			$data = $upload;
 
+		}
+
+		if($datasetLockKey !== null){
+			$this->unlockUploadKey($datasetLockKey);
 		}
 
 		return $data;
@@ -4141,7 +4196,14 @@ public function getSpotName($id){
 
 		}
 
+		// Mutual exclusion for the existence-probe → createNode window; see
+		// lockUploadKey. Released at every return below.
+		$projectLockKey = null;
+
 		if($thisid != ""){
+
+			$projectLockKey = "project:" . $thisid . ":" . $ownerPkey;
+			$this->lockUploadKey($projectLockKey);
 
 			$record=$this->neodb->getRecord("match (p:Project {id:$thisid, userpkey:$ownerPkey}) return id(p) as id,p");
 			if($record){
@@ -4160,6 +4222,9 @@ public function getSpotName($id){
 			$collabAuth = new CollaborationAuth($this->db, $this->neodb);
 			$canUpload = $collabAuth->canUploadProjectAsOwner($thisid, $this->userpkey);
 			if(!$canUpload['allowed']){
+				if($projectLockKey !== null){
+					$this->unlockUploadKey($projectLockKey);
+				}
 				$result = new stdClass();
 				$result->Error = $canUpload['reason'];
 				return $result;
@@ -4398,6 +4463,10 @@ public function getSpotName($id){
 		$upload->id=$thisid;
 		$upload->self="https://strabospot.org/db/project/$thisid";
 		$data=$upload;
+
+		if($projectLockKey !== null){
+			$this->unlockUploadKey($projectLockKey);
+		}
 
 		return $data;
 
