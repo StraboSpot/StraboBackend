@@ -57,15 +57,15 @@ class searchQueryRowBuilder {
 			//Year Min / Year Max
 			if($constraints[0]->constraintType == "minYear" || $constraints[0]->constraintType == "minYear"){
 				if($constraints[0]->constraintType == "minYear"){
-					$minyear = $constraints[0]->constraintValue;
+					$minyear = (int)$constraints[0]->constraintValue;
 					if($constraints[1]->constraintType == "maxYear"){
-						$maxyear = $constraints[1]->constraintValue;
+						$maxyear = (int)$constraints[1]->constraintValue;
 					}else{
 						$maxyear = 9999;
 					}
 				}elseif($constraints[0]->constraintType == "maxYear"){
 					$minyear = 1111;
-					$maxyear = $constraints[0]->constraintValue;
+					$maxyear = (int)$constraints[0]->constraintValue;
 				}
 
 				$thisitem .= "spot.date_created $notword BETWEEN '".$minyear."-1-1' AND '".$maxyear."-12-31'";
@@ -75,7 +75,7 @@ class searchQueryRowBuilder {
 			//Image Type
 			if($constraints[0]->constraintType == "imageType" ){
 				if($constraints[0]->constraintValue != ""){
-					$imagetype = $constraints[0]->constraintValue;
+					$imagetype = pg_escape_string($constraints[0]->constraintValue);
 
 					$thisitem .= "image.image_type ". $notsymbol ."= '$imagetype'";
 				}
@@ -84,7 +84,7 @@ class searchQueryRowBuilder {
 			//Rock Type
 			if($constraints[0]->constraintType == "rockType" ){
 				if($constraints[0]->constraintValue != ""){
-					$rocktype = $constraints[0]->constraintValue;
+					$rocktype = pg_escape_string($constraints[0]->constraintValue);
 
 					$thisitem .= "rock_type.strabo_rock_type ". $notsymbol ."= '$rocktype'";
 				}
@@ -93,7 +93,7 @@ class searchQueryRowBuilder {
 			//Metamorphic Facies
 			if($constraints[0]->constraintType == "metFacies" ){
 				if($constraints[0]->constraintValue != ""){
-					$metfacies = $constraints[0]->constraintValue;
+					$metfacies = pg_escape_string($constraints[0]->constraintValue);
 
 					$thisitem .= "rock_type.metamorphic_facies ". $notsymbol ."= '$metfacies'";
 				}
@@ -102,7 +102,7 @@ class searchQueryRowBuilder {
 			//Tectonic Province
 			if($constraints[0]->constraintType == "tectonicProvince" ){
 				if($constraints[0]->constraintValue != ""){
-					$gid = $constraints[0]->constraintValue;
+					$gid = (int)$constraints[0]->constraintValue;
 
 					//get polygon
 					$polygon = $this->db->get_var("select ST_AsText(the_geom) from shapegeology where gid=$gid");
@@ -154,7 +154,7 @@ class searchQueryRowBuilder {
 
 			//Owner
 			if($constraints[0]->constraintType == "owner" ){
-				$ownerpkey = $constraints[0]->constraintValue;
+				$ownerpkey = (int)$constraints[0]->constraintValue;
 				$thisitem .= "users.pkey ".$notsymbol."= $ownerpkey";
 				$userpkey=0;
 			}
@@ -171,7 +171,7 @@ class searchQueryRowBuilder {
 
 			//Sample ID
 			if($constraints[0]->constraintType == "sampleID" ){
-				$sampleid = strtolower($constraints[0]->constraintValue);
+				$sampleid = pg_escape_string(strtolower($constraints[0]->constraintValue));
 				$thisitem .= "lower(sample.sample_id) ".$notsymbol."= '$sampleid'";
 				$userpkey=0;
 			}
