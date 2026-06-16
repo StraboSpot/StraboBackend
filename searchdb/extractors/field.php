@@ -203,9 +203,13 @@ foreach ($activeUsers as $upk) {
 	// Get this user's (project, dataset) pairs via the User node's
 	// HAS_PROJECT + HAS_DATASET edges. Per project_neo4j_user_anchored_walks:
 	// scope by the edge, not by Project.userpkey property.
+	//
+	// Project name lives in `desc_project_name` (canonical, 99.9% populated)
+	// with a legacy `projectname` on older nodes (~9% of projects). Project
+	// nodes do NOT carry a `name` property — use coalesce.
 	$pdRows = $neodb->query(
 		"MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(p:Project)-[:HAS_DATASET]->(d:Dataset) " .
-		"RETURN p.id AS pid, p.name AS pname, " .
+		"RETURN p.id AS pid, coalesce(p.desc_project_name, p.projectname) AS pname, " .
 		"       d.id AS did, d.name AS dname"
 	);
 	if (!$pdRows) continue;

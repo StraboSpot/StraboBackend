@@ -114,7 +114,7 @@ $neodb->query("CREATE (u:User {
 $neodb->query("CREATE (p:Project {
 	id: '${PREFIX}_proj_pub',
 	userpkey: $TEST_UPK,
-	name: 'spsx Public Test Project'
+	desc_project_name: 'spsx Public Test Project'
 })");
 $neodb->query("MATCH (u:User {userpkey: $TEST_UPK}),
                      (p:Project {id: '${PREFIX}_proj_pub'})
@@ -126,7 +126,7 @@ $db->query("INSERT INTO project (user_pkey, project_name, strabo_project_id, isp
 $neodb->query("CREATE (p:Project {
 	id: '${PREFIX}_proj_priv',
 	userpkey: $TEST_UPK,
-	name: 'spsx Private Test Project'
+	desc_project_name: 'spsx Private Test Project'
 })");
 $neodb->query("MATCH (u:User {userpkey: $TEST_UPK}),
                      (p:Project {id: '${PREFIX}_proj_priv'})
@@ -277,7 +277,7 @@ $neodb->query("CREATE (u:User {
 })");
 $neodb->query("CREATE (p:Project {
 	id: '${PROJ_PUB}', userpkey: $DECOY_UPK,
-	name: 'spsx DECOY Project (same id as PUB)'
+	desc_project_name: 'spsx DECOY Project (same id as PUB)'
 })");
 $neodb->query("MATCH (u:User {userpkey: $DECOY_UPK}),
                      (p:Project {id: '${PROJ_PUB}', userpkey: $DECOY_UPK})
@@ -474,6 +474,21 @@ $hit = (int)$db->get_var(
 	   AND searchtext_tsv @@ to_tsquery('uniquekeyword_alpha')"
 );
 check('searchtext_tsv finds the unique spot.name token (1 hit)', $hit === 1, "got $hit");
+
+// Project name lands in project_name column AND flows into searchtext_tsv
+// via the extractor's bag (spot.name + project.name + dataset.name + notes).
+$pnameCount = (int)$db->get_var(
+	"SELECT count(*) FROM strabosearch.item_hit
+	 WHERE project_userpkey = $TEST_UPK AND project_name = 'spsx Public Test Project'"
+);
+check('project_name denormalized correctly', $pnameCount === 6, "got $pnameCount (expect 6 — public-project rows)");
+
+$projectKeywordHits = (int)$db->get_var(
+	"SELECT count(*) FROM strabosearch.item_hit
+	 WHERE project_userpkey = $TEST_UPK
+	   AND searchtext_tsv @@ to_tsquery('english', 'public & test & project')"
+);
+check('U1 keyword search finds project-name terms', $projectKeywordHits === 6, "got $projectKeywordHits");
 
 // ===========================================================================
 section('12. sync_state NOT updated on partial run');
