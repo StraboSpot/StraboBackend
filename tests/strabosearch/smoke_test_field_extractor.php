@@ -53,6 +53,11 @@ $PROJ_PRIV   = $PREFIX . '_proj_priv';
 $DSET        = $PREFIX . '_dataset';
 $DSET_PRIV   = $PREFIX . '_dataset_priv';
 
+// Second user — owns a Project node with the SAME id as $PROJ_PUB to
+// exercise the User-anchored "ids are not unique" guarantee (Scenario X).
+$DECOY_UPK   = 94502;
+$DECOY_PFX   = 'spsx94502';
+
 $failures = array();
 function check($label, $cond, $detail = '') {
 	global $failures;
@@ -67,20 +72,26 @@ function section($t) { echo PHP_EOL . str_repeat('=', 70) . PHP_EOL . '== ' . $t
 section('0. Cleanup any leftover fixtures');
 
 // Drop ALL fixture nodes + the slice in item_hit before seeding.
-$neodb->query("MATCH (n) WHERE n.id =~ '$PREFIX.*' DETACH DELETE n");
-$db->query("DELETE FROM strabosearch.item_hit WHERE project_userpkey = $TEST_UPK");
+// Match BOTH prefixes (94501 + decoy 94502) and a User node by userpkey.
+$neodb->query("MATCH (n) WHERE n.id =~ '$PREFIX.*' OR n.id =~ '$DECOY_PFX.*' DETACH DELETE n");
+$neodb->query("MATCH (u:User) WHERE u.userpkey IN [$TEST_UPK, $DECOY_UPK] DETACH DELETE u");
+$db->query("DELETE FROM strabosearch.item_hit WHERE project_userpkey IN ($TEST_UPK, $DECOY_UPK)");
 $db->query("DROP TABLE IF EXISTS strabosearch.item_hit_staging_field");
 // Project.ispublic lives in PG (Neo4j Project.ispublic is NULL everywhere).
 // Clear + reseed two PG rows so the extractor's per-project lookup finds
 // the public/private signal we're testing. The PG project FK requires the
-// user_pkey to exist in users — seed a fixture user too.
+// user_pkey to exist in users — seed two fixture users.
 $db->query("DELETE FROM project WHERE strabo_project_id IN ('$PROJ_PUB', '$PROJ_PRIV')");
-$db->query("DELETE FROM users WHERE pkey = $TEST_UPK");
+$db->query("DELETE FROM users WHERE pkey IN ($TEST_UPK, $DECOY_UPK)");
 $db->query("INSERT INTO users (pkey, firstname, lastname, email, password, hash, active)
 	VALUES ($TEST_UPK, 'spsx', 'fixture',
 	        'spsx-fixture-$TEST_UPK@test.strabospot.org',
+	        'x', 'x', false),
+	       ($DECOY_UPK, 'spsx', 'decoy',
+	        'spsx-decoy-$DECOY_UPK@test.strabospot.org',
 	        'x', 'x', false)");
-echo '  cleared fixture nodes + item_hit slice + pg fixtures for upk ' . $TEST_UPK . PHP_EOL;
+echo '  cleared fixture nodes + item_hit slice + pg fixtures for upk '
+	. $TEST_UPK . ' and decoy ' . $DECOY_UPK . PHP_EOL;
 
 // ===========================================================================
 section('1. Seed Neo4j fixtures');
@@ -89,12 +100,25 @@ section('1. Seed Neo4j fixtures');
 // Spot ids are deliberately short numeric (Neo4j id properties are
 // historically string-ish; the extractor coerces).
 
+// Fixture User node — the extractor anchors walks through
+// (:User)-[:HAS_PROJECT]->(:Project). Without this node + HAS_PROJECT
+// edges the extractor would return zero spots.
+$neodb->query("CREATE (u:User {
+	userpkey: $TEST_UPK,
+	email: 'spsx-fixture-$TEST_UPK@test.strabospot.org',
+	firstname: 'spsx',
+	lastname: 'fixture'
+})");
+
 // Public project (Neo4j node + PG row — extractor reads ispublic from PG)
 $neodb->query("CREATE (p:Project {
 	id: '${PREFIX}_proj_pub',
 	userpkey: $TEST_UPK,
 	name: 'spsx Public Test Project'
 })");
+$neodb->query("MATCH (u:User {userpkey: $TEST_UPK}),
+                     (p:Project {id: '${PREFIX}_proj_pub'})
+               CREATE (u)-[:HAS_PROJECT]->(p)");
 $db->query("INSERT INTO project (user_pkey, project_name, strabo_project_id, ispublic)
 	VALUES ($TEST_UPK, 'spsx Public Test Project', '$PROJ_PUB', TRUE)");
 
@@ -104,6 +128,9 @@ $neodb->query("CREATE (p:Project {
 	userpkey: $TEST_UPK,
 	name: 'spsx Private Test Project'
 })");
+$neodb->query("MATCH (u:User {userpkey: $TEST_UPK}),
+                     (p:Project {id: '${PREFIX}_proj_priv'})
+               CREATE (u)-[:HAS_PROJECT]->(p)");
 $db->query("INSERT INTO project (user_pkey, project_name, strabo_project_id, ispublic)
 	VALUES ($TEST_UPK, 'spsx Private Test Project', '$PROJ_PRIV', FALSE)");
 
@@ -239,7 +266,38 @@ $neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset'})
 	})
 	CREATE (d)-[:HAS_SPOT]->(s)");
 
-echo '  seeded 7 spots across 2 projects + 2 tags + 1 image' . PHP_EOL;
+// SCENARIO X — decoy user with SAME Project id as $PROJ_PUB.
+// Exercises the User-anchored "ids are not unique" guarantee. When we
+// extract for $TEST_UPK, the decoy's spot must NOT appear in $TEST_UPK's
+// item_hit rows even though both Projects share the id '$PROJ_PUB'.
+$neodb->query("CREATE (u:User {
+	userpkey: $DECOY_UPK,
+	email: 'spsx-decoy-$DECOY_UPK@test.strabospot.org',
+	firstname: 'spsx', lastname: 'decoy'
+})");
+$neodb->query("CREATE (p:Project {
+	id: '${PROJ_PUB}', userpkey: $DECOY_UPK,
+	name: 'spsx DECOY Project (same id as PUB)'
+})");
+$neodb->query("MATCH (u:User {userpkey: $DECOY_UPK}),
+                     (p:Project {id: '${PROJ_PUB}', userpkey: $DECOY_UPK})
+               CREATE (u)-[:HAS_PROJECT]->(p)");
+$neodb->query("MATCH (p:Project {id: '${PROJ_PUB}', userpkey: $DECOY_UPK})
+	CREATE (d:Dataset {
+		id: '${PREFIX}_dataset', userpkey: $DECOY_UPK,
+		name: 'spsx DECOY Dataset (same id as PRIMARY)'
+	})
+	CREATE (p)-[:HAS_DATASET]->(d)");
+$neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset', userpkey: $DECOY_UPK})
+	CREATE (s:Spot {
+		id: '${PREFIX}_spot_DECOY', userpkey: $DECOY_UPK,
+		name: 'spsx DECOY Spot — DECOYKEYWORD_should_not_leak',
+		wkt: 'POINT(-100.0 30.0)',
+		modified_timestamp: 1717862400
+	})
+	CREATE (d)-[:HAS_SPOT]->(s)");
+
+echo '  seeded 7 primary spots + 1 decoy under same-id Project/Dataset' . PHP_EOL;
 
 // ===========================================================================
 section('2. Run extractor');
@@ -443,13 +501,45 @@ check('idempotent: spot_B still has igneous:plutonic:granite',
 	$rowB2 && strpos((string)$rowB2->rock_types, 'igneous:plutonic:granite') !== false);
 
 // ===========================================================================
-section('14. Cleanup');
+section('14. Scenario X — same-id decoy must NOT cross-contaminate');
 
-$neodb->query("MATCH (n) WHERE n.id =~ '$PREFIX.*' DETACH DELETE n");
-$db->query("DELETE FROM strabosearch.item_hit WHERE project_userpkey = $TEST_UPK");
+// $TEST_UPK extraction should produce 7 rows; the decoy's spot
+// (id ${PREFIX}_spot_DECOY, owner $DECOY_UPK) must NOT appear under
+// $TEST_UPK's project_userpkey, AND the decoy's keyword must not
+// land in $TEST_UPK's searchtext_tsv even though the decoy Project,
+// Dataset, and Spot share an id with primary fixtures.
+
+$decoyLeakAsTestUserItem = (int)$db->get_var(
+	"SELECT count(*) FROM strabosearch.item_hit
+	 WHERE project_userpkey = $TEST_UPK AND item_id = '${PREFIX}_spot_DECOY'"
+);
+check('decoy spot NOT under TEST_UPK rows', $decoyLeakAsTestUserItem === 0,
+	"got $decoyLeakAsTestUserItem");
+
+$decoyKeywordLeak = (int)$db->get_var(
+	"SELECT count(*) FROM strabosearch.item_hit
+	 WHERE project_userpkey = $TEST_UPK
+	   AND searchtext_tsv @@ to_tsquery('decoykeyword_should_not_leak')"
+);
+check('decoy keyword NOT in TEST_UPK searchtext_tsv', $decoyKeywordLeak === 0,
+	"got $decoyKeywordLeak");
+
+$testUserRowCount = (int)$db->get_var(
+	"SELECT count(*) FROM strabosearch.item_hit
+	 WHERE project_userpkey = $TEST_UPK"
+);
+check('TEST_UPK row count unaffected by decoy (still 7)',
+	$testUserRowCount === 7, "got $testUserRowCount");
+
+// ===========================================================================
+section('15. Cleanup');
+
+$neodb->query("MATCH (n) WHERE n.id =~ '$PREFIX.*' OR n.id =~ '$DECOY_PFX.*' DETACH DELETE n");
+$neodb->query("MATCH (u:User) WHERE u.userpkey IN [$TEST_UPK, $DECOY_UPK] DETACH DELETE u");
+$db->query("DELETE FROM strabosearch.item_hit WHERE project_userpkey IN ($TEST_UPK, $DECOY_UPK)");
 $db->query("DROP TABLE IF EXISTS strabosearch.item_hit_staging_field");
 $db->query("DELETE FROM project WHERE strabo_project_id IN ('$PROJ_PUB', '$PROJ_PRIV')");
-$db->query("DELETE FROM users WHERE pkey = $TEST_UPK");
+$db->query("DELETE FROM users WHERE pkey IN ($TEST_UPK, $DECOY_UPK)");
 echo '  cleared fixture nodes + slice + staging + pg fixtures' . PHP_EOL;
 
 // ===========================================================================
