@@ -12,10 +12,18 @@
  *
  * ## Algorithm
  *
- *   1. Walk the spot graph BATCHED BY userpkey (the OOM-safe pattern the
- *      Phase 0.2 census proved — whole-graph aggregations blow the heap).
- *      For each Project owned by that user, traverse
- *      (Project)-[:HAS_DATASET]->(Dataset)-[:HAS_SPOT]->(Spot)
+ *   1. Walk the spot graph ANCHORED THROUGH (:User)-[:HAS_PROJECT]->(:Project).
+ *      Strabo ids (Project/Dataset/Spot.id) are NOT unique across the graph
+ *      — the same id can exist on multiple nodes owned by different users
+ *      (shapefile imports, "starter project" workflows, class scenarios).
+ *      The (:User)-[:HAS_PROJECT]->(:Project) edge IS the authoritative
+ *      ownership relationship. Matching Project/Dataset by id alone would
+ *      cross-product across all same-id nodes; chaining through User scopes
+ *      every node correctly. See project_neo4j_user_anchored_walks.
+ *
+ *      Iterate every User with at least one HAS_PROJECT edge, then for
+ *      each user traverse
+ *      (User)-[:HAS_PROJECT]->(Project)-[:HAS_DATASET]->(Dataset)-[:HAS_SPOT]->(Spot)
  *      with OPTIONAL MATCH on (Spot)-[:IS_TAGGED]->(:Tag {type:'geologic_unit'}).
  *
  *   2. Per Spot, parse:
@@ -156,23 +164,26 @@ line('  public projects:         ' . number_format($pubCount));
 // ---------------------------------------------------------------------------
 section('3. Walk Neo4j by userpkey');
 
-// Per-user, per-project, per-dataset walk. SKIP/LIMIT pagination across the
-// whole-graph traversal was quadratic on power users (42k-spot user 3286
-// fell off a cliff at high SKIP values — Neo4j re-scans from the start of
-// the result set every page). Per-dataset queries stay bounded since most
-// datasets carry <1000 spots; the inner loop keyset-paginates by s.id when
-// a dataset is unexpectedly large.
+// Anchor every traversal through (:User {userpkey: $upk})-[:HAS_PROJECT]->(:Project).
+// Per project_neo4j_user_anchored_walks: Strabo ids (Project/Dataset/Spot.id)
+// are NOT unique across the graph — the same id can exist on multiple nodes
+// owned by different users (shapefile imports, "starter project" workflows,
+// class scenarios). Matching by id alone returns ALL same-id nodes; the
+// (:User)-[:HAS_PROJECT]->(:Project) edge IS the authoritative ownership
+// relationship and is what scopes the walk correctly. Property filters on
+// Project.userpkey are wrong (the property is unreliable and ignores the
+// graph's actual ownership semantics).
 //
-// Mixed-type userpkey gotcha (per Phase 0.4): some Project nodes carry
-// userpkey as a STRING. toInt() coerces uniformly. This Neo4j is 3.0-era —
-// the function is toInt() NOT toInteger().
+// Per-dataset queries stay bounded since most datasets carry <1000 spots;
+// the inner loop keyset-paginates by s.id when a dataset is unexpectedly
+// large.
 
 if ($SINGLE_USER !== null) {
 	$activeUsers = array($SINGLE_USER);
 } else {
 	$rows = $neodb->query(
-		"MATCH (p:Project) WHERE p.userpkey IS NOT NULL " .
-		"RETURN distinct toInt(p.userpkey) AS upk ORDER BY upk"
+		"MATCH (u:User)-[:HAS_PROJECT]->(:Project) " .
+		"RETURN distinct toInt(u.userpkey) AS upk ORDER BY upk"
 	);
 	$activeUsers = array();
 	foreach ($rows as $r) {
@@ -189,12 +200,13 @@ $parseFail    = 0;
 $tStart       = microtime(true);
 
 foreach ($activeUsers as $upk) {
-	// Get this user's (project, dataset) pairs.
+	// Get this user's (project, dataset) pairs via the User node's
+	// HAS_PROJECT + HAS_DATASET edges. Per project_neo4j_user_anchored_walks:
+	// scope by the edge, not by Project.userpkey property.
 	$pdRows = $neodb->query(
-		"MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset) " .
-		"WHERE toInt(p.userpkey) = $upk " .
-		"RETURN p.id AS pid, p.userpkey AS puk, p.ispublic AS pispub, " .
-		"       p.name AS pname, d.id AS did, d.name AS dname"
+		"MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(p:Project)-[:HAS_DATASET]->(d:Dataset) " .
+		"RETURN p.id AS pid, p.name AS pname, " .
+		"       d.id AS did, d.name AS dname"
 	);
 	if (!$pdRows) continue;
 
@@ -202,8 +214,8 @@ foreach ($activeUsers as $upk) {
 
 	foreach ($pdRows as $pd) {
 		$pid    = $pd->get('pid');
-		$puk    = $pd->get('puk');
-		$pispub = $pd->get('pispub');
+		// Project owner = the User we're iterating (HAS_PROJECT is owner-only).
+		$puk    = $upk;
 		$pname  = $pd->get('pname');
 		$did    = $pd->get('did');
 		$dname  = $pd->get('dname');
@@ -212,10 +224,12 @@ foreach ($activeUsers as $upk) {
 
 		// Keyset-paginate by s.id within a dataset (handles the rare
 		// pathologically large dataset without re-scan penalty).
-		// Real Dataset/Spot ids are LONGs in Neo4j; quoting them yields
-		// string-vs-long mismatch with the indexed property. Emit numeric
-		// literal when purely-numeric, quoted+escaped string otherwise.
-		$didLit    = ctype_digit((string)$did) ? (string)$did
+		// Real Project/Dataset/Spot ids are LONGs in Neo4j; quoting them
+		// yields string-vs-long mismatch with the indexed property. Emit
+		// numeric literal when purely-numeric, quoted+escaped string otherwise.
+		$pidLit = ctype_digit((string)$pid) ? (string)$pid
+			: "'" . pg_escape_string((string)$pid) . "'";
+		$didLit = ctype_digit((string)$did) ? (string)$did
 			: "'" . pg_escape_string((string)$did) . "'";
 		$cursor = null;
 		while (true) {
@@ -238,17 +252,22 @@ foreach ($activeUsers as $upk) {
 			// payload (some tags carry ~25 properties incl. long
 			// descriptions / map_unit_name / color / etc. that we don't
 			// need) and was OOMing the Bolt stream channel.
-			// Tag map projection: collect only the 7 properties
-			// buildRockTypePath uses. Full Tag node collection inflates
-			// payload (some tags carry ~25 properties incl. long
-			// descriptions / map_unit_name / color / etc. that we don't
-			// need) and was OOMing the Bolt stream channel.
 			//
 			// has_samples/has_microstructure/has_pet were also payload
 			// sinks (some json_samples blobs are MB-sized). We compute the
 			// boolean flag server-side and skip pulling the blob content.
+			//
+			// Walk anchored through User → HAS_PROJECT → Project → HAS_DATASET
+			// → Dataset → HAS_SPOT → Spot per project_neo4j_user_anchored_walks.
+			// This scopes Project/Dataset/Spot by the edge rather than by id
+			// alone — Strabo ids are NOT unique (same id can exist on multiple
+			// nodes owned by different users; matching by id alone returns ALL
+			// same-id nodes and produces cross-product fan-out).
 			$rows = $neodb->query("
-				MATCH (d:Dataset {id: $didLit})-[:HAS_SPOT]->(s:Spot)
+				MATCH (u:User {userpkey: $upk})
+				      -[:HAS_PROJECT]->(p:Project {id: $pidLit})
+				      -[:HAS_DATASET]->(d:Dataset {id: $didLit})
+				      -[:HAS_SPOT]->(s:Spot)
 				WHERE 1=1 $cursorClause
 				OPTIONAL MATCH (s)-[:IS_TAGGED]->(t:Tag {type:'geologic_unit'})
 				OPTIONAL MATCH (s)-[hi:HAS_IMAGE]->()
