@@ -918,6 +918,14 @@ if($_POST['columnsubmit']!=""){
 			$updateprojectid = $strabo->straboIDToID($projectid,"Project");
 			$neodb->addRelationship($updateprojectid,$id,"HAS_DATASET");
 
+			// Mirror any sample sub-objects into strabosamples.* with full
+			// project/dataset context. insertSpot()'s sync hook CAN resolve
+			// context via Cypher, but in the loop below addSpotToDataset()
+			// runs AFTER insertSpot, so the spot->dataset edge doesn't exist
+			// yet when the hook fires and the fallback would miss it. Set the
+			// context explicitly, matching the bulk Field controllers.
+			$strabo->setSampleSyncContext($projectid, $datasetid);
+
 			$groupid = $id;
 
 		}
@@ -1640,6 +1648,8 @@ if($_POST['columnsubmit']!=""){
 
 			}//end if geometry
 		}//end foreach json
+
+		$strabo->clearSampleSyncContext();
 
 		if($tagsfound=="yes"){
 
