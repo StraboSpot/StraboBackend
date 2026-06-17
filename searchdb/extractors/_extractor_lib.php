@@ -294,6 +294,59 @@ function pgTsvector($text) {
 	return "to_tsvector('" . pg_escape_string(trim($text)) . "')";
 }
 
+/**
+ * Decode a PG-formatted array literal (e.g. "{Quartz,Olivine,\"with comma\"}")
+ * back into a PHP array. PG's get_results returns array-typed columns as
+ * the raw text literal — we don't get a typed PHP array. Strip the braces
+ * and split on unquoted commas; respect PG's double-quote escaping for
+ * elements with embedded commas / spaces / quotes / backslashes.
+ *
+ * Returns empty array for null / "{}" / non-string input.
+ *
+ * Used cross-extractor (Micro + Exp + future Samples) wherever an
+ * array_agg result needs to be re-emitted via pgTextArray.
+ */
+function pgParseTextArray($v) {
+	if ($v === null || $v === '' || $v === false) return array();
+	if (is_array($v)) return $v;
+	$s = (string)$v;
+	if ($s === '{}') return array();
+	if (strlen($s) < 2 || $s[0] !== '{' || substr($s, -1) !== '}') return array();
+	$body = substr($s, 1, -1);
+
+	$out = array();
+	$cur = '';
+	$inQuote = false;
+	$len = strlen($body);
+	for ($i = 0; $i < $len; $i++) {
+		$ch = $body[$i];
+		if ($inQuote) {
+			if ($ch === '\\' && $i + 1 < $len) {
+				$cur .= $body[$i + 1];
+				$i++;
+			} elseif ($ch === '"') {
+				$inQuote = false;
+			} else {
+				$cur .= $ch;
+			}
+		} else {
+			if ($ch === '"') {
+				$inQuote = true;
+			} elseif ($ch === ',') {
+				$out[] = $cur;
+				$cur = '';
+			} else {
+				$cur .= $ch;
+			}
+		}
+	}
+	if ($cur !== '' || count($out) > 0) $out[] = $cur;
+	// Drop the PG "NULL" sentinel inside the literal — appears when
+	// array_agg includes a NULL element. FILTER clauses upstream usually
+	// remove these, but be defensive.
+	return array_values(array_filter($out, function ($x) { return $x !== 'NULL' && $x !== ''; }));
+}
+
 // ---------------------------------------------------------------------------
 // Staging-table swap (§5.2.3)
 // ---------------------------------------------------------------------------
