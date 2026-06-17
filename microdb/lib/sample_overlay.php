@@ -122,6 +122,79 @@ if (!function_exists('micro_sample_overlay_apply')) {
     }
 
     /**
+     * Overlay the strabosamples spine onto the project.json *inside* an
+     * uploaded Micro .smz/zip, preserving the zip's exact structure so the
+     * StraboMicro desktop client can still re-import it. Used by the website
+     * .smz download endpoint (download_micro_file.php).
+     *
+     * The uploaded zip is shaped {desktop-uuid}/project.json + tiles/images
+     * and can be very large (hundreds of MB). To stay cheap:
+     *   - We read ONLY the small project.json entry (ZipArchive seeks via the
+     *     central directory — no full scan).
+     *   - If the overlay changes nothing (project has no Samples-app spine
+     *     edits — the common case), we return the ORIGINAL path untouched, so
+     *     a plain readfile streams it with zero rewrite.
+     *   - Only when the overlay actually changes the JSON do we copy the zip
+     *     to a temp file and replace that single entry. The copy lives on the
+     *     same filesystem under /ziptemp.
+     *
+     * Never throws and never breaks the download: on any failure (missing
+     * zip, no project.json entry, parse error, ZipArchive failure) it returns
+     * $srcZipPath so the caller streams the original, stale-but-valid file.
+     *
+     * @return string  path to stream (either $srcZipPath or a temp overlaid zip)
+     */
+    function micro_overlay_smz($db, $srcZipPath, $ownerPkey)
+    {
+        if (!class_exists('ZipArchive')) return $srcZipPath;
+        if (!is_string($srcZipPath) || !file_exists($srcZipPath)) return $srcZipPath;
+
+        $za = new ZipArchive();
+        if ($za->open($srcZipPath) !== true) return $srcZipPath;
+
+        // Find the top-level project.json entry (shallowest path).
+        $entry = null; $entryDepth = PHP_INT_MAX;
+        for ($i = 0; $i < $za->numFiles; $i++) {
+            $name = $za->getNameIndex($i);
+            if ($name === 'project.json'
+                || substr($name, -strlen('/project.json')) === '/project.json') {
+                $depth = substr_count($name, '/');
+                if ($depth < $entryDepth) { $entryDepth = $depth; $entry = $name; }
+            }
+        }
+        if ($entry === null) { $za->close(); return $srcZipPath; }
+
+        $raw = $za->getFromName($entry);
+        $za->close();
+        if ($raw === false) return $srcZipPath;
+
+        $json = json_decode($raw);
+        if ($json === null) return $srcZipPath;   // malformed → serve original
+
+        // Canonical "before" snapshot, then overlay, then canonical "after".
+        $before = json_encode($json);
+        micro_sample_overlay_apply($json, $db, $ownerPkey);
+        $after = json_encode($json);
+        if ($after === $before) return $srcZipPath;   // no spine edits → no rewrite
+
+        // Overlay changed the JSON — build a temp zip with the single entry
+        // replaced. Temp lives under /ziptemp (same fs as the source tree).
+        $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : dirname(dirname(__DIR__));
+        $zipTempDir = "$docRoot/ziptemp";
+        if (!is_dir($zipTempDir)) @mkdir($zipTempDir, 0775, true);
+        $tmp = $zipTempDir . '/smz_overlay_' . uniqid('', true) . '.zip';
+        if (!@copy($srcZipPath, $tmp)) { @unlink($tmp); return $srcZipPath; }
+
+        $zw = new ZipArchive();
+        if ($zw->open($tmp) !== true) { @unlink($tmp); return $srcZipPath; }
+        if ($zw->addFromString($entry, json_encode($json, JSON_PRETTY_PRINT)) !== true) {
+            $zw->close(); @unlink($tmp); return $srcZipPath;
+        }
+        $zw->close();
+        return $tmp;
+    }
+
+    /**
      * Convenience wrapper: read project.json from $srcPath, apply overlay,
      * write to $destPath. Used by getProjectPDF / getWebProject / etc.
      * Returns true on success, false if the source JSON couldn't be parsed

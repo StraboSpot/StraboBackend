@@ -98,24 +98,11 @@ class StraboMicro
 	 * 500 on a successful download.
 	 */
 	protected function regenerateProjectPdfIfDirty($project_internal_id, $owner_pkey) {
-		try {
-			$row = $this->db->get_row_prepared(
-				"SELECT pdf_dirty FROM micro_projectmetadata WHERE id = $1 LIMIT 1",
-				array((int)$project_internal_id)
-			);
-			if (!$row || $row->pdf_dirty !== 't') return;
-			require_once __DIR__ . '/lib/MicroProjectPDF.php';
-			$docRoot = $_SERVER['DOCUMENT_ROOT'];
-			$pdfPath = "$docRoot/straboMicroFiles/$project_internal_id/project.pdf";
-			$pdf = new MicroProjectPDF($this->db, (int)$project_internal_id, (int)$owner_pkey);
-			$pdf->generateToFile($pdfPath);
-			$this->db->prepare_query(
-				"UPDATE micro_projectmetadata SET pdf_dirty = FALSE WHERE id = $1",
-				array((int)$project_internal_id)
-			);
-		} catch (\Throwable $e) {
-			// Swallow — see docblock. A stale PDF is better than a 500.
-		}
+		// Delegates to the shared free function so the website PDF download
+		// endpoint (download_micro_pdf.php) and the app/REST download paths
+		// share one regen implementation. See microdb/lib/MicroProjectPDF.php.
+		require_once __DIR__ . '/lib/MicroProjectPDF.php';
+		micro_regenerate_pdf_if_dirty($this->db, (int)$project_internal_id, (int)$owner_pkey);
 	}
 
 	public function getWebProject($project_id){
