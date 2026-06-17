@@ -70,6 +70,44 @@ function flattenKeywords($var) {
 // ---------------------------------------------------------------------------
 
 /**
+ * Build the trace-type facet path from one json_trace element.
+ *
+ * json_trace on prod uses `trace_type` for the top-level facet
+ * (`contact` / `geologic_struc`) with a sub-classification key that
+ * varies by top-level:
+ *   - `contact` → `contact_type` (depositional / intrusive / marker_layer / other)
+ *   - `geologic_struc` → `geologic_structure_type` (fault / shear_zone / fold / …)
+ *
+ * Returns a colon-delimited path like `contact:depositional` or
+ * `geologic_struc:fault` so the F8 trace_type facet behaves like F7
+ * rock_types (hierarchical path, GIN-indexable prefix search). Returns
+ * empty string if no trace_type is set.
+ *
+ * Note on history: an earlier extractor (since pre-Phase-2) read
+ * `trace_feature_type` here, which is the key the StraboField client
+ * never wrote — every Field item_hit row landed with trace_types NULL
+ * until this helper went in. See feedback_verify_property_name_before_assuming_source.
+ */
+function buildTracePath($el) {
+	$g = function ($k) use ($el) {
+		if (is_object($el)) return isset($el->$k) ? $el->$k : null;
+		if (is_array($el))  return isset($el[$k]) ? $el[$k] : null;
+		return null;
+	};
+	$tt = $g('trace_type');
+	if ($tt === null || $tt === '') return '';
+	$path = (string)$tt;
+	if ($tt === 'contact') {
+		$ct = $g('contact_type');
+		if ($ct) $path .= ':' . $ct;
+	} elseif ($tt === 'geologic_struc') {
+		$gst = $g('geologic_structure_type');
+		if ($gst) $path .= ':' . $gst;
+	}
+	return $path;
+}
+
+/**
  * Build the colon-delimited rock-type path from a Tag object.
  *
  * Ported verbatim from db/strabospotclass.php:5965 — the canonical

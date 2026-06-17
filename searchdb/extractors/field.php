@@ -354,17 +354,22 @@ foreach ($activeUsers as $upk) {
 			$rockTypes = array_values(array_unique($rockTypes));
 			$metFacies = array_values(array_unique($metFacies));
 
-			// --- trace_types from json_trace
+			// --- trace_types from json_trace (key is `trace_type`, not
+			// the legacy-misread `trace_feature_type` — see buildTracePath
+			// docblock + feedback_verify_property_name_before_assuming_source).
+			// json_trace is typically a single object per spot (not an
+			// array like json_orientation_data), but the array-of-objects
+			// shape has been seen historically; handle both.
 			$traceTypes = array();
 			$jtr = safeJsonDecode($r->get('jtr'));
 			if (is_array($jtr)) {
 				foreach ($jtr as $el) {
-					if (is_object($el) && isset($el->trace_feature_type)) {
-						$traceTypes[] = (string)$el->trace_feature_type;
-					}
+					$p = buildTracePath($el);
+					if ($p !== '') $traceTypes[] = $p;
 				}
-			} elseif (is_object($jtr) && isset($jtr->trace_feature_type)) {
-				$traceTypes[] = (string)$jtr->trace_feature_type;
+			} elseif (is_object($jtr)) {
+				$p = buildTracePath($jtr);
+				if ($p !== '') $traceTypes[] = $p;
 			}
 			$traceTypes = array_values(array_unique($traceTypes));
 

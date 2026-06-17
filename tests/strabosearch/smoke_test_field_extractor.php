@@ -208,10 +208,17 @@ $neodb->query("CREATE (t:Tag {
 $neodb->query("MATCH (s:Spot {id: '${PREFIX}_spot_C'}), (t:Tag {id: '${PREFIX}_tag_metamorphic'})
 	CREATE (s)-[:IS_TAGGED]->(t)");
 
-// SCENARIO D — json_trace
+// SCENARIO D — json_trace (real-prod shape: top-level `trace_type`
+// with sub-classification `geologic_structure_type` or `contact_type`,
+// stored as an array of objects OR a single object — buildTracePath
+// handles both. Earlier fixture used a phantom `trace_feature_type`
+// key that prod never wrote; trace_types was silently empty across
+// the entire item_hit slice on dev/prod until 2026-06-17.)
 $jtrD = json_encode(array(
-	array('trace_feature_type' => 'fault'),
-	array('trace_feature_type' => 'contact'),
+	array('trace_feature' => true, 'trace_type' => 'geologic_struc',
+	      'geologic_structure_type' => 'fault'),
+	array('trace_feature' => true, 'trace_type' => 'contact',
+	      'contact_type' => 'depositional'),
 ));
 $neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset'})
 	CREATE (s:Spot {
@@ -416,11 +423,13 @@ $rowD = $db->get_row(
 );
 check('D: row found', $rowD !== null);
 if ($rowD) {
-	check('D: trace_types contains fault',
-		strpos((string)$rowD->trace_types, 'fault') !== false,
+	// Hierarchical paths per buildTracePath: geologic_struc:fault,
+	// contact:depositional. Substring checks cover the path components.
+	check('D: trace_types contains geologic_struc:fault',
+		strpos((string)$rowD->trace_types, 'geologic_struc:fault') !== false,
 		'got ' . $rowD->trace_types);
-	check('D: trace_types contains contact',
-		strpos((string)$rowD->trace_types, 'contact') !== false,
+	check('D: trace_types contains contact:depositional',
+		strpos((string)$rowD->trace_types, 'contact:depositional') !== false,
 		'got ' . $rowD->trace_types);
 	check('D: has_orientation = FALSE', $rowD->has_orientation === 'f');
 }
