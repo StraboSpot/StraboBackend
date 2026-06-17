@@ -927,11 +927,27 @@ include("includes/mheader.php");
         var safeQ = q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         return safe.replace(new RegExp('(' + safeQ + ')', 'gi'), '<mark>$1</mark>');
     }
+    function parsePgTimestamp(ts) {
+        // Postgres timestamptz renders as "YYYY-MM-DD HH:MM:SS.ffffff-04"
+        // (space separator, 6-digit fraction, 2-digit offset). Chrome and
+        // Firefox parse that leniently; Safari/JavaScriptCore returns an
+        // Invalid Date. Normalize to strict ISO 8601 before constructing.
+        if (ts == null || ts === '') return null;
+        if (typeof ts === 'number') return new Date(ts);
+        var s = String(ts).trim();
+        if (/^\d+$/.test(s)) return new Date(parseInt(s, 10));   // numeric epoch as string
+        var iso = s.replace(' ', 'T')                 // space -> T separator
+                   .replace(/(\.\d{3})\d+/, '$1')     // trim sub-millisecond digits
+                   .replace(/([+-]\d{2})$/, '$1:00'); // -04 -> -04:00
+        var d = new Date(iso);
+        if (!isNaN(d.getTime())) return d;
+        d = new Date(s);                              // last-ditch lenient parse
+        return isNaN(d.getTime()) ? null : d;
+    }
     function fmtDate(ts) {
         if (!ts) return '—';
-        // Postgres returns ISO 8601 already; trim to date.
-        var d = new Date(ts);
-        if (isNaN(d.getTime())) return ts;
+        var d = parsePgTimestamp(ts);
+        if (!d) return ts;
         return d.toLocaleDateString(undefined, {year: 'numeric', month: 'short', day: 'numeric'});
     }
     function badgeIcon(kind) {
