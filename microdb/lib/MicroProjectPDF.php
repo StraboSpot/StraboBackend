@@ -1142,3 +1142,38 @@ class MicroProjectPDF extends tFPDF
         return date('F j, Y g:i A', $ts);
     }
 }
+
+if (!function_exists('micro_regenerate_pdf_if_dirty')) {
+    /**
+     * Lazily regenerate straboMicroFiles/<id>/project.pdf via MicroProjectPDF
+     * when micro_projectmetadata.pdf_dirty=TRUE, then clear the flag. Shared by
+     * StraboMicro::regenerateProjectPdfIfDirty (app/REST download paths) and the
+     * website PDF download endpoint (download_micro_pdf.php) so both honor
+     * Samples-app spine edits. No-op when the flag is FALSE — the desktop
+     * client's uploaded PDF stays authoritative until an edit flips it. Errors
+     * are swallowed: a stale PDF is preferable to a 500 on a working download.
+     *
+     * @param object $db                ezSQL-style PG handle
+     * @param int    $projectInternalId micro_projectmetadata.id
+     * @param int    $ownerPkey         project owner pkey
+     */
+    function micro_regenerate_pdf_if_dirty($db, $projectInternalId, $ownerPkey) {
+        try {
+            $row = $db->get_row_prepared(
+                "SELECT pdf_dirty FROM micro_projectmetadata WHERE id = $1 LIMIT 1",
+                array((int)$projectInternalId)
+            );
+            if (!$row || $row->pdf_dirty !== 't') return;
+            $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : dirname(dirname(__DIR__));
+            $pdfPath = "$docRoot/straboMicroFiles/$projectInternalId/project.pdf";
+            $pdf = new MicroProjectPDF($db, (int)$projectInternalId, (int)$ownerPkey);
+            $pdf->generateToFile($pdfPath);
+            $db->prepare_query(
+                "UPDATE micro_projectmetadata SET pdf_dirty = FALSE WHERE id = $1",
+                array((int)$projectInternalId)
+            );
+        } catch (\Throwable $e) {
+            // Swallow — a stale PDF is better than a 500.
+        }
+    }
+}
