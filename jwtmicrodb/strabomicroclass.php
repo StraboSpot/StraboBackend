@@ -70,6 +70,12 @@ class StraboMicro
 
 			$p = json_decode($project->projectjson);
 
+			// Overlay strabosamples.* spine edits onto the samples (reuses
+			// microdb's lib — jwtmicrodb has no own lib/). Owner == this->userpkey
+			// (project row fetched WHERE userpkey = $this->userpkey).
+			require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+			micro_sample_overlay_apply($p, $this->db, (int)$this->userpkey);
+
 			foreach($p->datasets as $d){
 				foreach($d->samples as $s){
 					foreach($s->micrographs as $m){
