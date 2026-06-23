@@ -2198,6 +2198,25 @@ class StraboMicro
 
 						$this->db->query($query);
 
+						// Mirror into strabosamples.* via the shared micro sync
+						// helper (samples spine). jwtmicrodb has no own lib/, so it
+						// reuses microdb's function-library. Without this, Micro
+						// projects uploaded through the JWT API never mirror into
+						// the spine. Mirrors microdb/strabomicroclass.php.
+						require_once __DIR__ . '/../microdb/lib/sample_sync.php';
+						$thisMicrographCount = (is_array($thissamplemetadata->micrographs ?? null) || (is_object($thissamplemetadata->micrographs ?? null)))
+							? count((array)$thissamplemetadata->micrographs)
+							: 0;
+						micro_sample_sync(
+							$this->db,
+							$thissamplemetadata,
+							(string)$thisprojectmetadata->id,
+							(int)$project_metadata_id,
+							(int)$userpkey,
+							(int)$datasetmetadata_id,
+							$thisMicrographCount
+						);
+
 						if($thissamplemetadata->micrographs != ""){
 
 							foreach($thissamplemetadata->micrographs as $thismicrographmetadata){
@@ -4844,6 +4863,13 @@ class StraboMicro
 		$pkey = $this->db->get_var("select id from micro_projectmetadata where strabo_id='$projectid' and userpkey=$this->userpkey");
 
 		if($pkey != ""){
+			// Mirror sample removals into strabosamples.* BEFORE the cascade
+			// DELETE runs against the source tables — once those rows are gone
+			// the strabo_ids can't be resolved. jwtmicrodb reuses microdb's
+			// sync lib (no own lib/). Mirrors microdb deleteProject.
+			require_once __DIR__ . '/../microdb/lib/sample_sync.php';
+			micro_sample_sync_remove_project($this->db, $projectid, (int)$this->userpkey);
+
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey);
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey.".zip");
 
