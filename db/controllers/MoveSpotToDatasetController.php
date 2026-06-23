@@ -96,6 +96,13 @@ class MoveSpotToDatasetController extends MyController
 				//add
 				$this->strabo->addSpotToDataset($datasetid,$spotid);
 
+				// Re-mirror the moved spot's samples under the NEW project/dataset
+				// context so the strabosamples link metadata (dataset_id/project_id)
+				// and auto-seed collaborators follow the move. Without this the
+				// spine link keeps pointing at the OLD dataset/project.
+				// (userpkey is already set to effectiveOwner above.)
+				$this->strabo->resyncSpotSamples($spotid, $projectid, $datasetid);
+
 				//Update all modified_timestamps
 
 				//Original Project

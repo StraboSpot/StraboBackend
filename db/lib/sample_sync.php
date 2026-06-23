@@ -241,6 +241,124 @@ function field_sample_sync_remove_spot($db, $neodb, $spotId, $userpkey) {
 }
 
 /**
+ * Remove every sample mirrored from the spots in a dataset that is about to
+ * be bulk-deleted from Neo4j. Call BEFORE the DETACH DELETE so each spot's
+ * json_samples is still readable. Enumerates the dataset's spots and
+ * delegates each to field_sample_sync_remove_spot (priority-aware: the
+ * sample row only drops when no other subsystem still owns it; otherwise
+ * just the field link is removed).
+ *
+ * This is the dataset-grain counterpart to micro's
+ * micro_sample_sync_remove_project — Field previously had only a per-spot
+ * removal hook, so bulk dataset/project deletes orphaned spine rows.
+ *
+ * @param object $db        StraboDbPostgreSQL handle
+ * @param object $neodb     StraboDbNeo4j handle
+ * @param int    $datasetId Dataset id whose spots are being deleted
+ * @param int    $userpkey  Owner pkey (matches the delete's Cypher filter)
+ * @return int   Number of spots whose samples were removed.
+ */
+function field_sample_sync_remove_dataset($db, $neodb, $datasetId, $userpkey) {
+    $datasetId = (int)$datasetId;
+    $userpkey  = (int)$userpkey;
+    if ($datasetId <= 0) return 0;
+
+    $records = $neodb->query(
+        "MATCH (d:Dataset {id:$datasetId, userpkey:$userpkey})-[:HAS_SPOT]->(s:Spot)
+         RETURN DISTINCT s.id AS sid"
+    );
+    if (!is_array($records)) return 0;
+
+    $n = 0;
+    foreach ($records as $rec) {
+        $sid = $rec->value('sid');
+        if ($sid === null || $sid === '') continue;
+        if (field_sample_sync_remove_spot($db, $neodb, $sid, $userpkey) > 0) $n++;
+    }
+    return $n;
+}
+
+/**
+ * Remove every sample mirrored from the spots in a project that is about to
+ * be bulk-deleted from Neo4j (whole-project delete or version-restore's
+ * delete-then-reinsert). Call BEFORE the DETACH DELETE. Enumerates all
+ * spots under all of the project's datasets and delegates each to
+ * field_sample_sync_remove_spot.
+ *
+ * @param object $db        StraboDbPostgreSQL handle
+ * @param object $neodb     StraboDbNeo4j handle
+ * @param int    $projectId Project id whose spots are being deleted
+ * @param int    $userpkey  Owner pkey (matches the delete's Cypher filter)
+ * @return int   Number of spots whose samples were removed.
+ */
+function field_sample_sync_remove_project($db, $neodb, $projectId, $userpkey) {
+    $projectId = (int)$projectId;
+    $userpkey  = (int)$userpkey;
+    if ($projectId <= 0) return 0;
+
+    $records = $neodb->query(
+        "MATCH (p:Project {id:$projectId, userpkey:$userpkey})-[:HAS_DATASET]->(:Dataset)-[:HAS_SPOT]->(s:Spot)
+         RETURN DISTINCT s.id AS sid"
+    );
+    if (!is_array($records)) return 0;
+
+    $n = 0;
+    foreach ($records as $rec) {
+        $sid = $rec->value('sid');
+        if ($sid === null || $sid === '') continue;
+        if (field_sample_sync_remove_spot($db, $neodb, $sid, $userpkey) > 0) $n++;
+    }
+    return $n;
+}
+
+/**
+ * Re-mirror an already-stored spot's samples under a (possibly new)
+ * project/dataset context. Used by the move-spot path: the Neo4j Spot is
+ * unchanged but its owning dataset/project changed, so the spine link
+ * metadata (reference_metadata.dataset_id / project_id) and auto-seed
+ * collaborators must be refreshed — otherwise the link keeps pointing at
+ * the OLD dataset/project.
+ *
+ * Reads the spot straight from Neo4j (like the remove hook) and
+ * reconstructs the minimal upload-shaped properties the sync helper
+ * expects: samples[] (decoded from json_samples), wkt (for the lat/lng
+ * extractor — geometry is unchanged by a move, so it is preserved), and
+ * isSample (rich detection). Spots with no samples are a no-op.
+ *
+ * @param object      $db              StraboDbPostgreSQL handle
+ * @param object      $neodb           StraboDbNeo4j handle
+ * @param int         $spotId          The moved Spot's id
+ * @param int         $userpkey        Spot owner pkey
+ * @param string|null $projectStraboId NEW project's strabo_id
+ * @param string|null $datasetStraboId NEW dataset's strabo_id
+ * @return array      strabo_ids re-mirrored.
+ */
+function field_sample_sync_resync_spot($db, $neodb, $spotId, $userpkey, $projectStraboId = null, $datasetStraboId = null) {
+    $spotId   = (int)$spotId;
+    $userpkey = (int)$userpkey;
+    if ($spotId <= 0) return array();
+
+    $rec = $neodb->getRecord(
+        "MATCH (s:Spot {id:$spotId, userpkey:$userpkey}) RETURN s LIMIT 1"
+    );
+    if (!$rec) return array();
+    $vals = $rec->get('s')->values();
+    if (!is_array($vals)) return array();
+
+    $raw = isset($vals['json_samples']) ? $vals['json_samples'] : null;
+    if (!is_string($raw) || $raw === '') return array();   // no samples on this spot — nothing to resync
+    $samples = json_decode($raw);
+    if (!is_array($samples)) return array();
+
+    $props = new stdClass();
+    $props->samples = $samples;
+    if (isset($vals['wkt']))      $props->wkt      = $vals['wkt'];
+    if (isset($vals['isSample'])) $props->isSample = $vals['isSample'];
+
+    return field_sample_sync_spot($db, $neodb, $props, $spotId, $userpkey, $projectStraboId, $datasetStraboId);
+}
+
+/**
  * @internal
  */
 function _field_sample_sync_is_rich_props($p) {
