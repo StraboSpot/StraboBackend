@@ -114,6 +114,11 @@ $experiment->project_is_public = ($row->project_is_public === 't' || $row->proje
 if (!empty($row->json)) {
     $json_data = json_decode($row->json);
     if ($json_data) {
+        // Overlay strabosamples.* spine edits onto the embedded sample so the
+        // SPA's primary read reflects Samples-app edits (same as
+        // download_experiment.php). Owner pkey is e.userpkey.
+        require_once(__DIR__ . '/../lib/sample_overlay.php');
+        experimental_sample_overlay_apply($json_data, $db, (int)$row->userpkey);
         $experiment->data = $json_data;
     } else {
         $experiment->data = new stdClass();

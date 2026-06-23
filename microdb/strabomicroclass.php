@@ -70,6 +70,13 @@ class StraboMicro
 
 			$p = json_decode($project->projectjson);
 
+			// Overlay strabosamples.* spine edits onto the samples so this
+			// app-facing read reflects Samples-app edits (consistency with
+			// getWebProject / the .smz + PDF downloads). The project row was
+			// fetched WHERE userpkey = $this->userpkey, so the owner is us.
+			require_once __DIR__ . '/lib/sample_overlay.php';
+			micro_sample_overlay_apply($p, $this->db, (int)$this->userpkey);
+
 			foreach($p->datasets as $d){
 				foreach($d->samples as $s){
 					foreach($s->micrographs as $m){

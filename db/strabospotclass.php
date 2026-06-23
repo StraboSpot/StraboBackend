@@ -45,6 +45,22 @@ class StraboSpot
 		 $this->currentDatasetStraboId = null;
 	 }
 
+	 /**
+	  * Re-mirror a moved spot's samples under a new project/dataset context.
+	  * The Neo4j Spot is unchanged by a move, but its owning dataset/project
+	  * changed — so the strabosamples link metadata + auto-seed collaborators
+	  * must be refreshed. Reads the spot from Neo4j and re-runs the sync hook
+	  * with the new context (geometry/lat-lng preserved). Uses the currently
+	  * set userpkey (effectiveOwner on the collaborator path).
+	  */
+	 public function resyncSpotSamples($spotid, $projectStraboId, $datasetStraboId){
+		 require_once __DIR__ . '/lib/sample_sync.php';
+		 return field_sample_sync_resync_spot(
+			 $this->db, $this->neodb, $spotid, $this->userpkey,
+			 $projectStraboId, $datasetStraboId
+		 );
+	 }
+
 	 public function settesting($testing){
 		 $this->testing=$testing;
 	 }
@@ -1569,6 +1585,13 @@ class StraboSpot
 			$this->createVersion($projectid);
 		}
 
+		// Mirror sample removal into strabosamples.* BEFORE the bulk Neo4j
+		// delete (spots still exist + json_samples readable). The DETACH
+		// DELETE below never reaches Field's per-spot remove hook, so without
+		// this the dataset's mirrored samples would be orphaned.
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_dataset($this->db, $this->neodb, $datasetid, $this->userpkey);
+
 		//next, delete images;
 		$rows=$this->neodb->query("match (d:Dataset)
 						where d.userpkey=$this->userpkey and d.id=$datasetid
@@ -2691,6 +2714,12 @@ class StraboSpot
 
 	public function deleteDatasetSpots($feature_id){
 
+		// Mirror sample removal BEFORE the bulk Neo4j delete (spots still
+		// exist). Only the DELETE-verb actions reach this; the bulk-upload
+		// path uses per-spot deleteSingleSpot, so re-uploads are unaffected.
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_dataset($this->db, $this->neodb, $feature_id, $this->userpkey);
+
 		$this->neodb->query("optional match ()-[r:IS_RELATED_TO {datasetid:$feature_id,userpkey:$this->userpkey}]-(), ()-[rr:IS_TAGGED {datasetid:$feature_id,userpkey:$this->userpkey}]-() delete r,rr;");
 		$this->neodb->query("match (d:Dataset {id:$feature_id,userpkey:$this->userpkey})-[dr:HAS_SPOT]->(sp:Spot)
 							optional match (ds:Dataset)-[dsetr:HAS_SPOT]->(sp)
@@ -3532,6 +3561,13 @@ stdClass Object
 		if($this->projectExists($project_id)){
 			$this->createVersion($project_id);
 		}
+
+		// Mirror sample removal into strabosamples.* BEFORE the bulk Neo4j
+		// delete so the project's mirrored samples aren't orphaned. Also
+		// covers version-restore (switchVersion deletes via this path before
+		// re-inserting the snapshot's spots).
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_project($this->db, $this->neodb, $project_id, $this->userpkey);
 
 		//then, delete images;
 		$rows=$this->neodb->query("match (p:Project)
@@ -5036,6 +5072,11 @@ public function getSpotName($id){
 	}
 
 	public function deleteProjectDatasets($project_id){
+
+		// Mirror sample removal BEFORE the bulk Neo4j delete (spots still
+		// exist). Without this the project's datasets' mirrored samples orphan.
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_project($this->db, $this->neodb, $project_id, $this->userpkey);
 
 		//need to delete dataset and all spots beneath it too
 		$this->neodb->query("optional match ()-[r:IS_RELATED_TO {projectid:$project_id,userpkey:$this->userpkey}]-(), ()-[rr:IS_TAGGED {projectid:$project_id,userpkey:$this->userpkey}]-() delete r,rr;");
