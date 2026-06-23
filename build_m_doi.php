@@ -38,6 +38,14 @@ $projectname = $row->name;
 $db->prepare_query("INSERT INTO dois (uuid, strabo_project_id, user_pkey, project_name, doi_type) VALUES ($1, $2, $3, $4, $5)",
 	array($uuid, $projectid, $userpkey, $projectname, 'micro'));
 
+// Refresh the static smzFiles project.json with the strabosamples.* spine
+// overlay BEFORE freezing it into the permanent DOI snapshot. A DOI is a
+// citable, immutable artifact, so it must capture the sample values as they
+// are at mint time — not the pre-spine-edit upload values. No-op when the
+// project has no Samples-app edits (files_dirty=FALSE).
+require_once(__DIR__ . '/microdb/lib/sample_overlay.php');
+micro_regenerate_files_if_dirty($db, (int)$pid, (int)$row->userpkey);
+
 exec("cp -rp /srv/app/www/straboMicroView/smzFiles/" . escapeshellarg($pid) . " /srv/app/www/doi/doiFiles/" . escapeshellarg($uuid));
 
 $out = new stdClass();
