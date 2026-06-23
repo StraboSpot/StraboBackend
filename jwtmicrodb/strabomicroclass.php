@@ -104,7 +104,18 @@ class StraboMicro
 			mkdir("$docRoot/ziptemp/$uuid");
 			mkdir("$docRoot/ziptemp/$uuid/$project_id");
 
-			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.json $docRoot/ziptemp/$uuid/$project_id/");
+			// Regenerate the PDF if a Samples-app edit dirtied it, then write
+			// project.json with the strabosamples.* spine overlay (reuses
+			// microdb's lib — jwtmicrodb has none). Mirrors microdb getWebProject.
+			require_once __DIR__ . '/../microdb/lib/MicroProjectPDF.php';
+			micro_regenerate_pdf_if_dirty($this->db, (int)$pkey, (int)$this->userpkey);
+			require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+			micro_sample_overlay_write_json(
+				$this->db,
+				"$docRoot/straboMicroFiles/$pkey/project.json",
+				"$docRoot/ziptemp/$uuid/$project_id/project.json",
+				(int)$this->userpkey
+			);
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/associatedFiles $docRoot/ziptemp/$uuid/$project_id/");
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/webImages $docRoot/ziptemp/$uuid/$project_id/");
@@ -177,12 +188,20 @@ class StraboMicro
 			$json = file_get_contents("$docRoot/straboMicroFiles/$pkey/project.json");
 			$json = json_decode($json);
 
+			// Overlay strabosamples.* spine edits onto the samples (reuses
+			// microdb's lib). Mirrors microdb getProjectPDF.
+			require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+			micro_sample_overlay_apply($json, $this->db, (int)$this->userpkey);
+
 			unset($json->modifiedTimestamp);
 			$json->modifiedtimestamp = (int)$mod;
 
 			$json = json_encode($json, JSON_PRETTY_PRINT);
 			file_put_contents("$docRoot/ziptemp/$uuid/$project_id/project.json", $json);
 
+			// Regenerate the PDF if a Samples-app edit dirtied it before copying it.
+			require_once __DIR__ . '/../microdb/lib/MicroProjectPDF.php';
+			micro_regenerate_pdf_if_dirty($this->db, (int)$pkey, (int)$this->userpkey);
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
 			//Just using the PDF for now. We can re-implement these later if the web viewer is needed. JMA 20241121
 
