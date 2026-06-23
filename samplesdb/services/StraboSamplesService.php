@@ -1021,13 +1021,16 @@ class StraboSamplesService
     {
         try {
             // sample_subsystem_links.reference_id for Micro = the
-            // project's internal pkey (set by micro_sample_sync). Flip
-            // pdf_dirty on every such row. The link table is small per
-            // sample (a Micro sample appears in 1 project today; the
-            // schema doesn't preclude N).
+            // project's internal pkey (set by micro_sample_sync). Flip both
+            // derived-artifact dirty flags on every such row: pdf_dirty gates
+            // the server-PDF regen, files_dirty gates the static
+            // project.json/zip regen (micro_regenerate_files_if_dirty). Both
+            // are SET by the same edit; they clear independently on their own
+            // lazy-regen paths. The link table is small per sample (a Micro
+            // sample appears in 1 project today; the schema doesn't preclude N).
             $this->db->prepare_query(
                 "UPDATE micro_projectmetadata
-                    SET pdf_dirty = TRUE
+                    SET pdf_dirty = TRUE, files_dirty = TRUE
                   WHERE id IN (
                     SELECT CAST(reference_id AS INTEGER)
                       FROM strabosamples.sample_subsystem_links

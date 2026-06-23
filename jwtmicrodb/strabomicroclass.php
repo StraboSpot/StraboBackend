@@ -228,6 +228,13 @@ class StraboMicro
 		if($project->id != ""){
 
 			$id = $project->id;
+
+			// Refresh the static project.zip with the spine overlay if a
+			// Samples-app edit dirtied it (baked in on-disk; no per-file PHP
+			// serving hook exists for the static URL). Reuses microdb's lib.
+			require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+			micro_regenerate_files_if_dirty($this->db, (int)$id, (int)$this->userpkey);
+
 			$out->url = "/straboMicroFiles/".$id."/project.zip";
 			$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");
 
@@ -282,6 +289,13 @@ class StraboMicro
 	public function getSharedURL($id){
 
 		$out = new stdClass();
+
+		// Refresh the static project.zip with the spine overlay if dirty. A
+		// shared link carries no auth context, so resolve the owner pkey from
+		// the project row for the spine lookup scope.
+		$ownerPkey = (int)$this->db->get_var("select userpkey from micro_projectmetadata where id = '".(int)$id."'");
+		require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+		micro_regenerate_files_if_dirty($this->db, (int)$id, $ownerPkey);
 
 		$out->url = "/straboMicroFiles/".$id."/project.zip";
 		$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");

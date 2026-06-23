@@ -225,4 +225,97 @@ if (!function_exists('micro_sample_overlay_apply')) {
         return true;
     }
 
+    /**
+     * Lazily refresh the STATIC on-disk Micro project files with the
+     * strabosamples.* spine overlay when micro_projectmetadata.files_dirty=TRUE,
+     * then clear the flag. Sibling to micro_regenerate_pdf_if_dirty.
+     *
+     * Why this exists: the streamed/rendered Micro read surfaces overlay at
+     * read time, but a few readers serve a raw file directly with no per-file
+     * PHP hook — jwtmicrodb getProjectURL/getSharedURL hand back a static
+     * /straboMicroFiles/<id>/project.zip URL, and straboMicroView serves a
+     * static ./smzFiles/<id>/project.json. For those the overlay has to be
+     * baked into the on-disk file. The dirty flag (set by a Samples-app edit
+     * via StraboSamplesService) gates the rebuild so it happens once per edit,
+     * on the next access, not on every request.
+     *
+     * Revert-safe: the overlay is always re-derived from the AUTHORITATIVE raw
+     * upload (micro_projectmetadata.projectjson, never mutated by spine edits),
+     * NOT from the possibly-already-overlaid on-disk file. So if a spine field
+     * is later cleared, the regen reverts the on-disk file to the upload value.
+     *
+     * Regenerates all static copies under one flag (so the PDF-style per-store
+     * clear-race can't strand a copy):
+     *   - straboMicroFiles/<id>/project.json  (standalone)
+     *   - the project.json entry inside straboMicroFiles/<id>/project.zip
+     *   - straboMicroView/smzFiles/<id>/project.json  (only if that dir exists)
+     *
+     * Never throws and never breaks a download: a stale file is preferable to
+     * a 500.
+     *
+     * @param object $db                StraboDbPostgreSQL handle
+     * @param int    $projectInternalId micro_projectmetadata.id
+     * @param int    $ownerPkey         project owner pkey (spine lookup scope)
+     */
+    function micro_regenerate_files_if_dirty($db, $projectInternalId, $ownerPkey) {
+        try {
+            $row = $db->get_row_prepared(
+                "SELECT files_dirty, projectjson FROM micro_projectmetadata WHERE id = $1 LIMIT 1",
+                array((int)$projectInternalId)
+            );
+            if (!$row || $row->files_dirty !== 't') return;
+
+            // Re-derive from the authoritative raw upload + current spine.
+            $json = json_decode($row->projectjson);
+            if ($json !== null) {
+                micro_sample_overlay_apply($json, $db, (int)$ownerPkey);
+                $encoded = json_encode($json, JSON_PRETTY_PRINT);
+
+                // Treat an empty DOCUMENT_ROOT (CLI / cron) as unset so the
+                // path resolves to the repo root, not the filesystem root.
+                $docRoot = !empty($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : dirname(dirname(__DIR__));
+                $pid     = (int)$projectInternalId;
+
+                // 1. Standalone straboMicroFiles/<id>/project.json.
+                $mainDir = "$docRoot/straboMicroFiles/$pid";
+                if (is_dir($mainDir)) {
+                    @file_put_contents("$mainDir/project.json", $encoded);
+                }
+
+                // 2. The project.json entry inside straboMicroFiles/<id>/project.zip.
+                $zipPath = "$mainDir/project.zip";
+                if (class_exists('ZipArchive') && file_exists($zipPath)) {
+                    $za = new ZipArchive();
+                    if ($za->open($zipPath) === true) {
+                        $entry = null; $entryDepth = PHP_INT_MAX;
+                        for ($i = 0; $i < $za->numFiles; $i++) {
+                            $name = $za->getNameIndex($i);
+                            if ($name === 'project.json'
+                                || substr($name, -strlen('/project.json')) === '/project.json') {
+                                $depth = substr_count($name, '/');
+                                if ($depth < $entryDepth) { $entryDepth = $depth; $entry = $name; }
+                            }
+                        }
+                        if ($entry !== null) { $za->addFromString($entry, $encoded); }
+                        $za->close();
+                    }
+                }
+
+                // 3. straboMicroView's separate static store (prod-populated;
+                //    skip silently when the per-project dir isn't present).
+                $viewDir = "$docRoot/straboMicroView/smzFiles/$pid";
+                if (is_dir($viewDir)) {
+                    @file_put_contents("$viewDir/project.json", $encoded);
+                }
+            }
+
+            $db->prepare_query(
+                "UPDATE micro_projectmetadata SET files_dirty = FALSE WHERE id = $1",
+                array((int)$projectInternalId)
+            );
+        } catch (\Throwable $e) {
+            // Swallow — a stale static file is better than a 500 on download.
+        }
+    }
+
 }
