@@ -37,6 +37,9 @@ $rand    = substr(bin2hex(random_bytes(6)), 0, 10);
 $pass = 0; $fail = 0;
 function ok($cond, $msg){ global $pass, $fail; if($cond){ $pass++; echo "  PASS  $msg\n"; } else { $fail++; echo "  FAIL  $msg\n"; } }
 function section($t){ echo "\n== $t ==\n"; }
+// A clean page must carry no leaked PHP notices/warnings (e.g. the function-scope
+// DB-connection regression that produced "Require $dbuser..." / "Error preparing").
+function clean_body($b){ return stripos($b, "Warning:")===false && stripos($b, "Error preparing")===false && stripos($b, "Require \$dbuser")===false && stripos($b, "Notice:")===false; }
 
 function http($url, $opts = array()){
 	$ch = curl_init($url);
@@ -114,6 +117,7 @@ section("confirmemailchange.php - negative cases");
 // C1: a syntactically valid but non-existent token
 list($c, $b) = http("$BASE/changeemail/".str_repeat("a", 64));
 ok($c==200 && strpos($b, "Expired or Invalid")!==false, "C1 nonexistent token -> Expired or Invalid (code=$c)");
+ok(clean_body($b), "C1 page is free of PHP warnings/notices");
 
 // C2: an expired token
 $tokExpired = bin2hex(random_bytes(32));
@@ -134,6 +138,7 @@ $db->prepare_query(
 );
 list($c, $b) = http("$BASE/changeemail/$tokTaken");
 ok($c==200 && strpos($b, "No Longer Available")!==false, "C3 taken target -> No Longer Available");
+ok(clean_body($b), "C3 page is free of PHP warnings/notices");
 $used = $db->get_var_prepared("SELECT used_at FROM email_change_requests WHERE token=$1", array($tokTaken));
 ok($used!="", "C3 stale request burned (used_at set)");
 $stillOld = $db->get_var_prepared("SELECT email FROM users WHERE pkey=$1", array($pkeyA));
@@ -153,6 +158,7 @@ $db->prepare_query(
 );
 list($c, $b) = http("$BASE/changeemail/$tokGood");
 ok($c==200 && strpos($b, "Email Address Updated")!==false, "C4 valid token -> Email Address Updated (code=$c)");
+ok(clean_body($b), "C4 success page is free of PHP warnings/notices");
 
 $newdbemail = $db->get_var_prepared("SELECT email FROM users WHERE pkey=$1", array($pkeyA));
 ok($newdbemail==$emailA_new, "C4 users.email updated to new address");
