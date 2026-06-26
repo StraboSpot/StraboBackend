@@ -39,6 +39,7 @@ if($scriptname=="/index.php"){
 		$scriptname=="/view_project.php"||
 		$scriptname=="/edit_project.php"||
 		$scriptname=="/change_password.php"||
+		$scriptname=="/change_email.php"||
 		$scriptname=="/versioning.php"
 		){
 	$accountactive="active";
@@ -496,6 +497,7 @@ if($scriptname=="/index.php"||$scriptname=="/index2.php"||$scriptname=="/indexde
 					}
 					?>
 							<li id=''><a href='/change_password' ><span class='wsite-menu-title'>Change Password</span></a></li>
+							<li id=''><a href='/change_email' ><span class='wsite-menu-title'>Change Email</span></a></li>
 							<li id=''><a href='/versioning' ><span class='wsite-menu-title'>Versioning</span></a></li>
 					<?php
 					}else{
