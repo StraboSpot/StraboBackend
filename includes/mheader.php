@@ -234,6 +234,7 @@ if(in_array($userpkey, array(3, 7217))){
 }
 ?>
 									<li><a href="/change_password">Change Password</a></li>
+									<li><a href="/change_email">Change Email</a></li>
 									<li><a href="/delete_account">Delete Account</a></li>
 									<li><a href="/logout">Logout</a></li>
 								<?php
