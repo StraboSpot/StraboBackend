@@ -4319,7 +4319,7 @@ public function getSpotName($id){
 
 		if($dbaction=="new"){
 
-			$this->logToFile("New Project");
+			//$this->logToFile("New Project");
 
 			//********************************************************************
 			// create new project node, and then add other nodes
@@ -4330,7 +4330,7 @@ public function getSpotName($id){
 
 		}elseif($dbaction=="update"){
 
-			$this->logToFile("Update Project");
+			//$this->logToFile("Update Project");
 
 			//********************************************************************
 			// existing project was found, update here
