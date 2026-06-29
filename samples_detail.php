@@ -165,7 +165,8 @@ if (!$notFound) {
         $params = array_keys($expUuids);
         $placeholders = array();
         foreach ($params as $i => $_) $placeholders[] = '$' . ($i + 1);
-        $sql = "SELECT e.uuid AS experiment_uuid, e.userpkey AS experiment_userpkey,
+        $sql = "SELECT e.uuid AS experiment_uuid, e.pkey AS experiment_pkey,
+                       e.userpkey AS experiment_userpkey,
                        COALESCE(p.ispublic, FALSE) AS project_ispublic
                   FROM straboexp.experiment e
              LEFT JOIN straboexp.project p ON p.pkey = e.project_pkey
@@ -208,7 +209,10 @@ if (!$notFound) {
                 $isPublic = ($er->project_ispublic === 't' || $er->project_ispublic === true || $er->project_ispublic === 'true');
                 $isOwner  = ((int)$er->experiment_userpkey === $viewerPkey);
                 if ($isPublic || $isOwner) {
-                    $l['view_href'] = '/experimental/overview_experiment.php?u=' . rawurlencode($u);
+                    // Link to the native StraboExperimental viewer (Vue SPA route),
+                    // which itself offers the overview page + JSON/PDF downloads and
+                    // applies the Samples spine overlay. Keyed on experiment pkey.
+                    $l['view_href'] = '/experimental/view_experiment?e=' . (int)$er->experiment_pkey;
                 } else {
                     $l['view_unavailable'] = 'Host StraboExperimental project is private and owned by another user.';
                 }

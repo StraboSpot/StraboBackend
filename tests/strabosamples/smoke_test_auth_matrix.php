@@ -825,9 +825,8 @@ check("stranger: PRIVATE exp card disabled with privacy explanation",
     && stripos($l['view_unavailable'], 'private') !== false);
 
 $l = findLink($payload, 'experimental', 'authmx-exp-pub-ref');
-check("stranger: PUBLIC exp card links to overview_experiment",
-    $l && !empty($l['view_href'])
-    && strpos($l['view_href'], '/experimental/overview_experiment.php?u=' . $expPubUuid) === 0);
+check("stranger: PUBLIC exp card links to native experiment viewer",
+    $l && $l['view_href'] === '/experimental/view_experiment?e=' . $expPubPkey);
 
 // Viewer: owner — private hosts are THEIR projects, so links resolve.
 $p = httpPage($pageMain, $sidOwner);
@@ -837,8 +836,7 @@ check("owner: PRIVATE micro card links out (host owner)",
     $l && $l['view_href'] === '/microproject?id=' . $microPrivId);
 $l = findLink($payload, 'experimental', 'authmx-exp-priv-ref');
 check("owner: PRIVATE exp card links out (host owner)",
-    $l && !empty($l['view_href'])
-    && strpos($l['view_href'], '/experimental/overview_experiment.php?u=' . $expPrivUuid) === 0);
+    $l && $l['view_href'] === '/experimental/view_experiment?e=' . $expPrivPkey);
 
 // Viewer: editor — owns the PUBLIC DECOY micro project that shares the
 // private project's strabo_id. The link references the OWNER's private
