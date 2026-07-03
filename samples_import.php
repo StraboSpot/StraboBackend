@@ -167,6 +167,32 @@ include("includes/mheader.php");
 .si-warn { background: rgba(240,200,80,0.12); border: 1px solid rgba(240,200,80,0.4);
            border-radius: 6px; padding: 0.7em 1em; margin: 0.8em 0; font-size: 0.92em; }
 .si-success-big { font-size: 1.15em; margin-bottom: 0.7em; }
+/* Styled file picker: the native input is visually hidden inside the label
+   (kept technically focusable-offscreen so keyboard users still reach it). */
+.si-file-label { position: relative; overflow: hidden; }
+.si-file-label input[type="file"] {
+    position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0;
+}
+.si-file-name { opacity: 0.8; margin-left: 0.6em; }
+/* Busy overlay shown while an upload/validate or commit POST is in flight. */
+#si-busy-overlay {
+    position: fixed; top: 0; right: 0; bottom: 0; left: 0;
+    background: rgba(20, 20, 30, 0.75);
+    display: none; align-items: center; justify-content: center; z-index: 9999;
+}
+#si-busy-overlay.active { display: flex; }
+.si-busy-panel {
+    background: #2a2a3a; border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 8px; padding: 1.6em 2.2em; text-align: center; max-width: 420px;
+}
+.si-busy-spinner {
+    width: 34px; height: 34px; margin: 0 auto 0.9em auto;
+    border: 4px solid rgba(255,255,255,0.2); border-top-color: #e2506b;
+    border-radius: 50%; animation: si-spin 0.9s linear infinite;
+}
+@keyframes si-spin { to { transform: rotate(360deg); } }
+.si-busy-title { font-size: 1.05em; margin-bottom: 0.3em; }
+.si-busy-note  { opacity: 0.7; font-size: 0.9em; }
 </style>
 
 <div id="main" class="wrapper style1">
@@ -197,11 +223,17 @@ include("includes/mheader.php");
             <h3>2. Upload it back</h3>
             <p class="si-note">Accepted: .xlsx or .csv, up to 15&nbsp;MB. You will review every
                change before anything is saved — uploads never delete samples.</p>
-            <form method="post" enctype="multipart/form-data" action="/samples_import.php">
+            <form method="post" enctype="multipart/form-data" action="/samples_import.php" id="si-upload-form">
                 <input type="hidden" name="action" value="upload">
-                <input type="file" name="tabfile" accept=".xlsx,.xls,.csv" required>
+                <div>
+                    <label class="si-btn si-btn-secondary si-file-label">
+                        Choose file&hellip;
+                        <input type="file" name="tabfile" accept=".xlsx,.xls,.csv" id="si-file-input">
+                    </label>
+                    <span class="si-file-name" id="si-file-name">No file selected</span>
+                </div>
                 <div class="si-actions">
-                    <button type="submit" class="si-btn si-btn-primary">Upload &amp; review</button>
+                    <button type="submit" class="si-btn si-btn-primary" id="si-upload-btn" disabled>Upload &amp; review</button>
                     <a class="si-btn si-btn-secondary" href="/my_samples.php">Back to My Samples</a>
                 </div>
             </form>
@@ -245,7 +277,7 @@ include("includes/mheader.php");
         </div>
         <?php endif; ?>
 
-        <form method="post" action="/samples_import.php">
+        <form method="post" action="/samples_import.php" id="si-confirm-form">
             <input type="hidden" name="action" value="confirm">
             <input type="hidden" name="token" value="<?= htmlspecialchars($reviewToken) ?>">
 
@@ -306,7 +338,7 @@ include("includes/mheader.php");
                 <a class="si-btn si-btn-primary" href="/samples_import.php">Upload a corrected file</a>
                 <?php endif; ?>
                 <button type="submit" class="si-btn si-btn-secondary" name="action" value="cancel"
-                        formnovalidate>Cancel</button>
+                        formnovalidate id="si-cancel-btn">Cancel</button>
             </div>
         </form>
 
@@ -333,5 +365,71 @@ include("includes/mheader.php");
         <div class="bottomSpacer"></div>
     </div>
 </div>
+
+<!-- Busy overlay: shown by JS the moment a long-running POST leaves the page
+     (upload/validate or confirm/commit), since both are synchronous form
+     submits with no other feedback until the response renders. -->
+<div id="si-busy-overlay" aria-hidden="true">
+    <div class="si-busy-panel" role="status">
+        <div class="si-busy-spinner"></div>
+        <div class="si-busy-title" id="si-busy-title">Working&hellip;</div>
+        <div class="si-busy-note">Please keep this page open.</div>
+    </div>
+</div>
+
+<script>
+(function() {
+    'use strict';
+    // ES5 on purpose — matches the Phase G browser-compat baseline for the
+    // samples pages (Safari/iOS included).
+
+    var overlay = document.getElementById('si-busy-overlay');
+    function showBusy(title) {
+        document.getElementById('si-busy-title').textContent = title;
+        overlay.className = 'active';
+        overlay.setAttribute('aria-hidden', 'false');
+    }
+
+    // --- Upload form: styled picker + filename readout + busy state ---
+    var fileInput  = document.getElementById('si-file-input');
+    var uploadForm = document.getElementById('si-upload-form');
+    if (fileInput && uploadForm) {
+        var fileName  = document.getElementById('si-file-name');
+        var uploadBtn = document.getElementById('si-upload-btn');
+        fileInput.addEventListener('change', function() {
+            var has = fileInput.files && fileInput.files.length > 0;
+            fileName.textContent = has ? fileInput.files[0].name : 'No file selected';
+            uploadBtn.disabled = !has;
+        });
+        uploadForm.addEventListener('submit', function(e) {
+            if (!fileInput.files || fileInput.files.length === 0) {
+                e.preventDefault();
+                return;
+            }
+            showBusy('Uploading & validating…');
+            // Disable AFTER this tick so the submit serializes normally.
+            setTimeout(function() { uploadBtn.disabled = true; }, 0);
+        });
+    }
+
+    // --- Confirm form: busy state on commit (not on Cancel) ---
+    var confirmForm = document.getElementById('si-confirm-form');
+    if (confirmForm) {
+        var cancelClicked = false;
+        var cancelBtn = document.getElementById('si-cancel-btn');
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', function() { cancelClicked = true; });
+        }
+        confirmForm.addEventListener('submit', function() {
+            if (cancelClicked) { return; }
+            showBusy('Importing your changes…');
+            setTimeout(function() {
+                var btns = confirmForm.querySelectorAll('button[type="submit"]');
+                for (var i = 0; i < btns.length; i++) { btns[i].disabled = true; }
+            }, 0);
+        });
+    }
+})();
+</script>
 
 <?php include("includes/mfooter.php"); ?>
