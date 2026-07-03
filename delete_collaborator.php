@@ -20,7 +20,10 @@ $uuid = $_GET['u'] ?? '';
 $uuid = preg_replace('/[^a-zA-Z0-9\-]/', '', $uuid);
 if($uuid == "") exit("No uuid provided.");
 
-$db->prepare_query("UPDATE collaborators set disabled = TRUE, accepted = false, collaboration_level = 'readonly' WHERE uuid = $1", array($uuid));
+// Only the project owner (removing a collaborator) or the collaborator
+// themselves (leaving) may act on this row. A stranger who merely knows the
+// uuid matches zero rows.
+$db->prepare_query("UPDATE collaborators set disabled = TRUE, accepted = false, collaboration_level = 'readonly' WHERE uuid = $1 AND (project_owner_user_pkey = $2 OR collaborator_user_pkey = $2)", array($uuid, $userpkey));
 
 if($project_id != ""){
 	header("Location: collaborate?p=$project_id");
