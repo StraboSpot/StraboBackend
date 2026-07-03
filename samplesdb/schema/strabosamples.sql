@@ -64,6 +64,12 @@ CREATE TABLE strabosamples.samples (
   micro_data               JSONB,
   experimental_data        JSONB,
 
+  -- user-defined key/value fields from the tabular import path (flat
+  -- {"header": "value"} object; keys round-trip verbatim as columns on
+  -- tabular export). Owned by the samples system itself — no subsystem
+  -- reads or writes this column.
+  custom_data              JSONB,
+
   PRIMARY KEY (id, userpkey),
 
   -- Self-FK for the parent link. DEFERRABLE so cycles during a single migration
