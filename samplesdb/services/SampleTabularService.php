@@ -867,6 +867,16 @@ class SampleTabularService
             ->setTitle($isTemplate ? 'StraboSamples Import Template' : 'StraboSamples Export')
             ->setDescription('StraboSamples tabular ' . ($isTemplate ? 'template' : 'export'));
 
+        // Workbook default = UNLOCKED cells. Sheet protection (enabled on the
+        // Data sheet below) then only guards the cells we explicitly re-lock:
+        // the exported internal ids, the header row, and the read-only export
+        // context columns. Everything else — including brand-new rows and
+        // columns — stays freely editable. No password: this is an
+        // accidental-edit guard, not tamper-proofing (the server re-validates
+        // every id on upload regardless; unknown ids hard-error at review).
+        $wb->getDefaultStyle()->getProtection()
+           ->setLocked(PHPExcel_Style_Protection::PROTECTION_UNPROTECTED);
+
         // ---- Data sheet ----
         $data = $wb->getActiveSheet();
         $data->setTitle('Data');
@@ -902,6 +912,31 @@ class SampleTabularService
         foreach (range(0, count($headers) - 1) as $i) {
             $data->getColumnDimension(PHPExcel_Cell::stringFromColumnIndex($i))->setWidth(22);
         }
+
+        // Re-lock the guarded cells (see default-style note above), then turn
+        // sheet protection on. Locked = the written internal-id cells, the
+        // header row, and the read-only context columns; empty id cells on
+        // NEW rows stay unlocked (blank id = create; a deliberately pasted id
+        // = update-by-id, both valid). Excel refuses to sort a range that
+        // contains locked cells — the Instructions sheet tells users they can
+        // simply unprotect (no password) if they need to restructure.
+        $lastDataRow = $rowNum - 1;   // header row when there are no data rows
+        $lockRanges  = array('A1:' . $lastCol . '1');            // header row
+        if ($lastDataRow >= 2) {
+            $lockRanges[] = 'A2:A' . $lastDataRow;               // internal ids
+            foreach (array('linked_systems', 'modified_at') as $ctx) {
+                $ctxIdx = array_search($ctx, $headers);
+                if ($ctxIdx !== false) {
+                    $ctxCol = PHPExcel_Cell::stringFromColumnIndex($ctxIdx);
+                    $lockRanges[] = $ctxCol . '2:' . $ctxCol . $lastDataRow;
+                }
+            }
+        }
+        foreach ($lockRanges as $range) {
+            $data->getStyle($range)->getProtection()
+                 ->setLocked(PHPExcel_Style_Protection::PROTECTION_PROTECTED);
+        }
+        $data->getProtection()->setSheet(true);
 
         // ---- Vocabulary sheet ----
         $materialFlat = samples_vocab_material_flat();
@@ -977,6 +1012,11 @@ class SampleTabularService
             'columns the next time you export.',
             '',
             'THINGS TO KNOW',
+            '- The strabo_internal_id column (and the read-only export columns) are',
+            '  protected against accidental edits; new rows are fully editable and their',
+            '  blank id means "create". If you need to sort or restructure the sheet,',
+            '  unprotect it first (Review > Unprotect Sheet — there is no password);',
+            '  StraboSpot validates every id on upload either way.',
             '- A blank cell in a column you include CLEARS that field. Remove a whole',
             '  column if you do not want to touch that field.',
             '- Rows are never deleted by an upload. Delete samples in the web interface.',

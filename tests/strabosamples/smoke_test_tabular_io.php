@@ -93,6 +93,18 @@ try {
     check("template has 0 data rows",        count($parsedTpl['rows']) === 0);
     check("all 9 standard fields recognized", count($parsedTpl['fields_present']) === 9);
 
+    // Read-only id column: Data sheet protection on, header locked, data
+    // region unlocked by default (full reader — not setReadDataOnly — so
+    // styles/protection come back).
+    $tplWb   = PHPExcel_IOFactory::load($tplPath);
+    $tplData = $tplWb->getSheetByName('Data');
+    check("template Data sheet protection enabled", $tplData->getProtection()->getSheet() === true);
+    check("template header cell locked",
+          $tplData->getStyle('A1')->getProtection()->getLocked() === PHPExcel_Style_Protection::PROTECTION_PROTECTED);
+    check("template body cells default-unlocked",
+          $tplWb->getDefaultStyle()->getProtection()->getLocked() === PHPExcel_Style_Protection::PROTECTION_UNPROTECTED);
+    $tplWb->disconnectWorksheets();
+
     // ------------------------------------------------------------------
     echo "\n=== 2. seed samples + unmodified round-trip == all noop ===\n";
     // ------------------------------------------------------------------
@@ -133,6 +145,16 @@ try {
     $tmpFiles[] = $rtPath;
     $writer2 = new PHPExcel_Writer_Excel2007($wb2);
     $writer2->save($rtPath);
+    // Export protection: id cells locked, editable data cells not.
+    $rtWb   = PHPExcel_IOFactory::load($rtPath);
+    $rtData = $rtWb->getSheetByName('Data');
+    check("export Data sheet protection enabled", $rtData->getProtection()->getSheet() === true);
+    check("export id cell A2 locked",
+          $rtData->getStyle('A2')->getProtection()->getLocked() === PHPExcel_Style_Protection::PROTECTION_PROTECTED);
+    check("export data cell B2 not locked",
+          $rtData->getStyle('B2')->getProtection()->getLocked() !== PHPExcel_Style_Protection::PROTECTION_PROTECTED);
+    $rtWb->disconnectWorksheets();
+
     $parsedRt = $svc->parseUpload($rtPath, 'roundtrip.xlsx');
     check("round-trip parses",  !empty($parsedRt['ok']));
     $planRt = $svc->plan($parsedRt, array(
