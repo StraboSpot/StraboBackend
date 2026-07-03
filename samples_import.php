@@ -70,9 +70,13 @@ if ($action === 'upload') {
             $uploadError = $parsed['message'];
         } else {
             $reviewToken = $svc->saveState($parsed, $_FILES['tabfile']['name']);
-            $reviewPlan  = $svc->plan($parsed);
-            $reviewFile  = $_FILES['tabfile']['name'];
-            $view        = 'review';
+            if ($reviewToken === null) {
+                $uploadError = 'Could not start the import session (server temp storage unavailable). Please try again.';
+            } else {
+                $reviewPlan  = $svc->plan($parsed);
+                $reviewFile  = $_FILES['tabfile']['name'];
+                $view        = 'review';
+            }
         }
     }
 }

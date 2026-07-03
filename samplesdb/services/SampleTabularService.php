@@ -332,16 +332,18 @@ class SampleTabularService
     // State files — carry parsed rows between the review POSTs
     // ========================================================================
 
-    protected function stateDir()
+    /**
+     * State files live FLAT in the system temp dir (one file per token),
+     * NOT in a shared subdirectory: /tmp is sticky-writable for every
+     * user, whereas a subdirectory created by one uid (e.g. a root CLI
+     * test run) would silently lock out the Apache uid.
+     */
+    protected function statePath($token)
     {
-        $dir = sys_get_temp_dir() . '/strabo_tabular';
-        if (!is_dir($dir)) {
-            @mkdir($dir, 0700, true);
-        }
-        return $dir;
+        return sys_get_temp_dir() . '/strabo_tabular_' . $token . '.json';
     }
 
-    /** @return string token */
+    /** @return string|null token, or null when the state could not be persisted */
     public function saveState($parsed, $clientFilename)
     {
         $this->purgeStaleStates();
@@ -352,7 +354,11 @@ class SampleTabularService
             'created'  => time(),
             'parsed'   => $parsed,
         );
-        file_put_contents($this->stateDir() . '/' . $token . '.json', json_encode($state));
+        $path = $this->statePath($token);
+        if (@file_put_contents($path, json_encode($state)) === false) {
+            return null;
+        }
+        @chmod($path, 0600);
         return $token;
     }
 
@@ -360,7 +366,7 @@ class SampleTabularService
     public function loadState($token)
     {
         if (!preg_match('/^[0-9a-f]{32}$/', (string)$token)) { return null; }
-        $file = $this->stateDir() . '/' . $token . '.json';
+        $file = $this->statePath($token);
         if (!is_file($file)) { return null; }
         $state = json_decode(file_get_contents($file), true);
         if (!is_array($state)) { return null; }
@@ -375,14 +381,13 @@ class SampleTabularService
     public function discardState($token)
     {
         if (preg_match('/^[0-9a-f]{32}$/', (string)$token)) {
-            @unlink($this->stateDir() . '/' . $token . '.json');
+            @unlink($this->statePath($token));
         }
     }
 
     protected function purgeStaleStates()
     {
-        $dir = $this->stateDir();
-        $files = @glob($dir . '/*.json');
+        $files = @glob(sys_get_temp_dir() . '/strabo_tabular_*.json');
         if (!is_array($files)) { return; }
         $cutoff = time() - self::STATE_TTL_SECONDS;
         foreach ($files as $f) {
@@ -529,7 +534,10 @@ class SampleTabularService
                     }
                     $softVocab[$col][$raw]['count']++;
                     $softVocab[$col][$raw]['rows'][] = $n;
-                    $rowErr = true;  // unresolved soft issue blocks this row until decided
+                    // NOT a row error: the row keeps its raw value provisionally
+                    // and still counts toward create/update on the review screen.
+                    // plan.clean stays false while any soft issue is unresolved,
+                    // so commit remains blocked until the user decides.
                 }
             }
 
