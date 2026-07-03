@@ -31,7 +31,6 @@ neo4j_migration
 ogrtemp/*
 !ogrtemp/.gitkeep
 manuals/*
-!manuals/index.html
 phppgadmin
 profileimages
 serialize/serialized
