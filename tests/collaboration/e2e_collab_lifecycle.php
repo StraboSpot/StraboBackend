@@ -332,25 +332,17 @@ forceRow($uuid, 'edit', true, false);
 http("$BASE/halt_collaboration?p=$projectId", array('sid' => $ownerSid));
 $row = collabRow($projectId, $ownerPkey, $collabPkey);
 fok(isDisabled($row), "halt disables the collaborator (disabled=true)");
-// halt_collaboration.php ALSO flips accepted=false. Assert what the page really does.
-fok(!isAccepted($row), "halt also clears accepted flag (this is what the page does)");
+// Halt is suspend-not-revoke: accepted stays true so the collaborator keeps
+// readonly access (finding D fix). Revoke (delete_collaborator) is what clears
+// accepted and drops them to 'none'.
+fok(isAccepted($row), "halt preserves accepted=true (suspend, not revoke)");
+$ctx = $collabAuth->getProjectContext($collabPkey, (string)$projectId);
+fok($ctx->permissionLevel === 'readonly', "halted collaborator resolves to 'readonly' (got '{$ctx->permissionLevel}')");
+fok($collabAuth->canRead($ctx) === true, "halted collaborator can still read");
+fok($collabAuth->canCreateDataset($ctx) === false, "halted collaborator cannot create datasets");
 // Owner regains full control on the halted project.
 $octx = $collabAuth->getProjectContext($ownerPkey, (string)$projectId);
 fok($collabAuth->canEditDataset($octx, $ownerPkey) === true, "owner regains edit control when halted");
-
-// DISCREPANCY: getProjectContext only grants disabled collaborators readonly
-// access when accepted=true (CollaborationAuth.php:56 requires accepted=true;
-// :69-72 then maps disabled -> readonly). But every website page that disables a
-// collaborator (halt/delete/deny) ALSO sets accepted=false, so a really-halted
-// collaborator resolves to 'none' (no access), NOT the readonly the design
-// comments + run_tests.php fixture assert. The readonly-on-halt branch is
-// unreachable through the UI.
-$ctx = $collabAuth->getProjectContext($collabPkey, (string)$projectId);
-echo "  (real halted-collaborator permissionLevel = '{$ctx->permissionLevel}')\n";
-discrepancy($ctx->permissionLevel === 'readonly',
-    "halted collaborator retains readonly access as designed (real page yields '{$ctx->permissionLevel}'; ".
-    "CollaborationAuth intends 'readonly', run_tests.php fixture seeds accepted=true to match, ".
-    "but halt_collaboration.php sets accepted=false so the branch never fires)");
 
 // =============================================================================
 // cleanup
