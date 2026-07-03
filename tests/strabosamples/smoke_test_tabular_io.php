@@ -157,10 +157,11 @@ try {
 
     $parsedRt = $svc->parseUpload($rtPath, 'roundtrip.xlsx');
     check("round-trip parses",  !empty($parsedRt['ok']));
-    $planRt = $svc->plan($parsedRt, array(
-        // custom columns need a decision; import (the values are unchanged)
-        'custom_columns' => array('collector' => 'import', 'depth_m' => 'import'),
-    ));
+    // Decide every custom header the export carried — the union spans ALL of
+    // this user's samples (real data included), not just our seeded ones.
+    $rtCustomRes = array();
+    foreach ($parsedRt['custom_headers'] as $h) { $rtCustomRes[$h] = 'import'; }
+    $planRt = $svc->plan($parsedRt, array('custom_columns' => $rtCustomRes));
     check("round-trip plan is clean",         $planRt['clean'] === true);
     check("round-trip plan is all noop",
           $planRt['counts']['noop'] === 2 && $planRt['counts']['create'] === 0 && $planRt['counts']['update'] === 0);
@@ -236,6 +237,20 @@ try {
     check("changelog 'update' row written", $clog && $clog->change_type === 'update');
     $chg = $clog ? json_decode($clog->changes, true) : null;
     check("changelog diff carries old name", is_array($chg) && isset($chg['name']) && $chg['name']['old'] === 'RICH-01');
+
+    // Review-counts preview: a custom-only change with the column decision
+    // still UNDECIDED must already count as an update (provisional import,
+    // matching the review UI's default radio) while clean stays false —
+    // the "0 updated on review, 1 updated after confirm" bug Jason hit.
+    $csv = "strabo_internal_id,sample_id,collector\n$sRich,RICH-01-renamed,New Person\n";
+    $p = $svc->parseUpload(csvFile($csv), 'customonly.csv');
+    $plan = $svc->plan($p);   // no resolutions yet
+    check("undecided custom change counts as update", $plan['counts']['update'] === 1);
+    check("plan still not clean (decision pending)",  $plan['clean'] === false);
+    check("custom column listed as open decision",    in_array('collector', $plan['soft_custom']));
+    $planIgn = $svc->plan($p, array('custom_columns' => array('collector' => 'ignore')));
+    check("'ignore' resolution drops it back to noop",
+          $planIgn['clean'] === true && $planIgn['counts']['noop'] === 1 && $planIgn['counts']['update'] === 0);
 
     // ------------------------------------------------------------------
     echo "\n=== 5. vocab: unknown → soft → resolution paths ===\n";

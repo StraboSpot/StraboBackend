@@ -423,7 +423,13 @@ class SampleTabularService
         $softCustom   = array();  // headers awaiting an import/ignore decision
         $warnings     = array();
 
-        // Custom-column decisions.
+        // Custom-column decisions. Undecided headers are still soft issues
+        // (they keep plan.clean false, blocking commit until the user picks
+        // import/ignore on the review screen) but count PROVISIONALLY as
+        // imported — mirroring the review UI's default-checked "Import"
+        // radio — so the create/update counts preview what confirming with
+        // the defaults will actually do. Choosing "Ignore" re-plans without
+        // the column and those diffs drop back out.
         $importCustom = array();  // header => true
         foreach ($parsed['custom_headers'] as $header) {
             $decision = isset($customRes[$header]) ? $customRes[$header] : null;
@@ -431,6 +437,7 @@ class SampleTabularService
                 $importCustom[$header] = true;
             } elseif ($decision !== 'ignore') {
                 $softCustom[] = $header;
+                $importCustom[$header] = true;
             }
         }
 

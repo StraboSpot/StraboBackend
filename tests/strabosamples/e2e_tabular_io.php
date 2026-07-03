@@ -272,6 +272,34 @@ try {
     check("description landed",           $row && $row->description === 'updated via http');
 
     // ----------------------------------------------------------------
+    echo "\n=== F2. custom-only change previews as an update on review ===\n";
+    // ----------------------------------------------------------------
+    // Regression (Jason 2026-07-03): with a new custom column still
+    // undecided, the review chips said "0 updated" but confirming
+    // committed 1 update. The counts must preview the default (import).
+    $csv = "strabo_internal_id,sample_id,FooFoo Stuff\n"
+         . "$sSeed,E2E-SEED-01-renamed,bogus info\n";
+    file_put_contents($up, $csv);
+    $r = httpPostFile('/samples_import.php', $sidOwner, array('action' => 'upload'),
+                      'tabfile', $up, 'customonly.csv');
+    check("custom-only upload → review",  $r['status'] === 200);
+    check("review chip previews 1 updated", preg_match('/<strong>1<\/strong> updated/', $r['body']) === 1);
+    check("custom column decision still shown", strpos($r['body'], 'FooFoo Stuff') !== false);
+    $token = extractToken($r['body']);
+    // Ignore-resolution must drop it back to a no-op commit.
+    $r = httpPostForm('/samples_import.php', $sidOwner, array(
+        'action' => 'confirm', 'token' => $token,
+        'res_custom' => array(base64_encode('FooFoo Stuff') => 'ignore'),
+    ));
+    check("ignore → success with 0 updated",
+          strpos($r['body'], 'Import complete') !== false
+          && preg_match('/0 samples created,\s*0 updated/', $r['body']) === 1);
+    $cd = $db->get_var_prepared(
+        "SELECT custom_data::text FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+        array($sSeed, $ownerPkey));
+    check("ignored custom column not stored", strpos((string)$cd, 'FooFoo') === false);
+
+    // ----------------------------------------------------------------
     echo "\n=== G. cancel discards state ===\n";
     // ----------------------------------------------------------------
     $csv = "sample_id\n$pfx-CANCELME\n";
