@@ -54,7 +54,7 @@ if ($ownerPkey > 0 && $sampleId !== '') {
                 latitude, longitude,
                 display_sample_type, display_sample_purpose,
                 parent_sample_id, parent_userpkey,
-                field_data, micro_data, experimental_data,
+                field_data, micro_data, experimental_data, custom_data,
                 created_at, created_by, modified_at, modified_by
            FROM strabosamples.samples
           WHERE id=$1 AND userpkey=$2",
@@ -81,6 +81,7 @@ if (!$notFound) {
         'field_data'             => $spineRow->field_data        ? json_decode($spineRow->field_data,        true) : null,
         'micro_data'             => $spineRow->micro_data        ? json_decode($spineRow->micro_data,        true) : null,
         'experimental_data'      => $spineRow->experimental_data ? json_decode($spineRow->experimental_data, true) : null,
+        'custom_data'            => $spineRow->custom_data       ? json_decode($spineRow->custom_data,       true) : null,
         'created_at'             => $spineRow->created_at,
         'created_by'             => $spineRow->created_by !== null ? (int)$spineRow->created_by : null,
         'modified_at'            => $spineRow->modified_at,
@@ -1420,6 +1421,25 @@ include("includes/mheader.php");
         if (value === null || value === undefined || value === '') return '';
         return '<div><span class="sd-field-label">' + escapeHtml(label) + ':</span> ' + escapeHtml(value) + '</div>';
     }
+    // Custom key/value fields from the tabular import path (custom_data
+    // JSONB). Read-only here — they're edited by re-uploading a sheet on
+    // /samples_import.php. Rendered after the standard metadata rows with
+    // a small divider heading.
+    function customFieldsHtml(sample) {
+        var cd = sample.custom_data;
+        if (!cd || typeof cd !== 'object') return '';
+        var keys = Object.keys(cd).sort(function(a, b) {
+            return a.toLowerCase().localeCompare(b.toLowerCase());
+        });
+        var html = '';
+        keys.forEach(function(k) {
+            html += field(k, cd[k]);
+        });
+        if (html === '') return '';
+        return '<div style="margin-top:0.7em;padding-top:0.5em;border-top:1px solid rgba(255,255,255,0.12);'
+             + 'opacity:.75;font-size:.9em;">Custom Fields <span style="opacity:.7">(from tabular import)</span></div>'
+             + html;
+    }
     function subsystemLabel(s) {
         if (s === 'field')        return 'StraboField';
         if (s === 'micro')        return 'StraboMicro';
@@ -1489,6 +1509,7 @@ include("includes/mheader.php");
     metaHtml += field('IGSN',                         sample.igsn);
     metaHtml += field('Description',                  sample.description);
     metaHtml += field('Notes',                        sample.notes);
+    metaHtml += customFieldsHtml(sample);
     document.getElementById('sd-metadata-fields').innerHTML = metaHtml || '<div style="opacity:.6">No metadata recorded.</div>';
 
     // Edit + Collaborate visibility from perms.
@@ -2587,6 +2608,7 @@ include("includes/mheader.php");
         metaHtml += field('IGSN',                         sample.igsn);
         metaHtml += field('Description',                  sample.description);
         metaHtml += field('Notes',                        sample.notes);
+        metaHtml += customFieldsHtml(sample);
         document.getElementById('sd-metadata-fields').innerHTML = metaHtml || '<div style="opacity:.6">No metadata recorded.</div>';
 
         // Update page title (renders the same name-fallback as the metadata row).

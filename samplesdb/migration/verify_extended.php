@@ -96,6 +96,7 @@ $expectedColumns = array(
         'field_data'             => 'jsonb',
         'micro_data'             => 'jsonb',
         'experimental_data'      => 'jsonb',
+        'custom_data'            => 'jsonb',
     ),
     'sample_subsystem_links' => array(
         'sample_id'          => 'text',

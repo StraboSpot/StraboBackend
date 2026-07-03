@@ -157,6 +157,7 @@ class StraboSamplesService
                     s.display_sample_type, s.display_sample_purpose,
                     s.parent_sample_id, s.parent_userpkey,
                     s.field_data, s.micro_data, s.experimental_data,
+                    s.custom_data,
                     s.created_at, s.created_by, s.modified_at, s.modified_by
                FROM strabosamples.samples s
               WHERE s.id = $1 AND s.userpkey = $2",
@@ -172,6 +173,7 @@ class StraboSamplesService
         $sample['field_data']        = $this->decodeJson($row->field_data);
         $sample['micro_data']        = $this->decodeJson($row->micro_data);
         $sample['experimental_data'] = $this->decodeJson($row->experimental_data);
+        $sample['custom_data']       = $this->decodeJson($row->custom_data);
 
         // Child tables
         $sample['composition']      = $this->fetchComposition($id, $ownerPkey);
@@ -791,7 +793,7 @@ class StraboSamplesService
         'display_sample_type', 'display_sample_purpose',
     );
     private static $WRITABLE_JSONB_FIELDS = array(
-        'field_data', 'micro_data', 'experimental_data',
+        'field_data', 'micro_data', 'experimental_data', 'custom_data',
     );
 
     /**

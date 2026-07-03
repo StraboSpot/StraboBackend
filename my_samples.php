@@ -235,6 +235,28 @@ include("includes/mheader.php");
 .ms-new-btn:hover {
     background: #f06880;
 }
+.ms-io-btn {
+    background: rgba(255, 255, 255, 0.12);
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 0.6em 1.1em;
+    font-size: 1em;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-block;
+}
+.ms-io-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    color: #ffffff;
+}
+/* Export reuses Import's ⇪ glyph (U+21EA) rotated 180° — Unicode has no
+   matching outlined "down arrow from bar", so flipping keeps the pair
+   visually identical. */
+.ms-io-flip {
+    display: inline-block;
+    transform: rotate(180deg);
+}
 
 .ms-type-tabs {
     display: flex;
@@ -709,6 +731,8 @@ include("includes/mheader.php");
 
         <div class="ms-controls">
             <button type="button" class="ms-new-btn" id="ms-new-sample-btn">+ New Sample</button>
+            <a class="ms-io-btn" href="/samples_import.php" title="Bulk-import samples from a spreadsheet (XLSX/CSV)">&#8682; Import</a>
+            <a class="ms-io-btn" href="/samples_tabular_download.php?what=export" title="Download your samples as a spreadsheet"><span class="ms-io-flip">&#8682;</span> Export</a>
             <input type="text" id="ms-search" placeholder="Search ID, location, internal…" autocomplete="off">
             <select id="ms-sort">
                 <option value="modified_desc">Sort: Most recent</option>
