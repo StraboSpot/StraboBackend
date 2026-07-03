@@ -90,6 +90,44 @@ function samples_vocab_sample_purposes()
 }
 
 /**
+ * Flat value => display-label map for Material Type (optgroup structure
+ * collapsed). Used by the tabular import/export path, which needs plain
+ * lookups rather than <optgroup> rendering.
+ *
+ * @return array<string, string>
+ */
+function samples_vocab_material_flat()
+{
+    $flat = array();
+    foreach (samples_vocab_material_types() as $group => $opts) {
+        foreach ($opts as $value => $label) {
+            $flat[$value] = $label;
+        }
+    }
+    return $flat;
+}
+
+/**
+ * Case-insensitive resolver: accepts either a storage value or a display
+ * label and returns the canonical storage value, or NULL when the input
+ * matches neither. Shared by both vocab columns on the tabular import path.
+ *
+ * @param string $input     raw cell value (already trimmed)
+ * @param array  $flatVocab value => label map
+ * @return string|null      canonical storage value, or null
+ */
+function samples_vocab_resolve($input, array $flatVocab)
+{
+    $needle = mb_strtolower($input);
+    foreach ($flatVocab as $value => $label) {
+        if (mb_strtolower($value) === $needle || mb_strtolower($label) === $needle) {
+            return $value;
+        }
+    }
+    return null;
+}
+
+/**
  * Render a complete <select> for the material type dropdown, including
  * the "Other (free text)" escape sentinel. The companion text input is
  * NOT rendered here — the caller places it adjacent and toggles its
