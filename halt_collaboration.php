@@ -23,7 +23,13 @@ $project = $strabo->getProject($project_id);
 
 if($project->Error != "") exit($project->Error);
 
-$db->prepare_query("UPDATE collaborators set disabled = TRUE, accepted = FALSE, collaboration_level = 'readonly' WHERE strabo_project_id = $1 and project_owner_user_pkey = $2", array($project_id, $userpkey));
+// Halt = suspend collaboration: collaborators drop to read-only while the owner
+// regains full control. Keep accepted=TRUE so getProjectContext() still resolves
+// these rows and maps disabled -> readonly (CollaborationAuth.php). Clearing
+// accepted here would instead resolve them to 'none' (no access at all), which
+// is revoke semantics, not halt. The collaboration_level is preserved so a later
+// re-enable restores the original level.
+$db->prepare_query("UPDATE collaborators set disabled = TRUE WHERE strabo_project_id = $1 and project_owner_user_pkey = $2", array($project_id, $userpkey));
 
 header("Location: /my_field_data");
 

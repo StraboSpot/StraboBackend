@@ -49,12 +49,32 @@ class MoveSpotToDatasetController extends MyController
 			return $data;
 		}
 
-		// Get the original dataset for this spot
-		$originaldatasetid = $this->strabo->getDatasetId($spotid);
+		// Check permissions on the TARGET dataset first (this also yields the
+		// effectiveOwner used to resolve the source dataset below).
+		$originalUserpkey = $this->strabo->userpkey;
+		$targetContext = $this->auth->getDatasetContext($originalUserpkey, $datasetid);
+		if ($targetContext !== null && !$this->auth->canEditDataset($targetContext, $targetContext->datasetCreatedBy)) {
+			if ($targetContext->permissionLevel === 'none') {
+				return $this->notFound("Target dataset not found");
+			}
+			return $this->forbidden("You don't have permission to add spots to target dataset");
+		}
 
-		// Check permissions on source dataset (where spot is coming from)
+		// effectiveOwner - for collaboration, the target project's owner.
+		$userpkey = $targetContext ? $targetContext->effectiveOwner : $originalUserpkey;
+
+		// Resolve the source dataset UNDER THE EFFECTIVE OWNER. A collaborator's
+		// spots are stored under the project owner's pkey, so resolving with the
+		// requester's own pkey (getDatasetId's default) would miss the spot and
+		// silently skip the source-permission check - letting an editor move
+		// another editor's spot out of a dataset they cannot edit.
+		$this->strabo->setuserpkey($userpkey);
+		$originaldatasetid = $this->strabo->getDatasetId($spotid);
+		$this->strabo->setuserpkey($originalUserpkey);
+
+		// Check permissions on the source dataset with the REQUESTER's rights.
 		if ($originaldatasetid) {
-			$sourceContext = $this->auth->getDatasetContext($this->strabo->userpkey, $originaldatasetid);
+			$sourceContext = $this->auth->getDatasetContext($originalUserpkey, $originaldatasetid);
 			if ($sourceContext !== null && !$this->auth->canEditDataset($sourceContext, $sourceContext->datasetCreatedBy)) {
 				if ($sourceContext->permissionLevel === 'none') {
 					return $this->notFound("Spot not found");
@@ -63,19 +83,7 @@ class MoveSpotToDatasetController extends MyController
 			}
 		}
 
-		// Check permissions on target dataset (where spot is going to)
-		$targetContext = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetid);
-		if ($targetContext !== null && !$this->auth->canEditDataset($targetContext, $targetContext->datasetCreatedBy)) {
-			if ($targetContext->permissionLevel === 'none') {
-				return $this->notFound("Target dataset not found");
-			}
-			return $this->forbidden("You don't have permission to add spots to target dataset");
-		}
-
-		// Determine effectiveOwner - should be consistent across both datasets
-		// For collaboration, use the target project's owner
-		$userpkey = $targetContext ? $targetContext->effectiveOwner : $this->strabo->userpkey;
-		$originalUserpkey = $this->strabo->userpkey;
+		// Swap to the effective owner for the actual move.
 		if ($userpkey !== $originalUserpkey) {
 			$this->strabo->setuserpkey($userpkey);
 		}
