@@ -35,45 +35,45 @@ split their output into **FUNCTIONAL** checks (expected to pass) and **AUTHZ
 PROBES** that assert the *secure* expectation. A probe failure is a finding, not
 a broken test; those suites exit non-zero while a finding stands.
 
-## Open findings (as of the audit that added these suites)
+## Findings (surfaced by the probe suites; FIXED on `fix/collab-authz-findings`)
 
-These are surfaced by the probe suites; none were fixed by this test work.
+The audit surfaced these; the fix branch `fix/collab-authz-findings` addresses
+all four, and the probe suites now report 0 findings.
 
-**A. `update_collaboration_level.php` has no caller authorization.** It runs
+**A. `update_collaboration_level.php` had no caller authorization.** It ran
 `UPDATE collaborators SET collaboration_level=$l WHERE uuid=$u` with no check
-that the caller owns the project, and does not validate `$l`. A collaborator
+that the caller owns the project, and did not validate `$l`. A collaborator
 knows their own uuid (it is in their invite link), so an edit/readonly
-collaborator can set their own level to `owner` and gain `canEditProjectMetadata`
-rights, or set an arbitrary string. GET-based, no CSRF token.
+collaborator could set their own level to `owner` and gain
+`canEditProjectMetadata` rights, or set an arbitrary string. GET-based, no CSRF
+token. **Fix:** validate `$l ∈ {readonly, edit}` and scope the UPDATE by
+`project_owner_user_pkey = <session userpkey>`.
 
-**B. `delete_collaborator.php` / `deny_collaboration.php` have no caller
-authorization.** Both mutate `collaborators` by `uuid` alone; any authenticated
-user who knows a uuid can disable a collaborator or reject an invite.
+**B. `delete_collaborator.php` / `deny_collaboration.php` had no caller
+authorization.** Both mutated `collaborators` by `uuid` alone; any authenticated
+user who knew a uuid could disable a collaborator or reject an invite. **Fix:**
+`delete_collaborator` is scoped to the owner OR the collaborator themselves
+(so both remove-and-leave still work); `deny_collaboration` is scoped to the
+invitee. `halt_collaboration.php` was already correctly owner-scoped and is the
+passing positive control.
 
-Fix pattern for A/B: scope the UPDATE by `project_owner_user_pkey = <session
-userpkey>` (and for deny, by the invitee), exactly as `halt_collaboration.php`
-already does. `halt_collaboration.php` is the passing positive control.
-
-**C. MoveSpot skips the source-dataset permission check for collaborators.**
-`MoveSpotToDatasetController` resolves the spot's current dataset with
+**C. MoveSpot skipped the source-dataset permission check for collaborators.**
+`MoveSpotToDatasetController` resolved the spot's current dataset with
 `getDatasetId()`, which filters by the requesting user's `userpkey` *before* the
 effective-owner swap. A collaborator's spots are stored under the project
-owner's pkey, so the lookup returns nothing and the source check is skipped —
-an editor can move another editor's spot out of a dataset they cannot edit
-(demonstrated: HTTP 201). The owner is correctly blocked (positive control),
-because owner-project data is under the owner's pkey. Fix: resolve the source
-via `getDatasetContext()` / `getDatasetOwnerInfo()` (owner-agnostic), like the
-target dataset already is.
+owner's pkey, so the lookup returned nothing and the source check was skipped —
+an editor could move another editor's spot out of a dataset they cannot edit
+(demonstrated: HTTP 201). **Fix:** check the target first (to learn the
+effective owner), resolve the source dataset under the effective owner, then run
+the source-permission check with the requester's rights.
 
-**D. "Halted collaborator keeps readonly" is unreachable via the UI.**
+**D. "Halted collaborator keeps readonly" was unreachable via the UI.**
 `getProjectContext()` only maps a disabled collaborator to `readonly` when
-`accepted=true`, but every website page that disables a collaborator
-(`halt`/`delete`/`deny`) also sets `accepted=false`, which resolves to `none`
-(no access). So a really-halted collaborator loses read access entirely, not
-the readonly the design comments intend. `run_tests.php`'s fixture masks this by
-seeding `accepted=true, disabled=true` — a state no page produces. Decide which
-side is correct (halt should probably keep `accepted=true`) and align the code +
-fixture.
+`accepted=true`, but `halt_collaboration.php` also set `accepted=false`, which
+resolves to `none` (no access) — so a halted collaborator lost read access
+entirely instead of dropping to readonly. **Fix:** `halt` now sets only
+`disabled=TRUE` (suspend), preserving `accepted` and the level; `delete`
+(revoke) remains the path that clears `accepted` and drops to `none`.
 
 ## Known test-environment notes
 
