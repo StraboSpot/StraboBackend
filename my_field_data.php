@@ -105,6 +105,8 @@ include("includes/mheader.php");
 			window.location='/searchdownload?type=geojson&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="gems"){
 			window.location='/gems_export?dsids='+id;
+		}else if(selected=="custom_template"){
+			window.location='/TemplateWizard/export.php?dataset_id='+id;
 		}else if(selected=="geologic_units"){
 			window.location='/searchdownload?type=geologic_units&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="debug"){
@@ -155,6 +157,13 @@ include("includes/mheader.php");
 						<header class="major">
 							<h2>My StraboField Data</h2>
 						</header>
+
+						<!-- Template Wizard doors: tabular import/export via saved templates -->
+						<div style="text-align:center; margin-bottom: 1.5em;">
+							<a class="button small" href="/TemplateWizard/" title="Design reusable spreadsheet templates for your field data">Template Wizard</a>
+							&nbsp;
+							<a class="button small" href="/TemplateWizard/review.php" title="Bulk-import spots from a spreadsheet (XLSX/CSV)">&#8682; Import Tabular Data</a>
+						</div>
 
 <?php
 $collabquery = "
@@ -398,6 +407,7 @@ if($datasetCreatedBy == $userpkey || $collaboration_level == "admin"){
 															<option value="gpkg">GeoPackage</option>
 															<option value="geojson">GeoJSON</option>
 															<option value="gems">USGS GeMS</option>
+															<option value="custom_template">Custom Template (Wizard)</option>
 															<option value="image_basemaps">Image Basemaps</option>
 														</select>
 													</td>
@@ -582,6 +592,7 @@ if($userpkey==3 || $userpkey==3){
 															<option value="gpkg">GeoPackage</option>
 															<option value="geojson">GeoJSON</option>
 															<option value="gems">USGS GeMS</option>
+															<option value="custom_template">Custom Template (Wizard)</option>
 															<option value="image_basemaps">Image Basemaps</option>
 														</select>
 													</td>

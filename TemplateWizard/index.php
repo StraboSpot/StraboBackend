@@ -1,6 +1,6 @@
 <?php
 /**
- * File: choose_template.php
+ * File: index.php
  * Description: Template Wizard - Choose or Build Template (Page 1)
  *
  * @package    StraboSpot Web Site
@@ -10,7 +10,16 @@
  * @link       https://strabospot.org
  */
 
-include("../includes/mheader.php");
+chdir(dirname(__DIR__));
+include("logincheck.php");
+include("prepare_connections.php");
+require_once __DIR__ . "/services/FieldTabularService.php";
+
+$twsvc = new FieldTabularService($db, $neodb, $strabo);
+$twsvc->setUserpkey($userpkey);
+$twTemplates = $twsvc->listTemplates();
+
+include("includes/mheader.php");
 ?>
 
 			<!-- Main -->
@@ -29,7 +38,8 @@ include("../includes/mheader.php");
 									<strong>About the StraboSpot Template Wizard:</strong>
 									<div style="margin: 10px 0 0 0; padding-left: 20px;">
 										The StraboSpot Template Wizard allows for the creation of custom, reusable spreadsheet templates suited for importing data into the StraboField
-										database. This interface provides options for the creation of new templates, as well as the use and editing of existing templates. Please
+										database. This interface provides options for the creation of new templates, as well as the use and editing of existing templates. Saved
+										templates work in both directions: they define the spreadsheet you upload <em>and</em> the shape of dataset exports. Please
 										use the menu below to get started.
 									</div>
 								</div>
@@ -43,7 +53,7 @@ include("../includes/mheader.php");
 										</div>
 
 										<div class="col-12">
-											<input type="radio" id="method_existing" name="template_method" value="existing">
+											<input type="radio" id="method_existing" name="template_method" value="existing" <?php echo count($twTemplates) ? '' : 'disabled'; ?>>
 											<label for="method_existing">Choose Existing Template</label>
 										</div>
 
@@ -52,9 +62,9 @@ include("../includes/mheader.php");
 											<label for="template_select">My Templates</label>
 											<select name="template_id" id="template_select" disabled>
 												<option value="">-- Select a Template --</option>
-												<option value="1">Field Survey Template</option>
-												<option value="2">Rock Sample Collection</option>
-												<option value="3">Quick Entry Template</option>
+												<?php foreach ($twTemplates as $t): ?>
+												<option value="<?php echo (int)$t->pkey; ?>"><?php echo htmlspecialchars($t->name); ?></option>
+												<?php endforeach; ?>
 											</select>
 										</div>
 									</div>
@@ -77,12 +87,20 @@ include("../includes/mheader.php");
 													<label for="section_spot">Spot Data (required)</label>
 												</div>
 												<div class="col-12">
-													<input type="checkbox" id="section_orientation" name="selected_sections[]" value="orientation">
+													<input type="checkbox" id="section_orientation" name="selected_sections[]" value="orientation" checked>
 													<label for="section_orientation">Orientation Data</label>
 												</div>
 												<div class="col-12">
-													<input type="checkbox" id="section_rockunit" name="selected_sections[]" value="rockunit">
-													<label for="section_rockunit">Rock Units</label>
+													<input type="checkbox" id="section_geologic_unit" name="selected_sections[]" value="geologic_unit">
+													<label for="section_geologic_unit">Rock Units (Geologic Unit)</label>
+												</div>
+												<div class="col-12">
+													<input type="checkbox" id="section_trace" name="selected_sections[]" value="trace">
+													<label for="section_trace">Trace</label>
+												</div>
+												<div class="col-12">
+													<input type="checkbox" id="section_other_features" name="selected_sections[]" value="other_features">
+													<label for="section_other_features">Other Features</label>
 												</div>
 												<div class="col-12">
 													<input type="checkbox" id="section_sample" name="selected_sections[]" value="sample">
@@ -105,6 +123,20 @@ include("../includes/mheader.php");
 
 								</form>
 
+								<hr />
+
+								<!-- Direct doors: file import / dataset export -->
+								<div class="row gtr-uniform gtr-25">
+									<div class="col-12">
+										<h3>Shortcuts</h3>
+										<ul class="actions">
+											<li><a href="review.php" class="button">&#8682; Import a Spreadsheet</a></li>
+											<li><a href="export.php" class="button"><span style="display:inline-block;transform:rotate(180deg);">&#8682;</span> Export a Dataset</a></li>
+										</ul>
+										<p style="font-size: 0.9em;">Importing a file exported by StraboSpot? Its template travels inside the file &mdash; just upload it.</p>
+									</div>
+								</div>
+
 							</section>
 					<div class="bottomSpacer"></div>
 
@@ -114,5 +146,5 @@ include("../includes/mheader.php");
 <script src="js/choose_template.js"></script>
 
 <?php
-include("../includes/mfooter.php");
+include("includes/mfooter.php");
 ?>
