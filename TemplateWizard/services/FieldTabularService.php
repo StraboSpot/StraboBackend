@@ -354,10 +354,14 @@ class FieldTabularService
         if ($existing !== null) {
             return array('ok' => false, 'message' => "You already have a template named '$name'.");
         }
-        $newPkey = $this->db->get_var_prepared(
-            "INSERT INTO field_templates (userpkey, name, spec) VALUES ($1, $2, $3::jsonb) RETURNING pkey",
+        // NOTE: the prepared-statement layer discards RETURNING rows for
+        // INSERTs (rows_affected only) — read the id back via currval on the
+        // same connection instead.
+        $this->db->get_var_prepared(
+            "INSERT INTO field_templates (userpkey, name, spec) VALUES ($1, $2, $3::jsonb)",
             array($this->userpkey, $name, $specJson)
         );
+        $newPkey = $this->db->get_var_prepared("SELECT currval('field_templates_pkey_seq')", array());
         return array('ok' => true, 'pkey' => (int)$newPkey);
     }
 
@@ -793,9 +797,23 @@ class FieldTabularService
         }
 
         // ---- custom column decisions (samples pattern: provisional import) ----
+        // Custom columns DECLARED in the template spec are part of the saved
+        // design — they auto-decide as 'import' (no review friction; keeps the
+        // export→reimport round trip a clean all-noop plan).
+        $specCustom = array();
+        if (isset($parsed['spec']['columns'])) {
+            foreach ($parsed['spec']['columns'] as $col) {
+                if (isset($col['kind']) && $col['kind'] === 'custom') {
+                    $specCustom[$col['header']] = true;
+                }
+            }
+        }
         $importCustom = array();
         foreach ($parsed['custom_headers'] as $header) {
             $decision = isset($customRes[$header]) ? $customRes[$header] : null;
+            if (isset($specCustom[$header]) && $decision !== 'ignore') {
+                $decision = 'import';
+            }
             if ($decision === 'import') {
                 $importCustom[$header] = true;
             } elseif ($decision !== 'ignore') {
@@ -1587,31 +1605,28 @@ class FieldTabularService
         }
 
         // ---- geometry ----
-        if ($res['lat_present'] || $res['lng_present']) {
-            $curPt = $this->pointFromWkt($cur['wkt']);
-            if ($res['lat'] !== null && $res['lng'] !== null) {
-                $moved = ($curPt === null)
-                      || abs($curPt['lat'] - $res['lat']) > self::FLOAT_EPSILON
-                      || abs($curPt['lng'] - $res['lng']) > self::FLOAT_EPSILON;
-                if ($moved) {
-                    $isPlainPoint = ($cur['geometrytype'] === 'Point')
-                                 && ((string)$cur['wkt'] === (string)$cur['origwkt'])
-                                 && ($cur['image_basemap'] === null || $cur['image_basemap'] === '');
-                    if (!$isPlainPoint) {
-                        $gtype = $cur['geometrytype'] !== null ? $cur['geometrytype'] : 'non-point';
-                        $hardErrors[] = array('row' => $n0, 'column' => 'latitude', 'code' => 'geometry_read_only',
-                                              'message' => "This spot's geometry is $gtype — its location cannot be edited from a spreadsheet (attributes still can be).");
-                        return null;
-                    }
-                    $overlay['geom'] = array('lat' => $res['lat'], 'lng' => $res['lng']);
-                    $changed = true;
+        // Blank lat/lng cells on an update leave geometry UNTOUCHED (geometry
+        // cannot be cleared; blanks are how partial files leave it alone).
+        // Filled-in values compare against the current geometry's centroid —
+        // for Points that's the point itself; for lines/polygons it matches
+        // what export wrote, so an unedited round trip is a noop.
+        if ($res['lat'] !== null && $res['lng'] !== null) {
+            $curPt = $this->centroidOfWkt($cur['wkt']);
+            $moved = ($curPt === null)
+                  || abs($curPt['lat'] - $res['lat']) > self::FLOAT_EPSILON
+                  || abs($curPt['lng'] - $res['lng']) > self::FLOAT_EPSILON;
+            if ($moved) {
+                $isPlainPoint = ($cur['geometrytype'] === 'Point')
+                             && ((string)$cur['wkt'] === (string)$cur['origwkt'])
+                             && ($cur['image_basemap'] === null || $cur['image_basemap'] === '');
+                if (!$isPlainPoint) {
+                    $gtype = $cur['geometrytype'] !== null ? $cur['geometrytype'] : 'non-point';
+                    $hardErrors[] = array('row' => $n0, 'column' => 'latitude', 'code' => 'geometry_read_only',
+                                          'message' => "This spot's geometry is $gtype — its location cannot be edited from a spreadsheet (attributes still can be).");
+                    return null;
                 }
-            } elseif ($res['lat'] === null && $res['lng'] === null
-                      && $res['lat_present'] && $res['lng_present'] && $cur['wkt'] !== null) {
-                // blanking coordinates would delete geometry — refuse
-                $hardErrors[] = array('row' => $n0, 'column' => 'latitude', 'code' => 'geometry_required',
-                                      'message' => 'Latitude/longitude cannot be blanked on an existing spot.');
-                return null;
+                $overlay['geom'] = array('lat' => $res['lat'], 'lng' => $res['lng']);
+                $changed = true;
             }
         }
 
@@ -1714,13 +1729,18 @@ class FieldTabularService
         return $out;
     }
 
-    /** Point coords from a WKT string, or null. */
-    protected function pointFromWkt($wkt)
+    /** Centroid coords of any WKT geometry (a Point is its own centroid). */
+    protected function centroidOfWkt($wkt)
     {
-        if ($wkt === null) { return null; }
+        if ($wkt === null || $wkt === '') { return null; }
         if (preg_match('/^\s*POINT\s*\(\s*(-?[\d.]+)[\s,]+(-?[\d.]+)/i', (string)$wkt, $m)) {
             return array('lng' => (float)$m[1], 'lat' => (float)$m[2]);
         }
+        try {
+            $g = geoPHP::load((string)$wkt, 'wkt');
+            $c = $g->centroid();
+            if ($c) { return array('lng' => (float)$c->x(), 'lat' => (float)$c->y()); }
+        } catch (Exception $e) { /* fall through */ }
         return null;
     }
 
@@ -1804,11 +1824,10 @@ class FieldTabularService
             if ($w['action'] === 'update') { $jr['prior'] = $w['prior']; }
             $journalRows[] = $jr;
         }
-        $runId = $this->db->get_var_prepared(
+        $inserted = $this->db->get_var_prepared(
             "INSERT INTO field_tabular_runs
                     (userpkey, project_id, dataset_id, dataset_new, template, plan_counts, rows, status)
-             VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, 'started')
-             RETURNING pkey",
+             VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, 'started')",
             array($this->userpkey, (string)$projectId,
                   $datasetId !== null ? (string)$datasetId : '',
                   $newDataset ? 't' : 'f',
@@ -1816,6 +1835,9 @@ class FieldTabularService
                   json_encode($plan['counts']),
                   json_encode($journalRows))
         );
+        // RETURNING rows are discarded for INSERTs by the prepared layer —
+        // currval on the same connection is the reliable read-back.
+        $runId = $this->db->get_var_prepared("SELECT currval('field_tabular_runs_pkey_seq')", array());
         if ($runId === null) {
             return array('ok' => false, 'error' => 'journal_failed', 'rolled_back' => false,
                          'message' => 'Could not record the import journal — nothing was written.');
@@ -1862,14 +1884,22 @@ class FieldTabularService
                         . $this->describeInsertError($result));
                 }
                 if ($w['action'] === 'create') {
-                    $rel = $this->strabo->addSpotToDataset($datasetId, $w['spot_id']);
+                    // The spot exists as soon as insertSpot succeeds — record it
+                    // BEFORE the link attempt so a link failure still gets it
+                    // rolled back. Pre-resolve both node ids: passing an empty
+                    // id into addRelationship produces malformed Cypher, and a
+                    // Bolt protocol error wedges the connection for every
+                    // subsequent query (observed against Neo4j 3.0).
+                    $createdDone[] = $w['spot_id'];
+                    $dsNeo = $this->strabo->straboIDToID($datasetId, 'Dataset');
+                    $spNeo = $this->strabo->straboIDToID($w['spot_id'], 'Spot');
+                    if ($dsNeo === '' || $dsNeo === null || $spNeo === '' || $spNeo === null) {
+                        throw new Exception("Could not link spot {$w['spot_id']} to the dataset (dataset or spot node missing).");
+                    }
+                    $rel = $this->neodb->addRelationship($dsNeo, $spNeo, 'HAS_SPOT', 'Dataset', 'Spot');
                     if (!$rel) {
-                        // The spot exists but is orphaned — count it created so
-                        // rollback removes it.
-                        $createdDone[] = $w['spot_id'];
                         throw new Exception("Could not link spot {$w['spot_id']} to the dataset.");
                     }
-                    $createdDone[] = $w['spot_id'];
                 } else {
                     $updatedDone[$w['spot_id']] = $w['prior'];
                 }
