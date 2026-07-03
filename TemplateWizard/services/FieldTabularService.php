@@ -176,7 +176,6 @@ class FieldTabularService
             array('kind' => 'field', 'group' => 'spot', 'name' => 'date'),
             array('kind' => 'field', 'group' => 'spot', 'name' => 'notes'),
             array('kind' => 'system', 'key' => 'orientation_type'),
-            array('kind' => 'system', 'key' => 'orientation_role'),
             array('kind' => 'field', 'group' => 'orientation', 'name' => 'feature_type'),
             array('kind' => 'field', 'group' => 'orientation', 'name' => 'strike'),
             array('kind' => 'field', 'group' => 'orientation', 'name' => 'dip'),
@@ -249,14 +248,16 @@ class FieldTabularService
             array_splice($out, 1, 0, array(array('kind' => 'system', 'key' => 'geometry_type')));
         }
         if ($hasOrient && !$hasOType) {
-            // orientation columns are meaningless without the discriminator
+            // orientation columns are meaningless without the discriminator.
+            // orientation_role is NOT auto-injected (Jason 2026-07-03): it only
+            // materializes when a template opts in or an export actually
+            // contains associated orientations — most sheets never see it.
             $insertAt = 2;
             foreach ($out as $i => $c) {
                 if ($c['kind'] === 'field' && $c['group'] === 'orientation') { $insertAt = $i; break; }
             }
             array_splice($out, $insertAt, 0, array(
                 array('kind' => 'system', 'key' => 'orientation_type'),
-                array('kind' => 'system', 'key' => 'orientation_role'),
             ));
         }
         return array('ok' => true, 'spec' => array(
@@ -2198,6 +2199,30 @@ class FieldTabularService
             $features = json_decode(json_encode($fc['features']), true);
         }
 
+        // orientation_role only materializes when the data needs it: inject
+        // the column (after orientation_type) when the dataset carries any
+        // associated orientations and the template didn't opt in explicitly.
+        $hasRoleCol = false; $otypeIdx = null;
+        foreach ($defs as $i => $d) {
+            if ($d['kind'] === 'system' && $d['key'] === 'orientation_role') { $hasRoleCol = true; }
+            if ($d['kind'] === 'system' && $d['key'] === 'orientation_type') { $otypeIdx = $i; }
+        }
+        if (!$hasRoleCol && $otypeIdx !== null) {
+            $hasAssoc = false;
+            foreach ($features as $f) {
+                $list = isset($f['properties']['orientation_data']) ? $f['properties']['orientation_data'] : null;
+                if (!is_array($list)) { continue; }
+                foreach ($list as $el) {
+                    if (!empty($el['associated_orientation'])) { $hasAssoc = true; break 2; }
+                }
+            }
+            if ($hasAssoc) {
+                array_splice($defs, $otypeIdx + 1, 0, array(
+                    array('kind' => 'system', 'key' => 'orientation_role', 'header' => 'orientation_role'),
+                ));
+            }
+        }
+
         $headers = array();
         foreach ($defs as $d) { $headers[] = $d['header']; }
 
@@ -2419,6 +2444,18 @@ class FieldTabularService
         $validationRows = max(count($rows) + 200, 500);
         $vocabRanges = array();   // header => range
         $vocabColumns = array();
+        // exportLong may inject orientation_role into headers without it being
+        // in the template spec (data-driven materialization) — cover it here.
+        if (in_array('orientation_role', $headers)) {
+            $haveRoleDef = false;
+            foreach ($defs as $d) {
+                if ($d['kind'] === 'system' && $d['key'] === 'orientation_role') { $haveRoleDef = true; }
+            }
+            if (!$haveRoleDef) {
+                $vocabColumns[] = array('header' => 'orientation_role', 'label' => 'Orientation Role',
+                                        'values' => array('primary', 'associated'));
+            }
+        }
         foreach ($defs as $d) {
             if ($d['kind'] === 'system' && $d['key'] === 'orientation_type') {
                 $vocabColumns[] = array('header' => $d['header'], 'label' => 'Orientation Type',

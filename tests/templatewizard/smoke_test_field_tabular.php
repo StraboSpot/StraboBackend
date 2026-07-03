@@ -126,9 +126,9 @@ try {
     $v2 = $svc->validateSpec($bare);
     $keys = array();
     foreach ($v2['spec']['columns'] as $c) { if ($c['kind'] === 'system') { $keys[] = $c['key']; } }
-    check('system columns auto-injected', !empty($v2['ok'])
+    check('system columns auto-injected (role stays opt-in)', !empty($v2['ok'])
         && in_array('strabo_internal_id', $keys) && in_array('geometry_type', $keys)
-        && in_array('orientation_type', $keys) && in_array('orientation_role', $keys));
+        && in_array('orientation_type', $keys) && !in_array('orientation_role', $keys));
     check('unknown catalog field rejected',
         empty($svc->validateSpec(array('columns' => array(array('kind' => 'field', 'group' => 'spot', 'name' => 'nope'))))['ok']));
 

@@ -75,6 +75,13 @@
 	display: none;
 }
 
+/* Off-vocabulary / out-of-range values: kept but flagged (resolved on the
+   review screen) — must out-specify the dark-theme td background */
+.handsontable td.htInvalid {
+	background-color: #7a2b2b !important;
+	color: #eceff4 !important;
+}
+
 /* Context menu styling */
 .htContextMenu {
 	background-color: #3b4252 !important;

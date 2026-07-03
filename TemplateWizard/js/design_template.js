@@ -47,6 +47,23 @@ document.addEventListener('DOMContentLoaded', function() {
 		return h !== null && h !== '' && Object.prototype.hasOwnProperty.call(window.headerMap, h);
 	}
 
+	// The orientation_type value on a given row (short form), for per-row
+	// feature_type vocab. Tolerates label-ish variants.
+	function rowOtype(instance, row) {
+		const headers = instance.getDataAtRow(0);
+		for (let c = 0; c < headers.length; c++) {
+			if (headers[c] === 'orientation_type') {
+				const raw = instance.getDataAtCell(row, c);
+				if (raw === null || raw === '') { return null; }
+				const t = String(raw).toLowerCase().trim().replace(/[\s\-]+/g, '_');
+				if (t === 'planar' || t === 'linear' || t === 'tabular_zone') { return t; }
+				if (t === 'tabular') { return 'tabular_zone'; }
+				return null;
+			}
+		}
+		return null;
+	}
+
 	function showError(msg) {
 		modalTitle.textContent = 'Error';
 		modalTitle.style.color = '#bf616a';
@@ -187,8 +204,9 @@ document.addEventListener('DOMContentLoaded', function() {
 		autoWrapCol: false,
 		cells: function(row, col) {
 			const cellProperties = {};
+			const instance = this.instance;
 			if (row === 0) {
-				const cellValue = this.instance.getDataAtCell(row, col);
+				const cellValue = instance.getDataAtCell(row, col);
 				if (isKnownHeader(cellValue)) {
 					// StraboField catalog / system header — read-only
 					cellProperties.readOnly = true;
@@ -198,8 +216,77 @@ document.addEventListener('DOMContentLoaded', function() {
 					cellProperties.readOnly = false;
 					cellProperties.className = 'htCenter htMiddle';
 				}
+				return cellProperties;
+			}
+
+			// ---- data rows: per-column behavior from the header ----
+			const header = instance.getDataAtCell(0, col);
+			if (header === 'strabo_internal_id' || header === 'geometry_type') {
+				// managed by StraboSpot — never hand-entered (updates flow
+				// through export -> edit -> Import page)
+				cellProperties.readOnly = true;
+				cellProperties.className = 'htDimmed';
+				return cellProperties;
+			}
+			const v = (header !== null && header !== '') ? window.columnVocab[header] : undefined;
+			if (v && v.values) {
+				cellProperties.type = 'dropdown';
+				let src = v.values;
+				if (v.by_type) {
+					// feature_type vocab depends on the row's orientation_type
+					const ot = rowOtype(instance, row);
+					if (ot && v.by_type[ot]) { src = v.by_type[ot]; }
+				}
+				cellProperties.source = src;
+				if (v.strict) {
+					cellProperties.strict = true;
+					cellProperties.allowInvalid = false;   // hard reject
+				} else {
+					cellProperties.strict = false;
+					cellProperties.allowInvalid = true;    // keep + flag red; resolved at review
+				}
+			} else if (v && v.numeric) {
+				cellProperties.allowInvalid = true;        // keep + flag red
+				cellProperties.validator = function(value, cb) {
+					if (value === null || value === '' || value === undefined) { cb(true); return; }
+					const n = parseFloat(String(value).replace(',', '.'));
+					if (isNaN(n)) { cb(false); return; }
+					if (v.min !== undefined && n < v.min) { cb(false); return; }
+					if (v.max !== undefined && n > v.max) { cb(false); return; }
+					cb(true);
+				};
 			}
 			return cellProperties;
+		},
+		beforePaste: function(data, coords) {
+			// The id / geometry columns silently swallowing pasted values
+			// would turn intended updates into duplicate creates — strip the
+			// values AND tell the user where updates actually go.
+			const managed = [];
+			const headers = this.getDataAtRow(0);
+			for (let c = 0; c < headers.length; c++) {
+				if (headers[c] === 'strabo_internal_id' || headers[c] === 'geometry_type') {
+					managed.push(c);
+				}
+			}
+			if (!managed.length) { return; }
+			let stripped = false;
+			for (let k = 0; k < coords.length; k++) {
+				for (let r = 0; r < data.length; r++) {
+					if (coords[k].startRow + r === 0) { continue; }   // header row handled by readOnly
+					for (let j = 0; j < data[r].length; j++) {
+						const target = coords[k].startCol + j;
+						if (managed.indexOf(target) !== -1 && data[r][j] !== '' && data[r][j] !== null) {
+							data[r][j] = '';
+							stripped = true;
+						}
+					}
+				}
+			}
+			if (stripped) {
+				showError('Internal id / geometry values in your paste were ignored — those columns are managed by StraboSpot. ' +
+					'To UPDATE existing spots, upload the exported file on the Import page instead (that path keeps the ids and avoids duplicates).');
+			}
 		},
 		beforeChange: function(changes, source) {
 			// Handle custom header prefix for editable header cells

@@ -105,6 +105,13 @@ $headerMap = array(
     'orientation_role'   => array('kind' => 'system', 'key' => 'orientation_role'),
 );
 $catalogGroups = array();   // group => {label, fields: [{name, header, label}]}
+// Per-column grid behavior: dropdown vocab (strict for structural columns,
+// tolerant for catalog vocab — off-list values flag red and resolve at
+// review) and numeric constraints (red-flagged). Jason 2026-07-03.
+$columnVocab = array(
+    'orientation_type' => array('strict' => true, 'values' => array('planar', 'linear', 'tabular_zone')),
+    'orientation_role' => array('strict' => true, 'values' => array('primary', 'associated')),
+);
 $catalogAll = FieldTabularService::catalog();
 foreach ($catalogAll['groups'] as $gkey => $g) {
     $entry = array('label' => $g['label'], 'fields' => array());
@@ -112,6 +119,26 @@ foreach ($catalogAll['groups'] as $gkey => $g) {
         $h = FieldTabularService::displayHeader($gkey, $f['name']);
         $headerMap[$h] = array('kind' => 'field', 'group' => $gkey, 'name' => $f['name']);
         $entry['fields'][] = array('name' => $f['name'], 'header' => $h, 'label' => $f['label']);
+
+        $cv = array();
+        if (isset($f['vocab']) && count($f['vocab'])) {
+            $cv['strict'] = false;
+            $labels = array();
+            foreach ($f['vocab'] as $vv) { $labels[] = $vv['label']; }
+            $cv['values'] = $labels;
+            if (isset($f['vocab_by_type'])) {
+                foreach ($f['vocab_by_type'] as $otype => $tv) {
+                    $tl = array();
+                    foreach ($tv as $vv) { $tl[] = $vv['label']; }
+                    $cv['by_type'][$otype] = $tl;
+                }
+            }
+        } elseif (in_array($f['type'], array('integer', 'decimal'))) {
+            $cv['numeric'] = $f['type'];
+            if (isset($f['constraint']['min'])) { $cv['min'] = $f['constraint']['min']; }
+            if (isset($f['constraint']['max'])) { $cv['max'] = $f['constraint']['max']; }
+        }
+        if (!empty($cv)) { $columnVocab[$h] = $cv; }
     }
     $catalogGroups[$gkey] = $entry;
 }
@@ -176,6 +203,10 @@ include("includes/mheader.php");
 									<div class="col-7 col-12-small gtr-25">
 										<select id="add_column_select">
 											<option value="">-- StraboField columns --</option>
+											<optgroup label="Wizard columns">
+												<option value="orientation_type">Orientation Type (orientation_type)</option>
+												<option value="orientation_role">Orientation Role — for associated orientations (orientation_role)</option>
+											</optgroup>
 											<?php foreach ($catalogGroups as $gkey => $g): ?>
 											<optgroup label="<?php echo htmlspecialchars($g['label']); ?>">
 												<?php foreach ($g['fields'] as $f): ?>
@@ -248,6 +279,7 @@ window.templateColumns = <?php echo json_encode($columns); ?>;
 window.templateSpecCols = <?php echo json_encode($specColumns); ?>;
 window.templatePkey    = '<?php echo htmlspecialchars($template_pkey); ?>';
 window.headerMap       = <?php echo json_encode($headerMap); ?>;
+window.columnVocab     = <?php echo json_encode($columnVocab); ?>;
 </script>
 <script src="js/design_template.js"></script>
 
