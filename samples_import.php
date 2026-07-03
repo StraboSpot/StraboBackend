@@ -310,11 +310,24 @@ include("includes/mheader.php");
                 <h3>Custom columns</h3>
                 <p class="si-note">These aren&rsquo;t standard StraboSpot columns. Import them as custom
                    fields (they round-trip on export), or ignore them.</p>
-                <?php foreach ($reviewPlan['soft_custom'] as $header): $b64 = base64_encode($header); ?>
+                <?php foreach ($reviewPlan['soft_custom'] as $i => $header): $b64 = base64_encode($header); ?>
                 <div class="si-issue-row">
                     <code><?= htmlspecialchars($header) ?></code>
-                    <label><input type="radio" name="res_custom[<?= $b64 ?>]" value="import" checked> Import as custom field</label>
-                    <label><input type="radio" name="res_custom[<?= $b64 ?>]" value="ignore"> Ignore</label>
+                    <!-- Site-theme radios: main.css hides the native input and
+                         draws the control on the ADJACENT label's :before, so
+                         the input+label pair must be siblings (never wrap the
+                         input inside the label). The span keeps normal flow
+                         inside this flex row so the theme's float layout works. -->
+                    <span class="si-radio-pair">
+                        <input type="radio" name="res_custom[<?= $b64 ?>]" value="import"
+                               id="si-cc-<?= (int)$i ?>-import" checked>
+                        <label for="si-cc-<?= (int)$i ?>-import">Import as custom field</label>
+                    </span>
+                    <span class="si-radio-pair">
+                        <input type="radio" name="res_custom[<?= $b64 ?>]" value="ignore"
+                               id="si-cc-<?= (int)$i ?>-ignore">
+                        <label for="si-cc-<?= (int)$i ?>-ignore">Ignore</label>
+                    </span>
                 </div>
                 <?php endforeach; ?>
             </div>
