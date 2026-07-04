@@ -171,6 +171,14 @@ try {
         $wb->getSheetByName('Data') !== null && $wb->getSheetByName('Vocabulary') !== null
         && $wb->getSheetByName('Instructions') !== null && $wb->getSheetByName('_template') !== null);
     check('_template sheet hidden', $wb->getSheetByName('_template')->getSheetState() === PHPExcel_Worksheet::SHEETSTATE_HIDDEN);
+    $dataSheet = $wb->getSheetByName('Data');
+    check('band row 1: StraboSpot over id, Spot over name',
+        $dataSheet->getCell('A1')->getValue() === 'StraboSpot'
+        && $dataSheet->getCell('B1')->getValue() === 'Spot');
+    check('headers on row 2', $dataSheet->getCell('A2')->getValue() === 'strabo_internal_id'
+        && $dataSheet->getCell('B2')->getValue() === 'name');
+    check('band sections merged', count($dataSheet->getMergeCells()) >= 2);
+    check('freeze pane below headers', $dataSheet->getFreezePane() === 'A3');
     $tplPath = tempnam(sys_get_temp_dir(), 'wizsmoke_') . '.xlsx';
     $tmpFiles[] = $tplPath;
     $writer = new PHPExcel_Writer_Excel2007($wb);
@@ -192,6 +200,14 @@ try {
     $parsed = $svc->parseUpload(csvFile($csv), 'import.csv');
     check('CSV parses', !empty($parsed['ok']));
     check('custom column detected', $parsed['custom_headers'] === array('Field Book Page'));
+
+    // header-row detection: junk title line above the headers must lose to
+    // the real header row (same scan that skips the XLSX section band)
+    $titled = "My field notes June 2024,,,\n" . $csv;
+    $parsedTitled = $svc->parseUpload(csvFile($titled), 'titled.csv');
+    check('title line above headers skipped by detection',
+        !empty($parsedTitled['ok']) && count($parsedTitled['rows']) === count($parsed['rows'])
+        && $parsedTitled['custom_headers'] === array('Field Book Page'));
 
     $target = array('project_id' => $PROJECT_ID, 'dataset_id' => null, 'dataset_name' => "smokewiz DS1 $stamp");
     $plan = $svc->plan($parsed, $target);

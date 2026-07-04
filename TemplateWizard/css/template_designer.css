@@ -82,6 +82,23 @@
 	color: #eceff4 !important;
 }
 
+/* Section band (row 0): merged color-coded group labels above the headers.
+   Keys mirror FieldTabularService::sectionMeta(); hues echo the XLSX band. */
+.handsontable td.tw-band {
+	font-weight: bold;
+	text-align: center;
+	letter-spacing: 0.04em;
+	cursor: default;
+}
+.handsontable td.tw-band.tw-band-system         { background-color: #4c566a !important; color: #eceff4 !important; }
+.handsontable td.tw-band.tw-band-spot           { background-color: #3f5876 !important; color: #d8e6f5 !important; }
+.handsontable td.tw-band.tw-band-orientation    { background-color: #6d3b3b !important; color: #f5d9d5 !important; }
+.handsontable td.tw-band.tw-band-geologic_unit  { background-color: #3f5c3a !important; color: #ddeed7 !important; }
+.handsontable td.tw-band.tw-band-trace          { background-color: #7a5c28 !important; color: #f5e6c4 !important; }
+.handsontable td.tw-band.tw-band-other_features { background-color: #58406b !important; color: #e6d8f2 !important; }
+.handsontable td.tw-band.tw-band-sample         { background-color: #2e5a55 !important; color: #cdeae6 !important; }
+.handsontable td.tw-band.tw-band-custom         { background-color: #55565e !important; color: #e5e7eb !important; }
+
 /* Context menu styling */
 .htContextMenu {
 	background-color: #3b4252 !important;

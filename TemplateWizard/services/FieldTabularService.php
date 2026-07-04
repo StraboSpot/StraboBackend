@@ -100,6 +100,74 @@ class FieldTabularService
         return self::$catalog;
     }
 
+    /**
+     * Section metadata for the color-coded band row (Jason 2026-07-04):
+     * generated sheets + the designer grid draw a merged, colored section
+     * label above each contiguous run of same-group columns. Fill/font are
+     * ARGB for PHPExcel; the designer maps the same keys to CSS classes.
+     */
+    public static function sectionMeta()
+    {
+        $cat = self::catalog();
+        $label = function ($g, $fallback) use ($cat) {
+            return isset($cat['groups'][$g]['label']) ? $cat['groups'][$g]['label'] : $fallback;
+        };
+        return array(
+            'system'         => array('label' => 'StraboSpot',                          'fill' => 'FFCFCFCF', 'font' => 'FF3B3B3B'),
+            'spot'           => array('label' => $label('spot', 'Spot'),                'fill' => 'FFBDD7EE', 'font' => 'FF1F3864'),
+            'orientation'    => array('label' => $label('orientation', 'Orientations'), 'fill' => 'FFF7C7C0', 'font' => 'FF7B241C'),
+            'geologic_unit'  => array('label' => $label('geologic_unit', 'Geologic Unit'), 'fill' => 'FFC6E0B4', 'font' => 'FF375623'),
+            'trace'          => array('label' => $label('trace', 'Trace'),              'fill' => 'FFFFE0A3', 'font' => 'FF7F6000'),
+            'other_features' => array('label' => $label('other_features', 'Other Features'), 'fill' => 'FFD9C2E9', 'font' => 'FF4A235A'),
+            'sample'         => array('label' => $label('sample', 'Samples'),           'fill' => 'FFB7DEDA', 'font' => 'FF145A54'),
+            'custom'         => array('label' => 'Custom',                               'fill' => 'FFEDEDED', 'font' => 'FF555555'),
+        );
+    }
+
+    /**
+     * Section key per header position: contiguous same-section runs become
+     * one merged band cell. Headers absent from defs (export-injected
+     * geometry_type) resolve as system; unrecognized headers as custom.
+     * @return array of {start, end, section} runs (0-based inclusive)
+     */
+    public static function sectionRuns($headers, $defs)
+    {
+        $byHeader = array();
+        foreach ($defs as $d) { $byHeader[$d['header']] = $d; }
+        $systemHeaders = array('strabo_internal_id' => true, 'geometry_type' => true,
+                               'orientation_type' => true, 'orientation_role' => true);
+        $sections = array();
+        foreach ($headers as $h) {
+            if (isset($byHeader[$h])) {
+                $d = $byHeader[$h];
+                if ($d['kind'] === 'system') {
+                    // orientation_type/role sit inside the orientation section
+                    $sections[] = in_array($d['key'], array('orientation_type', 'orientation_role'))
+                        ? 'orientation' : 'system';
+                } elseif ($d['kind'] === 'field') {
+                    $sections[] = $d['group'];
+                } else {
+                    $sections[] = 'custom';
+                }
+            } elseif (isset($systemHeaders[$h])) {
+                $sections[] = in_array($h, array('orientation_type', 'orientation_role'))
+                    ? 'orientation' : 'system';
+            } else {
+                $sections[] = 'custom';
+            }
+        }
+        $runs = array();
+        foreach ($sections as $i => $s) {
+            if (count($runs) && $runs[count($runs) - 1]['section'] === $s
+                && $runs[count($runs) - 1]['end'] === $i - 1) {
+                $runs[count($runs) - 1]['end'] = $i;
+            } else {
+                $runs[] = array('start' => $i, 'end' => $i, 'section' => $s);
+            }
+        }
+        return $runs;
+    }
+
     /** Field definition from the catalog, or null. */
     public static function fieldDef($group, $name)
     {
@@ -443,14 +511,6 @@ class FieldTabularService
             return array('ok' => false, 'error' => 'too_many_rows',
                          'message' => 'File exceeds the ' . self::MAX_ROWS . '-row limit.');
         }
-        $headerRowIdx = null;
-        foreach ($grid as $i => $row) {
-            if (!$this->rowIsEmpty($row)) { $headerRowIdx = $i; break; }
-        }
-        if ($headerRowIdx === null) {
-            return array('ok' => false, 'error' => 'empty_file', 'message' => 'The file contains no data.');
-        }
-
         // Template-declared headers take precedence over the global index.
         $specHeaderMap = array();   // canonical header => column descriptor
         if ($spec !== null) {
@@ -469,6 +529,33 @@ class FieldTabularService
             'orientation_type'   => 'otype',
             'orientation_role'   => 'orole',
         );
+
+        // Header row = the best-scoring of the first few non-empty rows
+        // (count of cells that resolve to a known header). Generated files
+        // carry a merged section-band row ABOVE the headers ("Spot",
+        // "Orientations"...) whose labels resolve to nothing, and hand-made
+        // files sometimes lead with a title line — both must lose to the
+        // real header row. Band-less files: the first non-empty row wins
+        // outright, preserving the original behavior.
+        $headerRowIdx = null;
+        $bestScore = -1;
+        $scanned = 0;
+        foreach ($grid as $i => $row) {
+            if ($this->rowIsEmpty($row)) { continue; }
+            $score = 0;
+            foreach ($row as $cell) {
+                $canon = $this->canonicalizeHeader($this->cellToString($cell));
+                if ($canon === '') { continue; }
+                if (isset($specHeaderMap[$canon]) || isset($systemKeys[$canon]) || isset($globalIndex[$canon])) {
+                    $score++;
+                }
+            }
+            if ($score > $bestScore) { $bestScore = $score; $headerRowIdx = $i; }
+            if (++$scanned >= 5) { break; }
+        }
+        if ($headerRowIdx === null) {
+            return array('ok' => false, 'error' => 'empty_file', 'message' => 'The file contains no data.');
+        }
 
         $colMap = array();          // col idx => {type:'id'|'geom'|'otype'|'orole'|'field'|'custom', group?, name?, header}
         $customHeaders = array();
@@ -2419,18 +2506,38 @@ class FieldTabularService
            ->setLocked(PHPExcel_Style_Protection::PROTECTION_UNPROTECTED);
 
         // ---- Data sheet ----
+        // Row 1 = merged color-coded section band ("Spot" / "Orientations"...),
+        // row 2 = headers, data from row 3 (Jason 2026-07-04 — disambiguates
+        // headers like feature_type/quality by the section they belong to).
         $data = $wb->getActiveSheet();
         $data->setTitle('Data');
+        $sectionMeta = self::sectionMeta();
+        foreach (self::sectionRuns($headers, $defs) as $run) {
+            $meta = $sectionMeta[$run['section']];
+            $startL = PHPExcel_Cell::stringFromColumnIndex($run['start']);
+            $endL   = PHPExcel_Cell::stringFromColumnIndex($run['end']);
+            $data->setCellValue($startL . '1', $meta['label']);
+            if ($run['end'] > $run['start']) {
+                $data->mergeCells($startL . '1:' . $endL . '1');
+            }
+            $style = $data->getStyle($startL . '1:' . $endL . '1');
+            $style->getFill()->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+                  ->getStartColor()->setARGB($meta['fill']);
+            $style->getFont()->setBold(true)->getColor()->setARGB($meta['font']);
+            $style->getAlignment()->setHorizontal(PHPExcel_Style_Alignment::HORIZONTAL_CENTER);
+        }
         foreach ($headers as $i => $h) {
-            $data->getCellByColumnAndRow($i, 1)->setValue($h);
+            $data->getCellByColumnAndRow($i, 2)->setValue($h);
         }
         $lastCol = PHPExcel_Cell::stringFromColumnIndex(count($headers) - 1);
-        $data->getStyle('A1:' . $lastCol . '1')->getFont()->setBold(true);
-        $data->freezePane('A2');
-        $data->getComment('A1')->getText()->createTextRun(
+        $data->getStyle('A2:' . $lastCol . '2')->getFont()->setBold(true);
+        $data->freezePane('A3');
+        $idCol = array_search('strabo_internal_id', $headers);
+        $data->getComment(PHPExcel_Cell::stringFromColumnIndex($idCol === false ? 0 : $idCol) . '2')
+             ->getText()->createTextRun(
             'Internal StraboSpot id — do not edit. Repeat it on every row of the same spot. Leave blank on new spots.');
 
-        $rowNum = 2;
+        $rowNum = 3;
         foreach ($rows as $r) {
             foreach ($headers as $i => $h) {
                 $val = isset($r[$h]) ? (string)$r[$h] : '';
@@ -2445,13 +2552,14 @@ class FieldTabularService
             $data->getColumnDimension(PHPExcel_Cell::stringFromColumnIndex($i))->setWidth(18);
         }
 
-        // Lock header + id + geometry_type; leave everything else editable.
-        // Lock by HEADER position — exportLong may inject geometry_type into
-        // headers without it being in the template spec (data-driven
-        // materialization), so def indices can't be trusted as column indices.
-        $lastDataRow = max($rowNum - 1, 1);
-        $lockRanges = array('A1:' . $lastCol . '1');
-        if ($lastDataRow >= 2) {
+        // Lock band + header + id + geometry_type; leave everything else
+        // editable. Lock by HEADER position — exportLong may inject
+        // geometry_type into headers without it being in the template spec
+        // (data-driven materialization), so def indices can't be trusted as
+        // column indices.
+        $lastDataRow = max($rowNum - 1, 2);
+        $lockRanges = array('A1:' . $lastCol . '2');
+        if ($lastDataRow >= 3) {
             $lockedHeaders = array('geometry_type' => true);
             foreach ($defs as $d) {
                 if ($d['kind'] === 'system' && in_array($d['key'], array('strabo_internal_id', 'geometry_type'))) {
@@ -2461,7 +2569,7 @@ class FieldTabularService
             foreach ($headers as $i => $h) {
                 if (isset($lockedHeaders[$h])) {
                     $colL = PHPExcel_Cell::stringFromColumnIndex($i);
-                    $lockRanges[] = $colL . '2:' . $colL . $lastDataRow;
+                    $lockRanges[] = $colL . '3:' . $colL . $lastDataRow;
                 }
             }
         }
@@ -2521,7 +2629,7 @@ class FieldTabularService
             $colIdx = array_search($header, $headers);
             if ($colIdx === false) { continue; }
             $colL = PHPExcel_Cell::stringFromColumnIndex($colIdx);
-            for ($r2 = 2; $r2 <= $validationRows + 1; $r2++) {
+            for ($r2 = 3; $r2 <= $validationRows + 2; $r2++) {
                 $dv = $data->getCell($colL . $r2)->getDataValidation();
                 $dv->setType(PHPExcel_Cell_DataValidation::TYPE_LIST)
                    ->setErrorStyle(PHPExcel_Cell_DataValidation::STYLE_WARNING)
@@ -2563,6 +2671,8 @@ class FieldTabularService
             'that field; measurement rows replace the spot\'s full measurement list.',
             '',
             'THINGS TO KNOW',
+            '- The colored top row only labels column sections (Spot, Orientations...);',
+            '  it is locked and ignored on upload.',
             '- Line/polygon spots export their centroid; their location cannot be',
             '  edited from a spreadsheet (attributes can).',
             '- Dropdowns are suggestions — free text is allowed and reviewed on import.',

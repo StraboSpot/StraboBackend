@@ -17,8 +17,13 @@ document.addEventListener('DOMContentLoaded', function() {
 	const columns = window.templateColumns;
 	let templatePkey = window.templatePkey || '';
 
-	// Create initial data with header row
-	const initialData = [columns.slice()]; // First row is headers
+	// Grid layout: row 0 = color-coded section band (computed, read-only),
+	// row 1 = headers, data from row 2. HDR names the header row so the
+	// offset reads at every use site.
+	const HDR = 1;
+
+	// Create initial data: band placeholder + header row
+	const initialData = [new Array(columns.length).fill(''), columns.slice()];
 
 	// Add empty rows for data entry
 	for (let i = 0; i < 50; i++) {
@@ -47,10 +52,21 @@ document.addEventListener('DOMContentLoaded', function() {
 		return h !== null && h !== '' && Object.prototype.hasOwnProperty.call(window.headerMap, h);
 	}
 
+	// Section key for a header — drives the band row's label + color.
+	// orientation_type/role band with the orientation section they discriminate.
+	function sectionForHeader(h) {
+		if (!isKnownHeader(h)) { return 'custom'; }
+		const d = window.headerMap[h];
+		if (d.kind === 'system') {
+			return (d.key === 'orientation_type' || d.key === 'orientation_role') ? 'orientation' : 'system';
+		}
+		return d.group;
+	}
+
 	// The orientation_type value on a given row (short form), for per-row
 	// feature_type vocab. Tolerates label-ish variants.
 	function rowOtype(instance, row) {
-		const headers = instance.getDataAtRow(0);
+		const headers = instance.getDataAtRow(HDR);
 		for (let c = 0; c < headers.length; c++) {
 			if (headers[c] === 'orientation_type') {
 				const raw = instance.getDataAtCell(row, c);
@@ -137,25 +153,47 @@ document.addEventListener('DOMContentLoaded', function() {
 				}
 
 				const currentHeaders = orderedGrid()[0];
-				const fileHeaders = fileData[0].map(function (h) { return (h === null) ? '' : String(h); });
 
-				if (currentHeaders.length !== fileHeaders.length) {
-					showError('Error! Column count mismatch. File has ' + fileHeaders.length +
-						' columns, template has ' + currentHeaders.length + ' columns. ' +
-						'To import a file with different columns, use the Import page instead.');
+				// Generated files carry a section-band row above the headers —
+				// locate the header row as the first row matching the current
+				// headers exactly, so both banded and band-less files load.
+				let headerIdx = -1;
+				const scanMax = Math.min(fileData.length, 5);
+				for (let r = 0; r < scanMax; r++) {
+					const rowVals = fileData[r].map(function (h) { return (h === null) ? '' : String(h); });
+					if (rowVals.length === currentHeaders.length) {
+						let allMatch = true;
+						for (let i = 0; i < currentHeaders.length; i++) {
+							if (String(currentHeaders[i]) !== rowVals[i]) { allMatch = false; break; }
+						}
+						if (allMatch) { headerIdx = r; break; }
+					}
+				}
+				if (headerIdx === -1) {
+					// Keep the original, specific mismatch messages (vs row 0).
+					const fileHeaders = fileData[0].map(function (h) { return (h === null) ? '' : String(h); });
+					if (currentHeaders.length !== fileHeaders.length) {
+						showError('Error! Column count mismatch. File has ' + fileHeaders.length +
+							' columns, template has ' + currentHeaders.length + ' columns. ' +
+							'To import a file with different columns, use the Import page instead.');
+					} else {
+						let msg = 'Error! Column headers do not match.';
+						for (let i = 0; i < currentHeaders.length; i++) {
+							if (String(currentHeaders[i]) !== fileHeaders[i]) {
+								msg = 'Error! Column headers do not match. Expected "' +
+									currentHeaders[i] + '" at position ' + (i + 1) + ', but found "' + fileHeaders[i] + '".';
+								break;
+							}
+						}
+						showError(msg);
+					}
 					fileInput.value = '';
 					return;
 				}
-				for (let i = 0; i < currentHeaders.length; i++) {
-					if (String(currentHeaders[i]) !== fileHeaders[i]) {
-						showError('Error! Column headers do not match. Expected "' +
-							currentHeaders[i] + '" at position ' + (i + 1) + ', but found "' + fileHeaders[i] + '".');
-						fileInput.value = '';
-						return;
-					}
-				}
 
-				hot.loadData(fileData);
+				const bandRow = new Array(currentHeaders.length).fill('');
+				hot.loadData([bandRow].concat(fileData.slice(headerIdx)));
+				refreshBand();
 				checkTableData();
 				updateSaveButtonVisibility();
 				fileInput.value = '';
@@ -180,7 +218,8 @@ document.addEventListener('DOMContentLoaded', function() {
 		}
 		const visualCol = hot.countCols();
 		hot.alter('insert_col', visualCol, 1);
-		hot.setDataAtCell(0, visualCol, header);
+		hot.setDataAtCell(HDR, visualCol, header);
+		refreshBand();
 		addColumnSelect.value = '';
 		updateSaveButtonVisibility();
 	});
@@ -198,6 +237,7 @@ document.addEventListener('DOMContentLoaded', function() {
 		manualColumnResize: true,
 		copyPaste: true,
 		fillHandle: true,
+		mergeCells: [],
 		contextMenu: ['col_left', 'col_right', 'remove_col', '---------', 'row_above', 'row_below', 'remove_row', '---------', 'undo', 'redo'],
 		minSpareRows: 5,
 		autoWrapRow: false,
@@ -206,6 +246,12 @@ document.addEventListener('DOMContentLoaded', function() {
 			const cellProperties = {};
 			const instance = this.instance;
 			if (row === 0) {
+				// section band — computed, never hand-edited
+				cellProperties.readOnly = true;
+				cellProperties.className = 'tw-band tw-band-' + sectionForHeader(instance.getDataAtCell(HDR, col));
+				return cellProperties;
+			}
+			if (row === HDR) {
 				const cellValue = instance.getDataAtCell(row, col);
 				if (isKnownHeader(cellValue)) {
 					// StraboField catalog / system header — read-only
@@ -220,7 +266,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			}
 
 			// ---- data rows: per-column behavior from the header ----
-			const header = instance.getDataAtCell(0, col);
+			const header = instance.getDataAtCell(HDR, col);
 			if (header === 'strabo_internal_id' || header === 'geometry_type') {
 				// managed by StraboSpot — never hand-entered (updates flow
 				// through export -> edit -> Import page)
@@ -263,7 +309,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			// would turn intended updates into duplicate creates — strip the
 			// values AND tell the user where updates actually go.
 			const managed = [];
-			const headers = this.getDataAtRow(0);
+			const headers = this.getDataAtRow(HDR);
 			for (let c = 0; c < headers.length; c++) {
 				if (headers[c] === 'strabo_internal_id' || headers[c] === 'geometry_type') {
 					managed.push(c);
@@ -273,7 +319,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			let stripped = false;
 			for (let k = 0; k < coords.length; k++) {
 				for (let r = 0; r < data.length; r++) {
-					if (coords[k].startRow + r === 0) { continue; }   // header row handled by readOnly
+					if (coords[k].startRow + r <= HDR) { continue; }   // band + header rows handled by readOnly
 					for (let j = 0; j < data[r].length; j++) {
 						const target = coords[k].startCol + j;
 						if (managed.indexOf(target) !== -1 && data[r][j] !== '' && data[r][j] !== null) {
@@ -290,10 +336,10 @@ document.addEventListener('DOMContentLoaded', function() {
 		},
 		beforeChange: function(changes, source) {
 			// Handle custom header prefix for editable header cells
-			if (changes && source !== 'loadData') {
+			if (changes && source !== 'loadData' && source !== 'band') {
 				for (let i = 0; i < changes.length; i++) {
 					const [row, prop, oldValue, newValue] = changes[i];
-					if (row === 0 && newValue !== null && newValue !== '') {
+					if (row === HDR && newValue !== null && newValue !== '') {
 						if (!isKnownHeader(oldValue) && !isKnownHeader(newValue)) {
 							let cleanValue = newValue.toString();
 							if (cleanValue.startsWith('Custom_')) {
@@ -310,7 +356,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			}
 		},
 		afterBeginEditing: function(row, column) {
-			if (row === 0) {
+			if (row === HDR) {
 				const cellValue = this.getDataAtCell(row, column);
 				if (cellValue && typeof cellValue === 'string') {
 					if (cellValue.startsWith('Custom_') && !isKnownHeader(cellValue)) {
@@ -324,19 +370,40 @@ document.addEventListener('DOMContentLoaded', function() {
 			}
 		},
 		afterChange: function(changes, source) {
+			if (source === 'band') { return; }   // band rewrites must not recurse
 			if (source !== 'loadData' && changes) {
+				// header edits move columns between sections
+				for (let i = 0; i < changes.length; i++) {
+					if (changes[i][0] === HDR) { refreshBand(); break; }
+				}
 				checkTableData();
 				updateSaveButtonVisibility();
 			}
 		},
 		afterColumnMove: function(movedColumns, finalIndex) {
+			refreshBand();
 			updateSaveButtonVisibility();
 		},
 		afterRemoveCol: function() {
+			refreshBand();
 			updateSaveButtonVisibility();
 		},
 		afterCreateCol: function() {
+			refreshBand();
 			updateSaveButtonVisibility();
+		},
+		beforeCreateRow: function(index, amount, source) {
+			// nothing may land above the header row
+			if (index <= HDR && source !== 'auto') { return false; }
+		},
+		beforeRemoveRow: function(index, amount, physicalRows) {
+			const rows = physicalRows || [index];
+			for (let i = 0; i < rows.length; i++) {
+				if (rows[i] <= HDR) {
+					showError('The section band and header rows cannot be removed.');
+					return false;
+				}
+			}
 		},
 		afterRenderer: function(TD, row, col, prop, value, cellProperties) {
 			if (value && value.toString().trim() !== '') {
@@ -346,15 +413,18 @@ document.addEventListener('DOMContentLoaded', function() {
 	});
 
 	/**
-	 * Grid contents in VISUAL column order (drag/drop-aware). getData()
-	 * returns source order, so map each visual column to its physical one.
+	 * Grid contents in VISUAL column order (drag/drop-aware), WITHOUT the
+	 * band row — row 0 of the result is always the header row, so every
+	 * consumer (spec build, review submit, file compare) keeps its original
+	 * row semantics. getData() returns source order, so map each visual
+	 * column to its physical one.
 	 */
 	function orderedGrid() {
 		const rows = hot.countRows();
 		const cols = hot.countCols();
 		const source = hot.getData();
 		const out = [];
-		for (let r = 0; r < rows; r++) {
+		for (let r = HDR; r < rows; r++) {
 			const row = [];
 			for (let c = 0; c < cols; c++) {
 				const phys = hot.toPhysicalColumn(c);
@@ -364,6 +434,48 @@ document.addEventListener('DOMContentLoaded', function() {
 			out.push(row);
 		}
 		return out;
+	}
+
+	/**
+	 * Recompute the section band: label + color per contiguous run of
+	 * same-section columns (visual order), merged into one cell per run.
+	 * Called after anything that changes columns; writes with source 'band'
+	 * so afterChange does not recurse.
+	 */
+	let bandRefreshing = false;
+	function refreshBand() {
+		if (bandRefreshing) { return; }
+		bandRefreshing = true;
+		try {
+			const headers = orderedGrid()[0];
+			const sections = [];
+			for (let c = 0; c < headers.length; c++) {
+				sections.push(sectionForHeader(headers[c] === '' ? null : headers[c]));
+			}
+			const merges = [];
+			const writes = [];
+			for (let c = 0; c < sections.length; c++) {
+				const isStart = (c === 0) || (sections[c] !== sections[c - 1]);
+				if (isStart) {
+					let end = c;
+					while (end + 1 < sections.length && sections[end + 1] === sections[c]) { end++; }
+					if (end > c) {
+						merges.push({ row: 0, col: c, rowspan: 1, colspan: end - c + 1 });
+					}
+					writes.push([0, c, window.sectionMeta[sections[c]] ? window.sectionMeta[sections[c]].label : '']);
+				} else {
+					writes.push([0, c, '']);
+				}
+			}
+			// trailing spare columns (beyond the headers) carry no band
+			for (let c = sections.length; c < hot.countCols(); c++) {
+				writes.push([0, c, '']);
+			}
+			hot.updateSettings({ mergeCells: merges });
+			if (writes.length) { hot.setDataAtCell(writes, 'band'); }
+		} finally {
+			bandRefreshing = false;
+		}
 	}
 
 	/** Template spec built from the CURRENT grid headers (visual order). */
@@ -389,7 +501,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
 	function hasTableData() {
 		const tableData = hot.getData();
-		for (let i = 1; i < tableData.length; i++) {
+		for (let i = HDR + 1; i < tableData.length; i++) {
 			for (let j = 0; j < tableData[i].length; j++) {
 				if (tableData[i][j] !== null && tableData[i][j] !== '') {
 					return true;
@@ -530,4 +642,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			document.getElementById('submitForm').submit();
 		});
 	});
+
+	// initial band render (after all declarations above are live)
+	refreshBand();
 });

@@ -280,6 +280,11 @@ window.templateSpecCols = <?php echo json_encode($specColumns); ?>;
 window.templatePkey    = '<?php echo htmlspecialchars($template_pkey); ?>';
 window.headerMap       = <?php echo json_encode($headerMap); ?>;
 window.columnVocab     = <?php echo json_encode($columnVocab); ?>;
+window.sectionMeta     = <?php
+    $sm = array();
+    foreach (FieldTabularService::sectionMeta() as $k => $m) { $sm[$k] = array('label' => $m['label']); }
+    echo json_encode($sm);
+?>;
 </script>
 <script src="js/design_template.js"></script>
 
