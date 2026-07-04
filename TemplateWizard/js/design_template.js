@@ -237,22 +237,26 @@ document.addEventListener('DOMContentLoaded', function() {
 		manualColumnResize: true,
 		copyPaste: true,
 		fillHandle: true,
-		mergeCells: [],
 		contextMenu: ['col_left', 'col_right', 'remove_col', '---------', 'row_above', 'row_below', 'remove_row', '---------', 'undo', 'redo'],
 		minSpareRows: 5,
 		autoWrapRow: false,
 		autoWrapCol: false,
 		cells: function(row, col) {
+			// NOTE: cells() receives PHYSICAL indices while getDataAtCell()
+			// expects VISUAL ones — after a column drag they diverge, so all
+			// header lookups here go through getSourceDataAtCell (physical).
+			// Keying off physical data also means colors/locks/dropdowns
+			// travel with a dragged column automatically.
 			const cellProperties = {};
 			const instance = this.instance;
 			if (row === 0) {
 				// section band — computed, never hand-edited
 				cellProperties.readOnly = true;
-				cellProperties.className = 'tw-band tw-band-' + sectionForHeader(instance.getDataAtCell(HDR, col));
+				cellProperties.className = 'tw-band tw-band-' + sectionForHeader(instance.getSourceDataAtCell(HDR, col));
 				return cellProperties;
 			}
 			if (row === HDR) {
-				const cellValue = instance.getDataAtCell(row, col);
+				const cellValue = instance.getSourceDataAtCell(row, col);
 				if (isKnownHeader(cellValue)) {
 					// StraboField catalog / system header — read-only
 					cellProperties.readOnly = true;
@@ -266,7 +270,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			}
 
 			// ---- data rows: per-column behavior from the header ----
-			const header = instance.getDataAtCell(HDR, col);
+			const header = instance.getSourceDataAtCell(HDR, col);
 			if (header === 'strabo_internal_id' || header === 'geometry_type') {
 				// managed by StraboSpot — never hand-entered (updates flow
 				// through export -> edit -> Import page)
@@ -437,10 +441,13 @@ document.addEventListener('DOMContentLoaded', function() {
 	}
 
 	/**
-	 * Recompute the section band: label + color per contiguous run of
-	 * same-section columns (visual order), merged into one cell per run.
-	 * Called after anything that changes columns; writes with source 'band'
-	 * so afterChange does not recurse.
+	 * Recompute the section band labels: one label at the first cell of each
+	 * contiguous run of same-section columns (visual order); the run's other
+	 * cells stay empty but keep the section color (colors come from cells(),
+	 * keyed off PHYSICAL data, so they follow dragged columns for free).
+	 * NO MergeCells — the plugin's merge ranges and manualColumnMove live in
+	 * different coordinate spaces and fall apart on drag (Jason 2026-07-04).
+	 * Writes with source 'band' so afterChange does not recurse.
 	 */
 	let bandRefreshing = false;
 	function refreshBand() {
@@ -452,26 +459,12 @@ document.addEventListener('DOMContentLoaded', function() {
 			for (let c = 0; c < headers.length; c++) {
 				sections.push(sectionForHeader(headers[c] === '' ? null : headers[c]));
 			}
-			const merges = [];
 			const writes = [];
 			for (let c = 0; c < sections.length; c++) {
 				const isStart = (c === 0) || (sections[c] !== sections[c - 1]);
-				if (isStart) {
-					let end = c;
-					while (end + 1 < sections.length && sections[end + 1] === sections[c]) { end++; }
-					if (end > c) {
-						merges.push({ row: 0, col: c, rowspan: 1, colspan: end - c + 1 });
-					}
-					writes.push([0, c, window.sectionMeta[sections[c]] ? window.sectionMeta[sections[c]].label : '']);
-				} else {
-					writes.push([0, c, '']);
-				}
+				const label = isStart && window.sectionMeta[sections[c]] ? window.sectionMeta[sections[c]].label : '';
+				writes.push([0, c, label]);
 			}
-			// trailing spare columns (beyond the headers) carry no band
-			for (let c = sections.length; c < hot.countCols(); c++) {
-				writes.push([0, c, '']);
-			}
-			hot.updateSettings({ mergeCells: merges });
 			if (writes.length) { hot.setDataAtCell(writes, 'band'); }
 		} finally {
 			bandRefreshing = false;

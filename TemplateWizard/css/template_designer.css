@@ -89,6 +89,10 @@
 	text-align: center;
 	letter-spacing: 0.04em;
 	cursor: default;
+	/* no vertical borders: runs of same-colored cells read as one merged
+	   band (real merges fight manualColumnMove's coordinate mapping) */
+	border-left-color: transparent !important;
+	border-right-color: transparent !important;
 }
 .handsontable td.tw-band.tw-band-system         { background-color: #4c566a !important; color: #eceff4 !important; }
 .handsontable td.tw-band.tw-band-spot           { background-color: #3f5876 !important; color: #d8e6f5 !important; }
