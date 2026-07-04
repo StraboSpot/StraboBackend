@@ -56,7 +56,6 @@ if ($spec === null) {
     );
     $cols = array(
         array('kind' => 'system', 'key' => 'strabo_internal_id'),
-        array('kind' => 'system', 'key' => 'geometry_type'),
     );
     $sections = array_values(array_unique(array_merge(array('spot'), (array)$selected_sections)));
     foreach ($sections as $section) {
@@ -206,6 +205,7 @@ include("includes/mheader.php");
 											<optgroup label="Wizard columns">
 												<option value="orientation_type">Orientation Type (orientation_type)</option>
 												<option value="orientation_role">Orientation Role — for associated orientations (orientation_role)</option>
+												<option value="geometry_type">Geometry Type — export context, filled by StraboSpot (geometry_type)</option>
 											</optgroup>
 											<?php foreach ($catalogGroups as $gkey => $g): ?>
 											<optgroup label="<?php echo htmlspecialchars($g['label']); ?>">

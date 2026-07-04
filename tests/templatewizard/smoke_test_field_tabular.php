@@ -126,9 +126,12 @@ try {
     $v2 = $svc->validateSpec($bare);
     $keys = array();
     foreach ($v2['spec']['columns'] as $c) { if ($c['kind'] === 'system') { $keys[] = $c['key']; } }
-    check('system columns auto-injected (role stays opt-in)', !empty($v2['ok'])
-        && in_array('strabo_internal_id', $keys) && in_array('geometry_type', $keys)
+    check('system columns auto-injected (geom + role stay opt-in)', !empty($v2['ok'])
+        && in_array('strabo_internal_id', $keys) && !in_array('geometry_type', $keys)
         && in_array('orientation_type', $keys) && !in_array('orientation_role', $keys));
+    check('starter template has no geometry_type', !in_array('geometry_type',
+        array_map(function ($c) { return isset($c['key']) ? $c['key'] : ''; },
+                  FieldTabularService::defaultSpec()['columns'])));
     check('unknown catalog field rejected',
         empty($svc->validateSpec(array('columns' => array(array('kind' => 'field', 'group' => 'spot', 'name' => 'nope'))))['ok']));
 
@@ -258,6 +261,7 @@ try {
     $export = $svc->exportLong($DS1, $SPEC);
     check('export ok', !empty($export['ok']));
     check('export emits 5 long rows (3 orient + sample on A rows, 1 B row)', count($export['rows']) === 5);
+    check('all-point export omits geometry_type', !in_array('geometry_type', $export['headers']));
 
     $wb2 = $svc->buildWorkbook($export, false, "smokewiz-tpl-$stamp");
     $exPath = tempnam(sys_get_temp_dir(), 'wizsmoke_') . '.xlsx';
@@ -443,9 +447,28 @@ try {
     foreach ($export2['rows'] as $r0) {
         if ($r0['strabo_internal_id'] === (string)$LINE_ID) { $lineRow = $r0; }
     }
+    check('non-point export materializes geometry_type after id',
+        in_array('geometry_type', $export2['headers'])
+        && array_search('geometry_type', $export2['headers'])
+           === array_search('strabo_internal_id', $export2['headers']) + 1);
     check('line spot exports with geometry_type + centroid',
         $lineRow !== null && $lineRow['geometry_type'] === 'LineString'
         && abs((float)$lineRow['latitude'] - 34.25) < 0.001);
+    // opt-in via the designer picker: an explicit geometry_type column
+    // survives validateSpec and appears even on all-point exports.
+    $optSpec = $svc->validateSpec(array('spec_version' => 1, 'layout' => 'long', 'columns' => array(
+        array('kind' => 'system', 'key' => 'geometry_type'),
+        array('kind' => 'field', 'group' => 'spot', 'name' => 'name'),
+        array('kind' => 'field', 'group' => 'spot', 'name' => 'latitude'),
+        array('kind' => 'field', 'group' => 'spot', 'name' => 'longitude'),
+    )));
+    $optKeys = array();
+    foreach ($optSpec['spec']['columns'] as $c) { if ($c['kind'] === 'system') { $optKeys[] = $c['key']; } }
+    check('explicit geometry_type opt-in survives validateSpec', !empty($optSpec['ok'])
+        && in_array('geometry_type', $optKeys));
+    $optExport = $svc->exportLong($DS2, $optSpec['spec']);
+    check('opt-in template keeps geometry_type on all-point export',
+        !empty($optExport['ok']) && in_array('geometry_type', $optExport['headers']));
 
     $gCsv = "strabo_internal_id,spot_name,latitude,longitude\n$LINE_ID,SP-LINE,35.0,-118.45\n";
     check('lat/lng edit on line spot hard-errors',

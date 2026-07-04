@@ -168,7 +168,6 @@ class FieldTabularService
     {
         $cols = array(
             array('kind' => 'system', 'key' => 'strabo_internal_id'),
-            array('kind' => 'system', 'key' => 'geometry_type'),
             array('kind' => 'field', 'group' => 'spot', 'name' => 'name'),
             array('kind' => 'field', 'group' => 'spot', 'name' => 'latitude'),
             array('kind' => 'field', 'group' => 'spot', 'name' => 'longitude'),
@@ -244,9 +243,11 @@ class FieldTabularService
         if (!isset($seen['system:strabo_internal_id'])) {
             array_unshift($out, array('kind' => 'system', 'key' => 'strabo_internal_id'));
         }
-        if (!isset($seen['system:geometry_type'])) {
-            array_splice($out, 1, 0, array(array('kind' => 'system', 'key' => 'geometry_type')));
-        }
+        // geometry_type is NOT auto-injected (Jason 2026-07-04): it is export
+        // context only (the server never reads it on upload — the non-point
+        // lat/lng guard checks the stored geometry). It materializes on
+        // export when the dataset actually contains non-point spots, or when
+        // a template opts in via the designer picker.
         if ($hasOrient && !$hasOType) {
             // orientation columns are meaningless without the discriminator.
             // orientation_role is NOT auto-injected (Jason 2026-07-03): it only
@@ -2199,6 +2200,30 @@ class FieldTabularService
             $features = json_decode(json_encode($fc['features']), true);
         }
 
+        // geometry_type only materializes when the data needs it: inject the
+        // column (after strabo_internal_id) when the dataset carries any
+        // non-point spots and the template didn't opt in explicitly. It is
+        // export context — the warning that a row's lat/lng is a centroid,
+        // not an editable location; the server ignores it on upload.
+        $hasGeomCol = false; $idIdx = null;
+        foreach ($defs as $i => $d) {
+            if ($d['kind'] === 'system' && $d['key'] === 'geometry_type') { $hasGeomCol = true; }
+            if ($d['kind'] === 'system' && $d['key'] === 'strabo_internal_id') { $idIdx = $i; }
+        }
+        if (!$hasGeomCol) {
+            $hasNonPoint = false;
+            foreach ($features as $f) {
+                if (isset($f['geometry']['type']) && $f['geometry']['type'] !== 'Point') {
+                    $hasNonPoint = true; break;
+                }
+            }
+            if ($hasNonPoint) {
+                array_splice($defs, ($idIdx !== null ? $idIdx + 1 : 0), 0, array(
+                    array('kind' => 'system', 'key' => 'geometry_type', 'header' => 'geometry_type'),
+                ));
+            }
+        }
+
         // orientation_role only materializes when the data needs it: inject
         // the column (after orientation_type) when the dataset carries any
         // associated orientations and the template didn't opt in explicitly.
@@ -2421,11 +2446,20 @@ class FieldTabularService
         }
 
         // Lock header + id + geometry_type; leave everything else editable.
+        // Lock by HEADER position — exportLong may inject geometry_type into
+        // headers without it being in the template spec (data-driven
+        // materialization), so def indices can't be trusted as column indices.
         $lastDataRow = max($rowNum - 1, 1);
         $lockRanges = array('A1:' . $lastCol . '1');
         if ($lastDataRow >= 2) {
-            foreach ($defs as $i => $d) {
+            $lockedHeaders = array('geometry_type' => true);
+            foreach ($defs as $d) {
                 if ($d['kind'] === 'system' && in_array($d['key'], array('strabo_internal_id', 'geometry_type'))) {
+                    $lockedHeaders[$d['header']] = true;
+                }
+            }
+            foreach ($headers as $i => $h) {
+                if (isset($lockedHeaders[$h])) {
                     $colL = PHPExcel_Cell::stringFromColumnIndex($i);
                     $lockRanges[] = $colL . '2:' . $colL . $lastDataRow;
                 }
