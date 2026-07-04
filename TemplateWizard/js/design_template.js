@@ -619,7 +619,9 @@ document.addEventListener('DOMContentLoaded', function() {
 		saveTemplate(function(ok) {
 			if (!ok) { return; }
 			if (!dataPresent) {
-				showInfo('Saved', 'Template "' + templateName + '" saved. Use it any time from the wizard, the Import page, or dataset Export.');
+				// design-only save: land on the wizard hub (My Templates)
+				// with a confirmation banner rather than staying here
+				window.location = 'index.php?saved=' + encodeURIComponent(templateName);
 				return;
 			}
 			// Filter empty rows (keep header row) and continue to review.

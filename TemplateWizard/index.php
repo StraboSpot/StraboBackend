@@ -33,6 +33,13 @@ include("includes/mheader.php");
 						<!-- Content -->
 							<section id="content">
 
+<?php if (isset($_GET['saved']) && $_GET['saved'] !== ''): ?>
+								<!-- Save confirmation (redirect from the designer) -->
+								<div style="background-color: #3b4252; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #a3be8c;">
+									Template &ldquo;<?php echo htmlspecialchars($_GET['saved']); ?>&rdquo; saved.
+								</div>
+<?php endif; ?>
+
 								<!-- Instructions -->
 								<div style="background-color: #3b4252; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
 									<strong>About the StraboSpot Template Wizard:</strong>
@@ -43,6 +50,38 @@ include("includes/mheader.php");
 										use the menu below to get started.
 									</div>
 								</div>
+
+<?php if (count($twTemplates)): ?>
+								<!-- My Templates: manage saved designs -->
+								<div class="row gtr-uniform gtr-25">
+									<div class="col-12">
+										<h3>My Templates</h3>
+										<div class="table-wrapper">
+											<table>
+												<thead>
+													<tr><th>Name</th><th>Last Modified</th><th style="width: 220px;"></th></tr>
+												</thead>
+												<tbody>
+													<?php foreach ($twTemplates as $t): ?>
+													<tr>
+														<td><?php echo htmlspecialchars($t->name); ?></td>
+														<td><?php echo htmlspecialchars(date('M j, Y g:i A', strtotime($t->modified_at))); ?></td>
+														<td>
+															<ul class="actions" style="margin-bottom: 0;">
+																<li><a href="design_template.php?template_id=<?php echo (int)$t->pkey; ?>" class="button small">Edit</a></li>
+																<li><a href="#" class="button small tw-delete-template" data-pkey="<?php echo (int)$t->pkey; ?>" data-name="<?php echo htmlspecialchars($t->name); ?>">Delete</a></li>
+															</ul>
+														</td>
+													</tr>
+													<?php endforeach; ?>
+												</tbody>
+											</table>
+										</div>
+									</div>
+								</div>
+
+								<hr />
+<?php endif; ?>
 
 								<form id="templateForm" method="POST" action="design_template.php">
 
