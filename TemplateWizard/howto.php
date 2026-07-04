@@ -259,6 +259,7 @@ include("includes/mheader.php");
 									<li><strong>Row order doesn&rsquo;t matter</strong> &mdash; grouping is by name/id, so Excel sorting is safe. The single exception: an <code>associated</code> orientation attaches to the nearest <code>primary</code> row above it within the same spot, so keep those pairs together.</li>
 									<li><strong>New spots</strong> need a name, latitude and longitude, and a blank id. <strong>Updates</strong> (files you exported, then edited) carry the spot&rsquo;s id on every row &mdash; leave that column alone and the wizard matches rows to existing spots.</li>
 									<li><strong>Vocabulary cells</strong> accept the dropdown label or the stored value, case-insensitive. Anything unrecognized isn&rsquo;t rejected outright &mdash; the review screen lets you map it, keep it as free text, or fix it in the file.</li>
+									<li><strong>The id column is locked</strong> in Excel and LibreOffice. Some spreadsheet apps (Apple Numbers among them) ignore protection entirely &mdash; don&rsquo;t type in <code>strabo_internal_id</code> there. The wizard re-validates every id at review regardless, so a stray edit is caught before anything imports.</li>
 									<li><strong>Nothing imports until the file is clean.</strong> Upload &rarr; review &rarr; confirm; errors block the whole file, so a half-imported dataset can&rsquo;t happen.</li>
 								</ul>
 

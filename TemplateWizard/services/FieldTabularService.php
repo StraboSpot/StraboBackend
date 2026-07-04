@@ -2685,6 +2685,9 @@ class FieldTabularService
             '- Imports are all-or-nothing: any error means nothing is saved.',
             '- To sort in Excel, unprotect the sheet first (Review > Unprotect Sheet,',
             '  no password). Ids are re-validated on upload regardless.',
+            '- The locked id column is enforced by Excel and LibreOffice. Some apps',
+            '  (Apple Numbers among them) ignore spreadsheet protection — do not type',
+            '  in strabo_internal_id there; the wizard rejects invalid ids at review.',
             '- The hidden _template sheet carries your template design; upload this',
             '  file and the wizard recognizes it automatically.',
         );

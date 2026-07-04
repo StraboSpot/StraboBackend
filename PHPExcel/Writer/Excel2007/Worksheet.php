@@ -443,22 +443,26 @@ class PHPExcel_Writer_Excel2007_Worksheet extends PHPExcel_Writer_Excel2007_Writ
             $objWriter->writeAttribute('password', $pSheet->getProtection()->getPassword());
         }
 
-        $objWriter->writeAttribute('sheet', ($pSheet->getProtection()->getSheet() ? 'true' : 'false'));
-        $objWriter->writeAttribute('objects', ($pSheet->getProtection()->getObjects() ? 'true' : 'false'));
-        $objWriter->writeAttribute('scenarios', ($pSheet->getProtection()->getScenarios() ? 'true' : 'false'));
-        $objWriter->writeAttribute('formatCells', ($pSheet->getProtection()->getFormatCells() ? 'true' : 'false'));
-        $objWriter->writeAttribute('formatColumns', ($pSheet->getProtection()->getFormatColumns() ? 'true' : 'false'));
-        $objWriter->writeAttribute('formatRows', ($pSheet->getProtection()->getFormatRows() ? 'true' : 'false'));
-        $objWriter->writeAttribute('insertColumns', ($pSheet->getProtection()->getInsertColumns() ? 'true' : 'false'));
-        $objWriter->writeAttribute('insertRows', ($pSheet->getProtection()->getInsertRows() ? 'true' : 'false'));
-        $objWriter->writeAttribute('insertHyperlinks', ($pSheet->getProtection()->getInsertHyperlinks() ? 'true' : 'false'));
-        $objWriter->writeAttribute('deleteColumns', ($pSheet->getProtection()->getDeleteColumns() ? 'true' : 'false'));
-        $objWriter->writeAttribute('deleteRows', ($pSheet->getProtection()->getDeleteRows() ? 'true' : 'false'));
-        $objWriter->writeAttribute('selectLockedCells', ($pSheet->getProtection()->getSelectLockedCells() ? 'true' : 'false'));
-        $objWriter->writeAttribute('sort', ($pSheet->getProtection()->getSort() ? 'true' : 'false'));
-        $objWriter->writeAttribute('autoFilter', ($pSheet->getProtection()->getAutoFilter() ? 'true' : 'false'));
-        $objWriter->writeAttribute('pivotTables', ($pSheet->getProtection()->getPivotTables() ? 'true' : 'false'));
-        $objWriter->writeAttribute('selectUnlockedCells', ($pSheet->getProtection()->getSelectUnlockedCells() ? 'true' : 'false'));
+        // LOCAL PATCH (StraboSpot 2026-07-04): serialize as '1'/'0', not
+        // 'true'/'false'. Both are legal xsd:boolean, but Excel itself writes
+        // '1'/'0' here and some Excel builds have been reported to ignore
+        // sheetProtection spelled with word-booleans.
+        $objWriter->writeAttribute('sheet', ($pSheet->getProtection()->getSheet() ? '1' : '0'));
+        $objWriter->writeAttribute('objects', ($pSheet->getProtection()->getObjects() ? '1' : '0'));
+        $objWriter->writeAttribute('scenarios', ($pSheet->getProtection()->getScenarios() ? '1' : '0'));
+        $objWriter->writeAttribute('formatCells', ($pSheet->getProtection()->getFormatCells() ? '1' : '0'));
+        $objWriter->writeAttribute('formatColumns', ($pSheet->getProtection()->getFormatColumns() ? '1' : '0'));
+        $objWriter->writeAttribute('formatRows', ($pSheet->getProtection()->getFormatRows() ? '1' : '0'));
+        $objWriter->writeAttribute('insertColumns', ($pSheet->getProtection()->getInsertColumns() ? '1' : '0'));
+        $objWriter->writeAttribute('insertRows', ($pSheet->getProtection()->getInsertRows() ? '1' : '0'));
+        $objWriter->writeAttribute('insertHyperlinks', ($pSheet->getProtection()->getInsertHyperlinks() ? '1' : '0'));
+        $objWriter->writeAttribute('deleteColumns', ($pSheet->getProtection()->getDeleteColumns() ? '1' : '0'));
+        $objWriter->writeAttribute('deleteRows', ($pSheet->getProtection()->getDeleteRows() ? '1' : '0'));
+        $objWriter->writeAttribute('selectLockedCells', ($pSheet->getProtection()->getSelectLockedCells() ? '1' : '0'));
+        $objWriter->writeAttribute('sort', ($pSheet->getProtection()->getSort() ? '1' : '0'));
+        $objWriter->writeAttribute('autoFilter', ($pSheet->getProtection()->getAutoFilter() ? '1' : '0'));
+        $objWriter->writeAttribute('pivotTables', ($pSheet->getProtection()->getPivotTables() ? '1' : '0'));
+        $objWriter->writeAttribute('selectUnlockedCells', ($pSheet->getProtection()->getSelectUnlockedCells() ? '1' : '0'));
         $objWriter->endElement();
     }
 
