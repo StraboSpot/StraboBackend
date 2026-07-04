@@ -270,7 +270,8 @@ include("includes/mheader.php");
 <script src="assets/handsontable.full.min.js"></script>
 
 <!-- SheetJS for Excel/CSV parsing (load-into-grid) -->
-<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
+<!-- SheetJS CE 0.20.1 (Apache-2.0), vendored — the wizard has no external asset dependencies -->
+<script src="assets/xlsx.full.min.js"></script>
 
 <script>
 // Pass PHP data to JavaScript
