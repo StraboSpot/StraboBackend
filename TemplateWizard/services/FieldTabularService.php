@@ -2556,21 +2556,26 @@ class FieldTabularService
         // editable. Lock by HEADER position — exportLong may inject
         // geometry_type into headers without it being in the template spec
         // (data-driven materialization), so def indices can't be trusted as
-        // column indices.
-        $lastDataRow = max($rowNum - 1, 2);
+        // column indices. The id/geometry_type columns lock ALL THE WAY DOWN
+        // (same row extent as the vocab dropdowns), not just the data rows:
+        // users never legitimately type in them — blank id on a new row means
+        // create, and a hand-entered or shifted id is the wrong-spot-update /
+        // duplicate-create bug class (Jason 2026-07-04; previously blank
+        // templates locked nothing and rows below the data were open). The
+        // server re-validates every id regardless — this is the advisory
+        // first fence, same posture as the samples tabular workbooks.
+        $validationRows = max(count($rows) + 200, 500);
         $lockRanges = array('A1:' . $lastCol . '2');
-        if ($lastDataRow >= 3) {
-            $lockedHeaders = array('geometry_type' => true);
-            foreach ($defs as $d) {
-                if ($d['kind'] === 'system' && in_array($d['key'], array('strabo_internal_id', 'geometry_type'))) {
-                    $lockedHeaders[$d['header']] = true;
-                }
+        $lockedHeaders = array('geometry_type' => true);
+        foreach ($defs as $d) {
+            if ($d['kind'] === 'system' && in_array($d['key'], array('strabo_internal_id', 'geometry_type'))) {
+                $lockedHeaders[$d['header']] = true;
             }
-            foreach ($headers as $i => $h) {
-                if (isset($lockedHeaders[$h])) {
-                    $colL = PHPExcel_Cell::stringFromColumnIndex($i);
-                    $lockRanges[] = $colL . '3:' . $colL . $lastDataRow;
-                }
+        }
+        foreach ($headers as $i => $h) {
+            if (isset($lockedHeaders[$h])) {
+                $colL = PHPExcel_Cell::stringFromColumnIndex($i);
+                $lockRanges[] = $colL . '3:' . $colL . (2 + $validationRows);
             }
         }
         foreach ($lockRanges as $range) {
@@ -2583,7 +2588,6 @@ class FieldTabularService
         $vocab = $wb->createSheet();
         $vocab->setTitle('Vocabulary');
         $vCol = 0;
-        $validationRows = max(count($rows) + 200, 500);
         $vocabRanges = array();   // header => range
         $vocabColumns = array();
         // exportLong may inject orientation_role into headers without it being

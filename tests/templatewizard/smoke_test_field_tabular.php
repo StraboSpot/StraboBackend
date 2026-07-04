@@ -188,6 +188,22 @@ try {
         !empty($parsedTpl['ok']) && !empty($parsedTpl['embedded_spec']));
     check('template has 0 data rows', count($parsedTpl['rows']) === 0);
 
+    // Protection regression (2026-07-04): blank templates used to lock
+    // NOTHING below the header (the lock loop only ran when data rows
+    // existed) — a hand-typed id is the wrong-spot-update / duplicate-create
+    // bug class. The id column must lock all the way down; ordinary field
+    // cells stay editable.
+    $lockWb = PHPExcel_IOFactory::load($tplPath);
+    $lockSheet = $lockWb->getSheetByName('Data');
+    check('blank template: Data sheet protection enabled',
+        $lockSheet->getProtection()->getSheet() === true);
+    check('blank template: id cells locked at row 3 and far below the data area',
+        $lockSheet->getStyle('A3')->getProtection()->getLocked() === PHPExcel_Style_Protection::PROTECTION_PROTECTED
+        && $lockSheet->getStyle('A400')->getProtection()->getLocked() === PHPExcel_Style_Protection::PROTECTION_PROTECTED);
+    check('blank template: ordinary field cells stay editable',
+        $lockSheet->getStyle('B3')->getProtection()->getLocked() === PHPExcel_Style_Protection::PROTECTION_UNPROTECTED
+        && $lockSheet->getStyle('B400')->getProtection()->getLocked() === PHPExcel_Style_Protection::PROTECTION_UNPROTECTED);
+
     // ------------------------------------------------------------------
     echo "\n=== 4. creates via CSV (new dataset) ===\n";
     // ------------------------------------------------------------------
@@ -284,6 +300,15 @@ try {
     $tmpFiles[] = $exPath;
     $writer2 = new PHPExcel_Writer_Excel2007($wb2);
     $writer2->save($exPath);
+
+    // Same protection regression on a FILLED export: id cells must stay
+    // locked below the last data row (where users add new rows / paste).
+    $exLockWb = PHPExcel_IOFactory::load($exPath);
+    $exLockSheet = $exLockWb->getSheetByName('Data');
+    check('filled export: id cells locked on data rows AND below them',
+        $exLockSheet->getProtection()->getSheet() === true
+        && $exLockSheet->getStyle('A3')->getProtection()->getLocked() === PHPExcel_Style_Protection::PROTECTION_PROTECTED
+        && $exLockSheet->getStyle('A50')->getProtection()->getLocked() === PHPExcel_Style_Protection::PROTECTION_PROTECTED);
 
     $reparsed = $svc->parseUpload($exPath, 'export.xlsx');
     check('export re-parses with embedded spec', !empty($reparsed['ok']) && !empty($reparsed['embedded_spec']));
