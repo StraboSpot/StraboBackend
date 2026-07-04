@@ -77,10 +77,27 @@ if ($twFlash !== ''): ?>
 										table.tw-tpl-table tbody,
 										table.tw-tpl-table tbody tr,
 										table.tw-tpl-table td { display: block; width: 100%; }
-										table.tw-tpl-table tbody tr { padding: 0.75em 0.75em; }
-										table.tw-tpl-table td { padding: 0.2em 0; white-space: normal !important; }
-										table.tw-tpl-table td:first-child { font-weight: bold; color: #ffffff; }
-										table.tw-tpl-table td .actions { flex-wrap: wrap; margin-top: 0.4em; }
+										table.tw-tpl-table { margin-bottom: 1em; }
+										table.tw-tpl-table tbody tr {
+											padding: 1em;
+											margin-bottom: 1em;
+											border: solid 1px rgba(255, 255, 255, 0.3);
+											border-radius: 6px;
+											background-color: rgba(255, 255, 255, 0.075);
+										}
+										table.tw-tpl-table td { padding: 0.15em 0; white-space: normal !important; }
+										table.tw-tpl-table td:first-child { font-weight: bold; color: #ffffff; font-size: 1.1em; }
+										table.tw-tpl-table td:nth-child(2) { color: rgba(255, 255, 255, 0.6); }
+										/* Three equal-width buttons on one row; the theme's 2.25em button
+										   side padding would clip the labels at a third of a phone width. */
+										table.tw-tpl-table td .actions { display: flex; margin: 0.75em 0 0 0; }
+										table.tw-tpl-table td .actions li { flex: 1 1 0; padding: 0 0 0 0.6em; }
+										table.tw-tpl-table td .actions li:first-child { padding-left: 0; }
+										table.tw-tpl-table td .actions li .button {
+											width: 100%;
+											padding: 0 0.25em;
+											text-align: center;
+										}
 									}
 								</style>
 								<div class="row gtr-uniform gtr-25">
