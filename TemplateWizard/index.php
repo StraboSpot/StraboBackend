@@ -182,7 +182,7 @@ include("includes/mheader.php");
 					</div>
 				</div>
 
-<script src="js/choose_template.js"></script>
+<script src="js/choose_template.js?v=<?php echo filemtime(__DIR__ . '/js/choose_template.js'); ?>"></script>
 
 <?php
 include("includes/mfooter.php");

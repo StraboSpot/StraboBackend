@@ -150,7 +150,7 @@ include("includes/mheader.php");
 
 <!-- HandsonTable CSS (local 6.2.2 — last MIT-licensed release) -->
 <link rel="stylesheet" href="assets/handsontable.full.min.css">
-<link rel="stylesheet" href="css/template_designer.css">
+<link rel="stylesheet" href="css/template_designer.css?v=<?php echo filemtime(__DIR__ . '/css/template_designer.css'); ?>">
 
 			<!-- Main -->
 				<div id="main" class="wrapper style1">
@@ -286,7 +286,7 @@ window.sectionMeta     = <?php
     echo json_encode($sm);
 ?>;
 </script>
-<script src="js/design_template.js"></script>
+<script src="js/design_template.js?v=<?php echo filemtime(__DIR__ . '/js/design_template.js'); ?>"></script>
 
 <?php
 include("includes/mfooter.php");
