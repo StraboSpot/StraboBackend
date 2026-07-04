@@ -233,7 +233,13 @@ include("includes/mheader.php");
 								<input type="hidden" name="action" value="upload">
 								<div class="row gtr-uniform gtr-25">
 									<div class="col-6 col-12-small">
-										<input type="file" name="tabfile" id="tabfile" accept=".xlsx,.xls,.csv">
+										<!-- styled picker: native input visually hidden inside the
+										     label but kept focusable-offscreen for keyboard users
+										     (samples_import.php pattern) -->
+										<label for="tabfile" class="button">Choose File&hellip;</label>
+										<span id="tw-file-name" style="opacity: 0.8; margin-left: 0.6em;">No file selected</span>
+										<input type="file" name="tabfile" id="tabfile" accept=".xlsx,.xls,.csv"
+											style="position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0;">
 									</div>
 									<div class="col-6 col-12-small">
 										<select name="template_pkey">
@@ -245,12 +251,24 @@ include("includes/mheader.php");
 									</div>
 									<div class="col-12">
 										<ul class="actions">
-											<li><input type="submit" class="primary" value="Upload &amp; Review"></li>
+											<li><input type="submit" class="primary" value="Upload &amp; Review" id="tw-upload-btn" disabled></li>
 											<li><a href="index.php" class="button">Back to Wizard</a></li>
 										</ul>
 									</div>
 								</div>
 							</form>
+							<script>
+								(function () {
+									var input = document.getElementById('tabfile');
+									var name  = document.getElementById('tw-file-name');
+									var btn   = document.getElementById('tw-upload-btn');
+									input.addEventListener('change', function () {
+										var has = input.files && input.files.length;
+										name.textContent = has ? input.files[0].name : 'No file selected';
+										btn.disabled = !has;
+									});
+								})();
+							</script>
 							<?php endif; ?>
 
 							<?php if ($view === 'target' || $view === 'review'): ?>
