@@ -226,7 +226,8 @@ include("includes/mheader.php");
 									Files downloaded from the Template Wizard or a dataset export carry their template inside — they are recognized
 									automatically. For anything else, columns are matched by header name; unknown columns become custom fields
 									(you confirm them during review). Every change is shown for review before anything is saved, and imports are
-									all-or-nothing. Need a starting point? <a href="index.php">Design a template</a> first.
+									all-or-nothing. Need a starting point? <a href="index.php">Design a template</a> first &mdash; and if your
+									spots carry multiple measurements, see the <a href="howto.php">how-to guide</a> for the row format.
 								</div>
 							</div>
 							<form method="post" enctype="multipart/form-data">

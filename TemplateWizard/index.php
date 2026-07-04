@@ -222,6 +222,7 @@ if ($twFlash !== ''): ?>
 										<ul class="actions">
 											<li><a href="review.php" class="button">&#8682; Import a Spreadsheet</a></li>
 											<li><a href="export.php" class="button"><span style="display:inline-block;transform:rotate(180deg);">&#8682;</span> Export a Dataset</a></li>
+											<li><a href="howto.php" class="button">&#63;&nbsp; How-To: Multiple Measurements</a></li>
 										</ul>
 										<p style="font-size: 0.9em;">Importing a file exported by StraboSpot? Its template travels inside the file &mdash; just upload it.</p>
 									</div>
