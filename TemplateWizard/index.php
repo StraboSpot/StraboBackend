@@ -33,11 +33,24 @@ include("includes/mheader.php");
 						<!-- Content -->
 							<section id="content">
 
-<?php if (isset($_GET['saved']) && $_GET['saved'] !== ''): ?>
-								<!-- Save confirmation (redirect from the designer) -->
-								<div style="background-color: #3b4252; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #a3be8c;">
-									Template &ldquo;<?php echo htmlspecialchars($_GET['saved']); ?>&rdquo; saved.
+<?php
+$twFlash = '';
+if (isset($_GET['saved']) && $_GET['saved'] !== '') {
+    $twFlash = 'Template &ldquo;' . htmlspecialchars($_GET['saved']) . '&rdquo; saved.';
+} elseif (isset($_GET['deleted']) && $_GET['deleted'] !== '') {
+    $twFlash = 'Template &ldquo;' . htmlspecialchars($_GET['deleted']) . '&rdquo; deleted.';
+}
+if ($twFlash !== ''): ?>
+								<!-- Flash confirmation (redirect from save/delete): solid green, fades out -->
+								<div id="twFlashBanner" style="background-color: #a3be8c; color: #2e3440; padding: 12px; margin-bottom: 20px; border-radius: 5px; font-weight: bold;">
+									<?php echo $twFlash; ?>
 								</div>
+								<script>
+									setTimeout(function() { $('#twFlashBanner').fadeOut(1000); }, 2500);
+									if (window.history && window.history.replaceState) {
+										history.replaceState(null, '', window.location.pathname);
+									}
+								</script>
 <?php endif; ?>
 
 								<!-- Instructions -->

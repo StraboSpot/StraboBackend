@@ -72,7 +72,7 @@ document.addEventListener('DOMContentLoaded', function() {
 				.then(function(r) { return r.json(); })
 				.then(function(res) {
 					if (res && res.ok) {
-						window.location = 'index.php';
+						window.location = 'index.php?deleted=' + encodeURIComponent(name);
 					} else {
 						alert((res && res.message) ? res.message : 'Could not delete the template.');
 					}
