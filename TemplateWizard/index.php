@@ -72,7 +72,7 @@ if ($twFlash !== ''): ?>
 										<div class="table-wrapper">
 											<table>
 												<thead>
-													<tr><th>Name</th><th>Last Modified</th><th style="width: 220px;"></th></tr>
+													<tr><th>Name</th><th>Last Modified</th><th style="width: 330px;"></th></tr>
 												</thead>
 												<tbody>
 													<?php foreach ($twTemplates as $t): ?>
@@ -81,6 +81,7 @@ if ($twFlash !== ''): ?>
 														<td><?php echo htmlspecialchars(date('M j, Y g:i A', strtotime($t->modified_at))); ?></td>
 														<td>
 															<ul class="actions" style="margin-bottom: 0;">
+																<li><a href="export.php?what=template&amp;template_id=<?php echo (int)$t->pkey; ?>&amp;format=xlsx" class="button small" title="Download a blank, fillable spreadsheet for this template">Download</a></li>
 																<li><a href="design_template.php?template_id=<?php echo (int)$t->pkey; ?>" class="button small">Edit</a></li>
 																<li><a href="#" class="button small tw-delete-template" data-pkey="<?php echo (int)$t->pkey; ?>" data-name="<?php echo htmlspecialchars($t->name); ?>">Delete</a></li>
 															</ul>
