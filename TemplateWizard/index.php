@@ -66,11 +66,28 @@ if ($twFlash !== ''): ?>
 
 <?php if (count($twTemplates)): ?>
 								<!-- My Templates: manage saved designs -->
+								<style>
+									/* Theme tables have no phone layout (only .table-wrapper h-scroll,
+									   which just looks clipped) — collapse rows to stacked cards at the
+									   theme's small breakpoint. !important beats the inline desktop
+									   nowrap on the date/actions cells. */
+									@media screen and (max-width: 736px) {
+										table.tw-tpl-table thead { display: none; }
+										table.tw-tpl-table,
+										table.tw-tpl-table tbody,
+										table.tw-tpl-table tbody tr,
+										table.tw-tpl-table td { display: block; width: 100%; }
+										table.tw-tpl-table tbody tr { padding: 0.75em 0.75em; }
+										table.tw-tpl-table td { padding: 0.2em 0; white-space: normal !important; }
+										table.tw-tpl-table td:first-child { font-weight: bold; color: #ffffff; }
+										table.tw-tpl-table td .actions { flex-wrap: wrap; margin-top: 0.4em; }
+									}
+								</style>
 								<div class="row gtr-uniform gtr-25">
 									<div class="col-12">
 										<h3>My Templates</h3>
 										<div class="table-wrapper">
-											<table>
+											<table class="tw-tpl-table">
 												<thead>
 													<tr><th>Name</th><th>Last Modified</th><th></th></tr>
 												</thead>
@@ -81,8 +98,8 @@ if ($twFlash !== ''): ?>
 														<td style="white-space: nowrap;"><?php echo htmlspecialchars(date('M j, Y g:i A', strtotime($t->modified_at))); ?></td>
 														<td style="white-space: nowrap;">
 															<!-- .fixed keeps the buttons in a row on phones; the theme stacks
-															     non-fixed action lists full-width under 480px, which shatters
-															     table rows. Narrow screens scroll inside .table-wrapper instead. -->
+															     non-fixed action lists full-width under 480px. On small screens
+															     the row itself becomes a stacked card (style block above). -->
 															<ul class="actions fixed" style="margin-bottom: 0;">
 																<li><a href="export.php?what=template&amp;template_id=<?php echo (int)$t->pkey; ?>&amp;format=xlsx" class="button small" title="Download a blank, fillable spreadsheet for this template">Download</a></li>
 																<li><a href="design_template.php?template_id=<?php echo (int)$t->pkey; ?>" class="button small">Edit</a></li>
