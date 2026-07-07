@@ -6071,29 +6071,18 @@ public function getSpotName($id){
 	*  StraboTools analyses are fully separate from the StraboField
 	*  workflow by design (Jason, 2026-07-07): no :Image nodes, no
 	*  dbimages/ storage, no HAS_IMAGE links, invisible to StraboField
-	*  endpoints. Files live in /srv/app/www/straboToolsImages/ named by
-	*  the strabotools_image_seq Postgres sequence; metadata lives on
-	*  :ToolsAnalysis Neo4j nodes keyed by the client record UUID per
-	*  userpkey. Queryable scalars are individual properties; the full
-	*  client payload (including arrays like attitudeRowMajor) is kept
-	*  losslessly in the analysis_json string property.
+	*  endpoints. Analyses are flat per-user records with no graph
+	*  relationships, so they live entirely in PostgreSQL: one
+	*  strabotools_analyses row per (client record UUID, userpkey).
+	*  Files live in /srv/app/www/straboToolsImages/ named by the
+	*  strabotools_image_seq sequence. Queryable scalars are individual
+	*  columns; the full client payload (including arrays like
+	*  attitudeRowMajor) is kept losslessly in the analysis jsonb column.
 	*/
 
 	private function toolsUuidValid($id){
 		if(!is_string($id)){ return false; }
 		return preg_match('/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/', $id) === 1;
-	}
-
-	// Build a Cypher property map from fixed keys + client values.
-	// json_encode per value (not neodb->escape) so quotes/newlines in free
-	// text, zero-valued numbers, and booleans all survive intact.
-	private function toolsCypherProps($props){
-		$parts = array();
-		foreach($props as $key=>$value){
-			if($value === null){ continue; }
-			$parts[] = $key.": ".json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-		}
-		return "{".implode(", ", $parts)."}";
 	}
 
 	public function insertToolsAnalysis($post,$file){
@@ -6127,85 +6116,132 @@ public function getSpotName($id){
 		}
 
 		$imagesha1 = sha1_file($imagefiletmp_name);
-		$modified_timestamp = round(microtime(true)*1000);
-
-		$props = array(
-			'id' => $id,
-			'userpkey' => (int)$this->userpkey,
-			'created_by' => (int)$this->userpkey,
-			'origfilename' => (string)$imagefilename,
-			'imagesha1' => (string)$imagesha1,
-			'modified_timestamp' => $modified_timestamp,
-		);
+		$modified_timestamp = (int)round(microtime(true)*1000);
 
 		//searchable scalar projections out of the analysis payload
-		foreach(array('spotName','notes','captureDate','savedDate','appVersion','deviceModel') as $key){
+		//(absent/invalid values stay null -> SQL NULL via pg_execute)
+		$scalars = array(
+			'spot_name' => null, 'notes' => null, 'capture_date' => null,
+			'saved_date' => null, 'app_version' => null, 'device_model' => null,
+			'schema_version' => null, 'azimuth_offset_degrees' => null, 'attitude_gap_seconds' => null,
+			'latitude' => null, 'longitude' => null, 'horizontal_error_meters' => null,
+			'vertical_error_meters' => null, 'elevation_meters' => null,
+			'fabric_azimuth_degrees' => null, 'fabric_rake_degrees' => null,
+			'axial_ratio' => null, 'trend_degrees' => null, 'plunge_degrees' => null,
+			'color_index_percent' => null, 'mode_phase_count' => null,
+			'color_index_adaptive' => null,
+		);
+
+		foreach(array('spotName'=>'spot_name','notes'=>'notes','captureDate'=>'capture_date','savedDate'=>'saved_date','appVersion'=>'app_version','deviceModel'=>'device_model') as $key=>$col){
 			if(isset($analysis[$key]) && is_string($analysis[$key]) && $analysis[$key]!==""){
-				$props[$key] = $analysis[$key];
+				$scalars[$col] = $analysis[$key];
 			}
 		}
 
-		foreach(array('schemaVersion','azimuthOffsetDegrees','attitudeGapSeconds') as $key){
+		foreach(array('schemaVersion'=>'schema_version','azimuthOffsetDegrees'=>'azimuth_offset_degrees','attitudeGapSeconds'=>'attitude_gap_seconds') as $key=>$col){
 			if(isset($analysis[$key]) && is_numeric($analysis[$key])){
-				$props[$key] = $analysis[$key]+0;
+				$scalars[$col] = $analysis[$key]+0;
 			}
 		}
 
 		if(isset($analysis['position']) && is_array($analysis['position'])){
-			foreach(array('latitude','longitude','horizontalErrorMeters','verticalErrorMeters','elevationMeters') as $key){
+			foreach(array('latitude'=>'latitude','longitude'=>'longitude','horizontalErrorMeters'=>'horizontal_error_meters','verticalErrorMeters'=>'vertical_error_meters','elevationMeters'=>'elevation_meters') as $key=>$col){
 				if(isset($analysis['position'][$key]) && is_numeric($analysis['position'][$key])){
-					$props[$key] = $analysis['position'][$key]+0;
+					$scalars[$col] = $analysis['position'][$key]+0;
 				}
 			}
 		}
 
 		if(isset($analysis['measurements']) && is_array($analysis['measurements'])){
-			foreach(array('fabricAzimuthDegrees','fabricRakeDegrees','axialRatio','trendDegrees','plungeDegrees','colorIndexPercent','modePhaseCount') as $key){
+			foreach(array('fabricAzimuthDegrees'=>'fabric_azimuth_degrees','fabricRakeDegrees'=>'fabric_rake_degrees','axialRatio'=>'axial_ratio','trendDegrees'=>'trend_degrees','plungeDegrees'=>'plunge_degrees','colorIndexPercent'=>'color_index_percent','modePhaseCount'=>'mode_phase_count') as $key=>$col){
 				if(isset($analysis['measurements'][$key]) && is_numeric($analysis['measurements'][$key])){
-					$props[$key] = $analysis['measurements'][$key]+0;
+					$scalars[$col] = $analysis['measurements'][$key]+0;
 				}
 			}
 			if(isset($analysis['measurements']['colorIndexAdaptive']) && is_bool($analysis['measurements']['colorIndexAdaptive'])){
-				$props['colorIndexAdaptive'] = $analysis['measurements']['colorIndexAdaptive'];
+				//pg_execute would send PHP false as '', so pass PG boolean literals
+				$scalars['color_index_adaptive'] = $analysis['measurements']['colorIndexAdaptive'] ? 't' : 'f';
 			}
 		}
 
 		//full lossless payload (arrays like attitudeRowMajor/modePercentages live here)
-		$props['analysis_json'] = json_encode($analysis, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
-
-		//$id is regex-validated above; json_encode quotes it for Cypher
-		$idliteral = json_encode($id);
+		$analysisjson = json_encode($analysis, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
 		//********************************************************************
 		// check to see if analysis already exists (idempotent by client UUID)
 		//********************************************************************
-		$neoid = $this->neodb->get_var("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey RETURN id(n);");
+		$existing = $this->db->get_row_prepared("SELECT filename, created_timestamp FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($id, (int)$this->userpkey));
 
-		if($neoid!==""){
-
+		if($existing !== null){
 			//analysis exists: update in place, keep filename + created_timestamp
-			$existing = $this->neodb->getNode("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey RETURN n LIMIT 1;");
-
-			$filename = (isset($existing['filename']) && $existing['filename']!="") ? $existing['filename'] : $this->db->get_var("SELECT nextval('strabotools_image_seq');");
-			$props['filename'] = (string)$filename;
-			$props['created_timestamp'] = isset($existing['created_timestamp']) ? $existing['created_timestamp']+0 : $modified_timestamp;
-
-			$this->neodb->query("MATCH (n:ToolsAnalysis) WHERE id(n) = $neoid SET n = ".$this->toolsCypherProps($props)." RETURN id(n);");
-
-			copy ( $imagefiletmp_name , "/srv/app/www/straboToolsImages/$filename" );
-
+			$filename = $existing->filename;
+			$created_timestamp = (int)$existing->created_timestamp;
 		}else{
-
 			//new analysis
-			$filename = $this->db->get_var("SELECT nextval('strabotools_image_seq');");
-			$props['filename'] = (string)$filename;
-			$props['created_timestamp'] = $modified_timestamp;
-
-			$this->neodb->query("CREATE (n:ToolsAnalysis ".$this->toolsCypherProps($props).") RETURN id(n);");
-
-			copy ( $imagefiletmp_name , "/srv/app/www/straboToolsImages/$filename" );
-
+			$filename = (string)$this->db->get_var("SELECT nextval('strabotools_image_seq');");
+			$created_timestamp = $modified_timestamp;
 		}
+
+		//single upsert; ON CONFLICT keeps the stored filename/created_timestamp/created_by
+		//even if a concurrent upload of the same UUID slipped in after the SELECT above
+		$this->db->prepare_query("
+			INSERT INTO strabotools_analyses (
+				id, userpkey, created_by, filename, origfilename, imagesha1,
+				created_timestamp, modified_timestamp,
+				spot_name, notes, capture_date, saved_date, app_version, device_model,
+				schema_version, azimuth_offset_degrees, attitude_gap_seconds,
+				latitude, longitude, horizontal_error_meters, vertical_error_meters, elevation_meters,
+				fabric_azimuth_degrees, fabric_rake_degrees, axial_ratio, trend_degrees,
+				plunge_degrees, color_index_percent, mode_phase_count, color_index_adaptive,
+				analysis
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8,
+				$9, $10, $11, $12, $13, $14,
+				$15, $16, $17,
+				$18, $19, $20, $21, $22,
+				$23, $24, $25, $26,
+				$27, $28, $29, $30,
+				$31::jsonb
+			)
+			ON CONFLICT (id, userpkey) DO UPDATE SET
+				origfilename = EXCLUDED.origfilename,
+				imagesha1 = EXCLUDED.imagesha1,
+				modified_timestamp = EXCLUDED.modified_timestamp,
+				spot_name = EXCLUDED.spot_name,
+				notes = EXCLUDED.notes,
+				capture_date = EXCLUDED.capture_date,
+				saved_date = EXCLUDED.saved_date,
+				app_version = EXCLUDED.app_version,
+				device_model = EXCLUDED.device_model,
+				schema_version = EXCLUDED.schema_version,
+				azimuth_offset_degrees = EXCLUDED.azimuth_offset_degrees,
+				attitude_gap_seconds = EXCLUDED.attitude_gap_seconds,
+				latitude = EXCLUDED.latitude,
+				longitude = EXCLUDED.longitude,
+				horizontal_error_meters = EXCLUDED.horizontal_error_meters,
+				vertical_error_meters = EXCLUDED.vertical_error_meters,
+				elevation_meters = EXCLUDED.elevation_meters,
+				fabric_azimuth_degrees = EXCLUDED.fabric_azimuth_degrees,
+				fabric_rake_degrees = EXCLUDED.fabric_rake_degrees,
+				axial_ratio = EXCLUDED.axial_ratio,
+				trend_degrees = EXCLUDED.trend_degrees,
+				plunge_degrees = EXCLUDED.plunge_degrees,
+				color_index_percent = EXCLUDED.color_index_percent,
+				mode_phase_count = EXCLUDED.mode_phase_count,
+				color_index_adaptive = EXCLUDED.color_index_adaptive,
+				analysis = EXCLUDED.analysis
+		", array(
+			$id, (int)$this->userpkey, (int)$this->userpkey, $filename, (string)$imagefilename, (string)$imagesha1,
+			$created_timestamp, $modified_timestamp,
+			$scalars['spot_name'], $scalars['notes'], $scalars['capture_date'], $scalars['saved_date'], $scalars['app_version'], $scalars['device_model'],
+			$scalars['schema_version'], $scalars['azimuth_offset_degrees'], $scalars['attitude_gap_seconds'],
+			$scalars['latitude'], $scalars['longitude'], $scalars['horizontal_error_meters'], $scalars['vertical_error_meters'], $scalars['elevation_meters'],
+			$scalars['fabric_azimuth_degrees'], $scalars['fabric_rake_degrees'], $scalars['axial_ratio'], $scalars['trend_degrees'],
+			$scalars['plunge_degrees'], $scalars['color_index_percent'], $scalars['mode_phase_count'], $scalars['color_index_adaptive'],
+			$analysisjson
+		));
+
+		copy ( $imagefiletmp_name , "/srv/app/www/straboToolsImages/$filename" );
 
 		$data['self']="https://strabospot.org/db/strabotools/$id";
 		$data['id']=$id;
@@ -6224,23 +6260,23 @@ public function getSpotName($id){
 			return $data;
 		}
 
-		$idliteral = json_encode($analysis_id);
-		$node = $this->neodb->getNode("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey RETURN n LIMIT 1;");
+		$row = $this->db->get_row_prepared("SELECT filename, origfilename, created_timestamp, modified_timestamp, analysis FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($analysis_id, (int)$this->userpkey));
 
-		if(empty($node)){
+		if($row === null){
 			return $data;
 		}
 
 		$data->count = 1;
 		$data->id = $analysis_id;
-		$data->filename = isset($node["filename"]) ? $node["filename"] : "";
-		$data->origfilename = isset($node["origfilename"]) ? $node["origfilename"] : "";
+		$data->filename = $row->filename;
+		$data->origfilename = $row->origfilename !== null ? $row->origfilename : "";
 		$extension = $data->origfilename != "" ? strtolower(pathinfo($data->origfilename, PATHINFO_EXTENSION)) : "";
 		if($extension=="" || $extension=="jpg"){ $extension = "jpeg"; }
 		$data->extension = $extension;
-		$data->modified_timestamp = isset($node["modified_timestamp"]) ? $node["modified_timestamp"] : "";
-		$data->created_timestamp = isset($node["created_timestamp"]) ? $node["created_timestamp"] : "";
-		$data->analysis = isset($node["analysis_json"]) ? json_decode($node["analysis_json"]) : null;
+		//bigints come back from PG as strings; the API contract serves numbers
+		$data->modified_timestamp = (int)$row->modified_timestamp;
+		$data->created_timestamp = (int)$row->created_timestamp;
+		$data->analysis = json_decode($row->analysis);
 
 		return $data;
 
@@ -6250,20 +6286,17 @@ public function getSpotName($id){
 
 		$data['analyses'] = array();
 
-		$rows = $this->neodb->get_results("MATCH (n:ToolsAnalysis) WHERE n.userpkey = $this->userpkey RETURN n ORDER BY n.modified_timestamp DESC;");
+		$rows = $this->db->get_results_prepared("SELECT id, filename, created_timestamp, modified_timestamp, analysis FROM strabotools_analyses WHERE userpkey = $1 ORDER BY modified_timestamp DESC", array((int)$this->userpkey));
 
-		foreach($rows as $row){
-
-			$node = $row->get("n");
-			$node = $node->values();
+		foreach((array)$rows as $row){
 
 			$entry = array();
-			$entry['id'] = isset($node['id']) ? $node['id'] : "";
+			$entry['id'] = $row->id;
 			$entry['self'] = "https://strabospot.org/db/strabotools/".$entry['id'];
-			$entry['filename'] = isset($node['filename']) ? $node['filename'] : "";
-			$entry['modified_timestamp'] = isset($node['modified_timestamp']) ? $node['modified_timestamp'] : "";
-			$entry['created_timestamp'] = isset($node['created_timestamp']) ? $node['created_timestamp'] : "";
-			$entry['analysis'] = isset($node['analysis_json']) ? json_decode($node['analysis_json']) : null;
+			$entry['filename'] = $row->filename;
+			$entry['modified_timestamp'] = (int)$row->modified_timestamp;
+			$entry['created_timestamp'] = (int)$row->created_timestamp;
+			$entry['analysis'] = json_decode($row->analysis);
 
 			$data['analyses'][] = $entry;
 
@@ -6279,16 +6312,15 @@ public function getSpotName($id){
 			return false;
 		}
 
-		$idliteral = json_encode($analysis_id);
-		$node = $this->neodb->getNode("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey RETURN n LIMIT 1;");
+		$row = $this->db->get_row_prepared("SELECT filename FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($analysis_id, (int)$this->userpkey));
 
-		if(empty($node)){
+		if($row === null){
 			return false;
 		}
 
-		$filename = isset($node["filename"]) ? $node["filename"] : "";
+		$filename = $row->filename !== null ? $row->filename : "";
 
-		$this->neodb->query("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey DETACH DELETE n;");
+		$this->db->prepare_query("DELETE FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($analysis_id, (int)$this->userpkey));
 
 		if($filename!="" && file_exists("/srv/app/www/straboToolsImages/$filename")){
 			unlink("/srv/app/www/straboToolsImages/$filename");
