@@ -6065,4 +6065,237 @@ public function getSpotName($id){
 		return $out;
 	}
 
+	/**********************************************************************
+	*  StraboTools analyses
+	*
+	*  StraboTools analyses are fully separate from the StraboField
+	*  workflow by design (Jason, 2026-07-07): no :Image nodes, no
+	*  dbimages/ storage, no HAS_IMAGE links, invisible to StraboField
+	*  endpoints. Files live in /srv/app/www/straboToolsImages/ named by
+	*  the strabotools_image_seq Postgres sequence; metadata lives on
+	*  :ToolsAnalysis Neo4j nodes keyed by the client record UUID per
+	*  userpkey. Queryable scalars are individual properties; the full
+	*  client payload (including arrays like attitudeRowMajor) is kept
+	*  losslessly in the analysis_json string property.
+	*/
+
+	private function toolsUuidValid($id){
+		if(!is_string($id)){ return false; }
+		return preg_match('/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/', $id) === 1;
+	}
+
+	// Build a Cypher property map from fixed keys + client values.
+	// json_encode per value (not neodb->escape) so quotes/newlines in free
+	// text, zero-valued numbers, and booleans all survive intact.
+	private function toolsCypherProps($props){
+		$parts = array();
+		foreach($props as $key=>$value){
+			if($value === null){ continue; }
+			$parts[] = $key.": ".json_encode($value, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+		}
+		return "{".implode(", ", $parts)."}";
+	}
+
+	public function insertToolsAnalysis($post,$file){
+
+		$data = array();
+
+		$imagefilename = $file['name'];
+		$imagefiletmp_name = $file['tmp_name'];
+
+		$error="";
+
+		if($imagefiletmp_name==""){
+			$error.="No image file provided. ";
+		}
+
+		$analysisraw = isset($post['analysis']) ? $post['analysis'] : "";
+		$analysis = json_decode($analysisraw, true);
+
+		if(!is_array($analysis)){
+			$error.="Field 'analysis' must be a JSON object. ";
+		}
+
+		$id = (is_array($analysis) && isset($analysis['id'])) ? $analysis['id'] : "";
+		if(!$this->toolsUuidValid($id)){
+			$error.="analysis.id must be a UUID. ";
+		}
+
+		if($error!=""){
+			$data["Error"] = $error;
+			return $data;
+		}
+
+		$imagesha1 = sha1_file($imagefiletmp_name);
+		$modified_timestamp = round(microtime(true)*1000);
+
+		$props = array(
+			'id' => $id,
+			'userpkey' => (int)$this->userpkey,
+			'created_by' => (int)$this->userpkey,
+			'origfilename' => (string)$imagefilename,
+			'imagesha1' => (string)$imagesha1,
+			'modified_timestamp' => $modified_timestamp,
+		);
+
+		//searchable scalar projections out of the analysis payload
+		foreach(array('spotName','notes','captureDate','savedDate','appVersion','deviceModel') as $key){
+			if(isset($analysis[$key]) && is_string($analysis[$key]) && $analysis[$key]!==""){
+				$props[$key] = $analysis[$key];
+			}
+		}
+
+		foreach(array('schemaVersion','azimuthOffsetDegrees','attitudeGapSeconds') as $key){
+			if(isset($analysis[$key]) && is_numeric($analysis[$key])){
+				$props[$key] = $analysis[$key]+0;
+			}
+		}
+
+		if(isset($analysis['position']) && is_array($analysis['position'])){
+			foreach(array('latitude','longitude','horizontalErrorMeters','verticalErrorMeters','elevationMeters') as $key){
+				if(isset($analysis['position'][$key]) && is_numeric($analysis['position'][$key])){
+					$props[$key] = $analysis['position'][$key]+0;
+				}
+			}
+		}
+
+		if(isset($analysis['measurements']) && is_array($analysis['measurements'])){
+			foreach(array('fabricAzimuthDegrees','fabricRakeDegrees','axialRatio','trendDegrees','plungeDegrees','colorIndexPercent','modePhaseCount') as $key){
+				if(isset($analysis['measurements'][$key]) && is_numeric($analysis['measurements'][$key])){
+					$props[$key] = $analysis['measurements'][$key]+0;
+				}
+			}
+			if(isset($analysis['measurements']['colorIndexAdaptive']) && is_bool($analysis['measurements']['colorIndexAdaptive'])){
+				$props['colorIndexAdaptive'] = $analysis['measurements']['colorIndexAdaptive'];
+			}
+		}
+
+		//full lossless payload (arrays like attitudeRowMajor/modePercentages live here)
+		$props['analysis_json'] = json_encode($analysis, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+		//$id is regex-validated above; json_encode quotes it for Cypher
+		$idliteral = json_encode($id);
+
+		//********************************************************************
+		// check to see if analysis already exists (idempotent by client UUID)
+		//********************************************************************
+		$neoid = $this->neodb->get_var("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey RETURN id(n);");
+
+		if($neoid!==""){
+
+			//analysis exists: update in place, keep filename + created_timestamp
+			$existing = $this->neodb->getNode("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey RETURN n LIMIT 1;");
+
+			$filename = (isset($existing['filename']) && $existing['filename']!="") ? $existing['filename'] : $this->db->get_var("SELECT nextval('strabotools_image_seq');");
+			$props['filename'] = (string)$filename;
+			$props['created_timestamp'] = isset($existing['created_timestamp']) ? $existing['created_timestamp']+0 : $modified_timestamp;
+
+			$this->neodb->query("MATCH (n:ToolsAnalysis) WHERE id(n) = $neoid SET n = ".$this->toolsCypherProps($props)." RETURN id(n);");
+
+			copy ( $imagefiletmp_name , "/srv/app/www/straboToolsImages/$filename" );
+
+		}else{
+
+			//new analysis
+			$filename = $this->db->get_var("SELECT nextval('strabotools_image_seq');");
+			$props['filename'] = (string)$filename;
+			$props['created_timestamp'] = $modified_timestamp;
+
+			$this->neodb->query("CREATE (n:ToolsAnalysis ".$this->toolsCypherProps($props).") RETURN id(n);");
+
+			copy ( $imagefiletmp_name , "/srv/app/www/straboToolsImages/$filename" );
+
+		}
+
+		$data['self']="https://strabospot.org/db/strabotools/$id";
+		$data['id']=$id;
+		$data['filename']=$filename;
+
+		return $data;
+
+	}
+
+	public function getToolsAnalysisInfo($analysis_id){
+
+		$data = new stdClass();
+		$data->count = 0;
+
+		if(!$this->toolsUuidValid($analysis_id)){
+			return $data;
+		}
+
+		$idliteral = json_encode($analysis_id);
+		$node = $this->neodb->getNode("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey RETURN n LIMIT 1;");
+
+		if(empty($node)){
+			return $data;
+		}
+
+		$data->count = 1;
+		$data->id = $analysis_id;
+		$data->filename = isset($node["filename"]) ? $node["filename"] : "";
+		$data->origfilename = isset($node["origfilename"]) ? $node["origfilename"] : "";
+		$extension = $data->origfilename != "" ? strtolower(pathinfo($data->origfilename, PATHINFO_EXTENSION)) : "";
+		if($extension=="" || $extension=="jpg"){ $extension = "jpeg"; }
+		$data->extension = $extension;
+		$data->modified_timestamp = isset($node["modified_timestamp"]) ? $node["modified_timestamp"] : "";
+		$data->created_timestamp = isset($node["created_timestamp"]) ? $node["created_timestamp"] : "";
+		$data->analysis = isset($node["analysis_json"]) ? json_decode($node["analysis_json"]) : null;
+
+		return $data;
+
+	}
+
+	public function getMyToolsAnalyses(){
+
+		$data['analyses'] = array();
+
+		$rows = $this->neodb->get_results("MATCH (n:ToolsAnalysis) WHERE n.userpkey = $this->userpkey RETURN n ORDER BY n.modified_timestamp DESC;");
+
+		foreach($rows as $row){
+
+			$node = $row->get("n");
+			$node = $node->values();
+
+			$entry = array();
+			$entry['id'] = isset($node['id']) ? $node['id'] : "";
+			$entry['self'] = "https://strabospot.org/db/strabotools/".$entry['id'];
+			$entry['filename'] = isset($node['filename']) ? $node['filename'] : "";
+			$entry['modified_timestamp'] = isset($node['modified_timestamp']) ? $node['modified_timestamp'] : "";
+			$entry['created_timestamp'] = isset($node['created_timestamp']) ? $node['created_timestamp'] : "";
+			$entry['analysis'] = isset($node['analysis_json']) ? json_decode($node['analysis_json']) : null;
+
+			$data['analyses'][] = $entry;
+
+		}
+
+		return $data;
+
+	}
+
+	public function deleteToolsAnalysis($analysis_id){
+
+		if(!$this->toolsUuidValid($analysis_id)){
+			return false;
+		}
+
+		$idliteral = json_encode($analysis_id);
+		$node = $this->neodb->getNode("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey RETURN n LIMIT 1;");
+
+		if(empty($node)){
+			return false;
+		}
+
+		$filename = isset($node["filename"]) ? $node["filename"] : "";
+
+		$this->neodb->query("MATCH (n:ToolsAnalysis) WHERE n.id = $idliteral AND n.userpkey = $this->userpkey DETACH DELETE n;");
+
+		if($filename!="" && file_exists("/srv/app/www/straboToolsImages/$filename")){
+			unlink("/srv/app/www/straboToolsImages/$filename");
+		}
+
+		return true;
+
+	}
+
 }
