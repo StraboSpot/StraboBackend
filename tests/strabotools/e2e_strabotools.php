@@ -3,18 +3,25 @@
  * StraboTools API: curl-level E2E test suite
  *
  * Drives the live HTTP endpoints (Basic auth on /db/, JWT on /jwtdb/)
- * end-to-end and asserts server state at the Neo4j / filesystem layer:
+ * end-to-end and asserts server state at the PostgreSQL
+ * (strabotools_analyses) / filesystem layer:
  *
  *   POST   /db/strabotools        create + idempotent re-upload by UUID
  *   GET    /db/strabotools/<id>   image bytes + ?format=json metadata
  *   GET    /db/mystrabotools      listing, newest first
- *   DELETE /db/strabotools/<id>   node + file removal
+ *   DELETE /db/strabotools/<id>   row + file removal
  *
- * Also proves the StraboField-isolation contract (no :Image nodes, no
- * relationships, invisible id space) and per-user UUID namespacing.
+ * Also proves the StraboField-isolation contract (no :Image nodes,
+ * nothing written to Neo4j at all, invisible id space) and per-user
+ * UUID namespacing.
  *
  * Hermetic: creates its own users (strabotools_*@test.strabospot.org),
- * cleans up all DB rows, Neo4j nodes, and files. Run twice: both green.
+ * cleans up all DB rows and files. Run twice: both green.
+ *
+ * ⚠ The startup cleanup DELETEs every user matching
+ *   strabotools_%@test.strabospot.org (residue from crashed runs).
+ *   Don't hand-create test users under that pattern — they will vanish
+ *   the next time this suite runs and logins will fail mid-session.
  *
  * Usage (inside container): php /srv/app/www/tests/strabotools/e2e_strabotools.php
  *
@@ -115,6 +122,8 @@ section("Setup");
 // Clean any residue from a previous crashed run
 $db->query("DELETE FROM refresh_tokens WHERE userpkey IN (SELECT pkey FROM users WHERE email LIKE 'strabotools_%@test.strabospot.org')");
 $db->query("DELETE FROM users WHERE email LIKE 'strabotools_%@test.strabospot.org'");
+$db->query("DELETE FROM strabotools_analyses WHERE spot_name LIKE 'E2ETOOLS%'");
+// legacy residue from runs before the PostgreSQL storage conversion
 $neodb->query("MATCH (n:ToolsAnalysis) WHERE n.spotName STARTS WITH 'E2ETOOLS' DETACH DELETE n;");
 
 foreach ([$ownerEmail => 'Owner', $strangerEmail => 'Stranger'] as $email => $last) {
@@ -148,7 +157,9 @@ file_put_contents($blob2Path, base64_decode($jpegB64) . 'E2ETOOLS-V2-BYTES');
 test("Test blobs prepared", sha1_file($blob1Path) !== sha1_file($blob2Path));
 
 $uuidA = 'aaaaaaaa-1111-2222-3333-444444444444';
-$uuidB = 'bbbbbbbb-1111-2222-3333-444444444444';
+// uppercase on purpose: iOS UUID().uuidString is uppercase, and the
+// contract echoes the client's casing verbatim (id is text, not uuid)
+$uuidB = 'BBBBBBBB-1111-2222-3333-444444444444';
 $uuidC = 'cccccccc-1111-2222-3333-444444444444';
 
 $trickyNotes = "coarse-grained — `it's` \"near\" the contact\nline2 \\ backslash μm\"}) MATCH (x) DETACH DELETE x //";
@@ -202,19 +213,19 @@ test("Create returns numeric filename", $filenameA !== '' && ctype_digit((string
 test("File stored in straboToolsImages", file_exists("$toolsDir/$filenameA"));
 test("Stored bytes match upload", file_exists("$toolsDir/$filenameA") && sha1_file("$toolsDir/$filenameA") === sha1_file($blob1Path));
 
-$node = $neodb->getNode("MATCH (n:ToolsAnalysis) WHERE n.id = \"$uuidA\" AND n.userpkey = $ownerPkey RETURN n LIMIT 1;");
-test("Node created with owner userpkey", !empty($node));
-test("Scalar projection: spotName", isset($node['spotName']) && $node['spotName'] === $analysisA['spotName']);
-test("Scalar projection: latitude", isset($node['latitude']) && abs($node['latitude'] - 38.95) < 1e-9);
-test("Scalar projection: fabricAzimuthDegrees", isset($node['fabricAzimuthDegrees']) && abs($node['fabricAzimuthDegrees'] - 118.13) < 1e-9);
-test("Zero-valued number survives (azimuthOffsetDegrees)", isset($node['azimuthOffsetDegrees']) && $node['azimuthOffsetDegrees'] === 0);
-test("Boolean survives (colorIndexAdaptive)", isset($node['colorIndexAdaptive']) && $node['colorIndexAdaptive'] === false);
-test("Cypher-hostile notes stored literally", isset($node['notes']) && $node['notes'] === $trickyNotes);
-$storedJson = isset($node['analysis_json']) ? json_decode($node['analysis_json'], true) : null;
-test("analysis_json round-trips arrays", is_array($storedJson)
+$row = $db->get_row_prepared("SELECT * FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", [$uuidA, $ownerPkey]);
+test("Row created with owner userpkey", $row !== null);
+test("Scalar projection: spot_name", $row !== null && $row->spot_name === $analysisA['spotName']);
+test("Scalar projection: latitude", $row !== null && $row->latitude !== null && abs((float)$row->latitude - 38.95) < 1e-9);
+test("Scalar projection: fabric_azimuth_degrees", $row !== null && $row->fabric_azimuth_degrees !== null && abs((float)$row->fabric_azimuth_degrees - 118.13) < 1e-9);
+test("Zero-valued number survives (azimuth_offset_degrees)", $row !== null && $row->azimuth_offset_degrees !== null && (float)$row->azimuth_offset_degrees === 0.0);
+test("Boolean survives (color_index_adaptive)", $row !== null && $row->color_index_adaptive === 'f');
+test("SQL-hostile notes stored literally", $row !== null && $row->notes === $trickyNotes);
+$storedJson = $row !== null ? json_decode($row->analysis, true) : null;
+test("analysis jsonb round-trips arrays", is_array($storedJson)
     && $storedJson['attitudeRowMajor'] === $analysisA['attitudeRowMajor']
     && $storedJson['measurements']['modePercentages'] === $analysisA['measurements']['modePercentages']);
-$createdTsA = isset($node['created_timestamp']) ? $node['created_timestamp'] : null;
+$createdTsA = $row !== null ? (int)$row->created_timestamp : null;
 test("created_timestamp set", $createdTsA !== null && $createdTsA > 0);
 
 // ---------------------------------------------------------------------------
@@ -230,13 +241,13 @@ $r = uploadAnalysis("$baseUrl/db/strabotools", $analysisA2, $blob2Path, $ownerEm
 test("Re-upload returns 201", $r['code'] == 201, "got {$r['code']}: {$r['raw']}");
 test("Re-upload keeps the same filename", isset($r['body']['filename']) && (string)$r['body']['filename'] === (string)$filenameA, "got '{$r['body']['filename']}' vs '$filenameA'");
 
-$dupCount = (int)$neodb->get_var("MATCH (n:ToolsAnalysis) WHERE n.id = \"$uuidA\" AND n.userpkey = $ownerPkey RETURN count(n);");
-test("No duplicate node", $dupCount === 1, "count=$dupCount");
+$dupCount = (int)$db->get_var_prepared("SELECT count(*) FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", [$uuidA, $ownerPkey]);
+test("No duplicate row", $dupCount === 1, "count=$dupCount");
 
-$node = $neodb->getNode("MATCH (n:ToolsAnalysis) WHERE n.id = \"$uuidA\" AND n.userpkey = $ownerPkey RETURN n LIMIT 1;");
-test("Notes updated in place", isset($node['notes']) && $node['notes'] === $analysisA2['notes']);
-test("created_timestamp preserved", isset($node['created_timestamp']) && $node['created_timestamp'] === $createdTsA);
-test("modified_timestamp advanced", isset($node['modified_timestamp']) && $node['modified_timestamp'] > $createdTsA);
+$row = $db->get_row_prepared("SELECT notes, created_timestamp, modified_timestamp FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", [$uuidA, $ownerPkey]);
+test("Notes updated in place", $row !== null && $row->notes === $analysisA2['notes']);
+test("created_timestamp preserved", $row !== null && (int)$row->created_timestamp === $createdTsA);
+test("modified_timestamp advanced", $row !== null && (int)$row->modified_timestamp > $createdTsA);
 test("File replaced with new bytes", sha1_file("$toolsDir/$filenameA") === sha1_file($blob2Path));
 
 // ---------------------------------------------------------------------------
@@ -289,8 +300,8 @@ test("Stranger GET -> 404", $r['code'] == 404, "got {$r['code']}");
 
 $r = httpJson('DELETE', "$baseUrl/db/strabotools/$uuidA", $strangerEmail, $testPassword);
 test("Stranger DELETE -> 404", $r['code'] == 404, "got {$r['code']}");
-$stillThere = (int)$neodb->get_var("MATCH (n:ToolsAnalysis) WHERE n.id = \"$uuidA\" AND n.userpkey = $ownerPkey RETURN count(n);");
-test("Owner's node untouched by stranger DELETE", $stillThere === 1);
+$stillThere = (int)$db->get_var_prepared("SELECT count(*) FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", [$uuidA, $ownerPkey]);
+test("Owner's row untouched by stranger DELETE", $stillThere === 1);
 
 $r = httpJson('GET', "$baseUrl/db/mystrabotools", $strangerEmail, $testPassword);
 test("Stranger list is empty", $r['code'] == 200 && isset($r['body']['analyses']) && count($r['body']['analyses']) === 0);
@@ -301,8 +312,8 @@ $analysisHijack['spotName'] = 'E2ETOOLS stranger upload, same uuid';
 $r = uploadAnalysis("$baseUrl/db/strabotools", $analysisHijack, $blob1Path, $strangerEmail, $testPassword);
 test("Stranger upload with owner's UUID -> own record", $r['code'] == 201 && (string)$r['body']['filename'] !== (string)$filenameA);
 $strangerFilename = isset($r['body']['filename']) ? $r['body']['filename'] : '';
-$ownerNode = $neodb->getNode("MATCH (n:ToolsAnalysis) WHERE n.id = \"$uuidA\" AND n.userpkey = $ownerPkey RETURN n LIMIT 1;");
-test("Owner's record not hijacked", isset($ownerNode['spotName']) && $ownerNode['spotName'] === $analysisA['spotName']);
+$ownerSpotName = $db->get_var_prepared("SELECT spot_name FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", [$uuidA, $ownerPkey]);
+test("Owner's record not hijacked", $ownerSpotName === $analysisA['spotName']);
 
 // Anonymous: app-layer behavior depends on whether the vhost fronts /db/
 // with extauth. Either the request is rejected (401/403) or it resolves
@@ -361,8 +372,8 @@ $analysisC['spotName'] = 'E2ETOOLS uploaded via jwtdb';
 $r = uploadAnalysis("$baseUrl/jwtdb/strabotools", $analysisC, $blob1Path, null, null, $accessToken);
 test("JWT upload returns 201", $r['code'] == 201, "got {$r['code']}: {$r['raw']}");
 $filenameC = isset($r['body']['filename']) ? $r['body']['filename'] : '';
-$jwtNodeCount = (int)$neodb->get_var("MATCH (n:ToolsAnalysis) WHERE n.id = \"$uuidC\" AND n.userpkey = $ownerPkey RETURN count(n);");
-test("JWT upload owned by JWT user", $jwtNodeCount === 1);
+$jwtRowCount = (int)$db->get_var_prepared("SELECT count(*) FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", [$uuidC, $ownerPkey]);
+test("JWT upload owned by JWT user", $jwtRowCount === 1);
 
 $r = httpJson('POST', "$baseUrl/jwtauth/refresh.php", null, null, null, ['refresh_token' => $refreshToken]);
 test("Refresh grants new access token (multi-use refresh)", $r['code'] == 200 && isset($r['body']['access_token']), "got {$r['code']}: {$r['raw']}");
@@ -380,11 +391,9 @@ section("StraboField isolation");
 $imageCountAfter = (int)$neodb->get_var("MATCH (n:Image) RETURN count(n);");
 test("No :Image nodes created", $imageCountAfter === $imageCountBefore, "before=$imageCountBefore after=$imageCountAfter");
 
-$relCount = (int)$neodb->get_var("MATCH (n:ToolsAnalysis)--() RETURN count(*);");
-test("ToolsAnalysis nodes have no relationships", $relCount === 0, "count=$relCount");
-
-$straboLabelCount = (int)$neodb->get_var("MATCH (n:ToolsAnalysis:Strabo) RETURN count(n);");
-test("ToolsAnalysis nodes not tagged :Strabo", $straboLabelCount === 0, "count=$straboLabelCount");
+// storage is PostgreSQL-only now: the API must write nothing to Neo4j
+$toolsNodeCount = (int)$neodb->get_var("MATCH (n:ToolsAnalysis) WHERE n.userpkey IN [$ownerPkey, $strangerPkey] RETURN count(n);");
+test("Nothing written to Neo4j (:ToolsAnalysis count 0)", $toolsNodeCount === 0, "count=$toolsNodeCount");
 
 $r = httpJson('GET', "$baseUrl/db/myimages", $ownerEmail, $testPassword);
 $myimagesClean = !is_array($r['body']) || strpos(json_encode($r['body']), $uuidA) === false;
@@ -400,8 +409,8 @@ section("Delete (DELETE /db/strabotools/<id>)");
 
 $r = httpJson('DELETE', "$baseUrl/db/strabotools/$uuidA", $ownerEmail, $testPassword);
 test("DELETE returns 204", $r['code'] == 204, "got {$r['code']}");
-$gone = (int)$neodb->get_var("MATCH (n:ToolsAnalysis) WHERE n.id = \"$uuidA\" AND n.userpkey = $ownerPkey RETURN count(n);");
-test("Node deleted", $gone === 0);
+$gone = (int)$db->get_var_prepared("SELECT count(*) FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", [$uuidA, $ownerPkey]);
+test("Row deleted", $gone === 0);
 test("File deleted", !file_exists("$toolsDir/$filenameA"));
 
 $r = httpJson('DELETE', "$baseUrl/db/strabotools/$uuidA", $ownerEmail, $testPassword);
@@ -418,11 +427,11 @@ foreach ([$filenameB, $strangerFilename] as $fn) {
         unlink("$toolsDir/$fn");
     }
 }
-$neodb->query("MATCH (n:ToolsAnalysis) WHERE n.userpkey IN [$ownerPkey, $strangerPkey] DETACH DELETE n;");
+$db->query("DELETE FROM strabotools_analyses WHERE userpkey IN ($ownerPkey, $strangerPkey)");
 $db->query("DELETE FROM refresh_tokens WHERE userpkey IN ($ownerPkey, $strangerPkey)");
 $db->query("DELETE FROM users WHERE email LIKE 'strabotools_%@test.strabospot.org'");
 
-$residueNodes = (int)$neodb->get_var("MATCH (n:ToolsAnalysis) WHERE n.userpkey IN [$ownerPkey, $strangerPkey] RETURN count(n);");
+$residueRows = (int)$db->get_var("SELECT count(*) FROM strabotools_analyses WHERE userpkey IN ($ownerPkey, $strangerPkey)");
 $residueUsers = (int)$db->get_var("SELECT count(*) FROM users WHERE email LIKE 'strabotools_%@test.strabospot.org'");
 $residueFiles = 0;
 foreach ([$filenameA, $filenameB, $filenameC, $strangerFilename] as $fn) {
@@ -430,8 +439,8 @@ foreach ([$filenameA, $filenameB, $filenameC, $strangerFilename] as $fn) {
         $residueFiles++;
     }
 }
-test("Zero residue (nodes/users/files)", $residueNodes === 0 && $residueUsers === 0 && $residueFiles === 0,
-    "nodes=$residueNodes users=$residueUsers files=$residueFiles");
+test("Zero residue (rows/users/files)", $residueRows === 0 && $residueUsers === 0 && $residueFiles === 0,
+    "rows=$residueRows users=$residueUsers files=$residueFiles");
 
 if ($createdToolsDir) {
     $leftover = array_diff(scandir($toolsDir), ['.', '..']);
