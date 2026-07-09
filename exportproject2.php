@@ -1,6 +1,18 @@
-<?
-include("includes/header.php");
+<?php
+/**
+ * File: exportproject2.php
+ * Description: Instructions for exporting a StraboField project to PC or Mac
+ *
+ * @package    StraboSpot Web Site
+ * @author     Jason Ash <jasonash@ku.edu>
+ * @copyright  2026 StraboSpot
+ * @license    https://opensource.org/licenses/MIT MIT License
+ * @link       https://strabospot.org
+ */
+
+include 'includes/mheader.php';
 ?>
+
 <style type='text/css'>
 .howtostep {
 	padding-top: 0px;
@@ -9,12 +21,15 @@ include("includes/header.php");
 .olsteps {
 	padding-left: 20px;
 }
-
 </style>
 
-<div style="text-align:center;">
-	<h2 class="wsite-content-title">EXPORTING StraboField PROJECT TO PC OR MAC</h2>
-</div>
+			<!-- Main -->
+				<div id="main" class="wrapper style1">
+					<div class="container">
+
+						<header class="major">
+							<h2>Exporting StraboField Project to PC or Mac</h2>
+						</header>
 
 <div>
 From time to time, it might be necessary or desirable to export a StraboField project from your
@@ -23,8 +38,8 @@ or you might want to share a project with another user or a member of the Strabo
 Whatever the reason, the following steps should allow you to export a StraboField project to your PC or Mac.
 </div>
 
-<div style="text-align:center;padding-top:15px;">
-	<h2 class="wsite-content-title">FIRST, EXPORT PROJECT TO MOBILE DEVICE</h2>
+<div style="text-align:center;padding-top:25px;">
+	<h3>First, Export Project to Mobile Device</h3>
 </div>
 
 <div class="howtostep">
@@ -51,8 +66,8 @@ to your PC or Mac.
 
 
 <!--
-<div style="text-align:center;padding-top:15px;">
-	<h2 class="wsite-content-title">ANDROID</h2>
+<div style="text-align:center;padding-top:25px;">
+	<h3>Android</h3>
 </div>
 
 <div class="howtostep">
@@ -91,8 +106,8 @@ to your PC or Mac.
 </div>
 -->
 
-<div style="text-align:center;padding-top:15px;">
-	<h2 class="wsite-content-title">Transfer to Mac</h2>
+<div style="text-align:center;padding-top:25px;">
+	<h3>Transfer to Mac</h3>
 </div>
 
 <div class="howtostep">
@@ -126,8 +141,8 @@ to your PC or Mac.
 	</ol>
 </div>
 
-<div style="text-align:center;padding-top:15px;">
-	<h2 class="wsite-content-title">Transfer to Windows using iTunes</h2>
+<div style="text-align:center;padding-top:25px;">
+	<h3>Transfer to Windows using iTunes</h3>
 </div>
 
 <div class="howtostep">
@@ -163,6 +178,11 @@ to your PC or Mac.
 	</ol>
 </div>
 
-<?
-include("includes/footer.php");
+					<div class="bottomSpacer"></div>
+
+					</div>
+				</div>
+
+<?php
+include 'includes/mfooter.php';
 ?>
