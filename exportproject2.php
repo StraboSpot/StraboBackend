@@ -45,16 +45,16 @@ Whatever the reason, the following steps should allow you to export a StraboFiel
 <div class="howtostep">
 	<ol class="olsteps">
 		<li>
-			With the desired project and datasets active within StraboField, click on the upper-left Home menu and click "Upload, Backup & Export".
+			With the desired project and datasets active within StraboField, click on the upper-left Home menu and click "MANAGE PROJECT -> Backup".
 		</li>
 		<li>
-			Next, click "Backup project to device".
+			Next, click "Save".
 		</li>
 		<li>
 			Confirm or change the folder name you would like to export to. It is likely safe to keep the default value.
 		</li>
 		<li>
-			Click "Backup" to export the folder to your device.
+			Click "Save" to export the folder to your device.
 		</li>
 	</ol>
 </div>
