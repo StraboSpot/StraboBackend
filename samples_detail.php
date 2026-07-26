@@ -196,7 +196,15 @@ if (!$notFound) {
                 $isPublic = ($pr->ispublic === 't' || $pr->ispublic === true || $pr->ispublic === 'true');
                 $isOwner  = ((int)$pr->userpkey === $viewerPkey);
                 if ($isPublic || $isOwner) {
-                    $l['view_href'] = '/microproject?id=' . (int)$pr->id;
+                    // Viewer varies by uploading app (same branch as my_micro_data.php):
+                    // StraboMicro2 uploads carry a webImages dir and use the new
+                    // straboMicroView viewer; legacy projects use /microproject.
+                    $microPid = (int)$pr->id;
+                    if (is_dir(__DIR__ . "/straboMicroFiles/$microPid/webImages")) {
+                        $l['view_href'] = '/straboMicroView/view?p=' . $microPid;
+                    } else {
+                        $l['view_href'] = '/microproject?id=' . $microPid;
+                    }
                 } else {
                     $l['view_unavailable'] = 'Host StraboMicro project is private and owned by another user.';
                 }
