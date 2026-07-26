@@ -39,8 +39,15 @@ $samples = $svc->listMySamples();
 // caller can read (mirrors listMySamples' visibility predicate so the
 // badge query returns zero rows for non-accessible samples even if some
 // other path adds links to them).
+// Micro badges sum reference_metadata.micrograph_count (the card label is
+// "Micrographs", not "projects"); field/exp links are already one-per-unit.
+// Floor of 1 per link: pre-count rows and zero-micrograph samples still
+// surface the link, and the StraboMicro filter tab (badges > 0) keeps working.
 $badgeRows = $db->get_results_prepared(
-    "SELECT l.sample_id, l.sample_userpkey, l.subsystem, COUNT(*)::int AS n
+    "SELECT l.sample_id, l.sample_userpkey, l.subsystem,
+            SUM(CASE WHEN l.subsystem = 'micro'
+                     THEN GREATEST(COALESCE((l.reference_metadata->>'micrograph_count')::int, 1), 1)
+                     ELSE 1 END)::int AS n
        FROM strabosamples.sample_subsystem_links l
        JOIN strabosamples.samples s
          ON s.id = l.sample_id AND s.userpkey = l.sample_userpkey

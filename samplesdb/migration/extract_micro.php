@@ -54,7 +54,9 @@ function migration_extract_micro($db, $opts = array()) {
             sm.latitude,
             pm.userpkey        AS project_userpkey,
             pm.id              AS project_internal_id,
-            pm.strabo_id       AS project_strabo_id
+            pm.strabo_id       AS project_strabo_id,
+            (SELECT count(*) FROM strabomicro.micro_micrographmetadata mm
+              WHERE mm.sample_id = sm.id) AS micrograph_count
         FROM strabomicro.micro_samplemetadata sm
         LEFT JOIN strabomicro.micro_datasetmetadata dm ON dm.id = sm.dataset_id
         LEFT JOIN strabomicro.micro_projectmetadata pm ON pm.id = dm.project_id
@@ -152,6 +154,7 @@ function migration_extract_micro($db, $opts = array()) {
             'reference_metadata'     => array(
                 'dataset_id'       => $r->dataset_id !== null ? (int)$r->dataset_id : null,
                 'project_strabo_id'=> (string)$r->project_strabo_id,
+                'micrograph_count' => (int)$r->micrograph_count,
             ),
             'composition'            => array(),
             'parameters'             => array(),
