@@ -16,7 +16,8 @@
  *              Parent management (parent_sample_id / parent_userpkey)
  *              is NOT exposed here — those go through the separate
  *              /sample/{id}/parent sub-resource per §8.3. The Edit
- *              Metadata modal is scoped to spine metadata only.
+ *              Metadata modal saves the parent via samples_parent.php
+ *              and only the spine fields through this proxy.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
