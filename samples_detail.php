@@ -1169,6 +1169,78 @@ include("includes/mheader.php");
     line-height: 1.35;
 }
 .em-readonly-note[hidden] { display: none; }
+/* Parent picker — same recipe as the create modal's ms-parent-* set. */
+.em-parent-picker { position: relative; }
+.em-parent-clear {
+    position: absolute;
+    right: 0.4em;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.3em;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.3em;
+}
+.em-parent-clear:hover { color: #ffffff; }
+.em-parent-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #2a2a3a;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 1;
+}
+.em-parent-results[hidden] { display: none; }
+.em-parent-hit {
+    padding: 0.45em 0.7em;
+    cursor: pointer;
+    color: rgba(255, 255, 255, 0.9);
+    font-size: 0.92em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.em-parent-hit:last-child { border-bottom: none; }
+.em-parent-hit:hover { background: rgba(228, 76, 101, 0.2); }
+.em-parent-noresults {
+    padding: 0.5em 0.7em;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 0.9em;
+    font-style: italic;
+}
+.em-parent-current {
+    margin-top: 0.4em;
+    padding: 0.4em 0.7em;
+    background: rgba(228, 76, 101, 0.15);
+    border-left: 3px solid #e44c65;
+    border-radius: 3px;
+    font-size: 0.9em;
+    color: rgba(255, 255, 255, 0.9);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.6em;
+}
+.em-parent-current[hidden] { display: none; }
+.em-parent-current.pending { border-left-color: rgba(255, 200, 110, 0.95); background: rgba(255, 200, 110, 0.12); }
+.em-parent-current.orphan  { font-style: italic; color: rgba(255, 255, 255, 0.65); }
+.em-parent-remove {
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.15em;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.2em;
+    flex: 0 0 auto;
+}
+.em-parent-remove:hover { color: #fff; }
 .em-modal-error {
     background: rgba(228, 76, 101, 0.18);
     border-left: 3px solid #e44c65;
@@ -1325,10 +1397,12 @@ include("includes/mheader.php");
 
 <!-- Edit Metadata modal. Visible to owner + accepted-edit collaborators
      (gated by perms.canEdit). Opened from the Edit Metadata button under
-     Sample Metadata. Edits writable spine fields only — parent management
-     is the separate /sample/{id}/parent sub-resource. Lat/lng inputs are
-     disabled when the sample has a Field link (the Spot's geometry is
-     authoritative per §6.1; the API would 409 the request anyway). -->
+     Sample Metadata. Edits writable spine fields plus the parent link —
+     spine goes through samples_edit.php, parent through the separate
+     samples_parent.php proxy (§8.3 keeps them distinct sub-resources).
+     Lat/lng inputs are disabled when the sample has a Field link (the
+     Spot's geometry is authoritative per §6.1; the API would 409 the
+     request anyway). -->
 <div id="em-modal-overlay" class="em-modal-overlay" hidden>
     <div class="em-modal" role="dialog" aria-modal="true" aria-labelledby="em-modal-title">
         <div class="em-modal-header">
@@ -1375,6 +1449,18 @@ include("includes/mheader.php");
                 <label for="em-f-notes">Notes</label>
                 <textarea id="em-f-notes" rows="2" maxlength="4000"></textarea>
             </div>
+            <div class="em-form-row">
+                <label for="em-f-parent">Parent Sample</label>
+                <div class="em-parent-picker">
+                    <input type="text" id="em-f-parent" autocomplete="off" placeholder="Type to search your samples&hellip;">
+                    <button type="button" class="em-parent-clear" id="em-parent-input-clear" aria-label="Clear search" hidden>&times;</button>
+                    <div class="em-parent-results" id="em-parent-results" hidden></div>
+                </div>
+                <div class="em-parent-current" id="em-parent-current" hidden>
+                    <span id="em-parent-current-label"></span>
+                    <button type="button" class="em-parent-remove" id="em-parent-remove" aria-label="Remove parent" title="Remove parent">&times;</button>
+                </div>
+            </div>
             <div class="em-modal-error" id="em-modal-error" hidden></div>
             <div class="em-modal-footer">
                 <button type="button" class="em-btn-cancel" id="em-modal-cancel">Cancel</button>
@@ -1394,6 +1480,9 @@ include("includes/mheader.php");
     var shareUrl = JSON.parse(document.getElementById('sd-share-url-data').textContent || '""');
     var sample = payload.sample, owner = payload.owner, links = payload.links || [];
     var collabs = payload.collaborators || [], family = payload.family || {};
+    // Set by the familyExplorer IIFE; the Edit Metadata modal calls it
+    // after a successful parent set/clear so the widget re-snapshots.
+    var refreshFamilyWidget = null;
     var perms = payload.permissions || {isOwner: false, canEdit: false};
 
     function escapeHtml(s) {
@@ -1803,6 +1892,24 @@ include("includes/mheader.php");
         backBtn.addEventListener('click', resetToOriginal);
 
         window.addEventListener('resize', refreshWidgetRect);
+
+        // Exposed so the Edit Metadata modal can re-snapshot the widget
+        // after a parent set/clear. Re-fetches the page sample's 1-hop
+        // family and resets both the original snapshot and the current
+        // view to it — any in-progress exploration is intentionally
+        // discarded, since the tree just changed underneath it. Also
+        // rebinds the page-scope `family` so the modal's prefill reads
+        // the fresh parent on its next open.
+        refreshFamilyWidget = function() {
+            fetchFamily(sample.id, owner.pkey, function(newFam) {
+                if (!newFam) return;
+                originalFamily = newFam;
+                currentFamily  = newFam;
+                family         = newFam;
+                updateBreadcrumb();
+                renderFamily(newFam, false);
+            });
+        };
 
         // ---- Initial render ----
         renderFamily(currentFamily, /*isInitial*/ true);
@@ -2450,11 +2557,13 @@ include("includes/mheader.php");
 
     // ---- Edit Metadata modal ----
     // Edits the writable spine fields (name, igsn, description, notes,
-    // latitude, longitude, display_sample_type, display_sample_purpose).
-    // Parent management lives on /sample/{id}/parent and is out of scope
-    // for this modal. Lat/lng inputs disable when the sample has a Field
-    // link — the Spot's geometry is authoritative (§6.1) and the API
-    // would 409 'field_link_read_only' on a lat/lng PUT anyway.
+    // latitude, longitude, display_sample_type, display_sample_purpose)
+    // plus the parent link. Spine saves through samples_edit.php; the
+    // parent goes through samples_parent.php (§8.3 keeps parent a
+    // separate sub-resource — the spine proxy strips parent fields).
+    // Lat/lng inputs disable when the sample has a Field link — the
+    // Spot's geometry is authoritative (§6.1) and the API would 409
+    // 'field_link_read_only' on a lat/lng PUT anyway.
     var VOCAB_OTHER_SENTINEL = '__other__';
     var $emModal       = document.getElementById('em-modal-overlay');
     var $emForm        = document.getElementById('em-modal-form');
@@ -2474,6 +2583,159 @@ include("includes/mheader.php");
     var $emNotes       = document.getElementById('em-f-notes');
     var $emReadonlyNote= document.getElementById('em-readonly-note');
     var emEscHandler   = null;
+
+    // ---- Parent picker state ----
+    // emParentPending is a three-state flag: undefined = untouched (keep
+    // whatever the sample has), null = user removed the parent, object
+    // {id, userpkey, name} = user picked a new parent. The original is
+    // always read live from family.parent, which refreshFamilyWidget
+    // rebinds after every successful set/clear.
+    var $emParentInput      = document.getElementById('em-f-parent');
+    var $emParentInputClear = document.getElementById('em-parent-input-clear');
+    var $emParentResults    = document.getElementById('em-parent-results');
+    var $emParentCurrent    = document.getElementById('em-parent-current');
+    var $emParentLabel      = document.getElementById('em-parent-current-label');
+    var $emParentRemove     = document.getElementById('em-parent-remove');
+    var emParentPending     = undefined;
+    var emParentCandidates  = null;    // null = not loaded yet this open
+
+    function emOriginalParent() {
+        return (family && family.parent) ? family.parent : null;
+    }
+
+    function emParentDirty() {
+        if (emParentPending === undefined) return false;
+        var orig = emOriginalParent();
+        if (emParentPending === null) return orig !== null;
+        if (!orig || orig.orphaned) return true;
+        return !(emParentPending.id === orig.id && emParentPending.userpkey === orig.userpkey);
+    }
+
+    // Render the "current/selected parent" line under the search input.
+    function emRenderParentLine() {
+        var orig = emOriginalParent();
+        var eff  = (emParentPending === undefined) ? orig : emParentPending;
+        var dirty = emParentDirty();
+
+        $emParentCurrent.classList.remove('pending', 'orphan');
+        if (eff === null) {
+            if (dirty) {
+                // Non-null original explicitly removed.
+                $emParentCurrent.classList.add('pending');
+                $emParentLabel.textContent = 'Parent will be removed on save';
+                $emParentRemove.hidden = true;
+                $emParentCurrent.hidden = false;
+            } else {
+                $emParentCurrent.hidden = true;
+            }
+            return;
+        }
+        if (eff.orphaned) {
+            $emParentCurrent.classList.add('orphan');
+            $emParentLabel.textContent = 'Parent: (inaccessible — owned by another user)';
+        } else {
+            $emParentLabel.textContent = (dirty ? 'New parent: ' : 'Parent: ') + (eff.name || eff.id);
+            if (dirty) $emParentCurrent.classList.add('pending');
+        }
+        $emParentRemove.hidden = false;
+        $emParentCurrent.hidden = false;
+    }
+
+    function emResetParentPicker() {
+        emParentPending = undefined;
+        emParentCandidates = null;
+        $emParentInput.value = '';
+        $emParentInputClear.hidden = true;
+        $emParentResults.hidden = true;
+        $emParentResults.innerHTML = '';
+        emRenderParentLine();
+    }
+
+    // Candidate list loads lazily on modal open — the page itself is
+    // public-readable, so the caller's full sample list only ships to
+    // users who can actually edit. Refetched each open for freshness.
+    function emLoadParentCandidates() {
+        fetch('/samples_parent.php', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({action: 'list', sample_id: sample.id, owner_pkey: owner.pkey}),
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (j && j.ok && j.candidates) {
+                emParentCandidates = j.candidates;
+                // If the user is mid-search, re-run the filter now that
+                // data has arrived (replaces the "Loading…" row).
+                if (!$emParentResults.hidden) emFilterParentResults();
+            }
+        }).catch(function() { /* picker degrades to no results; save path still validates */ });
+    }
+
+    function emFilterParentResults() {
+        var q = $emParentInput.value.trim().toLowerCase();
+        if (!q) { $emParentResults.hidden = true; return; }
+        if (emParentCandidates === null) {
+            $emParentResults.innerHTML = '<div class="em-parent-noresults">Loading&hellip;</div>';
+            $emParentResults.hidden = false;
+            return;
+        }
+        var hits = emParentCandidates.filter(function(s) {
+            var hay = ((s.name || '') + ' ' + s.id).toLowerCase();
+            return hay.indexOf(q) !== -1;
+        }).slice(0, 10);
+        if (!hits.length) {
+            $emParentResults.innerHTML = '<div class="em-parent-noresults">No matches.</div>';
+            $emParentResults.hidden = false;
+            return;
+        }
+        $emParentResults.innerHTML = hits.map(function(s) {
+            return '<div class="em-parent-hit" data-id="' + escapeHtml(s.id) + '" data-uk="' + s.userpkey + '">'
+                 + '<strong>' + escapeHtml(s.name || s.id) + '</strong>'
+                 + (s.display_sample_type ? ' <span style="opacity:.7">' + escapeHtml(s.display_sample_type) + '</span>' : '')
+                 + '</div>';
+        }).join('');
+        $emParentResults.hidden = false;
+    }
+
+    $emParentInput.addEventListener('input', function() {
+        $emParentInputClear.hidden = !$emParentInput.value;
+        emFilterParentResults();
+    });
+    $emParentInputClear.addEventListener('click', function() {
+        $emParentInput.value = '';
+        $emParentInputClear.hidden = true;
+        $emParentResults.hidden = true;
+        $emParentResults.innerHTML = '';
+    });
+    $emParentResults.addEventListener('click', function(e) {
+        var hit = e.target.closest && e.target.closest('[data-id]');
+        if (!hit || emParentCandidates === null) return;
+        var id = hit.getAttribute('data-id');
+        var uk = parseInt(hit.getAttribute('data-uk'), 10);
+        var match = emParentCandidates.find(function(s) { return s.id === id && s.userpkey === uk; });
+        if (!match) return;
+        var orig = emOriginalParent();
+        if (orig && !orig.orphaned && orig.id === id && orig.userpkey === uk) {
+            emParentPending = undefined;   // re-picking the current parent = no change
+        } else {
+            emParentPending = {id: id, userpkey: uk, name: match.name || id};
+        }
+        $emParentInput.value = '';
+        $emParentInputClear.hidden = true;
+        $emParentResults.hidden = true;
+        $emParentResults.innerHTML = '';
+        emRenderParentLine();
+    });
+    $emParentRemove.addEventListener('click', function() {
+        emParentPending = (emOriginalParent() === null) ? undefined : null;
+        emRenderParentLine();
+    });
+    // Click outside the picker hides the results dropdown.
+    document.addEventListener('click', function(e) {
+        if (!$emModal || $emModal.hidden) return;
+        if (!$emParentResults.contains(e.target) && e.target !== $emParentInput) {
+            $emParentResults.hidden = true;
+        }
+    });
 
     // Pre-fill a vocab <select>: try to match an option's value; if no
     // match (i.e., the stored value is free-text), select the Other
@@ -2558,6 +2820,11 @@ include("includes/mheader.php");
             $emLat.title = '';
             $emLng.title = '';
         }
+
+        // Parent picker: discard any un-saved selection from a prior
+        // open, then lazily (re)load the candidate list.
+        emResetParentPicker();
+        emLoadParentCandidates();
 
         $emError.hidden = true;
         $emError.textContent = '';
@@ -2685,50 +2952,117 @@ include("includes/mheader.php");
         $emSubmit.disabled = true;
         $emSubmit.textContent = 'Saving…';
 
-        fetch('/samples_edit.php', {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify(body),
-        }).then(function(r) {
-            return r.json().then(
-                function(j) { return {status: r.status, body: j}; },
-                function()  { return {status: r.status, body: null}; }
-            );
-        }).then(function(res) {
-            if (res.body && res.body.ok && res.body.sample) {
-                applyEditedSample(res.body.sample);
-                closeEditModal();
-                return;
-            }
-            var code = res.body && res.body.error ? res.body.error : 'unknown';
-            var msg;
-            switch (code) {
-                case 'not_found':
-                    msg = 'Sample not found (may have been deleted). Reload the page.'; break;
-                case 'forbidden':
-                    msg = 'You do not have permission to edit this sample.'; break;
-                case 'field_link_read_only':
-                    msg = 'Latitude/Longitude are managed by StraboField for this sample.'; break;
-                case 'no_writable_fields':
-                    msg = 'Nothing to save.'; break;
-                case 'not_authenticated':
-                    msg = 'Your session has expired. Please reload the page and sign in again.'; break;
-                case 'invalid_json':
-                    msg = 'The server could not read the request. Please reload and try again.'; break;
-                default:
-                    msg = 'Could not save changes (' + code + ').';
-            }
+        function emShowError(msg) {
             $emError.textContent = msg;
             $emError.hidden = false;
             $emSubmit.disabled = false;
             $emSubmit.textContent = 'Save Changes';
-        }).catch(function() {
-            $emError.textContent = 'Network error — please try again.';
-            $emError.hidden = false;
-            $emSubmit.disabled = false;
-            $emSubmit.textContent = 'Save Changes';
-        });
+        }
+
+        function parseJsonResponse(r) {
+            return r.json().then(
+                function(j) { return {status: r.status, body: j}; },
+                function()  { return {status: r.status, body: null}; }
+            );
+        }
+
+        function saveSpine() {
+            fetch('/samples_edit.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+            }).then(parseJsonResponse).then(function(res) {
+                if (res.body && res.body.ok && res.body.sample) {
+                    applyEditedSample(res.body.sample);
+                    closeEditModal();
+                    return;
+                }
+                var code = res.body && res.body.error ? res.body.error : 'unknown';
+                var msg;
+                switch (code) {
+                    case 'not_found':
+                        msg = 'Sample not found (may have been deleted). Reload the page.'; break;
+                    case 'forbidden':
+                        msg = 'You do not have permission to edit this sample.'; break;
+                    case 'field_link_read_only':
+                        msg = 'Latitude/Longitude are managed by StraboField for this sample.'; break;
+                    case 'no_writable_fields':
+                        msg = 'Nothing to save.'; break;
+                    case 'not_authenticated':
+                        msg = 'Your session has expired. Please reload the page and sign in again.'; break;
+                    case 'invalid_json':
+                        msg = 'The server could not read the request. Please reload and try again.'; break;
+                    default:
+                        msg = 'Could not save changes (' + code + ').';
+                }
+                emShowError(msg);
+            }).catch(function() {
+                emShowError('Network error — please try again.');
+            });
+        }
+
+        // Parent first, spine second. The parent call is the one with
+        // validation that can meaningfully reject (access, cycles), so a
+        // failure there stops the save before anything is written; the
+        // spine PUT then runs exactly as it always has. If the parent
+        // succeeds but the spine fails, the parent change stays applied
+        // (it's already committed + changelogged server-side) and the
+        // spine error surfaces for retry — with the pending flag cleared,
+        // the retry only re-sends the spine.
+        if (emParentDirty()) {
+            var pending = emParentPending;
+            var pbody = {sample_id: sample.id, owner_pkey: owner.pkey};
+            if (pending === null) {
+                pbody.action = 'clear';
+            } else {
+                pbody.action           = 'set';
+                pbody.parent_sample_id = pending.id;
+                pbody.parent_userpkey  = pending.userpkey;
+            }
+            fetch('/samples_parent.php', {
+                method: 'POST',
+                credentials: 'same-origin',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(pbody),
+            }).then(parseJsonResponse).then(function(res) {
+                if (res.body && res.body.ok) {
+                    // Bridge the local snapshot until the widget's async
+                    // re-fetch rebinds family with server truth.
+                    family.parent = (pending === null) ? null
+                                  : {id: pending.id, userpkey: pending.userpkey, name: pending.name,
+                                     display_sample_type: null, display_sample_purpose: null};
+                    emParentPending = undefined;
+                    emRenderParentLine();
+                    if (refreshFamilyWidget) refreshFamilyWidget();
+                    saveSpine();
+                    return;
+                }
+                var code = res.body && res.body.error ? res.body.error : 'unknown';
+                var msg;
+                switch (code) {
+                    case 'cycle_detected':
+                        msg = 'That sample is a descendant of this one — setting it as the parent would create a loop.'; break;
+                    case 'parent_not_accessible':
+                        msg = 'You no longer have access to the selected parent sample.'; break;
+                    case 'parent_pair_required':
+                        msg = 'Select a parent sample from the search results, or remove the parent.'; break;
+                    case 'not_found':
+                        msg = 'Sample not found (may have been deleted). Reload the page.'; break;
+                    case 'forbidden':
+                        msg = 'You do not have permission to edit this sample.'; break;
+                    case 'not_authenticated':
+                        msg = 'Your session has expired. Please reload the page and sign in again.'; break;
+                    default:
+                        msg = 'Could not update the parent (' + code + ').';
+                }
+                emShowError(msg + ' No changes were saved.');
+            }).catch(function() {
+                emShowError('Network error — please try again. No changes were saved.');
+            });
+        } else {
+            saveSpine();
+        }
     });
 })();
 </script>
