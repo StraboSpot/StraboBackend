@@ -180,7 +180,29 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $
         $db->prepare_query("DELETE FROM straboexp.document            WHERE sample_pkey = $1", array($sample_pkey));
 
     } else {
-        $strabo_id   = $uuid_gen->v4();
+        // Reuse a strabo_id already embedded in the sample JSON: the create
+        // path pre-mints it so the experiment JSON can carry it before this
+        // row is written, and experiments saved while the FK-ordering bug
+        // was live (create ran this sync BEFORE the experiment insert, so
+        // this INSERT failed) have the embedded id but no row — reusing it
+        // heals them onto the same id instead of minting a divergent one.
+        // Never adopt an id another sample row already claims.
+        $strabo_id = null;
+        if (!empty($sample->strabo_id)) {
+            $candidate = strtolower(trim((string)$sample->strabo_id));
+            if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $candidate)) {
+                $claimed = $db->get_var_prepared(
+                    "SELECT 1 FROM straboexp.sample WHERE strabo_id = $1",
+                    array($candidate)
+                );
+                if (!$claimed) {
+                    $strabo_id = $candidate;
+                }
+            }
+        }
+        if ($strabo_id === null) {
+            $strabo_id = $uuid_gen->v4();
+        }
         $sample_pkey = (int)$db->get_var("SELECT nextval('straboexp.sample_pkey_seq')");
 
         $db->prepare_query("
