@@ -178,12 +178,13 @@ if (!empty($input->pkey)) {
     $experiment_pkey = (int)$db->get_var("SELECT nextval('straboexp.experiment_pkey_seq')");
     $uuid = $uuid_gen->v4();
 
-    // Mint normalized sample rows up front so strabo_id can be embedded in the
-    // experiment JSON before the experiment row is written. Single write per table.
+    // Pre-mint the strabo_id and embed it in the JSON, but do NOT write the
+    // normalized sample rows yet: straboexp.sample.experiment_pkey has an FK
+    // to straboexp.experiment, so the experiment row must be inserted first.
+    // exp_sample_sync() reuses the embedded id instead of minting its own.
     $sample_obj = isset($json_data->sample) ? $json_data->sample : null;
-    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj);
-    if ($strabo_id !== null && is_object($json_data->sample)) {
-        $json_data->sample->strabo_id = $strabo_id;
+    if (!empty($sample_obj) && is_object($sample_obj)) {
+        $sample_obj->strabo_id = $uuid_gen->v4();
     }
 
     $json_string = json_encode($json_data);
@@ -193,6 +194,9 @@ if (!empty($input->pkey)) {
         INSERT INTO straboexp.experiment (pkey, project_pkey, userpkey, id, created_timestamp, modified_timestamp, json, uuid)
         VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)
     ", array($experiment_pkey, $project_pkey, $userpkey, $experiment_id, $json_string, $uuid));
+
+    // Normalized sample rows (straboexp.sample + children)
+    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj);
 
     // Update parent project's full-text search keywords
     updateExpProjectKeywords($db, $project_pkey);
