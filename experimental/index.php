@@ -47,8 +47,13 @@ $isAdmin = ($userpkey && in_array($userpkey, $admin_pkeys));
 </script>
 
 <!-- Load Vue App (built assets) -->
-<script type="module" src="/experimental/dist/assets/main.js"></script>
-<link rel="stylesheet" href="/experimental/dist/assets/main.css">
+<?php
+// Cache-bust the stable-named entry files on every deploy; lazy chunks are
+// content-hashed by the build itself (see vite.config.js).
+$distv = @filemtime("experimental/dist/assets/main.js") ?: time();
+?>
+<script type="module" src="/experimental/dist/assets/main.js?v=<?php echo $distv; ?>"></script>
+<link rel="stylesheet" href="/experimental/dist/assets/main.css?v=<?php echo $distv; ?>">
 
 <?php
 // Include site footer
