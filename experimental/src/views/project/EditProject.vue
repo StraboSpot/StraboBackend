@@ -43,7 +43,7 @@
         </div>
 
         <div class="flex justify-end gap-3">
-          <router-link :to="`/view_project?ppk=${ppk}`" class="btn-secondary">Cancel</router-link>
+          <a href="/my_experimental_data" class="btn-secondary">Cancel</a>
           <button type="submit" class="btn-primary" :disabled="saving">
             {{ saving ? 'Saving...' : 'Save Changes' }}
           </button>

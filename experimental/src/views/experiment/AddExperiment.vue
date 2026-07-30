@@ -6,9 +6,9 @@
 
     <div v-else-if="error" class="text-center py-12">
       <p class="text-red-500 mb-4">{{ error }}</p>
-      <router-link :to="`/view_project?ppk=${ppk}`" class="btn-secondary">
-        Back to Project
-      </router-link>
+      <a href="/my_experimental_data" class="btn-secondary">
+        Back to My Data
+      </a>
     </div>
 
     <template v-else>
