@@ -3538,6 +3538,13 @@ stdClass Object
 		$this->db->query("update project set ispublic = false where user_pkey = $this->userpkey");
 		$this->db->query("update micro_projectmetadata set ispublic = false where userpkey = $this->userpkey");
 		$this->db->query("update users set active = false, deleted = true where pkey = $this->userpkey");
+
+		// StraboSearch live-sync (§5.3): the ACL-relevant flip — every index
+		// row of this user's Field + Micro projects goes private immediately
+		// (public search must not keep serving a deleted account's data).
+		require_once __DIR__ . '/lib/search_sync.php';
+		StraboSearchSync::touchProjectMeta($this->db, 'field', null, $this->userpkey, null, false);
+		StraboSearchSync::touchProjectMeta($this->db, 'micro', null, $this->userpkey, null, false);
 	}
 
 	public function insertProfileImage($post,$file){

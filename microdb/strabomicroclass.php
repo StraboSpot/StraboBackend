@@ -1783,6 +1783,13 @@ class StraboMicro
 
 				$this->db->query("update micro_projectmetadata set original_filename = '".$files['name']."' where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
 
+				// StraboSearch live-sync (§5.3): rebuild this project's index
+				// slice from the just-committed rows (whole-project replace —
+				// hook granularity matches write granularity). Runs even on a
+				// partial load so the index mirrors whatever the source holds.
+				require_once __DIR__ . '/lib/search_sync.php';
+				micro_search_sync_project($this->db, $project_metadata_id, $strabo_project_id, $this->userpkey);
+
 				if($data->Error != ""){
 					return $data;
 				}
@@ -1846,6 +1853,11 @@ class StraboMicro
 				$this->deleteTempFiles($project_metadata_id, $strabo_project_id);
 
 				$this->db->query("update micro_projectmetadata set original_filename = '".$files['name']."' where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
+
+				// StraboSearch live-sync (§5.3): rebuild this project's index
+				// slice — same rationale as insertProject.
+				require_once __DIR__ . '/lib/search_sync.php';
+				micro_search_sync_project($this->db, $project_metadata_id, $strabo_project_id, $this->userpkey);
 
 				if($data->Error != ""){
 					return $data;
@@ -4994,6 +5006,11 @@ class StraboMicro
 			// gone, we can no longer resolve the strabo_ids.
 			require_once __DIR__ . '/lib/sample_sync.php';
 			micro_sample_sync_remove_project($this->db, $projectid, (int)$this->userpkey);
+
+			// StraboSearch live-sync (§5.3): drop the project's index slice
+			// (micrographs + micrograph images + hosted sample fan-out rows).
+			require_once __DIR__ . '/lib/search_sync.php';
+			micro_search_sync_remove_project($this->db, $projectid, (int)$this->userpkey);
 
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey);
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey.".zip");
