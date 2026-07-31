@@ -133,13 +133,27 @@ const props = defineProps({
 
 const emit = defineEmits(['open-section'])
 
+// Deep check for actual user-entered content: any non-empty scalar at any
+// depth. Ignores the server-injected strabo_id key so a saved-but-empty
+// sample section doesn't light up its tile.
+const hasMeaningfulData = (val, ignoreKeys = []) => {
+  if (val === null || val === undefined || val === '') return false
+  if (Array.isArray(val)) return val.some((v) => hasMeaningfulData(v))
+  if (typeof val === 'object') {
+    return Object.entries(val).some(
+      ([k, v]) => !ignoreKeys.includes(k) && hasMeaningfulData(v)
+    )
+  }
+  return true
+}
+
 // Check if a section has data
 const hasData = (section) => {
   if (!props.experimentData) return false
 
   switch (section) {
     case 'sample':
-      return !!(props.experimentData.sample && Object.keys(props.experimentData.sample).length > 0)
+      return hasMeaningfulData(props.experimentData.sample, ['strabo_id'])
     case 'facilityApparatus':
       return !!(
         (props.experimentData.facility && Object.keys(props.experimentData.facility).length > 0) ||

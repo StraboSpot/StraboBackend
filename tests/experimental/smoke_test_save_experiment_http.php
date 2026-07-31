@@ -207,6 +207,113 @@ try {
         $r['json'] !== null && $sid4 !== null
         && preg_match('/^[0-9a-f-]{36}$/', $sid4) === 1);
 
+    // ---- Part 5: no sample metadata → no sample rows (2026-07-31 bug) ----
+    // The Vue Add page always sends a sample key ({} when untouched); PHP's
+    // empty() is false for any object, so create used to mint a junk
+    // strabo_id + empty sample row + nameless spine sample for every
+    // experiment saved without sample data.
+    echo "\n== empty sample ==\n";
+
+    // 5a: create with untouched sample section ({}), facility only
+    $r = hit($sid, array('project_pkey' => $project_pkey, 'experiment_id' => 'SMK-EMPTY',
+                         'data' => array('facility' => array('name' => 'Smoke Facility'),
+                                         'apparatus' => array('type' => 'Paterson Apparatus'),
+                                         'sample' => new stdClass())));
+    check('empty create: HTTP 200 + pure JSON + success',
+        $r['status'] === 200 && is_object($r['json']) && !empty($r['json']->success));
+    $exp5 = is_object($r['json']) ? (int)$r['json']->pkey : 0;
+    check('empty create: strabo_id is null in response',
+        is_object($r['json']) && $r['json']->strabo_id === null);
+    $n = (int)$db->get_var_prepared(
+        "SELECT count(*) FROM straboexp.sample WHERE experiment_pkey = $1", array($exp5));
+    check('empty create: NO straboexp.sample row', $n === 0);
+    $embedded = $db->get_var_prepared(
+        "SELECT json::jsonb -> 'sample' ->> 'strabo_id' FROM straboexp.experiment WHERE pkey = $1", array($exp5));
+    check('empty create: no strabo_id in stored JSON', $embedded === null);
+    if ($SPINE) {
+        $n = (int)$db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.sample_subsystem_links
+              WHERE subsystem = 'experimental' AND reference_id = $1 AND reference_userpkey = $2",
+            array((string)$exp5, $userpkey));
+        check('empty create: NO spine link row', $n === 0);
+    }
+
+    // 5b: skeleton of empty strings (modal opened, nothing entered) → same
+    $skeleton = array('name' => '', 'igsn' => '', 'id' => '', 'description' => '',
+                      'material' => array('material' => array('type' => '', 'name' => '', 'state' => '', 'note' => ''),
+                                          'composition' => array()),
+                      'parameters' => array());
+    $r = hit($sid, array('pkey' => $exp5, 'experiment_id' => 'SMK-EMPTY',
+                         'data' => array('facility' => array('name' => 'Smoke Facility'),
+                                         'sample' => $skeleton)));
+    check('skeleton update: HTTP 200 + strabo_id null',
+        $r['status'] === 200 && is_object($r['json']) && $r['json']->strabo_id === null);
+    $n = (int)$db->get_var_prepared(
+        "SELECT count(*) FROM straboexp.sample WHERE experiment_pkey = $1", array($exp5));
+    check('skeleton update: still NO sample row', $n === 0);
+
+    // 5c: heal a junk experiment left by the bug window — sample JSON is
+    // just {strabo_id}, empty sample row + nameless spine row exist.
+    $junkId = 'c2222222-3333-4444-8555-666666666666';
+    $spine_ids[] = $junkId;
+    $exp6 = (int)$db->get_var("SELECT nextval('straboexp.experiment_pkey_seq')");
+    $junkJson = array('facility' => array('name' => 'Smoke Facility'),
+                      'sample' => array('strabo_id' => $junkId));
+    $db->prepare_query(
+        "INSERT INTO straboexp.experiment (pkey, project_pkey, userpkey, id, json, uuid)
+         VALUES ($1, $2, $3, $4, $5, $6)",
+        array($exp6, $project_pkey, $userpkey, 'SMK-JUNKROW',
+              json_encode($junkJson), 'a0000000-0000-4000-8000-00000000cccc'));
+    $junkSamplePkey = (int)$db->get_var("SELECT nextval('straboexp.sample_pkey_seq')");
+    $db->prepare_query(
+        "INSERT INTO straboexp.sample (pkey, experiment_pkey, userpkey, name, strabo_id, json)
+         VALUES ($1, $2, $3, '', $4, '{}')",
+        array($junkSamplePkey, $exp6, $userpkey, $junkId));
+    if ($SPINE) {
+        $db->prepare_query(
+            "INSERT INTO strabosamples.samples (id, userpkey, experimental_data, created_by, modified_by)
+             VALUES ($1, $2, '{}'::jsonb, $3, $4) ON CONFLICT (id, userpkey) DO NOTHING",
+            array($junkId, $userpkey, $userpkey, $userpkey));
+        $db->prepare_query(
+            "INSERT INTO strabosamples.sample_subsystem_links
+               (sample_id, sample_userpkey, subsystem, reference_id, reference_userpkey)
+             VALUES ($1, $2, 'experimental', $3, $4)
+             ON CONFLICT DO NOTHING",
+            array($junkId, $userpkey, (string)$exp6, $userpkey));
+    }
+
+    $r = hit($sid, array('pkey' => $exp6, 'experiment_id' => 'SMK-JUNKROW', 'data' => $junkJson));
+    check('junk heal: HTTP 200 + strabo_id null',
+        $r['status'] === 200 && is_object($r['json']) && $r['json']->strabo_id === null);
+    $n = (int)$db->get_var_prepared(
+        "SELECT count(*) FROM straboexp.sample WHERE experiment_pkey = $1", array($exp6));
+    check('junk heal: empty sample row removed', $n === 0);
+    $embedded = $db->get_var_prepared(
+        "SELECT json::jsonb -> 'sample' ->> 'strabo_id' FROM straboexp.experiment WHERE pkey = $1", array($exp6));
+    check('junk heal: stale strabo_id stripped from stored JSON', $embedded === null);
+    if ($SPINE) {
+        $n = (int)$db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.samples WHERE id = $1 AND userpkey = $2",
+            array($junkId, $userpkey));
+        check('junk heal: junk spine row removed', $n === 0);
+    }
+
+    // 5d: clearing a REAL sample via skeleton removes its rows
+    $r = hit($sid, array('pkey' => $exp1, 'experiment_id' => 'SMK-1',
+                         'data' => array('facility' => array('name' => 'Smoke Facility'),
+                                         'sample' => $skeleton)));
+    check('clear: HTTP 200 + strabo_id null',
+        $r['status'] === 200 && is_object($r['json']) && $r['json']->strabo_id === null);
+    $n = (int)$db->get_var_prepared(
+        "SELECT count(*) FROM straboexp.sample WHERE experiment_pkey = $1", array($exp1));
+    check('clear: sample row removed', $n === 0);
+    if ($SPINE) {
+        $n = (int)$db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.samples WHERE id = $1 AND userpkey = $2",
+            array($sid1, $userpkey));
+        check('clear: spine row removed', $n === 0);
+    }
+
 } finally {
     if ($project_pkey) {
         $db->prepare_query(
