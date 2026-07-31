@@ -22,6 +22,42 @@ require_once __DIR__ . '/../../samplesdb/services/StraboSamplesService.php';
 if (!function_exists('exp_sample_sync')) {
 
 /**
+ * True when a value carries actual user-entered content: any non-empty
+ * scalar, or an array/object containing one at any depth.
+ */
+function exp_sample_value_has_data($val) {
+    if (is_array($val)) {
+        foreach ($val as $v) {
+            if (exp_sample_value_has_data($v)) return true;
+        }
+        return false;
+    }
+    if (is_object($val)) {
+        foreach (get_object_vars($val) as $v) {
+            if (exp_sample_value_has_data($v)) return true;
+        }
+        return false;
+    }
+    return $val !== null && $val !== '';
+}
+
+/**
+ * True when the sample JSON object holds user-entered metadata. The
+ * server-minted strabo_id is ignored — an untouched sample section arrives
+ * as {} (or as a skeleton of empty strings) and must NOT materialize
+ * sample rows or a strabosamples spine entry; the Vue Add page always
+ * includes a sample key, so object presence alone means nothing.
+ */
+function exp_sample_has_data($sample) {
+    if (empty($sample) || !is_object($sample)) return false;
+    foreach (get_object_vars($sample) as $key => $val) {
+        if ($key === 'strabo_id') continue;
+        if (exp_sample_value_has_data($val)) return true;
+    }
+    return false;
+}
+
+/**
  * Synchronize the normalized sample rows for an experiment.
  *
  * Writes the projected sample data to:
@@ -50,7 +86,9 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $
 
     // Empty-sample case: ensure no normalized rows linger.
     // FK cascades handle composition / parameter / document children.
-    if (empty($sample) || !is_object($sample)) {
+    // A sample object with no meaningful content (empty {} or a skeleton
+    // of empty strings, with or without a strabo_id) counts as empty.
+    if (!exp_sample_has_data($sample)) {
         // Grab the strabo_id before deletion so we can mirror the
         // removal into strabosamples.*.
         $existing = $db->get_row_prepared(

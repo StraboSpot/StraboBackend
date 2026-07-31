@@ -109,6 +109,10 @@ if (!empty($input->pkey)) {
     $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj);
     if ($strabo_id !== null && is_object($json_data->sample)) {
         $json_data->sample->strabo_id = $strabo_id;
+    } elseif (is_object($json_data->sample) && isset($json_data->sample->strabo_id)) {
+        // Sync judged the sample contentless (rows removed) — drop the
+        // round-tripped strabo_id so the stored JSON heals too.
+        unset($json_data->sample->strabo_id);
     }
 
     $json_string = json_encode($json_data);
@@ -182,9 +186,17 @@ if (!empty($input->pkey)) {
     // normalized sample rows yet: straboexp.sample.experiment_pkey has an FK
     // to straboexp.experiment, so the experiment row must be inserted first.
     // exp_sample_sync() reuses the embedded id instead of minting its own.
+    // Only when actual sample metadata was entered — the Vue Add page always
+    // sends a sample key (empty {} when untouched), and PHP's empty() is
+    // false for ANY object, so an object-presence check alone would mint a
+    // junk sample for every experiment saved without sample data.
     $sample_obj = isset($json_data->sample) ? $json_data->sample : null;
-    if (!empty($sample_obj) && is_object($sample_obj)) {
+    if (exp_sample_has_data($sample_obj)) {
         $sample_obj->strabo_id = $uuid_gen->v4();
+    } elseif (is_object($sample_obj) && isset($sample_obj->strabo_id)) {
+        // Contentless sample carrying a round-tripped id (e.g. loaded from
+        // a previous experiment's JSON) — don't persist the stale id.
+        unset($sample_obj->strabo_id);
     }
 
     $json_string = json_encode($json_data);
