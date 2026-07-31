@@ -128,6 +128,7 @@ $ITEM_COLS = array(
 	'location', 'date_value', 'searchtext_tsv',
 	'has_orientation', 'has_samples', 'has_images', 'has_microstructure', 'has_strat',
 	'minerals', 'mineral_methods', 'instrument_type', 'detector_type',
+	'tag_names', 'tag_text_tsv',
 	'source_modified',
 );
 $IMAGE_COLS = array(
@@ -137,6 +138,7 @@ $IMAGE_COLS = array(
 	'project_id', 'project_userpkey', 'project_subsystem', 'project_ispublic',
 	'location', 'date_value',
 	'minerals', 'mineral_methods', 'instrument_type', 'detector_type',
+	'tag_names', 'tag_text_tsv',
 	'source_modified',
 );
 $itemBuf = new BulkInsertBuffer($db,
@@ -194,6 +196,25 @@ $rows = $db->get_results("
 		 JOIN strabomicro.micro_instrumentdetector d ON d.instrument_id = i.id
 		 WHERE i.micrograph_id = mm.id AND d.detectortype IS NOT NULL AND d.detectortype <> ''
 		 LIMIT 1) AS detector_type,
+		COALESCE((
+			SELECT array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL AND t.name <> '')
+			FROM strabomicro.micro_micrograph_tag mt
+			JOIN strabomicro.micro_tag t ON t.id = mt.tag_id
+			WHERE mt.micrograph_id = mm.id
+		), ARRAY[]::TEXT[]) AS junction_tag_names,
+		COALESCE((
+			SELECT array_agg(DISTINCT t.name) FILTER (WHERE t.name IS NOT NULL AND t.name <> '')
+			FROM strabomicro.micro_spot_tag st
+			JOIN strabomicro.micro_spotmetadata sp2 ON sp2.id = st.spot_id
+			JOIN strabomicro.micro_tag t ON t.id = st.tag_id
+			WHERE sp2.micrograph_id = mm.id
+		), ARRAY[]::TEXT[]) AS spot_junction_tag_names,
+		mm.tags_json AS micrograph_tags_json,
+		COALESCE((
+			SELECT array_agg(sp.tags_json) FILTER (WHERE sp.tags_json IS NOT NULL AND sp.tags_json <> '' AND sp.tags_json <> '[]')
+			FROM strabomicro.micro_spotmetadata sp
+			WHERE sp.micrograph_id = mm.id
+		), ARRAY[]::TEXT[]) AS spot_tags_jsons,
 		(EXISTS (SELECT 1 FROM strabomicro.micro_fabricinfo            WHERE micrograph_id = mm.id) OR
 		 EXISTS (SELECT 1 FROM strabomicro.micro_graininfo             WHERE micrograph_id = mm.id) OR
 		 EXISTS (SELECT 1 FROM strabomicro.micro_foldinfo              WHERE micrograph_id = mm.id) OR
@@ -245,10 +266,30 @@ foreach ($rows as $r) {
 	$mtTsLit = pgTimestamp($r->project_mt);
 	$dateLit = ($mtTsLit !== 'NULL') ? '(' . $mtTsLit . ')::date' : 'NULL';
 
-	// Bag of words — names + notes from all chain rungs.
+	// --- tag_names (U10 amendment): name-only union of the four Micro tag
+	// sources — micrograph junction tags, spot junction tags, micrograph
+	// tags_json, and the tags_json of every spot drawn on this micrograph.
+	// No tag_types (F11 is Field-only; Micro tagType vocab is not folded in).
+	$tagNames = array_merge(
+		pgParseTextArray($r->junction_tag_names),
+		pgParseTextArray($r->spot_junction_tag_names),
+		microTagNamesFromJson($r->micrograph_tags_json)
+	);
+	foreach (pgParseTextArray($r->spot_tags_jsons) as $spotTagsJson) {
+		$tagNames = array_merge($tagNames, microTagNamesFromJson($spotTagsJson));
+	}
+	$tagNames = array_values(array_unique(array_filter($tagNames, function ($v) {
+		return $v !== null && $v !== '';
+	})));
+	$tagNamesLit   = pgTextArray($tagNames);
+	$tagTextTsvLit = pgTsvector(implode(' ', $tagNames));
+
+	// Bag of words — names + notes from all chain rungs. Tag names ride
+	// along per the U10 amendment (U1 safety net).
 	$bag = $micrographName . ' ' . $micrographNotes . ' '
 		. $sampleLabel . ' ' . $sampleSampleId . ' ' . $sampleNotes . ' '
-		. $projectName . ' ' . (string)$r->project_notes;
+		. $projectName . ' ' . (string)$r->project_notes
+		. ($tagNames ? ' ' . implode(' ', $tagNames) : '');
 	$searchtext = pgTsvector($bag);
 
 	// Native Micro arrays come back as PG array literals (e.g. "{Quartz,Olivine}").
@@ -304,6 +345,8 @@ foreach ($rows as $r) {
 		$mineralMethodsLit,
 		$instrumentTypeLit,
 		$detectorTypeLit,
+		$tagNamesLit,
+		$tagTextTsvLit,
 		$mtTsLit,
 	)) . ')';
 
@@ -330,6 +373,8 @@ foreach ($rows as $r) {
 		$mineralMethodsLit,
 		$instrumentTypeLit,
 		$detectorTypeLit,
+		$tagNamesLit,
+		$tagTextTsvLit,
 		$mtTsLit,
 	)) . ')';
 
@@ -440,6 +485,24 @@ line(sprintf('Done in %.1fs.', microtime(true) - $t0));
  *
  * Returns NULL for empty/null raw input (no row, no vocab entry).
  */
+/**
+ * Extract tag names from a Micro tags_json blob — a JSON array of
+ * {"id":..., "name":..., "tagType":...} objects as written by the
+ * StraboMicro client on micrograph and spot metadata rows. Name-only per
+ * the U10 amendment (Micro contributes no tag_types). Returns array of
+ * non-empty names; tolerates null / empty / malformed input.
+ */
+function microTagNamesFromJson($raw) {
+	if ($raw === null || $raw === '' || $raw === false) return array();
+	$decoded = json_decode((string)$raw);
+	if (!is_array($decoded)) return array();
+	$names = array();
+	foreach ($decoded as $t) {
+		if (is_object($t) && isset($t->name) && $t->name !== '') $names[] = (string)$t->name;
+	}
+	return $names;
+}
+
 function normalizeMicroImageType($raw) {
 	if ($raw === null || $raw === '' || $raw === false) return null;
 	$v = strtolower(trim((string)$raw));

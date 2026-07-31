@@ -184,6 +184,18 @@ $neodb->query("CREATE (t:Tag {
 })");
 $neodb->query("MATCH (s:Spot {id: '${PREFIX}_spot_B'}), (t:Tag {id: '${PREFIX}_tag_igneous'})
 	CREATE (s)-[:IS_TAGGED]->(t)");
+// Second tag on spot_B with a NON-geologic_unit type (U10/F11 amendment):
+// name + type must land in tag_names/tag_types/tag_text_tsv + vocab_tag_type,
+// while rock_types (geologic_unit-scoped) must NOT pick it up. Distinctive
+// snake_case type also exercises the Title Case label derivation.
+$neodb->query("CREATE (t:Tag {
+	id: '${PREFIX}_tag_concept',
+	userpkey: $TEST_UPK,
+	type: 'spsx_custom_type',
+	name: 'spsx Faultzone Concept UNIQTAGTOK'
+})");
+$neodb->query("MATCH (s:Spot {id: '${PREFIX}_spot_B'}), (t:Tag {id: '${PREFIX}_tag_concept'})
+	CREATE (s)-[:IS_TAGGED]->(t)");
 
 // SCENARIO C — metamorphic-greenschist tag → met_facies
 $neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset'})
@@ -415,6 +427,51 @@ if ($rowC) {
 }
 
 // ===========================================================================
+section('6b. Tags amendment — tag_names / tag_types / tag_text_tsv / vocab (U10+F11)');
+
+$rowBtags = $db->get_row(
+	"SELECT tag_names, tag_types, rock_types,
+	        (tag_text_tsv @@ to_tsquery('uniqtagtok'))  AS tsv_hit,
+	        (searchtext_tsv @@ to_tsquery('uniqtagtok')) AS bag_hit
+	 FROM strabosearch.item_hit WHERE item_id = '${PREFIX}_spot_B'"
+);
+check('B-tags: row found', $rowBtags !== null);
+if ($rowBtags) {
+	check('B-tags: tag_names carries BOTH tag names',
+		strpos((string)$rowBtags->tag_names, 'spsx Granite Unit') !== false
+		&& strpos((string)$rowBtags->tag_names, 'spsx Faultzone Concept UNIQTAGTOK') !== false,
+		'got ' . $rowBtags->tag_names);
+	check('B-tags: tag_types carries both types',
+		strpos((string)$rowBtags->tag_types, 'geologic_unit') !== false
+		&& strpos((string)$rowBtags->tag_types, 'spsx_custom_type') !== false,
+		'got ' . $rowBtags->tag_types);
+	check('B-tags: rock_types NOT polluted by the non-geologic_unit tag',
+		strpos((string)$rowBtags->rock_types, 'spsx_custom_type') === false,
+		'got ' . $rowBtags->rock_types);
+	check('B-tags: tag_text_tsv matches tag-name token (dedicated U10 path)',
+		$rowBtags->tsv_hit === 't');
+	check('B-tags: searchtext_tsv ALSO matches tag-name token (U1 safety net)',
+		$rowBtags->bag_hit === 't');
+}
+
+$rowAtags = $db->get_row(
+	"SELECT tag_names, tag_types, tag_text_tsv FROM strabosearch.item_hit
+	 WHERE item_id = '${PREFIX}_spot_A'"
+);
+check('A-tags: untagged spot has NULL tag columns',
+	$rowAtags !== null && $rowAtags->tag_names === null
+	&& $rowAtags->tag_types === null && $rowAtags->tag_text_tsv === null,
+	$rowAtags ? 'got ' . var_export(array($rowAtags->tag_names, $rowAtags->tag_types), true) : 'row missing');
+
+$vocabRow = $db->get_row(
+	"SELECT display_label FROM strabosearch.vocab_tag_type
+	 WHERE subsystem = 'field' AND raw_value = 'spsx_custom_type'"
+);
+check('vocab_tag_type upserted with Title Case label',
+	$vocabRow !== null && $vocabRow->display_label === 'Spsx Custom Type',
+	$vocabRow ? "got '{$vocabRow->display_label}'" : 'row missing');
+
+// ===========================================================================
 section('7. Scenario D — trace_types extraction');
 
 $rowD = $db->get_row(
@@ -564,6 +621,7 @@ $db->query("DELETE FROM strabosearch.item_hit WHERE project_userpkey IN ($TEST_U
 $db->query("DROP TABLE IF EXISTS strabosearch.item_hit_staging_field");
 $db->query("DELETE FROM project WHERE strabo_project_id IN ('$PROJ_PUB', '$PROJ_PRIV')");
 $db->query("DELETE FROM users WHERE pkey IN ($TEST_UPK, $DECOY_UPK)");
+$db->query("DELETE FROM strabosearch.vocab_tag_type WHERE raw_value = 'spsx_custom_type'");
 echo '  cleared fixture nodes + slice + staging + pg fixtures' . PHP_EOL;
 
 // ===========================================================================

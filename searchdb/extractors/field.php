@@ -139,6 +139,7 @@ $INSERT_COLS = array(
 	'orientation_strike', 'orientation_dip', 'orientation_trend', 'orientation_plunge',
 	'orientation_features', 'orientation_planar',
 	'rock_types', 'met_facies', 'trace_types',
+	'tag_names', 'tag_types', 'tag_text_tsv',
 	'source_modified',
 );
 $buf = new BulkInsertBuffer($db,
@@ -197,6 +198,7 @@ $totalSpots   = 0;
 $totalUsers   = 0;
 $totalSkipped = 0;
 $parseFail    = 0;
+$tagTypeVocabSeen = array();   // observed Tag.type values → vocab_tag_type (F11)
 $tStart       = microtime(true);
 
 foreach ($activeUsers as $upk) {
@@ -274,6 +276,7 @@ foreach ($activeUsers as $upk) {
 				      -[:HAS_SPOT]->(s:Spot)
 				WHERE 1=1 $cursorClause
 				OPTIONAL MATCH (s)-[:IS_TAGGED]->(t:Tag {type:'geologic_unit'})
+				OPTIONAL MATCH (s)-[:IS_TAGGED]->(at:Tag)
 				OPTIONAL MATCH (s)-[hi:HAS_IMAGE]->()
 				WITH s, collect(distinct {
 					rock_type: t.rock_type,
@@ -283,7 +286,9 @@ foreach ($activeUsers as $upk) {
 					metamorphic_grade: t.metamorphic_grade,
 					sedimentary_rock_type: t.sedimentary_rock_type,
 					sediment_type: t.sediment_type
-				}) AS tags, count(distinct hi) AS image_count
+				}) AS tags,
+				collect(distinct {name: at.name, type: at.type}) AS all_tags,
+				count(distinct hi) AS image_count
 				ORDER BY s.id
 				RETURN s.id AS sid, s.userpkey AS suk, s.name AS sname,
 				       substring(toString(s.json_orientation_data), 0, 100000) AS jod,
@@ -296,7 +301,7 @@ foreach ($activeUsers as $upk) {
 				       s.wkt AS wkt, s.modified_timestamp AS mt,
 				       s.date AS date_str, s.strat_section_id AS strat_id,
 				       s.image_basemap AS image_basemap,
-				       tags, image_count
+				       tags, all_tags, image_count
 				LIMIT $BATCH_SIZE
 			");
 			if (!$rows) break;
@@ -373,6 +378,37 @@ foreach ($activeUsers as $upk) {
 			}
 			$traceTypes = array_values(array_unique($traceTypes));
 
+			// --- tag_names / tag_types from ALL tags (U10 / F11 amendment).
+			// The geologic_unit-scoped `tags` collection above serves F7
+			// rock_types only; `all_tags` carries every attached tag's
+			// name + type. Deny-list = NULL/empty only.
+			$tagNames = array();
+			$tagTypes = array();
+			$allTagList = $r->get('all_tags');
+			if (is_array($allTagList)) {
+				foreach ($allTagList as $tg) {
+					if ($tg === null) continue;
+					$tn = null; $tt = null;
+					if (is_object($tg) && method_exists($tg, 'get')) {
+						try { $tn = $tg->get('name'); } catch (\Exception $e) {}
+						try { $tt = $tg->get('type'); } catch (\Exception $e) {}
+					} elseif (is_object($tg)) {
+						$tn = isset($tg->name) ? $tg->name : null;
+						$tt = isset($tg->type) ? $tg->type : null;
+					} elseif (is_array($tg)) {
+						$tn = isset($tg['name']) ? $tg['name'] : null;
+						$tt = isset($tg['type']) ? $tg['type'] : null;
+					}
+					if ($tn !== null && $tn !== '') $tagNames[] = (string)$tn;
+					if ($tt !== null && $tt !== '') {
+						$tagTypes[] = (string)$tt;
+						$tagTypeVocabSeen[(string)$tt] = true;
+					}
+				}
+			}
+			$tagNames = array_values(array_unique($tagNames));
+			$tagTypes = array_values(array_unique($tagTypes));
+
 			// --- has_* flags (server-side booleans skip pulling MB-sized blobs)
 			$has_orientation    = $hasOrientation;
 			$has_samples        = (bool)$r->get('hsamples');
@@ -405,7 +441,9 @@ foreach ($activeUsers as $upk) {
 			$bagParts[] = (string)$r->get('notes');
 			// Names + notes only. Buried-blob content becomes TYPED facets
 			// (orientation arrays, rock_types, trace_types), NOT bag-of-words
-			// — per Phase 0.1 autopsy + §4 design intent.
+			// — per Phase 0.1 autopsy + §4 design intent. Tag names ride
+			// along per the U10 amendment (§4.3-Tag: U1 safety net).
+			if ($tagNames) $bagParts[] = implode(' ', $tagNames);
 			$searchText = implode(' ', $bagParts);
 
 			// --- assemble VALUES tuple
@@ -435,6 +473,9 @@ foreach ($activeUsers as $upk) {
 				pgTextArray($rockTypes),
 				pgTextArray($metFacies),
 				pgTextArray($traceTypes),
+				pgTextArray($tagNames),
+				pgTextArray($tagTypes),
+				pgTsvector(implode(' ', $tagNames)),
 				pgTimestamp($r->get('mt')),
 			)) . ')';
 
@@ -502,6 +543,14 @@ if (!$APPLY) {
 		exit(1);
 	}
 	line(sprintf('  swapped:  %s rows into item_hit', number_format($ins)));
+
+	// vocab_tag_type refresh under subsystem='field' (F11 live vocab —
+	// deny-list of NULL/empty applied at collection time).
+	if ($tagTypeVocabSeen) {
+		$n = upsertVocabTagTypes($db, $tagTypeVocabSeen, 'field');
+		line(sprintf('  vocab_tag_type rows upserted: %d', $n));
+	}
+
 	if ($SINGLE_USER === null) {
 		updateSyncState($db, 'field', $ins);
 		line('  sync_state.field updated (last_full_backfill = now)');
