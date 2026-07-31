@@ -139,6 +139,12 @@ if (!empty($input->pkey)) {
     // Update parent project's full-text search keywords
     updateExpProjectKeywords($db, (int)$row->project_pkey);
 
+    // StraboSearch live-sync (§5.3): re-extract this experiment's index row
+    // AFTER the UPDATE commits. Keys on the experiment OWNER from the source
+    // row (never the session user — admin edits must land under e.userpkey).
+    require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+    StraboSearchSync::touchExperiment($db, $experiment_pkey);
+
     // Return updated experiment
     $result = new stdClass();
     $result->pkey = $experiment_pkey;
@@ -212,6 +218,10 @@ if (!empty($input->pkey)) {
 
     // Update parent project's full-text search keywords
     updateExpProjectKeywords($db, $project_pkey);
+
+    // StraboSearch live-sync (§5.3): index the new experiment.
+    require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+    StraboSearchSync::touchExperiment($db, $experiment_pkey);
 
     // Return created experiment
     $result = new stdClass();

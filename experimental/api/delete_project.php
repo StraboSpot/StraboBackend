@@ -134,6 +134,12 @@ if ($is_admin) {
     );
 }
 
+// StraboSearch live-sync (§5.3): drop every index row hosted by this
+// project (experiments + sample fan-out). Keyed on uuid alone — the Exp
+// convention sets project_userpkey per experiment owner.
+require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+StraboSearchSync::removeExpProject($db, $row->uuid);
+
 // Return success
 $result = new stdClass();
 $result->success = true;

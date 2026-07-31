@@ -111,6 +111,12 @@ if (!empty($input->pkey)) {
     // Update full-text search keywords
     updateExpProjectKeywords($db, $project_pkey);
 
+    // StraboSearch live-sync (§5.3): a rename must re-extract every hosted
+    // index row (experiment searchtext embeds the project name) + refresh
+    // the sample fan-out denorm.
+    require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+    StraboSearchSync::touchExpProject($db, $project_pkey);
+
     // Return updated project
     $result = new stdClass();
     $result->pkey = $project_pkey;
