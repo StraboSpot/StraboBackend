@@ -47,14 +47,16 @@ defineEmits(['save', 'cancel'])
 </script>
 
 <style scoped>
+/* NOTE: strabo-* colors are Tailwind tokens, not CSS custom properties —
+   var(--strabo-*) resolves to nothing, so always supply the hex fallback */
 .save-bar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 40;
-  background-color: var(--strabo-bg-secondary);
-  border-top: 1px solid var(--strabo-border);
+  background-color: var(--strabo-bg-secondary, #2d2d2d);
+  border-top: 1px solid var(--strabo-border, #424242);
   box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.35);
 }
 
@@ -83,7 +85,7 @@ defineEmits(['save', 'cancel'])
 }
 
 .save-status-clean {
-  color: var(--strabo-text-secondary);
+  color: var(--strabo-text-secondary, #9e9e9e);
 }
 
 .save-status-dirty {
