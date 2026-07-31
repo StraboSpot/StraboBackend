@@ -926,6 +926,12 @@ if($_POST['columnsubmit']!=""){
 			// context explicitly, matching the bulk Field controllers.
 			$strabo->setSampleSyncContext($projectid, $datasetid);
 
+			// StraboSearch live-sync (§5.3.4): suppress per-spot touches for
+			// the import loop; one batch sync at end-of-run beside
+			// buildPgDataset.
+			require_once __DIR__ . '/db/lib/search_sync.php';
+			field_search_sync_suppress();
+
 			$groupid = $id;
 
 		}
@@ -1713,6 +1719,11 @@ if($_POST['columnsubmit']!=""){
 
 		//also build PG dataset
 		$strabo->buildPgDataset($datasetid); //need to re-implement JMA 02282020
+
+		// StraboSearch live-sync (§5.3.4): end-of-import batch sync.
+		require_once __DIR__ . '/db/lib/search_sync.php';
+		field_search_sync_resume();
+		field_search_sync_dataset($db, $neodb, $datasetid, $strabo->userpkey);
 
 		$percent = 100;
 

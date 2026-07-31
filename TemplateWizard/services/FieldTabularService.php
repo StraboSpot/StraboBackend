@@ -1965,6 +1965,13 @@ class FieldTabularService
             // (Phase I lesson: set BEFORE the loop, not per spot).
             $this->strabo->setSampleSyncContext((string)$projectId, (string)$datasetId);
 
+            // StraboSearch live-sync (§5.3.4): suppress per-spot touches for
+            // the import loop; batch sync fires on the success path below.
+            // The rollback path relies on per-item hooks instead (resume
+            // happens before it runs).
+            require_once __DIR__ . '/../../db/lib/search_sync.php';
+            field_search_sync_suppress();
+
             foreach ($writes as $w) {
                 $result = $this->strabo->insertSpot(json_encode($w['feature']));
                 if (!$this->insertSucceeded($result, $w['spot_id'])) {
@@ -2002,6 +2009,7 @@ class FieldTabularService
             $failure = $e->getMessage();
         }
         $this->strabo->clearSampleSyncContext();
+        field_search_sync_resume();
 
         if ($failure === null) {
             $minted = array();
@@ -2011,6 +2019,10 @@ class FieldTabularService
             $this->db->get_var_prepared(
                 "UPDATE field_tabular_runs SET status = 'committed', finished_at = now() WHERE pkey = $1 RETURNING pkey",
                 array($runId));
+
+            // StraboSearch live-sync (§5.3.4): end-of-import batch sync.
+            field_search_sync_dataset($this->db, $this->neodb, $datasetId, $this->userpkey);
+
             return array(
                 'ok' => true, 'run_id' => $runId,
                 'created' => count($createdDone),

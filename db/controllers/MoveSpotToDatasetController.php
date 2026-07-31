@@ -104,6 +104,13 @@ class MoveSpotToDatasetController extends MyController
 				//add
 				$this->strabo->addSpotToDataset($datasetid,$spotid);
 
+				// StraboSearch live-sync (§5.3): re-derive the moved spot's
+				// project context from the graph (stale sweep drops the OLD
+				// project's row). BEFORE the sample resync below, so its
+				// search hook resolves against the fresh index.
+				require_once __DIR__ . '/../lib/search_sync.php';
+				field_search_sync_touch_spot($this->strabo->db, $this->strabo->neodb, $spotid, $userpkey);
+
 				// Re-mirror the moved spot's samples under the NEW project/dataset
 				// context so the strabosamples link metadata (dataset_id/project_id)
 				// and auto-seed collaborators follow the move. Without this the
@@ -258,6 +265,11 @@ class MoveSpotToDatasetController extends MyController
 						$projectStraboIdForSync = $this->strabo->getProjectId($feature_id);
 						$this->strabo->setSampleSyncContext($projectStraboIdForSync, $feature_id);
 
+						// StraboSearch live-sync (§5.3.4): suppress per-spot
+						// touches; batch sync fires beside buildPgDataset below.
+						require_once __DIR__ . '/../lib/search_sync.php';
+						field_search_sync_suppress();
+
 						foreach($features as $feature){
 
 							$spotid = $feature->properties->id;
@@ -318,6 +330,10 @@ class MoveSpotToDatasetController extends MyController
 
 						//also add dataset to Postgres Database here.
 						$this->strabo->buildPgDataset($feature_id); //need to re-implement JMA 02282020
+
+						// StraboSearch live-sync (§5.3.4): end-of-dataset batch sync.
+						field_search_sync_resume();
+						field_search_sync_dataset($this->strabo->db, $this->strabo->neodb, $feature_id, $this->strabo->userpkey);
 					}
 
 				}else{
