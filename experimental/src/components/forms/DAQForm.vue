@@ -148,7 +148,7 @@
         type="button"
         severity="secondary"
         outlined
-        label="Cancel"
+        label="Discard Changes"
         @click="$emit('cancel')"
       />
       <Button
@@ -162,6 +162,7 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
+import { useFormDirty } from '@/composables/useFormDirty'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
@@ -193,6 +194,8 @@ const createEmptyForm = () => ({
 
 const form = ref(createEmptyForm())
 
+const { isDirty, resetDirty } = useFormDirty(form)
+
 // Populate form with initial data
 watch(() => props.initialData, (data) => {
   if (data && Object.keys(data).length > 0) {
@@ -209,6 +212,7 @@ watch(() => props.initialData, (data) => {
       })) || []
     }
   }
+  resetDirty()
 }, { immediate: true, deep: true })
 
 // Device management
@@ -373,7 +377,7 @@ function handleSubmit() {
       detail: errors.join('\n'),
       life: 5000
     })
-    return
+    return false
   }
 
   // Clean up internal state before emitting
@@ -385,7 +389,10 @@ function handleSubmit() {
     })
   }
   emit('submit', formData)
+  return true
 }
+
+defineExpose({ isDirty, trySubmit: handleSubmit })
 </script>
 
 <style scoped>

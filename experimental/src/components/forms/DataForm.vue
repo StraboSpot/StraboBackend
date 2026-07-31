@@ -630,7 +630,7 @@
         type="button"
         severity="secondary"
         outlined
-        label="Cancel"
+        label="Discard Changes"
         @click="$emit('cancel')"
       />
       <Button
@@ -644,6 +644,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
+import { useFormDirty } from '@/composables/useFormDirty'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
@@ -726,6 +727,8 @@ function generateUUID() {
   })
 }
 
+const { isDirty, resetDirty } = useFormDirty(form)
+
 // Initialize form from initial data
 const initForm = () => {
   if (props.initialData?.datasets && Array.isArray(props.initialData.datasets) && props.initialData.datasets.length > 0) {
@@ -760,6 +763,7 @@ const initForm = () => {
     form.value = []
     selectedDatasetIdx.value = null
   }
+  resetDirty()
 }
 
 initForm()
@@ -992,7 +996,7 @@ const handleSubmit = () => {
       detail: errors.join('\n'),
       life: 5000
     })
-    return
+    return false
   }
 
   const cleanedData = {
@@ -1006,7 +1010,10 @@ const handleSubmit = () => {
     datasets: form.value.filter(ds => ds.data || ds.type || ds.id)
   }
   emit('submit', cleanedData)
+  return true
 }
+
+defineExpose({ isDirty, trySubmit: handleSubmit })
 </script>
 
 <style scoped>

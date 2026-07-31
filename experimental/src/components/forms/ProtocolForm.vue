@@ -193,7 +193,7 @@
         type="button"
         severity="secondary"
         outlined
-        label="Cancel"
+        label="Discard Changes"
         @click="$emit('cancel')"
       />
       <Button
@@ -206,6 +206,7 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useFormDirty } from '@/composables/useFormDirty'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
@@ -244,6 +245,8 @@ const availableFeatures = computed(() => {
 })
 
 // Initialize form from initial data
+const { isDirty, resetDirty } = useFormDirty(form)
+
 const initForm = () => {
   if (props.initialData && Array.isArray(props.initialData) && props.initialData.length > 0) {
     // Deep copy with default parameter arrays
@@ -263,6 +266,7 @@ const initForm = () => {
     form.value = []
     selectedStepIdx.value = null
   }
+  resetDirty()
 }
 
 initForm()
@@ -364,7 +368,10 @@ const handleSubmit = () => {
   }).filter(step => step.test || step.objective || step.description || (step.parameters && step.parameters.length > 0))
 
   emit('submit', cleanedData)
+  return true
 }
+
+defineExpose({ isDirty, trySubmit: handleSubmit })
 </script>
 
 <style scoped>
