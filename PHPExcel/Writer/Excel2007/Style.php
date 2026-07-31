@@ -409,7 +409,10 @@ class PHPExcel_Writer_Excel2007_Style extends PHPExcel_Writer_Excel2007_WriterPa
         $objWriter->writeAttribute('applyBorder', ($pPHPExcel->getDefaultStyle()->getBorders()->getHashCode() != $pStyle->getBorders()->getHashCode()) ? '1' : '0');
         $objWriter->writeAttribute('applyAlignment', ($pPHPExcel->getDefaultStyle()->getAlignment()->getHashCode() != $pStyle->getAlignment()->getHashCode()) ? '1' : '0');
         if ($pStyle->getProtection()->getLocked() != PHPExcel_Style_Protection::PROTECTION_INHERIT || $pStyle->getProtection()->getHidden() != PHPExcel_Style_Protection::PROTECTION_INHERIT) {
-            $objWriter->writeAttribute('applyProtection', 'true');
+            // LOCAL PATCH (StraboSpot 2026-07-04): '1', not 'true' — match
+            // Excel's own serialization of style booleans (see Worksheet.php
+            // writeSheetProtection note).
+            $objWriter->writeAttribute('applyProtection', '1');
         }
 
         // alignment
@@ -440,10 +443,11 @@ class PHPExcel_Writer_Excel2007_Style extends PHPExcel_Writer_Excel2007_WriterPa
         if ($pStyle->getProtection()->getLocked() != PHPExcel_Style_Protection::PROTECTION_INHERIT || $pStyle->getProtection()->getHidden() != PHPExcel_Style_Protection::PROTECTION_INHERIT) {
             $objWriter->startElement('protection');
             if ($pStyle->getProtection()->getLocked() != PHPExcel_Style_Protection::PROTECTION_INHERIT) {
-                $objWriter->writeAttribute('locked', ($pStyle->getProtection()->getLocked() == PHPExcel_Style_Protection::PROTECTION_PROTECTED ? 'true' : 'false'));
+                // LOCAL PATCH (StraboSpot 2026-07-04): '1'/'0', not 'true'/'false'.
+                $objWriter->writeAttribute('locked', ($pStyle->getProtection()->getLocked() == PHPExcel_Style_Protection::PROTECTION_PROTECTED ? '1' : '0'));
             }
             if ($pStyle->getProtection()->getHidden() != PHPExcel_Style_Protection::PROTECTION_INHERIT) {
-                $objWriter->writeAttribute('hidden', ($pStyle->getProtection()->getHidden() == PHPExcel_Style_Protection::PROTECTION_PROTECTED ? 'true' : 'false'));
+                $objWriter->writeAttribute('hidden', ($pStyle->getProtection()->getHidden() == PHPExcel_Style_Protection::PROTECTION_PROTECTED ? '1' : '0'));
             }
             $objWriter->endElement();
         }
@@ -502,11 +506,12 @@ class PHPExcel_Writer_Excel2007_Style extends PHPExcel_Writer_Excel2007_WriterPa
                 $objWriter->startElement('protection');
                 if (($pStyle->getProtection()->getLocked() !== null) &&
                     ($pStyle->getProtection()->getLocked() !== PHPExcel_Style_Protection::PROTECTION_INHERIT)) {
-                    $objWriter->writeAttribute('locked', ($pStyle->getProtection()->getLocked() == PHPExcel_Style_Protection::PROTECTION_PROTECTED ? 'true' : 'false'));
+                    // LOCAL PATCH (StraboSpot 2026-07-04): '1'/'0', not 'true'/'false'.
+                    $objWriter->writeAttribute('locked', ($pStyle->getProtection()->getLocked() == PHPExcel_Style_Protection::PROTECTION_PROTECTED ? '1' : '0'));
                 }
                 if (($pStyle->getProtection()->getHidden() !== null) &&
                     ($pStyle->getProtection()->getHidden() !== PHPExcel_Style_Protection::PROTECTION_INHERIT)) {
-                    $objWriter->writeAttribute('hidden', ($pStyle->getProtection()->getHidden() == PHPExcel_Style_Protection::PROTECTION_PROTECTED ? 'true' : 'false'));
+                    $objWriter->writeAttribute('hidden', ($pStyle->getProtection()->getHidden() == PHPExcel_Style_Protection::PROTECTION_PROTECTED ? '1' : '0'));
                 }
                 $objWriter->endElement();
             }
