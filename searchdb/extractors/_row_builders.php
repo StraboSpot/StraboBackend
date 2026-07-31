@@ -121,8 +121,14 @@ function samplesItemCols() {
 // ===========================================================================
 
 function neoIdLiteral($id) {
-	return ctype_digit((string)$id) ? (string)$id
-		: "'" . pg_escape_string((string)$id) . "'";
+	if (ctype_digit((string)$id)) return (string)$id;
+	// CYPHER string escaping is backslash-based. The previous
+	// pg_escape_string here used PG-style quote-DOUBLING, which produces a
+	// Cypher syntax error for quote-bearing input — and a failed query
+	// leaves the GraphAware Bolt connection permanently hung for the next
+	// caller (see StraboDbNeo4j::reconnect). Real Strabo ids are numeric;
+	// this branch guards legacy/garbage input.
+	return "'" . str_replace(array("\\", "'"), array("\\\\", "\\'"), (string)$id) . "'";
 }
 
 // ===========================================================================

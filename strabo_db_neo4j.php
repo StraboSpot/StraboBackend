@@ -49,6 +49,28 @@
 		}
 
 		/**********************************************************************
+		*  Rebuild the Bolt client. The GraphAware driver leaves the
+		*  connection in a dead state after a server-side query failure —
+		*  the next run() on the same connection blocks FOREVER waiting on
+		*  a response that never comes (verified against Neo4j 3.0 via
+		*  bolt). Callers that CATCH query exceptions and keep the handle
+		*  alive (the StraboSearch sync hooks' never-throw contract) must
+		*  reset the connection before reusing it.
+		*/
+
+		function reconnect()
+		{
+			if($this->neomode=="bolt"){
+				$protocol="bolt";
+			}else{
+				$protocol="http";
+			}
+			$this->client = ClientBuilder::create()
+				->addConnection("$this->neomode", "$protocol://$this->neousername:$this->neopassword@$this->neohost:$this->neoport")
+				->build();
+		}
+
+		/**********************************************************************
 		*  Test Function.
 		*/
 

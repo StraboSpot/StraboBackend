@@ -66,6 +66,9 @@ function field_search_sync_remove_dataset($db, $neodb, $datasetId, $userpkey) {
 		}
 		return StraboSearchSync::removeSpots($db, $spotIds, $userpkey);
 	} catch (\Throwable $e) {
+		// Failed Cypher leaves the Bolt connection dead — reset before
+		// handing it back (see StraboDbNeo4j::reconnect).
+		try { if (method_exists($neodb, 'reconnect')) $neodb->reconnect(); } catch (\Throwable $e2) {}
 		error_log('[strabosearch-sync] field_search_sync_remove_dataset '
 			. $datasetId . '/' . $userpkey . ' FAILED: ' . $e->getMessage());
 		return false;

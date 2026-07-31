@@ -105,6 +105,21 @@ class StraboSearchSync {
 		return false;
 	}
 
+	/**
+	 * A failed Cypher run leaves the GraphAware Bolt connection dead — the
+	 * NEXT query on it blocks forever. Since the never-throw contract keeps
+	 * the request alive after a sync failure, every catch path that may
+	 * have touched Neo4j must reset the shared connection before handing
+	 * it back to the caller.
+	 */
+	private static function resetNeo($neodb) {
+		try {
+			if ($neodb && method_exists($neodb, 'reconnect')) $neodb->reconnect();
+		} catch (\Throwable $e) {
+			error_log('[strabosearch-sync] neo4j reconnect FAILED: ' . $e->getMessage());
+		}
+	}
+
 	/** Statement-start timestamp used as the stale-sweep boundary. */
 	private static function touchEpoch($db) {
 		return (string)$db->get_var("SELECT now()");
@@ -258,6 +273,7 @@ class StraboSearchSync {
 			if ($alsoSamples) self::touchSamplesLinkedToSpots($db, array($spotId), $upk);
 			return true;
 		} catch (\Throwable $e) {
+			self::resetNeo($neodb);
 			return self::fail("touchSpot $spotId/$ownerPkey", $e);
 		}
 	}
@@ -333,6 +349,7 @@ class StraboSearchSync {
 			if (!$found) self::removeImage($db, $imageId, $upk);
 			return true;
 		} catch (\Throwable $e) {
+			self::resetNeo($neodb);
 			return self::fail("touchImage $imageId/$ownerPkey", $e);
 		}
 	}
@@ -448,6 +465,7 @@ class StraboSearchSync {
 			self::touchSamplesLinkedToSpots($db, array_keys($touchedSpotIds), $upk);
 			return true;
 		} catch (\Throwable $e) {
+			self::resetNeo($neodb);
 			return self::fail("syncFieldDataset $datasetId/$ownerPkey", $e);
 		}
 	}
