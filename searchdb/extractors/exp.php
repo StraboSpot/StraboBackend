@@ -112,6 +112,7 @@ chdir(__DIR__ . '/../../');
 require_once('includes/config.inc.php');
 require_once('db.php');
 require_once(__DIR__ . '/_extractor_lib.php');
+require_once(__DIR__ . '/_row_builders.php');
 
 $APPLY        = in_array('--apply', $argv, true);
 $NO_SWAP      = in_array('--no-swap', $argv, true);
@@ -135,14 +136,8 @@ $db->query("CREATE TABLE strabosearch.item_hit_staging_exp
 $db->query("ALTER TABLE strabosearch.item_hit_staging_exp DROP COLUMN item_hit_pkey");
 line('  staging table created (fresh): strabosearch.item_hit_staging_exp');
 
-$INSERT_COLS = array(
-	'item_type', 'item_id', 'item_userpkey',
-	'project_id', 'project_userpkey', 'project_subsystem', 'project_name', 'project_ispublic',
-	'location', 'date_value', 'searchtext_tsv',
-	'has_orientation', 'has_samples', 'has_images', 'has_microstructure', 'has_strat',
-	'apparatus_type', 'daq_sensor_type', 'measurement_type',
-	'source_modified',
-);
+// Single source of truth shared with the sync path — see _row_builders.php.
+$INSERT_COLS = expItemCols();
 $buf = new BulkInsertBuffer($db,
 	"INSERT INTO strabosearch.item_hit_staging_exp (" . implode(', ', $INSERT_COLS) . ") VALUES ",
 	500);
@@ -151,153 +146,20 @@ $buf = new BulkInsertBuffer($db,
 section('2. Single source pass');
 
 // Single query pulling experiment + project + LATERAL aggregates for
-// apparatus/facility/sample/daq facets. We intentionally use LIMIT 1 +
-// scalar sub-selects for E1–E3 (per the docblock scalar-vs-array note);
-// the array_agg(distinct header_type) feeds the searchtext bag so the
-// keyword path keeps all measurement types reachable.
+// apparatus/facility/sample/daq facets. Query rationale documented on
+// expSourceSql in _row_builders.php (shared with the sync touch path).
 $userFilter = $SINGLE_USER !== null ? "AND e.userpkey = " . (int)$SINGLE_USER : '';
 
-$rows = $db->get_results("
-	SELECT
-		e.pkey AS exp_pkey,
-		e.id   AS experiment_id,
-		e.userpkey,
-		e.modified_timestamp,
-		p.uuid     AS project_uuid,
-		p.name     AS project_name,
-		p.ispublic AS project_ispublic,
-		p.notes    AS project_notes,
-		(SELECT a.type FROM straboexp.apparatus a
-		 WHERE a.experiment_pkey = e.pkey AND a.type IS NOT NULL AND a.type <> ''
-		 ORDER BY a.pkey LIMIT 1) AS apparatus_type,
-		(SELECT a.name FROM straboexp.apparatus a
-		 WHERE a.experiment_pkey = e.pkey ORDER BY a.pkey LIMIT 1) AS apparatus_name,
-		(SELECT a.description FROM straboexp.apparatus a
-		 WHERE a.experiment_pkey = e.pkey ORDER BY a.pkey LIMIT 1) AS apparatus_desc,
-		(SELECT c.type FROM straboexp.daq_device_channel c
-		 JOIN straboexp.daq_device dd ON dd.pkey = c.daq_device_pkey
-		 JOIN straboexp.daq d ON d.pkey = dd.daq_pkey
-		 WHERE d.experiment_pkey = e.pkey AND c.type IS NOT NULL AND c.type <> ''
-		 ORDER BY c.pkey LIMIT 1) AS daq_sensor_type,
-		(SELECT c.header_type FROM straboexp.daq_device_channel c
-		 JOIN straboexp.daq_device dd ON dd.pkey = c.daq_device_pkey
-		 JOIN straboexp.daq d ON d.pkey = dd.daq_pkey
-		 WHERE d.experiment_pkey = e.pkey AND c.header_type IS NOT NULL AND c.header_type <> ''
-		 ORDER BY c.pkey LIMIT 1) AS measurement_type,
-		COALESCE((
-			SELECT array_agg(DISTINCT c.header_type) FILTER (WHERE c.header_type IS NOT NULL AND c.header_type <> '')
-			FROM straboexp.daq_device_channel c
-			JOIN straboexp.daq_device dd ON dd.pkey = c.daq_device_pkey
-			JOIN straboexp.daq d ON d.pkey = dd.daq_pkey
-			WHERE d.experiment_pkey = e.pkey
-		), ARRAY[]::TEXT[]) AS all_measurement_types,
-		(SELECT f.name FROM straboexp.facility f
-		 WHERE f.experiment_pkey = e.pkey ORDER BY f.pkey LIMIT 1) AS facility_name,
-		(SELECT f.institute FROM straboexp.facility f
-		 WHERE f.experiment_pkey = e.pkey ORDER BY f.pkey LIMIT 1) AS facility_institute,
-		(SELECT f.latitude FROM straboexp.facility f
-		 WHERE f.experiment_pkey = e.pkey AND f.latitude ~ '^-?[0-9.]+\$' AND f.longitude ~ '^-?[0-9.]+\$'
-		 ORDER BY f.pkey LIMIT 1) AS facility_lat,
-		(SELECT f.longitude FROM straboexp.facility f
-		 WHERE f.experiment_pkey = e.pkey AND f.latitude ~ '^-?[0-9.]+\$' AND f.longitude ~ '^-?[0-9.]+\$'
-		 ORDER BY f.pkey LIMIT 1) AS facility_lng,
-		(SELECT s.provenance_loc_latitude FROM straboexp.sample s
-		 WHERE s.experiment_pkey = e.pkey
-		   AND s.provenance_loc_latitude  ~ '^-?[0-9.]+\$'
-		   AND s.provenance_loc_longitude ~ '^-?[0-9.]+\$'
-		 ORDER BY s.pkey LIMIT 1) AS sample_lat,
-		(SELECT s.provenance_loc_longitude FROM straboexp.sample s
-		 WHERE s.experiment_pkey = e.pkey
-		   AND s.provenance_loc_latitude  ~ '^-?[0-9.]+\$'
-		   AND s.provenance_loc_longitude ~ '^-?[0-9.]+\$'
-		 ORDER BY s.pkey LIMIT 1) AS sample_lng,
-		COALESCE((
-			SELECT string_agg(DISTINCT coalesce(s.name, '') || ' ' || coalesce(s.material_name, '') || ' ' || coalesce(s.description, ''), ' ')
-			FROM straboexp.sample s WHERE s.experiment_pkey = e.pkey
-		), '') AS sample_bag,
-		EXISTS (SELECT 1 FROM straboexp.sample s WHERE s.experiment_pkey = e.pkey) AS has_samples,
-		(EXISTS (
-			SELECT 1 FROM straboexp.document d
-			JOIN straboexp.experiment_setup es ON es.pkey = d.experiment_setup_pkey
-			WHERE es.experiment_pkey = e.pkey
-		) OR EXISTS (
-			SELECT 1 FROM straboexp.document d
-			JOIN straboexp.apparatus a ON a.pkey = d.apparatus_pkey
-			WHERE a.experiment_pkey = e.pkey
-		)) AS has_images
-	FROM straboexp.experiment e
-	JOIN straboexp.project p ON p.pkey = e.project_pkey
-	WHERE e.userpkey IS NOT NULL
-	  AND e.id IS NOT NULL AND e.id <> ''
-	  AND p.uuid IS NOT NULL AND p.uuid <> ''
-	  $userFilter
-	ORDER BY e.userpkey, e.pkey
-");
+$rows = $db->get_results(expSourceSql($userFilter));
 $rows = (array)$rows;
 line('  experiments fetched: ' . number_format(count($rows)));
 
 $totalExperiments = 0;
 
 foreach ($rows as $r) {
-	$expId       = (string)$r->experiment_id;
-	$puk         = (int)$r->userpkey;
-	$projectId   = (string)$r->project_uuid;
-	$projectName = (string)$r->project_name;
-	$projectPub  = ($r->project_ispublic === 't' || $r->project_ispublic === true);
-
-	// Location: facility first, fall back to first sample provenance.
-	$lat = null;
-	$lng = null;
-	if (is_numeric($r->facility_lat) && is_numeric($r->facility_lng)) {
-		$lat = (float)$r->facility_lat;
-		$lng = (float)$r->facility_lng;
-	} elseif (is_numeric($r->sample_lat) && is_numeric($r->sample_lng)) {
-		$lat = (float)$r->sample_lat;
-		$lng = (float)$r->sample_lng;
-	}
-	$locLit = ($lat !== null && $lng !== null) ? pgPointLiteral($lng, $lat) : 'NULL';
-
-	$mtTsLit = pgTimestamp($r->modified_timestamp);
-	$dateLit = ($mtTsLit !== 'NULL') ? '(' . $mtTsLit . ')::date' : 'NULL';
-
-	// searchtext bag — includes ALL distinct measurement types so the
-	// keyword path covers experiments whose scalar measurement_type is
-	// some other primary value but who do measure (e.g.) Pressure too.
-	$allMeasures = pgParseTextArray($r->all_measurement_types);
-	$bag = $projectName . ' ' . (string)$r->project_notes . ' '
-		. $expId . ' '
-		. (string)$r->apparatus_name . ' ' . (string)$r->apparatus_type . ' '
-		. (string)$r->apparatus_desc . ' '
-		. (string)$r->facility_name . ' ' . (string)$r->facility_institute . ' '
-		. (string)$r->sample_bag . ' '
-		. implode(' ', $allMeasures);
-	$searchtext = pgTsvector($bag);
-
-	$hasSamples = ($r->has_samples === 't' || $r->has_samples === true);
-	$hasImages  = ($r->has_images  === 't' || $r->has_images  === true);
-
-	$values = '(' . implode(',', array(
-		pgText('experiment'),
-		pgText($expId, 64),
-		pgInt($puk),
-		pgText($projectId, 64),
-		pgInt($puk),
-		pgText('exp'),
-		pgText($projectName, 500),
-		pgBool($projectPub),
-		$locLit,
-		$dateLit,
-		$searchtext,
-		pgBool(false),           // has_orientation
-		pgBool($hasSamples),
-		pgBool($hasImages),
-		pgBool(false),           // has_microstructure
-		pgBool(false),           // has_strat
-		pgText($r->apparatus_type),
-		pgText($r->daq_sensor_type),
-		pgText($r->measurement_type),
-		$mtTsLit,
-	)) . ')';
+	// Row → tuple mapping shared with the sync touch path — see expTuple
+	// in _row_builders.php.
+	$values = expTuple($r);
 
 	if ($APPLY) {
 		$ret = $buf->add($values);

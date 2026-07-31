@@ -78,6 +78,7 @@ require_once('includes/config.inc.php');
 require_once('db.php');
 require_once('neodb.php');
 require_once(__DIR__ . '/_extractor_lib.php');
+require_once(__DIR__ . '/_row_builders.php');
 
 $APPLY        = in_array('--apply', $argv, true);
 $NO_SWAP      = in_array('--no-swap', $argv, true);
@@ -128,20 +129,9 @@ if ($RESUME_FROM > 0) {
 	line('  staging table created (fresh): strabosearch.item_hit_staging_field');
 }
 
-// INSERT column list excludes the PK + last_synced (defaulted). Used as a
-// single source of truth for both the staging INSERT and the swap's
-// projection back into item_hit.
-$INSERT_COLS = array(
-	'item_type', 'item_id', 'item_userpkey',
-	'project_id', 'project_userpkey', 'project_subsystem', 'project_name', 'project_ispublic',
-	'location', 'date_value', 'searchtext_tsv',
-	'has_orientation', 'has_samples', 'has_images', 'has_microstructure', 'has_strat',
-	'orientation_strike', 'orientation_dip', 'orientation_trend', 'orientation_plunge',
-	'orientation_features', 'orientation_planar',
-	'rock_types', 'met_facies', 'trace_types',
-	'tag_names', 'tag_types', 'tag_text_tsv',
-	'source_modified',
-);
+// INSERT column list excludes the PK + last_synced (defaulted). Single
+// source of truth shared with the sync path — see _row_builders.php.
+$INSERT_COLS = fieldItemCols();
 $buf = new BulkInsertBuffer($db,
 	"INSERT INTO strabosearch.item_hit_staging_field (" . implode(', ', $INSERT_COLS) . ") VALUES ",
 	500);
@@ -230,80 +220,18 @@ foreach ($activeUsers as $upk) {
 
 		// Keyset-paginate by s.id within a dataset (handles the rare
 		// pathologically large dataset without re-scan penalty).
-		// Real Project/Dataset/Spot ids are LONGs in Neo4j; quoting them
-		// yields string-vs-long mismatch with the indexed property. Emit
-		// numeric literal when purely-numeric, quoted+escaped string otherwise.
-		$pidLit = ctype_digit((string)$pid) ? (string)$pid
-			: "'" . pg_escape_string((string)$pid) . "'";
-		$didLit = ctype_digit((string)$did) ? (string)$did
-			: "'" . pg_escape_string((string)$did) . "'";
+		$pidLit = neoIdLiteral($pid);
+		$didLit = neoIdLiteral($did);
 		$cursor = null;
 		while (true) {
 			$cursorClause = '';
 			if ($cursor !== null) {
-				$cursorLit = ctype_digit((string)$cursor) ? (string)$cursor
-					: "'" . pg_escape_string((string)$cursor) . "'";
-				$cursorClause = "AND s.id > $cursorLit ";
+				$cursorClause = "AND s.id > " . neoIdLiteral($cursor) . " ";
 			}
-			// Pull only the blobs the §4 search model actually uses for
-			// indexable facets or has_* flags. Other blobs (json_inferences,
-			// json_sed, json_other_features, json__3d_structures,
-			// json_rock_unit) are intentionally NOT pulled — they would
-			// inflate payload (some spots carry 5MB blobs) for no facet gain.
-			// rock_types come from tags, not from json_rock_unit. The
-			// searchtext_tsv bag-of-words uses names + notes only —
-			// per Phase 0.1 the buried blobs become TYPED facets, not bag.
-			// Tag map projection: collect only the 7 properties
-			// buildRockTypePath uses. Full Tag node collection inflates
-			// payload (some tags carry ~25 properties incl. long
-			// descriptions / map_unit_name / color / etc. that we don't
-			// need) and was OOMing the Bolt stream channel.
-			//
-			// has_samples/has_microstructure/has_pet were also payload
-			// sinks (some json_samples blobs are MB-sized). We compute the
-			// boolean flag server-side and skip pulling the blob content.
-			//
-			// Walk anchored through User → HAS_PROJECT → Project → HAS_DATASET
-			// → Dataset → HAS_SPOT → Spot per project_neo4j_user_anchored_walks.
-			// This scopes Project/Dataset/Spot by the edge rather than by id
-			// alone — Strabo ids are NOT unique (same id can exist on multiple
-			// nodes owned by different users; matching by id alone returns ALL
-			// same-id nodes and produces cross-product fan-out).
-			$rows = $neodb->query("
-				MATCH (u:User {userpkey: $upk})
-				      -[:HAS_PROJECT]->(p:Project {id: $pidLit})
-				      -[:HAS_DATASET]->(d:Dataset {id: $didLit})
-				      -[:HAS_SPOT]->(s:Spot)
-				WHERE 1=1 $cursorClause
-				OPTIONAL MATCH (s)-[:IS_TAGGED]->(t:Tag {type:'geologic_unit'})
-				OPTIONAL MATCH (s)-[:IS_TAGGED]->(at:Tag)
-				OPTIONAL MATCH (s)-[hi:HAS_IMAGE]->()
-				WITH s, collect(distinct {
-					rock_type: t.rock_type,
-					igneous_rock_class: t.igneous_rock_class,
-					plutonic_rock_types: t.plutonic_rock_types,
-					metamorphic_rock_types: t.metamorphic_rock_types,
-					metamorphic_grade: t.metamorphic_grade,
-					sedimentary_rock_type: t.sedimentary_rock_type,
-					sediment_type: t.sediment_type
-				}) AS tags,
-				collect(distinct {name: at.name, type: at.type}) AS all_tags,
-				count(distinct hi) AS image_count
-				ORDER BY s.id
-				RETURN s.id AS sid, s.userpkey AS suk, s.name AS sname,
-				       substring(toString(s.json_orientation_data), 0, 100000) AS jod,
-				       substring(toString(s.orientation_data), 0, 100000) AS od_legacy,
-				       substring(toString(s.json_trace), 0, 100000) AS jtr,
-				       (s.json_samples IS NOT NULL AND s.json_samples <> '') AS hsamples,
-				       ((s.json_microstructure IS NOT NULL AND s.json_microstructure <> '')
-				        OR (s.json_pet IS NOT NULL AND s.json_pet <> '')) AS hmicro,
-				       substring(toString(s.notes), 0, 10000) AS notes,
-				       s.wkt AS wkt, s.modified_timestamp AS mt,
-				       s.date AS date_str, s.strat_section_id AS strat_id,
-				       s.image_basemap AS image_basemap,
-				       tags, all_tags, image_count
-				LIMIT $BATCH_SIZE
-			");
+			// Query + payload rationale documented on fieldSpotBatchCypher
+			// in _row_builders.php (shared with the sync touch path).
+			$rows = $neodb->query(
+				fieldSpotBatchCypher($upk, $pidLit, $didLit, $cursorClause, $BATCH_SIZE));
 			if (!$rows) break;
 
 			foreach ($rows as $r) {
@@ -316,179 +244,21 @@ foreach ($activeUsers as $upk) {
 				// (not yet in PG mirror) default to private.
 				$pispubBool = !empty($pgPubMap[(string)$pid]);
 
-			// --- orientation parse (dual conventions per Phase 0.2 census)
-			$od = safeJsonDecode($r->get('jod'));
-			if ($od === null) {
-				// bare orientation_data is the 2016-era convention; still seen
-				$od = safeJsonDecode($r->get('od_legacy'));
-			}
-			$strikes = $dips = $trends = $plunges = array();
-			$featTypes = $planars = array();
-			$hasOrientation = false;
-			if (is_array($od)) {
-				$hasOrientation = !empty($od);
-				foreach ($od as $el) {
-					if (!is_object($el)) continue;
-					if (isset($el->strike) && is_numeric($el->strike)) $strikes[] = (float)$el->strike;
-					if (isset($el->dip)    && is_numeric($el->dip))    $dips[]    = (float)$el->dip;
-					if (isset($el->trend)  && is_numeric($el->trend))  $trends[]  = (float)$el->trend;
-					if (isset($el->plunge) && is_numeric($el->plunge)) $plunges[] = (float)$el->plunge;
-					if (isset($el->feature_type)) $featTypes[] = (string)$el->feature_type;
-					// type field tells us planar vs linear
-					if (isset($el->type)) {
-						$t = (string)$el->type;
-						$planars[] = (strpos($t, 'linear') === false);  // default planar
+				// Row → tuple mapping is shared with the sync touch path —
+				// see fieldSpotTuple in _row_builders.php.
+				$values = fieldSpotTuple($r, $pid, $puk, $pname, $dname,
+					$pispubBool, $tagTypeVocabSeen);
+
+				if ($APPLY) {
+					$ret = $buf->add($values);
+					// add() drains poison batches and returns < 0 — log once per batch.
+					if ($ret === false || $ret < 0) {
+						line('  batch dropped (' . abs((int)$ret) . ' rows) — ' . $buf->lastError);
+						$parseFail += abs((int)$ret);
 					}
 				}
-			} elseif (is_object($od)) {
-				$hasOrientation = true;  // single-object form (rare; Phase 0.2 saw it)
-			}
-
-			// --- rock_types + met_facies from tags
-			$rockTypes = array();
-			$metFacies = array();
-			$tagList = $r->get('tags');
-			if (is_array($tagList)) {
-				foreach ($tagList as $tag) {
-					if ($tag === null) continue;
-					list($path, $facies) = buildRockTypePath($tag);
-					if ($path !== '') $rockTypes[] = $path;
-					if ($facies !== '') $metFacies[] = $facies;
-				}
-			}
-			$rockTypes = array_values(array_unique($rockTypes));
-			$metFacies = array_values(array_unique($metFacies));
-
-			// --- trace_types from json_trace (key is `trace_type`, not
-			// the legacy-misread `trace_feature_type` — see buildTracePath
-			// docblock + feedback_verify_property_name_before_assuming_source).
-			// json_trace is typically a single object per spot (not an
-			// array like json_orientation_data), but the array-of-objects
-			// shape has been seen historically; handle both.
-			$traceTypes = array();
-			$jtr = safeJsonDecode($r->get('jtr'));
-			if (is_array($jtr)) {
-				foreach ($jtr as $el) {
-					$p = buildTracePath($el);
-					if ($p !== '') $traceTypes[] = $p;
-				}
-			} elseif (is_object($jtr)) {
-				$p = buildTracePath($jtr);
-				if ($p !== '') $traceTypes[] = $p;
-			}
-			$traceTypes = array_values(array_unique($traceTypes));
-
-			// --- tag_names / tag_types from ALL tags (U10 / F11 amendment).
-			// The geologic_unit-scoped `tags` collection above serves F7
-			// rock_types only; `all_tags` carries every attached tag's
-			// name + type. Deny-list = NULL/empty only.
-			$tagNames = array();
-			$tagTypes = array();
-			$allTagList = $r->get('all_tags');
-			if (is_array($allTagList)) {
-				foreach ($allTagList as $tg) {
-					if ($tg === null) continue;
-					$tn = null; $tt = null;
-					if (is_object($tg) && method_exists($tg, 'get')) {
-						try { $tn = $tg->get('name'); } catch (\Exception $e) {}
-						try { $tt = $tg->get('type'); } catch (\Exception $e) {}
-					} elseif (is_object($tg)) {
-						$tn = isset($tg->name) ? $tg->name : null;
-						$tt = isset($tg->type) ? $tg->type : null;
-					} elseif (is_array($tg)) {
-						$tn = isset($tg['name']) ? $tg['name'] : null;
-						$tt = isset($tg['type']) ? $tg['type'] : null;
-					}
-					if ($tn !== null && $tn !== '') $tagNames[] = (string)$tn;
-					if ($tt !== null && $tt !== '') {
-						$tagTypes[] = (string)$tt;
-						$tagTypeVocabSeen[(string)$tt] = true;
-					}
-				}
-			}
-			$tagNames = array_values(array_unique($tagNames));
-			$tagTypes = array_values(array_unique($tagTypes));
-
-			// --- has_* flags (server-side booleans skip pulling MB-sized blobs)
-			$has_orientation    = $hasOrientation;
-			$has_samples        = (bool)$r->get('hsamples');
-			$has_images         = ((int)$r->get('image_count') > 0);
-			$has_microstructure = (bool)$r->get('hmicro');
-			$has_strat          = !empty($r->get('strat_id')) || !empty($r->get('image_basemap'));
-
-			// --- date_value: prefer parsed properties.date; fallback to mt epoch.
-			// Validate ISO-8601 prefix shape — Field carries garbage dates
-			// in the wild ('0000-00-00', '1932-00-00') that poison whole batches.
-			$dateLit = 'NULL';
-			$dateStr = $r->get('date_str');
-			if (is_string($dateStr) && preg_match('/^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])/', $dateStr, $dm)) {
-				$dateLit = "'" . $dm[1] . '-' . $dm[2] . '-' . $dm[3] . "'::date";
-			} else {
-				// pgTimestamp handles ms-vs-s epoch detection (Field's
-				// modified_timestamp is ms-epoch since the 2024-ish client
-				// revision; older spots used seconds).
-				$tsLit = pgTimestamp($r->get('mt'));
-				if ($tsLit !== 'NULL') $dateLit = '(' . $tsLit . ')::date';
-			}
-
-			// --- searchtext: flatten the spot.name + project.name + dataset.name + notes
-			//     + every blob we pulled, for U1 keyword fidelity to /fullsearch's
-			//     existing getKeywords behavior.
-			$bagParts = array();
-			$bagParts[] = (string)$r->get('sname');
-			$bagParts[] = (string)$pname;
-			$bagParts[] = (string)$dname;
-			$bagParts[] = (string)$r->get('notes');
-			// Names + notes only. Buried-blob content becomes TYPED facets
-			// (orientation arrays, rock_types, trace_types), NOT bag-of-words
-			// — per Phase 0.1 autopsy + §4 design intent. Tag names ride
-			// along per the U10 amendment (§4.3-Tag: U1 safety net).
-			if ($tagNames) $bagParts[] = implode(' ', $tagNames);
-			$searchText = implode(' ', $bagParts);
-
-			// --- assemble VALUES tuple
-			$values = '(' . implode(',', array(
-				pgText('spot'),
-				pgText((string)$spotId, 64),
-				pgInt($r->get('suk')),
-				pgText((string)$pid, 64),
-				pgInt($puk),
-				pgText('field'),
-				pgText($pname, 500),
-				pgBool($pispubBool),
-				pgCentroidFromWkt($r->get('wkt')),
-				$dateLit,
-				pgTsvector($searchText),
-				pgBool($has_orientation),
-				pgBool($has_samples),
-				pgBool($has_images),
-				pgBool($has_microstructure),
-				pgBool($has_strat),
-				pgNumericArray($strikes),
-				pgNumericArray($dips),
-				pgNumericArray($trends),
-				pgNumericArray($plunges),
-				pgTextArray($featTypes),
-				pgBoolArray($planars),
-				pgTextArray($rockTypes),
-				pgTextArray($metFacies),
-				pgTextArray($traceTypes),
-				pgTextArray($tagNames),
-				pgTextArray($tagTypes),
-				pgTsvector(implode(' ', $tagNames)),
-				pgTimestamp($r->get('mt')),
-			)) . ')';
-
-			if ($APPLY) {
-				$ret = $buf->add($values);
-				// add() drains poison batches and returns < 0 — log once per batch.
-				if ($ret === false || $ret < 0) {
-					line('  batch dropped (' . abs((int)$ret) . ' rows) — ' . $buf->lastError);
-					$parseFail += abs((int)$ret);
-				}
-			}
-			$nUserSpots++;
-			$totalSpots++;
+				$nUserSpots++;
+				$totalSpots++;
 			}
 
 			// Keyset-paginate: stop when the last batch was short (no more spots).

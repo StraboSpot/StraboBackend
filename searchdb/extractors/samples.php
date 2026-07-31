@@ -124,6 +124,7 @@ chdir(__DIR__ . '/../../');
 require_once('includes/config.inc.php');
 require_once('db.php');
 require_once(__DIR__ . '/_extractor_lib.php');
+require_once(__DIR__ . '/_row_builders.php');
 
 $APPLY        = in_array('--apply', $argv, true);
 $NO_SWAP      = in_array('--no-swap', $argv, true);
@@ -147,86 +148,21 @@ $db->query("CREATE TABLE strabosearch.item_hit_staging_samples
 $db->query("ALTER TABLE strabosearch.item_hit_staging_samples DROP COLUMN item_hit_pkey");
 line('  staging table created (fresh): strabosearch.item_hit_staging_samples');
 
-$INSERT_COLS = array(
-	'item_type', 'item_id', 'item_userpkey',
-	'project_id', 'project_userpkey', 'project_subsystem', 'project_name', 'project_ispublic',
-	'location', 'date_value', 'searchtext_tsv',
-	'sample_id', 'sample_name', 'igsn', 'display_sample_type', 'display_sample_purpose',
-	'has_orientation', 'has_samples', 'has_images', 'has_microstructure', 'has_strat',
-	'source_modified',
-);
+// Single source of truth shared with the sync path — see _row_builders.php.
+$INSERT_COLS = samplesItemCols();
 $buf = new BulkInsertBuffer($db,
 	"INSERT INTO strabosearch.item_hit_staging_samples (" . implode(', ', $INSERT_COLS) . ") VALUES ",
 	500);
-
-// Shared SELECT list for the spine columns every resolution query needs.
-$SAMPLE_COLS = "
-	s.id            AS sample_id,
-	s.userpkey      AS sample_userpkey,
-	s.name          AS sample_name,
-	s.igsn,
-	s.description,
-	s.notes,
-	s.latitude,
-	s.longitude,
-	s.display_sample_type,
-	s.display_sample_purpose,
-	s.modified_at,
-	s.custom_data::text AS custom_data_json";
 
 $userFilter = $SINGLE_USER !== null ? "AND s.userpkey = " . (int)$SINGLE_USER : '';
 
 /**
  * Emit one staging VALUES tuple for a resolved (sample × host project) pair.
- * $r must carry the $SAMPLE_COLS aliases + project_id / project_userpkey /
- * project_name / project_ispublic; $subsystem is the item_hit value
- * ('field' | 'micro' | 'exp'); $hostLocWkt is the host spot's location WKT
- * for the field fallback (null elsewhere).
+ * Row → tuple mapping shared with the sync touch path — see sampleTuple
+ * in _row_builders.php.
  */
 function emitSampleRow($buf, $APPLY, $r, $subsystem, $hostLocWkt) {
-	// Location: the sample's own coords win; field rows fall back to the
-	// host spot's already-indexed point.
-	$locLit = pgPointLiteral($r->longitude, $r->latitude);
-	if ($locLit === 'NULL' && $hostLocWkt !== null && $hostLocWkt !== '') {
-		$locLit = "ST_SetSRID(ST_GeomFromText('" . pg_escape_string($hostLocWkt) . "'), 4326)";
-	}
-
-	$mtTsLit = pgTimestamp($r->modified_at);
-	$dateLit = ($mtTsLit !== 'NULL') ? '(' . $mtTsLit . ')::date' : 'NULL';
-
-	$bag = (string)$r->sample_name . ' ' . (string)$r->igsn . ' '
-		. (string)$r->description . ' ' . (string)$r->notes . ' '
-		. (string)$r->display_sample_type . ' ' . (string)$r->display_sample_purpose . ' '
-		. (string)$r->project_name . ' '
-		. flattenKeywords(safeJsonDecode($r->custom_data_json));
-
-	$projectPub = ($r->project_ispublic === 't' || $r->project_ispublic === true);
-
-	$values = '(' . implode(',', array(
-		pgText('sample'),
-		pgText($r->sample_id),
-		pgInt($r->sample_userpkey),
-		pgText($r->project_id),
-		pgInt($r->project_userpkey),
-		pgText($subsystem),
-		pgText($r->project_name, 500),
-		pgBool($projectPub),
-		$locLit,
-		$dateLit,
-		pgTsvector($bag),
-		pgText($r->sample_id),
-		pgText($r->sample_name, 500),
-		pgText($r->igsn),
-		pgText($r->display_sample_type),
-		pgText($r->display_sample_purpose),
-		pgBool(false),           // has_orientation
-		pgBool(true),            // has_samples — the item IS a sample
-		pgBool(false),           // has_images
-		pgBool(false),           // has_microstructure
-		pgBool(false),           // has_strat
-		$mtTsLit,
-	)) . ')';
-
+	$values = sampleTuple($r, $subsystem, $hostLocWkt);
 	if ($APPLY) {
 		$ret = $buf->add($values);
 		if ($ret !== null && $ret < 0) {
@@ -238,24 +174,7 @@ function emitSampleRow($buf, $APPLY, $r, $subsystem, $hostLocWkt) {
 // ---------------------------------------------------------------------------
 section('2. Field fan-out (links resolved via the indexed Field slice)');
 
-$rows = $db->get_results("
-	SELECT DISTINCT ON (s.id, s.userpkey, ih.project_id, ih.project_userpkey)
-		$SAMPLE_COLS,
-		ih.project_id,
-		ih.project_userpkey,
-		ih.project_name,
-		ih.project_ispublic,
-		ST_AsText(ih.location) AS host_loc_wkt
-	FROM strabosamples.samples s
-	JOIN strabosamples.sample_subsystem_links l
-	  ON l.sample_id = s.id AND l.sample_userpkey = s.userpkey
-	 AND l.subsystem = 'field'
-	JOIN strabosearch.item_hit ih
-	  ON ih.item_type = 'spot' AND ih.project_subsystem = 'field'
-	 AND ih.item_id = l.reference_id AND ih.item_userpkey = l.reference_userpkey
-	WHERE TRUE $userFilter
-	ORDER BY s.id, s.userpkey, ih.project_id, ih.project_userpkey
-");
+$rows = $db->get_results(samplesFieldSql($userFilter));
 $rows = (array)$rows;
 $fieldRows = count($rows);
 foreach ($rows as $r) emitSampleRow($buf, $APPLY, $r, 'field', $r->host_loc_wkt);
@@ -280,23 +199,7 @@ line('  field links unresolved: ' . number_format($unresolvedField)
 // ---------------------------------------------------------------------------
 section('3. Micro fan-out (links resolved via micro_projectmetadata)');
 
-$rows = $db->get_results("
-	SELECT DISTINCT ON (s.id, s.userpkey, pm.strabo_id, pm.userpkey)
-		$SAMPLE_COLS,
-		pm.strabo_id AS project_id,
-		pm.userpkey  AS project_userpkey,
-		pm.name      AS project_name,
-		COALESCE(pm.ispublic, FALSE) AS project_ispublic
-	FROM strabosamples.samples s
-	JOIN strabosamples.sample_subsystem_links l
-	  ON l.sample_id = s.id AND l.sample_userpkey = s.userpkey
-	 AND l.subsystem = 'micro'
-	JOIN strabomicro.micro_projectmetadata pm
-	  ON pm.strabo_id = l.reference_metadata->>'project_strabo_id'
-	 AND pm.userpkey  = l.reference_userpkey
-	WHERE TRUE $userFilter
-	ORDER BY s.id, s.userpkey, pm.strabo_id, pm.userpkey
-");
+$rows = $db->get_results(samplesMicroSql($userFilter));
 $rows = (array)$rows;
 $microRows = count($rows);
 foreach ($rows as $r) emitSampleRow($buf, $APPLY, $r, 'micro', null);
@@ -306,22 +209,7 @@ line('  micro rows emitted:     ' . number_format($microRows));
 // ---------------------------------------------------------------------------
 section('4. Exp fan-out (links resolved via straboexp.project)');
 
-$rows = $db->get_results("
-	SELECT DISTINCT ON (s.id, s.userpkey, p.uuid, l.reference_userpkey)
-		$SAMPLE_COLS,
-		p.uuid               AS project_id,
-		l.reference_userpkey AS project_userpkey,
-		p.name               AS project_name,
-		COALESCE(p.ispublic, FALSE) AS project_ispublic
-	FROM strabosamples.samples s
-	JOIN strabosamples.sample_subsystem_links l
-	  ON l.sample_id = s.id AND l.sample_userpkey = s.userpkey
-	 AND l.subsystem = 'experimental'
-	JOIN straboexp.project p
-	  ON p.uuid = l.reference_metadata->>'project_uuid'
-	WHERE TRUE $userFilter
-	ORDER BY s.id, s.userpkey, p.uuid, l.reference_userpkey
-");
+$rows = $db->get_results(samplesExpSql($userFilter));
 $rows = (array)$rows;
 $expRows = count($rows);
 foreach ($rows as $r) emitSampleRow($buf, $APPLY, $r, 'exp', null);
