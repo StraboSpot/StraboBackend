@@ -1009,6 +1009,13 @@ class StraboSamplesService
             $this->markMicroProjectPdfsDirty($id, $ownerPkey);
         }
 
+        // StraboSearch live-sync (§5.3): recompute the sample's fan-out
+        // rows. Unconditional — JSONB-only updates (custom_data) feed the
+        // searchtext bag too. Transaction-neutral: joins the tabular
+        // import's outer transaction when one is open.
+        require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+        StraboSearchSync::touchSample($this->db, $id, $ownerPkey);
+
         return array('ok' => true, 'sample' => $this->getSample($id, $ownerPkey));
     }
 
@@ -1070,6 +1077,11 @@ class StraboSamplesService
             "DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
             array($id, $ownerPkey)
         );
+
+        // StraboSearch live-sync (§5.3): drop every fan-out row of the sample.
+        require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+        StraboSearchSync::removeSample($this->db, $id, $ownerPkey);
+
         return array('ok' => true);
     }
 
@@ -1739,6 +1751,12 @@ class StraboSamplesService
 
         $this->db->query("COMMIT");
 
+        // StraboSearch live-sync (§5.3): recompute the sample's fan-out rows
+        // from the just-committed spine + links. Runs for every subsystem
+        // caller (Field/Micro/Exp sample mirrors all land here).
+        require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+        StraboSearchSync::touchSample($this->db, $sampleId, $ownerPkey);
+
         // Changelog (outside the transaction — failure here doesn't roll back the upsert).
         if ($created) {
             $this->logChange($sampleId, $ownerPkey, 'create', array(
@@ -1825,6 +1843,11 @@ class StraboSamplesService
                 array($sampleId, $ownerPkey)
             );
             $this->db->query("COMMIT");
+
+            // StraboSearch live-sync (§5.3): whole sample gone.
+            require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+            StraboSearchSync::removeSample($this->db, $sampleId, $ownerPkey);
+
             return array('ok' => true, 'removed' => true);
         }
 
@@ -1841,6 +1864,12 @@ class StraboSamplesService
         );
 
         $this->db->query("COMMIT");
+
+        // StraboSearch live-sync (§5.3): recompute from the remaining links —
+        // this source's fan-out rows drop, other sources' rows survive.
+        require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+        StraboSearchSync::touchSample($this->db, $sampleId, $ownerPkey);
+
         return array('ok' => true, 'removed' => false);
     }
 

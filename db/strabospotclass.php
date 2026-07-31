@@ -263,6 +263,13 @@ class StraboSpot
 		field_sample_sync_remove_spot($this->db, $this->neodb, $id, $userpkey);
 
 		$this->neodb->query("MATCH (s:Spot {id: $id,userpkey:$userpkey})-[*0..]->(downstreamNode) DETACH DELETE s, downstreamNode");
+
+		// StraboSearch live-sync (§5.3): drop the spot's item + image index
+		// rows (post-delete — identity is denormalized in the index). NOT
+		// suppressed during bulk uploads: server-only spots deleted mid-loop
+		// must leave the index regardless.
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_spot($this->db, $id, $userpkey);
 		
 		/*
 		$this->neodb->query("match (sp:Spot {id:$id,userpkey:$this->userpkey})-[r:IS_RELATED_TO]-() delete r;");
@@ -840,6 +847,13 @@ class StraboSpot
 
 			$upload->properties->id=$thisid;
 
+			// StraboSearch live-sync (§5.3): index the spot BEFORE the sample
+			// mirror below, so the spine sync's own search hook resolves field
+			// links against the freshly indexed spot. No-ops during bulk
+			// suppression (batch sync runs at end-of-dataset).
+			require_once __DIR__ . '/lib/search_sync.php';
+			field_search_sync_touch_spot($this->db, $this->neodb, $thisid, $newspot['userpkey']);
+
 			// Mirror sample writes into strabosamples.* (samples/field-integration).
 			// Helper handles rich/legacy detection, stub-skipping, and idempotent upsert.
 			require_once __DIR__ . '/lib/sample_sync.php';
@@ -946,6 +960,11 @@ class StraboSpot
 
 					$upload->properties->self="https://strabospot.org/db/feature/$thisid";
 					$data=$upload;
+
+					// StraboSearch live-sync (§5.3): index before the sample
+					// mirror — same ordering rationale as the create branch.
+					require_once __DIR__ . '/lib/search_sync.php';
+					field_search_sync_touch_spot($this->db, $this->neodb, $thisid, $newspot['userpkey']);
 
 					// Mirror sample writes into strabosamples.* (samples/field-integration).
 					require_once __DIR__ . '/lib/sample_sync.php';
@@ -1591,6 +1610,12 @@ class StraboSpot
 		// this the dataset's mirrored samples would be orphaned.
 		require_once __DIR__ . '/lib/sample_sync.php';
 		field_sample_sync_remove_dataset($this->db, $this->neodb, $datasetid, $this->userpkey);
+
+		// StraboSearch live-sync (§5.3): drop the dataset's spots from the
+		// index. Pre-delete — spot ids are only enumerable while the graph
+		// still has them (item_hit carries no dataset id).
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_dataset($this->db, $this->neodb, $datasetid, $this->userpkey);
 
 		//next, delete images;
 		$rows=$this->neodb->query("match (d:Dataset)
@@ -2720,6 +2745,10 @@ class StraboSpot
 		require_once __DIR__ . '/lib/sample_sync.php';
 		field_sample_sync_remove_dataset($this->db, $this->neodb, $feature_id, $this->userpkey);
 
+		// StraboSearch live-sync (§5.3): pre-delete spot enumeration + index drop.
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_dataset($this->db, $this->neodb, $feature_id, $this->userpkey);
+
 		$this->neodb->query("optional match ()-[r:IS_RELATED_TO {datasetid:$feature_id,userpkey:$this->userpkey}]-(), ()-[rr:IS_TAGGED {datasetid:$feature_id,userpkey:$this->userpkey}]-() delete r,rr;");
 		$this->neodb->query("match (d:Dataset {id:$feature_id,userpkey:$this->userpkey})-[dr:HAS_SPOT]->(sp:Spot)
 							optional match (ds:Dataset)-[dsetr:HAS_SPOT]->(sp)
@@ -2820,6 +2849,12 @@ class StraboSpot
 		// Check if image still exists (wasn't deleted)
 		$stillExists = $this->neodb->get_var("MATCH (n:Image) WHERE n.id = $image_id RETURN count(n);");
 
+		if($stillExists == 0){
+			// StraboSearch live-sync (§5.3): direct-ownership delete succeeded.
+			require_once __DIR__ . '/lib/search_sync.php';
+			field_search_sync_remove_image($this->db, $image_id, $this->userpkey);
+		}
+
 		if($stillExists > 0){
 			// Try collaborative deletion - find image and check permissions
 			$imageInfo = $this->neodb->getNode("
@@ -2855,6 +2890,11 @@ class StraboSpot
 					$querystring = "MATCH (n:Image) WHERE n.id = $image_id
 									OPTIONAL MATCH (a:Spot)-[b:HAS_IMAGE]-(n) DELETE b,n;";
 					$this->neodb->query($querystring);
+					// StraboSearch live-sync (§5.3): collaborative delete —
+					// the indexed image_userpkey is the project owner's, not
+					// the session collaborator's.
+					require_once __DIR__ . '/lib/search_sync.php';
+					field_search_sync_remove_image($this->db, $image_id, $imageInfo['ownerPkey']);
 					return true;
 				}
 			}
@@ -2958,6 +2998,11 @@ class StraboSpot
 				//move_uploaded_file ( $imagefiletmp_name , "/srv/app/www/dbimages/$filename" );
 				copy ( $imagefiletmp_name , "/srv/app/www/dbimages/$filename" );
 
+				// StraboSearch live-sync (§5.3): re-index via the parent spot
+				// (image metadata + has_images ride the spot touch).
+				require_once __DIR__ . '/lib/search_sync.php';
+				field_search_sync_touch_image($this->db, $this->neodb, $id, $this->userpkey);
+
 				header("Image updated", true, 201);
 				$data['self']="https://strabospot.org/db/image/$id";
 				$data['id']=$id;
@@ -2999,6 +3044,12 @@ class StraboSpot
 				// Now move image to folder
 				//********************************************************************
 				move_uploaded_file ( $imagefiletmp_name , "/srv/app/www/dbimages/$newfilename" );
+
+				// StraboSearch live-sync (§5.3): index via the parent spot if
+				// one is linked; a spot-less image is unservable (§5.5) and
+				// stays out of the index until its spot upload links it.
+				require_once __DIR__ . '/lib/search_sync.php';
+				field_search_sync_touch_image($this->db, $this->neodb, $id, $this->userpkey);
 
 				header("Image created", true, 201);
 				$data['self']="https://strabospot.org/db/image/$id";
@@ -3487,6 +3538,13 @@ stdClass Object
 		$this->db->query("update project set ispublic = false where user_pkey = $this->userpkey");
 		$this->db->query("update micro_projectmetadata set ispublic = false where userpkey = $this->userpkey");
 		$this->db->query("update users set active = false, deleted = true where pkey = $this->userpkey");
+
+		// StraboSearch live-sync (§5.3): the ACL-relevant flip — every index
+		// row of this user's Field + Micro projects goes private immediately
+		// (public search must not keep serving a deleted account's data).
+		require_once __DIR__ . '/lib/search_sync.php';
+		StraboSearchSync::touchProjectMeta($this->db, 'field', null, $this->userpkey, null, false);
+		StraboSearchSync::touchProjectMeta($this->db, 'micro', null, $this->userpkey, null, false);
 	}
 
 	public function insertProfileImage($post,$file){
@@ -3568,6 +3626,11 @@ stdClass Object
 		// re-inserting the snapshot's spots).
 		require_once __DIR__ . '/lib/sample_sync.php';
 		field_sample_sync_remove_project($this->db, $this->neodb, $project_id, $this->userpkey);
+
+		// StraboSearch live-sync (§5.3): drop the project's whole Field index
+		// slice (spots + images + hosted sample fan-out rows).
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_project($this->db, $project_id, $this->userpkey);
 
 		//then, delete images;
 		$rows=$this->neodb->query("match (p:Project)
@@ -4493,6 +4556,13 @@ public function getSpotName($id){
 
 		$this->setProjectCenter($thisid, $ownerPkey);
 
+		// StraboSearch live-sync (§5.3): refresh the denormalized
+		// project_name / project_ispublic on this project's index slice from
+		// the PG row buildPgProject just rebuilt. Cheap UPDATE — the
+		// documented Field-rename searchtext staleness applies.
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_project_meta($this->db, $thisid, $ownerPkey);
+
 		$totalprojecttime = microtime(true)-$projectstarttime;
 		//$this->logToFile("buildprojectrelationships took: ".$totalprojecttime." secs","Project Time");
 
@@ -5078,6 +5148,11 @@ public function getSpotName($id){
 		require_once __DIR__ . '/lib/sample_sync.php';
 		field_sample_sync_remove_project($this->db, $this->neodb, $project_id, $this->userpkey);
 
+		// StraboSearch live-sync (§5.3): drop the project's whole Field index
+		// slice (spots + images + hosted sample fan-out rows).
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_project($this->db, $project_id, $this->userpkey);
+
 		//need to delete dataset and all spots beneath it too
 		$this->neodb->query("optional match ()-[r:IS_RELATED_TO {projectid:$project_id,userpkey:$this->userpkey}]-(), ()-[rr:IS_TAGGED {projectid:$project_id,userpkey:$this->userpkey}]-() delete r,rr;");
 		$this->neodb->query("match (p:Project)
@@ -5384,6 +5459,13 @@ public function getSpotName($id){
 
 					$this->setSampleSyncContext($projectid, $datasetid);
 
+					// StraboSearch live-sync (§5.3.4): suppress per-spot
+					// touches during the restore loop; one batch sync per
+					// dataset below (also covers the inline Image createNode
+					// above, which bypasses insertImage).
+					require_once __DIR__ . '/lib/search_sync.php';
+					field_search_sync_suppress();
+
 					//loop over spots and put in images first, then spot
 					foreach($spots as $spot){
 
@@ -5427,6 +5509,11 @@ public function getSpotName($id){
 					$this->setDatasetCenter($datasetid);
 					$this->setProjectCenter($projectid);
 					$this->buildPgDataset($datasetid);
+
+					// StraboSearch live-sync (§5.3.4): end-of-dataset batch
+					// sync, mirroring the buildPgDataset precedent.
+					field_search_sync_resume();
+					field_search_sync_dataset($this->db, $this->neodb, $datasetid, $this->userpkey);
 				}
 
 			}else{

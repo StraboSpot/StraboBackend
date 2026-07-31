@@ -142,6 +142,11 @@ class ProjectDatasetsSpotsController extends MyController
 									$this->strabo->setuserpkey((int)$ownerPkey);
 									$this->strabo->setSampleSyncContext($projectid, $datasetid);
 
+									// StraboSearch live-sync (§5.3.4): suppress
+									// per-spot touches; per-dataset batch sync below.
+									require_once __DIR__ . '/../lib/search_sync.php';
+									field_search_sync_suppress();
+
 									foreach($spots->features as $spot){
 
 										$spotid = $spot->properties->id;
@@ -186,6 +191,12 @@ class ProjectDatasetsSpotsController extends MyController
 							$this->strabo->setDatasetCenter($datasetid, $ownerPkey);
 
 							//also add dataset to Postgres Database here.
+
+							// StraboSearch live-sync (§5.3.4): per-dataset
+							// batch sync at end of this dataset's spot loop.
+							require_once __DIR__ . '/../lib/search_sync.php';
+							field_search_sync_resume();
+							field_search_sync_dataset($this->strabo->db, $this->strabo->neodb, $datasetid, $ownerPkey);
 						}
 					}
 

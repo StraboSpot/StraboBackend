@@ -102,6 +102,11 @@ if ($is_admin) {
 // Regenerate parent project keywords after experiment removal
 updateExpProjectKeywords($db, $project_pkey);
 
+// StraboSearch live-sync (§5.3): drop the experiment's index row — keyed on
+// the OWNER (item_id = experiment.id string, item_userpkey = e.userpkey).
+require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+StraboSearchSync::removeExperiment($db, $experiment_id, $owner_userpkey);
+
 // Return success response
 $result = new stdClass();
 $result->success = true;

@@ -120,6 +120,7 @@ require_once('includes/config.inc.php');
 require_once('db.php');
 require_once('neodb.php');
 require_once(__DIR__ . '/_extractor_lib.php');
+require_once(__DIR__ . '/_row_builders.php');
 
 $APPLY        = in_array('--apply', $argv, true);
 $NO_SWAP      = in_array('--no-swap', $argv, true);
@@ -157,22 +158,11 @@ if ($RESUME_FROM > 0) {
 }
 
 // Column list excludes image_hit_pkey (PK) and last_synced (defaulted).
-// Single source of truth for staging INSERT and swap projection.
+// Single source of truth shared with the sync path — see _row_builders.php.
 // Micro-native cols (minerals/mineral_methods/instrument_type/detector_type)
 // are NOT in this list — they stay NULL on Field rows and the Micro
 // extractor's swap will project them separately.
-$INSERT_COLS = array(
-	'image_id', 'image_subsystem', 'image_userpkey',
-	'image_type', 'annotated', 'title', 'caption', 'imagetext_tsv', 'filename',
-	'parent_spot_id', 'parent_sample_id',
-	'project_id', 'project_userpkey', 'project_subsystem', 'project_ispublic',
-	'location', 'date_value',
-	'orientation_strike', 'orientation_dip', 'orientation_trend', 'orientation_plunge',
-	'orientation_features', 'orientation_planar',
-	'rock_types', 'met_facies', 'trace_types',
-	'tag_names', 'tag_types', 'tag_text_tsv',
-	'source_modified',
-);
+$INSERT_COLS = fieldImageCols();
 $buf = new BulkInsertBuffer($db,
 	"INSERT INTO strabosearch.image_hit_staging_field (" . implode(', ', $INSERT_COLS) . ") VALUES ",
 	500);
@@ -235,66 +225,20 @@ foreach ($activeUsers as $upk) {
 
 		if ($pid === null || $did === null) continue;
 
-		// Numeric ids → numeric literals; string ids → escaped + quoted.
-		// Same pattern as field.php (Strabo ids are LONGs on prod; quoting
-		// them yields string-vs-long mismatch with the indexed property).
-		$pidLit = ctype_digit((string)$pid) ? (string)$pid
-			: "'" . pg_escape_string((string)$pid) . "'";
-		$didLit = ctype_digit((string)$did) ? (string)$did
-			: "'" . pg_escape_string((string)$did) . "'";
+		$pidLit = neoIdLiteral($pid);
+		$didLit = neoIdLiteral($did);
 
 		$cursor = null;
 		while (true) {
 			$cursorClause = '';
 			if ($cursor !== null) {
-				$cursorLit = ctype_digit((string)$cursor) ? (string)$cursor
-					: "'" . pg_escape_string((string)$cursor) . "'";
-				$cursorClause = "AND s.id > $cursorLit ";
+				$cursorClause = "AND s.id > " . neoIdLiteral($cursor) . " ";
 			}
 
-			// Walk anchored through User → HAS_PROJECT → Project → HAS_DATASET
-			// → Dataset → HAS_SPOT → Spot — same as field.php.
-			// Then the inner MATCH s-HAS_IMAGE-i filters out image-less spots.
-			// DISTINCT s + ORDER BY s.id + LIMIT pages by spot id.
-			//
-			// Per-spot collection: collect images + tags in one go so the
-			// PHP loop can parse the spot context once and apply it to every
-			// image. Avoids re-parsing per-image when a spot has 5 images.
-			$rows = $neodb->query("
-				MATCH (u:User {userpkey: $upk})
-				      -[:HAS_PROJECT]->(p:Project {id: $pidLit})
-				      -[:HAS_DATASET]->(d:Dataset {id: $didLit})
-				      -[:HAS_SPOT]->(s:Spot)
-				WHERE 1=1 $cursorClause
-				MATCH (s)-[:HAS_IMAGE]->(:Image)
-				WITH DISTINCT s ORDER BY s.id LIMIT $BATCH_SIZE
-				MATCH (s)-[:HAS_IMAGE]->(i:Image)
-				OPTIONAL MATCH (s)-[:IS_TAGGED]->(t:Tag {type:'geologic_unit'})
-				OPTIONAL MATCH (s)-[:IS_TAGGED]->(at:Tag)
-				WITH s, collect(distinct {
-					id: i.id, userpkey: i.userpkey,
-					image_type: i.image_type, title: i.title, caption: i.caption,
-					annotated: i.annotated, filename: i.filename,
-					modified_timestamp: i.modified_timestamp
-				}) AS images, collect(distinct {
-					rock_type: t.rock_type,
-					igneous_rock_class: t.igneous_rock_class,
-					plutonic_rock_types: t.plutonic_rock_types,
-					metamorphic_rock_types: t.metamorphic_rock_types,
-					metamorphic_grade: t.metamorphic_grade,
-					sedimentary_rock_type: t.sedimentary_rock_type,
-					sediment_type: t.sediment_type
-				}) AS tags,
-				collect(distinct {name: at.name, type: at.type}) AS all_tags
-				RETURN s.id AS sid, s.userpkey AS suk,
-				       substring(toString(s.json_orientation_data), 0, 100000) AS jod,
-				       substring(toString(s.orientation_data), 0, 100000) AS od_legacy,
-				       substring(toString(s.json_trace), 0, 100000) AS jtr,
-				       s.wkt AS wkt, s.modified_timestamp AS smt,
-				       s.date AS date_str,
-				       images, tags, all_tags
-				ORDER BY s.id
-			");
+			// Query rationale documented on fieldImagesBatchCypher in
+			// _row_builders.php (shared with the sync touch path).
+			$rows = $neodb->query(
+				fieldImagesBatchCypher($upk, $pidLit, $didLit, $cursorClause, $BATCH_SIZE));
 			if (!$rows) break;
 
 			foreach ($rows as $r) {
@@ -302,194 +246,19 @@ foreach ($activeUsers as $upk) {
 				if ($spotId === null) continue;
 				$cursor = $spotId;
 
-				// ----- Parse spot context ONCE per spot ---------------------
 				$pispubBool = !empty($pgPubMap[(string)$pid]);
-
-				// Orientation arrays (dual-conventions per Phase 0.2 census)
-				$od = safeJsonDecode($r->get('jod'));
-				if ($od === null) $od = safeJsonDecode($r->get('od_legacy'));
-				$strikes = $dips = $trends = $plunges = array();
-				$featTypes = $planars = array();
-				if (is_array($od)) {
-					foreach ($od as $el) {
-						if (!is_object($el)) continue;
-						if (isset($el->strike) && is_numeric($el->strike)) $strikes[] = (float)$el->strike;
-						if (isset($el->dip)    && is_numeric($el->dip))    $dips[]    = (float)$el->dip;
-						if (isset($el->trend)  && is_numeric($el->trend))  $trends[]  = (float)$el->trend;
-						if (isset($el->plunge) && is_numeric($el->plunge)) $plunges[] = (float)$el->plunge;
-						if (isset($el->feature_type)) $featTypes[] = (string)$el->feature_type;
-						if (isset($el->type)) {
-							$t = (string)$el->type;
-							$planars[] = (strpos($t, 'linear') === false);
-						}
-					}
-				}
-
-				// rock_types + met_facies from tags
-				$rockTypes = array();
-				$metFacies = array();
-				$tagList = $r->get('tags');
-				if (is_array($tagList)) {
-					foreach ($tagList as $tag) {
-						if ($tag === null) continue;
-						list($path, $facies) = buildRockTypePath($tag);
-						if ($path !== '') $rockTypes[] = $path;
-						if ($facies !== '') $metFacies[] = $facies;
-					}
-				}
-				$rockTypes = array_values(array_unique($rockTypes));
-				$metFacies = array_values(array_unique($metFacies));
-
-				// trace_types from json_trace — key is `trace_type` (not
-				// `trace_feature_type`). See buildTracePath docblock.
-				$traceTypes = array();
-				$jtr = safeJsonDecode($r->get('jtr'));
-				if (is_array($jtr)) {
-					foreach ($jtr as $el) {
-						$p = buildTracePath($el);
-						if ($p !== '') $traceTypes[] = $p;
-					}
-				} elseif (is_object($jtr)) {
-					$p = buildTracePath($jtr);
-					if ($p !== '') $traceTypes[] = $p;
-				}
-				$traceTypes = array_values(array_unique($traceTypes));
-
-				// tag_names / tag_types inherited from the parent spot
-				// (U10/F11 amendment — §5.1.3 Q4b inheritance). Same parse
-				// as field.php's all_tags handling; deny-list NULL/empty.
-				$tagNames = array();
-				$tagTypes = array();
-				$allTagList = $r->get('all_tags');
-				if (is_array($allTagList)) {
-					foreach ($allTagList as $tg) {
-						if ($tg === null) continue;
-						$tn = null; $tt = null;
-						if (is_object($tg) && method_exists($tg, 'get')) {
-							try { $tn = $tg->get('name'); } catch (\Exception $e) {}
-							try { $tt = $tg->get('type'); } catch (\Exception $e) {}
-						} elseif (is_object($tg)) {
-							$tn = isset($tg->name) ? $tg->name : null;
-							$tt = isset($tg->type) ? $tg->type : null;
-						} elseif (is_array($tg)) {
-							$tn = isset($tg['name']) ? $tg['name'] : null;
-							$tt = isset($tg['type']) ? $tg['type'] : null;
-						}
-						if ($tn !== null && $tn !== '') $tagNames[] = (string)$tn;
-						if ($tt !== null && $tt !== '') $tagTypes[] = (string)$tt;
-					}
-				}
-				$tagNames = array_values(array_unique($tagNames));
-				$tagTypes = array_values(array_unique($tagTypes));
-
-				// date_value (validated ISO-8601 prefix; epoch fallback)
-				$dateLit = 'NULL';
-				$dateStr = $r->get('date_str');
-				if (is_string($dateStr) && preg_match('/^(\d{4})-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])/', $dateStr, $dm)) {
-					$dateLit = "'" . $dm[1] . '-' . $dm[2] . '-' . $dm[3] . "'::date";
-				} else {
-					$tsLit = pgTimestamp($r->get('smt'));
-					if ($tsLit !== 'NULL') $dateLit = '(' . $tsLit . ')::date';
-				}
-
-				$locLit = pgCentroidFromWkt($r->get('wkt'));
-				$spotModLit = pgTimestamp($r->get('smt'));
-				$orStrikeLit  = pgNumericArray($strikes);
-				$orDipLit     = pgNumericArray($dips);
-				$orTrendLit   = pgNumericArray($trends);
-				$orPlungeLit  = pgNumericArray($plunges);
-				$orFeatLit    = pgTextArray($featTypes);
-				$orPlanarLit  = pgBoolArray($planars);
-				$rockLit      = pgTextArray($rockTypes);
-				$facLit       = pgTextArray($metFacies);
-				$traceLit     = pgTextArray($traceTypes);
-				$tagNamesLit  = pgTextArray($tagNames);
-				$tagTypesLit  = pgTextArray($tagTypes);
-				$tagTsvLit    = pgTsvector(implode(' ', $tagNames));
 
 				$totalSpotsWalked++;
 
-				// ----- Emit one row per image of this spot ------------------
-				$images = $r->get('images');
-				if (!is_array($images)) continue;
+				// Spot-context parse + per-image emission shared with the
+				// sync touch path — see fieldImageTuples in _row_builders.php.
+				$stats = array('no_filename' => 0, 'no_id' => 0);
+				$tuples = fieldImageTuples($r, $spotId, $pid, $puk, $pispubBool,
+					$vocabSeen, $stats);
+				$totalSkippedNoFn += $stats['no_filename'];
+				$totalSkippedNoId += $stats['no_id'];
 
-				foreach ($images as $img) {
-					if (!is_object($img) && !is_array($img)) continue;
-					$imgGet = function ($k) use ($img) {
-						if (is_object($img) && method_exists($img, 'get')) {
-							try { return $img->get($k); } catch (\Exception $e) { return null; }
-						}
-						if (is_object($img)) return isset($img->$k) ? $img->$k : null;
-						if (is_array($img))  return isset($img[$k]) ? $img[$k] : null;
-						return null;
-					};
-
-					$iid = $imgGet('id');
-					if ($iid === null || $iid === '') { $totalSkippedNoId++; continue; }
-
-					// §5.5 servability gate: no filename ⇒ unservable ⇒ skip.
-					// Per 0.4 audit: 43k images have no filename. They cannot
-					// be served, so they cannot appear in search results.
-					$filename = $imgGet('filename');
-					if ($filename === null || trim((string)$filename) === '') {
-						$totalSkippedNoFn++;
-						continue;
-					}
-
-					// Image userpkey is mixed-type on prod (3 string-typed).
-					// pgInt coerces via (int) which handles both numeric and
-					// string-numeric. Null/non-numeric collapses to NULL.
-					$iuk = $imgGet('userpkey');
-
-					// image_type normalization via §4.5 vocab mapping.
-					// Collect raw → unified pairs for end-of-run upsert into
-					// vocab_image_type.
-					$rawType = $imgGet('image_type');
-					$unifiedType = normalizeFieldImageType($rawType);
-					if ($rawType !== null && $rawType !== '') {
-						$vocabSeen[(string)$rawType] = $unifiedType;
-					}
-
-					// annotated is stored as "1" (true) or "" (false) on
-					// prod; coerce string → bool, NULL preserved.
-					$annRaw = $imgGet('annotated');
-					$annLit = pgBoolFromAnnotated($annRaw);
-
-					$title   = $imgGet('title');
-					$caption = $imgGet('caption');
-					$imageText = trim((string)$title . ' ' . (string)$caption);
-					$imageTextLit = pgTsvector($imageText);
-
-					$imgMtLit = pgTimestamp($imgGet('modified_timestamp'));
-					// source_modified preference: image's own mtime; fall
-					// back to spot's mtime if image carries none.
-					$sourceModLit = ($imgMtLit !== 'NULL') ? $imgMtLit : $spotModLit;
-
-					$values = '(' . implode(',', array(
-						pgText((string)$iid, 64),
-						pgText('field'),
-						pgInt($iuk),
-						pgText($unifiedType),
-						$annLit,
-						pgText($title),
-						pgText($caption),
-						$imageTextLit,
-						pgText($filename, 500),
-						pgText((string)$spotId, 64),
-						'NULL',                  // parent_sample_id (filled by samples extractor)
-						pgText((string)$pid, 64),
-						pgInt($puk),
-						pgText('field'),
-						pgBool($pispubBool),
-						$locLit,
-						$dateLit,
-						$orStrikeLit, $orDipLit, $orTrendLit, $orPlungeLit,
-						$orFeatLit, $orPlanarLit,
-						$rockLit, $facLit, $traceLit,
-						$tagNamesLit, $tagTypesLit, $tagTsvLit,
-						$sourceModLit,
-					)) . ')';
-
+				foreach ($tuples as $values) {
 					if ($APPLY) {
 						$ret = $buf->add($values);
 						if ($ret === false || $ret < 0) {
@@ -558,15 +327,7 @@ if (!$APPLY) {
 	// Upsert vocab_image_type with every (raw → unified) pair seen.
 	// Field-only — Micro extractor will upsert its own rows under subsystem='micro'.
 	if ($vocabSeen) {
-		$inserted = 0;
-		foreach ($vocabSeen as $raw => $unified) {
-			$rawEsc     = pg_escape_string((string)$raw);
-			$unifiedEsc = pg_escape_string((string)$unified);
-			$db->query("INSERT INTO strabosearch.vocab_image_type (subsystem, normalized_from, unified_value)
-				VALUES ('field', '$rawEsc', '$unifiedEsc')
-				ON CONFLICT (subsystem, normalized_from) DO UPDATE SET unified_value = EXCLUDED.unified_value");
-			$inserted++;
-		}
+		$inserted = upsertVocabImageTypes($db, $vocabSeen, 'field');
 		line(sprintf('  vocab_image_type rows upserted: %d', $inserted));
 	}
 
@@ -582,41 +343,6 @@ if (!$APPLY) {
 line();
 line(sprintf('Done in %.1fs.', microtime(true) - $t0));
 
-// ===========================================================================
-// Helpers — local to this extractor (Field image-type vocab + annotated coerce)
-// ===========================================================================
-
-/**
- * Map a raw Field :Image.image_type value to the §4.5 unified vocabulary.
- * 5 named buckets ('photo'/'sketch'/'thin_section'/'outcrop'/'sample') with
- * everything else falling to 'other'. NULL/empty raw collapses to NULL
- * (no row emitted for vocab_image_type either).
- *
- * The mapping is explicit and exhaustive — adding a new bucket requires a
- * design change + this function update, not a config tweak.
- */
-function normalizeFieldImageType($raw) {
-	if ($raw === null || $raw === '' || $raw === false) return null;
-	$v = strtolower(trim((string)$raw));
-	static $direct = array(
-		'photo'        => 'photo',
-		'sketch'       => 'sketch',
-		'thin_section' => 'thin_section',
-		'outcrop'      => 'outcrop',
-		'sample'       => 'sample',
-	);
-	return isset($direct[$v]) ? $direct[$v] : 'other';
-}
-
-/**
- * Coerce the stored 'annotated' value to a PG bool literal. Prod stores
- * "1" for true, "" or absent for false. Returns the literal string ready
- * to embed in VALUES.
- */
-function pgBoolFromAnnotated($v) {
-	if ($v === null) return 'NULL';
-	$s = (string)$v;
-	if ($s === '') return 'FALSE';
-	return ($s === '1' || strtolower($s) === 'true') ? 'TRUE' : 'FALSE';
-}
+// Former local helpers (normalizeFieldImageType, pgBoolFromAnnotated)
+// moved to _row_builders.php — shared with the sync touch path.
 ?>

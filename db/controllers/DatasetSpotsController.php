@@ -198,6 +198,12 @@ class DatasetSpotsController extends MyController
 						$projectStraboIdForSync = $this->strabo->getProjectId($feature_id);
 						$this->strabo->setSampleSyncContext($projectStraboIdForSync, $feature_id);
 
+						// StraboSearch live-sync (§5.3.4): suppress per-spot
+						// touches during the bulk loop; one batch sync fires
+						// beside buildPgDataset below. Spot DELETES stay live.
+						require_once __DIR__ . '/../lib/search_sync.php';
+						field_search_sync_suppress();
+
 						foreach($features as $feature){
 
 							$spotid = $feature->properties->id;
@@ -282,6 +288,12 @@ class DatasetSpotsController extends MyController
 
 						//also add dataset to Postgres Database here.
 						$this->strabo->buildPgDataset($feature_id, $ownerPkey);
+
+						// StraboSearch live-sync (§5.3.4): end-of-dataset
+						// batch sync (upsert current spots + images, re-touch
+						// linked samples).
+						field_search_sync_resume();
+						field_search_sync_dataset($this->strabo->db, $this->strabo->neodb, $feature_id, $ownerPkey);
 					}
 
 				}else{
