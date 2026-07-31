@@ -98,7 +98,12 @@ function micro_drop_chain($db, $upk, $strabo_id_prefix) {
 		$db->query("DELETE FROM strabomicro.micro_instrumentdetector WHERE instrument_id IN (SELECT id FROM strabomicro.micro_instrument WHERE micrograph_id = $mid)");
 		$db->query("DELETE FROM strabomicro.micro_instrument WHERE micrograph_id = $mid");
 		$db->query("DELETE FROM strabomicro.micro_fabricinfo WHERE micrograph_id = $mid");
+		// Tags amendment fixtures: junction rows + spots on the micrograph.
+		$db->query("DELETE FROM strabomicro.micro_micrograph_tag WHERE micrograph_id = $mid");
+		$db->query("DELETE FROM strabomicro.micro_spot_tag WHERE spot_id IN (SELECT id FROM strabomicro.micro_spotmetadata WHERE micrograph_id = $mid)");
+		$db->query("DELETE FROM strabomicro.micro_spotmetadata WHERE micrograph_id = $mid");
 	}
+	$db->query("DELETE FROM strabomicro.micro_tag WHERE strabo_id LIKE '${strabo_id_prefix}_tag%'");
 	$db->query("DELETE FROM strabomicro.micro_micrographmetadata WHERE sample_id IN (
 		SELECT sm.id FROM strabomicro.micro_samplemetadata sm
 		JOIN strabomicro.micro_datasetmetadata dm ON dm.id = sm.dataset_id
@@ -206,6 +211,29 @@ $db->query("INSERT INTO strabomicro.micro_instrumentdetector
 
 // fabricinfo row to trigger has_microstructure = TRUE
 $db->query("INSERT INTO strabomicro.micro_fabricinfo (micrograph_id) VALUES ($midA)");
+
+// Tags amendment (U10) — exercise ALL FOUR Micro tag-name sources on midA:
+// 1. micrograph junction tag (micro_micrograph_tag → micro_tag)
+$db->query("INSERT INTO strabomicro.micro_tag (strabo_id, name, tagtype)
+	VALUES ('{$PREFIX}_tag1', 'spsxm JunctionTag UNIQTAG_junc', 'Other')");
+$tagJuncA = $db->insert_id;
+$db->query("INSERT INTO strabomicro.micro_micrograph_tag (micrograph_id, tag_id)
+	VALUES ($midA, $tagJuncA)");
+// 2. micrograph tags_json (client-written array of {name, tagType})
+$db->query("UPDATE strabomicro.micro_micrographmetadata
+	SET tags_json = '[{\"id\":\"1\",\"name\":\"spsxm JsonTag UNIQTAG_mjson\",\"tagType\":\"Other\"}]'
+	WHERE id = $midA");
+// 3. spot on the micrograph carrying its own tags_json
+$db->query("INSERT INTO strabomicro.micro_spotmetadata (micrograph_id, strabo_id, name, tags_json)
+	VALUES ($midA, '{$PREFIX}_spot1', 'spsxm spot one',
+	        '[{\"name\":\"spsxm SpotJsonTag UNIQTAG_sjson\",\"tagType\":\"Other\"}]')");
+$spotA = $db->insert_id;
+// 4. spot junction tag (micro_spot_tag → micro_tag)
+$db->query("INSERT INTO strabomicro.micro_tag (strabo_id, name, tagtype)
+	VALUES ('{$PREFIX}_tag2', 'spsxm SpotJunctionTag UNIQTAG_sjunc', 'Other')");
+$tagSjuncA = $db->insert_id;
+$db->query("INSERT INTO strabomicro.micro_spot_tag (spot_id, tag_id)
+	VALUES ($spotA, $tagSjuncA)");
 
 // ---------------------------------------------------------------------------
 // SCENARIO B — Private project, optical micrograph
@@ -381,6 +409,53 @@ if ($rowAImg) {
 		strpos((string)$rowAImg->instrument_type, 'Scanning Electron') !== false,
 		"got '{$rowAImg->instrument_type}'");
 }
+
+// ===========================================================================
+section('4b. Tags amendment — tag_names from all four Micro sources (U10, name-only)');
+
+foreach (array('item_hit' => "item_id = '{$PREFIX}_imgA' AND item_userpkey = $TEST_UPK AND project_subsystem = 'micro'",
+               'image_hit' => "image_id = '{$PREFIX}_imgA' AND image_userpkey = $TEST_UPK AND image_subsystem = 'micro'") as $tbl => $where) {
+	// image_hit has imagetext_tsv, not searchtext_tsv — the U1 safety-net
+	// check only applies to item_hit.
+	$bagExpr = ($tbl === 'item_hit')
+		? "(searchtext_tsv @@ to_tsquery('uniqtag_mjson'))"
+		: 'TRUE';
+	$rowT = $db->get_row(
+		"SELECT tag_names, tag_types,
+		        (tag_text_tsv @@ to_tsquery('uniqtag_junc & uniqtag_mjson & uniqtag_sjson & uniqtag_sjunc')) AS tsv_all,
+		        $bagExpr AS bag_hit
+		 FROM strabosearch.$tbl WHERE $where"
+	);
+	check("$tbl: tag row found", $rowT !== null);
+	if ($rowT) {
+		$tn = (string)$rowT->tag_names;
+		check("$tbl: tag_names carries all four source names",
+			strpos($tn, 'UNIQTAG_junc') !== false && strpos($tn, 'UNIQTAG_mjson') !== false
+			&& strpos($tn, 'UNIQTAG_sjson') !== false && strpos($tn, 'UNIQTAG_sjunc') !== false,
+			'got ' . $tn);
+		check("$tbl: tag_types NULL (F11 is Field-only; Micro is name-only)",
+			$rowT->tag_types === null, 'got ' . var_export($rowT->tag_types, true));
+		check("$tbl: tag_text_tsv matches all four tag tokens", $rowT->tsv_all === 't');
+		if ($tbl === 'item_hit') {
+			check("$tbl: searchtext_tsv catches a tag token (U1 safety net)",
+				$rowT->bag_hit === 't');
+		}
+	}
+}
+
+$bareTags = $db->get_row(
+	"SELECT tag_names, tag_text_tsv FROM strabosearch.item_hit
+	 WHERE item_id = '{$PREFIX}_imgG2' AND item_userpkey = $TEST_UPK"
+);
+check('untagged micrograph has NULL tag columns',
+	$bareTags !== null && $bareTags->tag_names === null && $bareTags->tag_text_tsv === null,
+	$bareTags ? 'got ' . var_export($bareTags->tag_names, true) : 'row missing');
+
+$microVocab = (int)$db->get_var(
+	"SELECT count(*) FROM strabosearch.vocab_tag_type WHERE subsystem = 'micro'"
+);
+check('vocab_tag_type gets NO micro rows (Field-only vocab)', $microVocab === 0,
+	"got $microVocab");
 
 // ===========================================================================
 section('5. Scenario B — optical vocab + ispublic=FALSE flow-through');

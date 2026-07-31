@@ -348,6 +348,44 @@ function pgParseTextArray($v) {
 }
 
 // ---------------------------------------------------------------------------
+// Tag helpers (2026-06-29 TAGS amendment — U10 / F11)
+// ---------------------------------------------------------------------------
+
+/**
+ * Derive the F11 display label from a raw Tag.type value:
+ * snake_case → Title Case ('geologic_unit' → 'Geologic Unit'), with an
+ * override map for values whose mechanical derivation reads wrong. Unknown
+ * future types render with zero code change — per the §4.3 deny-list-only
+ * governance (allow-lists rot as tag types grow).
+ */
+function tagTypeDisplayLabel($raw) {
+	static $overrides = array(
+		'geologic_unit' => 'Geologic Unit',
+	);
+	$raw = (string)$raw;
+	if (isset($overrides[$raw])) return $overrides[$raw];
+	return ucwords(str_replace('_', ' ', $raw));
+}
+
+/**
+ * Upsert observed tag types into strabosearch.vocab_tag_type. $seen is a
+ * set-shaped array (raw type => true). Deny-list = NULL/empty only, applied
+ * at collection time by the caller.
+ */
+function upsertVocabTagTypes($db, $seen, $subsystem) {
+	$n = 0;
+	foreach ($seen as $raw => $_) {
+		$rawEsc   = pg_escape_string((string)$raw);
+		$labelEsc = pg_escape_string(tagTypeDisplayLabel($raw));
+		$db->query("INSERT INTO strabosearch.vocab_tag_type (subsystem, raw_value, display_label)
+			VALUES ('" . pg_escape_string($subsystem) . "', '$rawEsc', '$labelEsc')
+			ON CONFLICT (subsystem, raw_value) DO UPDATE SET display_label = EXCLUDED.display_label");
+		$n++;
+	}
+	return $n;
+}
+
+// ---------------------------------------------------------------------------
 // Staging-table swap (§5.2.3)
 // ---------------------------------------------------------------------------
 

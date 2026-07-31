@@ -170,6 +170,7 @@ $INSERT_COLS = array(
 	'orientation_strike', 'orientation_dip', 'orientation_trend', 'orientation_plunge',
 	'orientation_features', 'orientation_planar',
 	'rock_types', 'met_facies', 'trace_types',
+	'tag_names', 'tag_types', 'tag_text_tsv',
 	'source_modified',
 );
 $buf = new BulkInsertBuffer($db,
@@ -269,6 +270,7 @@ foreach ($activeUsers as $upk) {
 				WITH DISTINCT s ORDER BY s.id LIMIT $BATCH_SIZE
 				MATCH (s)-[:HAS_IMAGE]->(i:Image)
 				OPTIONAL MATCH (s)-[:IS_TAGGED]->(t:Tag {type:'geologic_unit'})
+				OPTIONAL MATCH (s)-[:IS_TAGGED]->(at:Tag)
 				WITH s, collect(distinct {
 					id: i.id, userpkey: i.userpkey,
 					image_type: i.image_type, title: i.title, caption: i.caption,
@@ -282,14 +284,15 @@ foreach ($activeUsers as $upk) {
 					metamorphic_grade: t.metamorphic_grade,
 					sedimentary_rock_type: t.sedimentary_rock_type,
 					sediment_type: t.sediment_type
-				}) AS tags
+				}) AS tags,
+				collect(distinct {name: at.name, type: at.type}) AS all_tags
 				RETURN s.id AS sid, s.userpkey AS suk,
 				       substring(toString(s.json_orientation_data), 0, 100000) AS jod,
 				       substring(toString(s.orientation_data), 0, 100000) AS od_legacy,
 				       substring(toString(s.json_trace), 0, 100000) AS jtr,
 				       s.wkt AS wkt, s.modified_timestamp AS smt,
 				       s.date AS date_str,
-				       images, tags
+				       images, tags, all_tags
 				ORDER BY s.id
 			");
 			if (!$rows) break;
@@ -352,6 +355,33 @@ foreach ($activeUsers as $upk) {
 				}
 				$traceTypes = array_values(array_unique($traceTypes));
 
+				// tag_names / tag_types inherited from the parent spot
+				// (U10/F11 amendment — §5.1.3 Q4b inheritance). Same parse
+				// as field.php's all_tags handling; deny-list NULL/empty.
+				$tagNames = array();
+				$tagTypes = array();
+				$allTagList = $r->get('all_tags');
+				if (is_array($allTagList)) {
+					foreach ($allTagList as $tg) {
+						if ($tg === null) continue;
+						$tn = null; $tt = null;
+						if (is_object($tg) && method_exists($tg, 'get')) {
+							try { $tn = $tg->get('name'); } catch (\Exception $e) {}
+							try { $tt = $tg->get('type'); } catch (\Exception $e) {}
+						} elseif (is_object($tg)) {
+							$tn = isset($tg->name) ? $tg->name : null;
+							$tt = isset($tg->type) ? $tg->type : null;
+						} elseif (is_array($tg)) {
+							$tn = isset($tg['name']) ? $tg['name'] : null;
+							$tt = isset($tg['type']) ? $tg['type'] : null;
+						}
+						if ($tn !== null && $tn !== '') $tagNames[] = (string)$tn;
+						if ($tt !== null && $tt !== '') $tagTypes[] = (string)$tt;
+					}
+				}
+				$tagNames = array_values(array_unique($tagNames));
+				$tagTypes = array_values(array_unique($tagTypes));
+
 				// date_value (validated ISO-8601 prefix; epoch fallback)
 				$dateLit = 'NULL';
 				$dateStr = $r->get('date_str');
@@ -373,6 +403,9 @@ foreach ($activeUsers as $upk) {
 				$rockLit      = pgTextArray($rockTypes);
 				$facLit       = pgTextArray($metFacies);
 				$traceLit     = pgTextArray($traceTypes);
+				$tagNamesLit  = pgTextArray($tagNames);
+				$tagTypesLit  = pgTextArray($tagTypes);
+				$tagTsvLit    = pgTsvector(implode(' ', $tagNames));
 
 				$totalSpotsWalked++;
 
@@ -453,6 +486,7 @@ foreach ($activeUsers as $upk) {
 						$orStrikeLit, $orDipLit, $orTrendLit, $orPlungeLit,
 						$orFeatLit, $orPlanarLit,
 						$rockLit, $facLit, $traceLit,
+						$tagNamesLit, $tagTypesLit, $tagTsvLit,
 						$sourceModLit,
 					)) . ')';
 

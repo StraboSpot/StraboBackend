@@ -471,6 +471,24 @@ if ($rowB) {
 	check('B: parent_spot_id linked', $rowB->parent_spot_id === "${PREFIX}_spotB");
 }
 
+// Tags amendment: image inherits parent spot's tag_names / tag_types (Q4b)
+// and the dedicated U10 tag_text_tsv path works on the image pathway.
+$rowBt = $db->get_row(
+	"SELECT tag_names, tag_types,
+	        (tag_text_tsv @@ to_tsquery('granite')) AS tsv_hit
+	 FROM strabosearch.image_hit WHERE image_id = '${PREFIX}_imgB1'"
+);
+check('B-tags: row found', $rowBt !== null);
+if ($rowBt) {
+	check("B-tags: tag_names inherits 'spsxi B Granite' from parent spot",
+		strpos((string)$rowBt->tag_names, 'spsxi B Granite') !== false,
+		'got ' . $rowBt->tag_names);
+	check("B-tags: tag_types inherits 'geologic_unit'",
+		strpos((string)$rowBt->tag_types, 'geologic_unit') !== false,
+		'got ' . $rowBt->tag_types);
+	check('B-tags: tag_text_tsv matches tag-name token', $rowBt->tsv_hit === 't');
+}
+
 // ===========================================================================
 section('6. Scenario C — tail image_type maps to "other"');
 
