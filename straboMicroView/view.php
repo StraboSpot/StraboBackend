@@ -26,6 +26,13 @@ if($row->id == ""){
 	exit();
 }
 
+// Refresh the static ./smzFiles/<id>/project.json (which microView.js fetches
+// client-side) with the spine overlay if a Samples-app edit dirtied it, before
+// the page's JS reads it. Owner is $row->userpkey (the project owner). No-op
+// when clean or when the per-project static dir isn't present.
+require_once(__DIR__ . '/../microdb/lib/sample_overlay.php');
+micro_regenerate_files_if_dirty($db, (int)$p, (int)$row->userpkey);
+
 
 ?>
 <!DOCTYPE html>

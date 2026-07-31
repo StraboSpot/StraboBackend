@@ -4,7 +4,6 @@ import { createRouter, createWebHistory } from 'vue-router'
 const HomePage = () => import('@/views/HomePage.vue')
 const AddProject = () => import('@/views/project/AddProject.vue')
 const EditProject = () => import('@/views/project/EditProject.vue')
-const ViewProject = () => import('@/views/project/ViewProject.vue')
 const DeleteProject = () => import('@/views/project/DeleteProject.vue')
 const AddExperiment = () => import('@/views/experiment/AddExperiment.vue')
 const EditExperiment = () => import('@/views/experiment/EditExperiment.vue')
@@ -40,10 +39,14 @@ const routes = [
     props: route => ({ ppk: route.query.ppk })
   },
   {
+    // Legacy route — project viewing now lives on my_experimental_data
     path: '/view_project',
     name: 'view-project',
-    component: ViewProject,
-    props: route => ({ ppk: route.query.ppk })
+    component: { render: () => null },
+    beforeEnter: () => {
+      window.location.href = '/my_experimental_data'
+      return false
+    }
   },
   {
     path: '/delete_project',

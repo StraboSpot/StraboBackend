@@ -81,6 +81,17 @@ $experiment_id = $row->id;
 $project_pkey = (int)$row->project_pkey;
 $project_name = $row->project_name;
 
+// Mirror the sample removal into strabosamples.* BEFORE deleting the
+// experiment row. exp_sample_sync's empty-sample branch removes the
+// straboexp.sample row + the spine link (priority-aware). Keyed on the
+// experiment OWNER's userpkey ($row->userpkey), which differs from the
+// session user on the admin path. Without this the spine row is orphaned.
+include_once("experimental/lib/sample_sync.php");
+include_once("includes/UUID.php");
+$owner_userpkey = (int)$row->userpkey;
+$uuid_gen = new UUID();
+exp_sample_sync($db, $uuid_gen, $experiment_pkey, $owner_userpkey, null, $neodb);
+
 // Delete the experiment - include userpkey in WHERE for extra security
 if ($is_admin) {
     $db->prepare_query("DELETE FROM straboexp.experiment WHERE pkey = $1", array($experiment_pkey));

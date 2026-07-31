@@ -149,7 +149,9 @@ if(count($experimentalrows)==0){
 													<option value=""  style="display:none">Options...</option>
 													<option value="newexperiment">Add Experiment</option>
 													<option value="overview">Overview</option>
-													<option value="landing">Landing Page</option>
+													<?php 
+													///<option value="landing">Landing Page</option> Let's hide this one for now per conversation with Claire 20260729
+													?>
 													<option value="edit">Edit Project</option>
 													<option value="download">Download Project</option>
 													<option value="delete">Delete Project</option>

@@ -91,6 +91,13 @@ if (empty($row->pkey)) {
 
 // Parse experiment data
 $json_data = !empty($row->json) ? json_decode($row->json) : null;
+// Overlay strabosamples.* spine edits onto the embedded sample so this public
+// overview reflects Samples-app edits. Owner pkey is e.userpkey
+// (experiment_owner), the spine row's key.
+if ($json_data) {
+    require_once(__DIR__ . '/lib/sample_overlay.php');
+    experimental_sample_overlay_apply($json_data, $db, (int)$row->experiment_owner);
+}
 $experiment_id = $row->experiment_id ?: 'N/A';
 $project_name = $row->project_name ?: 'N/A';
 $pkey = (int)$row->pkey;

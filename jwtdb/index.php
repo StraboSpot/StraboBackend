@@ -153,6 +153,10 @@ if(class_exists($view_name)) {
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_URL, $url);
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
+	//tracking is fire-and-forget: without these timeouts an unreachable
+	//stats host blocks every response here and piles up Apache workers
+	curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, 1000);
+	curl_setopt($ch, CURLOPT_TIMEOUT_MS, 1500);
 	$output = curl_exec($ch);
 	curl_close($ch);
 

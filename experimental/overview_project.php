@@ -91,7 +91,7 @@ if (empty($row->pkey)) {
 
 // Get all experiments
 $exp_rows = $db->get_results_prepared("
-    SELECT e.pkey, e.id as experiment_id, e.uuid, e.json
+    SELECT e.pkey, e.userpkey, e.id as experiment_id, e.uuid, e.json
     FROM straboexp.experiment e
     WHERE e.project_pkey = $1
     ORDER BY e.modified_timestamp DESC
@@ -383,6 +383,11 @@ include("includes/mheader.php");
                     if (empty($exp_row->json)) continue;
                     $exp_data = json_decode($exp_row->json);
                     if (empty($exp_data)) continue;
+                    // Overlay strabosamples.* spine edits onto the embedded
+                    // sample so this public overview reflects Samples-app edits.
+                    // Owner pkey is e.userpkey, the spine row's key.
+                    require_once(__DIR__ . '/lib/sample_overlay.php');
+                    experimental_sample_overlay_apply($exp_data, $db, (int)$exp_row->userpkey);
                 ?>
                     <hr style="margin:3em 0;border-color:#4b5563;">
                     <div id="exp-<?php echo $idx; ?>">

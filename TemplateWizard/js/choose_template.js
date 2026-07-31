@@ -54,4 +54,30 @@ document.addEventListener('DOMContentLoaded', function() {
 			this.checked = true;
 		}
 	});
+
+	// My Templates table: delete (soft delete server-side; imports/exports
+	// that used the template are unaffected — the spec travels in the files)
+	document.querySelectorAll('.tw-delete-template').forEach(function(btn) {
+		btn.addEventListener('click', function(e) {
+			e.preventDefault();
+			const name = this.getAttribute('data-name');
+			const pkey = this.getAttribute('data-pkey');
+			if (!window.confirm('Delete template "' + name + '"? Files exported with it keep working — their template travels inside the file.')) {
+				return;
+			}
+			const body = new URLSearchParams();
+			body.append('action', 'delete_template');
+			body.append('pkey', pkey);
+			fetch('ajax.php', { method: 'POST', body: body, credentials: 'same-origin' })
+				.then(function(r) { return r.json(); })
+				.then(function(res) {
+					if (res && res.ok) {
+						window.location = 'index.php?deleted=' + encodeURIComponent(name);
+					} else {
+						alert((res && res.message) ? res.message : 'Could not delete the template.');
+					}
+				})
+				.catch(function() { alert('Could not reach the server to delete the template.'); });
+		});
+	});
 });

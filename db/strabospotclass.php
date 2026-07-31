@@ -24,9 +24,41 @@ class StraboSpot
 	 public function setuserpkey($userpkey){
 		 $this->userpkey=$userpkey;
 	 }
-	 
+
 	 public function getuserpkey(){
 		 return $this->userpkey;
+	 }
+
+	 /**
+	  * Inject project/dataset context for the strabosamples mirror hook
+	  * inside insertSpot / deleteSingleSpot. Bulk controllers should call
+	  * this before their spot loops so auto-seed collaborators and link
+	  * metadata get populated on first write. Single-spot edit paths can
+	  * skip it — insertSpot falls back to a Cypher lookup.
+	  */
+	 public function setSampleSyncContext($projectStraboId, $datasetStraboId){
+		 $this->currentProjectStraboId = $projectStraboId !== null && $projectStraboId !== '' ? (string)$projectStraboId : null;
+		 $this->currentDatasetStraboId = $datasetStraboId !== null && $datasetStraboId !== '' ? (string)$datasetStraboId : null;
+	 }
+	 public function clearSampleSyncContext(){
+		 $this->currentProjectStraboId = null;
+		 $this->currentDatasetStraboId = null;
+	 }
+
+	 /**
+	  * Re-mirror a moved spot's samples under a new project/dataset context.
+	  * The Neo4j Spot is unchanged by a move, but its owning dataset/project
+	  * changed — so the strabosamples link metadata + auto-seed collaborators
+	  * must be refreshed. Reads the spot from Neo4j and re-runs the sync hook
+	  * with the new context (geometry/lat-lng preserved). Uses the currently
+	  * set userpkey (effectiveOwner on the collaborator path).
+	  */
+	 public function resyncSpotSamples($spotid, $projectStraboId, $datasetStraboId){
+		 require_once __DIR__ . '/lib/sample_sync.php';
+		 return field_sample_sync_resync_spot(
+			 $this->db, $this->neodb, $spotid, $this->userpkey,
+			 $projectStraboId, $datasetStraboId
+		 );
 	 }
 
 	 public function settesting($testing){
@@ -224,7 +256,12 @@ class StraboSpot
 		}else{
 			$userpkey = $this->userpkey;
 		}
-		
+
+		// Mirror sample removal into strabosamples.* BEFORE the Neo4j delete
+		// so we can still read json_samples + isSample (samples/field-integration).
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_spot($this->db, $this->neodb, $id, $userpkey);
+
 		$this->neodb->query("MATCH (s:Spot {id: $id,userpkey:$userpkey})-[*0..]->(downstreamNode) DETACH DELETE s, downstreamNode");
 		
 		/*
@@ -713,6 +750,19 @@ class StraboSpot
 
 		}
 
+		// Mirror the computed wkt onto the properties object so the
+		// strabosamples sample-sync helper (field_sample_sync_spot →
+		// samples_field_extract_geom_from_spot) can extract lat/lng. The
+		// sync is invoked AFTER Neo4j writes with $upload->properties as
+		// its input, and the input rarely carries wkt — geometry comes
+		// in as a GeoJSON object. Without this assignment, every new
+		// Field upload would produce strabosamples rows with NULL
+		// lat/lng. The 2026-06-05 fix corrected the migration path but
+		// missed this live path; e2e_workflows.php B.1 surfaced it.
+		if ($hasgeometry === "yes") {
+			$upload->properties->wkt = $wkt;
+		}
+
 		if($properties->origwkt!=""){
 			$newspot["origwkt"]=$properties->origwkt;
 		}else{
@@ -789,6 +839,16 @@ class StraboSpot
 			$upload->properties->self="https://strabospot.org/db/feature/$thisid";
 
 			$upload->properties->id=$thisid;
+
+			// Mirror sample writes into strabosamples.* (samples/field-integration).
+			// Helper handles rich/legacy detection, stub-skipping, and idempotent upsert.
+			require_once __DIR__ . '/lib/sample_sync.php';
+			field_sample_sync_spot(
+				$this->db, $this->neodb,
+				$upload->properties, $thisid, $newspot['userpkey'],
+				isset($this->currentProjectStraboId) ? $this->currentProjectStraboId : null,
+				isset($this->currentDatasetStraboId) ? $this->currentDatasetStraboId : null
+			);
 
 			$data=$upload;
 
@@ -886,6 +946,15 @@ class StraboSpot
 
 					$upload->properties->self="https://strabospot.org/db/feature/$thisid";
 					$data=$upload;
+
+					// Mirror sample writes into strabosamples.* (samples/field-integration).
+					require_once __DIR__ . '/lib/sample_sync.php';
+					field_sample_sync_spot(
+						$this->db, $this->neodb,
+						$upload->properties, $thisid, $newspot['userpkey'],
+						isset($this->currentProjectStraboId) ? $this->currentProjectStraboId : null,
+						isset($this->currentDatasetStraboId) ? $this->currentDatasetStraboId : null
+					);
 
 				}
 
@@ -1515,6 +1584,13 @@ class StraboSpot
 		if($projectid=$this->getProjectId($datasetid)){
 			$this->createVersion($projectid);
 		}
+
+		// Mirror sample removal into strabosamples.* BEFORE the bulk Neo4j
+		// delete (spots still exist + json_samples readable). The DETACH
+		// DELETE below never reaches Field's per-spot remove hook, so without
+		// this the dataset's mirrored samples would be orphaned.
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_dataset($this->db, $this->neodb, $datasetid, $this->userpkey);
 
 		//next, delete images;
 		$rows=$this->neodb->query("match (d:Dataset)
@@ -2638,6 +2714,12 @@ class StraboSpot
 
 	public function deleteDatasetSpots($feature_id){
 
+		// Mirror sample removal BEFORE the bulk Neo4j delete (spots still
+		// exist). Only the DELETE-verb actions reach this; the bulk-upload
+		// path uses per-spot deleteSingleSpot, so re-uploads are unaffected.
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_dataset($this->db, $this->neodb, $feature_id, $this->userpkey);
+
 		$this->neodb->query("optional match ()-[r:IS_RELATED_TO {datasetid:$feature_id,userpkey:$this->userpkey}]-(), ()-[rr:IS_TAGGED {datasetid:$feature_id,userpkey:$this->userpkey}]-() delete r,rr;");
 		$this->neodb->query("match (d:Dataset {id:$feature_id,userpkey:$this->userpkey})-[dr:HAS_SPOT]->(sp:Spot)
 							optional match (ds:Dataset)-[dsetr:HAS_SPOT]->(sp)
@@ -3480,6 +3562,13 @@ stdClass Object
 			$this->createVersion($project_id);
 		}
 
+		// Mirror sample removal into strabosamples.* BEFORE the bulk Neo4j
+		// delete so the project's mirrored samples aren't orphaned. Also
+		// covers version-restore (switchVersion deletes via this path before
+		// re-inserting the snapshot's spots).
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_project($this->db, $this->neodb, $project_id, $this->userpkey);
+
 		//then, delete images;
 		$rows=$this->neodb->query("match (p:Project)
 						where p.userpkey=$this->userpkey and p.id=$project_id
@@ -4319,7 +4408,7 @@ public function getSpotName($id){
 
 		if($dbaction=="new"){
 
-			$this->logToFile("New Project");
+			//$this->logToFile("New Project");
 
 			//********************************************************************
 			// create new project node, and then add other nodes
@@ -4330,7 +4419,7 @@ public function getSpotName($id){
 
 		}elseif($dbaction=="update"){
 
-			$this->logToFile("Update Project");
+			//$this->logToFile("Update Project");
 
 			//********************************************************************
 			// existing project was found, update here
@@ -4984,6 +5073,11 @@ public function getSpotName($id){
 
 	public function deleteProjectDatasets($project_id){
 
+		// Mirror sample removal BEFORE the bulk Neo4j delete (spots still
+		// exist). Without this the project's datasets' mirrored samples orphan.
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_project($this->db, $this->neodb, $project_id, $this->userpkey);
+
 		//need to delete dataset and all spots beneath it too
 		$this->neodb->query("optional match ()-[r:IS_RELATED_TO {projectid:$project_id,userpkey:$this->userpkey}]-(), ()-[rr:IS_TAGGED {projectid:$project_id,userpkey:$this->userpkey}]-() delete r,rr;");
 		$this->neodb->query("match (p:Project)
@@ -5288,6 +5382,8 @@ public function getSpotName($id){
 
 					$this->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
 
+					$this->setSampleSyncContext($projectid, $datasetid);
+
 					//loop over spots and put in images first, then spot
 					foreach($spots as $spot){
 
@@ -5324,6 +5420,8 @@ public function getSpotName($id){
 						$this->addSpotToDataset($datasetid,$spotid);
 
 					}
+
+					$this->clearSampleSyncContext();
 
 					//$this->buildDatasetRelationships($datasetid); 20251205
 					$this->setDatasetCenter($datasetid);
@@ -6063,6 +6161,271 @@ public function getSpotName($id){
 		}
 
 		return $out;
+	}
+
+	/**********************************************************************
+	*  StraboTools analyses
+	*
+	*  StraboTools analyses are fully separate from the StraboField
+	*  workflow by design (Jason, 2026-07-07): no :Image nodes, no
+	*  dbimages/ storage, no HAS_IMAGE links, invisible to StraboField
+	*  endpoints. Analyses are flat per-user records with no graph
+	*  relationships, so they live entirely in PostgreSQL: one
+	*  strabotools_analyses row per (client record UUID, userpkey).
+	*  Files live in /srv/app/www/straboToolsImages/ named by the
+	*  strabotools_image_seq sequence. Queryable scalars are individual
+	*  columns; the full client payload (including arrays like
+	*  attitudeRowMajor) is kept losslessly in the analysis jsonb column.
+	*/
+
+	private function toolsUuidValid($id){
+		if(!is_string($id)){ return false; }
+		return preg_match('/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/', $id) === 1;
+	}
+
+	public function insertToolsAnalysis($post,$file){
+
+		$data = array();
+
+		$imagefilename = $file['name'];
+		$imagefiletmp_name = $file['tmp_name'];
+
+		$error="";
+
+		if($imagefiletmp_name==""){
+			$error.="No image file provided. ";
+		}
+
+		$analysisraw = isset($post['analysis']) ? $post['analysis'] : "";
+		$analysis = json_decode($analysisraw, true);
+
+		if(!is_array($analysis)){
+			$error.="Field 'analysis' must be a JSON object. ";
+		}
+
+		$id = (is_array($analysis) && isset($analysis['id'])) ? $analysis['id'] : "";
+		if(!$this->toolsUuidValid($id)){
+			$error.="analysis.id must be a UUID. ";
+		}
+
+		if($error!=""){
+			$data["Error"] = $error;
+			return $data;
+		}
+
+		$imagesha1 = sha1_file($imagefiletmp_name);
+		$modified_timestamp = (int)round(microtime(true)*1000);
+
+		//searchable scalar projections out of the analysis payload
+		//(absent/invalid values stay null -> SQL NULL via pg_execute)
+		$scalars = array(
+			'spot_name' => null, 'notes' => null, 'capture_date' => null,
+			'saved_date' => null, 'app_version' => null, 'device_model' => null,
+			'schema_version' => null, 'azimuth_offset_degrees' => null, 'attitude_gap_seconds' => null,
+			'latitude' => null, 'longitude' => null, 'horizontal_error_meters' => null,
+			'vertical_error_meters' => null, 'elevation_meters' => null,
+			'fabric_azimuth_degrees' => null, 'fabric_rake_degrees' => null,
+			'axial_ratio' => null, 'trend_degrees' => null, 'plunge_degrees' => null,
+			'color_index_percent' => null, 'mode_phase_count' => null,
+			'color_index_adaptive' => null,
+		);
+
+		foreach(array('spotName'=>'spot_name','notes'=>'notes','captureDate'=>'capture_date','savedDate'=>'saved_date','appVersion'=>'app_version','deviceModel'=>'device_model') as $key=>$col){
+			if(isset($analysis[$key]) && is_string($analysis[$key]) && $analysis[$key]!==""){
+				$scalars[$col] = $analysis[$key];
+			}
+		}
+
+		foreach(array('schemaVersion'=>'schema_version','azimuthOffsetDegrees'=>'azimuth_offset_degrees','attitudeGapSeconds'=>'attitude_gap_seconds') as $key=>$col){
+			if(isset($analysis[$key]) && is_numeric($analysis[$key])){
+				$scalars[$col] = $analysis[$key]+0;
+			}
+		}
+
+		if(isset($analysis['position']) && is_array($analysis['position'])){
+			foreach(array('latitude'=>'latitude','longitude'=>'longitude','horizontalErrorMeters'=>'horizontal_error_meters','verticalErrorMeters'=>'vertical_error_meters','elevationMeters'=>'elevation_meters') as $key=>$col){
+				if(isset($analysis['position'][$key]) && is_numeric($analysis['position'][$key])){
+					$scalars[$col] = $analysis['position'][$key]+0;
+				}
+			}
+		}
+
+		if(isset($analysis['measurements']) && is_array($analysis['measurements'])){
+			foreach(array('fabricAzimuthDegrees'=>'fabric_azimuth_degrees','fabricRakeDegrees'=>'fabric_rake_degrees','axialRatio'=>'axial_ratio','trendDegrees'=>'trend_degrees','plungeDegrees'=>'plunge_degrees','colorIndexPercent'=>'color_index_percent','modePhaseCount'=>'mode_phase_count') as $key=>$col){
+				if(isset($analysis['measurements'][$key]) && is_numeric($analysis['measurements'][$key])){
+					$scalars[$col] = $analysis['measurements'][$key]+0;
+				}
+			}
+			if(isset($analysis['measurements']['colorIndexAdaptive']) && is_bool($analysis['measurements']['colorIndexAdaptive'])){
+				//pg_execute would send PHP false as '', so pass PG boolean literals
+				$scalars['color_index_adaptive'] = $analysis['measurements']['colorIndexAdaptive'] ? 't' : 'f';
+			}
+		}
+
+		//full lossless payload (arrays like attitudeRowMajor/modePercentages live here)
+		$analysisjson = json_encode($analysis, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+		//********************************************************************
+		// check to see if analysis already exists (idempotent by client UUID)
+		//********************************************************************
+		$existing = $this->db->get_row_prepared("SELECT filename, created_timestamp FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($id, (int)$this->userpkey));
+
+		if($existing !== null){
+			//analysis exists: update in place, keep filename + created_timestamp
+			$filename = $existing->filename;
+			$created_timestamp = (int)$existing->created_timestamp;
+		}else{
+			//new analysis
+			$filename = (string)$this->db->get_var("SELECT nextval('strabotools_image_seq');");
+			$created_timestamp = $modified_timestamp;
+		}
+
+		//single upsert; ON CONFLICT keeps the stored filename/created_timestamp/created_by
+		//even if a concurrent upload of the same UUID slipped in after the SELECT above
+		$this->db->prepare_query("
+			INSERT INTO strabotools_analyses (
+				id, userpkey, created_by, filename, origfilename, imagesha1,
+				created_timestamp, modified_timestamp,
+				spot_name, notes, capture_date, saved_date, app_version, device_model,
+				schema_version, azimuth_offset_degrees, attitude_gap_seconds,
+				latitude, longitude, horizontal_error_meters, vertical_error_meters, elevation_meters,
+				fabric_azimuth_degrees, fabric_rake_degrees, axial_ratio, trend_degrees,
+				plunge_degrees, color_index_percent, mode_phase_count, color_index_adaptive,
+				analysis
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8,
+				$9, $10, $11, $12, $13, $14,
+				$15, $16, $17,
+				$18, $19, $20, $21, $22,
+				$23, $24, $25, $26,
+				$27, $28, $29, $30,
+				$31::jsonb
+			)
+			ON CONFLICT (id, userpkey) DO UPDATE SET
+				origfilename = EXCLUDED.origfilename,
+				imagesha1 = EXCLUDED.imagesha1,
+				modified_timestamp = EXCLUDED.modified_timestamp,
+				spot_name = EXCLUDED.spot_name,
+				notes = EXCLUDED.notes,
+				capture_date = EXCLUDED.capture_date,
+				saved_date = EXCLUDED.saved_date,
+				app_version = EXCLUDED.app_version,
+				device_model = EXCLUDED.device_model,
+				schema_version = EXCLUDED.schema_version,
+				azimuth_offset_degrees = EXCLUDED.azimuth_offset_degrees,
+				attitude_gap_seconds = EXCLUDED.attitude_gap_seconds,
+				latitude = EXCLUDED.latitude,
+				longitude = EXCLUDED.longitude,
+				horizontal_error_meters = EXCLUDED.horizontal_error_meters,
+				vertical_error_meters = EXCLUDED.vertical_error_meters,
+				elevation_meters = EXCLUDED.elevation_meters,
+				fabric_azimuth_degrees = EXCLUDED.fabric_azimuth_degrees,
+				fabric_rake_degrees = EXCLUDED.fabric_rake_degrees,
+				axial_ratio = EXCLUDED.axial_ratio,
+				trend_degrees = EXCLUDED.trend_degrees,
+				plunge_degrees = EXCLUDED.plunge_degrees,
+				color_index_percent = EXCLUDED.color_index_percent,
+				mode_phase_count = EXCLUDED.mode_phase_count,
+				color_index_adaptive = EXCLUDED.color_index_adaptive,
+				analysis = EXCLUDED.analysis
+		", array(
+			$id, (int)$this->userpkey, (int)$this->userpkey, $filename, (string)$imagefilename, (string)$imagesha1,
+			$created_timestamp, $modified_timestamp,
+			$scalars['spot_name'], $scalars['notes'], $scalars['capture_date'], $scalars['saved_date'], $scalars['app_version'], $scalars['device_model'],
+			$scalars['schema_version'], $scalars['azimuth_offset_degrees'], $scalars['attitude_gap_seconds'],
+			$scalars['latitude'], $scalars['longitude'], $scalars['horizontal_error_meters'], $scalars['vertical_error_meters'], $scalars['elevation_meters'],
+			$scalars['fabric_azimuth_degrees'], $scalars['fabric_rake_degrees'], $scalars['axial_ratio'], $scalars['trend_degrees'],
+			$scalars['plunge_degrees'], $scalars['color_index_percent'], $scalars['mode_phase_count'], $scalars['color_index_adaptive'],
+			$analysisjson
+		));
+
+		copy ( $imagefiletmp_name , "/srv/app/www/straboToolsImages/$filename" );
+
+		$data['self']="https://strabospot.org/db/strabotools/$id";
+		$data['id']=$id;
+		$data['filename']=$filename;
+
+		return $data;
+
+	}
+
+	public function getToolsAnalysisInfo($analysis_id){
+
+		$data = new stdClass();
+		$data->count = 0;
+
+		if(!$this->toolsUuidValid($analysis_id)){
+			return $data;
+		}
+
+		$row = $this->db->get_row_prepared("SELECT filename, origfilename, created_timestamp, modified_timestamp, analysis FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($analysis_id, (int)$this->userpkey));
+
+		if($row === null){
+			return $data;
+		}
+
+		$data->count = 1;
+		$data->id = $analysis_id;
+		$data->filename = $row->filename;
+		$data->origfilename = $row->origfilename !== null ? $row->origfilename : "";
+		$extension = $data->origfilename != "" ? strtolower(pathinfo($data->origfilename, PATHINFO_EXTENSION)) : "";
+		if($extension=="" || $extension=="jpg"){ $extension = "jpeg"; }
+		$data->extension = $extension;
+		//bigints come back from PG as strings; the API contract serves numbers
+		$data->modified_timestamp = (int)$row->modified_timestamp;
+		$data->created_timestamp = (int)$row->created_timestamp;
+		$data->analysis = json_decode($row->analysis);
+
+		return $data;
+
+	}
+
+	public function getMyToolsAnalyses(){
+
+		$data['analyses'] = array();
+
+		$rows = $this->db->get_results_prepared("SELECT id, filename, created_timestamp, modified_timestamp, analysis FROM strabotools_analyses WHERE userpkey = $1 ORDER BY modified_timestamp DESC", array((int)$this->userpkey));
+
+		foreach((array)$rows as $row){
+
+			$entry = array();
+			$entry['id'] = $row->id;
+			$entry['self'] = "https://strabospot.org/db/strabotools/".$entry['id'];
+			$entry['filename'] = $row->filename;
+			$entry['modified_timestamp'] = (int)$row->modified_timestamp;
+			$entry['created_timestamp'] = (int)$row->created_timestamp;
+			$entry['analysis'] = json_decode($row->analysis);
+
+			$data['analyses'][] = $entry;
+
+		}
+
+		return $data;
+
+	}
+
+	public function deleteToolsAnalysis($analysis_id){
+
+		if(!$this->toolsUuidValid($analysis_id)){
+			return false;
+		}
+
+		$row = $this->db->get_row_prepared("SELECT filename FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($analysis_id, (int)$this->userpkey));
+
+		if($row === null){
+			return false;
+		}
+
+		$filename = $row->filename !== null ? $row->filename : "";
+
+		$this->db->prepare_query("DELETE FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($analysis_id, (int)$this->userpkey));
+
+		if($filename!="" && file_exists("/srv/app/www/straboToolsImages/$filename")){
+			unlink("/srv/app/www/straboToolsImages/$filename");
+		}
+
+		return true;
+
 	}
 
 }

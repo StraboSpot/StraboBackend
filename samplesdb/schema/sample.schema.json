@@ -1,0 +1,219 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://strabospot.org/schemas/strabosamples/sample.schema.json",
+  "title": "StraboSamples Sample",
+  "description": "Unified JSON representation of a StraboSamples sample. Corresponds 1:1 to the PostgreSQL row in strabosamples.samples plus its child tables, expressed as the wire shape served by /samplesdb/sample/{id}. The exact response shape may still narrow during Phase 2 (see DESIGN_PROPOSAL.md §16 item 1); this is the Phase-1 baseline.\n\nPer-subsystem JSONB extension fields (`field_data`, `micro_data`, `experimental_data`) are intentionally permissive — they mirror the upstream subsystem schemas, which evolve on their own timelines (§15). Authoritative shapes live in docs/StraboSamples/{strabofield,strabomicro,straboexperimental}_sample.schema.json.",
+
+  "type": "object",
+  "required": ["id", "userpkey", "created_at", "created_by", "modified_at", "modified_by"],
+  "additionalProperties": false,
+
+  "properties": {
+
+    "id": {
+      "type": "string",
+      "description": "Sample identifier (one half of the composite PK). Legacy Field/Micro ids are timestamp-derived strings; new samples and all Experimental rows carry minted UUIDs. Stored as TEXT — UUID format not enforced."
+    },
+    "userpkey": {
+      "type": "integer",
+      "description": "Owner pkey (the other half of the composite PK). Ownership == userpkey; there is no separate owner_pkey column (§4.1)."
+    },
+
+    "name":        { "type": ["string", "null"] },
+    "igsn":        { "type": ["string", "null"], "description": "Optional IGSN (SESAR registry). Demoted to metadata — identity is (id, userpkey), not IGSN (§3.4)." },
+    "description": { "type": ["string", "null"] },
+    "notes":       { "type": ["string", "null"] },
+
+    "latitude": {
+      "type": ["number", "null"],
+      "minimum": -90,
+      "maximum": 90,
+      "description": "Decimal degrees. For Field-linked samples this is read-only on the StraboSamples side — the value lives on the spot geometry in Neo4j (§3.2, §9.1)."
+    },
+    "longitude": {
+      "type": ["number", "null"],
+      "minimum": -180,
+      "maximum": 180,
+      "description": "Decimal degrees. See latitude note re: Field-linked read-only behavior."
+    },
+
+    "display_sample_type": {
+      "type": ["string", "null"],
+      "description": "Cross-system normalized sample type for filtering on My Samples (§11.1). Derived on upsert from the per-subsystem source (Micro `materialtype`, falling through to `othermaterialtype` when 'other'). Originals preserved in *_data JSONB."
+    },
+    "display_sample_purpose": {
+      "type": ["string", "null"],
+      "description": "Cross-system normalized sampling purpose for filtering on My Samples (§11.1). Derived on upsert; originals preserved in *_data JSONB."
+    },
+
+    "parent_sample_id": {
+      "type": ["string", "null"],
+      "description": "Parent sample identifier. NULL iff parent_userpkey is also NULL (DB CHECK constraint). Brand-new capability — never back-filled by migration (§4.3); populated via the API going forward."
+    },
+    "parent_userpkey": {
+      "type": ["integer", "null"],
+      "description": "Owner pkey of the parent sample. See parent_sample_id."
+    },
+
+    "created_at":  { "type": "string", "format": "date-time" },
+    "created_by":  { "type": "integer", "description": "User who created the sample. May differ from owner (`userpkey`) — e.g., a collaborator who collected it (§4.1, §7.3.1)." },
+    "modified_at": { "type": "string", "format": "date-time" },
+    "modified_by": { "type": "integer" },
+
+    "field_data": {
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/fieldData" }],
+      "description": "Verbatim mirror of the StraboField samples[i] sub-object (the one element of samples[0] for a rich sample-spot, or the inline sample entry for a legacy sample). Schema is permissive — Field's sample form definitions evolve out-of-band. Canonical shape: docs/StraboSamples/strabofield_sample.schema.json (Spot.properties.samples[i])."
+    },
+    "micro_data": {
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/microData" }],
+      "description": "Verbatim mirror of the StraboMicro sample row (`micro_samplemetadata`). Canonical shape: docs/StraboSamples/strabomicro_sample.schema.json."
+    },
+    "experimental_data": {
+      "anyOf": [{ "type": "null" }, { "$ref": "#/$defs/experimentalData" }],
+      "description": "Verbatim mirror of the StraboExperimental sample row (`straboexp.sample` + its sub-arrays). Canonical shape: docs/StraboSamples/straboexperimental_sample.schema.json. The original human `id` lands here; the StraboSamples `id` for an Experimental sample is the minted `strabo_id` UUID (§3.4, §9.3)."
+    },
+
+    "composition": {
+      "type": "array",
+      "description": "Mineral phases. One row per entry in strabosamples.sample_composition.",
+      "items": { "$ref": "#/$defs/compositionPhase" }
+    },
+    "parameters": {
+      "type": "array",
+      "description": "Pre-experimental parameter measurements. One row per entry in strabosamples.sample_parameters.",
+      "items": { "$ref": "#/$defs/sampleParameter" }
+    },
+    "documents": {
+      "type": "array",
+      "description": "Attached documents (files, images, publications). One row per entry in strabosamples.sample_documents.",
+      "items": { "$ref": "#/$defs/sampleDocument" }
+    },
+
+    "subsystem_links": {
+      "type": "array",
+      "description": "Many-to-many references back to the subsystems this sample exists in (§4.4, §5.5). Powers the My Samples badges and the per-subsystem cards on Sample Overview.",
+      "items": { "$ref": "#/$defs/subsystemLink" }
+    },
+
+    "collaborators": {
+      "type": "array",
+      "description": "Accepted + pending sample-level collaborator grants. Pending invites confer no access; auto-seeded project collaborators come in pre-accepted (§7.3, §7.3.1).",
+      "items": { "$ref": "#/$defs/collaborator" }
+    }
+  },
+
+  "$defs": {
+
+    "compositionPhase": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["mineral"],
+      "properties": {
+        "mineral":       { "type": "string", "minLength": 1, "description": "Selected from the MINERAL_TYPES list or 'Other' for custom entry." },
+        "other_mineral": { "type": ["string", "null"], "description": "Custom mineral name when `mineral` is 'Other'. NULL when migrated from Experimental (column not in source — §5.4)." },
+        "fraction":      { "type": ["string", "null"], "description": "Fractional amount of this phase. Stored as TEXT per source schema." },
+        "unit":          { "type": ["string", "null"], "description": "Conventional values: Vol%, Mol%, Wt%, MPa. Not constrained — legacy/forward-compat." },
+        "grainsize":     { "type": ["string", "null"], "description": "Grain size in micrometers (numeric string)." },
+        "ordering":      { "type": "integer", "minimum": 0, "default": 0, "description": "Display order. 0 when migrated from Experimental (column not in source)." }
+      }
+    },
+
+    "sampleParameter": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["control"],
+      "properties": {
+        "control":       { "type": "string", "minLength": 1 },
+        "other_control": { "type": ["string", "null"], "description": "Custom parameter name when `control` is 'Other'. NULL when migrated from Experimental (column not in source — §5.4)." },
+        "value":         { "type": ["string", "null"], "description": "Numeric value stored as TEXT per source schema." },
+        "unit":          { "type": ["string", "null"] },
+        "prefix":        { "type": ["string", "null"], "description": "Scientific notation multiplier ('-' means 1x)." },
+        "note":          { "type": ["string", "null"] },
+        "ordering":      { "type": "integer", "minimum": 0, "default": 0 }
+      }
+    },
+
+    "sampleDocument": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["uuid"],
+      "properties": {
+        "uuid":              { "type": "string", "description": "Storage filename under experimental/expimages/{uuid}. Stored as TEXT — UUID format not enforced." },
+        "type":              { "type": ["string", "null"], "description": "Conventional: Manual / Diagram / Picture / Video / Data / Software / ASTM / Publication / Other." },
+        "other_type":        { "type": ["string", "null"] },
+        "format":            { "type": ["string", "null"], "description": "Conventional: jpg / png / txt / csv / zip / rar / pdf / docx / Other." },
+        "other_format":      { "type": ["string", "null"] },
+        "path":              { "type": ["string", "null"], "description": "File path or URL." },
+        "document_id":       { "type": ["string", "null"], "description": "User-assigned document identifier (the source straboexp.document.id, not its int pkey)." },
+        "original_filename": { "type": ["string", "null"], "description": "Human-friendly filename at upload time, preserved from straboexp.document.original_filename." },
+        "description":       { "type": ["string", "null"] },
+        "ordering":          { "type": "integer", "minimum": 0, "default": 0 }
+      }
+    },
+
+    "subsystemLink": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["subsystem", "reference_id", "reference_userpkey"],
+      "properties": {
+        "subsystem": {
+          "type": "string",
+          "enum": ["field", "micro", "experimental"]
+        },
+        "reference_id": {
+          "type": "string",
+          "description": "For field: spot id (sample-spot id for rich samples, holding-spot id for legacy). For micro/experimental: project id."
+        },
+        "reference_userpkey": {
+          "type": "integer",
+          "description": "Owner of the containing record. May differ from sample userpkey when the sample is hosted inside a collaborator's project (§4.1 host identity)."
+        },
+        "reference_metadata": {
+          "anyOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "description": "Subsystem-specific extras without DDL churn. Conventional shapes:\n  field:        {\"dataset_id\": \"...\"}\n  micro:        {\"dataset_id\": \"...\", \"micrograph_count\": N}\n  experimental: {\"experiment_count\": N}"
+            }
+          ]
+        },
+        "created_at":  { "type": "string", "format": "date-time" },
+        "modified_at": { "type": "string", "format": "date-time" }
+      }
+    },
+
+    "collaborator": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["collaborator_pkey", "permission_level", "uuid", "accepted", "added_by", "added_at"],
+      "properties": {
+        "collaborator_pkey": { "type": "integer" },
+        "permission_level":  { "type": "string", "enum": ["edit", "readonly"] },
+        "uuid":              { "type": "string", "description": "Per-invite token used by the accept link. Mirrors public.collaborators.uuid." },
+        "accepted":          { "type": "boolean", "description": "Pending invites (accepted=false) confer NO access (§7.1)." },
+        "accepted_at":       { "type": ["string", "null"], "format": "date-time" },
+        "added_by":          { "type": "integer" },
+        "added_at":          { "type": "string", "format": "date-time" },
+        "removed_at":        { "type": ["string", "null"], "format": "date-time", "description": "Soft delete — plays the role of public.collaborators.disabled." }
+      }
+    },
+
+    "fieldData": {
+      "type": "object",
+      "description": "Verbatim mirror of StraboField's spot.properties.samples[i] sub-object. Permissive schema — the StraboField mobile client evolves this on its own timeline (§15). Canonical shape: docs/StraboSamples/strabofield_sample.schema.json (Spot.properties.samples[i]).\n\nCommon keys (non-exhaustive, see source schema): label, sample_id_name, sample_type, Sample_IGSN, main_sampling_purpose, sample_description, material_type, sample_type_1, deposit_thickness, ...",
+      "additionalProperties": true
+    },
+
+    "microData": {
+      "type": "object",
+      "description": "Verbatim mirror of the StraboMicro sample row (`micro_samplemetadata`). Permissive schema. Canonical shape: docs/StraboSamples/strabomicro_sample.schema.json.\n\nCommon keys (non-exhaustive): id, name, label, sampleID, igsn, latitude, longitude, mainSamplingPurpose, materialType, sampleType, lithology, ...",
+      "additionalProperties": true
+    },
+
+    "experimentalData": {
+      "type": "object",
+      "description": "Verbatim mirror of the StraboExperimental sample row (`straboexp.sample` + sub-array data). Permissive schema. Canonical shape: docs/StraboSamples/straboexperimental_sample.schema.json.\n\nIncludes the original human `id` (the user-typed text id, e.g. 'Carr#1_1234') — distinct from the StraboSamples `id` at the top level, which is the minted `strabo_id` UUID (§3.4, §9.3).",
+      "additionalProperties": true
+    }
+  }
+}

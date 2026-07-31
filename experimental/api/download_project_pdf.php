@@ -79,9 +79,10 @@ if (empty($row->pkey)) {
     exit;
 }
 
-// Get all experiments for this project
+// Get all experiments for this project. e.userpkey is selected for the
+// per-experiment spine-overlay lookup (per-experiment owner, not project owner).
 $exp_rows = $db->get_results_prepared("
-    SELECT e.id as experiment_id, e.json
+    SELECT e.id as experiment_id, e.json, e.userpkey
     FROM straboexp.experiment e
     WHERE e.project_pkey = $1
     ORDER BY e.modified_timestamp DESC
@@ -92,6 +93,26 @@ if (empty($exp_rows)) {
     http_response_code(400);
     echo json_encode(['error' => 'No experiments found in this project']);
     exit;
+}
+
+// Pre-decode the experiment JSONs and apply spine overlay in a single
+// batched lookup before PDF rendering. Storing the decoded objects on
+// each row prevents a second json_decode + drift between the JSON the
+// overlay touched and the JSON the renderer reads.
+require_once(__DIR__ . '/../lib/sample_overlay.php');
+$overlayTuples = array();
+foreach ($exp_rows as $exp_row) {
+    $exp_row->_experimentData = null;
+    if (!empty($exp_row->json)) {
+        $decoded = json_decode($exp_row->json);
+        if ($decoded) {
+            $exp_row->_experimentData = $decoded;
+            $overlayTuples[] = array($decoded, (int)$exp_row->userpkey);
+        }
+    }
+}
+if (!empty($overlayTuples)) {
+    experimental_sample_overlay_apply_batch($overlayTuples, $db);
 }
 
 // Include the PDF generator
@@ -174,9 +195,9 @@ try {
 
     // Generate each experiment
     foreach ($exp_rows as $exp_row) {
-        if (empty($exp_row->json)) continue;
-
-        $experimentData = json_decode($exp_row->json);
+        // Use the spine-overlaid decoded data stashed earlier so the PDF
+        // reads the same JSON the overlay touched.
+        $experimentData = isset($exp_row->_experimentData) ? $exp_row->_experimentData : null;
         if (empty($experimentData)) continue;
 
         // Set experiment data and generate on a new page

@@ -34,11 +34,13 @@ if ($_SESSION['loggedin'] != "yes") {
 $userpkey = $_SESSION['userpkey'];
 
 // Get and sanitize parameters
-$uuid = isset($_REQUEST['uuid']) ? preg_replace('/[^a-zA-Z0-9\-]/', '', $_REQUEST['uuid']) : '';
+// NOTE: named $doc_uuid, not $uuid — prepare_connections.php (included below)
+// assigns a UUID-generator instance to $uuid and would clobber it
+$doc_uuid = isset($_REQUEST['uuid']) ? preg_replace('/[^a-zA-Z0-9\-]/', '', $_REQUEST['uuid']) : '';
 $original_filename = isset($_REQUEST['filename']) ? $_REQUEST['filename'] : '';
 
 // Validate UUID
-if (empty($uuid) || strlen($uuid) !== 36) {
+if (empty($doc_uuid) || strlen($doc_uuid) !== 36) {
     http_response_code(400);
     exit("Invalid or missing UUID.");
 }
@@ -53,7 +55,7 @@ $is_admin = in_array($userpkey, $admin_pkeys);
 if (!$is_admin) {
     $owner_check = $db->get_var_prepared(
         "SELECT userpkey FROM straboexp.file_holdings WHERE uuid = $1",
-        array($uuid)
+        array($doc_uuid)
     );
 
     if ($owner_check === null) {
@@ -70,7 +72,7 @@ if (!$is_admin) {
 }
 
 // Path to the uploaded file
-$filePath = dirname(__DIR__) . "/expimages/$uuid";
+$filePath = dirname(__DIR__) . "/expimages/$doc_uuid";
 
 // Check if file exists
 if (!file_exists($filePath)) {
@@ -91,7 +93,7 @@ if (!$mimeType) {
 // Sanitize filename for Content-Disposition header
 $safeFilename = preg_replace('/[^a-zA-Z0-9._\-]/', '_', $original_filename);
 if (empty($safeFilename)) {
-    $safeFilename = $uuid;
+    $safeFilename = $doc_uuid;
 }
 
 // Set headers

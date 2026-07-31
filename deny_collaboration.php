@@ -26,7 +26,9 @@ if($count == 0){
 	exit("Collaboration Invite not Found.");
 }
 
-$db->prepare_query("update collaborators set disabled = true WHERE uuid = $1", array($uuid));
+// Denying an invitation is an action for the invited user. Scope the UPDATE to
+// the invitee so a stranger who knows the uuid cannot disable the collaboration.
+$db->prepare_query("update collaborators set disabled = true WHERE uuid = $1 AND collaborator_user_pkey = $2", array($uuid, $userpkey));
 
 header("Location: my_field_data");
 

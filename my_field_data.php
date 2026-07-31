@@ -105,6 +105,8 @@ include("includes/mheader.php");
 			window.location='/searchdownload?type=geojson&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="gems"){
 			window.location='/gems_export?dsids='+id;
+		}else if(selected=="custom_template"){
+			window.location='/TemplateWizard/export.php?dataset_id='+id;
 		}else if(selected=="geologic_units"){
 			window.location='/searchdownload?type=geologic_units&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="debug"){
@@ -398,7 +400,7 @@ if($datasetCreatedBy == $userpkey || $collaboration_level == "admin"){
 															<option value="gpkg">GeoPackage</option>
 															<option value="geojson">GeoJSON</option>
 															<option value="gems">USGS GeMS</option>
-															<option value="image_basemaps">Image Basemaps</option>
+																<option value="image_basemaps">Image Basemaps</option>
 														</select>
 													</td>
 													<td><?php echo $name?></td>
@@ -582,7 +584,7 @@ if($userpkey==3 || $userpkey==3){
 															<option value="gpkg">GeoPackage</option>
 															<option value="geojson">GeoJSON</option>
 															<option value="gems">USGS GeMS</option>
-															<option value="image_basemaps">Image Basemaps</option>
+																<option value="image_basemaps">Image Basemaps</option>
 														</select>
 													</td>
 													<td><?php echo $name?></td>

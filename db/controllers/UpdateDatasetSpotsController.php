@@ -156,6 +156,11 @@ class UpdateDatasetSpotsController extends MyController
 						//this turns pixel coordinates into real-world coordinates so we can do spatial searches
 						$features=$this->strabo->fixIncomingBasemaps($features);
 
+						// Resolve project context for the strabosamples mirror hook
+						// (samples/field-integration).
+						$projectStraboIdForSync = $this->strabo->getProjectId($datasetId);
+						$this->strabo->setSampleSyncContext($projectStraboIdForSync, $datasetId);
+
 						foreach($features as $feature){
 
 							$spotid = $feature->properties->id;
@@ -188,6 +193,7 @@ class UpdateDatasetSpotsController extends MyController
 							}
 
 						}
+						$this->strabo->clearSampleSyncContext();
 
 						// Log upload stats (use original user for tracking)
 						$spotcount = count($features);

@@ -62,8 +62,8 @@ if(count($rows) == 0){
 }
 
 if(count($rows) == 1){
-	$uuid = $rows[0]->uuid;
-	header("Location: /experimental/view_experiment?u=".$uuid);
+	$pkey = $rows[0]->pkey;
+	header("Location: /experimental/view_experiment?e=".$pkey);
 	exit();
 }
 
@@ -76,7 +76,7 @@ if(count($rows) == 1){
 							<h2>Select Experiment:</h2>
 						</header>
 
-<div class="textRight"><a href="/experimental/download_project?u=<?php echo $p?>">Download Project</a></div>
+<div class="textRight"><a href="/experimental/download_project.php?u=<?php echo $p?>">Download Project</a></div>
 
 <div class="table-wrapper">
 										<table class="myDataTable">
@@ -94,8 +94,8 @@ foreach($rows as $row){
 ?>
 												<tr>
 													<td style="width: 200px;">
-														<a href="/experimental/view_experiment?u=<?php echo $row->uuid?>" target="_blank">View</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
-														<a href="/experimental/download_experiment?u=<?php echo $row->uuid?>">Download</a>
+														<a href="/experimental/view_experiment?e=<?php echo $row->pkey?>" target="_blank">View</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;
+														<a href="/experimental/download_experiment.php?u=<?php echo $row->uuid?>">Download</a>
 													</td>
 													<td>
 														<?php echo $row->id?>

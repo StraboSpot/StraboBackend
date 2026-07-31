@@ -2,6 +2,7 @@ php_value memory_limit 4086M
 RewriteEngine on
 RewriteRule ^validate/(.*)$ validateuser.php?hash=$1 [L]
 RewriteRule ^passwdreset/(.*)$ passwordreset.php?hash=$1 [L]
+RewriteRule ^changeemail/(.*)$ confirmemailchange.php?token=$1 [L]
 RewriteRule ^viewdataset/(.*)$ view_dataset.php?id=$1 [L]
 RewriteRule ^help/(.*)$ helppage.php?extra=$1 [L]
 RewriteRule ^map_warper_check/(.*)$ mwcheck.php?id=$1 [L]
@@ -56,6 +57,7 @@ RewriteRule ^manual/(.*)$ manual_download.php?t=$1 [L]
 RewriteRule ^igsn/(.*)$ igsnland.php?igsn=$1 [L]
 RewriteRule ^aidescription/(.*)$ aidesccurl.php?image_id=$1 [L]
 RewriteRule ^aidescription2/(.*)$ aidesccurl2.php?image_id=$1 [L]
+RewriteRule ^samples/([^/]+)/([^/]+)/?$ samples_detail.php?owner=$1&id=$2 [L,QSA]
 
 
 
