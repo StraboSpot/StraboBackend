@@ -107,6 +107,7 @@ $project->can_delete = ($project->is_owner || $is_admin);
 $exp_rows = $db->get_results_prepared("
     SELECT
         e.pkey,
+        e.userpkey,
         e.uuid,
         e.json,
         to_char(e.modified_timestamp AT TIME ZONE 'UTC', 'Mon DD, YYYY HH24:MI') as modified_date,
@@ -128,6 +129,12 @@ foreach ($exp_rows as $exp_row) {
     if (!empty($exp_row->json)) {
         $json_data = json_decode($exp_row->json);
         if ($json_data) {
+            // Overlay strabosamples.* spine edits onto the embedded sample so
+            // any sample fields surfaced here reflect Samples-app edits
+            // (consistency with download_project.php). Owner is e.userpkey.
+            require_once(__DIR__ . '/../lib/sample_overlay.php');
+            experimental_sample_overlay_apply($json_data, $db, (int)$exp_row->userpkey);
+
             // Get experiment ID from JSON
             $exp->id = isset($json_data->experiment_id) ? $json_data->experiment_id : null;
 

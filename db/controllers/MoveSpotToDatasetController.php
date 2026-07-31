@@ -104,6 +104,13 @@ class MoveSpotToDatasetController extends MyController
 				//add
 				$this->strabo->addSpotToDataset($datasetid,$spotid);
 
+				// Re-mirror the moved spot's samples under the NEW project/dataset
+				// context so the strabosamples link metadata (dataset_id/project_id)
+				// and auto-seed collaborators follow the move. Without this the
+				// spine link keeps pointing at the OLD dataset/project.
+				// (userpkey is already set to effectiveOwner above.)
+				$this->strabo->resyncSpotSamples($spotid, $projectid, $datasetid);
+
 				//Update all modified_timestamps
 
 				//Original Project
@@ -246,6 +253,11 @@ class MoveSpotToDatasetController extends MyController
 						//this turns pixel coordinates into real-world coordinates so we can do spatial searches
 						$features=$this->strabo->fixIncomingBasemaps($features);
 
+						// Resolve project context for the strabosamples mirror hook
+						// (samples/field-integration).
+						$projectStraboIdForSync = $this->strabo->getProjectId($feature_id);
+						$this->strabo->setSampleSyncContext($projectStraboIdForSync, $feature_id);
+
 						foreach($features as $feature){
 
 							$spotid = $feature->properties->id;
@@ -280,6 +292,7 @@ class MoveSpotToDatasetController extends MyController
 							}
 
 						}
+						$this->strabo->clearSampleSyncContext();
 
 						//now look on server to see if any spots need to be deleted
 						$serverspots = $this->strabo->getDatasetSpotIds($feature_id);

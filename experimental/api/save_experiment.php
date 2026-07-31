@@ -195,7 +195,7 @@ if (!empty($input->pkey)) {
         VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)
     ", array($experiment_pkey, $project_pkey, $userpkey, $experiment_id, $json_string, $uuid));
 
-    // Normalized sample rows (straboexp.sample + children)
+    // Normalized sample rows (straboexp.sample + children + strabosamples spine)
     $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj);
 
     // Update parent project's full-text search keywords

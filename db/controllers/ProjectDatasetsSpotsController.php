@@ -140,6 +140,7 @@ class ProjectDatasetsSpotsController extends MyController
 								if($spots->features != ""){
 
 									$this->strabo->setuserpkey((int)$ownerPkey);
+									$this->strabo->setSampleSyncContext($projectid, $datasetid);
 
 									foreach($spots->features as $spot){
 
@@ -150,10 +151,11 @@ class ProjectDatasetsSpotsController extends MyController
 											$injson = json_encode($spot, JSON_PRETTY_PRINT);
 											$this->strabo->insertSpot($injson,null,$ownerPkey,$originalUploader);
 											$this->strabo->addSpotToDataset($datasetid,$spotid,"HAS_SPOT");
-		
+
 										}
-		
+
 									}
+									$this->strabo->clearSampleSyncContext();
 								}
 							
 							//}

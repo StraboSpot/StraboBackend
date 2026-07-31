@@ -1911,6 +1911,15 @@ note
 					");
 				}
 			}
+
+			// Mirror the just-written sample into strabosamples.* via the unified
+			// sync helper (samples/exp-integration). The helper re-projects from
+			// the same $sample object, takes the UPDATE branch on its straboexp.sample
+			// lookup (we just inserted that row), and upserts the strabosamples
+			// row + subsystem link + children. Catches the rare /devexperimental/
+			// path and any version-restore flow that re-enters insertExperiment.
+			require_once __DIR__ . '/../experimental/lib/sample_sync.php';
+			exp_sample_sync($this->db, $this->uuid, $experiment_pkey, $this->userpkey, $sample);
 		}
 
 		//Insert Experiment Setup

@@ -17,27 +17,58 @@
  * @license    https://opensource.org/licenses/MIT MIT License
  */
 
+require_once __DIR__ . '/../../samplesdb/services/StraboSamplesService.php';
+
 if (!function_exists('exp_sample_sync')) {
 
 /**
  * Synchronize the normalized sample rows for an experiment.
  *
- * @param object   $db             StraboDbPostgreSQL handle
- * @param object   $uuid_gen       UUID class with v4() method
+ * Writes the projected sample data to:
+ *   1. straboexp.sample + sample_composition + sample_parameter + document
+ *      (the existing Thread 2 normalization — unchanged behavior)
+ *   2. strabosamples.* via StraboSamplesService::upsertSample (new in
+ *      samples/exp-integration). The strabo_id minted/preserved by step
+ *      1 is the cross-system sample id; spine values are projected from
+ *      the same source fields the §10 migration uses.
+ *
+ * Phase-1-cutover note: step 2 writes to a schema that doesn't exist on
+ * production until the StraboSamples Phase 1 cutover runs. This branch
+ * MUST NOT ship to develop/PROD ahead of cutover; see memory
+ * project_strabosamples_phase1_cutover_deferred + the branch isolation
+ * rule. On dev (post-Phase-1-schema-apply), step 2 writes cleanly.
+ *
+ * @param object   $db              StraboDbPostgreSQL handle
+ * @param object   $uuid_gen        UUID class with v4() method
  * @param int      $experiment_pkey Owning experiment row's pkey
- * @param int      $userpkey       Owning user pkey
- * @param mixed    $sample         Sample object from experiment JSON (stdClass or null/empty)
- * @return string|null             The strabo_id of the synced sample, or null if no sample
+ * @param int      $userpkey        Owning user pkey
+ * @param mixed    $sample          Sample object from experiment JSON (stdClass or null/empty)
+ * @param object   $neodb           Optional Neo4j handle (unused for Experimental — kept for signature parity with the other subsystems' integrations). Defaults to null.
+ * @return string|null              The strabo_id of the synced sample, or null if no sample
  */
-function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample) {
+function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $neodb = null) {
 
     // Empty-sample case: ensure no normalized rows linger.
     // FK cascades handle composition / parameter / document children.
     if (empty($sample) || !is_object($sample)) {
+        // Grab the strabo_id before deletion so we can mirror the
+        // removal into strabosamples.*.
+        $existing = $db->get_row_prepared(
+            "SELECT strabo_id FROM straboexp.sample WHERE experiment_pkey = $1",
+            array($experiment_pkey)
+        );
+        $strabo_id_to_remove = ($existing && !empty($existing->strabo_id)) ? $existing->strabo_id : null;
+
         $db->prepare_query(
             "DELETE FROM straboexp.sample WHERE experiment_pkey = $1",
             array($experiment_pkey)
         );
+
+        if ($strabo_id_to_remove !== null) {
+            $svc = new StraboSamplesService($db, $neodb);
+            $svc->setUserpkey($userpkey);
+            $svc->removeSubsystemSample('experimental', $strabo_id_to_remove, $userpkey);
+        }
         return null;
     }
 
@@ -263,6 +294,161 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample) {
             ));
         }
     }
+
+    // ----------------------------------------------------------------------
+    // Mirror into strabosamples.* via StraboSamplesService. Projects the
+    // same shape the §10 migration produces so a re-upload converges on the
+    // same row state.
+    // ----------------------------------------------------------------------
+    $spineLat = ($loc_latitude  !== '' && is_numeric($loc_latitude))  ? (float)$loc_latitude  : null;
+    $spineLng = ($loc_longitude !== '' && is_numeric($loc_longitude)) ? (float)$loc_longitude : null;
+    $spineName = $name !== '' ? $name : ($id_str !== '' ? $id_str : null);
+
+    $spine = array(
+        'name'                   => $spineName,
+        'igsn'                   => ($igsn !== '' ? $igsn : null),
+        'description'            => ($description !== '' ? $description : null),
+        'notes'                  => null,
+        'latitude'               => $spineLat,
+        'longitude'              => $spineLng,
+        'display_sample_type'    => ($material_type !== '' ? $material_type : null),
+        'display_sample_purpose' => null,
+    );
+
+    // experimental_data JSONB: snapshot of the projected source columns +
+    // raw sample blob for round-trip (mirrors the migration's
+    // _migration_exp_row_to_jsonb shape).
+    $subsystemData = array(
+        'id'                       => $id_str,
+        'name'                     => $name,
+        'igsn'                     => $igsn,
+        'description'              => $description,
+        'parent_name'              => $parent_name,
+        'parent_igsn'              => $parent_igsn,
+        'parent_id'                => $parent_id,
+        'parent_description'       => $parent_description,
+        'material_type'            => $material_type,
+        'material_name'            => $material_name,
+        'material_state'           => $material_state,
+        'material_note'            => $material_note,
+        'provenance_formation'     => $prov_formation,
+        'provenance_member'        => $prov_member,
+        'provenance_submember'     => $prov_submember,
+        'provenance_source'        => $prov_source,
+        'provenance_loc_street'    => $loc_street,
+        'provenance_loc_building'  => $loc_building,
+        'provenance_loc_postcode'  => $loc_postcode,
+        'provenance_loc_city'      => $loc_city,
+        'provenance_loc_state'     => $loc_state,
+        'provenance_loc_country'   => $loc_country,
+        'provenance_loc_latitude'  => $loc_latitude,
+        'provenance_loc_longitude' => $loc_longitude,
+        'texture_bedding'          => $tex_bedding,
+        'texture_lineation'        => $tex_lineation,
+        'texture_foliation'        => $tex_foliation,
+        'texture_fault'            => $tex_fault,
+        '_sample_json'             => $sample_json,
+    );
+
+    // Reference info — points at the owning experiment. Project / experiment
+    // metadata goes into reference_metadata (mirrors migration).
+    $expRow = $db->get_row_prepared(
+        "SELECT id AS experiment_human_id, uuid AS experiment_uuid, project_pkey
+           FROM straboexp.experiment WHERE pkey = $1",
+        array($experiment_pkey)
+    );
+    $projUuid = null;
+    if ($expRow && !empty($expRow->project_pkey)) {
+        $projUuid = $db->get_var_prepared(
+            "SELECT uuid FROM straboexp.project WHERE pkey = $1",
+            array((int)$expRow->project_pkey)
+        );
+    }
+    $reference = array(
+        'reference_id'         => (string)$experiment_pkey,
+        'reference_userpkey'   => $userpkey,
+        'reference_metadata'   => array(
+            'experiment_pkey' => (int)$experiment_pkey,
+            'experiment_id'   => $expRow ? $expRow->experiment_human_id : null,
+            'experiment_uuid' => $expRow ? $expRow->experiment_uuid : null,
+            'project_pkey'    => ($expRow && $expRow->project_pkey !== null) ? (int)$expRow->project_pkey : null,
+            'project_uuid'    => $projUuid,
+        ),
+    );
+
+    // Project the children straight from the input shape — same projection
+    // the migration applies (other_mineral/other_control = null since
+    // straboexp source schema doesn't carry them).
+    $compOut = array();
+    if ($material && !empty($material->composition) && is_array($material->composition)) {
+        $i = 0;
+        foreach ($material->composition as $c) {
+            $mineral = isset($c->mineral) ? (string)$c->mineral : '';
+            if ($mineral === '') continue;
+            $compOut[] = array(
+                'mineral'       => $mineral,
+                'other_mineral' => null,
+                'fraction'      => isset($c->fraction)  ? $c->fraction  : null,
+                'unit'          => isset($c->unit)      ? $c->unit      : null,
+                'grainsize'     => isset($c->grainsize) ? $c->grainsize : null,
+                'ordering'      => $i++,
+            );
+        }
+    }
+    $paramOut = array();
+    if (!empty($sample->parameters) && is_array($sample->parameters)) {
+        $i = 0;
+        foreach ($sample->parameters as $p) {
+            $control = isset($p->control) ? (string)$p->control : '';
+            if ($control === '') continue;
+            $paramOut[] = array(
+                'control'       => $control,
+                'other_control' => null,
+                'value'         => isset($p->value)  ? $p->value  : null,
+                'unit'          => isset($p->unit)   ? $p->unit   : null,
+                'prefix'        => isset($p->prefix) ? $p->prefix : null,
+                'note'          => isset($p->note)   ? $p->note   : null,
+                'ordering'      => $i++,
+            );
+        }
+    }
+    $docOut = array();
+    if (!empty($sample->documents) && is_array($sample->documents)) {
+        $i = 0;
+        foreach ($sample->documents as $d) {
+            $u = isset($d->uuid) ? (string)$d->uuid : '';
+            if ($u === '' && isset($d->path)) $u = (string)$d->path;
+            if ($u === '') continue;
+            $docOut[] = array(
+                'uuid'              => $u,
+                'type'              => isset($d->type)              ? $d->type              : null,
+                'other_type'        => isset($d->other_type)        ? $d->other_type        : null,
+                'format'            => isset($d->format)            ? $d->format            : null,
+                'other_format'      => isset($d->other_format)      ? $d->other_format      : null,
+                'path'              => isset($d->path)              ? $d->path              : null,
+                'document_id'       => isset($d->id)                ? $d->id                : null,
+                'original_filename' => isset($d->original_filename) ? $d->original_filename : null,
+                'description'      => isset($d->description)        ? $d->description       : null,
+                'ordering'          => $i++,
+            );
+        }
+    }
+
+    $svc = new StraboSamplesService($db, $neodb);
+    $svc->setUserpkey($userpkey);
+    $svc->upsertSample(
+        'experimental',
+        $strabo_id,
+        $userpkey,
+        $spine,
+        $subsystemData,
+        $reference,
+        array(
+            'composition' => $compOut,
+            'parameters'  => $paramOut,
+            'documents'   => $docOut,
+        )
+    );
 
     return $strabo_id;
 }

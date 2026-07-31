@@ -57,6 +57,7 @@ RewriteRule ^manual/(.*)$ manual_download.php?t=$1 [L]
 RewriteRule ^igsn/(.*)$ igsnland.php?igsn=$1 [L]
 RewriteRule ^aidescription/(.*)$ aidesccurl.php?image_id=$1 [L]
 RewriteRule ^aidescription2/(.*)$ aidesccurl2.php?image_id=$1 [L]
+RewriteRule ^samples/([^/]+)/([^/]+)/?$ samples_detail.php?owner=$1&id=$2 [L,QSA]
 
 
 

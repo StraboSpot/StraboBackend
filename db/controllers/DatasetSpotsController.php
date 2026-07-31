@@ -193,7 +193,10 @@ class DatasetSpotsController extends MyController
 						//this turns pixel coordinates into real-world coordinates so we can do spatial searches
 						$features=$this->strabo->fixIncomingBasemaps($features);
 
-
+						// Resolve project context for the strabosamples mirror hook
+						// (samples/field-integration). Looked up once per request.
+						$projectStraboIdForSync = $this->strabo->getProjectId($feature_id);
+						$this->strabo->setSampleSyncContext($projectStraboIdForSync, $feature_id);
 
 						foreach($features as $feature){
 
@@ -231,6 +234,7 @@ class DatasetSpotsController extends MyController
 							}
 
 						}
+						$this->strabo->clearSampleSyncContext();
 
 						//Roll through imagefilenames and update images with filenames
 						$this->strabo->fixImageFileNames($imagefilenames);
