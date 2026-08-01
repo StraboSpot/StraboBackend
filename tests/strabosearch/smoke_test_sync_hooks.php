@@ -102,6 +102,7 @@ function sync_cleanup($db, $neodb, $TEST_UPK, $PFX) {
 	$neodb->query("MATCH (u:User {userpkey: $TEST_UPK}) DETACH DELETE u");
 	$db->query("DELETE FROM strabosearch.item_hit WHERE item_userpkey = $TEST_UPK OR project_userpkey = $TEST_UPK");
 	$db->query("DELETE FROM strabosearch.image_hit WHERE image_userpkey = $TEST_UPK OR project_userpkey = $TEST_UPK");
+	$db->query("DELETE FROM strabosearch.vocab_tag_type WHERE raw_value = 'spsync_touch_type'");
 	$db->query("DELETE FROM strabosamples.samples WHERE userpkey = $TEST_UPK");
 	// strabomicro has no ON DELETE CASCADE — walk the fixture chain
 	// bottom-up (micrograph children beyond spotmetadata are never
@@ -233,6 +234,51 @@ $neodb->query("MATCH (s:Spot {id: $SPOT1}) SET s.name = 'spsync renamed SYNCTOK_
 StraboSearchSync::touchSpot($db, $neodb, $SPOT1, $TEST_UPK);
 check('rename re-extracts searchtext', tsvHas($db, 'item_hit', $W1, 'SYNCTOK_renamed'));
 check('still one row after rename', itemCount($db, $W1) === 1);
+
+// ===========================================================================
+section('2b. FIELD — json_tags through the touch path (U10/F11 amendment)');
+
+// Tags come from Project.json_tags (per-row pjt in the touch Cypher), NOT
+// IS_TAGGED edges. Apply a geologic_unit + custom-type tag to SPOT1, touch,
+// then clear the blob and touch again — tag columns must empty back out.
+$jtSync = json_encode(array(
+	array('id' => 1, 'type' => 'geologic_unit', 'name' => 'spsync Granite SYNCTOK_tagname',
+	      'rock_type' => 'igneous', 'igneous_rock_class' => 'plutonic',
+	      'plutonic_rock_types' => 'granite', 'spots' => array($SPOT1)),
+	array('id' => 2, 'type' => 'spsync_touch_type', 'name' => 'spsync Concept',
+	      'spots' => array($SPOT1)),
+));
+$neodb->query("MATCH (p:Project {id: $PROJ}) SET p.json_tags = '$jtSync'");
+StraboSearchSync::touchSpot($db, $neodb, $SPOT1, $TEST_UPK);
+$r = itemRow($db, $W1);
+check('touch: tag_names carries both names',
+	$r && strpos((string)$r->tag_names, 'spsync Granite SYNCTOK_tagname') !== false
+	&& strpos((string)$r->tag_names, 'spsync Concept') !== false,
+	(string)($r ? $r->tag_names : 'null'));
+check('touch: tag_types carries both types',
+	$r && strpos((string)$r->tag_types, 'geologic_unit') !== false
+	&& strpos((string)$r->tag_types, 'spsync_touch_type') !== false,
+	(string)($r ? $r->tag_types : 'null'));
+check('touch: rock_types from geologic_unit tag only',
+	$r && strpos((string)$r->rock_types, 'igneous:plutonic:granite') !== false,
+	(string)($r ? $r->rock_types : 'null'));
+check('touch: tag_text_tsv matches tag token', tsvHas($db, 'item_hit', $W1, 'SYNCTOK_tagname'));
+$ir = $db->get_row("SELECT tag_names FROM strabosearch.image_hit WHERE $WI1 LIMIT 1");
+check('touch: image row inherits tag_names',
+	$ir && strpos((string)$ir->tag_names, 'spsync Granite SYNCTOK_tagname') !== false,
+	(string)($ir ? $ir->tag_names : 'null'));
+$vtRow = $db->get_row("SELECT display_label FROM strabosearch.vocab_tag_type
+	WHERE subsystem = 'field' AND raw_value = 'spsync_touch_type'");
+check('touch: vocab_tag_type upserted Title Case',
+	$vtRow !== null && $vtRow->display_label === 'Spsync Touch Type',
+	$vtRow ? "got '{$vtRow->display_label}'" : 'row missing');
+
+$neodb->query("MATCH (p:Project {id: $PROJ}) REMOVE p.json_tags");
+StraboSearchSync::touchSpot($db, $neodb, $SPOT1, $TEST_UPK);
+$r = itemRow($db, $W1);
+check('untag: tag columns empty after json_tags removed',
+	$r && $r->tag_names === null && $r->tag_types === null,
+	$r ? 'got ' . var_export(array($r->tag_names, $r->tag_types), true) : 'row missing');
 
 // Drop the cross-dataset edge again — the later deleteSingleDataset(DS2)
 // E2E expects DS2 to own only its own spot (the class's cascade Cypher is

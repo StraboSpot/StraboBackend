@@ -213,6 +213,7 @@ foreach ($activeUsers as $upk) {
 	$pdRows = $neodb->query(
 		"MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(p:Project)-[:HAS_DATASET]->(d:Dataset) " .
 		"RETURN p.id AS pid, coalesce(p.desc_project_name, p.projectname) AS pname, " .
+		"       substring(toString(p.json_tags), 0, 1000000) AS pjt, " .
 		"       d.id AS did, d.name AS dname"
 	);
 	if (!$pdRows) continue;
@@ -227,6 +228,9 @@ foreach ($activeUsers as $upk) {
 		$dname  = $pd->get('dname');
 
 		if ($pid === null || $did === null) continue;
+
+		// json_tags amendment: per-project spot_id → tags map (see field.php).
+		$tagMap = fieldTagMapFromJsonTags($pd->get('pjt'));
 
 		$pidLit = neoIdLiteral($pid);
 		$didLit = neoIdLiteral($did);
@@ -257,7 +261,7 @@ foreach ($activeUsers as $upk) {
 				// sync touch path — see fieldImageTuples in _row_builders.php.
 				$stats = array('no_filename' => 0, 'no_id' => 0);
 				$tuples = fieldImageTuples($r, $spotId, $pid, $puk, $pispubBool,
-					$vocabSeen, $stats);
+					$tagMap, $vocabSeen, $stats);
 				$totalSkippedNoFn += $stats['no_filename'];
 				$totalSkippedNoId += $stats['no_id'];
 
