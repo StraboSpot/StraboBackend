@@ -325,6 +325,18 @@ try {
         // (versioning restoration) — remove the sentinel project's snapshots.
         $db->prepare_query("DELETE FROM straboexp.versions WHERE uuid = $1",
             array('a0000000-0000-4000-8000-00000000aaaa'));
+        // On search/* branches the sync hooks index these writes; the direct
+        // SQL cleanup above bypasses the hooks, so sweep the index slice too.
+        if ($db->get_var("SELECT to_regclass('strabosearch.item_hit')")) {
+            $db->prepare_query(
+                "DELETE FROM strabosearch.item_hit WHERE project_subsystem = 'exp' AND project_id = $1",
+                array('a0000000-0000-4000-8000-00000000aaaa'));
+            foreach (array_unique($spine_ids) as $sidClean) {
+                $db->prepare_query(
+                    "DELETE FROM strabosearch.item_hit WHERE item_type = 'sample' AND item_id = $1",
+                    array($sidClean));
+            }
+        }
         if ($SPINE) {
             foreach (array_unique($spine_ids) as $sidClean) {
                 $db->prepare_query("DELETE FROM strabosamples.samples WHERE id = $1 AND userpkey = $2",

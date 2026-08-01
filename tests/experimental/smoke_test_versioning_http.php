@@ -338,6 +338,20 @@ try {
                 array($sidClean, $userpkey));
         }
     }
+    // On search/* branches the sync hooks index these writes; the direct
+    // SQL cleanup above bypasses the hooks, so sweep the index slice too.
+    if ($db->get_var("SELECT to_regclass('strabosearch.item_hit')")) {
+        foreach (array($PROJ_UUID, $OTHER_UUID) as $uClean) {
+            $db->prepare_query(
+                "DELETE FROM strabosearch.item_hit WHERE project_subsystem = 'exp' AND project_id = $1",
+                array($uClean));
+        }
+        foreach (array_unique($spine_ids) as $sidClean) {
+            $db->prepare_query(
+                "DELETE FROM strabosearch.item_hit WHERE item_type = 'sample' AND item_id = $1",
+                array($sidClean));
+        }
+    }
     @unlink($sessFile);
 }
 

@@ -103,9 +103,47 @@ function sync_cleanup($db, $neodb, $TEST_UPK, $PFX) {
 	$db->query("DELETE FROM strabosearch.item_hit WHERE item_userpkey = $TEST_UPK OR project_userpkey = $TEST_UPK");
 	$db->query("DELETE FROM strabosearch.image_hit WHERE image_userpkey = $TEST_UPK OR project_userpkey = $TEST_UPK");
 	$db->query("DELETE FROM strabosamples.samples WHERE userpkey = $TEST_UPK");
+	// strabomicro has no ON DELETE CASCADE — walk the fixture chain
+	// bottom-up (micrograph children beyond spotmetadata are never
+	// created by these fixtures).
+	$db->query("DELETE FROM strabomicro.micro_spotmetadata WHERE micrograph_id IN
+		(SELECT m.id FROM strabomicro.micro_micrographmetadata m
+		   JOIN strabomicro.micro_samplemetadata s ON m.sample_id = s.id
+		   JOIN strabomicro.micro_datasetmetadata d ON s.dataset_id = d.id
+		   JOIN strabomicro.micro_projectmetadata p ON d.project_id = p.id
+		  WHERE p.userpkey = $TEST_UPK)");
+	$db->query("DELETE FROM strabomicro.micro_projectgroups WHERE project_id IN
+		(SELECT id FROM strabomicro.micro_projectmetadata WHERE userpkey = $TEST_UPK)");
+	$db->query("DELETE FROM strabomicro.micro_mineral WHERE mineralogy_id IN
+		(SELECT mm.id FROM strabomicro.micro_mineralogy mm
+		   JOIN strabomicro.micro_micrographmetadata m ON mm.micrograph_id = m.id
+		   JOIN strabomicro.micro_samplemetadata s ON m.sample_id = s.id
+		   JOIN strabomicro.micro_datasetmetadata d ON s.dataset_id = d.id
+		   JOIN strabomicro.micro_projectmetadata p ON d.project_id = p.id
+		  WHERE p.userpkey = $TEST_UPK)");
+	$db->query("DELETE FROM strabomicro.micro_mineralogy WHERE micrograph_id IN
+		(SELECT m.id FROM strabomicro.micro_micrographmetadata m
+		   JOIN strabomicro.micro_samplemetadata s ON m.sample_id = s.id
+		   JOIN strabomicro.micro_datasetmetadata d ON s.dataset_id = d.id
+		   JOIN strabomicro.micro_projectmetadata p ON d.project_id = p.id
+		  WHERE p.userpkey = $TEST_UPK)");
+	$db->query("DELETE FROM strabomicro.micro_micrographmetadata WHERE sample_id IN
+		(SELECT s.id FROM strabomicro.micro_samplemetadata s
+		   JOIN strabomicro.micro_datasetmetadata d ON s.dataset_id = d.id
+		   JOIN strabomicro.micro_projectmetadata p ON d.project_id = p.id
+		  WHERE p.userpkey = $TEST_UPK)");
+	$db->query("DELETE FROM strabomicro.micro_samplemetadata WHERE dataset_id IN
+		(SELECT d.id FROM strabomicro.micro_datasetmetadata d
+		   JOIN strabomicro.micro_projectmetadata p ON d.project_id = p.id
+		  WHERE p.userpkey = $TEST_UPK)");
+	$db->query("DELETE FROM strabomicro.micro_datasetmetadata WHERE project_id IN
+		(SELECT id FROM strabomicro.micro_projectmetadata WHERE userpkey = $TEST_UPK)");
+	$db->query("DELETE FROM strabomicro.micro_groupmetadata WHERE project_id IN
+		(SELECT id FROM strabomicro.micro_projectmetadata WHERE userpkey = $TEST_UPK)");
 	$db->query("DELETE FROM strabomicro.micro_projectmetadata WHERE userpkey = $TEST_UPK");
 	$db->query("DELETE FROM straboexp.experiment WHERE userpkey = $TEST_UPK");
 	$db->query("DELETE FROM straboexp.project WHERE userpkey = $TEST_UPK");
+	$db->query("DELETE FROM straboexp.versions WHERE userpkey = $TEST_UPK");
 	$db->query("DELETE FROM project WHERE user_pkey = $TEST_UPK");
 	$db->query("DELETE FROM dataset WHERE user_pkey = $TEST_UPK");
 	$db->query("DELETE FROM versions WHERE userpkey = $TEST_UPK");
