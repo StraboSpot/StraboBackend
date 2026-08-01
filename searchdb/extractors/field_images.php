@@ -170,10 +170,13 @@ $buf = new BulkInsertBuffer($db,
 // ---------------------------------------------------------------------------
 section('2. Pre-fetch PG project metadata');
 
+// Keyed by (strabo_project_id, user_pkey): Strabo project ids are NOT
+// unique across users — see the matching fix in field.php.
 $pgPubMap = array();
-$rows = $db->get_results("SELECT strabo_project_id, ispublic FROM project");
+$rows = $db->get_results("SELECT strabo_project_id, user_pkey, ispublic FROM project");
 foreach ((array)$rows as $r) {
-	$pgPubMap[(string)$r->strabo_project_id] = ($r->ispublic === 't' || $r->ispublic === true);
+	$pgPubMap[(string)$r->strabo_project_id . '|' . (int)$r->user_pkey] =
+		($r->ispublic === 't' || $r->ispublic === true);
 }
 line('  pg project rows loaded: ' . number_format(count($pgPubMap)));
 
@@ -246,7 +249,7 @@ foreach ($activeUsers as $upk) {
 				if ($spotId === null) continue;
 				$cursor = $spotId;
 
-				$pispubBool = !empty($pgPubMap[(string)$pid]);
+				$pispubBool = !empty($pgPubMap[(string)$pid . '|' . (int)$upk]);
 
 				$totalSpotsWalked++;
 

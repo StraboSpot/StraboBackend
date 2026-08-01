@@ -175,13 +175,16 @@ class StraboSearchSync {
 	/**
 	 * Field project.ispublic lives in the PG `project` table (Neo4j
 	 * Project.ispublic is NULL everywhere). Unknown projects default to
-	 * private — same rule as the backfill extractor.
+	 * private — same rule as the backfill extractor. Keyed by
+	 * (strabo_project_id, user_pkey): Strabo project ids are NOT unique
+	 * across users, and an id-only lookup can return another user's flag
+	 * (found by the 2026-08-01 ACL denorm audit).
 	 */
-	private static function fieldProjectIsPublic($db, $pid) {
-		$k = (string)$pid;
+	private static function fieldProjectIsPublic($db, $pid, $upk) {
+		$k = (string)$pid . '|' . (int)$upk;
 		if (!array_key_exists($k, self::$fieldPubCache)) {
 			$v = $db->get_var("SELECT ispublic FROM project WHERE strabo_project_id = '"
-				. pg_escape_string($k) . "'");
+				. pg_escape_string((string)$pid) . "' AND user_pkey = " . (int)$upk);
 			self::$fieldPubCache[$k] = ($v === 't' || $v === true);
 		}
 		return self::$fieldPubCache[$k];
@@ -230,7 +233,7 @@ class StraboSearchSync {
 						if ($pid === null) continue;
 						$tuples[(string)$pid] = fieldSpotTuple(
 							$r, $pid, $upk, $r->get('pname'), $r->get('dname'),
-							self::fieldProjectIsPublic($db, $pid), $vocabTagTypes);
+							self::fieldProjectIsPublic($db, $pid, $upk), $vocabTagTypes);
 					}
 				}
 				$n = self::upsertItems($db, fieldItemCols(), array_values($tuples));
@@ -249,7 +252,7 @@ class StraboSearchSync {
 						if ($sid === null || $pid === null) continue;
 						$stats = array('no_filename' => 0, 'no_id' => 0);
 						$built = fieldImageTuples($r, $sid, $pid, $upk,
-							self::fieldProjectIsPublic($db, $pid), $vocabImageTypes, $stats);
+							self::fieldProjectIsPublic($db, $pid, $upk), $vocabImageTypes, $stats);
 						// fieldImageTuples returns tuples in the images-collection
 						// order; re-key by the image id embedded at position 1 is
 						// fragile, so dedupe on the tuple text (identical paths
@@ -402,7 +405,7 @@ class StraboSearchSync {
 						if ($pid === null || $did === null) continue;
 						$pname = $pd->get('pname');
 						$dname = $pd->get('dname');
-						$pispub = self::fieldProjectIsPublic($db, $pid);
+						$pispub = self::fieldProjectIsPublic($db, $pid, $upk);
 						$pidLit = neoIdLiteral($pid);
 						$didLit = neoIdLiteral($did);
 

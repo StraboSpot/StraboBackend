@@ -142,10 +142,14 @@ section('2. Pre-fetch PG project metadata');
 // Project.ispublic in Neo4j is NULL everywhere. The source of truth is the
 // PG `project` table (~8299 rows on prod), which the upload/create API
 // path keeps current. Build an in-memory map for O(1) per-spot lookup.
+// Keyed by (strabo_project_id, user_pkey): Strabo project ids are NOT
+// unique across users, and id-only keying let another user's flag win
+// (found by the 2026-08-01 ACL denorm audit — 14 projects drifted).
 $pgPubMap = array();
-$rows = $db->get_results("SELECT strabo_project_id, ispublic FROM project");
+$rows = $db->get_results("SELECT strabo_project_id, user_pkey, ispublic FROM project");
 foreach ((array)$rows as $r) {
-	$pgPubMap[(string)$r->strabo_project_id] = ($r->ispublic === 't' || $r->ispublic === true);
+	$pgPubMap[(string)$r->strabo_project_id . '|' . (int)$r->user_pkey] =
+		($r->ispublic === 't' || $r->ispublic === true);
 }
 line('  pg project rows loaded: ' . number_format(count($pgPubMap)));
 $pubCount = 0;
@@ -242,7 +246,7 @@ foreach ($activeUsers as $upk) {
 				// ispublic comes from the pre-fetched PG project map (Neo4j
 				// Project.ispublic is NULL everywhere on prod). Unknown projects
 				// (not yet in PG mirror) default to private.
-				$pispubBool = !empty($pgPubMap[(string)$pid]);
+				$pispubBool = !empty($pgPubMap[(string)$pid . '|' . (int)$puk]);
 
 				// Row → tuple mapping is shared with the sync touch path —
 				// see fieldSpotTuple in _row_builders.php.
