@@ -254,9 +254,11 @@ foreach ($activeUsers as $upk) {
 				$pispubBool = !empty($pgPubMap[(string)$pid . '|' . (int)$puk]);
 
 				// Row → tuple mapping is shared with the sync touch path —
-				// see fieldSpotTuple in _row_builders.php.
+				// see fieldSpotTuple in _row_builders.php. dataset_ids =
+				// this outer dataset; the swap's conflict action unions
+				// multi-dataset paths (dataset_ids amendment).
 				$values = fieldSpotTuple($r, $pid, $puk, $pname, $dname,
-					$pispubBool, $tagMap, $tagTypeVocabSeen);
+					$pispubBool, $tagMap, $tagTypeVocabSeen, array($did));
 
 				if ($APPLY) {
 					$ret = $buf->add($values);
@@ -314,9 +316,17 @@ if (!$APPLY) {
 	} else {
 		$slice = "project_subsystem = 'field' AND item_type = 'spot'";
 	}
+	// dataset_ids amendment: duplicate staging rows (same spot reached via
+	// two Datasets) union their dataset_ids instead of dropping the second
+	// path — the slice was deleted first in the swap txn, so the union only
+	// ever merges fresh same-run rows.
 	$ins = swapStagingInto($db, 'strabosearch.item_hit', 'strabosearch.item_hit_staging_field',
 		$slice, $INSERT_COLS,
-		array('item_type', 'item_id', 'item_userpkey', 'project_id', 'project_userpkey', 'project_subsystem'));
+		array('item_type', 'item_id', 'item_userpkey', 'project_id', 'project_userpkey', 'project_subsystem'),
+		"DO UPDATE SET dataset_ids = (
+			SELECT array_agg(DISTINCT x) FROM unnest(
+				coalesce(live.dataset_ids, '{}'::text[]) || coalesce(EXCLUDED.dataset_ids, '{}'::text[])
+			) AS x)");
 	if ($ins === null) {
 		line('  SWAP FAILED: ' . $db->last_error);
 		exit(1);

@@ -229,6 +229,13 @@ $neodb->query("MATCH (d:Dataset {id: $DS2}), (s:Spot {id: $SPOT1}) CREATE (d)-[:
 StraboSearchSync::touchSpot($db, $neodb, $SPOT1, $TEST_UPK);
 check('spot in 2 datasets of same project → still 1 row', itemCount($db, $W1) === 1,
 	'got ' . itemCount($db, $W1));
+// dataset_ids amendment: touchSpot merges every (project, dataset) fan-out
+// path — the deduped row must carry BOTH dataset ids.
+$r = $db->get_row("SELECT dataset_ids FROM strabosearch.item_hit WHERE $W1");
+check('dedupe merges dataset_ids from both paths',
+	$r && strpos((string)$r->dataset_ids, (string)$DS1) !== false
+	&& strpos((string)$r->dataset_ids, (string)$DS2) !== false,
+	(string)($r ? $r->dataset_ids : 'null'));
 
 $neodb->query("MATCH (s:Spot {id: $SPOT1}) SET s.name = 'spsync renamed SYNCTOK_renamed'");
 StraboSearchSync::touchSpot($db, $neodb, $SPOT1, $TEST_UPK);
@@ -285,6 +292,13 @@ check('untag: tag columns empty after json_tags removed',
 // not written for spots shared across the deleted and surviving dataset).
 $neodb->query("MATCH (d:Dataset {id: $DS2})-[r:HAS_SPOT]->(s:Spot {id: $SPOT1}) DELETE r");
 StraboSearchSync::touchSpot($db, $neodb, $SPOT1, $TEST_UPK);
+// dataset_ids amendment: full-replace semantics — the dropped DS2 path must
+// NOT linger (touchSpot rebuilds from current fan-out, no union-with-stale).
+$r = $db->get_row("SELECT dataset_ids FROM strabosearch.item_hit WHERE $W1");
+check('dataset_ids narrows back after edge drop (no stale union)',
+	$r && strpos((string)$r->dataset_ids, (string)$DS1) !== false
+	&& strpos((string)$r->dataset_ids, (string)$DS2) === false,
+	(string)($r ? $r->dataset_ids : 'null'));
 
 // ===========================================================================
 section('3. FIELD — touchImage resolve + stale removal');

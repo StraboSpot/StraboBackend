@@ -224,7 +224,12 @@ class StraboSearchSync {
 				$vocabImageTypes = array();
 
 				// --- item rows -------------------------------------------------
-				$tuples = array();   // keyed by project id → dedupe same-project paths
+				// Two-pass per project: collect every (project, dataset) fan-out
+				// path first, then build ONE tuple per project carrying the
+				// merged dataset_ids (+ all dataset names in the searchtext
+				// bag). The touch Cypher walks every path, so the merge is
+				// current-state complete — a full replace, no union-with-stale.
+				$byProj  = array();  // pid → ['row' => last Cypher row, 'dids' => set, 'dnames' => set]
 				$tagMaps = array();  // keyed by project id → json_tags map (decode once)
 				$rows = $neodb->query(fieldSpotTouchCypher($upk, neoIdLiteral($spotId)));
 				if ($rows) {
@@ -236,13 +241,31 @@ class StraboSearchSync {
 						if (!isset($tagMaps[$pk])) {
 							$tagMaps[$pk] = fieldTagMapFromJsonTags($r->get('pjt'));
 						}
-						$tuples[$pk] = fieldSpotTuple(
-							$r, $pid, $upk, $r->get('pname'), $r->get('dname'),
-							self::fieldProjectIsPublic($db, $pid, $upk),
-							$tagMaps[$pk], $vocabTagTypes);
+						if (!isset($byProj[$pk])) {
+							$byProj[$pk] = array('pid' => $pid, 'row' => $r,
+								'dids' => array(), 'dnames' => array());
+						}
+						$byProj[$pk]['row'] = $r;
+						$did = $r->get('did');
+						if ($did !== null && (string)$did !== '') {
+							$byProj[$pk]['dids'][(string)$did] = true;
+						}
+						$dname = $r->get('dname');
+						if (is_string($dname) && $dname !== '') {
+							$byProj[$pk]['dnames'][$dname] = true;
+						}
 					}
 				}
-				$n = self::upsertItems($db, fieldItemCols(), array_values($tuples));
+				$tuples = array();
+				foreach ($byProj as $pk => $agg) {
+					$r = $agg['row'];
+					$tuples[] = fieldSpotTuple(
+						$r, $agg['pid'], $upk, $r->get('pname'),
+						implode(' ', array_keys($agg['dnames'])),
+						self::fieldProjectIsPublic($db, $agg['pid'], $upk),
+						$tagMaps[$pk], $vocabTagTypes, array_keys($agg['dids']));
+				}
+				$n = self::upsertItems($db, fieldItemCols(), $tuples);
 				$db->query("DELETE FROM strabosearch.item_hit
 					WHERE item_type = 'spot' AND item_id = '$sidEsc'
 					  AND item_userpkey = $upk
@@ -437,8 +460,10 @@ class StraboSearchSync {
 								if ($sid === null) continue;
 								$cursor = $sid;
 								$touchedSpotIds[(string)$sid] = true;
+								// dataset_ids = the synced dataset (single-path
+								// replace; see fieldSpotTuple docblock).
 								$tuples[] = fieldSpotTuple($r, $pid, $upk, $pname, $dname,
-									$pispub, $tagMap, $vocabTagTypes);
+									$pispub, $tagMap, $vocabTagTypes, array($did));
 							}
 							$nItems += self::upsertItems($db, fieldItemCols(), $tuples);
 							if (count($rows) < 50) break;

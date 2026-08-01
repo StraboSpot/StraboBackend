@@ -389,7 +389,7 @@ if ($rowA) {
 section('5. Scenario B — igneous:plutonic rock_types + polygon centroid');
 
 $rowB = $db->get_row(
-	"SELECT rock_types, ST_AsText(location) AS loc, project_ispublic
+	"SELECT rock_types, ST_AsText(location) AS loc, project_ispublic, dataset_ids
 	 FROM strabosearch.item_hit WHERE item_id = '${PREFIX}_spot_B'"
 );
 check('B: row found', $rowB !== null);
@@ -401,6 +401,10 @@ if ($rowB) {
 	// The polygon centroid should be roughly (-118.55, 34.35)
 	check('B: location is a POINT (polygon centroid)',
 		strpos((string)$rowB->loc, 'POINT') !== false, 'got ' . $rowB->loc);
+	// dataset_ids amendment: the row carries its containing dataset's id.
+	check('B: dataset_ids carries the containing dataset',
+		strpos((string)$rowB->dataset_ids, $DSET_PRIV) !== false,
+		'got ' . $rowB->dataset_ids);
 }
 
 // ===========================================================================

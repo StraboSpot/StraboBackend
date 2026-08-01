@@ -402,18 +402,23 @@ function upsertVocabTagTypes($db, $seen, $subsystem) {
  *
  * Returns the number of rows inserted (or null on error; caller checks
  * $db->last_error).
+ *
+ * $conflictAction (optional): custom ON CONFLICT action replacing the
+ * default DO NOTHING. The live table is aliased `live` for it (the slice
+ * was deleted first inside this txn, so conflicts are staging-internal —
+ * any live.* reference sees a fresh same-run row, never a stale one).
  */
-function swapStagingInto($db, $liveTable, $stagingTable, $sliceWhere, $columns, $conflictColumns = null) {
+function swapStagingInto($db, $liveTable, $stagingTable, $sliceWhere, $columns, $conflictColumns = null, $conflictAction = null) {
 	$cols = is_array($columns) ? implode(', ', $columns) : (string)$columns;
 	$db->query('BEGIN');
 	$ok = $db->query("DELETE FROM $liveTable WHERE $sliceWhere");
 	if ($ok === false) { $db->query('ROLLBACK'); return null; }
-	$insertSql = "INSERT INTO $liveTable ($cols) SELECT $cols FROM $stagingTable";
+	$insertSql = "INSERT INTO $liveTable AS live ($cols) SELECT $cols FROM $stagingTable";
 	if ($conflictColumns) {
 		// Soak duplicates in the staging table (Field carries known dup
 		// spots — same id linked to multiple Datasets within the project).
 		$conflict = is_array($conflictColumns) ? implode(', ', $conflictColumns) : (string)$conflictColumns;
-		$insertSql .= " ON CONFLICT ($conflict) DO NOTHING";
+		$insertSql .= " ON CONFLICT ($conflict) " . ($conflictAction !== null ? $conflictAction : 'DO NOTHING');
 	}
 	$ok = $db->query($insertSql);
 	if ($ok === false) { $db->query('ROLLBACK'); return null; }
