@@ -34,8 +34,7 @@ All versions are kept, but using a version rolls back to that copy.
 <?php
 
 $exprows = $db->get_results_prepared("select uuid from straboexp.versions where userpkey=$1 group by uuid", array($userpkey));
-/*
-if(count($exprows) > 0){
+if(count((array)$exprows) > 0){
 ?>
 <h2>StraboExperimental Data:</h2>
 <?php
@@ -74,7 +73,7 @@ if(count($exprows) > 0){
 		?>
 		<tr>
 			<td style="width:100px;">
-				<a href="experimental/activate_version?p=<?php echo $vr->pkey?>" OnClick="return confirm('Are you sure you want to activate this version from  <?php echo $datecreated?>?')">Enable</a>
+				<a href="experimental/api/activate_version.php?p=<?php echo $vr->pkey?>" OnClick="return confirm('Are you sure you want to activate this version from  <?php echo $datecreated?>?')">Enable</a>
 			</td>
 
 			<td>
@@ -84,7 +83,7 @@ if(count($exprows) > 0){
 				<?php echo $experimentcount?>
 			</td>
 			<td style="width:50px;">
-				<a href="experimental/delete_version?p=<?php echo $vr->pkey?>" OnClick="return confirm('Are you sure you want to delete this version from  <?php echo $datecreated?>?')">Delete</a>
+				<a href="experimental/api/delete_version.php?p=<?php echo $vr->pkey?>" OnClick="return confirm('Are you sure you want to delete this version from  <?php echo $datecreated?>?')">Delete</a>
 			</td>
 		</tr>
 
@@ -100,7 +99,6 @@ if(count($exprows) > 0){
 
 	}
 }
-*/
 ?>
 <h2>StraboField Data:</h2>
 <?php
