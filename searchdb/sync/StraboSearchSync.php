@@ -225,15 +225,21 @@ class StraboSearchSync {
 
 				// --- item rows -------------------------------------------------
 				$tuples = array();   // keyed by project id → dedupe same-project paths
+				$tagMaps = array();  // keyed by project id → json_tags map (decode once)
 				$rows = $neodb->query(fieldSpotTouchCypher($upk, neoIdLiteral($spotId)));
 				if ($rows) {
 					foreach ($rows as $r) {
 						if ($r->get('sid') === null) continue;
 						$pid = $r->get('pid');
 						if ($pid === null) continue;
-						$tuples[(string)$pid] = fieldSpotTuple(
+						$pk = (string)$pid;
+						if (!isset($tagMaps[$pk])) {
+							$tagMaps[$pk] = fieldTagMapFromJsonTags($r->get('pjt'));
+						}
+						$tuples[$pk] = fieldSpotTuple(
 							$r, $pid, $upk, $r->get('pname'), $r->get('dname'),
-							self::fieldProjectIsPublic($db, $pid, $upk), $vocabTagTypes);
+							self::fieldProjectIsPublic($db, $pid, $upk),
+							$tagMaps[$pk], $vocabTagTypes);
 					}
 				}
 				$n = self::upsertItems($db, fieldItemCols(), array_values($tuples));
@@ -250,9 +256,14 @@ class StraboSearchSync {
 						$sid = $r->get('sid');
 						$pid = $r->get('pid');
 						if ($sid === null || $pid === null) continue;
+						$pk = (string)$pid;
+						if (!isset($tagMaps[$pk])) {
+							$tagMaps[$pk] = fieldTagMapFromJsonTags($r->get('pjt'));
+						}
 						$stats = array('no_filename' => 0, 'no_id' => 0);
 						$built = fieldImageTuples($r, $sid, $pid, $upk,
-							self::fieldProjectIsPublic($db, $pid, $upk), $vocabImageTypes, $stats);
+							self::fieldProjectIsPublic($db, $pid, $upk),
+							$tagMaps[$pk], $vocabImageTypes, $stats);
 						// fieldImageTuples returns tuples in the images-collection
 						// order; re-key by the image id embedded at position 1 is
 						// fragile, so dedupe on the tuple text (identical paths
@@ -396,6 +407,7 @@ class StraboSearchSync {
 					MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(p:Project)
 					      -[:HAS_DATASET]->(d:Dataset {id: " . neoIdLiteral($datasetId) . "})
 					RETURN p.id AS pid, coalesce(p.desc_project_name, p.projectname) AS pname,
+					       substring(toString(p.json_tags), 0, 1000000) AS pjt,
 					       d.id AS did, d.name AS dname
 				");
 				if ($pdRows) {
@@ -408,6 +420,8 @@ class StraboSearchSync {
 						$pispub = self::fieldProjectIsPublic($db, $pid, $upk);
 						$pidLit = neoIdLiteral($pid);
 						$didLit = neoIdLiteral($did);
+						// json_tags amendment: per-project spot_id → tags map.
+						$tagMap = fieldTagMapFromJsonTags($pd->get('pjt'));
 
 						// --- spots (keyset batches, same as backfill) ---------
 						$cursor = null;
@@ -424,7 +438,7 @@ class StraboSearchSync {
 								$cursor = $sid;
 								$touchedSpotIds[(string)$sid] = true;
 								$tuples[] = fieldSpotTuple($r, $pid, $upk, $pname, $dname,
-									$pispub, $vocabTagTypes);
+									$pispub, $tagMap, $vocabTagTypes);
 							}
 							$nItems += self::upsertItems($db, fieldItemCols(), $tuples);
 							if (count($rows) < 50) break;
@@ -447,7 +461,8 @@ class StraboSearchSync {
 								$count++;
 								$stats = array('no_filename' => 0, 'no_id' => 0);
 								$tuples = array_merge($tuples, fieldImageTuples(
-									$r, $sid, $pid, $upk, $pispub, $vocabImageTypes, $stats));
+									$r, $sid, $pid, $upk, $pispub, $tagMap,
+									$vocabImageTypes, $stats));
 							}
 							$nImages += self::upsertImages($db, fieldImageCols(), $tuples);
 							if ($count < 50) break;

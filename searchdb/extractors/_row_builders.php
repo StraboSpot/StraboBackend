@@ -144,10 +144,12 @@ function neoIdLiteral($id) {
  * json_other_features, json__3d_structures, json_rock_unit) are
  * intentionally NOT pulled — they would inflate payload (some spots carry
  * 5MB blobs) for no facet gain. rock_types come from tags, not from
- * json_rock_unit. Tag map projection collects only the 7 properties
- * buildRockTypePath uses (full Tag node collection was OOMing the Bolt
- * stream channel). has_samples/has_microstructure computed server-side to
- * skip pulling MB-sized blobs.
+ * json_rock_unit. Tags are NOT pulled here: per the json_tags amendment
+ * they come from Project.json_tags, fetched ONCE per project by the
+ * caller's outer (project, dataset) loop and joined to spots in PHP via
+ * fieldTagMapFromJsonTags (the IS_TAGGED write path has been dead since
+ * 2025-07-08 — edges cover only pre-mid-2025 data). has_samples/
+ * has_microstructure computed server-side to skip pulling MB-sized blobs.
  *
  * Walk anchored through User → HAS_PROJECT → Project → HAS_DATASET →
  * Dataset → HAS_SPOT → Spot per project_neo4j_user_anchored_walks —
@@ -161,20 +163,8 @@ function fieldSpotBatchCypher($upk, $pidLit, $didLit, $cursorClause, $batchSize)
 		      -[:HAS_DATASET]->(d:Dataset {id: $didLit})
 		      -[:HAS_SPOT]->(s:Spot)
 		WHERE 1=1 $cursorClause
-		OPTIONAL MATCH (s)-[:IS_TAGGED]->(t:Tag {type:'geologic_unit'})
-		OPTIONAL MATCH (s)-[:IS_TAGGED]->(at:Tag)
 		OPTIONAL MATCH (s)-[hi:HAS_IMAGE]->()
-		WITH s, collect(distinct {
-			rock_type: t.rock_type,
-			igneous_rock_class: t.igneous_rock_class,
-			plutonic_rock_types: t.plutonic_rock_types,
-			metamorphic_rock_types: t.metamorphic_rock_types,
-			metamorphic_grade: t.metamorphic_grade,
-			sedimentary_rock_type: t.sedimentary_rock_type,
-			sediment_type: t.sediment_type
-		}) AS tags,
-		collect(distinct {name: at.name, type: at.type}) AS all_tags,
-		count(distinct hi) AS image_count
+		WITH s, count(distinct hi) AS image_count
 		ORDER BY s.id
 		RETURN s.id AS sid, s.userpkey AS suk, s.name AS sname,
 		       substring(toString(s.json_orientation_data), 0, 100000) AS jod,
@@ -187,7 +177,7 @@ function fieldSpotBatchCypher($upk, $pidLit, $didLit, $cursorClause, $batchSize)
 		       s.wkt AS wkt, s.modified_timestamp AS mt,
 		       s.date AS date_str, s.strat_section_id AS strat_id,
 		       s.image_basemap AS image_basemap,
-		       tags, all_tags, image_count
+		       image_count
 		LIMIT $batchSize
 	";
 }
@@ -196,10 +186,11 @@ function fieldSpotBatchCypher($upk, $pidLit, $didLit, $cursorClause, $batchSize)
  * Single-spot touch pull for incremental sync (§5.3.2). Same field set as
  * the batch query, PLUS the project/dataset context columns the backfill
  * loop carries externally — the sync path has no outer (project, dataset)
- * loop, so every row is self-describing. One row per
- * (project, dataset) path that reaches the spot; a spot linked into two
- * datasets of one project yields two rows collapsing to one item_hit row
- * at upsert (same 6-tuple).
+ * loop, so every row is self-describing (including pjt = the project's
+ * json_tags blob for the per-spot tag join; 1M substring bound is 5× the
+ * observed dev max of 194KB). One row per (project, dataset) path that
+ * reaches the spot; a spot linked into two datasets of one project yields
+ * two rows collapsing to one item_hit row at upsert (same 6-tuple).
  */
 function fieldSpotTouchCypher($upk, $sidLit) {
 	return "
@@ -207,21 +198,10 @@ function fieldSpotTouchCypher($upk, $sidLit) {
 		      -[:HAS_PROJECT]->(p:Project)
 		      -[:HAS_DATASET]->(d:Dataset)
 		      -[:HAS_SPOT]->(s:Spot {id: $sidLit})
-		OPTIONAL MATCH (s)-[:IS_TAGGED]->(t:Tag {type:'geologic_unit'})
-		OPTIONAL MATCH (s)-[:IS_TAGGED]->(at:Tag)
 		OPTIONAL MATCH (s)-[hi:HAS_IMAGE]->()
-		WITH s, p, d, collect(distinct {
-			rock_type: t.rock_type,
-			igneous_rock_class: t.igneous_rock_class,
-			plutonic_rock_types: t.plutonic_rock_types,
-			metamorphic_rock_types: t.metamorphic_rock_types,
-			metamorphic_grade: t.metamorphic_grade,
-			sedimentary_rock_type: t.sedimentary_rock_type,
-			sediment_type: t.sediment_type
-		}) AS tags,
-		collect(distinct {name: at.name, type: at.type}) AS all_tags,
-		count(distinct hi) AS image_count
+		WITH s, p, d, count(distinct hi) AS image_count
 		RETURN p.id AS pid, coalesce(p.desc_project_name, p.projectname) AS pname,
+		       substring(toString(p.json_tags), 0, 1000000) AS pjt,
 		       d.id AS did, d.name AS dname,
 		       s.id AS sid, s.userpkey AS suk, s.name AS sname,
 		       substring(toString(s.json_orientation_data), 0, 100000) AS jod,
@@ -234,7 +214,7 @@ function fieldSpotTouchCypher($upk, $sidLit) {
 		       s.wkt AS wkt, s.modified_timestamp AS mt,
 		       s.date AS date_str, s.strat_section_id AS strat_id,
 		       s.image_basemap AS image_basemap,
-		       tags, all_tags, image_count
+		       image_count
 	";
 }
 
@@ -254,30 +234,19 @@ function fieldImagesBatchCypher($upk, $pidLit, $didLit, $cursorClause, $batchSiz
 		MATCH (s)-[:HAS_IMAGE]->(:Image)
 		WITH DISTINCT s ORDER BY s.id LIMIT $batchSize
 		MATCH (s)-[:HAS_IMAGE]->(i:Image)
-		OPTIONAL MATCH (s)-[:IS_TAGGED]->(t:Tag {type:'geologic_unit'})
-		OPTIONAL MATCH (s)-[:IS_TAGGED]->(at:Tag)
 		WITH s, collect(distinct {
 			id: i.id, userpkey: i.userpkey,
 			image_type: i.image_type, title: i.title, caption: i.caption,
 			annotated: i.annotated, filename: i.filename,
 			modified_timestamp: i.modified_timestamp
-		}) AS images, collect(distinct {
-			rock_type: t.rock_type,
-			igneous_rock_class: t.igneous_rock_class,
-			plutonic_rock_types: t.plutonic_rock_types,
-			metamorphic_rock_types: t.metamorphic_rock_types,
-			metamorphic_grade: t.metamorphic_grade,
-			sedimentary_rock_type: t.sedimentary_rock_type,
-			sediment_type: t.sediment_type
-		}) AS tags,
-		collect(distinct {name: at.name, type: at.type}) AS all_tags
+		}) AS images
 		RETURN s.id AS sid, s.userpkey AS suk,
 		       substring(toString(s.json_orientation_data), 0, 100000) AS jod,
 		       substring(toString(s.orientation_data), 0, 100000) AS od_legacy,
 		       substring(toString(s.json_trace), 0, 100000) AS jtr,
 		       s.wkt AS wkt, s.modified_timestamp AS smt,
 		       s.date AS date_str,
-		       images, tags, all_tags
+		       images
 		ORDER BY s.id
 	";
 }
@@ -295,31 +264,21 @@ function fieldImagesTouchCypher($upk, $sidLit) {
 		      -[:HAS_DATASET]->(d:Dataset)
 		      -[:HAS_SPOT]->(s:Spot {id: $sidLit})
 		MATCH (s)-[:HAS_IMAGE]->(i:Image)
-		OPTIONAL MATCH (s)-[:IS_TAGGED]->(t:Tag {type:'geologic_unit'})
-		OPTIONAL MATCH (s)-[:IS_TAGGED]->(at:Tag)
 		WITH s, p, collect(distinct {
 			id: i.id, userpkey: i.userpkey,
 			image_type: i.image_type, title: i.title, caption: i.caption,
 			annotated: i.annotated, filename: i.filename,
 			modified_timestamp: i.modified_timestamp
-		}) AS images, collect(distinct {
-			rock_type: t.rock_type,
-			igneous_rock_class: t.igneous_rock_class,
-			plutonic_rock_types: t.plutonic_rock_types,
-			metamorphic_rock_types: t.metamorphic_rock_types,
-			metamorphic_grade: t.metamorphic_grade,
-			sedimentary_rock_type: t.sedimentary_rock_type,
-			sediment_type: t.sediment_type
-		}) AS tags,
-		collect(distinct {name: at.name, type: at.type}) AS all_tags
+		}) AS images
 		RETURN p.id AS pid,
+		       substring(toString(p.json_tags), 0, 1000000) AS pjt,
 		       s.id AS sid, s.userpkey AS suk,
 		       substring(toString(s.json_orientation_data), 0, 100000) AS jod,
 		       substring(toString(s.orientation_data), 0, 100000) AS od_legacy,
 		       substring(toString(s.json_trace), 0, 100000) AS jtr,
 		       s.wkt AS wkt, s.modified_timestamp AS smt,
 		       s.date AS date_str,
-		       images, tags, all_tags
+		       images
 	";
 }
 
@@ -328,56 +287,78 @@ function fieldImagesTouchCypher($upk, $sidLit) {
 // ===========================================================================
 
 /**
- * Parse the tag map collections a Field Cypher pull returns (`tags` =
- * geologic_unit projection for F7 rock_types, `all_tags` = every attached
- * tag's name+type for U10/F11). Shared by the spot and image builders.
+ * json_tags amendment (2026-08, replaces the IS_TAGGED edge walk): build a
+ * spot_id → [tag objects] map from a Project.json_tags blob. json_tags is
+ * the AUTHORITATIVE tag store — the StraboField client maintains it on
+ * every project upload, while the server-side Tag-node/IS_TAGGED write
+ * path (buildRelationshipsFromRecord) has been gated off since 2025-07-08,
+ * so edges cover only pre-mid-2025 data.
+ *
+ * Blob shape (verified against dev 2026-08-01, 3,941 projects): a JSON
+ * array of tag objects — {id, name, type, spots: [spot ids], ...} — where
+ * geologic_unit-typed tags additionally carry the rock_type family of
+ * fields buildRockTypePath consumes. Membership is the tag's `spots`
+ * array (spot-level only: `features` sub-spot membership is intentionally
+ * ignored, matching the old extraction which only matched edges anchored
+ * on :Spot nodes).
+ *
+ * Tolerates null / empty / malformed input (returns empty map). Spot ids
+ * are keyed as strings — numeric ids stringify identically on both sides.
+ */
+function fieldTagMapFromJsonTags($raw) {
+	if ($raw === null || $raw === '' || $raw === false) return array();
+	$tags = json_decode((string)$raw);
+	if (!is_array($tags)) return array();
+	$map = array();
+	foreach ($tags as $t) {
+		if (!is_object($t)) continue;
+		if (!isset($t->spots) || !is_array($t->spots)) continue;
+		foreach ($t->spots as $sid) {
+			if ($sid === null || $sid === '') continue;
+			$map[(string)$sid][] = $t;
+		}
+	}
+	return $map;
+}
+
+/**
+ * Resolve one spot's tag facets from a fieldTagMapFromJsonTags map.
+ * Replaces the edge-era fieldParseTagCollections with identical output
+ * semantics: F7 rock_types/met_facies come from geologic_unit-typed tags
+ * only (parity with the old `{type:'geologic_unit'}` edge filter), U10
+ * tag_names / F11 tag_types from every tag on the spot. Shared by the
+ * spot and image builders.
  *
  * Returns array($rockTypes, $metFacies, $tagNames, $tagTypes) — all
  * deduped, deny-list (NULL/empty) applied.
  */
-function fieldParseTagCollections($r, &$tagTypeVocabSeen) {
+function fieldTagsForSpot($tagMap, $spotId, &$tagTypeVocabSeen) {
 	$rockTypes = array();
 	$metFacies = array();
-	$tagList = $r->get('tags');
-	if (is_array($tagList)) {
-		foreach ($tagList as $tag) {
-			if ($tag === null) continue;
-			list($path, $facies) = buildRockTypePath($tag);
+	$tagNames  = array();
+	$tagTypes  = array();
+	$key = (string)$spotId;
+	$list = isset($tagMap[$key]) ? $tagMap[$key] : array();
+	foreach ($list as $t) {
+		$tn = isset($t->name) ? $t->name : null;
+		$tt = isset($t->type) ? $t->type : null;
+		if ($tn !== null && $tn !== '') $tagNames[] = (string)$tn;
+		if ($tt !== null && $tt !== '') {
+			$tagTypes[] = (string)$tt;
+			$tagTypeVocabSeen[(string)$tt] = true;
+		}
+		if ($tt === 'geologic_unit') {
+			list($path, $facies) = buildRockTypePath($t);
 			if ($path !== '') $rockTypes[] = $path;
 			if ($facies !== '') $metFacies[] = $facies;
 		}
 	}
-	$rockTypes = array_values(array_unique($rockTypes));
-	$metFacies = array_values(array_unique($metFacies));
-
-	$tagNames = array();
-	$tagTypes = array();
-	$allTagList = $r->get('all_tags');
-	if (is_array($allTagList)) {
-		foreach ($allTagList as $tg) {
-			if ($tg === null) continue;
-			$tn = null; $tt = null;
-			if (is_object($tg) && method_exists($tg, 'get')) {
-				try { $tn = $tg->get('name'); } catch (\Exception $e) {}
-				try { $tt = $tg->get('type'); } catch (\Exception $e) {}
-			} elseif (is_object($tg)) {
-				$tn = isset($tg->name) ? $tg->name : null;
-				$tt = isset($tg->type) ? $tg->type : null;
-			} elseif (is_array($tg)) {
-				$tn = isset($tg['name']) ? $tg['name'] : null;
-				$tt = isset($tg['type']) ? $tg['type'] : null;
-			}
-			if ($tn !== null && $tn !== '') $tagNames[] = (string)$tn;
-			if ($tt !== null && $tt !== '') {
-				$tagTypes[] = (string)$tt;
-				$tagTypeVocabSeen[(string)$tt] = true;
-			}
-		}
-	}
-	$tagNames = array_values(array_unique($tagNames));
-	$tagTypes = array_values(array_unique($tagTypes));
-
-	return array($rockTypes, $metFacies, $tagNames, $tagTypes);
+	return array(
+		array_values(array_unique($rockTypes)),
+		array_values(array_unique($metFacies)),
+		array_values(array_unique($tagNames)),
+		array_values(array_unique($tagTypes)),
+	);
 }
 
 /**
@@ -460,15 +441,17 @@ function fieldDateLiteral($r, $mtField) {
  * fieldItemCols()). $r carries the spot fields from fieldSpot*Cypher;
  * project/dataset context arrives via the scalar params (the batch loop
  * carries it externally; the touch query returns it per-row and the
- * caller passes it through). Returns the "(...)" literal string.
+ * caller passes it through). $tagMap is the project's
+ * fieldTagMapFromJsonTags map (json_tags amendment — tags no longer ride
+ * the Cypher row). Returns the "(...)" literal string.
  */
-function fieldSpotTuple($r, $pid, $puk, $pname, $dname, $pispubBool, &$tagTypeVocabSeen) {
+function fieldSpotTuple($r, $pid, $puk, $pname, $dname, $pispubBool, $tagMap, &$tagTypeVocabSeen) {
 	$spotId = $r->get('sid');
 
 	list($hasOrientation, $strikes, $dips, $trends, $plunges, $featTypes, $planars)
 		= fieldParseOrientation($r);
 	list($rockTypes, $metFacies, $tagNames, $tagTypes)
-		= fieldParseTagCollections($r, $tagTypeVocabSeen);
+		= fieldTagsForSpot($tagMap, $spotId, $tagTypeVocabSeen);
 	$traceTypes = fieldParseTraceTypes($r);
 
 	// --- has_* flags (server-side booleans skip pulling MB-sized blobs)
@@ -528,17 +511,18 @@ function fieldSpotTuple($r, $pid, $puk, $pname, $dname, $pispubBool, &$tagTypeVo
 /**
  * One Field spot-with-images Cypher row → N image_hit VALUES tuples
  * (column order = fieldImageCols()), one per servable image. Spot context
- * is parsed ONCE and inherited by every image (§6 Q4a + Q4b).
+ * is parsed ONCE and inherited by every image (§6 Q4a + Q4b). $tagMap is
+ * the project's fieldTagMapFromJsonTags map (json_tags amendment).
  *
  * $stats picks up 'no_filename' / 'no_id' skip counts (the §5.5
  * servability gate: no filename ⇒ unservable ⇒ skip).
  */
-function fieldImageTuples($r, $spotId, $pid, $puk, $pispubBool, &$vocabSeen, &$stats) {
+function fieldImageTuples($r, $spotId, $pid, $puk, $pispubBool, $tagMap, &$vocabSeen, &$stats) {
 	$tagTypeVocabIgnored = array();  // image pull inherits tag types but F11 vocab is upserted by the spot pass
 	list(, $strikes, $dips, $trends, $plunges, $featTypes, $planars)
 		= fieldParseOrientation($r);
 	list($rockTypes, $metFacies, $tagNames, $tagTypes)
-		= fieldParseTagCollections($r, $tagTypeVocabIgnored);
+		= fieldTagsForSpot($tagMap, $spotId, $tagTypeVocabIgnored);
 	$traceTypes = fieldParseTraceTypes($r);
 
 	$dateLit = fieldDateLiteral($r, 'smt');

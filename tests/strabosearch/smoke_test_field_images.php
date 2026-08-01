@@ -192,17 +192,16 @@ $neodb->query("MATCH (d:Dataset {id: '${DSET_PUB}'})
 		annotated: ''
 	})
 	CREATE (s)-[:HAS_IMAGE]->(i)");
-$neodb->query("CREATE (t:Tag {
-	id: '${PREFIX}_tagB_ign',
-	userpkey: $TEST_UPK,
-	type: 'geologic_unit',
-	name: 'spsxi B Granite',
-	rock_type: 'igneous',
-	igneous_rock_class: 'plutonic',
-	plutonic_rock_types: 'granite'
-})");
-$neodb->query("MATCH (s:Spot {id: '${PREFIX}_spotB'}), (t:Tag {id: '${PREFIX}_tagB_ign'})
-	CREATE (s)-[:IS_TAGGED]->(t)");
+// json_tags amendment: spot B's tag lives in the public project's
+// json_tags blob (IS_TAGGED edges are dead and no longer read).
+$jtPubImg = json_encode(array(
+	array('id' => "${PREFIX}_tagB_ign", 'type' => 'geologic_unit',
+	      'name' => 'spsxi B Granite', 'rock_type' => 'igneous',
+	      'igneous_rock_class' => 'plutonic', 'plutonic_rock_types' => 'granite',
+	      'spots' => array("${PREFIX}_spotB")),
+));
+$neodb->query("MATCH (p:Project {id: '${PROJ_PUB}'})
+	SET p.json_tags = '$jtPubImg'");
 
 // ---------------------------------------------------------------------------
 // SCENARIO C — tail image_type maps to 'other'; vocab table records it.

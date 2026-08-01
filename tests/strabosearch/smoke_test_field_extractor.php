@@ -173,29 +173,24 @@ $neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset_priv'})
 		modified_timestamp: 1717344000
 	})
 	CREATE (d)-[:HAS_SPOT]->(s)");
-$neodb->query("CREATE (t:Tag {
-	id: '${PREFIX}_tag_igneous',
-	userpkey: $TEST_UPK,
-	type: 'geologic_unit',
-	name: 'spsx Granite Unit',
-	rock_type: 'igneous',
-	igneous_rock_class: 'plutonic',
-	plutonic_rock_types: 'granite'
-})");
-$neodb->query("MATCH (s:Spot {id: '${PREFIX}_spot_B'}), (t:Tag {id: '${PREFIX}_tag_igneous'})
-	CREATE (s)-[:IS_TAGGED]->(t)");
-// Second tag on spot_B with a NON-geologic_unit type (U10/F11 amendment):
-// name + type must land in tag_names/tag_types/tag_text_tsv + vocab_tag_type,
-// while rock_types (geologic_unit-scoped) must NOT pick it up. Distinctive
-// snake_case type also exercises the Title Case label derivation.
-$neodb->query("CREATE (t:Tag {
-	id: '${PREFIX}_tag_concept',
-	userpkey: $TEST_UPK,
-	type: 'spsx_custom_type',
-	name: 'spsx Faultzone Concept UNIQTAGTOK'
-})");
-$neodb->query("MATCH (s:Spot {id: '${PREFIX}_spot_B'}), (t:Tag {id: '${PREFIX}_tag_concept'})
-	CREATE (s)-[:IS_TAGGED]->(t)");
+// json_tags amendment: tags live in Project.json_tags (the client-written
+// blob; IS_TAGGED edges are dead since 2025-07-08 and no longer read).
+// Membership = each tag's `spots` id array. Second tag on spot_B has a
+// NON-geologic_unit type (U10/F11 amendment): name + type must land in
+// tag_names/tag_types/tag_text_tsv + vocab_tag_type, while rock_types
+// (geologic_unit-scoped) must NOT pick it up. Distinctive snake_case type
+// also exercises the Title Case label derivation.
+$jtPriv = json_encode(array(
+	array('id' => "${PREFIX}_tag_igneous", 'type' => 'geologic_unit',
+	      'name' => 'spsx Granite Unit', 'rock_type' => 'igneous',
+	      'igneous_rock_class' => 'plutonic', 'plutonic_rock_types' => 'granite',
+	      'spots' => array("${PREFIX}_spot_B")),
+	array('id' => "${PREFIX}_tag_concept", 'type' => 'spsx_custom_type',
+	      'name' => 'spsx Faultzone Concept UNIQTAGTOK',
+	      'spots' => array("${PREFIX}_spot_B")),
+));
+$neodb->query("MATCH (p:Project {id: '${PREFIX}_proj_priv'})
+	SET p.json_tags = '$jtPriv'");
 
 // SCENARIO C — metamorphic-greenschist tag → met_facies
 $neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset'})
@@ -208,17 +203,16 @@ $neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset'})
 		modified_timestamp: 1717430400
 	})
 	CREATE (d)-[:HAS_SPOT]->(s)");
-$neodb->query("CREATE (t:Tag {
-	id: '${PREFIX}_tag_metamorphic',
-	userpkey: $TEST_UPK,
-	type: 'geologic_unit',
-	name: 'spsx Schist Unit',
-	rock_type: 'metamorphic',
-	metamorphic_rock_types: 'schist',
-	metamorphic_grade: 'greenschist'
-})");
-$neodb->query("MATCH (s:Spot {id: '${PREFIX}_spot_C'}), (t:Tag {id: '${PREFIX}_tag_metamorphic'})
-	CREATE (s)-[:IS_TAGGED]->(t)");
+// json_tags on the PUBLIC project carries spot_C's metamorphic tag —
+// also proves per-project scoping (spot_B's tags live on proj_priv).
+$jtPub = json_encode(array(
+	array('id' => "${PREFIX}_tag_metamorphic", 'type' => 'geologic_unit',
+	      'name' => 'spsx Schist Unit', 'rock_type' => 'metamorphic',
+	      'metamorphic_rock_types' => 'schist', 'metamorphic_grade' => 'greenschist',
+	      'spots' => array("${PREFIX}_spot_C")),
+));
+$neodb->query("MATCH (p:Project {id: '${PREFIX}_proj_pub'})
+	SET p.json_tags = '$jtPub'");
 
 // SCENARIO D — json_trace (real-prod shape: top-level `trace_type`
 // with sub-classification `geologic_structure_type` or `contact_type`,
