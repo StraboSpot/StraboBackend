@@ -321,6 +321,10 @@ try {
                (SELECT pkey FROM straboexp.experiment WHERE project_pkey = $1)", array($project_pkey));
         $db->prepare_query("DELETE FROM straboexp.experiment WHERE project_pkey = $1", array($project_pkey));
         $db->prepare_query("DELETE FROM straboexp.project WHERE pkey = $1", array($project_pkey));
+        // save_experiment snapshots a project version before create/update
+        // (versioning restoration) — remove the sentinel project's snapshots.
+        $db->prepare_query("DELETE FROM straboexp.versions WHERE uuid = $1",
+            array('a0000000-0000-4000-8000-00000000aaaa'));
         if ($SPINE) {
             foreach (array_unique($spine_ids) as $sidClean) {
                 $db->prepare_query("DELETE FROM strabosamples.samples WHERE id = $1 AND userpkey = $2",
