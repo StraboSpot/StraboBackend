@@ -33,11 +33,11 @@ include("includes/mheader.php");
 
 	function  projectExperimentalPub(projectid){
 		if(document.getElementById('switch_'+projectid).checked){
-			console.log("https://strabospot.org/experimental/project_public?projectid="+projectid+"&state=public");
-			$.get("/experimental/project_public?projectid="+projectid+"&state=public");
+			console.log("https://strabospot.org/experimental/api/project_public.php?projectid="+projectid+"&state=public");
+			$.get("/experimental/api/project_public.php?projectid="+projectid+"&state=public");
 		}else{
-			console.log("https://strabospot.org/experimental/project_public?projectid="+projectid+"&state=private");
-			$.get("/experimental/project_public?projectid="+projectid+"&state=private");
+			console.log("https://strabospot.org/experimental/api/project_public.php?projectid="+projectid+"&state=private");
+			$.get("/experimental/api/project_public.php?projectid="+projectid+"&state=private");
 		}
 	}
 

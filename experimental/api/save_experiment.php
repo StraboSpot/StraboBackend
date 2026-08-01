@@ -102,6 +102,18 @@ if (!empty($input->pkey)) {
         exit;
     }
 
+    // Version snapshot BEFORE overwriting the experiment (restores the
+    // pre-Vue-rewrite inEditExperiment behavior). Log-and-continue: a
+    // snapshot failure must not block the save.
+    try {
+        include_once("expdb/straboexpclass.php");
+        $exp = new StraboExp($neodb, $userpkey, $db);
+        $exp->setuuid($uuid_gen);
+        $exp->createProjectVersion((int)$row->project_pkey);
+    } catch (Exception $e) {
+        error_log("Failed to create version backup before updating experiment $experiment_pkey: " . $e->getMessage());
+    }
+
     // Sync the normalized sample rows (1:1 with experiment). Preserves strabo_id
     // across edits by anchoring on experiment_pkey; mints fresh only on first
     // appearance of a sample for this experiment.
@@ -176,6 +188,17 @@ if (!empty($input->pkey)) {
         http_response_code(404);
         echo json_encode(['error' => 'Project not found or access denied']);
         exit;
+    }
+
+    // Version snapshot BEFORE adding the experiment (restores the
+    // pre-Vue-rewrite inNewExperiment behavior). Log-and-continue.
+    try {
+        include_once("expdb/straboexpclass.php");
+        $exp = new StraboExp($neodb, $userpkey, $db);
+        $exp->setuuid($uuid_gen);
+        $exp->createProjectVersion($project_pkey);
+    } catch (Exception $e) {
+        error_log("Failed to create version backup before adding experiment to project $project_pkey: " . $e->getMessage());
     }
 
     // Generate new pkey and uuid
