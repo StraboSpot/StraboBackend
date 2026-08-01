@@ -254,9 +254,11 @@ foreach ($activeUsers as $upk) {
 				$pispubBool = !empty($pgPubMap[(string)$pid . '|' . (int)$puk]);
 
 				// Row → tuple mapping is shared with the sync touch path —
-				// see fieldSpotTuple in _row_builders.php.
+				// see fieldSpotTuple in _row_builders.php. dataset_ids =
+				// this outer dataset; the swap's conflict action unions
+				// multi-dataset paths (dataset_ids amendment).
 				$values = fieldSpotTuple($r, $pid, $puk, $pname, $dname,
-					$pispubBool, $tagMap, $tagTypeVocabSeen);
+					$pispubBool, $tagMap, $tagTypeVocabSeen, array($did));
 
 				if ($APPLY) {
 					$ret = $buf->add($values);
@@ -314,9 +316,29 @@ if (!$APPLY) {
 	} else {
 		$slice = "project_subsystem = 'field' AND item_type = 'spot'";
 	}
+	// dataset_ids amendment: the ON CONFLICT DO NOTHING keeps the FIRST
+	// path's row when a spot is reached via two Datasets — the post-insert
+	// merge then unions dataset_ids across ALL staging paths for the rare
+	// multi-path spots (runs inside the swap txn, before staging truncates;
+	// only ever merges fresh same-run rows since the slice was deleted first).
 	$ins = swapStagingInto($db, 'strabosearch.item_hit', 'strabosearch.item_hit_staging_field',
 		$slice, $INSERT_COLS,
-		array('item_type', 'item_id', 'item_userpkey', 'project_id', 'project_userpkey', 'project_subsystem'));
+		array('item_type', 'item_id', 'item_userpkey', 'project_id', 'project_userpkey', 'project_subsystem'),
+		"UPDATE strabosearch.item_hit ih
+		 SET dataset_ids = m.ds
+		 FROM (
+			SELECT s.item_type, s.item_id, s.item_userpkey,
+			       s.project_id, s.project_userpkey, s.project_subsystem,
+			       array_agg(DISTINCT d) AS ds
+			FROM strabosearch.item_hit_staging_field s
+			CROSS JOIN LATERAL unnest(s.dataset_ids) AS d
+			GROUP BY 1, 2, 3, 4, 5, 6
+			HAVING count(DISTINCT d) > 1
+		 ) m
+		 WHERE ih.item_type = m.item_type AND ih.item_id = m.item_id
+		   AND ih.item_userpkey = m.item_userpkey AND ih.project_id = m.project_id
+		   AND ih.project_userpkey = m.project_userpkey
+		   AND ih.project_subsystem = m.project_subsystem");
 	if ($ins === null) {
 		line('  SWAP FAILED: ' . $db->last_error);
 		exit(1);

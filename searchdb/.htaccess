@@ -1,0 +1,17 @@
+    RewriteEngine On
+
+    RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+    # This directory doubles as the StraboSearch CLI toolbox (extractors,
+    # census, install, spike, sync, verifiers). None of that is web surface —
+    # only the API entry points are. Deny direct web execution of everything
+    # else BEFORE the router rule (the router only catches non-file paths;
+    # a direct hit on extractors/field.php IS a file and would execute).
+    RewriteRule ^(extractors|census|install|spike|sync|imageaudit|shapegeology)(/|$) - [F,L]
+    RewriteRule ^(verify_extended|verify_schema)\.php$ - [F,L]
+
+    # /searchdb/{endpoint} → index.php/{endpoint} (samplesdb-style router).
+    # /searchdb/jwt/ is a real directory with its own entry + .htaccess.
+    RewriteCond %{REQUEST_FILENAME} !-f
+    RewriteCond %{REQUEST_FILENAME} !-d
+    RewriteRule ^(.*)$ index.php/$1 [L]

@@ -15,8 +15,8 @@
  *
  * So the canonical first install is the psql pipe:
  *
- *   cat searchdb/install/0?_*.sql | docker exec -i strabo-postgres \
- *       psql -U postgres -d strabospot
+ *   cat searchdb/install/0?_*.sql searchdb/install/1?_*.sql | \
+ *       docker exec -i strabo-postgres psql -U postgres -d strabospot
  *
  * This script's role is therefore not "the installer" — it is the
  * **spike-teardown + guard + table-level re-apply** helper. It:
@@ -52,8 +52,8 @@ function emitPipeCommand() {
 	line();
 	line('  Run the canonical first install as the postgres superuser:');
 	line();
-	line('    cat searchdb/install/0?_*.sql | docker exec -i strabo-postgres \\');
-	line('        psql -U postgres -d strabospot');
+	line('    cat searchdb/install/0?_*.sql searchdb/install/1?_*.sql | \\');
+	line('        docker exec -i strabo-postgres psql -U postgres -d strabospot');
 	line();
 	line('  Then re-run this script (or verify_schema.php) to confirm.');
 }
@@ -117,11 +117,17 @@ if (!$schemaPresent || !$aclIdx) {
 section('3. Re-apply table DDL (idempotent — strabodbuser scope)');
 
 // Skip 01 (schema, superuser-only) and 07 (ACL index, superuser-only).
-// Re-apply 02–06, which strabodbuser owns once 01 has run.
-$tableFiles = array_filter(glob(__DIR__ . '/0?_*.sql'), function ($p) {
-	$base = basename($p);
-	return $base !== '01_schema.sql' && $base !== '07_collaborators_acl_index.sql';
-});
+// Re-apply everything else (02–06, 08+), which strabodbuser owns once 01
+// has run. Two-digit files (10+) matched explicitly — `0?_*` misses them.
+// NB: 11_query_indexes.sql additionally requires the pg_trgm extension
+// (one-time CREATE EXTENSION as postgres — see that file's header); its
+// DO-block guard fails the file cleanly if the extension is absent.
+$tableFiles = array_filter(
+	array_merge(glob(__DIR__ . '/0?_*.sql'), glob(__DIR__ . '/[1-9]?_*.sql')),
+	function ($p) {
+		$base = basename($p);
+		return $base !== '01_schema.sql' && $base !== '07_collaborators_acl_index.sql';
+	});
 sort($tableFiles);
 
 if (!$tableFiles) {

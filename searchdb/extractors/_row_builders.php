@@ -47,6 +47,7 @@ function fieldItemCols() {
 		'orientation_features', 'orientation_planar',
 		'rock_types', 'met_facies', 'trace_types',
 		'tag_names', 'tag_types', 'tag_text_tsv',
+		'dataset_ids',
 		'source_modified',
 	);
 }
@@ -444,8 +445,18 @@ function fieldDateLiteral($r, $mtField) {
  * caller passes it through). $tagMap is the project's
  * fieldTagMapFromJsonTags map (json_tags amendment — tags no longer ride
  * the Cypher row). Returns the "(...)" literal string.
+ *
+ * $datasetIds (dataset_ids amendment, Phase 3): ids of the Dataset nodes
+ * reaching this spot within the host project — feeds the §5.4.1
+ * match_counts.dataset rollup. Callers pass what their walk scope knows:
+ * the backfill + syncFieldDataset pass their single outer dataset (the
+ * staging swap unions duplicate paths; the bulk sync's single-dataset
+ * replace narrows a genuinely multi-dataset spot to the synced dataset —
+ * accepted, same one-path semantics as $dname in the searchtext bag);
+ * touchSpot merges all fan-out paths per project before building, so the
+ * per-spot touch is always current-state complete.
  */
-function fieldSpotTuple($r, $pid, $puk, $pname, $dname, $pispubBool, $tagMap, &$tagTypeVocabSeen) {
+function fieldSpotTuple($r, $pid, $puk, $pname, $dname, $pispubBool, $tagMap, &$tagTypeVocabSeen, $datasetIds = array()) {
 	$spotId = $r->get('sid');
 
 	list($hasOrientation, $strikes, $dips, $trends, $plunges, $featTypes, $planars)
@@ -504,6 +515,7 @@ function fieldSpotTuple($r, $pid, $puk, $pname, $dname, $pispubBool, $tagMap, &$
 		pgTextArray($tagNames),
 		pgTextArray($tagTypes),
 		pgTsvector(implode(' ', $tagNames)),
+		pgTextArray(array_values(array_unique(array_filter(array_map('strval', (array)$datasetIds), 'strlen')))),
 		pgTimestamp($r->get('mt')),
 	)) . ')';
 }
