@@ -64,6 +64,12 @@ $db->prepare_query(
     array($ispublic ? 't' : 'f', $project_pkey, $userpkey)
 );
 
+// StraboSearch live-sync (§5.3): ACL flip — rebuild the project's index
+// slice so project_ispublic follows immediately (a public→private toggle
+// must not leave items publicly searchable until the nightly heal).
+require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+StraboSearchSync::touchExpProject($db, $project_pkey);
+
 $result = new stdClass();
 $result->success = true;
 $result->pkey = $project_pkey;
