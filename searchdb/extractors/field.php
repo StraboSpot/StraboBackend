@@ -316,17 +316,29 @@ if (!$APPLY) {
 	} else {
 		$slice = "project_subsystem = 'field' AND item_type = 'spot'";
 	}
-	// dataset_ids amendment: duplicate staging rows (same spot reached via
-	// two Datasets) union their dataset_ids instead of dropping the second
-	// path — the slice was deleted first in the swap txn, so the union only
-	// ever merges fresh same-run rows.
+	// dataset_ids amendment: the ON CONFLICT DO NOTHING keeps the FIRST
+	// path's row when a spot is reached via two Datasets — the post-insert
+	// merge then unions dataset_ids across ALL staging paths for the rare
+	// multi-path spots (runs inside the swap txn, before staging truncates;
+	// only ever merges fresh same-run rows since the slice was deleted first).
 	$ins = swapStagingInto($db, 'strabosearch.item_hit', 'strabosearch.item_hit_staging_field',
 		$slice, $INSERT_COLS,
 		array('item_type', 'item_id', 'item_userpkey', 'project_id', 'project_userpkey', 'project_subsystem'),
-		"DO UPDATE SET dataset_ids = (
-			SELECT array_agg(DISTINCT x) FROM unnest(
-				coalesce(live.dataset_ids, '{}'::text[]) || coalesce(EXCLUDED.dataset_ids, '{}'::text[])
-			) AS x)");
+		"UPDATE strabosearch.item_hit ih
+		 SET dataset_ids = m.ds
+		 FROM (
+			SELECT s.item_type, s.item_id, s.item_userpkey,
+			       s.project_id, s.project_userpkey, s.project_subsystem,
+			       array_agg(DISTINCT d) AS ds
+			FROM strabosearch.item_hit_staging_field s
+			CROSS JOIN LATERAL unnest(s.dataset_ids) AS d
+			GROUP BY 1, 2, 3, 4, 5, 6
+			HAVING count(DISTINCT d) > 1
+		 ) m
+		 WHERE ih.item_type = m.item_type AND ih.item_id = m.item_id
+		   AND ih.item_userpkey = m.item_userpkey AND ih.project_id = m.project_id
+		   AND ih.project_userpkey = m.project_userpkey
+		   AND ih.project_subsystem = m.project_subsystem");
 	if ($ins === null) {
 		line('  SWAP FAILED: ' . $db->last_error);
 		exit(1);

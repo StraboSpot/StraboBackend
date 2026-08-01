@@ -403,25 +403,31 @@ function upsertVocabTagTypes($db, $seen, $subsystem) {
  * Returns the number of rows inserted (or null on error; caller checks
  * $db->last_error).
  *
- * $conflictAction (optional): custom ON CONFLICT action replacing the
- * default DO NOTHING. The live table is aliased `live` for it (the slice
- * was deleted first inside this txn, so conflicts are staging-internal —
- * any live.* reference sees a fresh same-run row, never a stale one).
+ * $postInsertSql (optional): statement(s) executed inside the swap txn
+ * AFTER the insert and BEFORE the staging TRUNCATE — for follow-up merges
+ * that need both the fresh live slice and the raw (pre-dedupe) staging
+ * rows, e.g. the dataset_ids multi-path union. (A custom ON CONFLICT
+ * DO UPDATE cannot do this: with duplicate staging rows it fails with
+ * "cannot affect row a second time".) String or array of strings.
  */
-function swapStagingInto($db, $liveTable, $stagingTable, $sliceWhere, $columns, $conflictColumns = null, $conflictAction = null) {
+function swapStagingInto($db, $liveTable, $stagingTable, $sliceWhere, $columns, $conflictColumns = null, $postInsertSql = null) {
 	$cols = is_array($columns) ? implode(', ', $columns) : (string)$columns;
 	$db->query('BEGIN');
 	$ok = $db->query("DELETE FROM $liveTable WHERE $sliceWhere");
 	if ($ok === false) { $db->query('ROLLBACK'); return null; }
-	$insertSql = "INSERT INTO $liveTable AS live ($cols) SELECT $cols FROM $stagingTable";
+	$insertSql = "INSERT INTO $liveTable ($cols) SELECT $cols FROM $stagingTable";
 	if ($conflictColumns) {
 		// Soak duplicates in the staging table (Field carries known dup
 		// spots — same id linked to multiple Datasets within the project).
 		$conflict = is_array($conflictColumns) ? implode(', ', $conflictColumns) : (string)$conflictColumns;
-		$insertSql .= " ON CONFLICT ($conflict) " . ($conflictAction !== null ? $conflictAction : 'DO NOTHING');
+		$insertSql .= " ON CONFLICT ($conflict) DO NOTHING";
 	}
 	$ok = $db->query($insertSql);
 	if ($ok === false) { $db->query('ROLLBACK'); return null; }
+	foreach ((array)($postInsertSql ?: array()) as $sql) {
+		$ok = $db->query($sql);
+		if ($ok === false) { $db->query('ROLLBACK'); return null; }
+	}
 	$inserted = (int)$db->get_var("SELECT count(*) FROM $liveTable WHERE $sliceWhere");
 	$ok = $db->query("TRUNCATE $stagingTable");
 	if ($ok === false) { $db->query('ROLLBACK'); return null; }
