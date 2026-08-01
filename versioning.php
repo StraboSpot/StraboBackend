@@ -34,7 +34,7 @@ All versions are kept, but using a version rolls back to that copy.
 <?php
 
 $exprows = $db->get_results_prepared("select uuid from straboexp.versions where userpkey=$1 group by uuid", array($userpkey));
-
+/*
 if(count($exprows) > 0){
 ?>
 <h2>StraboExperimental Data:</h2>
@@ -100,6 +100,7 @@ if(count($exprows) > 0){
 
 	}
 }
+*/
 ?>
 <h2>StraboField Data:</h2>
 <?php
