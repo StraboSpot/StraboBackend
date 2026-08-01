@@ -9,6 +9,13 @@
  *              for the apps, which always hold a token; the anonymous
  *              public-search surface is /searchdb/ (§5.5.3).
  *
+ *              NB: this entry lives TWO directory levels deep (the §5.4.1
+ *              URL is /searchdb/jwt/), but jwtauth/middleware.php loads
+ *              its dependencies via `../`-relative includes, which PHP
+ *              resolves against the CWD ONLY — so we chdir to searchdb/
+ *              first, making the middleware see the same one-level-deep
+ *              world it sees under /jwtdb/ and /samplesjwtdb/.
+ *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
  * @copyright  2026 StraboSpot
@@ -18,29 +25,31 @@
 
 set_time_limit(0);
 
-// Initialize Databases
-include_once "../../includes/config.inc.php";
-include_once "../../db.php";
-include_once "../services/StraboSearchService.php";
+chdir(dirname(__DIR__));   // → www/searchdb/
 
-include_once "../../jwtauth/middleware.php";
+// Initialize Databases
+include_once "../includes/config.inc.php";
+include_once "../db.php";
+include_once "./services/StraboSearchService.php";
+
+include_once "../jwtauth/middleware.php";
 
 // Authenticate via JWT
 $user = authenticate();
 $userpkey = (int)$user['sub'];
 
 // Load Base Controller
-include "../controllers/MyController.php";
+include "./controllers/MyController.php";
 
 // Load Additional Controllers
-foreach (glob("../controllers/*.php") as $filename) {
+foreach (glob("./controllers/*.php") as $filename) {
     include_once $filename;
 }
 
-include "../library/Request.php";
-include "../views/ApiView.php";
-include "../views/JsonView.php";
-include "../views/HtmlView.php";
+include "./library/Request.php";
+include "./views/ApiView.php";
+include "./views/JsonView.php";
+include "./views/HtmlView.php";
 
 $svc = new StraboSearchService($db, $userpkey);
 

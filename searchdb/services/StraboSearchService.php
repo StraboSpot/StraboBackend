@@ -267,18 +267,22 @@ class StraboSearchService
         // Persist only a DSL that validates — a saved search must replay.
         $dsl = $this->qb->validate($p['dsl']);
 
+        // No INSERT ... RETURNING — the db wrapper's prepare_query classes
+        // the statement as an insert and never captures returned rows.
         $this->db->last_error = '';
-        $row = $this->db->get_row_prepared(
+        $this->db->prepare_query(
             "INSERT INTO strabosearch.saved_search (user_pkey, search_name, dsl_json)
              VALUES ($1, $2, $3)
              ON CONFLICT (user_pkey, search_name)
-             DO UPDATE SET dsl_json = EXCLUDED.dsl_json, modified_at = now()
-             RETURNING saved_search_pkey", array($this->userpkey, $name, json_encode($dsl)));
-        if ($this->db->last_error || !$row) {
+             DO UPDATE SET dsl_json = EXCLUDED.dsl_json, modified_at = now()",
+            array($this->userpkey, $name, json_encode($dsl)));
+        if ($this->db->last_error) {
             throw new SearchDslError('Could not save search.');
         }
-        return array('saved_search_pkey' => (int)$row->saved_search_pkey,
-                     'search_name' => $name);
+        $pkey = $this->db->get_var_prepared(
+            "SELECT saved_search_pkey FROM strabosearch.saved_search
+             WHERE user_pkey = $1 AND search_name = $2", array($this->userpkey, $name));
+        return array('saved_search_pkey' => (int)$pkey, 'search_name' => $name);
     }
 
     public function updateSavedSearch($pkey, $params)
