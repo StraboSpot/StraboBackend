@@ -776,10 +776,12 @@ class StraboExp
 	}
 
 	public function createProjectVersion($project_pkey){
-		$prow = $this->db->get_row("select * from straboexp.project where pkey = $project_pkey");
-		if($prow->pkey != ""){
+		$project_pkey = (int)$project_pkey;
+		$prow = $this->db->get_row_prepared("select * from straboexp.project where pkey = $1", array($project_pkey));
+		if($prow && $prow->pkey != ""){
 
 			$ver = new stdClass();
+			$ver->project = new stdClass();
 			$ver->project->userpkey = $prow->userpkey;
 			$ver->project->uuid = $prow->uuid;
 			$ver->project->created_timestamp = $prow->created_timestamp;
@@ -788,10 +790,10 @@ class StraboExp
 			$ver->project->ispublic = $prow->ispublic;
 
 			$experiments = [];
-			$erows = $this->db->get_results("select * from straboexp.experiment where project_pkey = $project_pkey");
-			$experimentcount = count($erows);
+			$erows = $this->db->get_results_prepared("select * from straboexp.experiment where project_pkey = $1", array($project_pkey));
+			$experimentcount = count((array)$erows);
 
-			foreach($erows as $erow){
+			foreach((array)$erows as $erow){
 				$json = $erow->json;
 				$json = json_decode($json);
 
@@ -804,80 +806,97 @@ class StraboExp
 				$experiments[] = $json;
 			}
 			$ver->experiments = $experiments;
-			$verjson = pg_escape_string(json_encode($ver, JSON_PRETTY_PRINT));
+			$verjson = json_encode($ver, JSON_PRETTY_PRINT);
 
-			$uuid = $prow->uuid;
 			$verpkey = $this->db->get_var("select nextval('straboexp.versions_pkey_seq')");
 
-			$this->db->query("
-								insert into straboexp.versions (
-																pkey,
-																uuid,
-																userpkey,
-																projectname,
-																experimentcount,
-																json
-															)values(
-																$verpkey,
-																'$uuid',
-																$this->userpkey,
-																'$prow->name',
-																$experimentcount,
-																'$verjson'
-															)
-			");
+			// Version rows belong to the PROJECT owner (not $this->userpkey):
+			// on admin-initiated paths the owner must still see + restore the
+			// snapshot from versioning.php.
+			$this->db->prepare_query("
+				insert into straboexp.versions
+					(pkey, uuid, userpkey, projectname, experimentcount, json)
+				values ($1, $2, $3, $4, $5, $6)
+			", array($verpkey, $prow->uuid, (int)$prow->userpkey, $prow->name, $experimentcount, $verjson));
 
 		}
 	}
 
 	public function restoreVersion($versionpkey){
 
-		//first, delete project in case it exists,
-		$vrow = $this->db->get_row("select * from straboexp.versions where userpkey = $this->userpkey and pkey = $versionpkey");
-		if($vrow->pkey != ""){
-
-			$json = json_decode($vrow->json);
-			$project = $json->project;
-			$experiments = $json->experiments;
-
-			//create a version first before restoring
-			$project_pkey = $this->db->get_var("select pkey from straboexp.project where uuid='$project->uuid' and userpkey = $this->userpkey");
-			if($project_pkey != ""){
-			}
-
-			$this->db->query("delete from straboexp.project where uuid='$project->uuid' and userpkey = $this->userpkey");
-
-			$project_pkey = $this->db->get_var("select nextval('straboexp.project_pkey_seq')");
-			$this->db->query("
-				insert into straboexp.project values (
-					$project_pkey,
-					$this->userpkey,
-					'$project->uuid',
-					'$project->created_timestamp',
-					now(),
-					'$project->name',
-					'$project->notes',
-					'$project->ispublic',
-					null
-				)
-			");
-
-			foreach($experiments as $exp){
-
-				//get experiment id from json and send it along to insertExperiment
-
-				$experiment_id = $exp->experimentid;
-				unset($exp->experimentid);
-
-				$this->insertExperiment($exp, $project_pkey, null, $experiment_id, null);
-			}
-
-			$this->updateProjectKeywords($project_pkey);
-
-		}else{
-			exit("version not found.");
+		$versionpkey = (int)$versionpkey;
+		$vrow = $this->db->get_row_prepared("select * from straboexp.versions where userpkey = $1 and pkey = $2", array($this->userpkey, $versionpkey));
+		if(!$vrow || $vrow->pkey == ""){
+			return false;
 		}
 
+		$json = json_decode($vrow->json);
+		$project = $json->project;
+		$experiments = (isset($json->experiments) && is_array($json->experiments)) ? $json->experiments : [];
+
+		// Samples-spine teardown (post-cutover): the project delete below
+		// cascades straboexp.experiment + straboexp.sample away but does NOT
+		// touch the strabosamples spine. Re-inserting a snapshot experiment
+		// converges on the SAME spine row (exp_sample_sync reuses the
+		// strabo_id embedded in the snapshot's sample JSON), so only live
+		// samples whose strabo_id will NOT come back from the snapshot need
+		// sync-removal here — otherwise they'd be orphaned spine rows.
+		// A snapshot sample only "comes back" if it passes the same
+		// exp_sample_has_data() gate the insert path applies — a contentless
+		// {strabo_id: ...} junk object (07-29 bug window) does NOT recreate
+		// its spine row, so its live counterpart must still be torn down.
+		require_once __DIR__ . '/../experimental/lib/sample_sync.php';
+		$snapshot_sample_ids = array();
+		foreach($experiments as $exp){
+			if(isset($exp->sample) && !empty($exp->sample->strabo_id)
+					&& exp_sample_has_data($exp->sample)){
+				$snapshot_sample_ids[strtolower(trim((string)$exp->sample->strabo_id))] = true;
+			}
+		}
+		$live_project_pkey = $this->db->get_var_prepared(
+			"select pkey from straboexp.project where uuid = $1 and userpkey = $2",
+			array($project->uuid, $this->userpkey));
+		if($live_project_pkey != ""){
+			$live_samples = $this->db->get_results_prepared("
+				select e.pkey, e.userpkey, s.strabo_id
+				  from straboexp.experiment e
+				  join straboexp.sample s on s.experiment_pkey = e.pkey
+				 where e.project_pkey = $1", array((int)$live_project_pkey));
+			foreach((array)$live_samples as $lrow){
+				$sid = strtolower(trim((string)$lrow->strabo_id));
+				if($sid !== '' && !isset($snapshot_sample_ids[$sid])){
+					exp_sample_sync($this->db, $this->uuid, (int)$lrow->pkey, (int)$lrow->userpkey, null, $this->neodb);
+				}
+			}
+		}
+
+		$this->db->prepare_query("delete from straboexp.project where uuid = $1 and userpkey = $2",
+			array($project->uuid, $this->userpkey));
+
+		// Snapshot JSON stores ispublic as PG text ('t'/'f'); normalize so
+		// either that or a real boolean binds cleanly.
+		$ispublic = ($project->ispublic === true || $project->ispublic === 't') ? 't' : 'f';
+
+		$project_pkey = $this->db->get_var("select nextval('straboexp.project_pkey_seq')");
+		$this->db->prepare_query("
+			insert into straboexp.project
+				(pkey, userpkey, uuid, created_timestamp, modified_timestamp, name, notes, ispublic, keywords)
+			values ($1, $2, $3, $4, now(), $5, $6, $7, null)
+		", array($project_pkey, $this->userpkey, $project->uuid, $project->created_timestamp,
+			$project->name, $project->notes, $ispublic));
+
+		foreach($experiments as $exp){
+
+			//get experiment id from json and send it along to insertExperiment
+
+			$experiment_id = isset($exp->experimentid) ? $exp->experimentid : "";
+			unset($exp->experimentid);
+
+			$this->insertExperiment($exp, $project_pkey, null, $experiment_id, null);
+		}
+
+		$this->updateProjectKeywords($project_pkey);
+		return true;
 	}
 
 	public function getExperimentalApparatuses(){

@@ -81,15 +81,28 @@ $experiment_id = $row->id;
 $project_pkey = (int)$row->project_pkey;
 $project_name = $row->project_name;
 
+include_once("includes/UUID.php");
+$uuid_gen = new UUID();
+
+// Version snapshot BEFORE deleting the experiment (restores the
+// pre-Vue-rewrite delete_experiment behavior). Log-and-continue: a
+// snapshot failure must not block the deletion.
+try {
+    include_once("expdb/straboexpclass.php");
+    $exp = new StraboExp($neodb, $userpkey, $db);
+    $exp->setuuid($uuid_gen);
+    $exp->createProjectVersion($project_pkey);
+} catch (Exception $e) {
+    error_log("Failed to create version backup before deleting experiment $experiment_pkey: " . $e->getMessage());
+}
+
 // Mirror the sample removal into strabosamples.* BEFORE deleting the
 // experiment row. exp_sample_sync's empty-sample branch removes the
 // straboexp.sample row + the spine link (priority-aware). Keyed on the
 // experiment OWNER's userpkey ($row->userpkey), which differs from the
 // session user on the admin path. Without this the spine row is orphaned.
 include_once("experimental/lib/sample_sync.php");
-include_once("includes/UUID.php");
 $owner_userpkey = (int)$row->userpkey;
-$uuid_gen = new UUID();
 exp_sample_sync($db, $uuid_gen, $experiment_pkey, $owner_userpkey, null, $neodb);
 
 // Delete the experiment - include userpkey in WHERE for extra security
