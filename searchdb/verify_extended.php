@@ -15,14 +15,18 @@
  *              Field slice):
  *
  *                [lag]     sync_state freshness report (§5.6.3, informational)
- *                [field]   Neo4j spots vs item_hit spot rows. Stage A: per
- *                          (project, user) count + max-modified aggregates
- *                          via the user-anchored walk; Stage B: id-level
- *                          diff of only the flagged projects.
+ *                [field]   Neo4j spots vs item_hit spot rows — full
+ *                          id+mtime diff per user via the user-anchored
+ *                          walk. Id-level ALWAYS (no aggregate pre-filter):
+ *                          count aggregates let a missing row and an extra
+ *                          row cancel out. Staleness is set-membership —
+ *                          the index timestamp must match at least one
+ *                          source copy (duplicate nodes sharing an id are
+ *                          legitimate; catches drift in both directions).
  *                [images]  Neo4j reachable servable Images vs image_hit
- *                          field rows, per user (image identity is
- *                          per-image, not per-project — a multi-project
- *                          image keeps one row). Same two-stage shape.
+ *                          field rows — same shape, per user (image
+ *                          identity is per-image, not per-project: a
+ *                          multi-project image keeps one row).
  *                [micro]   micrograph chain vs item_hit micrographs AND
  *                          image_hit micro rows — pure-SQL full diff.
  *                [exp]     experiment×project vs item_hit experiments —
@@ -324,31 +328,35 @@ foreach (sqlRows($db, "
 }
 
 // ---------------------------------------------------------------------------
-// [field] Neo4j spots vs item_hit spot rows
+// [field] Neo4j spots vs item_hit spot rows — full id-level diff per user.
+//
+// Id-level always (no aggregate pre-filter): count/max aggregates have a
+// blind spot — a missing row and an extra row in the same slice cancel out
+// (e.g. an image/spot REPLACE whose two sync ops both failed). Id+mt-only
+// pulls are cheap: the biggest dev user (190k spots) pulls in ~1s, the
+// whole graph in ~15s. Correctness of the safety net wins.
 // ---------------------------------------------------------------------------
 
 if (in_array('field', $ONLY, true)) {
-	subsection('[field] Neo4j spots vs item_hit (two-stage)');
+	subsection('[field] Neo4j spots vs item_hit (id-level per user)');
 	$failed = false;
 	$checkDrift = 0;
 	$printed = 0;
 
-	// Stage A index side: one aggregate pass over the Field spot slice.
+	// Index aggregate — used only to find EXTRA index users/projects (rows
+	// whose user/project never shows up in the source walk).
 	$scopeSql = ($SCOPE_UPK !== null) ? " AND project_userpkey = $SCOPE_UPK" : '';
-	$idxAgg = array();   // upk → pid → {n, maxep}
+	$idxAgg = array();   // upk → pid → row count
 	foreach (sqlRows($db, "
-		SELECT project_userpkey AS upk, project_id AS pid, count(*) AS n,
-		       max(extract(epoch from source_modified)) AS maxep
+		SELECT project_userpkey AS upk, project_id AS pid, count(*) AS n
 		FROM strabosearch.item_hit
 		WHERE item_type = 'spot' AND project_subsystem = 'field'$scopeSql
 		GROUP BY 1, 2", $failed) as $r) {
-		$idxAgg[(int)$r->upk][(string)$r->pid] = array(
-			'n' => (int)$r->n,
-			'maxep' => ($r->maxep === null ? null : (float)$r->maxep));
+		$idxAgg[(int)$r->upk][(string)$r->pid] = (int)$r->n;
 	}
 
-	// Stage A source side: per-user aggregate walk (user-anchored — Strabo
-	// ids are NOT unique; HAS_PROJECT is the ownership edge).
+	// User-anchored walk (Strabo ids are NOT unique; HAS_PROJECT is the
+	// authoritative ownership edge).
 	if ($SCOPE_UPK !== null) {
 		$activeUsers = array($SCOPE_UPK);
 	} else {
@@ -362,170 +370,124 @@ if (in_array('field', $ONLY, true)) {
 	line('  users to walk: ' . count($activeUsers) . ', indexed field projects: '
 		. array_sum(array_map('count', $idxAgg)));
 
-	$flagged = array();          // list of [upk, pid, reason]
-	$srcSeen = array();          // upk → pid → true (for extra-project detection)
 	foreach ($activeUsers as $upk) {
 		if ($failed) break;      // poisoned walk — don't trust anything further
+
+		$hasIdx = isset($idxAgg[$upk]);
+		// Source: pid → sid → [mt epochs] (dup nodes sharing an id give the
+		// membership list; same node via two datasets collapses on DISTINCT).
 		$rows = neoRows($neodb, "
 			MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(p:Project)
 			      -[:HAS_DATASET]->(:Dataset)-[:HAS_SPOT]->(s:Spot)
 			WHERE s.id IS NOT NULL
-			RETURN p.id AS pid, count(DISTINCT s.id) AS n,
-			       max(toInt(s.modified_timestamp)) AS maxms", $failed);
+			WITH DISTINCT p, s
+			RETURN p.id AS pid, s.id AS sid, s.modified_timestamp AS mt", $failed);
 		if ($rows === null) break;
+		$src = array();
 		foreach ($rows as $r) {
 			$pid = $r->get('pid');
-			if ($pid === null) continue;
-			$pidK = (string)$pid;
-			$srcSeen[$upk][$pidK] = true;
-			$srcN  = (int)$r->get('n');
-			$srcEp = epochFromNeoMt($r->get('maxms'));
-			$idx = isset($idxAgg[$upk][$pidK]) ? $idxAgg[$upk][$pidK] : null;
-			if ($idx === null) {
-				$flagged[] = array($upk, $pid, "missing project ($srcN spots)");
-			} elseif ($idx['n'] !== $srcN) {
-				$flagged[] = array($upk, $pid, "count {$idx['n']} != source $srcN");
-			} elseif ($srcEp !== null && $idx['maxep'] !== null
-					&& abs($srcEp - $idx['maxep']) > VERIFY_STALE_TOL) {
-				// Either direction — an index newer than every source copy is
-				// drift too (version restore). Stage B's membership rule is
-				// the authority; a dup-node project can flag here and come
-				// back clean below.
-				$flagged[] = array($upk, $pid, 'max-modified mismatch (stale?)');
-			}
+			$sid = $r->get('sid');
+			if ($pid === null || $sid === null) continue;
+			$src[(string)$pid][(string)$sid][] = epochFromNeoMt($r->get('mt'));
 		}
-	}
+		if (!$src && !$hasIdx) continue;
 
-	// Whole projects present in the index but absent from the source walk.
-	$extraProjects = array();
-	if (!$failed) {
-		foreach ($idxAgg as $upk => $pids) {
-			if ($SCOPE_UPK === null && !in_array($upk, $activeUsers, true)) {
-				foreach ($pids as $pidK => $agg) $extraProjects[] = array($upk, $pidK, $agg['n']);
-				continue;
-			}
-			foreach ($pids as $pidK => $agg) {
-				if (!isset($srcSeen[$upk][$pidK])) $extraProjects[] = array($upk, $pidK, $agg['n']);
-			}
-		}
-	}
-
-	line('  flagged projects: ' . count($flagged) . ', extra index projects: ' . count($extraProjects));
-
-	// Extra projects: every index row is drift; heal = drop the slice.
-	foreach ($extraProjects as $ep) {
-		list($upk, $pidK, $n) = $ep;
-		$checkDrift += $n;
-		detailLine($printed, "EXTRA project $pidK/u$upk — $n index row(s), no source project");
-		if ($HEAL && healBudgetTake($n)) {
-			healResult(StraboSearchSync::removeFieldProject($db, $pidK, $upk), $n,
-				"removeFieldProject $pidK/$upk");
-		} else {
-			$UNHEALED += $n;
-		}
-	}
-
-	// Stage B: id-level diff per flagged project.
-	foreach ($flagged as $f) {
-		if ($failed) break;
-		list($upk, $pid, $reason) = $f;
-		$pidK = (string)$pid;
-		$pidLit = neoIdLiteral($pid);
-
-		// Source spot map (id → max epoch), keyset-paginated (tiny rows,
-		// but whale projects exist).
-		$srcSpots = array();
-		$cursor = null;
-		while (true) {
-			$cur = ($cursor !== null) ? "AND s.id > " . neoIdLiteral($cursor) . " " : '';
-			$rows = neoRows($neodb, "
-				MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(p:Project {id: $pidLit})
-				      -[:HAS_DATASET]->(:Dataset)-[:HAS_SPOT]->(s:Spot)
-				WHERE s.id IS NOT NULL $cur
-				WITH DISTINCT s ORDER BY s.id LIMIT 10000
-				RETURN s.id AS sid, s.modified_timestamp AS mt", $failed);
-			if ($rows === null) break 2;
-			$count = 0;
-			foreach ($rows as $r) {
-				$sid = $r->get('sid');
-				if ($sid === null) continue;
-				$count++;
-				$cursor = $sid;
-				// List of copies (dup nodes sharing one id) — membership rule.
-				$srcSpots[(string)$sid][] = epochFromNeoMt($r->get('mt'));
-			}
-			if ($count < 10000) break;
-		}
-
-		// Index spot map for this project (project_slice idx).
-		$idxSpots = array();
-		$pidEsc = pg_escape_string($pidK);
+		// Index: pid → sid → epoch (slice index makes this cheap).
+		$idx = array();
 		foreach (sqlRows($db, "
-			SELECT item_id, extract(epoch from source_modified) AS ep
+			SELECT project_id, item_id, extract(epoch from source_modified) AS ep
 			FROM strabosearch.item_hit
 			WHERE item_type = 'spot' AND project_subsystem = 'field'
-			  AND project_userpkey = $upk AND project_id = '$pidEsc'", $failed) as $r) {
-			$idxSpots[(string)$r->item_id] = ($r->ep === null ? null : (float)$r->ep);
+			  AND project_userpkey = $upk", $failed) as $r) {
+			$idx[(string)$r->project_id][(string)$r->item_id] =
+				($r->ep === null ? null : (float)$r->ep);
 		}
 
-		$missing = array();
-		$stale   = array();
-		foreach ($srcSpots as $sidK => $eps) {
-			if (!array_key_exists($sidK, $idxSpots)) {
-				$missing[] = $sidK;
-			} elseif (!epMatchesAny($idxSpots[$sidK], $eps)) {
-				$stale[] = $sidK;
+		// Per-project diff.
+		foreach ($src as $pidK => $spots) {
+			$idxSpots = isset($idx[$pidK]) ? $idx[$pidK] : array();
+			$missing = array();
+			$stale   = array();
+			foreach ($spots as $sidK => $eps) {
+				if (!array_key_exists($sidK, $idxSpots)) {
+					$missing[] = $sidK;
+				} elseif (!epMatchesAny($idxSpots[$sidK], $eps)) {
+					$stale[] = $sidK;
+				}
+			}
+			$extra = array_values(array_diff(array_keys($idxSpots), array_keys($spots)));
+			$n = count($missing) + count($stale) + count($extra);
+			if ($n === 0) continue;
+			$checkDrift += $n;
+			detailLine($printed, "project $pidK/u$upk: "
+				. count($missing) . ' missing, ' . count($stale) . ' stale, ' . count($extra) . ' extra');
+
+			if (!$HEAL) { $UNHEALED += $n; continue; }
+			if ($extra) {
+				if (healBudgetTake(count($extra))) {
+					healResult(StraboSearchSync::removeSpots($db, $extra, $upk), count($extra),
+						"removeSpots x" . count($extra) . " $pidK/$upk");
+				} else { $UNHEALED += count($extra); }
+			}
+			$toTouch = array_merge($missing, $stale);
+			if ($toTouch) {
+				if (!healBudgetTake(count($toTouch))) {
+					$UNHEALED += count($toTouch);
+				} elseif (count($toTouch) > 200) {
+					// Whole-slice rebuild beats per-spot touches at this size —
+					// syncFieldDataset batches per dataset (and re-syncs the
+					// images + linked samples of every touched spot).
+					$drows = neoRows($neodb, "
+						MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(p:Project {id: " . neoIdLiteral($pidK) . "})
+						      -[:HAS_DATASET]->(d:Dataset)
+						RETURN DISTINCT d.id AS did", $failed);
+					if ($drows !== null) {
+						$ok = true;
+						foreach ($drows as $dr) {
+							$did = $dr->get('did');
+							if ($did === null) continue;
+							$ok = StraboSearchSync::syncFieldDataset($db, $neodb, $did, $upk) && $ok;
+						}
+						healResult($ok, count($toTouch), "syncFieldDataset sweep $pidK/$upk");
+					}
+				} else {
+					$ok = true;
+					foreach ($toTouch as $sidK) {
+						$ok = StraboSearchSync::touchSpot($db, $neodb, $sidK, $upk) && $ok;
+					}
+					healResult($ok, count($toTouch), "touchSpot x" . count($toTouch) . " $pidK/$upk");
+				}
 			}
 		}
-		$extra = array_values(array_diff(array_keys($idxSpots), array_keys($srcSpots)));
 
-		$n = count($missing) + count($stale) + count($extra);
-		if ($n === 0) {
-			// Stage A false positive — racing live write, or a dup-copy
-			// project where the aggregate max disagrees but membership holds.
-			detailLine($printed, "project $pidK/u$upk flagged ($reason) but id-diff clean — not drift");
-			continue;
-		}
-		$checkDrift += $n;
-		detailLine($printed, "project $pidK/u$upk ($reason): "
-			. count($missing) . ' missing, ' . count($stale) . ' stale, ' . count($extra) . ' extra');
-
-		if (!$HEAL) { $UNHEALED += $n; continue; }
-
-		// Heal removals first (cheap), then touches.
-		if ($extra) {
-			if (healBudgetTake(count($extra))) {
-				healResult(StraboSearchSync::removeSpots($db, $extra, $upk), count($extra),
-					"removeSpots x" . count($extra) . " $pidK/$upk");
-			} else { $UNHEALED += count($extra); }
-		}
-		$toTouch = array_merge($missing, $stale);
-		if ($toTouch) {
-			if (!healBudgetTake(count($toTouch))) {
-				$UNHEALED += count($toTouch);
-			} elseif (count($toTouch) > 200) {
-				// Whole-slice rebuild is cheaper than per-spot touches at this
-				// size — syncFieldDataset batches per dataset (and re-syncs
-				// the images + linked samples of every touched spot).
-				$drows = neoRows($neodb, "
-					MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(p:Project {id: $pidLit})
-					      -[:HAS_DATASET]->(d:Dataset)
-					RETURN DISTINCT d.id AS did", $failed);
-				if ($drows !== null) {
-					$ok = true;
-					foreach ($drows as $dr) {
-						$did = $dr->get('did');
-						if ($did === null) continue;
-						$ok = StraboSearchSync::syncFieldDataset($db, $neodb, $did, $upk) && $ok;
-					}
-					healResult($ok, count($toTouch), "syncFieldDataset sweep $pidK/$upk");
-				}
+		// Whole index projects this user's walk never reached.
+		foreach ($idx as $pidK => $idxSpots) {
+			if (isset($src[$pidK])) continue;
+			$n = count($idxSpots);
+			$checkDrift += $n;
+			detailLine($printed, "EXTRA project $pidK/u$upk — $n index row(s), no source project");
+			if ($HEAL && healBudgetTake($n)) {
+				healResult(StraboSearchSync::removeFieldProject($db, $pidK, $upk), $n,
+					"removeFieldProject $pidK/$upk");
 			} else {
-				$ok = true;
-				foreach ($toTouch as $sidK) {
-					$ok = StraboSearchSync::touchSpot($db, $neodb, $sidK, $upk) && $ok;
+				$UNHEALED += $n;
+			}
+		}
+		unset($idxAgg[$upk]);   // walked — whatever remains at the end is extra-user
+	}
+
+	// Index rows belonging to users absent from the source walk entirely.
+	if (!$failed && $SCOPE_UPK === null) {
+		foreach ($idxAgg as $upk => $pids) {
+			foreach ($pids as $pidK => $n) {
+				$checkDrift += $n;
+				detailLine($printed, "EXTRA user $upk project $pidK — $n index row(s), user not in source");
+				if ($HEAL && healBudgetTake($n)) {
+					healResult(StraboSearchSync::removeFieldProject($db, $pidK, $upk), $n,
+						"removeFieldProject $pidK/$upk");
+				} else {
+					$UNHEALED += $n;
 				}
-				healResult($ok, count($toTouch), "touchSpot x" . count($toTouch) . " $pidK/$upk");
 			}
 		}
 	}
@@ -535,11 +497,13 @@ if (in_array('field', $ONLY, true)) {
 }
 
 // ---------------------------------------------------------------------------
-// [images] Neo4j servable Field images vs image_hit
+// [images] Neo4j servable Field images vs image_hit — full id-level diff
+// per user (same rationale as [field]; image identity is per-image, so the
+// diff is per user, not per project — a multi-project image keeps one row).
 // ---------------------------------------------------------------------------
 
 if (in_array('images', $ONLY, true)) {
-	subsection('[images] Neo4j servable Field images vs image_hit (per user)');
+	subsection('[images] Neo4j servable Field images vs image_hit (id-level per user)');
 	$failed = false;
 	$checkDrift = 0;
 	$printed = 0;
@@ -550,16 +514,13 @@ if (in_array('images', $ONLY, true)) {
 	         AND i.filename IS NOT NULL AND trim(toString(i.filename)) <> ''";
 
 	$scopeSql = ($SCOPE_UPK !== null) ? " AND project_userpkey = $SCOPE_UPK" : '';
-	$idxAgg = array();   // upk → {n, maxep}
+	$idxUsers = array();   // upk → indexed row count (extra-user detection)
 	foreach (sqlRows($db, "
-		SELECT project_userpkey AS upk, count(DISTINCT image_id) AS n,
-		       max(extract(epoch from source_modified)) AS maxep
+		SELECT project_userpkey AS upk, count(*) AS n
 		FROM strabosearch.image_hit
 		WHERE image_subsystem = 'field'$scopeSql
 		GROUP BY 1", $failed) as $r) {
-		$idxAgg[(int)$r->upk] = array(
-			'n' => (int)$r->n,
-			'maxep' => ($r->maxep === null ? null : (float)$r->maxep));
+		$idxUsers[(int)$r->upk] = (int)$r->n;
 	}
 
 	if ($SCOPE_UPK !== null) {
@@ -572,71 +533,31 @@ if (in_array('images', $ONLY, true)) {
 			foreach ($urows as $r) $activeUsers[] = (int)$r->get('upk');
 		}
 	}
+	line('  users to walk: ' . count($activeUsers) . ', indexed image users: ' . count($idxUsers));
 
-	$flaggedUsers = array();
-	$srcUserSeen  = array();
 	foreach ($activeUsers as $upk) {
 		if ($failed) break;
+
+		$hasIdx = isset($idxUsers[$upk]);
+		// Source: image id → [[mt epochs], one parent spot id].
 		$rows = neoRows($neodb, "
 			MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(:Project)
-			      -[:HAS_DATASET]->(:Dataset)-[:HAS_SPOT]->(:Spot)-[:HAS_IMAGE]->(i:Image)
+			      -[:HAS_DATASET]->(:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(i:Image)
 			WHERE $ELIG
-			RETURN count(DISTINCT i.id) AS n, max(toInt(i.modified_timestamp)) AS maxms", $failed);
+			WITH i, min(s.id) AS sid
+			RETURN i.id AS iid, i.modified_timestamp AS imt, sid", $failed);
 		if ($rows === null) break;
-		$srcN = 0; $srcEp = null;
-		foreach ($rows as $r) {
-			$srcN  = (int)$r->get('n');
-			$srcEp = epochFromNeoMt($r->get('maxms'));
-		}
-		$srcUserSeen[$upk] = true;
-		$idx = isset($idxAgg[$upk]) ? $idxAgg[$upk] : array('n' => 0, 'maxep' => null);
-		// NOTE index maxep may legitimately EXCEED the source image max —
-		// rows fall back to the parent spot's mtime when the image has none.
-		if ($idx['n'] !== $srcN) {
-			$flaggedUsers[] = array($upk, "count {$idx['n']} != source $srcN");
-		} elseif ($srcEp !== null && $idx['maxep'] !== null
-				&& $srcEp > $idx['maxep'] + VERIFY_STALE_TOL) {
-			$flaggedUsers[] = array($upk, 'source newer than index (stale)');
-		}
-	}
-	if (!$failed && $SCOPE_UPK === null) {
-		foreach ($idxAgg as $upk => $agg) {
-			if (!isset($srcUserSeen[$upk])) $flaggedUsers[] = array($upk, "no source user ({$agg['n']} rows)");
-		}
-	}
-	line('  users flagged: ' . count($flaggedUsers) . ' of ' . count($activeUsers));
-
-	foreach ($flaggedUsers as $f) {
-		if ($failed) break;
-		list($upk, $reason) = $f;
-
-		// Source: image id → [max mtime epoch, one parent spot id].
 		$srcImgs = array();
-		$cursor = null;
-		while (true) {
-			$cur = ($cursor !== null) ? "AND i.id > " . neoIdLiteral($cursor) . " " : '';
-			$rows = neoRows($neodb, "
-				MATCH (u:User {userpkey: $upk})-[:HAS_PROJECT]->(:Project)
-				      -[:HAS_DATASET]->(:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(i:Image)
-				WHERE $ELIG $cur
-				WITH i, min(s.id) AS sid
-				ORDER BY i.id LIMIT 10000
-				RETURN i.id AS iid, i.modified_timestamp AS imt, sid", $failed);
-			if ($rows === null) break 2;
-			$count = 0;
-			foreach ($rows as $r) {
-				$iid = $r->get('iid');
-				if ($iid === null) continue;
-				$count++;
-				$cursor = $iid;
-				$iidK = (string)$iid;
-				if (!isset($srcImgs[$iidK])) {
-					$srcImgs[$iidK] = array(array(), $r->get('sid'));
-				}
-				$srcImgs[$iidK][0][] = epochFromNeoMt($r->get('imt'));
+		foreach ($rows as $r) {
+			$iid = $r->get('iid');
+			if ($iid === null) continue;
+			$iidK = (string)$iid;
+			if (!isset($srcImgs[$iidK])) {
+				$srcImgs[$iidK] = array(array(), $r->get('sid'));
 			}
-			if ($count < 10000) break;
+			$srcImgs[$iidK][0][] = epochFromNeoMt($r->get('imt'));
 		}
+		if (!$srcImgs && !$hasIdx) continue;
 
 		// Index: image id → [epoch, image_userpkey].
 		$idxImgs = array();
@@ -650,11 +571,11 @@ if (in_array('images', $ONLY, true)) {
 
 		$touchSpots = array();   // parent spots of missing/stale images
 		$extras = array();       // [image_id, image_userpkey]
-		foreach ($srcImgs as $iidK => $src) {
-			list($eps, $sid) = $src;
+		foreach ($srcImgs as $iidK => $srcv) {
+			list($eps, $sid) = $srcv;
 			// Rows whose every source copy lacks a mtime fell back to the
 			// parent SPOT's mtime at extract — skip the stale test for those
-			// (count/identity checks still apply).
+			// (identity checks still apply).
 			$hasOwnMt = false;
 			foreach ($eps as $e) if ($e !== null) { $hasOwnMt = true; break; }
 			if (!array_key_exists($iidK, $idxImgs)) {
@@ -671,10 +592,15 @@ if (in_array('images', $ONLY, true)) {
 				$checkDrift++;
 			}
 		}
-		detailLine($printed, "user $upk ($reason): " . count($touchSpots)
+		if (!$touchSpots && !$extras) { unset($idxUsers[$upk]); continue; }
+		detailLine($printed, "user $upk: " . count($touchSpots)
 			. ' spot(s) to re-touch, ' . count($extras) . ' extra image row(s)');
 
-		if (!$HEAL) { $UNHEALED += count($touchSpots) + count($extras); continue; }
+		if (!$HEAL) {
+			$UNHEALED += count($touchSpots) + count($extras);
+			unset($idxUsers[$upk]);
+			continue;
+		}
 		if ($extras) {
 			if (healBudgetTake(count($extras))) {
 				$ok = true;
@@ -693,6 +619,23 @@ if (in_array('images', $ONLY, true)) {
 				}
 				healResult($ok, count($touchSpots), "touchSpot(parents) x" . count($touchSpots) . " u$upk");
 			} else { $UNHEALED += count($touchSpots); }
+		}
+		unset($idxUsers[$upk]);
+	}
+
+	// Image rows of users absent from the source walk entirely.
+	if (!$failed && $SCOPE_UPK === null) {
+		foreach ($idxUsers as $upk => $n) {
+			$checkDrift += $n;
+			detailLine($printed, "EXTRA user $upk — $n image row(s), user not in source");
+			if (!$HEAL || !healBudgetTake($n)) { $UNHEALED += $n; continue; }
+			$ok = true;
+			foreach (sqlRows($db, "
+				SELECT image_id, image_userpkey FROM strabosearch.image_hit
+				WHERE image_subsystem = 'field' AND project_userpkey = $upk", $failed) as $r) {
+				$ok = StraboSearchSync::removeImage($db, $r->image_id, (int)$r->image_userpkey) && $ok;
+			}
+			healResult($ok, $n, "removeImage sweep u$upk");
 		}
 	}
 
