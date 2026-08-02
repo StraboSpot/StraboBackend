@@ -120,13 +120,35 @@
 	top: 100%;
 	max-height: 16em;
 	overflow-y: auto;
-	background: #fff;
-	color: #333;   /* site dark theme's light text would vanish on #fff */
-	border: 1px solid rgba(144, 144, 144, 0.5);
-	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+	background: #1c1d26;   /* site dark ground (main.css select option) */
+	color: rgba(255, 255, 255, 0.75);
+	border: 1px solid rgba(255, 255, 255, 0.3);
+	border-radius: 4px;
+	box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
 	margin: 0;
 	padding: 0;
 	list-style: none;
+}
+
+.ss-ta-list,
+.ss-modal-card {
+	scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
+}
+
+.ss-ta-list::-webkit-scrollbar,
+.ss-modal-card::-webkit-scrollbar {
+	width: 8px;
+}
+
+.ss-ta-list::-webkit-scrollbar-thumb,
+.ss-modal-card::-webkit-scrollbar-thumb {
+	background: rgba(255, 255, 255, 0.25);
+	border-radius: 4px;
+}
+
+.ss-ta-list::-webkit-scrollbar-track,
+.ss-modal-card::-webkit-scrollbar-track {
+	background: transparent;
 }
 
 .ss-ta-list li {
@@ -137,7 +159,8 @@
 
 .ss-ta-list li.ss-active,
 .ss-ta-list li:hover {
-	background: rgba(87, 114, 158, 0.15);
+	background: rgba(228, 76, 101, 0.25);   /* site accent tint */
+	color: #ffffff;
 }
 
 .ss-ta-list li .ss-ta-count {
@@ -422,14 +445,15 @@
 	top: 50%;
 	left: 50%;
 	transform: translate(-50%, -50%);
-	background: #fff;
-	color: #333;
+	background: #1c1d26;   /* site dark ground — match the page, not a light card */
+	color: rgba(255, 255, 255, 0.75);
 	padding: 1.5em;
 	border-radius: 5px;
+	border: 1px solid rgba(255, 255, 255, 0.2);
 	width: min(560px, 92vw);
 	max-height: 86vh;
 	overflow-y: auto;
-	box-shadow: 0 6px 30px rgba(0, 0, 0, 0.35);
+	box-shadow: 0 6px 30px rgba(0, 0, 0, 0.6);
 }
 
 .ss-modal-card.ss-modal-map {
@@ -438,25 +462,36 @@
 
 .ss-modal-card h3 {
 	margin-bottom: 0.6em;
-	color: #333;   /* site theme h3 is light — invisible on the white card */
 }
 
 .ss-modal-card .ss-saved-name {
-	color: #222;
+	color: #ffffff;
 }
 
-/* Site buttons draw with currentColor — the dark theme's near-white text
-   vanishes on the white modal card. Force dark chrome inside modals. */
-.ss-modal-card .button:not(.primary) {
-	color: #444 !important;
-	box-shadow: inset 0 0 0 2px #bbb;
-}
-
-.ss-modal-card input[type="text"],
+/* main.css themes only text/password/email inputs — number and date fall
+   back to light browser defaults. Extend the exact site input styling
+   (transparent ground, white-alpha border, accent focus) + dark widget
+   chrome for the native date-picker/spinner glyphs. */
+.ss-criteria input[type="number"],
+.ss-criteria input[type="date"],
 .ss-modal-card input[type="number"],
 .ss-modal-card input[type="date"] {
-	color: #333;
-	border-color: #ccc;
+	background: transparent;
+	border: solid 1px rgba(255, 255, 255, 0.3);
+	border-radius: 4px;
+	color: inherit;
+	height: 3em;
+	padding: 0 1em;
+	outline: 0;
+	color-scheme: dark;
+	transition: border-color 0.2s ease-in-out;
+}
+
+.ss-criteria input[type="number"]:focus,
+.ss-criteria input[type="date"]:focus,
+.ss-modal-card input[type="number"]:focus,
+.ss-modal-card input[type="date"]:focus {
+	border-color: #e44c65;
 }
 
 .ss-modal-actions {
