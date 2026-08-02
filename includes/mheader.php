@@ -149,7 +149,7 @@ if($userpkey == "adsf"){
 							<li>
 								<a href="#">Search</a>
 								<ul>
-									<li><a href="/fullsearch">Search All Strabo Data</a></li>
+									<li><a href="/strabosearch/">Search All Strabo Data</a></li>
 									<li><a href="/search" target="_blank">Search Strabo Field Data</a></li>
 									<li><a href="/publicmaps" target="_blank">Search Public Maps</a></li>
 								</ul>
