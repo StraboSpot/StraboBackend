@@ -62,9 +62,13 @@
 		btn.style.opacity = ok ? '' : '0.5';
 		btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
 
-		// No active criteria left → the displayed results describe a search
-		// that no longer exists. Reset to the quiet prompt + clean URL.
-		if (!ok && window.SSResults.hasResults()) {
+		// Displayed results must always reflect the criteria above (Jason
+		// 08-02): any change to the EFFECTIVE query — value edited, chip or
+		// row removed, NOT toggled — invalidates them. Reset to the quiet
+		// prompt + clean URL until Search runs again. Changes that don't
+		// alter the effective query (e.g. adding an empty row) keep them.
+		if (window.SSResults.hasResults() && lastRunDsl &&
+			JSON.stringify(window.SSBuilder.getDsl()) !== JSON.stringify(lastRunDsl)) {
 			window.SSResults.clear();
 			lastRunDsl = null;
 			window.history.replaceState(null, '', window.location.pathname);
