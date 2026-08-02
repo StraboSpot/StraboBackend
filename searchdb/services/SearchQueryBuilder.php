@@ -803,9 +803,18 @@ class SearchQueryBuilder
     // Projects pathway (§5.4.1)
     // ═══════════════════════════════════════════════════════════════════
 
+    /**
+     * ONE statement per search (Phase 5.D): the paged project groups, the
+     * §6.5.2 subsystem summary, and the Images counterpart badge all ride
+     * a single scan of item_hit (matched CTE, materialized) plus a single
+     * scan of image_hit (imgsum CTE — its per-subsystem counts sum to the
+     * counterpart total). The pre-5.D shape re-ran the full WHERE as four
+     * separate statements, which doubled every search and made the
+     * GIN-unfriendly shapes (NOT text, browse-all) pay the big scan twice.
+     * Results come back as one json payload row.
+     */
     public function runProjectsQuery($dsl)
     {
-        // ---- page of project groups ------------------------------------
         $this->resetParams();
         list($where, $hasText) = $this->itemWhere($dsl);
 
@@ -816,15 +825,18 @@ class SearchQueryBuilder
                 . $this->bind($textVal) . ")) AS rank";
         }
 
+        // Sort must target the owner EXPRESSION, not the output alias —
+        // ORDER BY lower(alias) is invalid inside an expression.
+        $ownerExpr = "trim(coalesce(u.firstname, '') || ' ' || coalesce(u.lastname, ''))";
         list($sortUsed, $orderBy) = $this->resolveSort(
-            $dsl['sort'], $hasText, 'g.rank', 'g.project_name', 'owner_name', 'g.last_modified');
+            $dsl['sort'], $hasText, 'g.rank', 'g.project_name', $ownerExpr, 'g.last_modified');
 
         $limit  = $this->bind($dsl['page_size']);
         $offset = $this->bind($dsl['page'] * $dsl['page_size']);
 
-        // image-side WHERE for the per-project image count (own param slots,
-        // same query).
-        $imgCountWhere = $this->imageWhereSql($dsl);
+        // Image-side WHERE (full DSL). The string is reused in two places
+        // (imgsum + per-project c_image) — same param slots, bound once.
+        $imgW = $this->imageWhereSql($dsl);
 
         $sql = "
 WITH matched AS (
@@ -850,121 +862,140 @@ groups AS (
   FROM matched
   GROUP BY 1, 2, 3
 ),
-dscounts AS (
+dsc AS (
+  -- One unnest pass, two granularities: per-project dataset counts for
+  -- the page rows (glevel 0) + per-subsystem totals for the summary
+  -- (glevel 1). Same count(DISTINCT d) semantics as the pre-5.D queries.
   SELECT project_id, project_userpkey, project_subsystem,
-         count(DISTINCT d) AS c_dataset
+         count(DISTINCT d) AS c_dataset,
+         GROUPING(project_id) AS glevel
   FROM matched CROSS JOIN LATERAL unnest(dataset_ids) AS d
-  GROUP BY 1, 2, 3
+  GROUP BY GROUPING SETS ((project_id, project_userpkey, project_subsystem),
+                          (project_subsystem))
+),
+imgsum AS (
+  SELECT im.image_subsystem AS subsystem, count(*) AS n
+  FROM strabosearch.image_hit im
+  WHERE $imgW
+  GROUP BY 1
+),
+page AS (
+  SELECT g.project_id, g.project_userpkey, g.project_subsystem,
+         g.project_name, g.project_ispublic,
+         g.date_min::text AS date_min, g.date_max::text AS date_max,
+         g.last_modified::text AS last_modified,
+         ST_Y(g.centroid) AS centroid_lat, ST_X(g.centroid) AS centroid_lng,
+         g.c_spot, g.c_sample, g.c_experiment, g.c_micrograph,
+         coalesce(ds.c_dataset, 0) AS c_dataset,
+         $ownerExpr AS owner_name,
+         (SELECT count(*) FROM strabosearch.image_hit im
+           WHERE im.project_id = g.project_id
+             AND im.project_userpkey = g.project_userpkey
+             AND $imgW) AS c_image
+  FROM groups g
+  LEFT JOIN dsc ds ON ds.glevel = 0
+       AND ds.project_id = g.project_id
+       AND ds.project_userpkey = g.project_userpkey
+       AND ds.project_subsystem = g.project_subsystem
+  LEFT JOIN users u ON u.pkey = g.project_userpkey
+  ORDER BY $orderBy
+  LIMIT $limit::int OFFSET $offset::int
+),
+sumitems AS (
+  SELECT project_subsystem AS subsystem,
+         count(*)          AS n_project,
+         sum(c_spot)       AS n_spot,
+         sum(c_sample)     AS n_sample,
+         sum(c_experiment) AS n_experiment,
+         sum(c_micrograph) AS n_micrograph
+  FROM groups GROUP BY 1
 )
-SELECT count(*) OVER ()                                     AS total_rows,
-       g.project_id, g.project_userpkey, g.project_subsystem,
-       g.project_name, g.project_ispublic,
-       g.date_min::text AS date_min, g.date_max::text AS date_max,
-       g.last_modified,
-       ST_Y(g.centroid) AS centroid_lat, ST_X(g.centroid) AS centroid_lng,
-       g.c_spot, g.c_sample, g.c_experiment, g.c_micrograph,
-       coalesce(ds.c_dataset, 0) AS c_dataset,
-       trim(coalesce(u.firstname, '') || ' ' || coalesce(u.lastname, '')) AS owner_name,
-       (SELECT count(*) FROM strabosearch.image_hit im
-         WHERE im.project_id = g.project_id
-           AND im.project_userpkey = g.project_userpkey
-           AND $imgCountWhere)                              AS c_image
-FROM groups g
-LEFT JOIN dscounts ds USING (project_id, project_userpkey, project_subsystem)
-LEFT JOIN users u ON u.pkey = g.project_userpkey
-ORDER BY $orderBy
-LIMIT $limit::int OFFSET $offset::int";
+SELECT json_build_object(
+  'total',       (SELECT count(*) FROM groups),
+  'page',        coalesce((SELECT json_agg(row_to_json(p)) FROM page p), '[]'::json),
+  'items',       coalesce((SELECT json_agg(row_to_json(s)) FROM sumitems s), '[]'::json),
+  'datasets',    coalesce((SELECT json_agg(json_build_object(
+                     'subsystem', d.project_subsystem, 'n', d.c_dataset))
+                     FROM dsc d WHERE d.glevel = 1), '[]'::json),
+  'images',      coalesce((SELECT json_agg(row_to_json(i)) FROM imgsum i), '[]'::json),
+  'counterpart', (SELECT coalesce(sum(n), 0) FROM imgsum)
+)::text AS payload";
 
         $rows = $this->execPrepared($sql);
+        $payload = $rows ? json_decode($rows[0]->payload, true) : null;
+        if (!is_array($payload)) {
+            throw new SearchDslError('Search failed — malformed result payload.');
+        }
 
-        $total = $rows ? (int)$rows[0]->total_rows : 0;
         $results = array();
-        foreach ($rows as $r) {
+        foreach ($payload['page'] as $p) {
             $results[] = array(
-                'project_id'        => $r->project_id,
-                'project_userpkey'  => (int)$r->project_userpkey,
-                'project_subsystem' => $r->project_subsystem,
-                'project_name'      => $r->project_name,
-                'project_ispublic'  => ($r->project_ispublic === 't' || $r->project_ispublic === true),
-                'owner_name'        => $r->owner_name,
-                'date_range'        => array($r->date_min, $r->date_max),
-                'last_modified'     => $r->last_modified,
-                'location_centroid' => ($r->centroid_lat !== null)
-                    ? array('lat' => (float)$r->centroid_lat, 'lng' => (float)$r->centroid_lng)
+                'project_id'        => $p['project_id'],
+                'project_userpkey'  => (int)$p['project_userpkey'],
+                'project_subsystem' => $p['project_subsystem'],
+                'project_name'      => $p['project_name'],
+                'project_ispublic'  => (bool)$p['project_ispublic'],
+                'owner_name'        => $p['owner_name'],
+                'date_range'        => array($p['date_min'], $p['date_max']),
+                'last_modified'     => $p['last_modified'],
+                'location_centroid' => ($p['centroid_lat'] !== null)
+                    ? array('lat' => (float)$p['centroid_lat'], 'lng' => (float)$p['centroid_lng'])
                     : null,
                 'match_counts'      => array(
-                    'dataset'    => (int)$r->c_dataset,
-                    'spot'       => (int)$r->c_spot,
-                    'sample'     => (int)$r->c_sample,
-                    'experiment' => (int)$r->c_experiment,
-                    'micrograph' => (int)$r->c_micrograph,
-                    'image'      => (int)$r->c_image,
+                    'dataset'    => (int)$p['c_dataset'],
+                    'spot'       => (int)$p['c_spot'],
+                    'sample'     => (int)$p['c_sample'],
+                    'experiment' => (int)$p['c_experiment'],
+                    'micrograph' => (int)$p['c_micrograph'],
+                    'image'      => (int)$p['c_image'],
                 ),
             );
         }
 
-        // ---- subsystem summary (whole result set, §6.5.2 triptych) ------
-        $summary = $this->projectsSubsystemSummary($dsl);
+        // Subsystem summary, same shape as the pre-5.D three-way UNION:
+        // keys appear only when their count is non-zero (project always is).
+        $summary = array();
+        foreach ($payload['items'] as $s) {
+            $ss = $s['subsystem'];
+            if (!isset($summary[$ss])) $summary[$ss] = array();
+            $summary[$ss]['project'] = (int)$s['n_project'];
+            foreach (array('spot', 'sample', 'experiment', 'micrograph') as $t) {
+                if ((int)$s['n_' . $t] > 0) $summary[$ss][$t] = (int)$s['n_' . $t];
+            }
+        }
+        foreach ($payload['datasets'] as $d) {
+            if ((int)$d['n'] > 0) $summary[$d['subsystem']]['dataset'] = (int)$d['n'];
+        }
+        foreach ($payload['images'] as $i) {
+            if (!isset($summary[$i['subsystem']])) $summary[$i['subsystem']] = array();
+            $summary[$i['subsystem']]['image'] = (int)$i['n'];
+        }
 
-        // ---- facet counts (§5.4.3) ---------------------------------------
+        // ---- facet counts (§5.4.3) — per-criterion self-exclusion means
+        // these cannot share the matched scan; still separate statements.
         $facets = $this->facetCounts($dsl, false);
 
         return array(
-            'total'   => $total,
+            'total'   => (int)$payload['total'],
             'results' => $results,
             'subsystem_summary' => $summary,
+            'counterpart_total' => (int)$payload['counterpart'],
             'facet_counts' => $facets,
             'sort'    => $sortUsed,
         );
-    }
-
-    private function projectsSubsystemSummary($dsl)
-    {
-        $this->resetParams();
-        list($where) = $this->itemWhere($dsl);
-        $sql = "
-WITH matched AS (
-  SELECT ih.project_id, ih.project_userpkey, ih.project_subsystem,
-         ih.item_type, ih.dataset_ids
-  FROM strabosearch.item_hit ih
-  WHERE $where
-)
-SELECT 'item' AS kind, project_subsystem AS subsystem, item_type AS k, count(*) AS n
-  FROM matched GROUP BY 2, 3
-UNION ALL
-SELECT 'project', project_subsystem, NULL, count(DISTINCT (project_id, project_userpkey))
-  FROM matched GROUP BY 2
-UNION ALL
-SELECT 'dataset', project_subsystem, NULL, count(DISTINCT d)
-  FROM matched CROSS JOIN LATERAL unnest(dataset_ids) AS d GROUP BY 2";
-        $rows = $this->execPrepared($sql);
-
-        $summary = array();
-        foreach ((array)$rows as $r) {
-            $ss = $r->subsystem;
-            if (!isset($summary[$ss])) $summary[$ss] = array();
-            if ($r->kind === 'project')      $summary[$ss]['project'] = (int)$r->n;
-            elseif ($r->kind === 'dataset')  { if ((int)$r->n > 0) $summary[$ss]['dataset'] = (int)$r->n; }
-            elseif ($r->kind === 'item')     $summary[$ss][$r->k] = (int)$r->n;
-        }
-
-        // image counts per subsystem (image-side WHERE, full DSL)
-        $this->resetParams();
-        list($iw) = $this->imageWhere($dsl);
-        $rows = $this->execPrepared(
-            "SELECT im.image_subsystem AS subsystem, count(*) AS n
-             FROM strabosearch.image_hit im WHERE $iw GROUP BY 1");
-        foreach ((array)$rows as $r) {
-            if (!isset($summary[$r->subsystem])) $summary[$r->subsystem] = array();
-            $summary[$r->subsystem]['image'] = (int)$r->n;
-        }
-        return $summary;
     }
 
     // ═══════════════════════════════════════════════════════════════════
     // Images pathway
     // ═══════════════════════════════════════════════════════════════════
 
+    /**
+     * ONE statement per search (Phase 5.D, mirroring runProjectsQuery):
+     * the paged image rows + total + the Projects counterpart badge in a
+     * single round trip. The q CTE materializes only the columns the page
+     * needs (the old SELECT im.* dragged both tsvectors through the
+     * materialization).
+     */
     public function runImagesQuery($dsl)
     {
         $this->resetParams();
@@ -977,98 +1008,90 @@ SELECT 'dataset', project_subsystem, NULL, count(DISTINCT d)
                 . $this->bind($textVal) . ")) AS rank";
         }
 
+        $ownerExpr = "trim(coalesce(u.firstname, '') || ' ' || coalesce(u.lastname, ''))";
         list($sortUsed, $orderBy) = $this->resolveSort(
-            $dsl['sort'], $hasText, 'q.rank', 'q.title', 'owner_name', 'q.source_modified');
+            $dsl['sort'], $hasText, 'q.rank', 'q.title', $ownerExpr, 'q.source_modified');
 
         $limit  = $this->bind($dsl['page_size']);
         $offset = $this->bind($dsl['page'] * $dsl['page_size']);
 
+        // Counterpart: item-side WHERE, full DSL, same param list.
+        list($cpWhere) = $this->itemWhere($dsl);
+
         $sql = "
 WITH q AS (
-  SELECT im.*, $rankSel
+  SELECT im.image_hit_pkey, im.image_id, im.image_subsystem, im.image_userpkey,
+         im.image_type, im.annotated, im.title, im.caption, im.filename,
+         im.parent_spot_id, im.parent_sample_id,
+         im.project_id, im.project_userpkey, im.project_subsystem,
+         im.date_value, im.location, im.source_modified, $rankSel
   FROM strabosearch.image_hit im
   WHERE $where
+),
+page AS (
+  SELECT q.image_hit_pkey,
+         q.image_id, q.image_subsystem, q.image_userpkey, q.image_type,
+         q.annotated, q.title, q.caption, q.filename,
+         q.parent_spot_id, q.parent_sample_id,
+         q.project_id, q.project_userpkey, q.project_subsystem,
+         q.date_value::text AS date_value,
+         ST_Y(q.location) AS lat, ST_X(q.location) AS lng,
+         $ownerExpr AS owner_name,
+         (SELECT max(pi.project_name) FROM strabosearch.item_hit pi
+           WHERE pi.project_id = q.project_id
+             AND pi.project_userpkey = q.project_userpkey
+             AND pi.project_subsystem = q.project_subsystem) AS project_name
+  FROM q
+  LEFT JOIN users u ON u.pkey = q.project_userpkey
+  ORDER BY $orderBy
+  LIMIT $limit::int OFFSET $offset::int
 )
-SELECT count(*) OVER () AS total_rows,
-       q.image_hit_pkey,
-       q.image_id, q.image_subsystem, q.image_userpkey, q.image_type,
-       q.annotated, q.title, q.caption, q.filename,
-       q.parent_spot_id, q.parent_sample_id,
-       q.project_id, q.project_userpkey, q.project_subsystem, q.project_ispublic,
-       q.date_value::text AS date_value,
-       ST_Y(q.location) AS lat, ST_X(q.location) AS lng,
-       q.source_modified,
-       trim(coalesce(u.firstname, '') || ' ' || coalesce(u.lastname, '')) AS owner_name,
-       (SELECT max(pi.project_name) FROM strabosearch.item_hit pi
-         WHERE pi.project_id = q.project_id
-           AND pi.project_userpkey = q.project_userpkey
-           AND pi.project_subsystem = q.project_subsystem) AS project_name
-FROM q
-LEFT JOIN users u ON u.pkey = q.project_userpkey
-ORDER BY $orderBy
-LIMIT $limit::int OFFSET $offset::int";
+SELECT json_build_object(
+  'total',       (SELECT count(*) FROM q),
+  'page',        coalesce((SELECT json_agg(row_to_json(p)) FROM page p), '[]'::json),
+  'counterpart', (SELECT count(DISTINCT (ih.project_id, ih.project_userpkey, ih.project_subsystem))
+                  FROM strabosearch.item_hit ih WHERE $cpWhere)
+)::text AS payload";
 
         $rows = $this->execPrepared($sql);
+        $payload = $rows ? json_decode($rows[0]->payload, true) : null;
+        if (!is_array($payload)) {
+            throw new SearchDslError('Search failed — malformed result payload.');
+        }
 
-        $total = $rows ? (int)$rows[0]->total_rows : 0;
         $results = array();
-        foreach ($rows as $r) {
+        foreach ($payload['page'] as $p) {
             $results[] = array(
-                'image_hit_pkey'    => (int)$r->image_hit_pkey,
-                'image_id'          => $r->image_id,
-                'image_subsystem'   => $r->image_subsystem,
-                'image_type'        => $r->image_type,
-                'annotated'         => ($r->annotated === null) ? null
-                    : ($r->annotated === 't' || $r->annotated === true),
-                'title'             => $r->title,
-                'caption'           => $r->caption,
-                'filename'          => $r->filename,
-                'parent_spot_id'    => $r->parent_spot_id,
-                'parent_sample_id'  => $r->parent_sample_id,
-                'project_id'        => $r->project_id,
-                'project_userpkey'  => (int)$r->project_userpkey,
-                'project_subsystem' => $r->project_subsystem,
-                'project_name'      => $r->project_name,
-                'owner_name'        => $r->owner_name,
-                'date_value'        => $r->date_value,
-                'location'          => ($r->lat !== null)
-                    ? array('lat' => (float)$r->lat, 'lng' => (float)$r->lng) : null,
+                'image_hit_pkey'    => (int)$p['image_hit_pkey'],
+                'image_id'          => $p['image_id'],
+                'image_subsystem'   => $p['image_subsystem'],
+                'image_type'        => $p['image_type'],
+                'annotated'         => ($p['annotated'] === null) ? null : (bool)$p['annotated'],
+                'title'             => $p['title'],
+                'caption'           => $p['caption'],
+                'filename'          => $p['filename'],
+                'parent_spot_id'    => $p['parent_spot_id'],
+                'parent_sample_id'  => $p['parent_sample_id'],
+                'project_id'        => $p['project_id'],
+                'project_userpkey'  => (int)$p['project_userpkey'],
+                'project_subsystem' => $p['project_subsystem'],
+                'project_name'      => $p['project_name'],
+                'owner_name'        => $p['owner_name'],
+                'date_value'        => $p['date_value'],
+                'location'          => ($p['lat'] !== null)
+                    ? array('lat' => (float)$p['lat'], 'lng' => (float)$p['lng']) : null,
             );
         }
 
         $facets = $this->facetCounts($dsl, true);
 
         return array(
-            'total'   => $total,
+            'total'   => (int)$payload['total'],
             'results' => $results,
+            'counterpart_total' => (int)$payload['counterpart'],
             'facet_counts' => $facets,
             'sort'    => $sortUsed,
         );
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // Cross-pathway counts
-    // ═══════════════════════════════════════════════════════════════════
-
-    /** Image rows matching the DSL (Projects tab's counterpart badge). */
-    public function countImages($dsl)
-    {
-        $this->resetParams();
-        list($where) = $this->imageWhere($dsl);
-        $rows = $this->execPrepared(
-            "SELECT count(*) AS n FROM strabosearch.image_hit im WHERE $where");
-        return $rows ? (int)$rows[0]->n : 0;
-    }
-
-    /** Project groups matching the DSL (Images tab's counterpart badge). */
-    public function countProjects($dsl)
-    {
-        $this->resetParams();
-        list($where) = $this->itemWhere($dsl);
-        $rows = $this->execPrepared(
-            "SELECT count(DISTINCT (ih.project_id, ih.project_userpkey, ih.project_subsystem)) AS n
-             FROM strabosearch.item_hit ih WHERE $where");
-        return $rows ? (int)$rows[0]->n : 0;
     }
 
     // ═══════════════════════════════════════════════════════════════════

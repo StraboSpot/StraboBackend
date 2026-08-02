@@ -584,6 +584,26 @@ check('smart default: pure facet → modified_desc', $r['sort'] === 'modified_de
 $r = $own->runSearch($D(array($KEY('UNIQAPI_alpha'))));
 check('smart default: text → relevance', $r['sort'] === 'relevance');
 
+// owner_asc regression — pre-Phase-5.D this was ORDER BY lower(output-alias),
+// which PG rejects: the sort errored on BOTH pathways since Phase 3.
+$r = $own->runSearch($D(array($KEY('UNIQAPI_alpha OR UNIQAPI_beta OR UNIQAPI_gamma')),
+	array('sort' => 'owner_asc')));
+$owners = array(); foreach ($r['results'] as $x) $owners[] = $x['owner_name'];
+$sortedOwners = $owners;
+usort($sortedOwners, function ($a, $b) { return strcmp(strtolower($a), strtolower($b)); });
+check('owner_asc runs + orders (projects)',
+	$r['sort'] === 'owner_asc' && $r['total'] === 3 && $owners === $sortedOwners,
+	json_encode($owners));
+$r = $own->runSearch($D(array($KEY('UNIQAPI_alpha OR UNIQAPI_beta OR UNIQAPI_gamma')),
+	array('pathway' => 'images', 'sort' => 'owner_asc')));
+check('owner_asc runs (images)', $r['sort'] === 'owner_asc');
+
+// Past-the-end paging keeps the true total (pre-5.D count(*) OVER () gave 0).
+$r = $own->runSearch($D(array($KEY('UNIQAPI_alpha OR UNIQAPI_beta OR UNIQAPI_gamma')),
+	array('page_size' => 1, 'page' => 50)));
+check('total stable past the last page', $r['total'] === 3 && $r['results'] === array(),
+	'total=' . $r['total'] . ' rows=' . count($r['results']));
+
 // ---------------------------------------------------------------------------
 section('11. Robustness — injection shapes + validation rejects');
 
