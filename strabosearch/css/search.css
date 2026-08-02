@@ -121,6 +121,7 @@
 	max-height: 16em;
 	overflow-y: auto;
 	background: #fff;
+	color: #333;   /* site dark theme's light text would vanish on #fff */
 	border: 1px solid rgba(144, 144, 144, 0.5);
 	box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
 	margin: 0;
@@ -437,6 +438,25 @@
 
 .ss-modal-card h3 {
 	margin-bottom: 0.6em;
+	color: #333;   /* site theme h3 is light — invisible on the white card */
+}
+
+.ss-modal-card .ss-saved-name {
+	color: #222;
+}
+
+/* Site buttons draw with currentColor — the dark theme's near-white text
+   vanishes on the white modal card. Force dark chrome inside modals. */
+.ss-modal-card .button:not(.primary) {
+	color: #444 !important;
+	box-shadow: inset 0 0 0 2px #bbb;
+}
+
+.ss-modal-card input[type="text"],
+.ss-modal-card input[type="number"],
+.ss-modal-card input[type="date"] {
+	color: #333;
+	border-color: #ccc;
 }
 
 .ss-modal-actions {
