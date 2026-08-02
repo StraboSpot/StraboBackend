@@ -755,7 +755,7 @@
 		addBar.appendChild(addBtn);
 		container.appendChild(addBar);
 
-		addRow({ crit: 'U1' });   // friendly default: keyword row ready to type
+		addRow();   // open on an empty "— pick criterion —" row (Jason 08-02)
 		notifyChange();
 	}
 
@@ -790,7 +790,7 @@
 			var state = C.dslToRow(entry);
 			if (state) addRow(state);
 		});
-		if (rows.length === 0) addRow({ crit: 'U1' });
+		if (rows.length === 0) addRow();
 		notifyChange();
 	}
 
