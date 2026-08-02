@@ -24,11 +24,19 @@ include("../includes/mheader.php");
 
 $searchLoggedIn = (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'yes'
     && isset($_SESSION['userpkey']) && (int)$_SESSION['userpkey'] > 0);
+
+// mtime cache-buster: no Cache-Control headers are sent for static assets,
+// so browsers (mobile Chrome especially) heuristic-cache CSS/JS and a plain
+// reload serves stale layout. ?v=<mtime> makes every edit a new URL.
+function ss_asset($path) {
+    $mtime = @filemtime(__DIR__ . '/../' . ltrim($path, '/'));
+    return htmlspecialchars($path . ($mtime ? '?v=' . $mtime : ''));
+}
 ?>
 
 			<link rel="stylesheet" href="/assets/js/featherlight/featherlight.css" />
 			<link rel="stylesheet" href="/assets/js/leaflet/leaflet.css" />
-			<link rel="stylesheet" href="/strabosearch/css/search.css" />
+			<link rel="stylesheet" href="<?php echo ss_asset('/strabosearch/css/search.css'); ?>" />
 
 			<!-- Main -->
 				<div id="main" class="wrapper style1">
@@ -91,11 +99,11 @@ $searchLoggedIn = (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'ye
 				};
 				</script>
 				<script src="/assets/js/leaflet/leaflet.js"></script>
-				<script src="/strabosearch/js/catalog.js"></script>
-				<script src="/strabosearch/js/builder.js"></script>
-				<script src="/strabosearch/js/results.js"></script>
-				<script src="/strabosearch/js/saved.js"></script>
-				<script src="/strabosearch/js/app.js"></script>
+				<script src="<?php echo ss_asset('/strabosearch/js/catalog.js'); ?>"></script>
+				<script src="<?php echo ss_asset('/strabosearch/js/builder.js'); ?>"></script>
+				<script src="<?php echo ss_asset('/strabosearch/js/results.js'); ?>"></script>
+				<script src="<?php echo ss_asset('/strabosearch/js/saved.js'); ?>"></script>
+				<script src="<?php echo ss_asset('/strabosearch/js/app.js'); ?>"></script>
 
 <?php
 include("../includes/mfooter.php");
