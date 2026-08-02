@@ -101,7 +101,7 @@ require_once(__DIR__ . '/sync/StraboSearchSync.php');  // pulls _row_builders �
 $HEAL       = in_array('--heal', $argv, true);
 $MAX_HEAL   = 5000;
 $SCOPE_UPK  = null;   // --source-userpkey — scopes every check to one user (test isolation)
-$ONLY       = array('field', 'images', 'micro', 'exp', 'samples', 'acl');
+$ONLY       = array('field', 'images', 'micro', 'exp', 'samples', 'acl', 'sanity');
 
 foreach (array_slice($argv, 1) as $arg) {
 	if ($arg === '--help' || $arg === '-h') {
@@ -114,7 +114,7 @@ foreach (array_slice($argv, 1) as $arg) {
 		echo "                      is left in place and reported — 'beyond healing reach' means\n";
 		echo "                      re-run the extractors instead.\n";
 		echo "  --source-userpkey=N Scope every check to one user (hermetic tests / incident triage).\n";
-		echo "  --only=a,b,c        Run a subset of: field,images,micro,exp,samples,acl.\n";
+		echo "  --only=a,b,c        Run a subset of: field,images,micro,exp,samples,acl,sanity.\n";
 		echo "                      NOTE: samples resolves through the indexed Field slice — running\n";
 		echo "                      samples without field against a drifted Field slice under-detects.\n\n";
 		echo "  Exit 0 = clean; 1 = drift found + fully healed; 2 = drift/errors at exit.\n";
@@ -124,7 +124,7 @@ foreach (array_slice($argv, 1) as $arg) {
 	if (preg_match('/^--source-userpkey=(\d+)$/', $arg, $m)) $SCOPE_UPK = (int)$m[1];
 	if (preg_match('/^--only=([a-z,]+)$/', $arg, $m)) {
 		$ONLY = array_values(array_intersect(
-			array('field', 'images', 'micro', 'exp', 'samples', 'acl'),
+			array('field', 'images', 'micro', 'exp', 'samples', 'acl', 'sanity'),
 			explode(',', $m[1])));
 	}
 }
@@ -1020,6 +1020,87 @@ if (in_array('acl', $ONLY, true)) {
 
 	$DRIFT += $checkDrift;
 	finishCheck('acl', $checkDrift, $failed);
+}
+
+// ---------------------------------------------------------------------------
+// [sanity] Phase 5.A — index-internal referential + vocab sanity.
+//
+// The images-pathway predicates traverse parent chains INSIDE the index
+// (parent_spot_id / micro image_id → item_hit rows; parent_sample_id →
+// spine rows), so a dangling ref silently breaks U1/U9 inheritance and
+// U5/U6/U7 sample routing for that image — invisible to the per-table
+// source diffs above, which each see a consistent table. Vocab tables
+// feed F7 expansion + the facet feeds; an empty one means refresh_vocab
+// never ran after the last extract. Detect-only: dangling refs indicate
+// a sync/extractor bug (fix the cause, re-touch the project); they count
+// as unhealed so the cron exits 2.
+// ---------------------------------------------------------------------------
+
+if (in_array('sanity', $ONLY, true)) {
+	subsection('[sanity] index-internal referential + vocab sanity');
+	$failed = false;
+	$checkDrift = 0;
+	$printed = 0;
+
+	$scopeIm = ($SCOPE_UPK !== null) ? " AND im.image_userpkey = $SCOPE_UPK" : '';
+	$dangling = array(
+		'field image → parent spot missing' => "
+			SELECT count(*) AS n FROM strabosearch.image_hit im
+			WHERE im.image_subsystem = 'field' AND im.parent_spot_id IS NOT NULL$scopeIm
+			  AND NOT EXISTS (SELECT 1 FROM strabosearch.item_hit pi
+			      WHERE pi.item_type = 'spot'
+			        AND pi.project_id = im.project_id
+			        AND pi.project_userpkey = im.project_userpkey
+			        AND pi.item_id = im.parent_spot_id)",
+		'micro image → micrograph item missing' => "
+			SELECT count(*) AS n FROM strabosearch.image_hit im
+			WHERE im.image_subsystem = 'micro'$scopeIm
+			  AND NOT EXISTS (SELECT 1 FROM strabosearch.item_hit pi
+			      WHERE pi.item_type = 'micrograph'
+			        AND pi.project_id = im.project_id
+			        AND pi.project_userpkey = im.project_userpkey
+			        AND pi.item_id = im.image_id)",
+		'image parent_sample → spine row missing' => "
+			SELECT count(*) AS n FROM strabosearch.image_hit im
+			WHERE im.parent_sample_id IS NOT NULL$scopeIm
+			  AND NOT EXISTS (SELECT 1 FROM strabosearch.item_hit si
+			      WHERE si.item_type = 'sample'
+			        AND si.sample_id = im.parent_sample_id
+			        AND si.item_userpkey = im.image_userpkey)",
+	);
+	foreach ($dangling as $label => $sql) {
+		$n = (int)sqlVar($db, $sql, $failed);
+		if ($n > 0) {
+			detailLine($printed, "$label: $n row(s)");
+			$checkDrift += $n;
+		}
+	}
+
+	if ($SCOPE_UPK === null) {
+		// Vocab checks are environment-global — skipped under
+		// --source-userpkey (hermetic test scopes).
+		$orphans = (int)sqlVar($db, "
+			SELECT count(*) FROM strabosearch.vocab_rock_type v
+			WHERE v.parent_path IS NOT NULL
+			  AND NOT EXISTS (SELECT 1 FROM strabosearch.vocab_rock_type p
+			      WHERE p.path = v.parent_path)", $failed);
+		if ($orphans > 0) {
+			detailLine($printed, "vocab_rock_type orphan parent_path: $orphans row(s) (broken F7 tree)");
+			$checkDrift += $orphans;
+		}
+		foreach (array('vocab_rock_type', 'vocab_facet_counts', 'vocab_tag_type') as $vt) {
+			$n = (int)sqlVar($db, "SELECT count(*) FROM strabosearch.$vt", $failed);
+			if ($n === 0) {
+				detailLine($printed, "$vt is EMPTY — run refresh_vocab.php after the extract");
+				$checkDrift += 1;
+			}
+		}
+	}
+
+	line("  sanity drift rows: $checkDrift");
+	$UNHEALED += $checkDrift;   // detect-only by design
+	$DRIFT += $checkDrift;
+	finishCheck('sanity', $checkDrift, $failed);
 }
 
 // ---------------------------------------------------------------------------

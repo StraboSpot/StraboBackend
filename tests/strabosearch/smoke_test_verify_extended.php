@@ -185,14 +185,28 @@ $db->query("INSERT INTO strabosamples.sample_subsystem_links
 	       ('$S1', $TEST_UPK, 'micro', 'mref', $TEST_UPK, '{\"project_strabo_id\": \"$MSTRABO\"}'),
 	       ('$S1', $TEST_UPK, 'experimental', 'eref', $TEST_UPK, '{\"project_uuid\": \"$EUUID\"}')");
 
+// Post-cutover reality: EVERY micro sample has a spine row whose id IS the
+// micro strabo_id (Phase 1 backfill convention). Micro image rows stamp
+// parent_sample_id with that id, and the [sanity] check asserts the chain
+// resolves — so the fixture must carry the spine row too.
+$db->query("INSERT INTO strabosamples.samples
+	(id, userpkey, name, created_by, modified_by)
+	VALUES ('{$MSTRABO}_samp', $TEST_UPK, 'spverify micro sample', $TEST_UPK, $TEST_UPK)");
+$db->query("INSERT INTO strabosamples.sample_subsystem_links
+	(sample_id, sample_userpkey, subsystem, reference_id, reference_userpkey, reference_metadata)
+	VALUES ('{$MSTRABO}_samp', $TEST_UPK, 'micro', '{$MSTRABO}_samp', $TEST_UPK,
+	        '{\"project_strabo_id\": \"$MSTRABO\"}')");
+
 // Build the clean index through the sync primitives (same code heals use).
 check('index: touchSpot SPOT1', StraboSearchSync::touchSpot($db, $neodb, $SPOT1, $TEST_UPK) === true);
 check('index: touchSpot SPOT2', StraboSearchSync::touchSpot($db, $neodb, $SPOT2, $TEST_UPK) === true);
 check('index: syncMicroProject', StraboSearchSync::syncMicroProject($db, $mpid, $MSTRABO, $TEST_UPK) === true);
 check('index: touchExperiment', StraboSearchSync::touchExperiment($db, $epk) === true);
 check('index: touchSample', StraboSearchSync::touchSample($db, $S1, $TEST_UPK) === true);
-check('baseline rows: 2 spots + 1 micrograph + 1 experiment + 3 sample fan-out',
-	itemCount($db, "item_userpkey = $TEST_UPK") === 7,
+check('index: touchSample (micro spine)',
+	StraboSearchSync::touchSample($db, $MSTRABO . '_samp', $TEST_UPK) === true);
+check('baseline rows: 2 spots + 1 micrograph + 1 experiment + 4 sample fan-out',
+	itemCount($db, "item_userpkey = $TEST_UPK") === 8,
 	'got ' . itemCount($db, "item_userpkey = $TEST_UPK"));
 check('baseline image rows: 1 field + 1 micro',
 	imageCount($db, "image_userpkey = $TEST_UPK") === 2,
@@ -204,7 +218,7 @@ section('1. BASELINE — clean scoped run passes everything');
 list($code, $out) = runVerify();
 check('clean run exit 0', $code === 0, "exit $code");
 check('clean run says PASS', strpos($out, 'VERIFY EXTENDED: PASS') !== false);
-foreach (array('field', 'images', 'micro', 'exp', 'samples', 'acl') as $c) {
+foreach (array('field', 'images', 'micro', 'exp', 'samples', 'acl', 'sanity') as $c) {
 	check("clean run: $c OK", preg_match('/' . $c . ':\s+OK/', $out) === 1);
 }
 
@@ -392,6 +406,23 @@ check('budget-capped heal exits 2', $code === 2, "exit $code");
 check('budget-capped heal reports unhealed', preg_match('/unhealed:\s+[1-9]/', $out) === 1, $out);
 list($code, $out) = runVerify('--only=samples --heal');
 check('uncapped heal repairs the remainder, exit 1', $code === 1, "exit $code");
+
+// ===========================================================================
+section('8b. SANITY — dangling parent ref detected (Phase 5.A, detect-only)');
+
+// Deleting the micrograph ITEM row leaves its image row's parent chain
+// dangling — the class the source diffs can't see (each table alone is
+// consistent with its source slice pull).
+$db->query("DELETE FROM strabosearch.item_hit WHERE $WM");
+list($code, $out) = runVerify('--only=sanity');
+check('dangling micro parent detected, exit 2', $code === 2, "exit $code");
+check('sanity names the dangling class',
+	strpos($out, 'micrograph item missing') !== false);
+check('index: syncMicroProject restores the chain',
+	StraboSearchSync::syncMicroProject($db, $mpid, $MSTRABO, $TEST_UPK) === true);
+list($code, $out) = runVerify('--only=sanity');
+check('sanity clean after restore, exit 0', $code === 0, "exit $code");
+
 list($code, $out) = runVerify();
 check('FINAL full scoped run clean, exit 0', $code === 0, "exit $code");
 

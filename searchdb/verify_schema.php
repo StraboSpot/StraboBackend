@@ -54,6 +54,7 @@ $expectedTables = array(
 	'image_hit',
 	'vocab_image_type',
 	'vocab_rock_type',
+	'vocab_tag_type',     // install/08 TAGS amendment
 	'vocab_facet_counts',
 	'saved_search',
 	'sync_state',
@@ -123,6 +124,12 @@ $itemHitCols = array(
 	'measurement_type'        => 'varchar',
 	'source_modified'         => 'timestamptz',
 	'last_synced'             => 'timestamptz',
+	// install/08 TAGS amendment
+	'tag_names'               => '_text',
+	'tag_types'               => '_text',
+	'tag_text_tsv'            => 'tsvector',
+	// install/10 dataset_ids amendment (Phase 3)
+	'dataset_ids'             => '_text',
 );
 verifyColumns($db, $check, 'item_hit', $itemHitCols);
 
@@ -163,6 +170,10 @@ $imageHitCols = array(
 	'detector_type'           => 'varchar',
 	'source_modified'         => 'timestamptz',
 	'last_synced'             => 'timestamptz',
+	// install/08 TAGS amendment
+	'tag_names'               => '_text',
+	'tag_types'               => '_text',
+	'tag_text_tsv'            => 'tsvector',
 );
 verifyColumns($db, $check, 'image_hit', $imageHitCols);
 
@@ -178,6 +189,11 @@ verifyColumns($db, $check, 'vocab_rock_type', array(
 	'path'        => 'varchar',
 	'parent_path' => 'varchar',
 	'depth'       => 'int2',
+));
+verifyColumns($db, $check, 'vocab_tag_type', array(
+	'raw_value'     => 'varchar',
+	'display_label' => 'varchar',
+	'subsystem'     => 'varchar',
 ));
 verifyColumns($db, $check, 'vocab_facet_counts', array(
 	'criterion_id' => 'varchar',
@@ -253,6 +269,40 @@ $aclIdx = (int)$db->get_var(
 	   AND indexname  = 'collaborators_search_acl_idx'"
 );
 $check('collaborators_search_acl_idx exists on public.collaborators', $aclIdx === 1);
+
+// ---------------------------------------------------------------------------
+section('9. Install-file indexes (Phase 5.A — self-updating sweep)');
+
+// Every CREATE INDEX in searchdb/install/*.sql must exist on the live
+// schema. Parsing the install files instead of a hand-kept list means a
+// future install/NN can't silently ship an index this verifier ignores.
+$declared = array();
+foreach (glob(__DIR__ . '/install/*.sql') as $f) {
+	// The trailing "\s+ON\s" anchors to real DDL — prose mentions of
+	// "CREATE INDEX" in file-header comments don't have "name ON table".
+	if (preg_match_all('/CREATE\s+INDEX\s+(?:IF\s+NOT\s+EXISTS\s+)?([a-z0-9_]+)\s+ON\s/i',
+			file_get_contents($f), $m)) {
+		foreach ($m[1] as $idx) $declared[$idx] = basename($f);
+	}
+}
+$check('install files declare indexes to sweep', count($declared) > 0,
+	'(' . count($declared) . ' declared)');
+
+$rows = $db->get_results(
+	"SELECT indexname FROM pg_indexes WHERE schemaname IN ('strabosearch', 'public')");
+$live = array();
+foreach ((array)$rows as $r) $live[$r->indexname] = true;
+
+$missing = array();
+foreach ($declared as $idx => $srcFile) {
+	if (!isset($live[$idx])) $missing[] = "$idx ($srcFile)";
+}
+$check('all declared install indexes exist on the live schema', $missing === array(),
+	$missing ? '— missing: ' . implode(', ', $missing) : '');
+
+$trgm = (int)$db->get_var("SELECT count(*) FROM pg_extension WHERE extname = 'pg_trgm'");
+$check('pg_trgm extension installed (install/11 prerequisite)', $trgm === 1,
+	$trgm ? '' : '— run CREATE EXTENSION pg_trgm as postgres (Phase 6 runbook line)');
 
 // ---------------------------------------------------------------------------
 section('Result');
