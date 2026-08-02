@@ -31,6 +31,11 @@ class StraboSearchService
         $this->db = $db;
         $this->userpkey = (int)$userpkey;
         $this->qb = new SearchQueryBuilder($db, $this->userpkey);
+        // Result aggregation sorts 100k+ rows on broad searches; the 7MB
+        // default spills those sorts to disk (Phase 5.D: 592ms → 304ms on
+        // the browse-all main statement). Session-scoped — searchdb/proxy
+        // requests only ever run search queries on this connection.
+        @$this->db->query("SET work_mem = '64MB'");
     }
 
     public function isAnonymous()
@@ -73,7 +78,7 @@ class StraboSearchService
         return array(
             'pathway'           => 'projects',
             'total'             => $r['total'],
-            'counterpart_total' => $this->qb->countImages($dsl),
+            'counterpart_total' => $r['counterpart_total'],
             'page'              => $dsl['page'],
             'page_size'         => $dsl['page_size'],
             'sort'              => $r['sort'],
@@ -89,7 +94,7 @@ class StraboSearchService
         return array(
             'pathway'           => 'images',
             'total'             => $r['total'],
-            'counterpart_total' => $this->qb->countProjects($dsl),
+            'counterpart_total' => $r['counterpart_total'],
             'page'              => $dsl['page'],
             'page_size'         => $dsl['page_size'],
             'sort'              => $r['sort'],
