@@ -172,6 +172,18 @@ class StraboSearchService
             case 'owner':
                 return $this->ownerVocab();
 
+            case 'province':
+                // F10 tectonic province — shapegeology gid → name (§4.3).
+                $rows = $this->db->get_results_prepared(
+                    "SELECT gid, name FROM shapegeology
+                     WHERE name IS NOT NULL AND trim(name) <> ''
+                     ORDER BY name, gid", array());
+                $out = array();
+                foreach ((array)$rows as $r) {
+                    $out[] = array('gid' => (int)$r->gid, 'name' => $r->name);
+                }
+                return array('facet' => $facet, 'values' => $out);
+
             default:
                 // Observed-value facets ride the pre-aggregated counts
                 // table under their criterion id.
