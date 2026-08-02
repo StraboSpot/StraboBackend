@@ -23,7 +23,8 @@ $p = $_GET['p'] ?? '';
 $p = preg_replace('/[^a-zA-Z0-9\-]/', '', $p);
 include("prepare_connections.php");
 
-$project_pkey = $db->get_var_prepared("SELECT pkey FROM straboexp.project WHERE uuid=$1", array($p));
+$project_pkey = $db->get_var_prepared("SELECT pkey FROM straboexp.project WHERE uuid=$1 AND (ispublic OR userpkey = $2)",
+	array($p, $userpkey));
 
 if($project_pkey == ""){
 	include("includes/mheader.php");
