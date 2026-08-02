@@ -48,9 +48,15 @@ line('STRABOSEARCH VOCAB REFRESH — ' . date('Y-m-d H:i:s'));
 // ---------------------------------------------------------------------------
 section('1. vocab_rock_type — observed paths + ancestor closure');
 
+// public rows only — the F7 tree is served to ANONYMOUS users, and rock
+// types include free-typed user content (Phase 5.C: same leakage class as
+// the facet counts). Private-only paths still match when typed directly
+// (array overlap uses the typed path itself; expansion only adds known
+// vocab descendants).
 $rows = $db->get_results(
 	"SELECT DISTINCT v AS path FROM strabosearch.item_hit
-	 CROSS JOIN LATERAL unnest(rock_types) AS v WHERE v IS NOT NULL AND v <> ''");
+	 CROSS JOIN LATERAL unnest(rock_types) AS v
+	 WHERE project_ispublic = TRUE AND v IS NOT NULL AND v <> ''");
 $paths = array();
 foreach ((array)$rows as $r) {
 	// Ancestor closure: igneous:plutonic:granite also yields
@@ -117,15 +123,20 @@ $db->query('TRUNCATE strabosearch.vocab_facet_counts');
 $total = 0;
 foreach ($facetSources as $cid => $spec) {
 	list($table, $col, $isArray) = $spec;
+	// project_ispublic = TRUE: this table feeds the ANONYMOUS initial
+	// facet state (§5.4.3) — counting private rows leaked private vocab
+	// values + counts to everyone (Phase 5.C finding). Per-user values
+	// still surface through the ACL'd live recounts once criteria are
+	// active; the U4 owner vocab was already ACL'd the same way.
 	if ($isArray) {
 		$sql = "INSERT INTO strabosearch.vocab_facet_counts (criterion_id, value, count)
 			SELECT '$cid', v, count(*) FROM strabosearch.$table
 			CROSS JOIN LATERAL unnest($col) AS v
-			WHERE v IS NOT NULL AND v <> '' GROUP BY 2";
+			WHERE project_ispublic = TRUE AND v IS NOT NULL AND v <> '' GROUP BY 2";
 	} else {
 		$sql = "INSERT INTO strabosearch.vocab_facet_counts (criterion_id, value, count)
 			SELECT '$cid', $col, count(*) FROM strabosearch.$table
-			WHERE $col IS NOT NULL AND $col <> '' GROUP BY 2";
+			WHERE project_ispublic = TRUE AND $col IS NOT NULL AND $col <> '' GROUP BY 2";
 	}
 	// prepare_query — see the vocab_rock_type INSERT note (lastval landmine).
 	$db->last_error = '';
