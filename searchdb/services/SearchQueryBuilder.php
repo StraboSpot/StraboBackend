@@ -868,6 +868,7 @@ dsc AS (
   -- (glevel 1). Same count(DISTINCT d) semantics as the pre-5.D queries.
   SELECT project_id, project_userpkey, project_subsystem,
          count(DISTINCT d) AS c_dataset,
+         array_agg(DISTINCT d) AS ds_ids,
          GROUPING(project_id) AS glevel
   FROM matched CROSS JOIN LATERAL unnest(dataset_ids) AS d
   GROUP BY GROUPING SETS ((project_id, project_userpkey, project_subsystem),
@@ -887,6 +888,7 @@ page AS (
          ST_Y(g.centroid) AS centroid_lat, ST_X(g.centroid) AS centroid_lng,
          g.c_spot, g.c_sample, g.c_experiment, g.c_micrograph,
          coalesce(ds.c_dataset, 0) AS c_dataset,
+         coalesce(ds.ds_ids, '{}'::text[]) AS dataset_ids,
          $ownerExpr AS owner_name,
          (SELECT count(*) FROM strabosearch.image_hit im
            WHERE im.project_id = g.project_id
@@ -936,6 +938,7 @@ SELECT json_build_object(
                 'project_name'      => $p['project_name'],
                 'project_ispublic'  => (bool)$p['project_ispublic'],
                 'owner_name'        => $p['owner_name'],
+                'dataset_ids'       => is_array($p['dataset_ids']) ? $p['dataset_ids'] : array(),
                 'date_range'        => array($p['date_min'], $p['date_max']),
                 'last_modified'     => $p['last_modified'],
                 'location_centroid' => ($p['centroid_lat'] !== null)

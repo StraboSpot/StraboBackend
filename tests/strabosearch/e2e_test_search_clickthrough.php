@@ -158,11 +158,16 @@ foreach (array(
 		$db->query("INSERT INTO dataset (project_pkey, user_pkey, strabo_dataset_id, dataset_name)
 			VALUES ($ppk, $UPK, '{$f['proj']}_ds2', 'spse2e Field DS2 {$f['proj']}')");
 	}
+	// dataset_ids mirrors the PG-mirror datasets: public project = 2 (list
+	// page + /fpl/ chooser path), private = 1 (deep-link + redirect path).
+	$dsArr = ($f['pub'] === 'TRUE')
+		? "{{$f['proj']}_ds,{$f['proj']}_ds2}" : "{{$f['proj']}_ds}";
 	$db->query("INSERT INTO strabosearch.item_hit
 		(item_type, item_id, item_userpkey, project_id, project_userpkey, project_subsystem,
-		 project_name, project_ispublic, searchtext_tsv, source_modified)
+		 project_name, project_ispublic, searchtext_tsv, dataset_ids, source_modified)
 		VALUES ('spot', '{$f['proj']}_s1', $UPK, '{$f['proj']}', $UPK, 'field',
-		 'spse2e field {$f['proj']}', {$f['pub']}, to_tsvector('english', '{$f['key']}'), now())");
+		 'spse2e field {$f['proj']}', {$f['pub']}, to_tsvector('english', '{$f['key']}'),
+		 '$dsArr', now())");
 }
 
 // samples fan-out row hosted on the public field project (U8=samples path)
@@ -222,10 +227,15 @@ check('anon search finds public field project', $r !== null
 	&& $r['project_id'] === $PFX . '_fp_pub', 'total=' . ($j ? $j['total'] : "st=$st"));
 check('result subsystem drives /fpl/ landing', $r !== null && landingUrl($r) === '/fpl/' . $PFX . '_fp_pub');
 
+check('field result carries dataset_ids (drives the UI deep-link)',
+	isset($r['dataset_ids']) && $r['dataset_ids'] === array($PFX . '_fp_pub_ds', $PFX . '_fp_pub_ds2'),
+	json_encode(isset($r['dataset_ids']) ? $r['dataset_ids'] : null));
+
 list($st, $h, $body) = http_raw('GET', $BASE . landingUrl($r), null);
 check('anon /fpl/ click-through 200', $st === 200, "got $st");
 check('landing shows the dataset list', strpos($body, 'spse2e Field DS') !== false);
-check('landing links into the map viewer', strpos($body, '/fieldland/?datasetid=') !== false);
+check('landing links into StraboFieldDatasetDetail',
+	strpos($body, '/StraboFieldDatasetDetail/?dataset_id=') !== false);
 
 // private: invisible in anon search AND gated on direct click-through
 list($st, $j, $r) = findProject('UNIQE2E_fpriv');
@@ -234,8 +244,8 @@ check('anon search: private field project invisible', $j && $j['total'] === 0,
 list($st, $h, $body) = http_raw('GET', $BASE . '/fpl/' . $PFX . '_fp_priv', null);
 check('anon /fpl/ private → Not Found page', strpos($body, 'Project Not Found') !== false);
 list($st, $h, $body) = http_raw('GET', $BASE . '/fpl/' . $PFX . '_fp_priv', $sid);
-check('owner /fpl/ private (1 dataset) → 302 into /fieldland/', $st === 302
-	&& strpos(locationHeader($h), '/fieldland/?datasetid=' . $PFX . '_fp_priv_ds') !== false,
+check('owner /fpl/ private (1 dataset) → 302 into StraboFieldDatasetDetail', $st === 302
+	&& strpos(locationHeader($h), '/StraboFieldDatasetDetail/?dataset_id=' . $PFX . '_fp_priv_ds') !== false,
 	"st=$st " . locationHeader($h));
 
 // ---------------------------------------------------------------------------

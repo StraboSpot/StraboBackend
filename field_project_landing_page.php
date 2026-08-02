@@ -64,7 +64,7 @@ if(count($rows) == 0){
 
 if(count($rows) == 1){
 	$dataset_id = $rows[0]->strabo_dataset_id;
-	header("Location: /fieldland/?datasetid=$dataset_id");
+	header("Location: /StraboFieldDatasetDetail/?dataset_id=" . rawurlencode($dataset_id));
 	exit();
 }
 
@@ -93,7 +93,7 @@ if(count($rows) == 1){
 foreach($rows as $row){
 ?>
 												<tr>
-													<td><a href="/fieldland/?datasetid=<?php echo $row->strabo_dataset_id?>" target="_blank">View</a></td>
+													<td><a href="/StraboFieldDatasetDetail/?dataset_id=<?php echo rawurlencode($row->strabo_dataset_id)?>" target="_blank">View</a></td>
 													<td>
 														<?php echo $row->dataset_name?>
 													</td>

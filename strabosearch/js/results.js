@@ -394,8 +394,15 @@
 
 		var title = el('div', 'ss-card-title');
 		var link = el('a', null, r.project_name || '(unnamed project)');
-		link.href = (CFG.landing[r.project_subsystem] || CFG.landing.field) +
-			encodeURIComponent(r.project_id);
+		// Field: single-dataset projects deep-link straight to the modern
+		// dataset viewer; multi-dataset go through /fpl/ (the named dataset
+		// chooser, whose own links now target the same viewer).
+		if (r.project_subsystem === 'field' && r.dataset_ids && r.dataset_ids.length === 1) {
+			link.href = CFG.fieldDataset + encodeURIComponent(r.dataset_ids[0]);
+		} else {
+			link.href = (CFG.landing[r.project_subsystem] || CFG.landing.field) +
+				encodeURIComponent(r.project_id);
+		}
 		link.target = '_blank';
 		title.appendChild(link);
 		if (r.project_ispublic) {

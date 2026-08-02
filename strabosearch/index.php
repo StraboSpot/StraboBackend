@@ -86,7 +86,8 @@ $searchLoggedIn = (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'ye
 						micro: '/strabosearch/images/microscope.png',
 						exp:   '/strabosearch/images/beaker.png'
 					},
-					landing: { field: '/fpl/', micro: '/mpl/', exp: '/epl/' }
+					landing: { field: '/fpl/', micro: '/mpl/', exp: '/epl/' },
+					fieldDataset: '/StraboFieldDatasetDetail/?dataset_id='
 				};
 				</script>
 				<script src="/assets/js/leaflet/leaflet.js"></script>
