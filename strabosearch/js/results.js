@@ -55,6 +55,13 @@
 	// fetch
 	// ══════════════════════════════════════════════════════════════════
 
+	/** Site-standard "Searching. Please wait..." overlay (§6.4 addendum:
+	 *  Jason 08-02 — slow NOT-queries need an unmissable working signal). */
+	function showLoading(on) {
+		var el = document.getElementById('loadingScreen');
+		if (el) el.style.display = on ? '' : 'none';
+	}
+
 	function abortInflight() {
 		if (state && state.inflight) {
 			state.inflight.abort();
@@ -64,12 +71,14 @@
 			clearTimeout(state.slowTimer);
 			clearTimeout(state.stillTimer);
 		}
+		showLoading(false);
 	}
 
 	function fetchPathway(pathway, cb, errCb) {
 		abortInflight();
 		var ctrl = new AbortController();
 		state.inflight = ctrl;
+		showLoading(true);
 
 		var dsl = JSON.parse(JSON.stringify(state.baseDsl));
 		dsl.pathway = pathway;
@@ -78,7 +87,9 @@
 		if (state.sort) dsl.sort = state.sort;
 
 		// §6.7: >10s escalates the skeleton to "Still searching…" + Cancel.
+		// The overlay comes down so the Cancel control is clickable.
 		state.stillTimer = setTimeout(function () {
+			showLoading(false);
 			var content = region.querySelector('.ss-tab-content');
 			if (!content) return;
 			var note = el('div', 'ss-empty-state');
@@ -111,6 +122,7 @@
 			clearTimeout(state.slowTimer);
 			clearTimeout(state.stillTimer);
 			state.inflight = null;
+			showLoading(false);
 			state.data[pathway] = resp;
 			cb(resp);
 		}).catch(function (e) {
@@ -118,6 +130,7 @@
 			clearTimeout(state.slowTimer);
 			clearTimeout(state.stillTimer);
 			state.inflight = null;
+			showLoading(false);
 			errCb(e);
 		});
 	}
