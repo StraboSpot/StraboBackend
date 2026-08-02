@@ -990,6 +990,7 @@ WITH q AS (
   WHERE $where
 )
 SELECT count(*) OVER () AS total_rows,
+       q.image_hit_pkey,
        q.image_id, q.image_subsystem, q.image_userpkey, q.image_type,
        q.annotated, q.title, q.caption, q.filename,
        q.parent_spot_id, q.parent_sample_id,
@@ -1013,6 +1014,7 @@ LIMIT $limit::int OFFSET $offset::int";
         $results = array();
         foreach ($rows as $r) {
             $results[] = array(
+                'image_hit_pkey'    => (int)$r->image_hit_pkey,
                 'image_id'          => $r->image_id,
                 'image_subsystem'   => $r->image_subsystem,
                 'image_type'        => $r->image_type,
