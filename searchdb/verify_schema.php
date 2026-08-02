@@ -71,7 +71,24 @@ foreach ($expectedTables as $t) {
 	$check('table strabosearch.' . $t, in_array($t, $actualTables, true));
 }
 
-$extra = array_diff($actualTables, $expectedTables);
+// Extractor staging tables ({item,image}_hit_staging_<source>) are part of
+// the §5.2.3 swap lifecycle — TRUNCATEd (not dropped) after a swap so
+// --resume-from works. Empty ones are normal; a NON-EMPTY one means an
+// extract was interrupted mid-run.
+$staging = array();
+$extra   = array();
+foreach (array_diff($actualTables, $expectedTables) as $t) {
+	if (preg_match('/^(item|image)_hit_staging_[a-z_]+$/', $t)) {
+		$n = (int)$db->get_var("SELECT count(*) FROM strabosearch.\"$t\"");
+		if ($n > 0) $staging[] = "$t ($n rows)";
+	} else {
+		$extra[] = $t;
+	}
+}
+if ($staging) {
+	$check('staging tables empty (interrupted extract otherwise)', false,
+		'— non-empty: ' . implode(', ', $staging));
+}
 if ($extra) {
 	$check('no unexpected tables in strabosearch', false,
 		'— extras: ' . implode(', ', $extra));
