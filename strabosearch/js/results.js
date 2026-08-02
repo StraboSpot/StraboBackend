@@ -550,12 +550,24 @@
 		};
 	}
 
+	/** Reset to the pre-search quiet prompt (criteria emptied — Jason 08-02:
+	 *  stale results with no criteria left are misleading). */
+	function clear() {
+		abortInflight();
+		state = null;
+		region.innerHTML = '';
+		region.appendChild(el('div', 'ss-quiet-prompt',
+			'Compose a search above to see results.'));
+	}
+
 	window.SSResults = {
 		init: function (elRegion, opts) {
 			region = elRegion;
 			onStateChange = (opts && opts.onStateChange) || function () {};
 		},
 		run: run,
+		clear: clear,
+		hasResults: function () { return state !== null; },
 		abort: abortInflight
 	};
 

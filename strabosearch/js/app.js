@@ -61,6 +61,14 @@
 		btn.classList.toggle('disabled', !ok);
 		btn.style.opacity = ok ? '' : '0.5';
 		btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+
+		// No active criteria left → the displayed results describe a search
+		// that no longer exists. Reset to the quiet prompt + clean URL.
+		if (!ok && window.SSResults.hasResults()) {
+			window.SSResults.clear();
+			lastRunDsl = null;
+			window.history.replaceState(null, '', window.location.pathname);
+		}
 	}
 
 	// ---- boot -------------------------------------------------------------
