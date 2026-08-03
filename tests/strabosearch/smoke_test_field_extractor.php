@@ -26,6 +26,10 @@
  *                F. Spot with HAS_IMAGE relationship → has_images=TRUE.
  *                G. Spot with no extension data → all extension columns
  *                   NULL, all has_* flags FALSE.
+ *                S1/S2/S3. has_strat semantics: in-section spot
+ *                   (strat_section_id) TRUE, section-defining spot
+ *                   (sed.strat_section) TRUE, image-basemap spot FALSE
+ *                   (regression guard — pre-fix definition counted these).
  *                H. searchtext_tsv contains a unique fixture token from
  *                   spot.name (proves U1 keyword indexing wires up).
  *                I. sync_state NOT updated on partial run (--source-userpkey).
@@ -279,6 +283,52 @@ $neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset'})
 	})
 	CREATE (d)-[:HAS_SPOT]->(s)");
 
+// SCENARIO S1 — child spot placed IN a strat section (strat_section_id)
+// → has_strat TRUE
+$neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset'})
+	CREATE (s:Spot {
+		id: '${PREFIX}_spot_S1',
+		userpkey: $TEST_UPK,
+		name: 'spsx Spot Theta',
+		wkt: 'POINT(-117.9 33.6)',
+		modified_timestamp: 1717948800,
+		strat_section_id: 15930225337001
+	})
+	CREATE (d)-[:HAS_SPOT]->(s)");
+
+// SCENARIO S2 — spot DEFINING a strat section (sed.strat_section, the
+// parent spot hosting the column; blob shape verified against prod)
+// → has_strat TRUE
+$sedS2 = json_encode(array('strat_section' => array(
+	'strat_section_id' => 15930225337001,
+	'column_profile'   => 'clastic',
+	'column_y_axis_units' => 'm',
+)));
+$neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset'})
+	CREATE (s:Spot {
+		id: '${PREFIX}_spot_S2',
+		userpkey: $TEST_UPK,
+		name: 'spsx Spot Iota',
+		wkt: 'POINT(-117.8 33.5)',
+		modified_timestamp: 1718035200,
+		sed: '$sedS2'
+	})
+	CREATE (d)-[:HAS_SPOT]->(s)");
+
+// SCENARIO S3 — spot placed on an IMAGE BASEMAP → has_strat FALSE.
+// Regression guard: the pre-fix definition (strat_section_id OR
+// image_basemap) wrongly counted these — 76% of flagged rows on prod.
+$neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset'})
+	CREATE (s:Spot {
+		id: '${PREFIX}_spot_S3',
+		userpkey: $TEST_UPK,
+		name: 'spsx Spot Kappa',
+		wkt: 'POINT(-117.7 33.4)',
+		modified_timestamp: 1718121600,
+		image_basemap: 15930225337999
+	})
+	CREATE (d)-[:HAS_SPOT]->(s)");
+
 // SCENARIO X — decoy user with SAME Project id as $PROJ_PUB.
 // Exercises the User-anchored "ids are not unique" guarantee. When we
 // extract for $TEST_UPK, the decoy's spot must NOT appear in $TEST_UPK's
@@ -310,7 +360,7 @@ $neodb->query("MATCH (d:Dataset {id: '${PREFIX}_dataset', userpkey: $DECOY_UPK})
 	})
 	CREATE (d)-[:HAS_SPOT]->(s)");
 
-echo '  seeded 7 primary spots + 1 decoy under same-id Project/Dataset' . PHP_EOL;
+echo '  seeded 10 primary spots + 1 decoy under same-id Project/Dataset' . PHP_EOL;
 
 // ===========================================================================
 section('2. Run extractor');
@@ -332,7 +382,7 @@ $rowCount = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK AND project_subsystem = 'field'"
 );
-check('7 rows landed for the fixture user', $rowCount === 7, "got $rowCount");
+check('10 rows landed for the fixture user', $rowCount === 10, "got $rowCount");
 
 $pubCount = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
@@ -342,7 +392,7 @@ $privCount = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK AND project_ispublic = FALSE"
 );
-check('public project rows: 6', $pubCount === 6, "got $pubCount");
+check('public project rows: 9', $pubCount === 9, "got $pubCount");
 check('private project rows: 1', $privCount === 1, "got $privCount");
 
 $pname = $db->get_var(
@@ -530,6 +580,30 @@ if ($rowG) {
 }
 
 // ===========================================================================
+section('10b. has_strat semantics — in/defines section TRUE, image basemap FALSE');
+
+$rowS1 = $db->get_row(
+	"SELECT has_strat FROM strabosearch.item_hit
+	 WHERE item_id = '${PREFIX}_spot_S1'"
+);
+check('S1: row found', $rowS1 !== null);
+if ($rowS1) check('S1: strat_section_id spot → has_strat TRUE', $rowS1->has_strat === 't');
+
+$rowS2 = $db->get_row(
+	"SELECT has_strat FROM strabosearch.item_hit
+	 WHERE item_id = '${PREFIX}_spot_S2'"
+);
+check('S2: row found', $rowS2 !== null);
+if ($rowS2) check('S2: sed.strat_section definer → has_strat TRUE', $rowS2->has_strat === 't');
+
+$rowS3 = $db->get_row(
+	"SELECT has_strat FROM strabosearch.item_hit
+	 WHERE item_id = '${PREFIX}_spot_S3'"
+);
+check('S3: row found', $rowS3 !== null);
+if ($rowS3) check('S3: image_basemap spot → has_strat FALSE', $rowS3->has_strat === 'f');
+
+// ===========================================================================
 section('11. searchtext_tsv U1 keyword search');
 
 $hit = (int)$db->get_var(
@@ -545,14 +619,14 @@ $pnameCount = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK AND project_name = 'spsx Public Test Project'"
 );
-check('project_name denormalized correctly', $pnameCount === 6, "got $pnameCount (expect 6 — public-project rows)");
+check('project_name denormalized correctly', $pnameCount === 9, "got $pnameCount (expect 9 — public-project rows)");
 
 $projectKeywordHits = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK
 	   AND searchtext_tsv @@ to_tsquery('english', 'public & test & project')"
 );
-check('U1 keyword search finds project-name terms', $projectKeywordHits === 6, "got $projectKeywordHits");
+check('U1 keyword search finds project-name terms', $projectKeywordHits === 9, "got $projectKeywordHits");
 
 // ===========================================================================
 section('12. sync_state NOT updated on partial run');
@@ -570,7 +644,7 @@ $rowCount2 = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK AND project_subsystem = 'field'"
 );
-check('idempotent re-run: still 7 rows', $rowCount2 === 7, "got $rowCount2");
+check('idempotent re-run: still 10 rows', $rowCount2 === 10, "got $rowCount2");
 
 // Tag survival across re-runs (re-run rebuilds staging from scratch).
 $rowB2 = $db->get_row(
@@ -582,7 +656,7 @@ check('idempotent: spot_B still has igneous:plutonic:granite',
 // ===========================================================================
 section('14. Scenario X — same-id decoy must NOT cross-contaminate');
 
-// $TEST_UPK extraction should produce 7 rows; the decoy's spot
+// $TEST_UPK extraction should produce 10 rows; the decoy's spot
 // (id ${PREFIX}_spot_DECOY, owner $DECOY_UPK) must NOT appear under
 // $TEST_UPK's project_userpkey, AND the decoy's keyword must not
 // land in $TEST_UPK's searchtext_tsv even though the decoy Project,
@@ -607,8 +681,8 @@ $testUserRowCount = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK"
 );
-check('TEST_UPK row count unaffected by decoy (still 7)',
-	$testUserRowCount === 7, "got $testUserRowCount");
+check('TEST_UPK row count unaffected by decoy (still 10)',
+	$testUserRowCount === 10, "got $testUserRowCount");
 
 // ===========================================================================
 section('15. Cleanup');

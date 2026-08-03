@@ -177,7 +177,7 @@ function fieldSpotBatchCypher($upk, $pidLit, $didLit, $cursorClause, $batchSize)
 		       substring(toString(s.notes), 0, 10000) AS notes,
 		       s.wkt AS wkt, s.modified_timestamp AS mt,
 		       s.date AS date_str, s.strat_section_id AS strat_id,
-		       s.image_basemap AS image_basemap,
+		       (s.sed IS NOT NULL AND toString(s.sed) CONTAINS '\"strat_section\"') AS sed_strat,
 		       image_count
 		LIMIT $batchSize
 	";
@@ -214,7 +214,7 @@ function fieldSpotTouchCypher($upk, $sidLit) {
 		       substring(toString(s.notes), 0, 10000) AS notes,
 		       s.wkt AS wkt, s.modified_timestamp AS mt,
 		       s.date AS date_str, s.strat_section_id AS strat_id,
-		       s.image_basemap AS image_basemap,
+		       (s.sed IS NOT NULL AND toString(s.sed) CONTAINS '\"strat_section\"') AS sed_strat,
 		       image_count
 	";
 }
@@ -470,7 +470,10 @@ function fieldSpotTuple($r, $pid, $puk, $pname, $dname, $pispubBool, $tagMap, &$
 	$has_samples        = (bool)$r->get('hsamples');
 	$has_images         = ((int)$r->get('image_count') > 0);
 	$has_microstructure = (bool)$r->get('hmicro');
-	$has_strat          = !empty($r->get('strat_id')) || !empty($r->get('image_basemap'));
+	// strat = the spot is IN a strat section (strat_section_id) or DEFINES
+	// one (sed.strat_section). image_basemap spots are unrelated — the two
+	// placement mechanisms are mutually exclusive on the whole graph.
+	$has_strat          = !empty($r->get('strat_id')) || (bool)$r->get('sed_strat');
 
 	$dateLit = fieldDateLiteral($r, 'mt');
 
