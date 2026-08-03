@@ -538,10 +538,21 @@ try {
 
     // Re-upload — upload-side state should win (last-writer-wins). Roll
     // the description forward via the fixture and POST again.
-    $fixture['project']['modified_timestamp']                          = $modifiedTs + 2000;
-    $fixture['project']['datasets'][0]['modified_timestamp']           = $modifiedTs + 2000;
+    // The re-upload's timestamp must beat the spot's CURRENT stored
+    // modified_timestamp — which the B.5 writeback just bumped to real
+    // now() — or insertSpot's anti-clobber gate (strabospotclass ~:905)
+    // silently skips the update AND the sample-sync hook. The original
+    // "$modifiedTs + 2000" anchored to fixture-build time, so the check
+    // raced suite runtime against a 2s margin: it passed only when the
+    // suite reached B.5 in under 2 seconds, and started losing reliably
+    // once the StraboSearch live-sync hooks added per-upload work. Use a
+    // fresh now()+margin instead — the semantics under test ("a genuinely
+    // newer client upload wins, last-writer-wins per §10.4") are unchanged.
+    $reuploadTs = (int)(microtime(true) * 1000) + 60000;
+    $fixture['project']['modified_timestamp']                          = $reuploadTs;
+    $fixture['project']['datasets'][0]['modified_timestamp']           = $reuploadTs;
     foreach ($fixture['project']['datasets'][0]['spots']['features'] as &$f) {
-        $f['properties']['modified_timestamp'] = $modifiedTs + 2000;
+        $f['properties']['modified_timestamp'] = $reuploadTs;
     }
     unset($f);
     $fixture['project']['datasets'][0]['spots']['features'][1]['properties']['samples'][0]['sample_description']
