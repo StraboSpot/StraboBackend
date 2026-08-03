@@ -1340,7 +1340,10 @@ class StraboSpot
 			foreach($properties->samples as $samp){
 				unset($thissamp);
 				foreach($samp as $key=>$value){
-					if($key=="id"){$value = (int)$value;}
+					// Sample ids may be strings (UUIDs from the samples system);
+					// only cast the all-digit legacy form. An unconditional (int)
+					// turned UUID ids into 0/truncated garbage on the :Sample node.
+					if($key=="id" && ctype_digit((string)$value)){$value = (int)$value;}
 					if($value!=""){
 						if(is_array($value)){$value=json_encode($value);}
 						$thissamp[$key]=$value;
