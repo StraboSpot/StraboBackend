@@ -41,6 +41,13 @@ if($_SESSION['loggedin']=="yes"){
 				$db->prepare_query("UPDATE project SET ispublic = false WHERE strabo_project_id=$1 AND user_pkey = $2", array($projectid, $userpkey));
 		}
 
+		// StraboSearch live-sync (§5.3): flip project_ispublic on the
+		// project's Field index slice (spots + images + hosted sample
+		// fan-out) — ACL-relevant, must not wait for the nightly heal.
+		require_once __DIR__ . '/searchdb/sync/StraboSearchSync.php';
+		StraboSearchSync::touchProjectMeta($db, 'field', $projectid, (int)$userpkey,
+			null, $state === 'public');
+
 	}
 
 }

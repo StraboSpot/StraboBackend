@@ -71,4 +71,16 @@ if (!$exp->restoreVersion($version_pkey)) {
     exit("version not found on server.");
 }
 
+// StraboSearch live-sync (§5.3): the restore replaced the project's whole
+// experiment set (and its samples fan-out) — rebuild the index slice. The
+// project row was recreated with a NEW pkey; re-resolve it by uuid.
+$restored_pkey = $db->get_var_prepared(
+    "SELECT pkey FROM straboexp.project WHERE uuid = $1 AND userpkey = $2",
+    array($uuid, $userpkey)
+);
+if (!empty($restored_pkey)) {
+    require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+    StraboSearchSync::touchExpProject($db, (int)$restored_pkey);
+}
+
 header("Location: /my_experimental_data");
