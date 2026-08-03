@@ -18,10 +18,22 @@
  *             samples[0], spot.id == samples[0].id. reference_id = spot.id.
  *   LEGACY  — full sample object inline in a normal spot's samples[] array.
  *             No isSample flag. reference_id = the holding spot.id.
- *   STUB    — entry in a parent spot's samples[] whose id matches a rich
- *             sample-spot's id. Carries no real data — promoted-then-stub.
- *             Detected via Cypher: ANY Spot{id, userpkey, isSample=1} exists.
+ *   STUB    — entry in a parent spot's samples[] left behind when a sample
+ *             was promoted to a rich sample-spot. Carries no real data.
+ *             Detected two ways (either sufficient; see
+ *             _field_sample_sync_is_stub_entry): by SHAPE (no data beyond
+ *             the id — works for any id format, including string/UUID
+ *             sample ids whose rich spot has a different numeric spot id)
+ *             and by GRAPH PROBE (a live Spot{id, userpkey, isSample=1}
+ *             with this id — covers the prod dual-existence case where the
+ *             parent kept a FULL legacy copy of a promoted sample).
  *             SKIPPED on upload to avoid duplicating the rich row.
+ *
+ * Sample-id format: ids are TEXT end-to-end. Legacy Field ids are numeric
+ * timestamp strings; ids minted by the samples system are UUIDs. Nothing
+ * in this file may assume numeric — the 2026-08-03 string-id hardening
+ * (fix/field-string-sample-ids) removed the last numeric-only stub probes.
+ * Spot ids, by contrast, remain integers throughout /db.
  *
  * Project/dataset context flow:
  *   - Bulk controllers (ProjectDatasetsSpotsController, DatasetSpotsController,
@@ -48,6 +60,51 @@
 require_once __DIR__ . '/../../samplesdb/services/StraboSamplesService.php';
 
 if (!function_exists('field_sample_sync_spot')) {
+
+/**
+ * Decide whether a legacy samples[] entry is a parent-stub (or stale full
+ * copy) of a rich sample-spot, and must therefore be skipped by both the
+ * upload mirror and the remove mirror.
+ *
+ * Signal 1 — SHAPE: the client's stub form is {id} only. An entry with no
+ * non-empty value on any key besides id is a stub regardless of id format.
+ * This is the only signal that works when the sample id is a string/UUID
+ * decoupled from the (numeric) rich sample-spot id, and it also stops
+ * data-less entries from materializing empty spine rows.
+ *
+ * Signal 2 — GRAPH PROBE: a live rich sample-spot with this id exists.
+ * Needed for the prod dual-existence case (v5 audit): a promoted sample
+ * whose parent spot kept a FULL legacy copy. Numeric ids probe as ints;
+ * string ids probe quoted, gated by a strict charset check (no quotes or
+ * backslashes can pass, so inlining is Cypher-safe).
+ */
+function _field_sample_sync_is_stub_entry($neodb, $entry, $sampleId, $userpkey) {
+    $hasData = false;
+    foreach ((array)$entry as $k => $v) {
+        if ($k === 'id') continue;
+        if (is_array($v) || is_object($v)) {
+            if (count((array)$v) > 0) { $hasData = true; break; }
+            continue;
+        }
+        if ($v !== null && $v !== '') { $hasData = true; break; }
+    }
+    if (!$hasData) return true;
+
+    $userpkey = (int)$userpkey;
+    if (ctype_digit((string)$sampleId)) {
+        $probe = $neodb->get_var(
+            "MATCH (s:Spot {id:" . (int)$sampleId . ", userpkey:$userpkey, isSample:1}) RETURN s.id LIMIT 1"
+        );
+        return !empty($probe);
+    }
+    if (preg_match('/^[A-Za-z0-9][A-Za-z0-9_.\-]{0,63}$/', (string)$sampleId)) {
+        $probe = $neodb->get_var(
+            "MATCH (s:Spot {id:'" . $sampleId . "', userpkey:$userpkey, isSample:1}) RETURN s.id LIMIT 1"
+        );
+        return !empty($probe);
+    }
+    return false;
+}
 
 /**
  * Walk a Field Spot's samples array (rich + legacy) and mirror each real
@@ -142,18 +199,11 @@ function field_sample_sync_spot($db, $neodb, $properties, $spotId, $userpkey, $p
         $sampleId = isset($obj->id) ? (string)$obj->id : '';
         if ($sampleId === '') continue;
 
-        // Stub check: another Spot owned by the same user with id == $sampleId
-        // and isSample = 1 means this entry is a parent-stub left behind by
-        // a rich sample-spot. Skip it — the rich row already exists (or
-        // will exist when the rich spot uploads).
-        $sampleIdInt = ctype_digit($sampleId) ? (int)$sampleId : 0;
-        if ($sampleIdInt > 0) {
-            $stubProbe = $neodb->get_var(
-                "MATCH (s:Spot {id:$sampleIdInt, userpkey:$userpkey, isSample:1}) RETURN s.id LIMIT 1"
-            );
-            if (!empty($stubProbe)) {
-                continue;
-            }
+        // Stub check (shape + graph probe, any id format) — skip parent-stubs
+        // and stale full copies of promoted samples; the rich row is (or will
+        // be) the authoritative one.
+        if (_field_sample_sync_is_stub_entry($neodb, $obj, $sampleId, $userpkey)) {
+            continue;
         }
 
         _field_sample_sync_emit_one(
@@ -227,13 +277,10 @@ function field_sample_sync_remove_spot($db, $neodb, $spotId, $userpkey) {
         $entry = (array)$entry;
         $sampleId = isset($entry['id']) ? (string)$entry['id'] : '';
         if ($sampleId === '') continue;
-        $sampleIdInt = ctype_digit($sampleId) ? (int)$sampleId : 0;
-        if ($sampleIdInt > 0) {
-            $stub = $neodb->get_var(
-                "MATCH (s:Spot {id:$sampleIdInt, userpkey:$userpkey, isSample:1}) RETURN s.id LIMIT 1"
-            );
-            if (!empty($stub)) continue;
-        }
+        // Same stub semantics as the upload mirror: a stub-shaped entry (or
+        // one whose rich sample-spot is still alive) must not tear down the
+        // rich sample's spine row when the parent spot is deleted.
+        if (_field_sample_sync_is_stub_entry($neodb, $entry, $sampleId, $userpkey)) continue;
         $svc->removeSubsystemSample('field', $sampleId, $userpkey);
         $n++;
     }
