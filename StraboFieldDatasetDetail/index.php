@@ -16,6 +16,15 @@
 chdir(dirname(__FILE__) . '/..');
 include("includes/mheader.php");
 
+// mtime cache-buster: statics ship no Cache-Control headers, so browsers
+// heuristic-cache CSS/JS and a plain reload serves stale assets after a
+// deploy. ?v=<mtime> makes every edit a new URL (same pattern as
+// /strabosearch/).
+function dsd_asset($path) {
+	$mtime = @filemtime(dirname(__FILE__) . '/../' . ltrim($path, '/'));
+	return htmlspecialchars($path . ($mtime ? '?v=' . $mtime : ''));
+}
+
 $dataset_id = isset($_GET['dataset_id']) ? (int)$_GET['dataset_id'] : 0;
 
 $error_message = null;
@@ -69,7 +78,7 @@ endif;
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.4.0/ol.css">
 <link rel="stylesheet" href="https://unpkg.com/ol-layerswitcher@4.1.2/dist/ol-layerswitcher.css">
-<link rel="stylesheet" href="/StraboFieldDatasetDetail/css/detail.css">
+<link rel="stylesheet" href="<?= dsd_asset('/StraboFieldDatasetDetail/css/detail.css') ?>">
 
 <div id="dataset-detail-root">
 	<div id="dataset-detail-header">
@@ -122,14 +131,14 @@ window.DATASET_DETAIL_CONFIG = {
 </script>
 <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>
 <script src="https://unpkg.com/ol-layerswitcher@4.1.2/dist/ol-layerswitcher.js"></script>
-<script src="/StraboFieldDatasetDetail/js/basemaps.js"></script>
-<script src="/StraboFieldDatasetDetail/js/symbology.js"></script>
-<script src="/StraboFieldDatasetDetail/js/sidebar.js"></script>
-<script src="/StraboFieldDatasetDetail/js/spots.js"></script>
-<script src="/StraboFieldDatasetDetail/js/image_basemap.js"></script>
-<script src="/StraboFieldDatasetDetail/js/strat_section.js"></script>
-<script src="/StraboFieldDatasetDetail/js/downloads.js"></script>
-<script src="/StraboFieldDatasetDetail/js/detail.js"></script>
+<script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/basemaps.js') ?>"></script>
+<script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/symbology.js') ?>"></script>
+<script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/sidebar.js') ?>"></script>
+<script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/spots.js') ?>"></script>
+<script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/image_basemap.js') ?>"></script>
+<script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/strat_section.js') ?>"></script>
+<script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/downloads.js') ?>"></script>
+<script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/detail.js') ?>"></script>
 
 <?php
 include("includes/mfooter.php");

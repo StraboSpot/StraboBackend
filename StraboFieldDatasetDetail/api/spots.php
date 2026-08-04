@@ -4,6 +4,9 @@
  * Description: Public JSON endpoint for the dataset landing page. Returns a
  *              GeoJSON FeatureCollection of all spots in a single dataset,
  *              regardless of project public/private status. No auth required.
+ *              Each feature carries properties.tags — the project-level
+ *              tags (incl. geologic units) joined to that spot, membership
+ *              arrays stripped.
  *
  *              Response shape:
  *                {
@@ -44,6 +47,10 @@ if (!$dataset_id) {
 
 // Resolve dataset → project → owner. Used as the $userpkey for StraboSpot
 // helpers (which otherwise default to 99999 for anonymous).
+// json_tags rides along because tags (incl. geologic units / rock type)
+// live ONLY in this project-level blob — Spot nodes carry no tag data and
+// the IS_TAGGED edges are dead (writer disabled 2025-07-08). The 1MB
+// substring bound matches the search extractors (worst prod blob ~200KB).
 $meta_rows = $neodb->get_results("
 	MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)
 	WHERE d.id = $dataset_id
@@ -51,7 +58,8 @@ $meta_rows = $neodb->get_results("
 	       p.id AS project_id,
 	       coalesce(p.desc_project_name, p.name, '') AS project_name,
 	       coalesce(d.name, '') AS dataset_name,
-	       p.public AS is_public
+	       p.public AS is_public,
+	       substring(toString(p.json_tags), 0, 1000000) AS json_tags
 	LIMIT 1
 ");
 
@@ -68,6 +76,8 @@ $project_name = (string)$meta_row->value('project_name');
 $dataset_name = (string)$meta_row->value('dataset_name');
 $public_val  = $meta_row->value('is_public');
 $is_public   = ($public_val === true || $public_val === 1 || $public_val === '1' || $public_val === 'true');
+
+$tag_map = spotTagMapFromJsonTags($meta_row->value('json_tags'));
 
 $strabo = new StraboSpot($neodb, $owner_pkey, $db);
 $strabo->setuuid(new UUID());
@@ -118,6 +128,11 @@ if ($spot_rows) {
 
 		$feature['properties']['datasetid'] = $owner_pkey . '-' . $dataset_id;
 
+		$spot_key = isset($spotvals->id) ? (string)$spotvals->id : '';
+		if ($spot_key !== '' && isset($tag_map[$spot_key])) {
+			$feature['properties']['tags'] = $tag_map[$spot_key];
+		}
+
 		// Only geographic spots contribute to the map envelope. Spots that live
 		// on an image basemap or strat section are in pixel space.
 		if (empty($spotvals->image_basemap) && empty($spotvals->strat_section_id)) {
@@ -126,6 +141,44 @@ if ($spot_rows) {
 
 		$features[] = $feature;
 	}
+}
+
+/**
+ * Build a spot_id → [tag objects] map from the project's json_tags blob.
+ * Membership is each tag's `spots` id array plus the keys of its
+ * `features` map (sub-spot tagging — the tag still belongs on that spot's
+ * card). The bulky membership fields are stripped from the tag objects
+ * before they ride each feature's properties. Tolerates null / empty /
+ * malformed input.
+ */
+function spotTagMapFromJsonTags($raw) {
+	if ($raw === null || $raw === '' || $raw === false) return array();
+	$tags = json_decode((string)$raw);
+	if (!is_array($tags)) return array();
+	$map = array();
+	foreach ($tags as $t) {
+		if (!is_object($t)) continue;
+		$stripped = clone $t;
+		unset($stripped->spots);
+		unset($stripped->features);
+		$spot_ids = array();
+		if (isset($t->spots) && is_array($t->spots)) {
+			foreach ($t->spots as $sid) {
+				if ($sid === null || $sid === '') continue;
+				$spot_ids[(string)$sid] = true;
+			}
+		}
+		if (isset($t->features) && is_object($t->features)) {
+			foreach ($t->features as $sid => $feature_ids) {
+				if ((string)$sid === '') continue;
+				$spot_ids[(string)$sid] = true;
+			}
+		}
+		foreach (array_keys($spot_ids) as $sid) {
+			$map[$sid][] = $stripped;
+		}
+	}
+	return $map;
 }
 
 function extendEnvelope($geometry, &$west, &$south, &$east, &$north) {

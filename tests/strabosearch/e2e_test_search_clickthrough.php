@@ -33,6 +33,7 @@
 chdir('/srv/app/www');
 require_once '/srv/app/www/includes/config.inc.php';
 require_once '/srv/app/www/db.php';
+require_once '/srv/app/www/neodb.php';
 
 $UPK  = 94570;
 $PFX  = 'spse2e';
@@ -120,6 +121,12 @@ function landingUrl($r) {
 // ---------------------------------------------------------------------------
 section('0. Fixtures');
 
+function e2e_neo_cleanup($neodb, $UPK) {
+	// All Neo4j fixture nodes carry the fixture userpkey (full scan, same
+	// cost class as the extractor suite's id-regex cleanup — dev-only).
+	$neodb->query("MATCH (n) WHERE n.userpkey = $UPK DETACH DELETE n");
+}
+
 function e2e_cleanup($db, $UPK, $PFX) {
 	$db->prepare_query("DELETE FROM strabosearch.item_hit  WHERE project_id LIKE $1", array($PFX . '_%'));
 	$db->prepare_query("DELETE FROM strabosearch.image_hit WHERE project_id LIKE $1", array($PFX . '_%'));
@@ -132,6 +139,7 @@ function e2e_cleanup($db, $UPK, $PFX) {
 	$db->prepare_query("DELETE FROM users WHERE pkey = $1", array($UPK));
 }
 e2e_cleanup($db, $UPK, $PFX);
+e2e_neo_cleanup($neodb, $UPK);
 
 $db->prepare_query(
 	"INSERT INTO users (pkey, firstname, lastname, email, password, hash, active, deleted)
@@ -216,6 +224,46 @@ foreach (array(
 		 'spse2e exp {$e['uuid']}', {$e['pub']}, to_tsvector('english', '{$e['key']}'), now())");
 }
 
+// -- FIELD detail page (Neo4j): dataset + spots + project-level json_tags.
+//    StraboFieldDatasetDetail/api/spots.php reads Neo4j (not the PG mirror)
+//    and (int)-casts dataset_id, so this fixture needs numeric ids.
+$NEO_DS     = 94570001;
+$NEO_SPOT_A = 94570002;
+$NEO_SPOT_B = 94570003;
+$NEO_SPOT_C = 94570004;
+
+$neodb->query("CREATE (p:Project {id: '{$PFX}_np', userpkey: $UPK,
+		desc_project_name: 'spse2e neo project'})
+	CREATE (d:Dataset {id: $NEO_DS, userpkey: $UPK, name: 'spse2e Neo DS'})
+	CREATE (p)-[:HAS_DATASET]->(d)
+	CREATE (sa:Spot {id: $NEO_SPOT_A, userpkey: $UPK, name: 'spse2e neo spot A',
+		wkt: 'POINT(-97.66 38.58)', origwkt: 'POINT(-97.66 38.58)',
+		gtype: 'Point', date: '2024-09-13T20:09:06.000Z', modified_timestamp: 1726258146})
+	CREATE (d)-[:HAS_SPOT]->(sa)
+	CREATE (sb:Spot {id: $NEO_SPOT_B, userpkey: $UPK, name: 'spse2e neo spot B',
+		wkt: 'POINT(-97.67 38.59)', origwkt: 'POINT(-97.67 38.59)',
+		gtype: 'Point', date: '2024-09-13T20:10:06.000Z', modified_timestamp: 1726258206})
+	CREATE (d)-[:HAS_SPOT]->(sb)
+	CREATE (sc:Spot {id: $NEO_SPOT_C, userpkey: $UPK, name: 'spse2e neo spot C',
+		wkt: 'POINT(-97.68 38.60)', origwkt: 'POINT(-97.68 38.60)',
+		gtype: 'Point', date: '2024-09-13T20:11:06.000Z', modified_timestamp: 1726258266})
+	CREATE (d)-[:HAS_SPOT]->(sc)");
+
+// Tag membership: geologic_unit on spot A (spots[]), a plain concept tag on
+// A + B (spots[]), and a features-map-only tag on spot B (sub-spot tagging
+// still surfaces on the spot's card). Spot C stays untagged.
+$jtNeo = json_encode(array(
+	array('id' => 94570090, 'type' => 'geologic_unit', 'name' => 'spse2e Alkali Unit',
+	      'unit_label_abbreviation' => 'Kag', 'rock_type' => 'igneous',
+	      'igneous_rock_class' => 'plutonic', 'plutonic_rock_types' => 'alkali_granite',
+	      'spots' => array($NEO_SPOT_A)),
+	array('id' => 94570091, 'type' => 'concept', 'name' => 'spse2e Concept Tag',
+	      'spots' => array($NEO_SPOT_A, $NEO_SPOT_B)),
+	array('id' => 94570092, 'type' => 'documentation', 'name' => 'spse2e Feature Tag',
+	      'features' => array((string)$NEO_SPOT_B => array(94570099))),
+));
+$neodb->query("MATCH (p:Project {id: '{$PFX}_np'}) SET p.json_tags = '$jtNeo'");
+
 $sid = forgeSession($UPK);
 check('fixtures seeded', true);
 
@@ -247,6 +295,50 @@ list($st, $h, $body) = http_raw('GET', $BASE . '/fpl/' . $PFX . '_fp_priv', $sid
 check('owner /fpl/ private (1 dataset) → 302 into StraboFieldDatasetDetail', $st === 302
 	&& strpos(locationHeader($h), '/StraboFieldDatasetDetail/?dataset_id=' . $PFX . '_fp_priv_ds') !== false,
 	"st=$st " . locationHeader($h));
+
+// ---------------------------------------------------------------------------
+section('1b. FIELD — dataset detail API joins project json_tags to spots');
+
+list($st, $h, $raw) = http_raw('GET',
+	$BASE . '/StraboFieldDatasetDetail/api/spots.php?dataset_id=' . $NEO_DS, null);
+$fc = json_decode($raw, true);
+check('anon detail API 200 + parseable FeatureCollection', $st === 200
+	&& is_array($fc) && isset($fc['features']), "st=$st");
+check('all 3 fixture spots returned', $fc && count($fc['features']) === 3,
+	'got ' . ($fc ? count($fc['features']) : 0));
+
+$byId = array();
+if ($fc) foreach ($fc['features'] as $f) {
+	if (isset($f['properties']['id'])) $byId[(string)$f['properties']['id']] = $f;
+}
+
+$fa = isset($byId[(string)$NEO_SPOT_A]) ? $byId[(string)$NEO_SPOT_A] : null;
+$fb = isset($byId[(string)$NEO_SPOT_B]) ? $byId[(string)$NEO_SPOT_B] : null;
+$fcSpot = isset($byId[(string)$NEO_SPOT_C]) ? $byId[(string)$NEO_SPOT_C] : null;
+
+$tagsA = ($fa && isset($fa['properties']['tags'])) ? $fa['properties']['tags'] : array();
+$tagNamesA = array_map(function ($t) { return isset($t['name']) ? $t['name'] : ''; }, $tagsA);
+check('spot A carries both spot-level tags', count($tagsA) === 2
+	&& in_array('spse2e Alkali Unit', $tagNamesA) && in_array('spse2e Concept Tag', $tagNamesA),
+	json_encode($tagNamesA));
+
+$gu = null;
+foreach ($tagsA as $t) if (isset($t['type']) && $t['type'] === 'geologic_unit') $gu = $t;
+check('geologic_unit tag keeps its rock-type fields (F7 source)', $gu !== null
+	&& $gu['rock_type'] === 'igneous' && $gu['igneous_rock_class'] === 'plutonic'
+	&& $gu['plutonic_rock_types'] === 'alkali_granite'
+	&& $gu['unit_label_abbreviation'] === 'Kag', json_encode($gu));
+check('membership arrays stripped from payload tags', $gu !== null
+	&& !isset($gu['spots']) && !isset($gu['features']));
+
+$tagsB = ($fb && isset($fb['properties']['tags'])) ? $fb['properties']['tags'] : array();
+$tagNamesB = array_map(function ($t) { return isset($t['name']) ? $t['name'] : ''; }, $tagsB);
+check('spot B gets spots[] tag AND features-map tag', count($tagsB) === 2
+	&& in_array('spse2e Concept Tag', $tagNamesB) && in_array('spse2e Feature Tag', $tagNamesB),
+	json_encode($tagNamesB));
+
+check('untagged spot C has no tags key', $fcSpot !== null
+	&& !isset($fcSpot['properties']['tags']));
 
 // ---------------------------------------------------------------------------
 section('2. MICRO — search → result → /mpl/ redirect');
@@ -320,7 +412,10 @@ if ($ir !== null) {
 section('6. Teardown + zero residue');
 
 e2e_cleanup($db, $UPK, $PFX);
+e2e_neo_cleanup($neodb, $UPK);
 foreach ($sessionFiles as $f) @unlink($f);
+$neoResidue = $neodb->get_results("MATCH (n) WHERE n.userpkey = $UPK RETURN count(n) AS c");
+check('zero Neo4j residue', $neoResidue && (int)$neoResidue[0]->value('c') === 0);
 check('zero item_hit residue',
 	(int)$db->get_var("SELECT count(*) FROM strabosearch.item_hit WHERE project_id LIKE '{$PFX}_%'") === 0);
 check('zero image_hit residue',
