@@ -6,6 +6,8 @@
  * Section source fields (confirmed against legacy tab_builders.js):
  *   Spot Info:        spot.properties (id, name, geometry, date/time)
  *   Notes:            spot.properties.notes
+ *   Geologic Units:   spot.properties.tags[] (type === 'geologic_unit')
+ *   Tags:             spot.properties.tags[] (every other type)
  *   Orientations:     spot.properties.orientation_data[]
  *   Samples:          spot.properties.samples[]
  *   Images:           spot.properties.images[]
@@ -120,6 +122,9 @@
 
 		if (props.notes) sections.push({ title: 'Notes', html: '<p class="ds-notes">' + escapeHtml(String(props.notes)) + '</p>' });
 
+		var units = buildGeologicUnits(props.tags);
+		if (units) sections.push({ title: 'Geologic Units', html: units });
+
 		var orient = buildOrientations(props.orientation_data);
 		if (orient) sections.push({ title: 'Orientations', html: orient });
 
@@ -153,6 +158,9 @@
 		var sed = buildSed(props.sed);
 		if (sed) sections.push({ title: 'Sedimentology', html: sed });
 
+		var tags = buildTags(props.tags);
+		if (tags) sections.push({ title: 'Tags', html: tags });
+
 		var rest = buildGenericRest(props);
 		if (rest) sections.push({ title: 'Other', html: rest });
 
@@ -177,6 +185,53 @@
 		}
 		if (props.altitude != null && props.altitude !== '') rows.push(kv('Altitude (m)', props.altitude));
 		return rows.length ? renderKVList(rows) : null;
+	}
+
+	/* Tags arrive as project-level tag objects the API joined to this spot
+	 * (membership arrays already stripped server-side). Geologic-unit tags
+	 * get their own section — they carry the rock-type classification —
+	 * every other type lands in Tags. */
+
+	function buildGeologicUnits(tags) {
+		if (!Array.isArray(tags)) return null;
+		var units = tags.filter(function (t) { return t && t.type === 'geologic_unit'; });
+		return renderTagItems(units, 'Geologic unit', { type: 1 });
+	}
+
+	function buildTags(tags) {
+		if (!Array.isArray(tags)) return null;
+		var rest = tags.filter(function (t) { return t && t.type !== 'geologic_unit'; });
+		return renderTagItems(rest, 'Tag', {});
+	}
+
+	function renderTagItems(tags, fallbackLabel, skipKeys) {
+		if (!tags.length) return null;
+		var html = '';
+		tags.forEach(function (t, idx) {
+			var title = (t.name != null && t.name !== '') ? String(t.name) : (fallbackLabel + ' ' + (idx + 1));
+			html += '<div class="ds-item">';
+			html += '  <div class="ds-item-title">' + escapeHtml(title) + '</div>';
+			html += renderKVList(tagRows(t, skipKeys));
+			html += '</div>';
+		});
+		return html;
+	}
+
+	function tagRows(t, skipKeys) {
+		var rows = [];
+		// Promote the unit label the way the legacy Rock Unit tab did.
+		if (t.unit_label_abbreviation != null && t.unit_label_abbreviation !== '') {
+			rows.push(kv('Unit Label', formatValue(t.unit_label_abbreviation)));
+		}
+		Object.keys(t).forEach(function (k) {
+			if (k === 'id' || k === 'name' || k === 'unit_label_abbreviation') return;
+			if (skipKeys[k]) return;
+			var v = t[k];
+			if (v == null || v === '') return;
+			if (typeof v === 'object') return;
+			rows.push(kv(labelFor(k), formatValue(v)));
+		});
+		return rows;
 	}
 
 	function buildOrientations(orientation_data) {
