@@ -228,7 +228,12 @@
 			if (skipKeys[k]) return;
 			var v = t[k];
 			if (v == null || v === '') return;
-			if (typeof v === 'object') return;
+			// Geologic-unit tags carry scalar arrays (eon, era, epoch, age…).
+			if (Array.isArray(v)) {
+				if (!v.length || typeof v[0] === 'object') return;
+			} else if (typeof v === 'object') {
+				return;
+			}
 			rows.push(kv(labelFor(k), formatValue(v)));
 		});
 		return rows;
