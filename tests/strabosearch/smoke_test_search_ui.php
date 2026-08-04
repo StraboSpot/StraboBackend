@@ -264,6 +264,14 @@ check('logged-in page 200', $st === 200, "got $st");
 check('logged-in: Save current present', strpos($body, 'ssSaveBtn') !== false);
 check('logged-in: My searches present', strpos($body, 'ssMySearchesBtn') !== false);
 
+// The builder is rendered client-side, so the Start over button (08-04)
+// can't appear in served HTML — assert its wiring in the served JS asset.
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/builder.js', null);
+check('builder.js asset 200', $st === 200, "got $st");
+check('builder.js: Start over button wired', strpos($body, "'Start over'") !== false
+	&& strpos($body, 'ss-start-over') !== false);
+check('builder.js: Start over pristine gating', strpos($body, "'Nothing to clear'") !== false);
+
 // ---------------------------------------------------------------------------
 section('2. Proxy search — anonymous vs session identity');
 
