@@ -4481,7 +4481,14 @@ public function getSpotName($id){
 			//********************************************************************
 			$projectid = $this->neodb->createNode($newprojectjson,"Project");
 			$userid = $this->neodb->get_var("match (a:User) where a.userpkey=".$ownerPkey." return id(a)");
-			//$this->neodb->addRelationship($userid, $projectid, "HAS_PROJECT","User","Project");
+			// (u)-[:HAS_PROJECT]->(p) is the authoritative ownership edge —
+			// StraboSearch extraction and every anchored walk require it;
+			// without it the project is invisible to search. (Disabled
+			// 2025-12-06 during collab work; projects created since lack
+			// the edge — heal_ownerless_projects.php repairs them.)
+			if($userid !== null && $userid !== ""){
+				$this->neodb->addRelationship($userid, $projectid, "HAS_PROJECT","User","Project");
+			}
 
 		}elseif($dbaction=="update"){
 
@@ -4503,6 +4510,13 @@ public function getSpotName($id){
 			//$this->neodb->query("match (a:Project)-[rt]-(t:Tag) where id(a)=$projectid and a.userpkey=$this->userpkey delete rt,t;");
 
 			$this->neodb->updateNode($projectid,$newprojectjson,"Project");
+
+			// Self-heal the ownership edge (CREATE UNIQUE = no-op when
+			// present): projects created 2025-12→2026-08 lack it.
+			$userid = $this->neodb->get_var("match (a:User) where a.userpkey=".$ownerPkey." return id(a)");
+			if($userid !== null && $userid !== ""){
+				$this->neodb->addRelationship($userid, $projectid, "HAS_PROJECT","User","Project");
+			}
 
 			$totalprojecttime = microtime(true)-$projectstarttime;
 			//$this->logToFile("Update project took: ".$totalprojecttime." secs","Project Time");

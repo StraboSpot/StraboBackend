@@ -1097,6 +1097,37 @@ if (in_array('sanity', $ONLY, true)) {
 		}
 	}
 
+	// Ownerless Field projects: no (:User)-[:HAS_PROJECT]-> edge, so the
+	// extractor walk can never reach them — their content silently stays
+	// out of the index no matter how often we re-extract (insertProject
+	// regression 2025-12-06 → 2026-08-04). Counts only HEALABLE ones
+	// (owner :User exists, no owned same-id sibling); dup shadows and
+	// userless orphans belong to the parked duplicate-node cleanup.
+	// Repair: searchdb/heal_ownerless_projects.php --apply + field
+	// re-extract (edge creation is graph surgery — not a Sync-layer touch,
+	// so this stays detect-only like the dangling-ref checks above).
+	// (toInt/toString: userpkey and id are Long or String depending on
+	// write-path era; typed equality would silently mismatch, and mixed
+	// types must never reach a Cypher ORDER BY on 3.0.)
+	$scopeCy = ($SCOPE_UPK !== null) ? " AND toInt(p.userpkey) = $SCOPE_UPK" : '';
+	$rows = neoRows($neodb,
+		"MATCH (p:Project) " .
+		"WHERE NOT (:User)-[:HAS_PROJECT]->(p) AND exists(p.userpkey)$scopeCy " .
+		"OPTIONAL MATCH (u:User) WHERE u.userpkey = toInt(p.userpkey) " .
+		"OPTIONAL MATCH (q:Project) " .
+		"  WHERE toString(q.id) = toString(p.id) AND id(q) <> id(p) " .
+		"    AND toInt(q.userpkey) = toInt(p.userpkey) " .
+		"    AND (:User)-[:HAS_PROJECT]->(q) " .
+		"WITH p, count(DISTINCT u) AS nu, count(DISTINCT q) AS nq " .
+		"WHERE nu > 0 AND nq = 0 RETURN count(p) AS n", $failed);
+	if ($rows !== null && count($rows)) {
+		$n = (int)$rows[0]->get('n');
+		if ($n > 0) {
+			detailLine($printed, "ownerless Field projects (healable, unsearchable): $n — run heal_ownerless_projects.php");
+			$checkDrift += $n;
+		}
+	}
+
 	line("  sanity drift rows: $checkDrift");
 	$UNHEALED += $checkDrift;   // detect-only by design
 	$DRIFT += $checkDrift;
