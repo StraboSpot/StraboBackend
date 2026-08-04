@@ -74,6 +74,19 @@
 			});
 		});
 
+		// Open full-size images in a featherlight lightbox instead of a new
+		// tab; the href/new-tab markup stays as the fallback if featherlight
+		// is ever unavailable.
+		Array.prototype.forEach.call(root.querySelectorAll('.ds-image-link'), function (link) {
+			link.addEventListener('click', function (e) {
+				var $ = global.jQuery;
+				if ($ && $.featherlight) {
+					e.preventDefault();
+					$.featherlight(link.getAttribute('href'), { type: 'image' });
+				}
+			});
+		});
+
 		Array.prototype.forEach.call(root.querySelectorAll('.ds-image-action'), function (btn) {
 			btn.addEventListener('click', function () {
 				var id = btn.getAttribute('data-basemap-id');
@@ -308,7 +321,7 @@
 			var title = img.title || img.caption || '';
 			var isBasemap = !!basemapIds[String(id)];
 			html += '<figure class="ds-image' + (isBasemap ? ' ds-image-basemap' : '') + '">';
-			html += '  <a href="' + src + '" target="_blank" rel="noopener">';
+			html += '  <a class="ds-image-link" href="' + src + '" target="_blank" rel="noopener">';
 			html += '    <img loading="lazy" src="' + src + '" alt="' + escapeHtml(title) + '">';
 			html += '  </a>';
 			if (title) html += '<figcaption>' + escapeHtml(title) + '</figcaption>';

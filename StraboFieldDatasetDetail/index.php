@@ -78,6 +78,8 @@ endif;
 
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/ol@10.4.0/ol.css">
 <link rel="stylesheet" href="https://unpkg.com/ol-layerswitcher@4.1.2/dist/ol-layerswitcher.css">
+<!-- featherlight.js ships globally via mheader.php, but its CSS does not -->
+<link rel="stylesheet" href="/assets/js/featherlight/featherlight.css">
 <link rel="stylesheet" href="<?= dsd_asset('/StraboFieldDatasetDetail/css/detail.css') ?>">
 
 <div id="dataset-detail-root">

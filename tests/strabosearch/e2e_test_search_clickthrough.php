@@ -341,6 +341,26 @@ check('untagged spot C has no tags key', $fcSpot !== null
 	&& !isset($fcSpot['properties']['tags']));
 
 // ---------------------------------------------------------------------------
+section('1c. FIELD — detail page sidebar images open in a lightbox');
+// HTTP-only suite, can't run JS — assert the served page + asset carry the
+// lightbox wiring (same pattern as smoke_test_search_ui asset checks).
+
+list($st, $h, $body) = http_raw('GET',
+	$BASE . '/StraboFieldDatasetDetail/?dataset_id=' . $NEO_DS, null);
+check('detail page 200 for fixture dataset', $st === 200, "got $st");
+check('detail page ships featherlight CSS',
+	strpos($body, '/assets/js/featherlight/featherlight.css') !== false);
+
+list($st, $h, $body) = http_raw('GET',
+	$BASE . '/StraboFieldDatasetDetail/js/sidebar.js', null);
+check('served sidebar.js marks image links for lightbox handling',
+	strpos($body, 'ds-image-link') !== false
+	&& strpos($body, "querySelectorAll('.ds-image-link')") !== false);
+check('served sidebar.js opens featherlight with new-tab fallback',
+	strpos($body, "\$.featherlight(link.getAttribute('href'), { type: 'image' })") !== false
+	&& strpos($body, 'e.preventDefault()') !== false);
+
+// ---------------------------------------------------------------------------
 section('2. MICRO — search → result → /mpl/ redirect');
 
 list($st, $j, $r) = findProject('UNIQE2E_mpub');
