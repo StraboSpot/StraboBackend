@@ -111,8 +111,10 @@ foreach (($stale ? $stale : array()) as $r) {
 	@unlink($d . '/images/' . $PFX . '_micro_img.jpg');
 	@unlink($d . '/images/' . $PFX . '_micro_img2.jpg');
 	@unlink($d . '/compositeThumbnails/' . $PFX . '_micro_img2');
+	@unlink($d . '/webImages/' . $PFX . '_micro_img2');
 	@rmdir($d . '/images');
 	@rmdir($d . '/compositeThumbnails');
+	@rmdir($d . '/webImages');
 	@rmdir($d);
 }
 $db->prepare_query("DELETE FROM micro_projectmetadata WHERE strabo_id LIKE $1", array($PFX . '_%'));
@@ -195,21 +197,34 @@ $microImgPkey = (int)$db->get_var_prepared(
 	array($PFX . '_micro_img'));
 check('micro image_hit fixture inserted', $microImgPkey > 0);
 
-// second micro image: GREEN compositeThumbnails/<id> + 0-BYTE images/<id>.jpg.
-// Proves the candidate chain prefers the prebuilt composite thumb and skips
-// empty legacy composites (regression: images/<id>.jpg-only resolution served
-// black label-only canvases / not-found for tiles+webImages-tier projects).
+// second micro image: GREEN 250px compositeThumbnails/<id> + BLUE 800px
+// webImages/<id> + 0-BYTE images/<id>.jpg. Proves the SIZE-AWARE chain:
+// small requests serve the prebuilt composite thumb (green), large requests
+// serve the full webImages source (blue — we never upscale, so the lightbox
+// must not get a 250px thumb), and empty legacy composites are skipped
+// (regression: images/<id>.jpg-only resolution served black label-only
+// canvases / not-found for tiles+webImages-tier projects).
 $MICRO_COMP_DIR = dirname($MICRO_DIR) . '/compositeThumbnails';
 $MICRO_COMP_FILE = $MICRO_COMP_DIR . '/' . $PFX . '_micro_img2';
+$MICRO_WEB_DIR = dirname($MICRO_DIR) . '/webImages';
+$MICRO_WEB_FILE = $MICRO_WEB_DIR . '/' . $PFX . '_micro_img2';
 $MICRO_EMPTY_FILE = $MICRO_DIR . '/' . $PFX . '_micro_img2.jpg';
 @mkdir($MICRO_COMP_DIR, 0775, true);
+@mkdir($MICRO_WEB_DIR, 0775, true);
 $gd = imagecreatetruecolor(250, 100);
 imagefilledrectangle($gd, 0, 0, 249, 99, imagecolorallocate($gd, 30, 200, 30));
 imagejpeg($gd, $MICRO_COMP_FILE, 90);
 imagedestroy($gd);
 @chmod($MICRO_COMP_FILE, 0644);
+$gd = imagecreatetruecolor(800, 320);
+imagefilledrectangle($gd, 0, 0, 799, 319, imagecolorallocate($gd, 30, 30, 200));
+imagejpeg($gd, $MICRO_WEB_FILE, 90);
+imagedestroy($gd);
+@chmod($MICRO_WEB_FILE, 0644);
 file_put_contents($MICRO_EMPTY_FILE, '');
-check('micro composite-thumb fixture written', is_file($MICRO_COMP_FILE) && filesize($MICRO_COMP_FILE) > 0);
+check('micro composite-thumb + webImages fixtures written',
+	is_file($MICRO_COMP_FILE) && filesize($MICRO_COMP_FILE) > 0
+	&& is_file($MICRO_WEB_FILE) && filesize($MICRO_WEB_FILE) > 0);
 
 $db->query("INSERT INTO strabosearch.image_hit
 	(image_id, image_subsystem, image_userpkey, image_type, title, filename,
@@ -386,20 +401,38 @@ check('micro image thumb is JPEG', strpos(contentType($h), 'image/jpeg') !== fal
 check('micro thumb bytes decode as image', @imagecreatefromstring($body) !== false);
 check('micro thumb lazy cache file created', is_file($THUMB_DIR . '/' . $microImgPkey . '_150.jpg'));
 
-// micro candidate-chain preference (regression: images/<id>.jpg-only lookup
-// served black legacy composites / not-found — 2026-08-03): green
-// compositeThumbnails must win over the 0-byte images/<id>.jpg
-foreach (glob($THUMB_DIR . '/' . $microImg2Pkey . '_*.jpg') as $f) @unlink($f);
-list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/thumb.php?id=' . $microImg2Pkey . '&size=150');
-check('micro composite-thumb is JPEG (empty .jpg skipped)', strpos(contentType($h), 'image/jpeg') !== false, contentType($h));
-$gd = @imagecreatefromstring($body);
-check('micro composite-thumb decodes', $gd !== false);
-if ($gd !== false) {
+// micro size-aware candidate chain (regressions: images/<id>.jpg-only lookup
+// served black legacy composites / not-found; thumb-first ordering handed the
+// size=1600 lightbox a 250px thumbnail — both 2026-08-03). Small request must
+// serve the GREEN compositeThumbnails; large request the BLUE 800px
+// webImages; the 0-byte images/<id>.jpg must be skipped by both.
+function centerRgb($body) {
+	$gd = @imagecreatefromstring($body);
+	if ($gd === false) return null;
 	$rgb = imagecolorat($gd, (int)(imagesx($gd) / 2), (int)(imagesy($gd) / 2));
-	$r = ($rgb >> 16) & 0xFF; $g = ($rgb >> 8) & 0xFF; $b = $rgb & 0xFF;
-	check('micro thumb served FROM compositeThumbnails (green wins)', $g > 150 && $r < 100 && $b < 100, "rgb($r,$g,$b)");
+	$out = array(($rgb >> 16) & 0xFF, ($rgb >> 8) & 0xFF, $rgb & 0xFF, imagesx($gd));
 	imagedestroy($gd);
+	return $out;
 }
+foreach (glob($THUMB_DIR . '/' . $microImg2Pkey . '_*.jpg') as $f) @unlink($f);
+
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/thumb.php?id=' . $microImg2Pkey . '&size=150');
+check('micro small thumb is JPEG (empty .jpg skipped)', strpos(contentType($h), 'image/jpeg') !== false, contentType($h));
+$px = centerRgb($body);
+check('micro small thumb decodes', $px !== null);
+check('micro small thumb served FROM compositeThumbnails (green wins)',
+	$px !== null && $px[1] > 150 && $px[0] < 100 && $px[2] < 100,
+	$px !== null ? "rgb($px[0],$px[1],$px[2])" : 'no decode');
+
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/thumb.php?id=' . $microImg2Pkey . '&size=1600');
+check('micro large thumb is JPEG', strpos(contentType($h), 'image/jpeg') !== false, contentType($h));
+$px = centerRgb($body);
+check('micro large thumb decodes', $px !== null);
+check('micro large thumb served FROM webImages (blue wins)',
+	$px !== null && $px[2] > 150 && $px[0] < 100 && $px[1] < 100,
+	$px !== null ? "rgb($px[0],$px[1],$px[2])" : 'no decode');
+check('micro large thumb is full-size, not the 250px thumb',
+	$px !== null && $px[3] === 800, $px !== null ? 'width=' . $px[3] : 'no decode');
 
 // ---------------------------------------------------------------------------
 section('7. Cleanup');
@@ -414,8 +447,10 @@ $db->prepare_query("DELETE FROM micro_projectmetadata WHERE strabo_id LIKE $1", 
 @unlink($MICRO_IMG_FILE);
 @unlink($MICRO_EMPTY_FILE);
 @unlink($MICRO_COMP_FILE);
+@unlink($MICRO_WEB_FILE);
 @rmdir($MICRO_DIR);
 @rmdir($MICRO_COMP_DIR);
+@rmdir($MICRO_WEB_DIR);
 @rmdir(dirname($MICRO_DIR));
 foreach (glob($THUMB_DIR . '/' . $pubImgPkey . '_*.jpg') as $f) @unlink($f);
 foreach (glob($THUMB_DIR . '/' . $privImgPkey . '_*.jpg') as $f) @unlink($f);
@@ -433,6 +468,7 @@ $residue += (int)$db->get_var_prepared("SELECT count(*) FROM micro_projectmetada
 $residue += is_file($IMG_FILE) ? 1 : 0;
 $residue += is_file($MICRO_IMG_FILE) ? 1 : 0;
 $residue += is_file($MICRO_COMP_FILE) ? 1 : 0;
+$residue += is_file($MICRO_WEB_FILE) ? 1 : 0;
 $residue += is_file($MICRO_EMPTY_FILE) ? 1 : 0;
 check('zero residue', $residue === 0, "got $residue");
 
