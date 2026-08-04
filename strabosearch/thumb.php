@@ -14,10 +14,17 @@
  *                field — /dbimages/<filename>  (raw upload, extensionless,
  *                        99.98% JPEG; decoded via imagecreatefromstring
  *                        which sniffs the real format)
- *                micro — <docroot>/straboMicroFiles/<project_pkey>/images/
- *                        <image_id>.jpg (upload-time composite; project
- *                        pkey resolved by (strabo_id, userpkey) — micro
- *                        strabo_ids are NOT unique across users)
+ *                micro — best-first candidate chain matching what the three
+ *                        micro viewer tiers display (project id resolved by
+ *                        (strabo_id, userpkey) — micro strabo_ids are NOT
+ *                        unique across users): compositeThumbnails/<id>
+ *                        (tiles tier), webThumbnails|webImages/<id> under
+ *                        straboMicroFiles/ and straboMicroView/smzFiles/
+ *                        (webImages tier), images/<id> original, and LAST
+ *                        images/<id>.jpg — the legacy createProjectImages()
+ *                        composite that degrades to a black label-only
+ *                        canvas / 0-byte file when its uiImages/ base is
+ *                        missing. Zero-byte candidates are skipped.
  *
  *              Cache: /var/www/searchthumbs/<pkey>_<size>.jpg, keyed by
  *              image_hit_pkey so an ACL re-check still runs every request
@@ -116,8 +123,29 @@ if ($row->image_subsystem === 'field') {
          WHERE strabo_id = $1 AND userpkey = $2 LIMIT 1",
         array($row->project_id, (int)$row->project_userpkey));
     if ($ppkey) {
-        $source = $docroot . '/straboMicroFiles/' . (int)$ppkey
-                . '/images/' . basename((string)$row->image_id) . '.jpg';
+        $pid = (int)$ppkey;
+        $img = basename((string)$row->image_id);
+        // Candidate sources, best first — mirrors what the three micro
+        // viewer tiers actually display. images/<id>.jpg goes LAST: it is
+        // the legacy createProjectImages() composite, which degrades to a
+        // black label-only canvas (or a 0-byte file) whenever its
+        // uiImages/ base was missing at generation time.
+        $candidates = array(
+            // tiles tier — prebuilt thumb the /microview/ viewer shows
+            $docroot . '/straboMicroFiles/' . $pid . '/compositeThumbnails/' . $img,
+            // webImages tier — straboMicroView sidebar thumb, then main
+            // image; check both roots (smzFiles mirrors straboMicroFiles)
+            $docroot . '/straboMicroFiles/' . $pid . '/webThumbnails/' . $img,
+            $docroot . '/straboMicroView/smzFiles/' . $pid . '/webThumbnails/' . $img,
+            $docroot . '/straboMicroFiles/' . $pid . '/webImages/' . $img,
+            $docroot . '/straboMicroView/smzFiles/' . $pid . '/webImages/' . $img,
+            // upload-time original (extensionless), then legacy composite
+            $docroot . '/straboMicroFiles/' . $pid . '/images/' . $img,
+            $docroot . '/straboMicroFiles/' . $pid . '/images/' . $img . '.jpg',
+        );
+        foreach ($candidates as $cand) {
+            if (is_file($cand) && filesize($cand) > 0) { $source = $cand; break; }
+        }
     }
 }
 if ($source === '' || !is_file($source)) showNotFound();
