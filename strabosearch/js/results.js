@@ -414,9 +414,16 @@
 		if (r.owner_name) metaBits.push('Owner: ' + r.owner_name);
 		var mod = dateOnly(r.last_modified);
 		if (mod) metaBits.push('Updated ' + mod);
+		// Data date range (labeled, Jason 08-04). Micro/samples extractors
+		// derive date_value FROM the modified timestamp (no observation
+		// date exists there), so a single-day range equal to "Updated" is
+		// pure duplication — suppress it. Real ranges (Field observation
+		// dates) still render.
 		var d0 = r.date_range && dateOnly(r.date_range[0]);
 		var d1 = r.date_range && dateOnly(r.date_range[1]);
-		if (d0 && d1) metaBits.push(d0 === d1 ? d0 : d0 + ' – ' + d1);
+		if (d0 && d1 && !(d0 === d1 && d0 === mod)) {
+			metaBits.push('Data: ' + (d0 === d1 ? d0 : d0 + ' – ' + d1));
+		}
 		body.appendChild(el('div', 'ss-card-meta', metaBits.join('  ·  ')));
 
 		var counts = [];

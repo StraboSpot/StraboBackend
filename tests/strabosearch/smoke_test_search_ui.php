@@ -272,6 +272,14 @@ check('builder.js: Start over button wired', strpos($body, "'Start over'") !== f
 	&& strpos($body, 'ss-start-over') !== false);
 check('builder.js: Start over pristine gating', strpos($body, "'Nothing to clear'") !== false);
 
+// Card meta line (08-04): data date range is labeled and suppressed when it
+// collapses to the same day as "Updated" (micro/samples derive both from the
+// modified timestamp — an unlabeled duplicate date otherwise).
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/results.js', null);
+check('results.js asset 200', $st === 200, "got $st");
+check('results.js: labeled date range + duplicate suppression', strpos($body, "'Data: '") !== false
+	&& strpos($body, "d0 === mod") !== false);
+
 // ---------------------------------------------------------------------------
 section('2. Proxy search — anonymous vs session identity');
 
