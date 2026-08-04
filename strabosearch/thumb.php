@@ -39,13 +39,25 @@ if (isset($_SESSION['loggedin']) && $_SESSION['loggedin'] === 'yes'
 }
 session_write_close();
 
+// Buffer all output: any PHP warning/notice emitted before the image bytes
+// (e.g. a db-layer trigger_error with display_errors on) would otherwise be
+// prepended to the body and corrupt the image. discardOutput() drops it all
+// just before we send real bytes.
+ob_start();
+
 include_once("../includes/config.inc.php");
 include("../db.php");
 
 $cacheDir = '/var/www/searchthumbs';
 
+function discardOutput()
+{
+    while (ob_get_level() > 0) ob_end_clean();
+}
+
 function showNotFound()
 {
+    discardOutput();
     header('Content-Type: image/png');
     readfile($_SERVER['DOCUMENT_ROOT'] . "/includes/images/image-not-found.png");
     exit();
@@ -84,6 +96,7 @@ if (!$visible) showNotFound();
 // ---- lazy disk cache ------------------------------------------------------
 $cacheFile = $cacheDir . '/' . (int)$row->image_hit_pkey . '_' . $size . '.jpg';
 if (is_file($cacheFile)) {
+    discardOutput();
     header('Content-Type: image/jpeg');
     header('Cache-Control: private, max-age=86400');
     readfile($cacheFile);
@@ -99,7 +112,7 @@ if ($row->image_subsystem === 'field') {
     if ($base !== '') $source = $docroot . '/dbimages/' . $base;
 } elseif ($row->image_subsystem === 'micro') {
     $ppkey = $db->get_var_prepared(
-        "SELECT pkey FROM micro_projectmetadata
+        "SELECT id FROM micro_projectmetadata
          WHERE strabo_id = $1 AND userpkey = $2 LIMIT 1",
         array($row->project_id, (int)$row->project_userpkey));
     if ($ppkey) {
@@ -137,6 +150,7 @@ if (is_dir($cacheDir) && is_writable($cacheDir)) {
     @imagejpeg($new, $cacheFile, 82);
 }
 
+discardOutput();
 header('Content-Type: image/jpeg');
 header('Cache-Control: private, max-age=86400');
 if (is_file($cacheFile)) {

@@ -13,7 +13,9 @@
  *
  *              Hermetic: fixture user upk 94560 ('spsui'), index rows,
  *              one servable field image (fixture JPEG in /dbimages),
- *              one legacy fullsearches row. Zero residue on exit.
+ *              one servable micro image (metadata row + fixture JPEG in
+ *              straboMicroFiles/<id>/images), one legacy fullsearches
+ *              row. Zero residue on exit.
  *
  *              Run inside the container:
  *                docker exec strabo-php php /srv/app/www/tests/strabosearch/smoke_test_search_ui.php
@@ -103,6 +105,13 @@ $db->prepare_query("DELETE FROM strabosearch.saved_search WHERE user_pkey = $1",
 $db->prepare_query("DELETE FROM fullsearches WHERE user_pkey = $1", array($UPK));
 $db->prepare_query("DELETE FROM users WHERE pkey = $1", array($UPK));
 @unlink($IMG_FILE);
+$stale = $db->get_results("SELECT id FROM micro_projectmetadata WHERE strabo_id LIKE '{$PFX}_%'");
+foreach (($stale ? $stale : array()) as $r) {
+	@unlink('/srv/app/www/straboMicroFiles/' . (int)$r->id . '/images/' . $PFX . '_micro_img.jpg');
+	@rmdir('/srv/app/www/straboMicroFiles/' . (int)$r->id . '/images');
+	@rmdir('/srv/app/www/straboMicroFiles/' . (int)$r->id);
+}
+$db->prepare_query("DELETE FROM micro_projectmetadata WHERE strabo_id LIKE $1", array($PFX . '_%'));
 
 $db->prepare_query(
 	"INSERT INTO users (pkey, firstname, lastname, email, password, hash, active, deleted)
@@ -145,6 +154,42 @@ $pubImgPkey = (int)$db->get_var_prepared(
 $privImgPkey = (int)$db->get_var_prepared(
 	"SELECT image_hit_pkey FROM strabosearch.image_hit WHERE image_id = $1", array($PFX . '_img_priv'));
 check('image_hit fixtures inserted', $pubImgPkey > 0 && $privImgPkey > 0);
+
+// servable micro image: real metadata row + on-disk composite, so the micro
+// resolution chain ((strabo_id, userpkey) -> micro_projectmetadata.id ->
+// straboMicroFiles/<id>/images/<image_id>.jpg) is exercised end-to-end.
+// Regression: thumb.php once selected a nonexistent `pkey` column, so EVERY
+// micro thumb fell through to not-found (2026-08-03).
+$MICRO_SID = $PFX . '_micro_proj';
+$db->prepare_query(
+	"INSERT INTO micro_projectmetadata (strabo_id, userpkey, name, ispublic)
+	 VALUES ($1, $2, 'UI suite micro', TRUE)", array($MICRO_SID, $UPK));
+$microPid = (int)$db->get_var_prepared(
+	"SELECT id FROM micro_projectmetadata WHERE strabo_id = $1 AND userpkey = $2",
+	array($MICRO_SID, $UPK));
+check('micro project fixture inserted', $microPid > 0);
+
+$MICRO_DIR = '/srv/app/www/straboMicroFiles/' . $microPid . '/images';
+$MICRO_IMG_FILE = $MICRO_DIR . '/' . $PFX . '_micro_img.jpg';
+@mkdir($MICRO_DIR, 0775, true);
+$gd = imagecreatetruecolor(320, 240);
+imagefilledrectangle($gd, 0, 0, 319, 239, imagecolorallocate($gd, 60, 60, 200));
+imagejpeg($gd, $MICRO_IMG_FILE, 90);
+imagedestroy($gd);
+@chmod($MICRO_IMG_FILE, 0644);
+check('micro fixture JPEG written', is_file($MICRO_IMG_FILE));
+
+$db->query("INSERT INTO strabosearch.image_hit
+	(image_id, image_subsystem, image_userpkey, image_type, title, filename,
+	 project_id, project_userpkey, project_subsystem, project_ispublic,
+	 imagetext_tsv, source_modified)
+	VALUES ('{$PFX}_micro_img', 'micro', $UPK, 'micrograph_optical', 'UI suite micro image',
+	 '{$PFX}_micro_img.jpg', '$MICRO_SID', $UPK, 'micro', TRUE,
+	 to_tsvector('english', 'UNIQSSUIMICRO thumb fixture'), now())");
+$microImgPkey = (int)$db->get_var_prepared(
+	"SELECT image_hit_pkey FROM strabosearch.image_hit WHERE image_id = $1",
+	array($PFX . '_micro_img'));
+check('micro image_hit fixture inserted', $microImgPkey > 0);
 
 // legacy saved search
 $db->prepare_query(
@@ -277,9 +322,11 @@ section('6. Thumbnails — ACL + lazy cache');
 // sweep any cached fixture thumbs from prior runs
 foreach (glob($THUMB_DIR . '/' . $pubImgPkey . '_*.jpg') as $f) @unlink($f);
 foreach (glob($THUMB_DIR . '/' . $privImgPkey . '_*.jpg') as $f) @unlink($f);
+foreach (glob($THUMB_DIR . '/' . $microImgPkey . '_*.jpg') as $f) @unlink($f);
 
-list($st, $h) = http_raw('GET', $BASE . '/strabosearch/thumb.php?id=0');
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/thumb.php?id=0');
 check('id=0 serves not-found PNG', strpos(contentType($h), 'image/png') !== false);
+check('not-found PNG bytes decode as image', @imagecreatefromstring($body) !== false);
 
 list($st, $h) = http_raw('GET', $BASE . '/strabosearch/thumb.php?id=999999999');
 check('bogus id serves not-found PNG', strpos(contentType($h), 'image/png') !== false);
@@ -300,6 +347,13 @@ check('private image anonymous -> not-found PNG', strpos(contentType($h), 'image
 list($st, $h) = http_raw('GET', $BASE . '/strabosearch/thumb.php?id=' . $privImgPkey . '&size=150', $sid);
 check('private image owner -> JPEG', strpos(contentType($h), 'image/jpeg') !== false);
 
+// micro resolution chain end-to-end (regression: `pkey` column bug blanked
+// every micro thumb — 2026-08-03)
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/thumb.php?id=' . $microImgPkey . '&size=150');
+check('micro image thumb is JPEG', strpos(contentType($h), 'image/jpeg') !== false, contentType($h));
+check('micro thumb bytes decode as image', @imagecreatefromstring($body) !== false);
+check('micro thumb lazy cache file created', is_file($THUMB_DIR . '/' . $microImgPkey . '_150.jpg'));
+
 // ---------------------------------------------------------------------------
 section('7. Cleanup');
 
@@ -308,9 +362,14 @@ $db->prepare_query("DELETE FROM strabosearch.image_hit WHERE project_id LIKE $1"
 $db->prepare_query("DELETE FROM strabosearch.saved_search WHERE user_pkey = $1", array($UPK));
 $db->prepare_query("DELETE FROM fullsearches WHERE user_pkey = $1", array($UPK));
 $db->prepare_query("DELETE FROM users WHERE pkey = $1", array($UPK));
+$db->prepare_query("DELETE FROM micro_projectmetadata WHERE strabo_id LIKE $1", array($PFX . '_%'));
 @unlink($IMG_FILE);
+@unlink($MICRO_IMG_FILE);
+@rmdir($MICRO_DIR);
+@rmdir(dirname($MICRO_DIR));
 foreach (glob($THUMB_DIR . '/' . $pubImgPkey . '_*.jpg') as $f) @unlink($f);
 foreach (glob($THUMB_DIR . '/' . $privImgPkey . '_*.jpg') as $f) @unlink($f);
+foreach (glob($THUMB_DIR . '/' . $microImgPkey . '_*.jpg') as $f) @unlink($f);
 foreach ($sessionFiles as $f) @unlink($f);
 
 $residue = 0;
@@ -319,7 +378,9 @@ $residue += (int)$db->get_var_prepared("SELECT count(*) FROM strabosearch.image_
 $residue += (int)$db->get_var_prepared("SELECT count(*) FROM strabosearch.saved_search WHERE user_pkey = $1", array($UPK));
 $residue += (int)$db->get_var_prepared("SELECT count(*) FROM fullsearches WHERE user_pkey = $1", array($UPK));
 $residue += (int)$db->get_var_prepared("SELECT count(*) FROM users WHERE pkey = $1", array($UPK));
+$residue += (int)$db->get_var_prepared("SELECT count(*) FROM micro_projectmetadata WHERE strabo_id LIKE $1", array($PFX . '_%'));
 $residue += is_file($IMG_FILE) ? 1 : 0;
+$residue += is_file($MICRO_IMG_FILE) ? 1 : 0;
 check('zero residue', $residue === 0, "got $residue");
 
 echo PHP_EOL . ($failures
