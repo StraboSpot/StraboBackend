@@ -107,9 +107,13 @@ $db->prepare_query("DELETE FROM users WHERE pkey = $1", array($UPK));
 @unlink($IMG_FILE);
 $stale = $db->get_results("SELECT id FROM micro_projectmetadata WHERE strabo_id LIKE '{$PFX}_%'");
 foreach (($stale ? $stale : array()) as $r) {
-	@unlink('/srv/app/www/straboMicroFiles/' . (int)$r->id . '/images/' . $PFX . '_micro_img.jpg');
-	@rmdir('/srv/app/www/straboMicroFiles/' . (int)$r->id . '/images');
-	@rmdir('/srv/app/www/straboMicroFiles/' . (int)$r->id);
+	$d = '/srv/app/www/straboMicroFiles/' . (int)$r->id;
+	@unlink($d . '/images/' . $PFX . '_micro_img.jpg');
+	@unlink($d . '/images/' . $PFX . '_micro_img2.jpg');
+	@unlink($d . '/compositeThumbnails/' . $PFX . '_micro_img2');
+	@rmdir($d . '/images');
+	@rmdir($d . '/compositeThumbnails');
+	@rmdir($d);
 }
 $db->prepare_query("DELETE FROM micro_projectmetadata WHERE strabo_id LIKE $1", array($PFX . '_%'));
 
@@ -190,6 +194,34 @@ $microImgPkey = (int)$db->get_var_prepared(
 	"SELECT image_hit_pkey FROM strabosearch.image_hit WHERE image_id = $1",
 	array($PFX . '_micro_img'));
 check('micro image_hit fixture inserted', $microImgPkey > 0);
+
+// second micro image: GREEN compositeThumbnails/<id> + 0-BYTE images/<id>.jpg.
+// Proves the candidate chain prefers the prebuilt composite thumb and skips
+// empty legacy composites (regression: images/<id>.jpg-only resolution served
+// black label-only canvases / not-found for tiles+webImages-tier projects).
+$MICRO_COMP_DIR = dirname($MICRO_DIR) . '/compositeThumbnails';
+$MICRO_COMP_FILE = $MICRO_COMP_DIR . '/' . $PFX . '_micro_img2';
+$MICRO_EMPTY_FILE = $MICRO_DIR . '/' . $PFX . '_micro_img2.jpg';
+@mkdir($MICRO_COMP_DIR, 0775, true);
+$gd = imagecreatetruecolor(250, 100);
+imagefilledrectangle($gd, 0, 0, 249, 99, imagecolorallocate($gd, 30, 200, 30));
+imagejpeg($gd, $MICRO_COMP_FILE, 90);
+imagedestroy($gd);
+@chmod($MICRO_COMP_FILE, 0644);
+file_put_contents($MICRO_EMPTY_FILE, '');
+check('micro composite-thumb fixture written', is_file($MICRO_COMP_FILE) && filesize($MICRO_COMP_FILE) > 0);
+
+$db->query("INSERT INTO strabosearch.image_hit
+	(image_id, image_subsystem, image_userpkey, image_type, title, filename,
+	 project_id, project_userpkey, project_subsystem, project_ispublic,
+	 imagetext_tsv, source_modified)
+	VALUES ('{$PFX}_micro_img2', 'micro', $UPK, 'micrograph_optical', 'UI suite micro image 2',
+	 '{$PFX}_micro_img2.jpg', '$MICRO_SID', $UPK, 'micro', TRUE,
+	 to_tsvector('english', 'UNIQSSUIMICRO thumb fixture two'), now())");
+$microImg2Pkey = (int)$db->get_var_prepared(
+	"SELECT image_hit_pkey FROM strabosearch.image_hit WHERE image_id = $1",
+	array($PFX . '_micro_img2'));
+check('micro image_hit fixture 2 inserted', $microImg2Pkey > 0);
 
 // legacy saved search
 $db->prepare_query(
@@ -354,6 +386,21 @@ check('micro image thumb is JPEG', strpos(contentType($h), 'image/jpeg') !== fal
 check('micro thumb bytes decode as image', @imagecreatefromstring($body) !== false);
 check('micro thumb lazy cache file created', is_file($THUMB_DIR . '/' . $microImgPkey . '_150.jpg'));
 
+// micro candidate-chain preference (regression: images/<id>.jpg-only lookup
+// served black legacy composites / not-found — 2026-08-03): green
+// compositeThumbnails must win over the 0-byte images/<id>.jpg
+foreach (glob($THUMB_DIR . '/' . $microImg2Pkey . '_*.jpg') as $f) @unlink($f);
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/thumb.php?id=' . $microImg2Pkey . '&size=150');
+check('micro composite-thumb is JPEG (empty .jpg skipped)', strpos(contentType($h), 'image/jpeg') !== false, contentType($h));
+$gd = @imagecreatefromstring($body);
+check('micro composite-thumb decodes', $gd !== false);
+if ($gd !== false) {
+	$rgb = imagecolorat($gd, (int)(imagesx($gd) / 2), (int)(imagesy($gd) / 2));
+	$r = ($rgb >> 16) & 0xFF; $g = ($rgb >> 8) & 0xFF; $b = $rgb & 0xFF;
+	check('micro thumb served FROM compositeThumbnails (green wins)', $g > 150 && $r < 100 && $b < 100, "rgb($r,$g,$b)");
+	imagedestroy($gd);
+}
+
 // ---------------------------------------------------------------------------
 section('7. Cleanup');
 
@@ -365,11 +412,15 @@ $db->prepare_query("DELETE FROM users WHERE pkey = $1", array($UPK));
 $db->prepare_query("DELETE FROM micro_projectmetadata WHERE strabo_id LIKE $1", array($PFX . '_%'));
 @unlink($IMG_FILE);
 @unlink($MICRO_IMG_FILE);
+@unlink($MICRO_EMPTY_FILE);
+@unlink($MICRO_COMP_FILE);
 @rmdir($MICRO_DIR);
+@rmdir($MICRO_COMP_DIR);
 @rmdir(dirname($MICRO_DIR));
 foreach (glob($THUMB_DIR . '/' . $pubImgPkey . '_*.jpg') as $f) @unlink($f);
 foreach (glob($THUMB_DIR . '/' . $privImgPkey . '_*.jpg') as $f) @unlink($f);
 foreach (glob($THUMB_DIR . '/' . $microImgPkey . '_*.jpg') as $f) @unlink($f);
+foreach (glob($THUMB_DIR . '/' . $microImg2Pkey . '_*.jpg') as $f) @unlink($f);
 foreach ($sessionFiles as $f) @unlink($f);
 
 $residue = 0;
@@ -381,6 +432,8 @@ $residue += (int)$db->get_var_prepared("SELECT count(*) FROM users WHERE pkey = 
 $residue += (int)$db->get_var_prepared("SELECT count(*) FROM micro_projectmetadata WHERE strabo_id LIKE $1", array($PFX . '_%'));
 $residue += is_file($IMG_FILE) ? 1 : 0;
 $residue += is_file($MICRO_IMG_FILE) ? 1 : 0;
+$residue += is_file($MICRO_COMP_FILE) ? 1 : 0;
+$residue += is_file($MICRO_EMPTY_FILE) ? 1 : 0;
 check('zero residue', $residue === 0, "got $residue");
 
 echo PHP_EOL . ($failures
