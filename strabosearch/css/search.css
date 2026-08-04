@@ -177,6 +177,10 @@
 	margin-top: 0.6em;
 }
 
+.ss-add-row a + a {
+	margin-left: 0.5em;
+}
+
 .ss-add-row a.ss-disabled {
 	opacity: 0.4;
 	pointer-events: none;

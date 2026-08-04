@@ -92,6 +92,16 @@
 		var ok = bottom && bottom.crit;
 		btn.classList.toggle('ss-disabled', !ok);
 		btn.title = ok ? '' : 'Pick a criterion above first';
+
+		// "Start over" is a no-op on a pristine builder (single empty row);
+		// results/URL can't be stale then — app.js invalidation already
+		// cleared them the moment the effective query diverged.
+		var reset = container.querySelector('.ss-start-over');
+		if (reset) {
+			var pristine = rows.length === 1 && !rows[0].crit;
+			reset.classList.toggle('ss-disabled', pristine);
+			reset.title = pristine ? 'Nothing to clear' : '';
+		}
 	}
 
 	// ══════════════════════════════════════════════════════════════════
@@ -753,6 +763,22 @@
 			notifyChange();
 		});
 		addBar.appendChild(addBtn);
+
+		// "Start over" (Jason 08-04): one-click reset to the first-load
+		// state. No confirm — rebuilding is cheap and Save current sits
+		// nearby for queries worth keeping. Stale results + the ?q= share
+		// URL are cleared by app.js's effective-query invalidation, which
+		// fires off the notifyChange below.
+		var resetBtn = el('a', 'button small ss-start-over', 'Start over');
+		resetBtn.href = 'javascript:void(0);';
+		resetBtn.addEventListener('click', function () {
+			if (resetBtn.classList.contains('ss-disabled')) return;
+			rows.slice().forEach(function (r) { r.el.remove(); });
+			rows = [];
+			addRow();
+			notifyChange();
+		});
+		addBar.appendChild(resetBtn);
 		container.appendChild(addBar);
 
 		addRow();   // open on an empty "— pick criterion —" row (Jason 08-02)
