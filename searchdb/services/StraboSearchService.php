@@ -179,9 +179,13 @@ class StraboSearchService
 
             case 'province':
                 // F10 tectonic province — shapegeology gid → name (§4.3).
+                // the_geom IS NOT NULL: 43 provinces lost their outlines in
+                // the pre-PostGIS import (repair_the_geom.sql) — they can
+                // never match, so they don't belong in the dropdown.
                 $rows = $this->db->get_results_prepared(
                     "SELECT gid, name FROM shapegeology
                      WHERE name IS NOT NULL AND trim(name) <> ''
+                       AND the_geom IS NOT NULL
                      ORDER BY name, gid", array());
                 $out = array();
                 foreach ((array)$rows as $r) {
