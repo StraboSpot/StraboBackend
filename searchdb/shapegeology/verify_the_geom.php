@@ -11,6 +11,11 @@
  *   6. containment self-test (each polygon contains its own surface point)
  *   7. end-to-end: the exact fullsearch constraint shape runs without error
  *      against real spot locations (catches the mixed-SRID failure class)
+ *   8. antimeridian sanity: no non-polar polygon spans > 180° of longitude
+ *      (a planar build of a ±180°-crossing ring wraps the LONG way around
+ *      the globe — the 2026-08-04 Aleutian Arc incident: German spots
+ *      matched "Aleutian Arc"); plus a targeted Aleutian Arc probe
+ *      (contains Adak Island, does NOT contain Bonn)
  *
  * Usage: docker exec strabo-php php /srv/app/www/searchdb/shapegeology/verify_the_geom.php
  * Exits non-zero on any failure.
@@ -85,6 +90,44 @@ foreach ($spots as $s) {
 }
 check('fullsearch-shaped ST_Contains runs clean against spot.location', $ok,
 	count($spots) . " spots probed, $hits province hits");
+
+// 8. Antimeridian sanity. Only a polar cap may legitimately have a single
+//    polygon PART spanning > 180° of longitude (its planar band build is
+//    approximately correct). Any other wide part is an unrepaired ±180°
+//    crosser whose interior wraps the long way around the globe and falsely
+//    contains distant spots. Per-PART, not bounding box: a correctly split
+//    crosser (e.g. the repaired Aleutian Arc) still has a −180..180 bbox.
+//    "Polar" = the geometry lies entirely poleward of ±66° latitude.
+$wrapped = $db->get_results("select distinct gid, name, lon_span from (
+		select gid, name,
+			round((ST_XMax(g) - ST_XMin(g))::numeric, 1) as lon_span,
+			ST_YMin(g) as ymin, ST_YMax(g) as ymax
+		from (select gid, name, (ST_Dump(the_geom)).geom as g
+			from shapegeology where the_geom is not null) parts
+	) p
+	where lon_span > 180
+	  and not (ymax <= -66 or ymin >= 66)");
+foreach ((array)$wrapped as $w) {
+	echo "        WRAPPED: [{$w->gid}] {$w->name} spans {$w->lon_span} deg of longitude\n";
+}
+check('no non-polar province spans > 180 deg of longitude', count((array)$wrapped) === 0,
+	count((array)$wrapped) . ' wrapped');
+
+//    Targeted regression probe for the incident geometry: Aleutian Arc must
+//    contain Adak Island (-176.65, 51.87) and must NOT contain Bonn,
+//    Germany (7.10, 50.73). Skips cleanly if the row is absent/geometry-less.
+$aleut = $db->get_row("select gid,
+		ST_Contains(the_geom, ST_SetSRID(ST_MakePoint(-176.65, 51.87), ST_SRID(the_geom))) as has_adak,
+		ST_Contains(the_geom, ST_SetSRID(ST_MakePoint(7.10, 50.73), ST_SRID(the_geom))) as has_bonn
+	from shapegeology where name = 'Aleutian Arc' and the_geom is not null");
+if ($aleut) {
+	check('Aleutian Arc contains Adak Island', $aleut->has_adak === 't' || $aleut->has_adak === true,
+		"gid={$aleut->gid}");
+	check('Aleutian Arc does NOT contain Bonn, Germany', !($aleut->has_bonn === 't' || $aleut->has_bonn === true),
+		"gid={$aleut->gid}");
+} else {
+	echo "        (Aleutian Arc row absent or geometry-less — probe skipped)\n";
+}
 
 echo "\n" . ($fail === 0 ? "VERIFY THE_GEOM: PASS" : "VERIFY THE_GEOM: FAIL") . " ($pass passed, $fail failed)\n";
 exit($fail === 0 ? 0 : 1);
