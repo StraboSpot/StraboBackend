@@ -21,10 +21,11 @@ if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > 
 }
 $_SESSION['LAST_ACTIVITY'] = time();
 
-// Require login
+// Anonymous or expired sessions proceed with no identity; prepare_connections.php
+// maps that to the no-user sentinel (99999) and the access-control query below
+// (owner OR public project) decides visibility. See softlogincheck.php.
 if ($_SESSION['loggedin'] != "yes") {
-    http_response_code(401);
-    die('Authentication required');
+    $_SESSION['userpkey'] = "";
 }
 
 // Validate project ID

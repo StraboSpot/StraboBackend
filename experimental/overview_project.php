@@ -8,7 +8,8 @@
  *   u    - Project UUID (required)
  *   from - If "mydata", shows a back button to /my_experimental_data
  *
- * Access: Public projects available to all; private projects require login + ownership.
+ * Access: Public projects available to all (including anonymous visitors);
+ * private projects require login + ownership.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -20,7 +21,7 @@
 // Change to root directory for proper include path resolution
 chdir($_SERVER['DOCUMENT_ROOT']);
 
-include("logincheck.php");
+include("softlogincheck.php");
 include("prepare_connections.php");
 include("adminkeys.php");
 

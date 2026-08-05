@@ -19,7 +19,9 @@
  *
  *                A. GET /experimental/api/download_experiment.php?id={exp}
  *                   (JSON) — owner sees spine overlay on the embedded sample
- *                B. download_experiment.php anonymous → 401
+ *                B. download_experiment.php anonymous, private project → 404
+ *                   (anonymous PUBLIC reads allowed since 2026-08-05 —
+ *                   see tests/experimental/smoke_test_exp_public_anonymous.php)
  *                C. download_experiment.php as stranger, PRIVATE project → 404
  *                D. GET /experimental/api/download_project.php?id={proj}
  *                   (JSON) — batch overlay across experiments; a second
@@ -28,7 +30,7 @@
  *                   + overlay still applied (public-read path)
  *                F. GET /experimental/api/download_pdf.php?id={exp} → 200 +
  *                   valid %PDF (overlay runs before render; render succeeds)
- *                G. download_pdf.php anonymous → 401
+ *                G. download_pdf.php anonymous, private project → 404
  *                H. GET /experimental/api/download_project_pdf.php?id={proj}
  *                   → 200 + valid %PDF
  *                I. download_project_pdf.php as stranger, PRIVATE → 404
@@ -219,12 +221,13 @@ try {
     check("A: provenance.location.longitude overlaid",   $s && (string)$s['material']['provenance']['location']['longitude'] === '-120.5');
 
     // =====================================================================
-    // B — anonymous → 401
+    // B — anonymous on a PRIVATE project → 404 (existence hidden; public
+    // reads are anonymous-allowed since 2026-08-05)
     // =====================================================================
-    echo "\n=== B: download_experiment.php anonymous → 401 ===\n";
+    echo "\n=== B: download_experiment.php anonymous, private → 404 ===\n";
     $r = httpGet($epExp, null);
     note("HTTP {$r['status']}");
-    check("B: anonymous rejected (401)", $r['status'] === 401);
+    check("B: anonymous denied on private experiment (404)", $r['status'] === 404);
 
     // =====================================================================
     // C — stranger on a PRIVATE project → 404 (existence hidden)
@@ -272,12 +275,12 @@ try {
     check("F: PDF is non-trivial (>1KB)",  strlen($r['body']) > 1024);
 
     // =====================================================================
-    // G — download_pdf.php anonymous → 401
+    // G — download_pdf.php anonymous on a PRIVATE project → 404
     // =====================================================================
-    echo "\n=== G: download_pdf.php anonymous → 401 ===\n";
+    echo "\n=== G: download_pdf.php anonymous, private → 404 ===\n";
     $r = httpGet("/experimental/api/download_pdf.php?id=$expPriv1Pkey", null);
     note("HTTP {$r['status']}");
-    check("G: anonymous PDF rejected (401)", $r['status'] === 401);
+    check("G: anonymous PDF denied on private experiment (404)", $r['status'] === 404);
 
     // =====================================================================
     // H — download_project_pdf.php as owner → 200 + valid %PDF

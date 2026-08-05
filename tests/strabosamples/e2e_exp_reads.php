@@ -10,7 +10,9 @@
  *
  *                A. GET /experimental/api/get_experiment.php?id={exp} (JSON,
  *                   owner) → data.sample overlaid
- *                B. get_experiment.php anonymous → 401
+ *                B. get_experiment.php anonymous, private project → 404
+ *                   (anonymous PUBLIC reads allowed since 2026-08-05 —
+ *                   see tests/experimental/smoke_test_exp_public_anonymous.php)
  *                C. GET /experimental/overview_experiment.php?u={uuid} (HTML)
  *                   → rendered body shows the overlaid name/igsn/description
  *                D. GET /experimental/overview_project.php?u={projuuid} (HTML)
@@ -119,11 +121,11 @@ try {
     check("A: material.material.type overlaid",   $s && isset($s['material']['material']['type']) && $s['material']['material']['type'] === 'tephra');
     check("A: material.material.name UNCHANGED",   $s && isset($s['material']['material']['name']) && $s['material']['material']['name'] === 'granite');
 
-    // B — get_experiment.php anonymous → 401
-    echo "\n=== B: get_experiment.php anonymous → 401 ===\n";
+    // B — anonymous on a PRIVATE project → 404 (existence hidden; public reads are anonymous-allowed since 2026-08-05)
+    echo "\n=== B: get_experiment.php anonymous, private → 404 ===\n";
     $r = httpGet("/experimental/api/get_experiment.php?id=$expPkey", null);
     note("HTTP {$r['status']}");
-    check("B: anonymous rejected (401)", $r['status'] === 401);
+    check("B: anonymous denied on private experiment (404)", $r['status'] === 404);
 
     // C — overview_experiment.php HTML
     echo "\n=== C: overview_experiment.php (HTML) — overlay rendered ===\n";

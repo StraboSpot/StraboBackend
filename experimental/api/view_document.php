@@ -5,7 +5,13 @@
  *
  * Usage: view_document.php?uuid={uuid}&filename={original_filename}
  *
- * Requires authentication - user must own the document or be admin.
+ * Access: public-by-obscurity (unguessable UUID), matching the legacy /i/
+ * endpoint (view_experimental_uploaded_file.php) that serves the SAME
+ * files from the same directory without authentication — document URLs are
+ * baked into stored experiment JSON, so an ownership gate here only broke
+ * non-owner viewers of public experiments while securing nothing the /i/
+ * route didn't already expose. Matches the site-wide accepted posture for
+ * image/file serving.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -25,14 +31,6 @@ if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > 
 }
 $_SESSION['LAST_ACTIVITY'] = time();
 
-// Require login for document access
-if ($_SESSION['loggedin'] != "yes") {
-    http_response_code(401);
-    exit("Authentication required.");
-}
-
-$userpkey = $_SESSION['userpkey'];
-
 // Get and sanitize parameters
 // NOTE: named $doc_uuid, not $uuid — prepare_connections.php (included below)
 // assigns a UUID-generator instance to $uuid and would clobber it
@@ -45,30 +43,19 @@ if (empty($doc_uuid) || strlen($doc_uuid) !== 36) {
     exit("Invalid or missing UUID.");
 }
 
-// Include database and admin configuration
-include_once("adminkeys.php");
+// Include database configuration
 include("prepare_connections.php");
 
-$is_admin = in_array($userpkey, $admin_pkeys);
+// Confirm the document is a registered upload (404 for unknown UUIDs).
+// No ownership gate — see the access note in the header.
+$holding_check = $db->get_var_prepared(
+    "SELECT userpkey FROM straboexp.file_holdings WHERE uuid = $1",
+    array($doc_uuid)
+);
 
-// Verify document ownership - user must own the document or be admin
-if (!$is_admin) {
-    $owner_check = $db->get_var_prepared(
-        "SELECT userpkey FROM straboexp.file_holdings WHERE uuid = $1",
-        array($doc_uuid)
-    );
-
-    if ($owner_check === null) {
-        // Document not found in database
-        http_response_code(404);
-        exit("Document not found.");
-    }
-
-    if ((int)$owner_check !== $userpkey) {
-        // User doesn't own this document
-        http_response_code(403);
-        exit("Access denied.");
-    }
+if ($holding_check === null) {
+    http_response_code(404);
+    exit("Document not found.");
 }
 
 // Path to the uploaded file
