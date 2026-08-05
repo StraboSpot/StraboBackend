@@ -362,6 +362,45 @@
 }
 .ds-back-to-map:hover { background: rgba(55, 58, 75, 0.98); }
 
+/* Strat-sections doorway panel. Shares the back button's slot (below the
+   zoom controls and layer switcher) — never a collision, because the panel
+   is hidden in pixel-space modes where the back button owns navigation.
+   Left side keeps it clear of the metadata sidebar. */
+.ds-strat-panel {
+	position: absolute;
+	top: 9.5em;
+	left: 0.5em;
+	z-index: 11;
+	background: rgba(39, 40, 51, 0.965);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	border-radius: 4px;
+	padding: 8px 10px;
+	box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
+	max-width: 220px;
+}
+.ds-strat-panel-header {
+	color: #aab;
+	font-size: 11px;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	margin-bottom: 6px;
+}
+.ds-strat-panel-item {
+	display: block;
+	width: 100%;
+	text-align: left;
+	background: transparent;
+	color: #fff;
+	border: none;
+	padding: 4px 2px;
+	font-size: 13px;
+	font-family: inherit;
+	cursor: pointer;
+	border-radius: 3px;
+}
+.ds-strat-panel-item:hover { background: rgba(255, 255, 255, 0.08); }
+#dataset-detail-root.ds-pixel-mode .ds-strat-panel { display: none; }
+
 /* "View as basemap" button below image thumbnails in the sidebar */
 .dataset-sidebar .ds-image-action {
 	display: block;

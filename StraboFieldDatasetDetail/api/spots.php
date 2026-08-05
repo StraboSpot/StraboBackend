@@ -119,12 +119,21 @@ if ($spot_rows) {
 			$strat_section_ids[] = $spotvals->strat_section_id;
 		}
 
-		$wkt = isset($spotvals->origwkt) && $spotvals->origwkt !== '' ? $spotvals->origwkt : $spotvals->wkt;
-		if (empty($wkt)) continue;
 		if (isset($spotvals->geometrytype) && $spotvals->geometrytype === 'wwwPoint') continue;
 
+		// Geometry-less spots STAY in the payload (geometry: null). A strat
+		// section's PARENT spot (the one carrying sed.strat_section) may
+		// never have been mapped — StraboField allows that — and dropping it
+		// here made its section unreachable: the strat viewer resolves the
+		// parent from this payload. Unmapped spot nodes also lack wkt/gtype
+		// entirely, so backfill the props the shared builder dereferences.
+		foreach (array('wkt', 'origwkt', 'gtype', 'geometrytype', 'date', 'name') as $k) {
+			if (!isset($spotvals->$k)) $spotvals->$k = '';
+		}
+
 		$feature = $strabo->singleSpotJSONFromFeatureData($spotvals, $imagestuff);
-		if (!$feature || !isset($feature['geometry'])) continue;
+		if (!$feature) continue;
+		if (!isset($feature['geometry'])) $feature['geometry'] = null;
 
 		$feature['properties']['datasetid'] = $owner_pkey . '-' . $dataset_id;
 

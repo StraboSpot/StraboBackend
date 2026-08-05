@@ -311,7 +311,9 @@
 	function styleForStratFeature(feature) {
 		var geomType = feature.getGeometry().getType();
 
-		if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
+		// GeometryCollection: StraboSed interbedded intervals are stacks of
+		// polygons in one collection — style them like any interval.
+		if (geomType === 'Polygon' || geomType === 'MultiPolygon' || geomType === 'GeometryCollection') {
 			var fillColor = getStratIntervalFillColor(feature);
 			return new ol.style.Style({
 				fill: new ol.style.Fill({ color: fillColor }),
@@ -529,9 +531,55 @@
 		state.backButton = btn;
 	}
 
+	/* ---------------- sections panel ----------------------------------- */
+
+	/**
+	 * Give the dataset's strat sections a visible doorway. Called by
+	 * spots.js after the payload is indexed. Renders a map-corner panel
+	 * with one button per ENTERABLE section (parent spot present in the
+	 * payload — enter() needs it for axes/settings). When the map has no
+	 * geographic features at all (strat-only dataset with an unmapped
+	 * parent), auto-enters the first section so the page never lands on
+	 * an empty map.
+	 */
+	function offerSections(data, geographicCount) {
+		var ids = (data && data.strat_section_ids) || [];
+		var sections = [];
+		ids.forEach(function (id) {
+			var parent = findParentSpot(id);
+			if (!parent) return;
+			var name = (parent.properties && parent.properties.name) || 'Unnamed section';
+			sections.push({ id: id, name: name });
+		});
+		if (sections.length === 0) return;
+
+		var container = document.getElementById('dataset-detail-body');
+		if (container && !document.getElementById('ds-strat-panel')) {
+			var panel = document.createElement('div');
+			panel.id = 'ds-strat-panel';
+			panel.className = 'ds-strat-panel';
+			var header = document.createElement('div');
+			header.className = 'ds-strat-panel-header';
+			header.textContent = 'Strat sections';
+			panel.appendChild(header);
+			sections.forEach(function (s) {
+				var btn = document.createElement('button');
+				btn.type = 'button';
+				btn.className = 'ds-strat-panel-item';
+				btn.textContent = s.name;
+				btn.addEventListener('click', function () { enter(s.id); });
+				panel.appendChild(btn);
+			});
+			container.appendChild(panel);
+		}
+
+		if (geographicCount === 0) enter(sections[0].id);
+	}
+
 	global.DatasetDetailStratSection = {
 		enter: enter,
 		exit: exit,
-		isActive: isActive
+		isActive: isActive,
+		offerSections: offerSections
 	};
 })(window);

@@ -264,6 +264,37 @@ $jtNeo = json_encode(array(
 ));
 $neodb->query("MATCH (p:Project {id: '{$PFX}_np'}) SET p.json_tags = '$jtNeo'");
 
+// -- Strat-only dataset: an UNMAPPED parent spot carrying the strat-section
+//    definition (real StraboSed shape — origwkt empty, wkt/gtype absent) plus
+//    one child interval in strat pixel space. Regression fixture for the
+//    2026-08-04 empty-landing-page bug: the API used to DROP the geometry-less
+//    parent, leaving the section unreachable and the page blank.
+$NEO_DS_STRAT     = 94570005;
+$NEO_STRAT_PARENT = 94570006;
+$NEO_STRAT_CHILD  = 94570007;
+$NEO_STRAT_SECID  = 94570008;
+
+$sedParent = json_encode(array('strat_section' => array(
+	'strat_section_id' => $NEO_STRAT_SECID,
+	'column_profile' => 'clastic', 'column_y_axis_units' => 'm')));
+$sedChild = json_encode(array('character' => 'bed',
+	'interval' => array('interval_thickness' => 1.5, 'thickness_units' => 'm'),
+	'lithologies' => array(array('primary_lithology' => 'siliciclastic',
+		'siliciclastic_type' => 'sandstone', 'sand_grain_size' => 'sand_coarse_l'))));
+
+$neodb->query("MATCH (p:Project {id: '{$PFX}_np'})
+	CREATE (d:Dataset {id: $NEO_DS_STRAT, userpkey: $UPK, name: 'spse2e Strat DS'})
+	CREATE (p)-[:HAS_DATASET]->(d)
+	CREATE (sp:Spot {id: $NEO_STRAT_PARENT, userpkey: $UPK, name: 'spse2e strat parent',
+		origwkt: '', date: '2024-09-13T20:12:06.000Z', modified_timestamp: 1726258326,
+		sed: '$sedParent'})
+	CREATE (d)-[:HAS_SPOT]->(sp)
+	CREATE (sc:Spot {id: $NEO_STRAT_CHILD, userpkey: $UPK, name: 'spse2e strat child',
+		wkt: 'POLYGON((0 0,0 30,40 30,40 0,0 0))', origwkt: 'POLYGON((0 0,0 30,40 30,40 0,0 0))',
+		gtype: 'Polygon', date: '2024-09-13T20:13:06.000Z', modified_timestamp: 1726258386,
+		strat_section_id: $NEO_STRAT_SECID, sed: '$sedChild'})
+	CREATE (d)-[:HAS_SPOT]->(sc)");
+
 $sid = forgeSession($UPK);
 check('fixtures seeded', true);
 
@@ -359,6 +390,55 @@ check('served sidebar.js marks image links for lightbox handling',
 check('served sidebar.js opens featherlight with new-tab fallback',
 	strpos($body, "\$.featherlight(link.getAttribute('href'), { type: 'image' })") !== false
 	&& strpos($body, 'e.preventDefault()') !== false);
+
+// ---------------------------------------------------------------------------
+section('1d. FIELD — strat-only dataset: unmapped parent rides the payload');
+
+list($st, $h, $raw) = http_raw('GET',
+	$BASE . '/StraboFieldDatasetDetail/api/spots.php?dataset_id=' . $NEO_DS_STRAT, null);
+$sc = json_decode($raw, true);
+check('strat dataset API 200 + parseable JSON', $st === 200 && is_array($sc), "st=$st");
+check('BOTH spots returned (geometry-less parent kept)',
+	$sc && count($sc['features']) === 2, 'got ' . ($sc ? count($sc['features']) : 0));
+
+$byId = array();
+if ($sc) foreach ($sc['features'] as $f) {
+	if (isset($f['properties']['id'])) $byId[(string)$f['properties']['id']] = $f;
+}
+$parent = isset($byId[(string)$NEO_STRAT_PARENT]) ? $byId[(string)$NEO_STRAT_PARENT] : null;
+$child  = isset($byId[(string)$NEO_STRAT_CHILD])  ? $byId[(string)$NEO_STRAT_CHILD]  : null;
+
+check('parent has geometry: null + intact sed.strat_section', $parent !== null
+	&& array_key_exists('geometry', $parent) && $parent['geometry'] === null
+	&& isset($parent['properties']['sed']['strat_section']['strat_section_id'])
+	&& (string)$parent['properties']['sed']['strat_section']['strat_section_id'] === (string)$NEO_STRAT_SECID);
+check('child keeps pixel Polygon + strat_section_id', $child !== null
+	&& isset($child['geometry']['type']) && $child['geometry']['type'] === 'Polygon'
+	&& (string)$child['properties']['strat_section_id'] === (string)$NEO_STRAT_SECID);
+check('strat_section_ids lists the section', $sc
+	&& in_array($NEO_STRAT_SECID, $sc['strat_section_ids']));
+check('envelope null (no geographic spots)', $sc && $sc['envelope'] === null);
+
+// Served assets carry the doorway wiring (HTTP-only suite, can't run JS).
+list($st, $h, $body) = http_raw('GET',
+	$BASE . '/StraboFieldDatasetDetail/js/spots.js', null);
+check('served spots.js skips null-geometry spots on the map layer',
+	strpos($body, 'if (!spot.geometry) return;') !== false);
+check('served spots.js offers strat sections to the panel',
+	strpos($body, 'DatasetDetailStratSection.offerSections') !== false);
+
+list($st, $h, $body) = http_raw('GET',
+	$BASE . '/StraboFieldDatasetDetail/js/strat_section.js', null);
+check('served strat_section.js builds the sections panel + auto-enters',
+	strpos($body, "panel.className = 'ds-strat-panel'") !== false
+	&& strpos($body, 'if (geographicCount === 0) enter(sections[0].id);') !== false);
+check('served strat_section.js styles GeometryCollection intervals',
+	strpos($body, "geomType === 'GeometryCollection'") !== false);
+
+list($st, $h, $body) = http_raw('GET',
+	$BASE . '/StraboFieldDatasetDetail/css/detail.css', null);
+check('served detail.css ships the sections panel styles',
+	strpos($body, '.ds-strat-panel') !== false);
 
 // ---------------------------------------------------------------------------
 section('2. MICRO — search → result → /mpl/ redirect');
