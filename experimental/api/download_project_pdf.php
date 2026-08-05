@@ -30,12 +30,11 @@ if ($project_pkey <= 0) {
     exit;
 }
 
-// Require login
+// Anonymous or expired sessions proceed with no identity; prepare_connections.php
+// maps that to the no-user sentinel (99999) and the access-control query below
+// (owner OR public project) decides visibility. See softlogincheck.php.
 if ($_SESSION['loggedin'] != "yes") {
-    header('Content-type: application/json');
-    http_response_code(401);
-    echo json_encode(['error' => 'Authentication required']);
-    exit;
+    $_SESSION['userpkey'] = "";
 }
 
 $userpkey = $_SESSION['userpkey'];

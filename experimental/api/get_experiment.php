@@ -7,7 +7,8 @@
  *   id - Experiment pkey (required)
  *
  * Returns experiment JSON with all LAPS sections.
- * Requires login - user must own the experiment OR parent project must be public.
+ * Access: user must own the experiment OR parent project must be public
+ * (public experiments are served to anonymous visitors too).
  */
 
 // Change to root directory for proper include path resolution
@@ -31,11 +32,11 @@ if ($experiment_pkey <= 0) {
     exit;
 }
 
-// Require login for experiment access
+// Anonymous or expired sessions proceed with no identity; prepare_connections.php
+// maps that to the no-user sentinel (99999) and the access-control query below
+// (owner OR public project) decides visibility. See softlogincheck.php.
 if ($_SESSION['loggedin'] != "yes") {
-    http_response_code(401);
-    echo json_encode(['error' => 'Authentication required']);
-    exit;
+    $_SESSION['userpkey'] = "";
 }
 
 $userpkey = $_SESSION['userpkey'];
