@@ -323,6 +323,20 @@ check('province vocab 200', $st === 200, "got $st");
 check('province values have gid+name', $j && isset($j['values'][0]['gid'])
 	&& isset($j['values'][0]['name']), 'n=' . ($j ? count($j['values']) : 0));
 
+// Geometry-less provinces (43 rows lost their outlines in the pre-PostGIS
+// import) can never match a search and must NOT be offered in the dropdown.
+// Hermetic fixture: a named row with NULL the_geom must be absent from vocab.
+$db->query("DELETE FROM shapegeology WHERE gid = 999901");
+$db->query("INSERT INTO shapegeology (gid, name) VALUES (999901, '$PFX geomless province')");
+list($st, $j) = api('vocab&facet=province');
+$geomlessSeen = false;
+foreach (($j ? $j['values'] : array()) as $pv) {
+	if ((int)$pv['gid'] === 999901) { $geomlessSeen = true; break; }
+}
+check('geometry-less province absent from vocab', $st === 200 && !$geomlessSeen,
+	'n=' . ($j ? count($j['values']) : 0));
+$db->query("DELETE FROM shapegeology WHERE gid = 999901");
+
 list($st, $j) = api('vocab&facet=rock_type');
 check('rock_type vocab has path+depth', $j && isset($j['values'][0]['path'])
 	&& array_key_exists('depth', $j['values'][0]));
