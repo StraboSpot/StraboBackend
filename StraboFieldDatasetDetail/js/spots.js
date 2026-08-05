@@ -47,6 +47,9 @@
 		});
 		global.DatasetDetail.spotsById = spotsById;
 		global.DatasetDetail.imagesById = imagesById;
+		// Expose the payload before any early return — the strat-section
+		// module resolves parent spots from spotsData.
+		global.DatasetDetail.spotsData = data;
 		global.DatasetDetail.imageBasemapIds = {};
 		(data.image_basemap_ids || []).forEach(function (id) {
 			global.DatasetDetail.imageBasemapIds[String(id)] = true;
@@ -54,6 +57,9 @@
 
 		var geographicFeatures = [];
 		(data.features || []).forEach(function (spot) {
+			// Unmapped spots (geometry: null — e.g. a strat-section parent
+			// that was never given a map location) can't render on the map.
+			if (!spot.geometry) return;
 			// Skip spots that live on an image basemap or strat section —
 			// those are rendered by Phase 4 / Phase 5 modes.
 			if (spot.properties && spot.properties.image_basemap) return;
@@ -62,6 +68,13 @@
 				DatasetDetailSymbology.explodeSpotOrientations(spot)
 			);
 		});
+
+		// Strat sections get a visible doorway — a panel listing them —
+		// auto-entered when the map would otherwise be empty (strat-only
+		// datasets whose parent spot was never mapped show NOTHING else).
+		if (global.DatasetDetailStratSection && global.DatasetDetailStratSection.offerSections) {
+			global.DatasetDetailStratSection.offerSections(data, geographicFeatures.length);
+		}
 
 		if (geographicFeatures.length === 0) return;
 
@@ -106,7 +119,6 @@
 		}
 
 		global.DatasetDetail.spotsLayer = vectorLayer;
-		global.DatasetDetail.spotsData  = data;
 	}
 
 	function styleForFeature(feature) {
@@ -132,7 +144,9 @@
 			});
 		}
 
-		if (geomType === 'Polygon' || geomType === 'MultiPolygon') {
+		// GeometryCollection rides the polygon default: fill/stroke apply to
+		// polygon + line members (point members stay unstyled, as before).
+		if (geomType === 'Polygon' || geomType === 'MultiPolygon' || geomType === 'GeometryCollection') {
 			return new ol.style.Style({
 				fill: new ol.style.Fill({ color: POLY_DEFAULT_FILL }),
 				stroke: new ol.style.Stroke({ color: POLY_DEFAULT_STROKE, width: 2 })
