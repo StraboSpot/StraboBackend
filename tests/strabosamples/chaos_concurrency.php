@@ -321,6 +321,14 @@ try {
     // =====================================================================
     // E.1a — CREATE race: both users bulk-upload the same project payload
     // simultaneously onto a clean slate. 3 iterations.
+    //
+    // Gate-aware pass criteria (same auth model as E.1b): the first racer to
+    // create the dataset becomes its creator. If the other racer's auth check
+    // runs BEFORE that create commits, both requests pass as creators (both
+    // 2xx); if it runs AFTER, the creator-only-edit rule deterministically
+    // 403s the loser. Which window the race lands in is pure timing, so both
+    // outcomes are legal. Failures are: double-denial, a non-403 denial
+    // (e.g. 5xx), or any invariant violation below.
     // =====================================================================
     echo "=== E.1a: parallel CREATE race (owner + editor, clean slate) ===\n";
 
@@ -341,8 +349,19 @@ try {
         $rB = curlWait($hB);
         note("iter $iter HTTP: owner={$rA['status']} editor={$rB['status']}");
 
-        $ok2xx = ($rA['status'] >= 200 && $rA['status'] < 300) && ($rB['status'] >= 200 && $rB['status'] < 300);
-        check("E.1a iter $iter: both uploads returned 2xx", $ok2xx);
+        $okA = $rA['status'] >= 200 && $rA['status'] < 300;
+        $okB = $rB['status'] >= 200 && $rB['status'] < 300;
+        $gateOk = ($okA || $okB)
+            && ($okA || $rA['status'] === 403)
+            && ($okB || $rB['status'] === 403);
+        check("E.1a iter $iter: winner 2xx, loser 2xx or clean 403", $gateOk);
+
+        // When exactly one racer won, the dataset's creator must be the winner.
+        if ($okA xor $okB) {
+            $createdBy = (int)$neodb->get_var("MATCH (d:Dataset {id:$datasetId}) RETURN d.created_by");
+            $winnerPkey = $okA ? $ownerPkey : $editorPkey;
+            check("E.1a iter $iter: 403'd racer lost to the actual dataset creator", $createdBy === $winnerPkey);
+        }
 
         $bad = neoSingletons($neodb, $projectId, $datasetId, array($richAId, $richBId, $legHoldId));
         check("E.1a iter $iter: Neo4j single-instance invariants", empty($bad));
