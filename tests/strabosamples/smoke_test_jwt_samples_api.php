@@ -254,6 +254,9 @@ try {
     check("unknown controller -> 404 'No such function'",
         $r['code'] === 404 && isset($r['body']['Error']) && strpos($r['body']['Error'], 'No such function') === 0);
 
+    $r = req('HEAD', '/mysamples', bearer($ownerToken));
+    check("unhandled verb (HEAD) -> 405, not a fatal", $r['code'] === 405);
+
     // -----------------------------------------------------------------------
     // 5. Delete through the gate
     // -----------------------------------------------------------------------

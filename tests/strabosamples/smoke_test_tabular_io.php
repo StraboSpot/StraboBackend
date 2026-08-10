@@ -489,6 +489,31 @@ try {
     check("discarded state gone", $svc->loadState($token) === null);
     check("garbage token rejected", $svc->loadState('zzzz') === null);
 
+    // TTL expiry (audit item 6): age states deterministically by rewriting
+    // the 'created' stamp inside the state JSON / the file mtime — the two
+    // clocks loadState and purgeStaleStates respectively run on.
+    $ttl = SampleTabularService::STATE_TTL_SECONDS;
+    $tokenOld = $svc->saveState($p, 'old.csv');
+    $stateFile = sys_get_temp_dir() . '/strabo_tabular_' . $tokenOld . '.json';
+    $raw = json_decode(file_get_contents($stateFile), true);
+    $raw['created'] = time() - $ttl - 10;
+    file_put_contents($stateFile, json_encode($raw));
+    check("expired state (past TTL) refuses to load", $svc->loadState($tokenOld) === null);
+    check("expired state file unlinked on load attempt", !is_file($stateFile));
+
+    $tokenFresh = $svc->saveState($p, 'fresh.csv');
+    $freshFile = sys_get_temp_dir() . '/strabo_tabular_' . $tokenFresh . '.json';
+    $raw = json_decode(file_get_contents($freshFile), true);
+    $raw['created'] = time() - $ttl + 3600;  // aged but inside TTL
+    file_put_contents($freshFile, json_encode($raw));
+    check("aged-but-unexpired state still loads", is_array($svc->loadState($tokenFresh)));
+
+    // purgeStaleStates sweep (mtime-based) fires on the next saveState.
+    touch($freshFile, time() - $ttl - 10);
+    $tokenNew = $svc->saveState($p, 'trigger-purge.csv');
+    check("stale file swept by purge on next saveState", !is_file($freshFile));
+    $svc->discardState($tokenNew);
+
     // ------------------------------------------------------------------
     echo "\n=== 13. custom key cap ===\n";
     // ------------------------------------------------------------------
