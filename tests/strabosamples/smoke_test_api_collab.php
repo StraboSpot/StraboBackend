@@ -170,9 +170,11 @@ try {
     check("accept refused with 'duplicate_id_conflict'", empty($r['ok']) && $r['error'] === 'duplicate_id_conflict');
 
     echo "\n=== owner-only gates ===\n";
-    // Invitee tries to invite someone to the owner's sample.
+    // Ex-invitee (grant removed + re-invite denied above, so no read access)
+    // tries to invite someone: existence-hiding returns not_found, not
+    // forbidden — a caller who can't read the sample can't learn it exists.
     $r = $svc->inviteCollaborators($testId, $ownerPkey, array('anyone@example.com'), 'edit');
-    check("invitee invite refused with 'forbidden'", empty($r['ok']) && $r['error'] === 'forbidden');
+    check("ex-invitee invite refused with 'not_found' (existence hidden)", empty($r['ok']) && $r['error'] === 'not_found');
 
     echo "\n=== unknown email returns 'unknown' ===\n";
     $svc->setUserpkey($ownerPkey);

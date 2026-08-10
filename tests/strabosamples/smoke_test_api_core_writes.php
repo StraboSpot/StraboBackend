@@ -177,11 +177,21 @@ try {
     check("reader update refused 'forbidden'",            empty($r['ok']) && $r['error'] === 'forbidden');
 
     echo "\n=== stranger blocked, delete owner-only ===\n";
-    $r = $svc->updateSample($suppliedId, $ownerPkey, array('description' => 'stranger attempt'));  // still as reader
-    check("readonly cannot delete",                       empty($svc->deleteSample($suppliedId, $ownerPkey)['ok']));
+    // True stranger (sentinel pkey, no grants): existence-hiding means every
+    // verb answers not_found, indistinguishable from a missing sample.
+    $svc->setUserpkey(999999901);
+    $r = $svc->updateSample($suppliedId, $ownerPkey, array('description' => 'stranger attempt'));
+    check("stranger update refused 'not_found' (existence hidden)", empty($r['ok']) && $r['error'] === 'not_found');
+    $r = $svc->deleteSample($suppliedId, $ownerPkey);
+    check("stranger delete refused 'not_found' (existence hidden)", empty($r['ok']) && $r['error'] === 'not_found');
+
+    $svc->setUserpkey($readerPkey);
+    $r = $svc->deleteSample($suppliedId, $ownerPkey);
+    check("readonly cannot delete ('forbidden')",         empty($r['ok']) && $r['error'] === 'forbidden');
 
     $svc->setUserpkey($editorPkey);
-    check("editor cannot delete (owner-only)",            empty($svc->deleteSample($suppliedId, $ownerPkey)['ok']));
+    $r = $svc->deleteSample($suppliedId, $ownerPkey);
+    check("editor cannot delete (owner-only, 'forbidden')", empty($r['ok']) && $r['error'] === 'forbidden');
 
     echo "\n=== Field-linked lat/lng read-only ===\n";
     $fieldSampleId = "smoketest-writes-field-$stamp";

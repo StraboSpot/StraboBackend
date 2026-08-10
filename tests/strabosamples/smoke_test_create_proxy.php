@@ -148,7 +148,7 @@ try {
         'parent_sample_id' => $strangerId,
         'parent_userpkey'  => $strangerPkey,
     )));
-    check('status = 403',                              $r['status'] === 403);
+    check('status = 404 (existence-hiding: unreadable parent = missing)', $r['status'] === 404);
     check('json.error = parent_not_accessible',         isset($r['json']['error']) && $r['json']['error'] === 'parent_not_accessible');
 
     echo "\n=== Successful create with own parent ===\n";

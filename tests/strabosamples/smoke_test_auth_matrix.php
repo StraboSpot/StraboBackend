@@ -596,20 +596,20 @@ check("stranger REST GET composition → 404", $r['status'] === 404);
 
 $r = httpBasic('PUT', "$restMain?owner=$ownerPkey",
     json_encode(array('notes' => 'stranger-edit-SHOULD-NOT-LAND')), $outsiderEmail, $password);
-check("stranger REST PUT sample denied (403)", $r['status'] === 403);
+check("stranger REST PUT sample denied (404, existence hidden)", $r['status'] === 404);
 
 $r = httpBasic('DELETE', "$restDisp?owner=$ownerPkey", null, $outsiderEmail, $password);
-check("stranger REST DELETE sample denied (403)", $r['status'] === 403);
+check("stranger REST DELETE sample denied (404, existence hidden)", $r['status'] === 404);
 
 $r = httpBasic('POST', "$restMain/collaborators?owner=$ownerPkey",
     json_encode(array('emails' => array($outsiderEmail), 'permission_level' => 'edit')),
     $outsiderEmail, $password);
-check("stranger REST POST collaborators (self-invite) → 403", $r['status'] === 403);
+check("stranger REST POST collaborators (self-invite) → 404, existence hidden", $r['status'] === 404);
 
 $r = httpSession('POST', '/samples_edit.php',
     json_encode(array('sample_id' => $idMain, 'owner_pkey' => $ownerPkey, 'description' => 'stranger-proxy-edit')),
     $sidOutsider);
-check("stranger proxy edit → 403", $r['status'] === 403);
+check("stranger proxy edit → 404 (existence hidden)", $r['status'] === 404);
 
 $r = httpSession('POST', '/samples_changelog.php',
     json_encode(array('action' => 'list', 'sample_id' => $idMain, 'owner_pkey' => $ownerPkey)),
@@ -624,7 +624,7 @@ check("stranger proxy family → 404", $r['status'] === 404);
 $r = httpSession('POST', '/samples_collab.php',
     json_encode(array('action' => 'list', 'sample_id' => $idMain, 'owner_pkey' => $ownerPkey)),
     $sidOutsider);
-check("stranger proxy collab list → 403", $r['status'] === 403);
+check("stranger proxy collab list → 404 (existence hidden)", $r['status'] === 404);
 
 $v = $db->get_var_prepared(
     "SELECT notes FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
@@ -673,12 +673,12 @@ check("pending REST GET changelog → 404", $r['status'] === 404);
 
 $r = httpBasic('PUT', "$restMain?owner=$ownerPkey",
     json_encode(array('notes' => 'pending-edit-SHOULD-NOT-LAND')), $outsiderEmail, $password);
-check("pending REST PUT sample denied (403)", $r['status'] === 403);
+check("pending REST PUT sample denied (404 — pending invite confers nothing)", $r['status'] === 404);
 
 $r = httpSession('POST', '/samples_edit.php',
     json_encode(array('sample_id' => $idMain, 'owner_pkey' => $ownerPkey, 'description' => 'pending-proxy-edit')),
     $sidOutsider);
-check("pending proxy edit → 403", $r['status'] === 403);
+check("pending proxy edit → 404 (existence hidden)", $r['status'] === 404);
 
 $r = httpSession('POST', '/samples_changelog.php',
     json_encode(array('action' => 'list', 'sample_id' => $idMain, 'owner_pkey' => $ownerPkey)),
@@ -784,11 +784,11 @@ check("share URL embedded in page matches canonical form",
     && substr($shareUrlEmbedded, -strlen("/samples/$ownerPkey/" . rawurlencode($idMain)))
        === "/samples/$ownerPkey/" . rawurlencode($idMain));
 
-// Direct edit POST as the stranger (C.3's "cannot trigger an edit") — 403.
+// Direct edit POST as the stranger (C.3's "cannot trigger an edit") — 404, existence hidden.
 $r = httpSession('POST', '/samples_edit.php',
     json_encode(array('sample_id' => $idMain, 'owner_pkey' => $ownerPkey, 'name' => 'hijacked')),
     $sidOutsider);
-check("stranger direct samples_edit.php POST → 403", $r['status'] === 403);
+check("stranger direct samples_edit.php POST → 404 (existence hidden)", $r['status'] === 404);
 $v = $db->get_var_prepared(
     "SELECT name FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
     array($idMain, $ownerPkey)
