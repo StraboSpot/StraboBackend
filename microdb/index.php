@@ -41,6 +41,7 @@ if($usercount == 0){
 }
 
 if($usercount == 0 &&  md5($password)!=$hashval){
+	header('WWW-Authenticate: Basic realm="StraboMicro"');
 	header("HTTP/1.1 401 Unauthorized");
 	echo "Unauthorized";exit();
 }
@@ -48,6 +49,7 @@ if($usercount == 0 &&  md5($password)!=$hashval){
 $userpkey=$db->get_var_prepared("select pkey from users where email=$1", array($username));
 
 if($userpkey == ""){
+	header('WWW-Authenticate: Basic realm="StraboMicro"');
 	header("HTTP/1.1 401 Unauthorized");
 	echo "Unauthorized";exit();
 }
