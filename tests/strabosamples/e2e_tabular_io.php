@@ -196,6 +196,9 @@ try {
     check("review shows 1 new",           preg_match('/<strong>1<\/strong> new/', $r['body']) === 1);
     check("review surfaces unknown vocab value", strpos($r['body'], 'Weird Vocab Value') !== false);
     check("review surfaces custom column",       strpos($r['body'], 'collector') !== false);
+    check("review change panel lists creating name",
+          strpos($r['body'], 'What will change') !== false
+          && strpos($r['body'], "$pfx-HTTP-A") !== false);
     $token = extractToken($r['body']);
     check("review carries a state token", $token !== null);
 
@@ -262,6 +265,12 @@ try {
                       'tabfile', $up, 'update.csv');
     check("update upload → review",       $r['status'] === 200);
     check("review shows 1 updated",       preg_match('/<strong>1<\/strong> updated/', $r['body']) === 1);
+    check("change panel shows old→new description",
+          strpos($r['body'], 'What will change') !== false
+          && strpos($r['body'], 'seeded for export') !== false
+          && strpos($r['body'], 'updated via http') !== false);
+    check("change panel labels row with current sample name",
+          preg_match('/class="si-col-name">E2E-SEED-01</', $r['body']) === 1);
     $token = extractToken($r['body']);
     $r = httpPostForm('/samples_import.php', $sidOwner, array('action' => 'confirm', 'token' => $token));
     check("update confirm → success",     strpos($r['body'], 'Import complete') !== false);
@@ -285,6 +294,9 @@ try {
     check("custom-only upload → review",  $r['status'] === 200);
     check("review chip previews 1 updated", preg_match('/<strong>1<\/strong> updated/', $r['body']) === 1);
     check("custom column decision still shown", strpos($r['body'], 'FooFoo Stuff') !== false);
+    check("change panel shows custom add as (blank) → value",
+          strpos($r['body'], 'si-dim') !== false
+          && strpos($r['body'], 'bogus info') !== false);
     $token = extractToken($r['body']);
     // Ignore-resolution must drop it back to a no-op commit.
     $r = httpPostForm('/samples_import.php', $sidOwner, array(

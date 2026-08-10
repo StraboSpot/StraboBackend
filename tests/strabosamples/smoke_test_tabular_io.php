@@ -217,6 +217,28 @@ try {
     $plan = $svc->plan($p, array('custom_columns' => array('depth_m' => 'import')));
     check("update plan clean", $plan['clean'] === true);
     check("1 update", $plan['counts']['update'] === 1);
+
+    // Change-detail capture for the review screen: template header names +
+    // old → new values ride on the update plan row.
+    $urow = null;
+    foreach ($plan['rows'] as $r) { if ($r['action'] === 'update') { $urow = $r; } }
+    check("update row carries current sample name", $urow && $urow['sample_name'] === 'RICH-01');
+    $chgByCol = array();
+    if ($urow && isset($urow['changes'])) {
+        foreach ($urow['changes'] as $c) { $chgByCol[$c['column']] = $c; }
+    }
+    check("change detail: rename old→new",
+          isset($chgByCol['sample_id']) && $chgByCol['sample_id']['old'] === 'RICH-01'
+          && $chgByCol['sample_id']['new'] === 'RICH-01-renamed');
+    check("change detail: blank-cell clear shows old notes + null new",
+          isset($chgByCol['notes']) && $chgByCol['notes']['old'] === 'rich notes'
+          && $chgByCol['notes']['new'] === null);
+    check("change detail: custom depth_m removal listed",
+          isset($chgByCol['depth_m']) && $chgByCol['depth_m']['old'] === '12.5'
+          && $chgByCol['depth_m']['new'] === null);
+    check("change detail: untouched fields absent",
+          !isset($chgByCol['igsn']) && !isset($chgByCol['description']) && !isset($chgByCol['collector']));
+
     $res = $svc->commit($plan);
     check("update commit ok", !empty($res['ok']) && $res['updated'] === 1);
 
@@ -251,6 +273,25 @@ try {
     $planIgn = $svc->plan($p, array('custom_columns' => array('collector' => 'ignore')));
     check("'ignore' resolution drops it back to noop",
           $planIgn['clean'] === true && $planIgn['counts']['noop'] === 1 && $planIgn['counts']['update'] === 0);
+
+    // Plan-only (no commit): vocab changes surface as DISPLAY labels, not
+    // storage values; coordinate changes carry numeric old/new.
+    $csv = "strabo_internal_id,material_type,latitude,longitude\n$sRich,Sediment,34.25,-118.5\n";
+    $p = $svc->parseUpload(csvFile($csv), 'chgdetail.csv');
+    $plan = $svc->plan($p);
+    $urow = null;
+    foreach ($plan['rows'] as $r) { if ($r['action'] === 'update') { $urow = $r; } }
+    $chgByCol = array();
+    if ($urow && isset($urow['changes'])) {
+        foreach ($urow['changes'] as $c) { $chgByCol[$c['column']] = $c; }
+    }
+    check("change detail: vocab old/new as display labels",
+          isset($chgByCol['material_type']) && $chgByCol['material_type']['old'] === 'Intact Rock'
+          && $chgByCol['material_type']['new'] === 'Sediment');
+    check("change detail: latitude numeric old/new",
+          isset($chgByCol['latitude']) && abs($chgByCol['latitude']['old'] - 34.2) < 1e-9
+          && abs($chgByCol['latitude']['new'] - 34.25) < 1e-9);
+    check("change detail: unchanged longitude absent", !isset($chgByCol['longitude']));
 
     // ------------------------------------------------------------------
     echo "\n=== 5. vocab: unknown → soft → resolution paths ===\n";
