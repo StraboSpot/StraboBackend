@@ -748,15 +748,24 @@ class StraboSamplesService
      * @param string $permissionLevel 'edit' or 'readonly'
      * @return int number of rows inserted
      */
-    public function autoSeedProjectCollaborators($sampleId, $ownerPkey, array $collaboratorPkeys, $permissionLevel)
+    public function autoSeedProjectCollaborators($sampleId, $ownerPkey, array $collaboratorPkeys, $permissionLevel = 'edit')
     {
         $ownerPkey = (int)$ownerPkey;
         if (!in_array($permissionLevel, array('edit', 'readonly'), true)) {
             return 0;
         }
         $inserted = 0;
-        foreach ($collaboratorPkeys as $pkey) {
-            $pkey = (int)$pkey;
+        // Two accepted shapes: a pkey => level map (each grant mirrors that
+        // collaborator's own project level — §7.3.1 "one-time copy"), or a
+        // plain list of pkeys all seeded at $permissionLevel.
+        foreach ($collaboratorPkeys as $key => $val) {
+            if (is_string($val) && in_array($val, array('edit', 'readonly'), true)) {
+                $pkey  = (int)$key;
+                $level = $val;
+            } else {
+                $pkey  = (int)$val;
+                $level = $permissionLevel;
+            }
             if ($pkey === $ownerPkey || $pkey <= 0) {
                 continue;
             }
@@ -775,7 +784,7 @@ class StraboSamplesService
                    (sample_id, sample_userpkey, collaborator_pkey, permission_level,
                     uuid, accepted, accepted_at, added_by)
                  VALUES ($1, $2, $3, $4, $5, TRUE, now(), $6)",
-                array($sampleId, $ownerPkey, $pkey, $permissionLevel, $newUuid, $this->userpkey)
+                array($sampleId, $ownerPkey, $pkey, $level, $newUuid, $this->userpkey)
             );
             $inserted++;
         }
@@ -1755,8 +1764,10 @@ class StraboSamplesService
      * the projected source values. reference describes the source's link
      * (reference_id + reference_userpkey + reference_metadata). children
      * is an array with optional composition/parameters/documents arrays.
-     * opts may include 'autoSeedCollaborators' (array of pkeys to seed as
-     * accepted edit collaborators on first creation only).
+     * opts may include 'autoSeedCollaborators' — a pkey => level map (each
+     * grant mirrors that collaborator's own project level) or a plain pkey
+     * list seeded at opts['autoSeedLevel'] — applied as pre-accepted sample
+     * collaborators on first creation only.
      *
      * The actor (modified_by / changed_by) is $this->userpkey; falls back
      * to $ownerPkey when unset (server-internal callers can either

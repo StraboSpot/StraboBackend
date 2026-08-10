@@ -442,12 +442,13 @@ function _field_sample_sync_cypher_context($neodb, $spotId, $userpkey, $projectI
 
 /**
  * @internal — pull accepted, non-disabled project collaborators from the
- * public.collaborators table for auto-seed. Returns an array with two
- * keys: 'list' (int pkeys) and 'level' ('edit'|'readonly'). Empty list
+ * public.collaborators table for auto-seed. Returns a pkey => level map
+ * ('edit'|'readonly') — each seeded sample grant mirrors that
+ * collaborator's OWN project level (§7.3.1 "one-time copy"). Empty map
  * when project context is unknown.
  */
 function _field_sample_sync_compute_seed($db, $projectStraboId, $ownerPkey) {
-    $out = array('list' => array(), 'level' => 'edit');
+    $out = array();
     if (!$projectStraboId) return $out;
     $rows = $db->get_results_prepared(
         "SELECT collaborator_user_pkey, collaboration_level
@@ -461,10 +462,9 @@ function _field_sample_sync_compute_seed($db, $projectStraboId, $ownerPkey) {
     if (!is_array($rows)) return $out;
     foreach ($rows as $r) {
         $pk = (int)$r->collaborator_user_pkey;
-        if ($pk > 0) $out['list'][] = $pk;
-        if (isset($r->collaboration_level) && $r->collaboration_level === 'readonly') {
-            $out['level'] = 'readonly';
-        }
+        if ($pk <= 0) continue;
+        $out[$pk] = (isset($r->collaboration_level) && $r->collaboration_level === 'readonly')
+            ? 'readonly' : 'edit';
     }
     return $out;
 }
@@ -517,9 +517,9 @@ function _field_sample_sync_emit_one($db, $neodb, $sampleObj, $spotProps, $sampl
     );
 
     $opts = array();
-    if (!empty($seed['list'])) {
-        $opts['autoSeedCollaborators'] = $seed['list'];
-        $opts['autoSeedLevel']         = $seed['level'];
+    if (!empty($seed)) {
+        // pkey => level map — per-collaborator mirroring.
+        $opts['autoSeedCollaborators'] = $seed;
     }
 
     $svc = new StraboSamplesService($db, $neodb);

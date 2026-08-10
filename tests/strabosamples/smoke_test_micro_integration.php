@@ -43,11 +43,12 @@ function check($label, $cond) {
 }
 
 $users = $db->get_results_prepared(
-    "SELECT pkey FROM users WHERE deleted = FALSE AND active = TRUE ORDER BY pkey LIMIT 2", array()
+    "SELECT pkey FROM users WHERE deleted = FALSE AND active = TRUE ORDER BY pkey LIMIT 3", array()
 );
-if (!is_array($users) || count($users) < 2) { echo "Need 2 users\n"; exit(1); }
-$ownerPkey       = (int)$users[0]->pkey;
+if (!is_array($users) || count($users) < 3) { echo "Need 3 users\n"; exit(1); }
+$ownerPkey        = (int)$users[0]->pkey;
 $collaboratorPkey = (int)$users[1]->pkey;
+$readonlyPkey     = (int)$users[2]->pkey;
 $uuid_gen = new UUID();
 
 $stamp           = time();
@@ -84,13 +85,21 @@ $db->prepare_query(
     array($sampleInternalB, $datasetInternalId, $strabo_id_b, 'B', 'B-label', 'other', 'lunar regolith')
 );
 
-// Pre-seed a project collaborator so the §7.3.1 auto-seed has a target.
+// Pre-seed a MIXED project roster (edit + readonly) so the §7.3.1 auto-seed
+// proves per-collaborator level mirroring — the readonly member must NOT
+// downgrade the editor's grant.
 $collabUuid = $uuid_gen->v4();
 $db->prepare_query(
     "INSERT INTO collaborators (strabo_project_id, project_owner_user_pkey, collaborator_user_pkey,
                                 collaboration_level, accepted, uuid, disabled)
      VALUES ($1, $2, $3, 'edit', TRUE, $4, FALSE)",
     array($projectStraboId, $ownerPkey, $collaboratorPkey, $collabUuid)
+);
+$db->prepare_query(
+    "INSERT INTO collaborators (strabo_project_id, project_owner_user_pkey, collaborator_user_pkey,
+                                collaboration_level, accepted, uuid, disabled)
+     VALUES ($1, $2, $3, 'readonly', TRUE, $4, FALSE)",
+    array($projectStraboId, $ownerPkey, $readonlyPkey, $uuid_gen->v4())
 );
 
 echo "owner=$ownerPkey  collab=$collaboratorPkey  project=$projectInternalId ($projectStraboId)  dataset=$datasetInternalId\n\n";
@@ -158,8 +167,15 @@ try {
         array($strabo_id_a, $ownerPkey, $collaboratorPkey)
     );
     check("collaborator seeded into sample_collaborators",    $seeded !== null);
-    check("seeded permission_level = 'edit'",                 $seeded && $seeded->permission_level === 'edit');
+    check("editor mirrors own level ('edit' despite readonly co-member)",
+          $seeded && $seeded->permission_level === 'edit');
     check("seeded accepted = true",                           $seeded && in_array((string)$seeded->accepted, array('t','true','1'), true));
+    $seededRo = $db->get_row_prepared(
+        "SELECT permission_level FROM strabosamples.sample_collaborators
+          WHERE sample_id=$1 AND sample_userpkey=$2 AND collaborator_pkey=$3",
+        array($strabo_id_a, $ownerPkey, $readonlyPkey)
+    );
+    check("readonly member seeded at own level",              $seededRo && $seededRo->permission_level === 'readonly');
 
     echo "\n=== changelog: 'create' source='micro' ===\n";
     $clog = $db->get_row_prepared(

@@ -140,17 +140,15 @@ function micro_sample_sync($db, $sample, $project_strabo_id, $project_internal_i
             AND disabled = FALSE",
         array($project_strabo_id, (int)$project_owner_pkey)
     );
-    $seedList  = array();
-    $seedLevel = 'edit';
+    // pkey => level map — each seeded grant mirrors that collaborator's
+    // OWN project level (§7.3.1 "one-time copy"), matching the Field path.
+    $seedMap = array();
     if (is_array($seedRows)) {
         foreach ($seedRows as $row) {
             $pkey = (int)$row->collaborator_user_pkey;
-            if ($pkey > 0) $seedList[] = $pkey;
-            // If any project collaborator is readonly, the sample-level
-            // grant matches; otherwise stays at edit.
-            if (isset($row->collaboration_level) && $row->collaboration_level === 'readonly') {
-                $seedLevel = 'readonly';
-            }
+            if ($pkey <= 0) continue;
+            $seedMap[$pkey] = (isset($row->collaboration_level) && $row->collaboration_level === 'readonly')
+                ? 'readonly' : 'edit';
         }
     }
 
@@ -165,8 +163,7 @@ function micro_sample_sync($db, $sample, $project_strabo_id, $project_internal_i
         $reference,
         array(),  // Micro has no composition/parameters/documents children today
         array(
-            'autoSeedCollaborators' => $seedList,
-            'autoSeedLevel'         => $seedLevel,
+            'autoSeedCollaborators' => $seedMap,
         )
     );
 
