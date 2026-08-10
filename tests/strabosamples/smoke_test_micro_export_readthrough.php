@@ -155,6 +155,33 @@ try {
           isset($s1->sampleID) && $s1->sampleID === 'UntrackedSample' &&
           isset($s1->sampleDescription) && $s1->sampleDescription === 'untracked desc');
 
+    // Regression pin (2026-08-10 audit item 5): object-SHAPED collections —
+    // `datasets` as a stdClass map keyed by id, and `samples` as a stdClass
+    // map — must overlay identically to arrays. Verified correct today
+    // (foreach iterates stdClass properties; sample objects mutate by
+    // reference through the (array) cast, and all real projectjson rows use
+    // arrays anyway) — this pins that a future rewrite of the walk keeps it.
+    $objShaped = json_decode(json_encode(array(
+        'datasets' => array(
+            'dsA' => array(
+                'samples' => array(
+                    array('id' => $sampleStraboId, 'sampleID' => 'RawA'),
+                ),
+            ),
+            'dsB' => array(
+                'samples' => array(
+                    'k1' => array('id' => $sampleStraboId, 'sampleID' => 'RawB'),
+                ),
+            ),
+        ),
+    )));  // decode WITHOUT assoc → stdClass maps, matching a client's JSON object shape
+    micro_sample_overlay_apply($objShaped, $db, $ownerPkey);
+    check("overlay: object-keyed datasets map still overlaid",
+          $objShaped->datasets->dsA->samples[0]->sampleID === 'EditedSampleName');
+    $k1 = 'k1';
+    check("overlay: object-keyed samples map still overlaid",
+          $objShaped->datasets->dsB->samples->$k1->sampleID === 'EditedSampleName');
+
     // -------------------------------------------------------------------
     // PART 2: micro_sample_overlay_write_json() filesystem-style.
     // -------------------------------------------------------------------
