@@ -104,6 +104,16 @@ try {
     check('status = 400',                              $r['status'] === 400);
     check('json.error = invalid_json',                  isset($r['json']['error']) && $r['json']['error'] === 'invalid_json');
 
+    echo "\n=== Non-JSON custom_data string → 400 (pre-fix: ok:true, silent PG abort) ===\n";
+    $badJsonId = 'smoke-proxy-' . $stamp . '-badjson';
+    $r = hit($sid, json_encode(array('id' => $badJsonId, 'name' => 'bad json', 'custom_data' => 'not json')));
+    check('status = 400',                              $r['status'] === 400);
+    check('json.error = invalid_json_field',            isset($r['json']['error']) && $r['json']['error'] === 'invalid_json_field');
+    $n = (int)$db->get_var_prepared(
+        "SELECT count(*) FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+        array($badJsonId, $ownerPkey));
+    check('no row written for rejected create',         $n === 0);
+
     echo "\n=== Successful create (auto-minted id) ===\n";
     $suppliedId = 'smoke-proxy-' . $stamp . '-a';
     $payload = json_encode(array(

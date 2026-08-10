@@ -850,6 +850,11 @@ class StraboSamplesService
             }
         }
 
+        $badJsonb = $this->validateJsonbFields($input);
+        if ($badJsonb !== null) {
+            return $badJsonb;
+        }
+
         // Build column + value lists.
         $cols   = array('id', 'userpkey', 'created_by', 'modified_by');
         $params = array($id, $ownerPkey, $ownerPkey, $ownerPkey);
@@ -945,6 +950,11 @@ class StraboSamplesService
         }
         if (empty($spineUpdates) && empty($jsonbUpdates)) {
             return array('ok' => false, 'error' => 'no_writable_fields');
+        }
+
+        $badJsonb = $this->validateJsonbFields($jsonbUpdates);
+        if ($badJsonb !== null) {
+            return $badJsonb;
         }
 
         // Field-link lat/lng read-only guard.
@@ -1133,10 +1143,50 @@ class StraboSamplesService
         if ($val === null) return null;
         if (is_string($val)) {
             // Caller already encoded — trust it. (Lets clients pass already-
-            // serialized JSONB when convenient.)
+            // serialized JSONB when convenient.) Client input is validated
+            // upstream by validateJsonbFields(); internal upsert callers
+            // always pass arrays.
             return $val;
         }
         return json_encode($val);
+    }
+
+    /**
+     * Validate client-supplied JSONB fields before they reach SQL.
+     * Each present, non-null value must resolve to a JSON object/array —
+     * either already decoded (array, or stdClass from the JSON body) or a
+     * pre-encoded JSON string that parses to one. Anything else previously
+     * flowed into the INSERT/UPDATE verbatim and aborted it inside
+     * PostgreSQL, which surfaced as ok:true with no row written (the db
+     * wrapper warns but does not throw).
+     *
+     * Returns null when valid, or the error array to hand back to the
+     * caller ('invalid_json_field' with the offending field named).
+     */
+    protected function validateJsonbFields(array $input)
+    {
+        foreach (self::$WRITABLE_JSONB_FIELDS as $f) {
+            if (!array_key_exists($f, $input) || $input[$f] === null) {
+                continue;
+            }
+            $v = $input[$f];
+            if (is_array($v) || is_object($v)) {
+                continue;
+            }
+            if (is_string($v)) {
+                $decoded = json_decode($v);
+                if (json_last_error() === JSON_ERROR_NONE
+                        && (is_array($decoded) || is_object($decoded))) {
+                    continue;
+                }
+            }
+            return array(
+                'ok'     => false,
+                'error'  => 'invalid_json_field',
+                'detail' => array('field' => $f),
+            );
+        }
+        return null;
     }
 
     // ============================================================
