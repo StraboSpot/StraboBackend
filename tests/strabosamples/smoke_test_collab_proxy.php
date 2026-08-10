@@ -196,31 +196,34 @@ try {
     check('status = 404',                       $r['status'] === 404);
     check('error = grant_not_found',             isset($r['json']['error']) && $r['json']['error'] === 'grant_not_found');
 
-    echo "\n=== Non-owner tries to invite — forbidden ===\n";
+    // Stranger sessions (no read access) get 404 not_found on every collab
+    // mutation — existence-hiding; 'forbidden' is reserved for callers who
+    // can read the sample but lack manage rights.
+    echo "\n=== Stranger tries to invite — 404 existence hidden ===\n";
     $r = hit($strangerSid, json_encode(array(
         'sample_id' => $sampleId, 'owner_pkey' => $ownerPkey, 'action' => 'invite',
         'emails' => array($inviteeEmail),
         'permission_level' => 'edit',
     )));
-    check('status = 403',                       $r['status'] === 403);
-    check('error = forbidden',                   isset($r['json']['error']) && $r['json']['error'] === 'forbidden');
+    check('status = 404',                       $r['status'] === 404);
+    check('error = not_found',                   isset($r['json']['error']) && $r['json']['error'] === 'not_found');
 
-    echo "\n=== Non-owner tries to update_level — forbidden ===\n";
+    echo "\n=== Stranger tries to update_level — 404 existence hidden ===\n";
     $r = hit($strangerSid, json_encode(array(
         'sample_id' => $sampleId, 'owner_pkey' => $ownerPkey, 'action' => 'update_level',
         'collaborator_pkey' => $inviteePkey,
         'permission_level' => 'edit',
     )));
-    check('status = 403',                       $r['status'] === 403);
-    check('error = forbidden',                   isset($r['json']['error']) && $r['json']['error'] === 'forbidden');
+    check('status = 404',                       $r['status'] === 404);
+    check('error = not_found',                   isset($r['json']['error']) && $r['json']['error'] === 'not_found');
 
-    echo "\n=== Non-owner tries to remove — forbidden ===\n";
+    echo "\n=== Stranger tries to remove — 404 existence hidden ===\n";
     $r = hit($strangerSid, json_encode(array(
         'sample_id' => $sampleId, 'owner_pkey' => $ownerPkey, 'action' => 'remove',
         'collaborator_pkey' => $inviteePkey,
     )));
-    check('status = 403',                       $r['status'] === 403);
-    check('error = forbidden',                   isset($r['json']['error']) && $r['json']['error'] === 'forbidden');
+    check('status = 404',                       $r['status'] === 404);
+    check('error = not_found',                   isset($r['json']['error']) && $r['json']['error'] === 'not_found');
 
     echo "\n=== Remove — happy path ===\n";
     $r = hit($ownerSid, json_encode(array(

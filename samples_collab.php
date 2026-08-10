@@ -84,11 +84,11 @@ switch ($action) {
     case 'list':
         $list = $svc->listCollaborators($sampleId, $ownerPkey);
         if ($list === null) {
-            // canRead failed → either sample doesn't exist or caller is
-            // unauthorized. Surface as forbidden; the modal is owner-only
-            // and reaching this means something's off with the session.
-            http_response_code(403);
-            echo json_encode(array('ok' => false, 'error' => 'forbidden'));
+            // canRead failed → sample missing OR caller unauthorized.
+            // Existence-hiding posture: both surface as 404 not_found,
+            // matching the REST API and the read endpoints.
+            http_response_code(404);
+            echo json_encode(array('ok' => false, 'error' => 'not_found'));
             exit;
         }
         // Enrich with display fields via one batched users lookup.

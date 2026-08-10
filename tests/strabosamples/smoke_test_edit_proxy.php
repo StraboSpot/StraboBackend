@@ -208,17 +208,18 @@ try {
     check('status = 403',                       $r['status'] === 403);
     check('error = forbidden',                   isset($r['json']['error']) && $r['json']['error'] === 'forbidden');
 
-    echo "\n=== Stranger → 403 (sample exists; no edit access) ===\n";
-    // updateSample's exists-check passes since the row is there; the canEdit
-    // gate then rejects → 'forbidden'. Aligns with api_core_writes service
-    // behavior. (404 'not_found' is reserved for actually-missing rows.)
+    echo "\n=== Stranger → 404 (existence hidden; no read access) ===\n";
+    // Existence-hiding posture: a caller who can't READ the sample gets the
+    // same not_found as a missing row on every verb — mutations can't be
+    // used to probe which (id, owner) pairs exist. 'forbidden' is reserved
+    // for readable-but-not-writable callers (readonly collab, above).
     $r = hit($strangerSid, json_encode(array(
         'sample_id'   => $sampleId,
         'owner_pkey'  => $ownerPkey,
         'notes'       => 'stranger-attempt',
     )));
-    check('status = 403',                       $r['status'] === 403);
-    check('error = forbidden',                   isset($r['json']['error']) && $r['json']['error'] === 'forbidden');
+    check('status = 404',                       $r['status'] === 404);
+    check('error = not_found',                   isset($r['json']['error']) && $r['json']['error'] === 'not_found');
 
     echo "\n=== Nonexistent sample → 404 ===\n";
     $r = hit($ownerSid, json_encode(array(

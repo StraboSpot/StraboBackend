@@ -455,7 +455,11 @@ class StraboSamplesService
     {
         $ownerPkey = (int)$ownerPkey;
         $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
-        if (!$ctx->exists) {
+        if (!$ctx->canRead()) {
+            // Existence-hiding: a caller without read access gets the same
+            // not_found as a missing sample on every verb, so mutations can't
+            // be used to probe which (id, owner) pairs exist. Readable-but-
+            // not-writable callers still get the informative 'forbidden'.
             return array('ok' => false, 'error' => 'not_found');
         }
         if (!$ctx->canManage()) {
@@ -561,7 +565,11 @@ class StraboSamplesService
         $ownerPkey = (int)$ownerPkey;
         $collaboratorPkey = (int)$collaboratorPkey;
         $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
-        if (!$ctx->exists) {
+        if (!$ctx->canRead()) {
+            // Existence-hiding: a caller without read access gets the same
+            // not_found as a missing sample on every verb, so mutations can't
+            // be used to probe which (id, owner) pairs exist. Readable-but-
+            // not-writable callers still get the informative 'forbidden'.
             return array('ok' => false, 'error' => 'not_found');
         }
         if (!$ctx->canManage()) {
@@ -597,7 +605,11 @@ class StraboSamplesService
         $ownerPkey = (int)$ownerPkey;
         $collaboratorPkey = (int)$collaboratorPkey;
         $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
-        if (!$ctx->exists) {
+        if (!$ctx->canRead()) {
+            // Existence-hiding: a caller without read access gets the same
+            // not_found as a missing sample on every verb, so mutations can't
+            // be used to probe which (id, owner) pairs exist. Readable-but-
+            // not-writable callers still get the informative 'forbidden'.
             return array('ok' => false, 'error' => 'not_found');
         }
         if (!$ctx->canManage()) {
@@ -907,7 +919,11 @@ class StraboSamplesService
     {
         $ownerPkey = (int)$ownerPkey;
         $ctx = $this->auth->getSampleContext($this->userpkey, $id, $ownerPkey);
-        if (!$ctx->exists) {
+        if (!$ctx->canRead()) {
+            // Existence-hiding: a caller without read access gets the same
+            // not_found as a missing sample on every verb, so mutations can't
+            // be used to probe which (id, owner) pairs exist. Readable-but-
+            // not-writable callers still get the informative 'forbidden'.
             return array('ok' => false, 'error' => 'not_found');
         }
         if (!$ctx->canEdit()) {
@@ -1067,7 +1083,11 @@ class StraboSamplesService
     {
         $ownerPkey = (int)$ownerPkey;
         $ctx = $this->auth->getSampleContext($this->userpkey, $id, $ownerPkey);
-        if (!$ctx->exists) {
+        if (!$ctx->canRead()) {
+            // Existence-hiding: a caller without read access gets the same
+            // not_found as a missing sample on every verb, so mutations can't
+            // be used to probe which (id, owner) pairs exist. Readable-but-
+            // not-writable callers still get the informative 'forbidden'.
             return array('ok' => false, 'error' => 'not_found');
         }
         if (!$ctx->canManage()) {
@@ -1278,7 +1298,11 @@ class StraboSamplesService
         $parentUserpkey = (int)$parentUserpkey;
 
         $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
-        if (!$ctx->exists) {
+        if (!$ctx->canRead()) {
+            // Existence-hiding: a caller without read access gets the same
+            // not_found as a missing sample on every verb, so mutations can't
+            // be used to probe which (id, owner) pairs exist. Readable-but-
+            // not-writable callers still get the informative 'forbidden'.
             return array('ok' => false, 'error' => 'not_found');
         }
         if (!$ctx->canEdit()) {
@@ -1337,7 +1361,11 @@ class StraboSamplesService
         $ownerPkey = (int)$ownerPkey;
 
         $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
-        if (!$ctx->exists) {
+        if (!$ctx->canRead()) {
+            // Existence-hiding: a caller without read access gets the same
+            // not_found as a missing sample on every verb, so mutations can't
+            // be used to probe which (id, owner) pairs exist. Readable-but-
+            // not-writable callers still get the informative 'forbidden'.
             return array('ok' => false, 'error' => 'not_found');
         }
         if (!$ctx->canEdit()) {
@@ -1472,7 +1500,11 @@ class StraboSamplesService
         $cfg = self::$SUB_ARRAY_TABLES[$resource];
 
         $ctx = $this->auth->getSampleContext($this->userpkey, $sampleId, $ownerPkey);
-        if (!$ctx->exists) {
+        if (!$ctx->canRead()) {
+            // Existence-hiding: a caller without read access gets the same
+            // not_found as a missing sample on every verb, so mutations can't
+            // be used to probe which (id, owner) pairs exist. Readable-but-
+            // not-writable callers still get the informative 'forbidden'.
             return array('ok' => false, 'error' => 'not_found');
         }
         if (!$ctx->canEdit()) {

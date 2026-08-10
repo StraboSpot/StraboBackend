@@ -119,7 +119,7 @@ if (!empty($result['ok'])) {
     switch ($err) {
         case 'not_found':             http_response_code(404); break;
         case 'forbidden':             http_response_code(403); break;
-        case 'parent_not_accessible': http_response_code(403); break;
+        case 'parent_not_accessible': http_response_code(404); break;  // existence-hiding: unreadable parent = missing
         case 'parent_pair_required':  http_response_code(400); break;
         case 'cycle_detected':        http_response_code(409); break;
         default:                      http_response_code(500);

@@ -224,12 +224,14 @@ try {
     $r = req('GET', "/sample/$idA?owner=$ownerPkey", bearer($outsiderToken));
     check("outsider GET owner's sample -> 404 (existence hidden)", $r['code'] === 404);
 
+    // Existence-hiding: a caller with no read access gets 404 on every verb,
+    // so mutations can't probe which (id, owner) pairs exist.
     $r = req('PUT', "/sample/$idA?owner=$ownerPkey", bearer($outsiderToken), array('name' => 'HIJACKED'));
-    check("outsider PUT owner's sample -> 403 forbidden",
-        $r['code'] === 403 && isset($r['body']['Error']) && $r['body']['Error'] === 'forbidden');
+    check("outsider PUT owner's sample -> 404 not_found (existence hidden)",
+        $r['code'] === 404 && isset($r['body']['Error']) && $r['body']['Error'] === 'not_found');
 
     $r = req('DELETE', "/sample/$idA?owner=$ownerPkey", bearer($outsiderToken));
-    check("outsider DELETE owner's sample -> 403 forbidden", $r['code'] === 403);
+    check("outsider DELETE owner's sample -> 404 (existence hidden)", $r['code'] === 404);
 
     $r = req('PUT', "/sample/$idA", bearer($outsiderToken), array('name' => 'HIJACKED'));
     check("outsider PUT without ?owner resolves in own namespace -> 404 not_found", $r['code'] === 404);

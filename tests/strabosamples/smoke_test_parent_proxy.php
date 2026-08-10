@@ -203,10 +203,10 @@ try {
     check('status = 409',                       $r['status'] === 409);
     check('error = cycle_detected',              isset($r['json']['error']) && $r['json']['error'] === 'cycle_detected');
 
-    echo "\n=== set: inaccessible parent rejected ===\n";
+    echo "\n=== set: inaccessible parent rejected (404, existence hidden) ===\n";
     $r = hit($ownerSid, json_encode(array('action' => 'set', 'sample_id' => $idA, 'owner_pkey' => $ownerPkey,
                                           'parent_sample_id' => $idPrivate, 'parent_userpkey' => $strangerPkey)));
-    check('status = 403',                       $r['status'] === 403);
+    check('status = 404 (unreadable parent = missing)', $r['status'] === 404);
     check('error = parent_not_accessible',       isset($r['json']['error']) && $r['json']['error'] === 'parent_not_accessible');
 
     echo "\n=== set: missing parent pair rejected ===\n";
@@ -234,11 +234,11 @@ try {
     check('status = 403',                       $r['status'] === 403);
     check('error = forbidden',                   isset($r['json']['error']) && $r['json']['error'] === 'forbidden');
 
-    echo "\n=== set: stranger forbidden ===\n";
+    echo "\n=== set: stranger denied (404, existence hidden) ===\n";
     $r = hit($strangerSid, json_encode(array('action' => 'set', 'sample_id' => $idB, 'owner_pkey' => $ownerPkey,
                                              'parent_sample_id' => $idPrivate, 'parent_userpkey' => $strangerPkey)));
-    check('status = 403',                       $r['status'] === 403);
-    check('error = forbidden',                   isset($r['json']['error']) && $r['json']['error'] === 'forbidden');
+    check('status = 404',                       $r['status'] === 404);
+    check('error = not_found',                   isset($r['json']['error']) && $r['json']['error'] === 'not_found');
 
     echo "\n=== set: nonexistent sample 404 ===\n";
     $r = hit($ownerSid, json_encode(array('action' => 'set', 'sample_id' => 'no-such-' . $stamp, 'owner_pkey' => $ownerPkey,
