@@ -315,8 +315,14 @@ try {
     check("A: rich link rich=true",                      $link && isset($link->meta['rich']) && $link->meta['rich'] === true);
 
     check("A: rich changelog has exactly one 'create'",  changelogCreateCount($db, $spotA_rich, $ownerPkey) === 1);
-    check("A: auto-seed landed editor on rich sample",   collabGrant($db, $spotA_rich, $ownerPkey, $editorPkey) !== null);
-    check("A: auto-seed landed readonly on rich sample", collabGrant($db, $spotA_rich, $ownerPkey, $readonlyPkey) !== null);
+    $gEd = collabGrant($db, $spotA_rich, $ownerPkey, $editorPkey);
+    $gRo = collabGrant($db, $spotA_rich, $ownerPkey, $readonlyPkey);
+    check("A: auto-seed landed editor on rich sample",   $gEd !== null);
+    check("A: auto-seed landed readonly on rich sample", $gRo !== null);
+    check("A: editor grant mirrors own level 'edit' (not batch-downgraded by readonly co-member)",
+          $gEd && $gEd->permission_level === 'edit');
+    check("A: readonly grant mirrors own level 'readonly'",
+          $gRo && $gRo->permission_level === 'readonly');
 
     $legRow  = sampleRow($db, $legacyA_sample, $ownerPkey);
     $legLink = linkRow($db, $legacyA_sample, $ownerPkey);
