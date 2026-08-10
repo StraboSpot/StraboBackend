@@ -97,7 +97,15 @@ if (class_exists($controller_name)) {
     $controller = new $controller_name();
     $controller->setStraboSamplesHandler($svc);
     $action_name = strtolower($request->verb) . 'Action';
-    $result = $controller->$action_name($request);
+    if (method_exists($controller, $action_name)) {
+        $result = $controller->$action_name($request);
+    } else {
+        // Verbs without a MyController handler (HEAD, TRACE, …) used to
+        // fatal on the undefined method — answer 405 cleanly instead.
+        header("Method Not Allowed", true, 405);
+        $result['Error'] = "Method not supported (" . $request->verb . ")";
+        header('Content-Type: application/json; charset=utf8');
+    }
 } else {
     header("Bad Request", true, 404);
     $result['Error'] = "No such function (" . $showcontroller . ")";

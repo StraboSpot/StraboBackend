@@ -717,6 +717,11 @@ check("anon REST (bad password) → 401", $r['status'] === 401);
 $r = httpBasic('GET', "$restMain?owner=$ownerPkey", null, null, null);
 check("anon REST (no credentials) → 401", $r['status'] === 401);
 
+// Router hardening: verbs with no controller handler must 405 cleanly,
+// not fatal on the undefined {verb}Action method.
+$r = httpBasic('HEAD', "$restMain?owner=$ownerPkey", null, $ownerEmail, $password);
+check("unhandled verb (HEAD) → 405, not a fatal", $r['status'] === 405);
+
 foreach (array(
     'samples_edit.php'      => array('sample_id' => $idMain, 'owner_pkey' => $ownerPkey, 'notes' => 'x'),
     'samples_collab.php'    => array('action' => 'list', 'sample_id' => $idMain, 'owner_pkey' => $ownerPkey),
