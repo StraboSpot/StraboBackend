@@ -38,6 +38,25 @@ $svc = new SampleTabularService($db, $neodb);
 $svc->setUserpkey($userpkey);
 
 const SI_MAX_UPLOAD_BYTES = 15728640; // 15 MB
+const SI_MAX_CHANGE_ROWS  = 50;       // review detail: updated rows shown in full
+const SI_MAX_CREATE_NAMES = 20;       // review detail: new-sample names listed
+
+/**
+ * Review-screen change value → display HTML. NULL/blank renders as a
+ * dimmed placeholder ("blank" for current values, "cleared" for new —
+ * a present-but-empty cell clears the field, and that must be visible).
+ */
+function si_change_html($v, $blankLabel)
+{
+    if ($v === null || $v === '') {
+        return '<em class="si-dim">(' . htmlspecialchars($blankLabel) . ')</em>';
+    }
+    $s = (string)$v;
+    if (mb_strlen($s) > 80) {
+        $s = mb_substr($s, 0, 77) . '…';
+    }
+    return htmlspecialchars($s);
+}
 
 $action = isset($_POST['action']) ? $_POST['action'] : '';
 
@@ -164,6 +183,9 @@ include("includes/mheader.php");
 .si-issue-row code { background: rgba(255,255,255,0.1); padding: 0.15em 0.5em; border-radius: 4px; }
 .si-issue-row select { min-width: 220px; }
 .si-note { opacity: 0.75; font-size: 0.9em; }
+.si-dim { opacity: 0.55; font-style: italic; }
+.si-change-table td { vertical-align: top; }
+.si-change-table .si-col-name { white-space: nowrap; }
 .si-warn { background: rgba(240,200,80,0.12); border: 1px solid rgba(240,200,80,0.4);
            border-radius: 6px; padding: 0.7em 1em; margin: 0.8em 0; font-size: 0.92em; }
 .si-success-big { font-size: 1.15em; margin-bottom: 0.7em; }
@@ -274,6 +296,60 @@ include("includes/mheader.php");
                 </tr>
                 <?php endforeach; ?>
             </table>
+        </div>
+        <?php endif; ?>
+
+        <?php
+        // Change detail — old → new per field for every updated row, plus
+        // the names of samples about to be created. Pure display: the data
+        // rides on the plan rows the server diffed anyway, and it re-renders
+        // live as vocab/custom resolutions re-plan (e.g. ignoring a custom
+        // column drops its diffs out of this list).
+        $siChangedRows = array();
+        $siCreateNames = array();
+        foreach ($reviewPlan['rows'] as $r) {
+            if ($r['action'] === 'update' && !empty($r['changes'])) {
+                $siChangedRows[] = $r;
+            } elseif ($r['action'] === 'create' && isset($r['input']['name'])) {
+                $siCreateNames[] = $r['input']['name'];
+            }
+        }
+        $siShownRows  = array_slice($siChangedRows, 0, SI_MAX_CHANGE_ROWS);
+        $siShownNames = array_slice($siCreateNames, 0, SI_MAX_CREATE_NAMES);
+        ?>
+        <?php if (!empty($siShownRows) || !empty($siShownNames)): ?>
+        <div class="si-panel">
+            <h3>What will change</h3>
+            <?php if (!empty($siShownNames)): ?>
+            <p class="si-note">Creating <?= count($siCreateNames) ?> new
+               sample<?= count($siCreateNames) == 1 ? '' : 's' ?>:
+               <?= htmlspecialchars(implode(', ', $siShownNames)) ?><?php
+                   if (count($siCreateNames) > count($siShownNames)):
+                       ?> &hellip;and <?= count($siCreateNames) - count($siShownNames) ?> more<?php
+                   endif; ?></p>
+            <?php endif; ?>
+            <?php if (!empty($siShownRows)): ?>
+            <table class="si-table si-change-table">
+                <tr><th>Row</th><th>Sample</th><th>Column</th><th>Current value</th><th>New value</th></tr>
+                <?php foreach ($siShownRows as $r): $nch = count($r['changes']); ?>
+                    <?php foreach ($r['changes'] as $i => $c): ?>
+                <tr>
+                    <?php if ($i === 0): ?>
+                    <td rowspan="<?= (int)$nch ?>"><?= (int)$r['n'] ?></td>
+                    <td rowspan="<?= (int)$nch ?>" class="si-col-name"><?= htmlspecialchars((string)$r['sample_name']) ?></td>
+                    <?php endif; ?>
+                    <td><?= htmlspecialchars($c['column']) ?></td>
+                    <td><?= si_change_html($c['old'], 'blank') ?></td>
+                    <td><?= si_change_html($c['new'], 'cleared') ?></td>
+                </tr>
+                    <?php endforeach; ?>
+                <?php endforeach; ?>
+            </table>
+            <?php if (count($siChangedRows) > count($siShownRows)): ?>
+            <p class="si-note">&hellip;and <?= count($siChangedRows) - count($siShownRows) ?> more
+               changed row<?= (count($siChangedRows) - count($siShownRows)) == 1 ? '' : 's' ?> not shown.</p>
+            <?php endif; ?>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
 

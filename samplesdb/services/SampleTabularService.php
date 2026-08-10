@@ -626,17 +626,35 @@ class SampleTabularService
             }
 
             // Diff against current; only changed fields go to the service.
-            $diff = array();
+            // $changes mirrors the diff for the review screen: template
+            // header names + old/new display values (vocab as labels).
+            $diff    = array();
+            $changes = array();
+            $headerOf = array_flip(self::$COLUMNS);   // field => template header
             foreach ($values as $f => $v) {
                 $curVal = $cur->$f;
                 if ($f === 'latitude' || $f === 'longitude') {
                     $curNum = ($curVal === null) ? null : (float)$curVal;
                     $same = ($v === null && $curNum === null)
                          || ($v !== null && $curNum !== null && abs($v - $curNum) < self::FLOAT_EPSILON);
-                    if (!$same) { $diff[$f] = $v; }
+                    if (!$same) {
+                        $diff[$f] = $v;
+                        $changes[] = array('column' => $headerOf[$f], 'old' => $curNum, 'new' => $v);
+                    }
                 } else {
                     $curStr = ($curVal === null || $curVal === '') ? null : (string)$curVal;
-                    if ($curStr !== $v) { $diff[$f] = $v; }
+                    if ($curStr !== $v) {
+                        $diff[$f] = $v;
+                        $oldDisp = $curStr; $newDisp = $v;
+                        if ($f === 'display_sample_type') {
+                            $oldDisp = $this->displayVocab($curStr, $materialFlat);
+                            $newDisp = $this->displayVocab($v, $materialFlat);
+                        } elseif ($f === 'display_sample_purpose') {
+                            $oldDisp = $this->displayVocab($curStr, $purposeFlat);
+                            $newDisp = $this->displayVocab($v, $purposeFlat);
+                        }
+                        $changes[] = array('column' => $headerOf[$f], 'old' => $oldDisp, 'new' => $newDisp);
+                    }
                 }
             }
 
@@ -664,6 +682,13 @@ class SampleTabularService
                 }
                 if ($newCustom !== $curCustom) {
                     $diff['custom_data'] = empty($newCustom) ? null : $newCustom;
+                    foreach ($custom as $k => $v) {
+                        $old = array_key_exists($k, $curCustom) ? $curCustom[$k] : null;
+                        if ($v === null && $old === null) { continue; }
+                        if ($v !== null && $old !== null && is_scalar($old) && (string)$old === $v) { continue; }
+                        if ($old !== null && !is_scalar($old)) { $old = json_encode($old); }
+                        $changes[] = array('column' => $k, 'old' => $old, 'new' => $v);
+                    }
                 }
             }
 
@@ -671,7 +696,8 @@ class SampleTabularService
                 $planRows[] = array('n' => $n, 'action' => 'noop', 'id' => $rec['id']);
                 $counts['noop']++;
             } else {
-                $planRows[] = array('n' => $n, 'action' => 'update', 'id' => $rec['id'], 'input' => $diff);
+                $planRows[] = array('n' => $n, 'action' => 'update', 'id' => $rec['id'], 'input' => $diff,
+                                    'sample_name' => $cur->name, 'changes' => $changes);
                 $counts['update']++;
             }
         }
