@@ -153,6 +153,20 @@ try {
     check('status = 400',                       $r['status'] === 400);
     check('error = no_writable_fields',          isset($r['json']['error']) && $r['json']['error'] === 'no_writable_fields');
 
+    echo "\n=== Non-JSON custom_data string → 400 (pre-fix: ok:true, silent PG abort) ===\n";
+    $r = hit($ownerSid, json_encode(array(
+        'sample_id'   => $sampleId,
+        'owner_pkey'  => $ownerPkey,
+        'custom_data' => 'definitely not json',
+    )));
+    check('status = 400',                       $r['status'] === 400);
+    check('error = invalid_json_field',          isset($r['json']['error']) && $r['json']['error'] === 'invalid_json_field');
+    check('detail names custom_data',            isset($r['json']['detail']['field']) && $r['json']['detail']['field'] === 'custom_data');
+    $v = $db->get_var_prepared(
+        "SELECT custom_data FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+        array($sampleId, $ownerPkey));
+    check('DB custom_data untouched by rejected update', $v === null);
+
     echo "\n=== Happy-path update (owner) ===\n";
     $r = hit($ownerSid, json_encode(array(
         'sample_id'   => $sampleId,

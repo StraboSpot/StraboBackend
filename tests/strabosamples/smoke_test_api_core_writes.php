@@ -109,6 +109,36 @@ try {
     check("valid parent accepted",                        !empty($r['ok']));
     if (!empty($r['ok'])) $ids[] = array($r['sample']['id'], $ownerPkey);
 
+    echo "\n=== JSONB input validation (invalid never reaches SQL) ===\n";
+    // Pre-fix, a non-JSON string flowed verbatim into the INSERT and aborted
+    // it inside PostgreSQL — surfaced as ok:true with NO row written.
+    $badId = "smoketest-writes-badjson-$stamp";
+    $r = $svc->createSample(array('id' => $badId, 'name' => 'bad json', 'custom_data' => 'not json at all'));
+    check("create with non-JSON string rejected 'invalid_json_field'",
+          empty($r['ok']) && $r['error'] === 'invalid_json_field');
+    check("error detail names the field",
+          isset($r['detail']['field']) && $r['detail']['field'] === 'custom_data');
+    $n = (int)$db->get_var_prepared(
+        "SELECT count(*) FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($badId, $ownerPkey));
+    check("no row written for rejected create",           $n === 0);
+    $r = $svc->createSample(array('id' => $badId, 'name' => 'scalar json', 'custom_data' => 42));
+    check("create with scalar custom_data rejected",      empty($r['ok']) && $r['error'] === 'invalid_json_field');
+    $r = $svc->createSample(array('id' => $badId, 'name' => 'pre-encoded', 'custom_data' => '{"depth_m": 4}'));
+    check("pre-encoded JSON-object string still accepted", !empty($r['ok']));
+    check("pre-encoded string round-trips decoded",
+          !empty($r['sample']) && is_array($r['sample']['custom_data'])
+          && $r['sample']['custom_data']['depth_m'] === 4);
+    if (!empty($r['ok'])) $ids[] = array($badId, $ownerPkey);
+    $r = $svc->updateSample($badId, $ownerPkey, array('field_data' => '[broken'));
+    check("update with non-JSON string rejected 'invalid_json_field'",
+          empty($r['ok']) && $r['error'] === 'invalid_json_field'
+          && isset($r['detail']['field']) && $r['detail']['field'] === 'field_data');
+    $v = $db->get_var_prepared(
+        "SELECT custom_data FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($badId, $ownerPkey));
+    check("rejected update left row untouched",           $v !== null && strpos($v, 'depth_m') !== false);
+    $r = $svc->updateSample($badId, $ownerPkey, array('custom_data' => null));
+    check("null still clears a JSONB field",              !empty($r['ok']) && $r['sample']['custom_data'] === null);
+
     echo "\n=== updateSample spine + JSONB ===\n";
     $beforeRow = $db->get_row_prepared(
         "SELECT modified_at FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",

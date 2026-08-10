@@ -332,6 +332,7 @@ class SampleController extends MyController
             case 'parent_pair_required':
             case 'already_accepted':
             case 'missing_required_field':
+            case 'invalid_json_field':
                 header("Bad Request", true, 400);
                 break;
             case 'duplicate_id':

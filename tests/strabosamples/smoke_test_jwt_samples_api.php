@@ -213,6 +213,11 @@ try {
     check("GET /invitations -> 200 {invitations, count}",
         $r['code'] === 200 && isset($r['body']['invitations']) && isset($r['body']['count']));
 
+    $r = req('POST', '/sample', bearer($ownerToken), array(
+        'id' => $PREFIX . 'badjson', 'name' => 'bad', 'custom_data' => 'not json'));
+    check("POST with non-JSON custom_data -> 400 invalid_json_field",
+        $r['code'] === 400 && isset($r['body']['Error']) && $r['body']['Error'] === 'invalid_json_field');
+
     // -----------------------------------------------------------------------
     // 3. Cross-user isolation through the JWT gate
     // -----------------------------------------------------------------------

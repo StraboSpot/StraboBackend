@@ -62,6 +62,7 @@ if (!empty($result['ok'])) {
         case 'duplicate_id':          http_response_code(409); break;
         case 'parent_not_accessible': http_response_code(404); break;  // existence-hiding: unreadable parent = missing
         case 'parent_pair_required':  http_response_code(400); break;
+        case 'invalid_json_field':    http_response_code(400); break;
         case 'not_authenticated':     http_response_code(401); break;
         default:                      http_response_code(500);
     }

@@ -84,6 +84,7 @@ if (!empty($result['ok'])) {
         case 'forbidden':             http_response_code(403); break;
         case 'field_link_read_only':  http_response_code(409); break;
         case 'no_writable_fields':    http_response_code(400); break;
+        case 'invalid_json_field':    http_response_code(400); break;
         case 'not_authenticated':     http_response_code(401); break;
         default:                      http_response_code(500);
     }
