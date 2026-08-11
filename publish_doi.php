@@ -93,20 +93,22 @@ include "includes/mheader.php";
 <div style="margin:auto;padding-top:10px;">
 
 	<div style="text-align:center">
-		<a href="https://osf.io" target="_blank">
-			<img src="/includes/images/osf_logo_dark.png" width="200px"/>
+		<a href="https://zenodo.org/communities/strabospot" target="_blank">
+			<img src="/includes/images/zenodo_logo.png" width="200px"/>
 		</a>
 	</div>
 	<div style="padding-top:10px;padding-bottom:15px;">
-		While StraboSpot does not provide Digital Object Identifiers directly, we recommend using the Open Science Framework (OSF) for publishing project data. The process for creating StraboSpot
-		data suitable for publication is as follows:
+		While StraboSpot does not provide Digital Object Identifiers directly, we recommend using <a href="https://zenodo.org" target="_blank">Zenodo</a>, a free research
+		data repository operated by CERN, for publishing project data. (Zenodo replaces our previous recommendation, the Open Science Framework, which has discontinued
+		its DOI service.) The process for creating StraboSpot data suitable for publication is as follows:
 		<div style="padding-left:40px;padding-top:10px;">
 			<ol>
-				<li>Clicking the button below begins the generation files necessary for publication at <a href="https://osf.io" target="_blank">OSF</a>.</li>
+				<li>Clicking the button below begins generating the files necessary for publication at <a href="https://zenodo.org" target="_blank">Zenodo</a>.</li>
 				<li>A snapshot of your StraboSpot project is taken and saved to the StraboSpot server.</li>
 				<li>After the snapshot has been created, links are provided to download landing page and project files.</li>
-				<li>Once these files are downloaded, they should be uploaded to OSF as a new project.</li>
-				<li>The new project at <a href="https://osf.io" target="_blank">OSF</a> can then be published with a DOI.</li>
+				<li>Sign in (or create a free account) at Zenodo, then click &quot;New upload&quot; on the <a href="https://zenodo.org/communities/strabospot" target="_blank">StraboSpot community page</a> so your record is part of the StraboSpot collection.</li>
+				<li>Attach the downloaded project files, fill in the metadata (title, authors, description, keywords, license), and add your StraboSpot landing page URL as a Related identifier (&quot;Is derived from&quot;).</li>
+				<li>Publish the upload. Zenodo assigns the DOI immediately. If you may update the dataset later, cite the &quot;Cite all versions&quot; DOI shown on your Zenodo record.</li>
 				<li>The new DOI value can be saved with the archived project at StraboSpot.</li>
 			</ol>
 		</div>
