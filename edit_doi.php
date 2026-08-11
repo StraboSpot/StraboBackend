@@ -81,7 +81,7 @@ if($_GET['n']){
 </div>
 <div style="text-align:center;padding-top:10px;padding-bottom:15px;">
 You can now proceed to <a href="https://zenodo.org/communities/strabospot" target="_blank">Zenodo</a> and click &quot;New upload&quot; on the StraboSpot community page.<br>
-Use the links below to gather data for DOI submission &mdash; attach the project files and add the landing page URL as a Related identifier.<br>
+Use the links below to gather data for DOI submission. Attach the project files and add the landing page URL as a Related identifier.<br>
 Once Zenodo has assigned a DOI, use the form below to update your project.
 </div>
 <?php

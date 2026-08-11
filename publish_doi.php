@@ -98,8 +98,8 @@ include "includes/mheader.php";
 		</a>
 	</div>
 	<div style="padding-top:10px;padding-bottom:15px;">
-		While StraboSpot does not provide Digital Object Identifiers directly, we recommend using <a href="https://zenodo.org" target="_blank">Zenodo</a> &mdash; a free research
-		data repository operated by CERN &mdash; for publishing project data. (Zenodo replaces our previous recommendation, the Open Science Framework, which has discontinued
+		While StraboSpot does not provide Digital Object Identifiers directly, we recommend using <a href="https://zenodo.org" target="_blank">Zenodo</a>, a free research
+		data repository operated by CERN, for publishing project data. (Zenodo replaces our previous recommendation, the Open Science Framework, which has discontinued
 		its DOI service.) The process for creating StraboSpot data suitable for publication is as follows:
 		<div style="padding-left:40px;padding-top:10px;">
 			<ol>
@@ -108,7 +108,7 @@ include "includes/mheader.php";
 				<li>After the snapshot has been created, links are provided to download landing page and project files.</li>
 				<li>Sign in (or create a free account) at Zenodo, then click &quot;New upload&quot; on the <a href="https://zenodo.org/communities/strabospot" target="_blank">StraboSpot community page</a> so your record is part of the StraboSpot collection.</li>
 				<li>Attach the downloaded project files, fill in the metadata (title, authors, description, keywords, license), and add your StraboSpot landing page URL as a Related identifier (&quot;Is derived from&quot;).</li>
-				<li>Publish the upload &mdash; Zenodo assigns the DOI immediately. If you may update the dataset later, cite the &quot;Cite all versions&quot; DOI shown on your Zenodo record.</li>
+				<li>Publish the upload. Zenodo assigns the DOI immediately. If you may update the dataset later, cite the &quot;Cite all versions&quot; DOI shown on your Zenodo record.</li>
 				<li>The new DOI value can be saved with the archived project at StraboSpot.</li>
 			</ol>
 		</div>
