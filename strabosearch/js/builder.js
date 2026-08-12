@@ -685,7 +685,7 @@
 	function buildPicker(row) {
 		var sel = el('select', 'ss-crit-select');
 		sel.setAttribute('aria-label', 'Criterion');
-		var empty = el('option', null, '— pick criterion —');
+		var empty = el('option', null, 'Choose Criteria');
 		empty.value = '';
 		sel.appendChild(empty);
 		var groups = {};
