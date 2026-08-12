@@ -91,6 +91,17 @@ function field_search_sync_dataset($db, $neodb, $datasetId, $userpkey) {
 	return StraboSearchSync::syncFieldDataset($db, $neodb, $datasetId, $userpkey);
 }
 
+/**
+ * json_tags amendment: propagate a PROJECT-ONLY tag edit (the web app's
+ * surgical save sends nothing but the project JSON) into the tag-derived
+ * index columns. Called from insertProject when the stored json_tags
+ * actually changed; diff-gated inside, so unchanged autosaves are free.
+ */
+function field_search_sync_project_tags($db, $neodb, $projectId, $ownerPkey, $oldJsonTags, $newJsonTags) {
+	return StraboSearchSync::touchFieldProjectTags($db, $neodb, $projectId, $ownerPkey,
+		$oldJsonTags, $newJsonTags);
+}
+
 function field_search_sync_suppress() { StraboSearchSync::suppressFieldItemTouches(); }
 function field_search_sync_resume()   { StraboSearchSync::resumeFieldItemTouches(); }
 

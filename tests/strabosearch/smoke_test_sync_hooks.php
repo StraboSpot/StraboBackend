@@ -412,6 +412,125 @@ check('removeFieldProject drops the whole slice',
 	&& imageCount($db, "image_subsystem='field' AND project_id='$PROJ' AND project_userpkey=$TEST_UPK") === 0);
 
 // ===========================================================================
+section('6b. FIELD, project-only tag sync (insertProject json_tags hook)');
+
+// The web version of the StraboField app saves surgically: a tag assign
+// changes nothing but Project.json_tags, so ONLY the project JSON is
+// uploaded and no spot/dataset write follows. insertProject must propagate
+// the change into the tag-derived index columns on its own.
+
+// Re-index SPOT1 + SPOT2 (slice was dropped above); no tags on the node.
+StraboSearchSync::touchSpot($db, $neodb, $SPOT1, $TEST_UPK);
+StraboSearchSync::touchSpot($db, $neodb, $SPOT2, $TEST_UPK);
+$r = itemRow($db, $W1);
+check('6b baseline: SPOT1 re-indexed tagless', $r !== null && $r->tag_names === null);
+
+$projTagJson = json_encode(array(
+	'id' => $PROJ,
+	'modified_timestamp' => 1722420000000,
+	'date' => '2026-07-21',
+	'description' => array('project_name' => 'spsync Field Project SYNCTOK_projname'),
+	'preferences' => new stdClass(),
+	'templates' => new stdClass(),
+	'tags' => array(array(
+		'id' => 3, 'type' => 'spsync_touch_type',
+		'name' => 'spsync WebTag SYNCTOK_webtag',
+		'spots' => array($SPOT1),
+	)),
+));
+$strabo->insertProject($projTagJson);
+$r = itemRow($db, $W1);
+check('project-only upload propagates tag_names',
+	$r !== null && strpos((string)$r->tag_names, 'SYNCTOK_webtag') !== false,
+	(string)($r ? $r->tag_names : 'null'));
+check('project-only upload: tag_text_tsv live (U10)',
+	(bool)$db->get_var("SELECT 1 FROM strabosearch.item_hit WHERE $W1
+		AND tag_text_tsv @@ plainto_tsquery('SYNCTOK_webtag') LIMIT 1"));
+check('project-only upload: searchtext ride-along exact (small-set touch path)',
+	tsvHas($db, 'item_hit', $W1, 'SYNCTOK_webtag'));
+$ir = $db->get_row("SELECT tag_names FROM strabosearch.image_hit WHERE $WI1 LIMIT 1");
+check('project-only upload: image row inherits tag',
+	$ir !== null && strpos((string)$ir->tag_names, 'SYNCTOK_webtag') !== false,
+	(string)($ir ? $ir->tag_names : 'null'));
+$rr = itemRow($db, $W2);
+check('untagged SPOT2 stays tagless', $rr !== null && $rr->tag_names === null);
+
+// Same blob again: prove the diff gate writes nothing at the METHOD level
+// (touchProjectMeta stamps last_synced on every project POST, so the
+// E2E timestamps cannot serve as the no-op probe).
+$jtNow = $neodb->get_var("MATCH (u:User {userpkey: $TEST_UPK})-[:HAS_PROJECT]->(p:Project {id: $PROJ})
+	RETURN toString(p.json_tags)");
+$before = $db->get_var("SELECT last_synced FROM strabosearch.item_hit WHERE $W1");
+StraboSearchSync::touchFieldProjectTags($db, $neodb, $PROJ, $TEST_UPK, $jtNow, $jtNow);
+$after = $db->get_var("SELECT last_synced FROM strabosearch.item_hit WHERE $W1");
+check('unchanged json_tags: diff gate writes nothing', $before === $after);
+
+// Rename + unassign at the method level (the normal-path upload merge keeps
+// server tag objects, so renames/removals reach json_tags via other flows).
+$jtRenamed = json_encode(array(array(
+	'id' => 3, 'type' => 'spsync_touch_type',
+	'name' => 'spsync Renamed SYNCTOK_renamedtag',
+	'spots' => array($SPOT1),
+)));
+$neodb->query("MATCH (u:User {userpkey: $TEST_UPK})-[:HAS_PROJECT]->(p:Project {id: $PROJ})
+	SET p.json_tags = '$jtRenamed'");
+StraboSearchSync::touchFieldProjectTags($db, $neodb, $PROJ, $TEST_UPK, $jtNow, $jtRenamed);
+$r = itemRow($db, $W1);
+check('tag rename propagates',
+	$r !== null && strpos((string)$r->tag_names, 'SYNCTOK_renamedtag') !== false
+	&& strpos((string)$r->tag_names, 'SYNCTOK_webtag') === false,
+	(string)($r ? $r->tag_names : 'null'));
+check('tag rename: searchtext follows (touch path)',
+	tsvHas($db, 'item_hit', $W1, 'SYNCTOK_renamedtag'));
+
+$neodb->query("MATCH (u:User {userpkey: $TEST_UPK})-[:HAS_PROJECT]->(p:Project {id: $PROJ})
+	REMOVE p.json_tags");
+StraboSearchSync::touchFieldProjectTags($db, $neodb, $PROJ, $TEST_UPK, $jtRenamed, null);
+$r = itemRow($db, $W1);
+check('tag unassign clears columns',
+	$r !== null && $r->tag_names === null && $r->tag_types === null,
+	$r ? 'got ' . var_export(array($r->tag_names, $r->tag_types), true) : 'row missing');
+
+// Bulk fallback (PG-only, $neodb null forces it): tag columns update, the
+// searchtext ride-along stays stale by design (documented lag, same
+// acceptance as the Field project rename).
+$jtBulk = json_encode(array(array(
+	'id' => 4, 'type' => 'spsync_touch_type',
+	'name' => 'spsync Bulk SYNCTOK_bulktag',
+	'spots' => array($SPOT1, $SPOT2),
+)));
+StraboSearchSync::refreshFieldProjectTagColumns($db, null, $PROJ, $TEST_UPK,
+	$jtBulk, array($SPOT1, $SPOT2));
+$r = itemRow($db, $W1);
+$r2 = itemRow($db, $W2);
+check('bulk path updates tag columns on both spots',
+	$r !== null && strpos((string)$r->tag_names, 'SYNCTOK_bulktag') !== false
+	&& $r2 !== null && strpos((string)$r2->tag_names, 'SYNCTOK_bulktag') !== false);
+check('bulk path: tag_text_tsv live (U10)',
+	(bool)$db->get_var("SELECT 1 FROM strabosearch.item_hit WHERE $W2
+		AND tag_text_tsv @@ plainto_tsquery('SYNCTOK_bulktag') LIMIT 1"));
+check('bulk path: searchtext ride-along stays stale (documented)',
+	!tsvHas($db, 'item_hit', $W2, 'SYNCTOK_bulktag'));
+$ir = $db->get_row("SELECT tag_names FROM strabosearch.image_hit WHERE $WI1 LIMIT 1");
+check('bulk path updates image rows',
+	$ir !== null && strpos((string)$ir->tag_names, 'SYNCTOK_bulktag') !== false);
+// Bulk mass-unassign: all-NULL VALUES columns must stay typed (regression
+// pin for the self-typed NULL literals).
+StraboSearchSync::refreshFieldProjectTagColumns($db, null, $PROJ, $TEST_UPK,
+	'[]', array($SPOT1, $SPOT2));
+$r = itemRow($db, $W1);
+$r2 = itemRow($db, $W2);
+check('bulk mass-unassign clears both spots (typed NULLs)',
+	$r !== null && $r->tag_names === null && $r2 !== null && $r2->tag_names === null);
+
+// Suppression: hook no-ops (bulk uploads re-extract at end-of-dataset).
+StraboSearchSync::suppressFieldItemTouches();
+$ok = StraboSearchSync::touchFieldProjectTags($db, $neodb, $PROJ, $TEST_UPK, null, $jtBulk);
+StraboSearchSync::resumeFieldItemTouches();
+$r = itemRow($db, $W1);
+check('suppressed: hook no-ops', $ok === true && $r !== null && $r->tag_names === null);
+
+// ===========================================================================
 section('7. MICRO — syncMicroProject slice rebuild + shrink + meta + remove');
 
 $MSTRABO = $PFX . '_microproj';
