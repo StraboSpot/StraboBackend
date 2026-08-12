@@ -6,7 +6,9 @@
  *
  *                text        — single-line full-text (U1, U10, I3, M1*)
  *                prefixtext  — text + exact-match toggle (U5, U6)
- *                bbox        — map modal bounding box (U2)
+ *                polygon     — map modal drawn polygon (U2); serializes
+ *                              as GeoJSON Polygon, legacy {bbox} values
+ *                              load as rectangle polygons
  *                daterange   — paired date inputs (U3)
  *                numrange    — paired min/max numerics (F1–F4)
  *                owner       — single-pick typeahead over users (U4)
@@ -34,7 +36,7 @@
 		{ id: 'U1',  group: 'Universal', label: 'Keyword',
 			widget: 'text', placeholder: 'e.g. granite, "fault zone", Tuscany' },
 		{ id: 'U2',  group: 'Universal', label: 'Location (map area)',
-			widget: 'bbox' },
+			widget: 'polygon' },
 		{ id: 'U3',  group: 'Universal', label: 'Date range',
 			widget: 'daterange' },
 		{ id: 'U4',  group: 'Universal', label: 'Owner',
@@ -173,8 +175,8 @@
 				return String(v).trim() !== '';
 			case 'prefixtext':
 				return v.text !== undefined && String(v.text).trim() !== '';
-			case 'bbox':
-				return Array.isArray(v.bbox) && v.bbox.length === 4;
+			case 'polygon':
+				return Array.isArray(v.polygon) && v.polygon.length >= 3;
 			case 'daterange':
 			case 'numrange':
 				return (v.min !== undefined && v.min !== '') ||
@@ -210,8 +212,13 @@
 				value = String(v).trim(); break;
 			case 'prefixtext':
 				value = { text: String(v.text).trim(), exact: !!v.exact }; break;
-			case 'bbox':
-				value = { bbox: v.bbox.map(Number) }; break;
+			case 'polygon': {
+				// Open vertex ring → closed GeoJSON ring (API §4.4 form).
+				var ring = v.polygon.map(function (p) { return [Number(p[0]), Number(p[1])]; });
+				ring.push(ring[0].slice());
+				value = { type: 'Polygon', coordinates: [ring] };
+				break;
+			}
 			case 'daterange': {
 				value = {};
 				if (v.min) value.min = v.min;
@@ -265,10 +272,22 @@
 					? { text: v, exact: false }
 					: { text: v.text || '', exact: !!v.exact };
 				break;
-			case 'bbox':
-				// GeoJSON polygon values (API-accepted) round-trip as bbox
-				// of their envelope is NOT attempted — only bbox form loads.
-				row.value = (v && Array.isArray(v.bbox)) ? { bbox: v.bbox.slice() } : null;
+			case 'polygon':
+				// Legacy {bbox:[w,s,e,n]} values (pre-polygon saved searches
+				// and share URLs) load as their rectangle polygon. MultiPolygon
+				// (API-accepted, never UI-produced) still does not load.
+				if (v && Array.isArray(v.bbox) && v.bbox.length === 4) {
+					var b = v.bbox.map(Number);
+					row.value = { polygon: [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]] };
+				} else if (v && v.type === 'Polygon' && Array.isArray(v.coordinates)
+						&& Array.isArray(v.coordinates[0]) && v.coordinates[0].length >= 4) {
+					var outer = v.coordinates[0].map(function (p) { return [Number(p[0]), Number(p[1])]; });
+					var first = outer[0], last = outer[outer.length - 1];
+					if (first[0] === last[0] && first[1] === last[1]) outer.pop();
+					row.value = { polygon: outer };
+				} else {
+					row.value = null;
+				}
 				break;
 			case 'daterange': {
 				if (v && v.year) {
@@ -316,6 +335,8 @@
 			else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') s = String(v);
 			else if (Array.isArray(v)) s = v.join(', ');
 			else if (v.bbox) s = 'bbox ' + v.bbox.map(function (n) { return Number(n).toFixed(1); }).join(',');
+			else if (v.type === 'Polygon' && Array.isArray(v.coordinates) && Array.isArray(v.coordinates[0]))
+				s = 'polygon (' + Math.max(v.coordinates[0].length - 1, 0) + ' vertices)';
 			else if (v.text !== undefined) s = v.text + (v.exact ? ' (exact)' : '');
 			else if (v.min !== undefined || v.max !== undefined)
 				s = (v.min !== undefined ? v.min : '…') + '–' + (v.max !== undefined ? v.max : '…');

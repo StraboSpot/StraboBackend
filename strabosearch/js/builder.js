@@ -10,8 +10,9 @@
  *                input+ADJACENT-label pattern is used — chips/toggles
  *                here are button-role spans instead, tri-states use the
  *                adjacent-label pattern.
- *              - U2 map modal: Leaflet pan/zoom-to-frame + "use current
- *                view", plus always-editable W/S/E/N inputs.
+ *              - U2 map modal: Leaflet click-vertex polygon drawing
+ *                (double-click closes, right-click undoes a vertex),
+ *                plus a "Use current view" rectangle shortcut.
  *
  * @package    StraboSpot Web Site — StraboSearch
  */
@@ -116,7 +117,7 @@
 		switch (c.widget) {
 			case 'text':        return wText(row, box, c);
 			case 'prefixtext':  return wPrefixText(row, box, c);
-			case 'bbox':        return wBbox(row, box, c);
+			case 'polygon':     return wPolygon(row, box, c);
 			case 'daterange':   return wDateRange(row, box, c);
 			case 'numrange':    return wNumRange(row, box, c);
 			case 'owner':
@@ -182,21 +183,20 @@
 		box.appendChild(hint);
 	}
 
-	function bboxLabel(b) {
-		return 'bbox: W ' + (+b[0]).toFixed(2) + '  S ' + (+b[1]).toFixed(2) +
-		       '  E ' + (+b[2]).toFixed(2) + '  N ' + (+b[3]).toFixed(2);
+	function polygonLabel(ring) {
+		return 'polygon: ' + ring.length + ' vertices';
 	}
 
-	function wBbox(row, box) {
-		var btn = el('a', 'button small', row.value && row.value.bbox ? 'Edit bounds' : 'Set bounds…');
+	function wPolygon(row, box) {
+		var btn = el('a', 'button small', row.value && row.value.polygon ? 'Edit area' : 'Set area…');
 		btn.href = 'javascript:void(0);';
 		var summary = el('span', 'ss-bbox-summary',
-			row.value && row.value.bbox ? bboxLabel(row.value.bbox) : 'no area set');
+			row.value && row.value.polygon ? polygonLabel(row.value.polygon) : 'no area set');
 		btn.addEventListener('click', function () {
-			openBboxModal(row.value && row.value.bbox, function (bbox) {
-				row.value = bbox ? { bbox: bbox } : null;
-				summary.textContent = bbox ? bboxLabel(bbox) : 'no area set';
-				btn.textContent = bbox ? 'Edit bounds' : 'Set bounds…';
+			openPolygonModal(row.value && row.value.polygon, function (ring) {
+				row.value = ring ? { polygon: ring } : null;
+				summary.textContent = ring ? polygonLabel(ring) : 'no area set';
+				btn.textContent = ring ? 'Edit area' : 'Set area…';
 				notifyChange();
 			});
 		});
@@ -513,39 +513,26 @@
 	}
 
 	// ══════════════════════════════════════════════════════════════════
-	// U2 map modal (Leaflet + numeric W/S/E/N, §6.3.3)
+	// U2 map modal (Leaflet click-vertex polygon, §6.3.3)
 	// ══════════════════════════════════════════════════════════════════
 
-	var bboxModal = null;
+	var polyModal = null;
 
-	function openBboxModal(existing, done) {
-		closeBboxModal();
+	function openPolygonModal(existing, done) {
+		closePolygonModal();
 		var backdrop = el('div', 'grayOut');
 		backdrop.style.display = 'inline';
 		var card = el('div', 'ss-modal-card ss-modal-map');
 		card.setAttribute('role', 'dialog');
-		card.setAttribute('aria-label', 'Set location bounds');
-		card.appendChild(el('h3', null, 'Set location bounds'));
+		card.setAttribute('aria-label', 'Set search area');
+		card.appendChild(el('h3', null, 'Set search area'));
 
 		var mapDiv = el('div');
-		mapDiv.id = 'ssBboxMap';
+		mapDiv.id = 'ssPolyMap';
 		card.appendChild(mapDiv);
 		card.appendChild(el('span', 'ss-hint',
-			'Pan / zoom the map so the view frames your area, then "Use current view" — or type bounds directly.'));
-
-		var inputs = {};
-		var pair = el('div', 'ss-range-pair');
-		pair.style.marginTop = '0.6em';
-		[['w', 'West'], ['s', 'South'], ['e', 'East'], ['n', 'North']].forEach(function (p) {
-			var input = el('input');
-			input.type = 'number';
-			input.step = 'any';
-			input.placeholder = p[1];
-			input.setAttribute('aria-label', p[1] + ' bound');
-			inputs[p[0]] = input;
-			pair.appendChild(input);
-		});
-		card.appendChild(pair);
+			'Click the map to drop vertices and double-click to close the polygon. ' +
+			'Right-click removes the last vertex. "Use current view" makes a rectangle from the visible map.'));
 
 		var actions = el('div', 'ss-modal-actions');
 		var useView = el('a', 'button small', 'Use current view');
@@ -560,87 +547,131 @@
 
 		document.body.appendChild(backdrop);
 		document.body.appendChild(card);
-		bboxModal = { backdrop: backdrop, card: card };
+		polyModal = { backdrop: backdrop, card: card };
 
-		var map = L.map(mapDiv, { worldCopyJump: true });
+		var map = L.map(mapDiv, { worldCopyJump: true, doubleClickZoom: false });
 		L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
 			maxZoom: 18,
 			attribution: '&copy; OpenStreetMap contributors'
 		}).addTo(map);
 
-		var rect = null;
-		function drawRect(b) {
-			if (rect) { map.removeLayer(rect); rect = null; }
-			if (!b) return;
-			rect = L.rectangle([[b[1], b[0]], [b[3], b[2]]],
-				{ color: '#d9534f', weight: 2, fillOpacity: 0.08 });
-			rect.addTo(map);
+		var verts = [];      // open ring of [lng, lat], oldest first
+		var closed = false;
+		var layers = [];
+
+		function round4(n) { return Math.round(n * 10000) / 10000; }
+
+		function redraw() {
+			layers.forEach(function (l) { map.removeLayer(l); });
+			layers = [];
+			var latlngs = verts.map(function (p) { return [p[1], p[0]]; });
+			if (closed) {
+				layers.push(L.polygon(latlngs,
+					{ color: '#d9534f', weight: 2, fillOpacity: 0.08 }).addTo(map));
+				return;
+			}
+			if (latlngs.length > 1) {
+				layers.push(L.polyline(latlngs,
+					{ color: '#d9534f', weight: 2, dashArray: '6 4' }).addTo(map));
+			}
+			latlngs.forEach(function (ll) {
+				layers.push(L.circleMarker(ll,
+					{ radius: 4, color: '#d9534f', weight: 2, fillOpacity: 0.9 }).addTo(map));
+			});
 		}
 
-		function setInputs(b) {
-			inputs.w.value = b ? b[0] : '';
-			inputs.s.value = b ? b[1] : '';
-			inputs.e.value = b ? b[2] : '';
-			inputs.n.value = b ? b[3] : '';
+		// Shift all longitudes by one common multiple of 360 so rings drawn
+		// on a worldCopyJump copy land back in [-180, 180]. A single shared
+		// shift keeps the ring intact (per-vertex wrapping would tear
+		// polygons that touch the antimeridian).
+		function normalizeRing(ring) {
+			var mean = ring.reduce(function (a, p) { return a + p[0]; }, 0) / ring.length;
+			var shift = 360 * Math.round(mean / 360);
+			if (!shift) return ring;
+			return ring.map(function (p) { return [round4(p[0] - shift), p[1]]; });
 		}
 
-		function readInputs() {
-			var vals = ['w', 's', 'e', 'n'].map(function (k) { return inputs[k].value.trim(); });
-			if (vals.some(function (v) { return v === '' || isNaN(Number(v)); })) return null;
-			var b = vals.map(Number);
-			if (b[0] >= b[2] || b[1] >= b[3]) return null;
-			return b;
-		}
+		map.on('click', function (ev) {
+			if (closed) return;   // Clear starts a new polygon
+			verts.push([round4(ev.latlng.lng), round4(ev.latlng.lat)]);
+			redraw();
+		});
+
+		map.on('dblclick', function (ev) {
+			if (closed) return;
+			// The double-click's own click events already dropped this vertex
+			// (twice on most browsers); collapse them into one final vertex.
+			var pt = map.latLngToContainerPoint(ev.latlng);
+			while (verts.length) {
+				var last = verts[verts.length - 1];
+				if (pt.distanceTo(map.latLngToContainerPoint([last[1], last[0]])) < 10) verts.pop();
+				else break;
+			}
+			verts.push([round4(ev.latlng.lng), round4(ev.latlng.lat)]);
+			if (verts.length >= 3) closed = true;
+			redraw();
+		});
+
+		map.on('contextmenu', function () {
+			if (closed || !verts.length) return;
+			verts.pop();
+			redraw();
+		});
 
 		if (existing) {
-			setInputs(existing);
-			drawRect(existing);
-			map.fitBounds([[existing[1], existing[0]], [existing[3], existing[2]]], { padding: [20, 20] });
+			verts = existing.map(function (p) { return [Number(p[0]), Number(p[1])]; });
+			closed = true;
+			redraw();
+			map.fitBounds(verts.map(function (p) { return [p[1], p[0]]; }), { padding: [20, 20] });
 		} else {
 			map.setView([20, 0], 2);
 		}
 
-		['w', 's', 'e', 'n'].forEach(function (k) {
-			inputs[k].addEventListener('input', function () {
-				var b = readInputs();
-				if (b) drawRect(b);
-			});
-		});
-
 		useView.addEventListener('click', function () {
+			// getBounds is unclamped: a zoomed-out or copy-panned view can
+			// exceed [-180, 180], and stored data never does. Re-center by a
+			// common 360 multiple, then clamp to the world so a wide view
+			// means "everywhere" instead of a ring no location falls inside.
 			var b = map.getBounds();
-			var bbox = [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]
-				.map(function (n) { return Math.round(n * 10000) / 10000; });
-			setInputs(bbox);
-			drawRect(bbox);
+			var w = b.getWest(), s = b.getSouth();
+			var e = b.getEast(), n = b.getNorth();
+			var shift = 360 * Math.round(((w + e) / 2) / 360);
+			w -= shift; e -= shift;
+			if (e - w >= 360) { w = -180; e = 180; }
+			w = Math.max(w, -180); e = Math.min(e, 180);
+			verts = [[round4(w), round4(s)], [round4(e), round4(s)],
+			         [round4(e), round4(n)], [round4(w), round4(n)]];
+			closed = true;
+			redraw();
 		});
 		clear.addEventListener('click', function () {
-			setInputs(null);
-			drawRect(null);
+			verts = [];
+			closed = false;
+			redraw();
 		});
 		save.addEventListener('click', function () {
-			var b = readInputs();
-			if (!b && ['w', 's', 'e', 'n'].some(function (k) { return inputs[k].value.trim() !== ''; })) {
-				alert('Bounds must be numeric with West < East and South < North.');
+			if (!closed && verts.length >= 3) closed = true;   // Save implies close
+			if (verts.length > 0 && !closed) {
+				alert('A polygon needs at least 3 vertices. Keep clicking, or use Clear to start over.');
 				return;
 			}
-			closeBboxModal();
+			closePolygonModal();
 			map.remove();
-			done(b);
+			done(closed ? normalizeRing(verts) : null);
 		});
 		cancel.addEventListener('click', function () {
-			closeBboxModal();
+			closePolygonModal();
 			map.remove();
 		});
 
 		setTimeout(function () { map.invalidateSize(); }, 60);
 	}
 
-	function closeBboxModal() {
-		if (!bboxModal) return;
-		bboxModal.backdrop.remove();
-		bboxModal.card.remove();
-		bboxModal = null;
+	function closePolygonModal() {
+		if (!polyModal) return;
+		polyModal.backdrop.remove();
+		polyModal.card.remove();
+		polyModal = null;
 	}
 
 	// ══════════════════════════════════════════════════════════════════

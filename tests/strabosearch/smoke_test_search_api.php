@@ -420,6 +420,16 @@ check('U2 bbox: S1 in box → P1', pids($r) === array($P1));
 check('U2 bbox: match_counts spot=1 (S2 outside box)', $r['results'][0]['match_counts']['spot'] === 1,
 	json_encode($r['results'][0]['match_counts']));
 
+// Since 2026-08-12 the UI serializes U2 as a GeoJSON Polygon (drawn in the
+// map modal); the same box as a closed rectangle ring must behave
+// identically to the bbox form above.
+$r = $own->runSearch($D(array($KEY('UNIQAPI_alpha'),
+	array('id' => 'U2', 'value' => array('type' => 'Polygon', 'coordinates' => array(array(
+		array(-119, 34), array(-118, 34), array(-118, 35), array(-119, 35), array(-119, 34))))))));
+check('U2 GeoJSON polygon: S1 in ring → P1', pids($r) === array($P1), json_encode(pids($r)));
+check('U2 GeoJSON polygon: match_counts spot=1', $r['results'][0]['match_counts']['spot'] === 1,
+	json_encode($r['results'][0]['match_counts']));
+
 $r = $own->runSearch($D(array($KEY('UNIQAPI_alpha'), array('id' => 'U3', 'value' => array('year' => 2023)))));
 check('U3 year 2023: only S2 → P1 spot=1', $r['results'] && $r['results'][0]['match_counts']['spot'] === 1);
 $r = $own->runSearch($D(array(array('id' => 'U3', 'value' => array('min' => '2024-06-01', 'max' => '2024-06-30')), $KEY('UNIQAPI_alpha'))));
@@ -626,6 +636,7 @@ check('fixture rows intact after injection attempts', $n === 7, "got $n");
 $rejects = array(
 	array('criteria' => array(array('id' => 'ZZ', 'value' => 1))),
 	array('criteria' => array(array('id' => 'U2', 'value' => array('bbox' => array(1, 2))))),
+	array('criteria' => array(array('id' => 'U2', 'value' => array('type' => 'Polygon', 'coordinates' => 'junk')))),
 	array('criteria' => array(array('id' => 'U3', 'value' => array('min' => 'junk')))),
 	array('pathway' => 'sideways'),
 	array('subsystems' => array('mainframe')),
