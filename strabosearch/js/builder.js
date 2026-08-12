@@ -564,19 +564,23 @@
 		function redraw() {
 			layers.forEach(function (l) { map.removeLayer(l); });
 			layers = [];
+			// interactive: false on every preview layer, or the vertex dots
+			// and line swallow map clicks. The natural closing gesture is a
+			// double-click ON the just-placed vertex, which must fall through
+			// to the map's dblclick handler.
 			var latlngs = verts.map(function (p) { return [p[1], p[0]]; });
 			if (closed) {
 				layers.push(L.polygon(latlngs,
-					{ color: '#d9534f', weight: 2, fillOpacity: 0.08 }).addTo(map));
+					{ color: '#d9534f', weight: 2, fillOpacity: 0.08, interactive: false }).addTo(map));
 				return;
 			}
 			if (latlngs.length > 1) {
 				layers.push(L.polyline(latlngs,
-					{ color: '#d9534f', weight: 2, dashArray: '6 4' }).addTo(map));
+					{ color: '#d9534f', weight: 2, dashArray: '6 4', interactive: false }).addTo(map));
 			}
 			latlngs.forEach(function (ll) {
 				layers.push(L.circleMarker(ll,
-					{ radius: 4, color: '#d9534f', weight: 2, fillOpacity: 0.9 }).addTo(map));
+					{ radius: 4, color: '#d9534f', weight: 2, fillOpacity: 0.9, interactive: false }).addTo(map));
 			});
 		}
 
