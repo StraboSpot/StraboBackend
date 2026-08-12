@@ -271,6 +271,14 @@ check('builder.js asset 200', $st === 200, "got $st");
 check('builder.js: Start over button wired', strpos($body, "'Start over'") !== false
 	&& strpos($body, 'ss-start-over') !== false);
 check('builder.js: Start over pristine gating', strpos($body, "'Nothing to clear'") !== false);
+// Polygon map modal (08-12): drawn polygon replaced the W/S/E/N envelope.
+check('builder.js: polygon modal wired', strpos($body, "'Set search area'") !== false
+	&& strpos($body, 'doubleClickZoom') !== false);
+check('builder.js: envelope inputs gone', strpos($body, "'West'") === false);
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/catalog.js', null);
+check('catalog.js asset 200', $st === 200, "got $st");
+check('catalog.js: U2 serializes GeoJSON Polygon + legacy bbox load',
+	strpos($body, "type: 'Polygon'") !== false && strpos($body, 'v.bbox') !== false);
 
 // Card meta line (08-04): data date range is labeled and suppressed when it
 // collapses to the same day as "Updated" (micro/samples derive both from the

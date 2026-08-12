@@ -461,7 +461,7 @@
 }
 
 .ss-modal-card.ss-modal-map {
-	width: min(760px, 96vw);
+	width: min(1000px, 96vw);
 }
 
 .ss-modal-card h3 {
@@ -505,9 +505,15 @@
 	justify-content: flex-end;
 }
 
-#ssBboxMap {
-	height: 380px;
+#ssPolyMap {
+	height: min(520px, 60vh);
 	border: 1px solid rgba(144, 144, 144, 0.4);
+}
+
+/* Vertex clicking is the primary interaction; signal it over Leaflet's
+   default grab cursor. */
+#ssPolyMap.leaflet-container {
+	cursor: crosshair;
 }
 
 .ss-saved-row {
@@ -596,7 +602,7 @@
 		width: 96vw;
 	}
 
-	#ssBboxMap {
+	#ssPolyMap {
 		height: 60vh;
 	}
 
