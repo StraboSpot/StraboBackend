@@ -628,10 +628,19 @@
 		}
 
 		useView.addEventListener('click', function () {
+			// getBounds is unclamped: a zoomed-out or copy-panned view can
+			// exceed [-180, 180], and stored data never does. Re-center by a
+			// common 360 multiple, then clamp to the world so a wide view
+			// means "everywhere" instead of a ring no location falls inside.
 			var b = map.getBounds();
-			var w = round4(b.getWest()), s = round4(b.getSouth());
-			var e = round4(b.getEast()), n = round4(b.getNorth());
-			verts = [[w, s], [e, s], [e, n], [w, n]];
+			var w = b.getWest(), s = b.getSouth();
+			var e = b.getEast(), n = b.getNorth();
+			var shift = 360 * Math.round(((w + e) / 2) / 360);
+			w -= shift; e -= shift;
+			if (e - w >= 360) { w = -180; e = 180; }
+			w = Math.max(w, -180); e = Math.min(e, 180);
+			verts = [[round4(w), round4(s)], [round4(e), round4(s)],
+			         [round4(e), round4(n)], [round4(w), round4(n)]];
 			closed = true;
 			redraw();
 		});
