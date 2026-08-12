@@ -4,9 +4,11 @@
  *              with hybrid counts (§6.11 Q5: both totals immediately,
  *              inactive-tab rows lazy), subsystem triptych band reusing
  *              /fullsearch's searchCountResult component, project and
- *              image hit cards, offset pagination, smart-default sort.
- *              §6.7 empty/error/loading states inclusive of the 10s
- *              "Still searching…" escalation.
+ *              image hit cards, infinite scroll (auto-fetch of the next
+ *              offset page when a bottom sentinel nears the viewport,
+ *              with a "Fetching more results" status row), smart-default
+ *              sort. §6.7 empty/error/loading states inclusive of the
+ *              10s "Still searching…" escalation.
  *
  *              v1 deviations (documented in design doc as-built notes):
  *              - No keyword snippet line on project cards — the §5.4.1
@@ -28,9 +30,12 @@
 	//   baseDsl,                 criteria+subsystems (no paging keys)
 	//   sort,                    user override or null (smart default)
 	//   tab: 'projects'|'images',
-	//   page: {projects: 0, images: 0},
-	//   data: {projects: resp|null, images: resp|null},
-	//   inflight: AbortController|null, slowTimer, stillTimer
+	//   data: {projects: acc|null, images: acc|null} where acc accumulates
+	//     fetched pages: {total, page_size, counterpart_total,
+	//     subsystem_summary, results: [], fetchedPages, done}
+	//   seen: {projects: {}, images: {}}   append dedupe (offset drift)
+	//   inflight: AbortController|null, slowTimer, stillTimer,
+	//   loadingMore, observer, sentinel, status
 	// }
 	var onStateChange = function () {};   // app.js mirrors URL
 
@@ -70,25 +75,30 @@
 		if (state) {
 			clearTimeout(state.slowTimer);
 			clearTimeout(state.stillTimer);
+			// An aborted next-page fetch resolves via the silent AbortError
+			// path, so the flag must clear here or loading wedges shut.
+			state.loadingMore = false;
 		}
 		showLoading(false);
 	}
 
-	function fetchPathway(pathway, cb, errCb) {
+	/** Fetch one offset page. quiet = incremental scroll fetch: no overlay,
+	 *  no "Still searching…" escalation (the status row covers it). */
+	function fetchPage(pathway, page, quiet, cb, errCb) {
 		abortInflight();
 		var ctrl = new AbortController();
 		state.inflight = ctrl;
-		showLoading(true);
+		if (!quiet) showLoading(true);
 
 		var dsl = JSON.parse(JSON.stringify(state.baseDsl));
 		dsl.pathway = pathway;
-		dsl.page = state.page[pathway];
+		dsl.page = page;
 		dsl.page_size = PAGE_SIZE[pathway];
 		if (state.sort) dsl.sort = state.sort;
 
 		// §6.7: >10s escalates the skeleton to "Still searching…" + Cancel.
 		// The overlay comes down so the Cancel control is clickable.
-		state.stillTimer = setTimeout(function () {
+		if (!quiet) state.stillTimer = setTimeout(function () {
 			showLoading(false);
 			var content = region.querySelector('.ss-tab-content');
 			if (!content) return;
@@ -123,7 +133,6 @@
 			clearTimeout(state.stillTimer);
 			state.inflight = null;
 			showLoading(false);
-			state.data[pathway] = resp;
 			cb(resp);
 		}).catch(function (e) {
 			if (e.name === 'AbortError') return;
@@ -135,6 +144,47 @@
 		});
 	}
 
+	/** Merge one fetched page into the pathway accumulator. */
+	function ingest(pathway, resp) {
+		var d = state.data[pathway];
+		if (!d) {
+			d = state.data[pathway] = {
+				total: resp.total,
+				page_size: resp.page_size,
+				counterpart_total: resp.counterpart_total,
+				subsystem_summary: resp.subsystem_summary,
+				results: [],
+				fetchedPages: 0
+			};
+			state.seen[pathway] = {};
+		}
+		(resp.results || []).forEach(function (r) {
+			// Offset pages under live data can drift a row across a page
+			// boundary between fetches; dropping re-seen keys beats showing
+			// a duplicate card.
+			var key = (pathway === 'projects')
+				? r.project_subsystem + ':' + r.project_id
+				: String(r.image_hit_pkey);
+			if (state.seen[pathway][key]) return;
+			state.seen[pathway][key] = true;
+			d.results.push(r);
+		});
+		d.fetchedPages++;
+		d.total = resp.total;
+		d.done = (resp.results || []).length < d.page_size ||
+		         d.fetchedPages * d.page_size >= d.total;
+	}
+
+	function loadFirstPage(pathway) {
+		state.data[pathway] = null;
+		state.seen[pathway] = {};
+		renderSkeletons(pathway);
+		fetchPage(pathway, 0, false, function (resp) {
+			ingest(pathway, resp);
+			renderAll();
+		}, renderError);
+	}
+
 	// ══════════════════════════════════════════════════════════════════
 	// top-level render
 	// ══════════════════════════════════════════════════════════════════
@@ -142,17 +192,21 @@
 	/** Start a brand-new search (Search button / URL load). */
 	function run(baseDsl, opts) {
 		abortInflight();
+		disconnectObserver();
 		state = {
 			baseDsl: baseDsl,
 			sort: (opts && opts.sort) || null,
 			tab: (opts && opts.tab) || 'projects',
-			page: { projects: (opts && opts.page) || 0, images: (opts && opts.tab === 'images' && opts.page) || 0 },
 			data: { projects: null, images: null },
-			inflight: null
+			seen: {},
+			inflight: null,
+			loadingMore: false,
+			observer: null,
+			sentinel: null,
+			status: null
 		};
 		renderShell();
-		renderSkeletons(state.tab);
-		fetchPathway(state.tab, function () { renderAll(); }, renderError);
+		loadFirstPage(state.tab);
 		onStateChange(getUrlState());
 	}
 
@@ -195,10 +249,10 @@
 		sel.value = state.sort || '';
 		sel.addEventListener('change', function () {
 			state.sort = sel.value || null;
-			state.page = { projects: 0, images: 0 };
 			state.data = { projects: null, images: null };
-			renderSkeletons(state.tab);
-			fetchPathway(state.tab, function () { renderAll(); }, renderError);
+			state.seen = {};
+			disconnectObserver();
+			loadFirstPage(state.tab);
 			onStateChange(getUrlState());
 		});
 		sortBox.appendChild(sortLabel);
@@ -223,8 +277,7 @@
 		if (state.data[pathway]) {
 			renderAll();
 		} else {
-			renderSkeletons(pathway);
-			fetchPathway(pathway, function () { renderAll(); }, renderError);
+			loadFirstPage(pathway);
 		}
 		onStateChange(getUrlState());
 	}
@@ -251,8 +304,7 @@
 		retry.href = 'javascript:void(0);';
 		retry.style.marginTop = '0.8em';
 		retry.addEventListener('click', function () {
-			renderSkeletons(state.tab);
-			fetchPathway(state.tab, function () { renderAll(); }, renderError);
+			loadFirstPage(state.tab);
 		});
 		card.appendChild(retry);
 		content.appendChild(card);
@@ -263,19 +315,22 @@
 	}
 
 	function renderAll() {
-		var resp = state.data[state.tab];
-		if (!resp) return;
+		var d = state.data[state.tab];
+		if (!d) return;
 		updateTabBadges();
+		disconnectObserver();
+		state.sentinel = null;
+		state.status = null;
 
 		var content = region.querySelector('.ss-tab-content');
 		content.innerHTML = '';
 
-		var bothEmpty = resp.total === 0 && (
+		var bothEmpty = d.total === 0 && (
 			(state.data.projects && state.data.projects.total === 0 &&
 			 state.data.images && state.data.images.total === 0) ||
-			resp.counterpart_total === 0);
+			d.counterpart_total === 0);
 
-		if (resp.total === 0) {
+		if (d.total === 0) {
 			if (bothEmpty) {
 				content.appendChild(emptyState('Nothing matched. Try removing or broadening a constraint, and double-check vocabulary values.'));
 			} else if (state.tab === 'projects') {
@@ -287,18 +342,18 @@
 		}
 
 		if (state.tab === 'projects') {
-			renderTriptych(content, resp.subsystem_summary);
-			(resp.results || []).forEach(function (r) {
+			renderTriptych(content, d.subsystem_summary);
+			d.results.forEach(function (r) {
 				content.appendChild(projectCard(r));
 			});
 		} else {
 			var grid = el('div', 'ss-image-grid');
-			(resp.results || []).forEach(function (r) {
+			d.results.forEach(function (r) {
 				grid.appendChild(imageCard(r));
 			});
 			content.appendChild(grid);
 		}
-		renderPager(content, resp);
+		renderInfiniteTail(content, d);
 	}
 
 	function updateTabBadges() {
@@ -491,64 +546,119 @@
 	}
 
 	// ══════════════════════════════════════════════════════════════════
-	// pagination (§6.5.5)
+	// infinite scroll (§6.5.5, amended 2026-08-12: auto-pagination
+	// replaced the numbered offset pager at the higher-ups' request)
 	// ══════════════════════════════════════════════════════════════════
 
-	function pageWindow(current, last) {
-		// 1-based labels; always 1 + last, window of ±2 around current.
-		var pages = [];
-		for (var p = 0; p <= last; p++) {
-			if (p === 0 || p === last || Math.abs(p - current) <= 2) pages.push(p);
+	function disconnectObserver() {
+		if (state && state.observer) {
+			state.observer.disconnect();
+			state.observer = null;
 		}
-		var out = [];
-		for (var i = 0; i < pages.length; i++) {
-			if (i > 0 && pages[i] - pages[i - 1] > 1) out.push('gap');
-			out.push(pages[i]);
-		}
-		return out;
 	}
 
-	function renderPager(content, resp) {
-		var last = Math.max(0, Math.ceil(resp.total / resp.page_size) - 1);
-		if (last === 0) return;
-		var current = state.page[state.tab];
-		var pager = el('div', 'ss-pager');
-		pager.setAttribute('role', 'navigation');
-		pager.setAttribute('aria-label', 'Result pages');
+	function setFetchStatus(msg, spin) {
+		if (!state.status) return;
+		state.status.innerHTML = '';
+		if (spin) state.status.appendChild(el('span', 'ss-spinner'));
+		if (msg) state.status.appendChild(document.createTextNode(msg));
+	}
 
-		function goto(p) {
-			state.page[state.tab] = p;
-			state.data[state.tab] = null;
-			renderSkeletons(state.tab);
-			fetchPathway(state.tab, function () {
-				renderAll();
-				region.scrollIntoView({ behavior: 'smooth', block: 'start' });
-			}, renderError);
-			onStateChange(getUrlState());
-		}
+	function endNote(d) {
+		return el('div', 'ss-end-note',
+			'End of results · ' + fmtInt(d.total) + ' total');
+	}
 
-		if (current > 0) {
-			var prev = el('a', null, '‹ Prev');
-			prev.addEventListener('click', function () { goto(current - 1); });
-			pager.appendChild(prev);
+	/** Sentinel + live status row after the last rendered card. */
+	function renderInfiniteTail(content, d) {
+		if (d.done) {
+			// A single-page result set needs no "end" marker.
+			if (d.total > d.page_size) content.appendChild(endNote(d));
+			return;
 		}
-		pageWindow(current, last).forEach(function (p) {
-			if (p === 'gap') {
-				pager.appendChild(el('span', 'ss-gap', '…'));
-			} else if (p === current) {
-				pager.appendChild(el('span', 'ss-current', String(p + 1)));
-			} else {
-				var a = el('a', null, String(p + 1));
-				a.addEventListener('click', function () { goto(p); });
-				pager.appendChild(a);
+		var sentinel = el('div', 'ss-scroll-sentinel');
+		sentinel.setAttribute('aria-hidden', 'true');
+		var status = el('div', 'ss-fetch-status');
+		status.setAttribute('role', 'status');
+		content.appendChild(sentinel);
+		content.appendChild(status);
+		state.sentinel = sentinel;
+		state.status = status;
+		armObserver();
+	}
+
+	function armObserver() {
+		disconnectObserver();
+		if (!state.sentinel) return;
+		if (!('IntersectionObserver' in window)) {
+			// Ancient-browser fallback: manual load.
+			setFetchStatus('', false);
+			var more = el('a', 'button small', 'Load more');
+			more.href = 'javascript:void(0);';
+			more.addEventListener('click', loadNext);
+			state.status.appendChild(more);
+			return;
+		}
+		// rootMargin prefetches ~a viewport ahead so the status row is
+		// rarely seen; observe() fires immediately when the sentinel is
+		// already inside the margin, which chains short pages until the
+		// sentinel escapes the viewport.
+		state.observer = new IntersectionObserver(function (entries) {
+			for (var i = 0; i < entries.length; i++) {
+				if (entries[i].isIntersecting) { loadNext(); break; }
 			}
+		}, { rootMargin: '600px 0px' });
+		state.observer.observe(state.sentinel);
+	}
+
+	function loadNext() {
+		var pathway = state.tab;
+		var d = state.data[pathway];
+		if (!d || d.done || state.loadingMore || state.inflight) return;
+		state.loadingMore = true;
+		setFetchStatus('Fetching more results…', true);
+
+		fetchPage(pathway, d.fetchedPages, true, function (resp) {
+			state.loadingMore = false;
+			var before = d.results.length;
+			ingest(pathway, resp);
+			if (state.tab !== pathway) return;   // tab switched mid-fetch
+			appendCards(pathway, d.results.slice(before));
+			updateTabBadges();
+			setFetchStatus('', false);
+			if (d.done) {
+				disconnectObserver();
+				var content = region.querySelector('.ss-tab-content');
+				state.sentinel.remove();
+				state.status.remove();
+				state.sentinel = null;
+				state.status = null;
+				if (content && d.total > d.page_size) content.appendChild(endNote(d));
+			} else {
+				armObserver();
+			}
+		}, function (e) {
+			state.loadingMore = false;
+			if (state.tab !== pathway || !state.status) return;
+			setFetchStatus((e.message || 'Fetching more results failed.') + '  ', false);
+			var retry = el('a', 'button small', 'Retry');
+			retry.href = 'javascript:void(0);';
+			retry.addEventListener('click', loadNext);
+			state.status.appendChild(retry);
 		});
-		if (current < last) {
-			var next = el('a', null, 'Next ›');
-			next.addEventListener('click', function () { goto(current + 1); });
-			pager.appendChild(next);
+	}
+
+	function appendCards(pathway, newResults) {
+		var content = region.querySelector('.ss-tab-content');
+		if (!content) return;
+		if (pathway === 'images') {
+			var grid = content.querySelector('.ss-image-grid');
+			newResults.forEach(function (r) { grid.appendChild(imageCard(r)); });
+		} else {
+			newResults.forEach(function (r) {
+				content.insertBefore(projectCard(r), state.sentinel);
+			});
 		}
-		content.appendChild(pager);
 	}
 
 	// ══════════════════════════════════════════════════════════════════
@@ -559,8 +669,7 @@
 		if (!state) return null;
 		return {
 			tab: state.tab,
-			sort: state.sort,
-			page: state.page[state.tab]
+			sort: state.sort
 		};
 	}
 
@@ -568,6 +677,7 @@
 	 *  stale results with no criteria left are misleading). */
 	function clear() {
 		abortInflight();
+		disconnectObserver();
 		state = null;
 		region.innerHTML = '';
 		region.appendChild(el('div', 'ss-quiet-prompt',
