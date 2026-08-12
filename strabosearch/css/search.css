@@ -410,35 +410,40 @@
 	border-radius: 4px;
 }
 
-/* ---- pagination (§6.5.5) ------------------------------------------------ */
+/* ---- infinite scroll (§6.5.5, amended 2026-08-12) ----------------------- */
 
-.ss-pager {
-	display: flex;
-	gap: 0.4em;
-	justify-content: center;
-	flex-wrap: wrap;
-	margin-top: 1.2em;
+.ss-scroll-sentinel {
+	height: 1px;
+}
+
+.ss-fetch-status {
+	text-align: center;
+	padding: 1.2em 0 1.6em;
+	color: rgba(255, 255, 255, 0.55);
+	min-height: 1.5em;
+}
+
+.ss-spinner {
+	display: inline-block;
+	width: 1em;
+	height: 1em;
+	border: 2px solid rgba(255, 255, 255, 0.25);
+	border-top-color: #e44c65;
+	border-radius: 50%;
+	animation: ss-spin 0.8s linear infinite;
+	vertical-align: -0.15em;
+	margin-right: 0.55em;
+}
+
+@keyframes ss-spin {
+	to { transform: rotate(360deg); }
+}
+
+.ss-end-note {
+	text-align: center;
+	padding: 1.2em 0 1.6em;
+	color: rgba(255, 255, 255, 0.45);
 	font-size: 0.9em;
-}
-
-.ss-pager a,
-.ss-pager span {
-	padding: 0.25em 0.7em;
-	border: 1px solid rgba(144, 144, 144, 0.4);
-	border-radius: 3px;
-	border-bottom-width: 1px;
-	cursor: pointer;
-}
-
-.ss-pager span.ss-current {
-	background: #57729e;
-	color: #fff;
-	border-color: #57729e;
-}
-
-.ss-pager span.ss-gap {
-	border: 0;
-	cursor: default;
 }
 
 /* ---- modals (reuse grayOut backdrop, §6.1.1) ---------------------------- */
@@ -607,9 +612,7 @@
 	}
 
 	/* ≥44px touch targets (§6.8) */
-	.ss-chipbtn,
-	.ss-pager a,
-	.ss-pager span {
+	.ss-chipbtn {
 		min-height: 44px;
 		min-width: 44px;
 		display: inline-flex;

@@ -3,9 +3,11 @@
  * Description: StraboSearch page orchestrator — wires builder + results
  *              + saved modules, the Search button enable rule (§6.4:
  *              ≥1 active row), the shareable URL state (?q=<base64-json>
- *              mirrors {dsl, tab, sort, page}; loading a shared URL
- *              repopulates the builder and auto-runs), and the anonymous
- *              inline note (session-dismissable, §6.4).
+ *              mirrors {dsl, tab, sort}; a page component existed before
+ *              the 2026-08-12 infinite-scroll switch and is ignored on
+ *              old links; loading a shared URL repopulates the builder
+ *              and auto-runs), and the anonymous inline note
+ *              (session-dismissable, §6.4).
  *
  * @package    StraboSpot Web Site — StraboSearch
  */
@@ -40,8 +42,7 @@
 		var payload = {
 			dsl: lastRunDsl,
 			tab: urlState ? urlState.tab : 'projects',
-			sort: urlState ? urlState.sort : null,
-			page: urlState ? urlState.page : 0
+			sort: urlState ? urlState.sort : null
 		};
 		var qs = '?q=' + encodeState(payload);
 		window.history.replaceState(null, '', window.location.pathname + qs);
@@ -132,8 +133,7 @@
 				window.SSBuilder.loadDsl(st.dsl);
 				updateSearchButton();
 				if (window.SSBuilder.hasActiveRow()) {
-					runSearch({ tab: st.tab || 'projects', sort: st.sort || null,
-						page: st.page || 0 });
+					runSearch({ tab: st.tab || 'projects', sort: st.sort || null });
 				}
 			}
 		}

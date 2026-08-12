@@ -287,6 +287,12 @@ list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/results.js', nu
 check('results.js asset 200', $st === 200, "got $st");
 check('results.js: labeled date range + duplicate suppression', strpos($body, "'Data: '") !== false
 	&& strpos($body, "d0 === mod") !== false);
+// Infinite scroll (08-12): sentinel observer + status row replaced the pager.
+check('results.js: infinite scroll wired', strpos($body, 'IntersectionObserver') !== false
+	&& strpos($body, 'Fetching more results') !== false
+	&& strpos($body, 'ss-scroll-sentinel') !== false);
+check('results.js: offset pager removed', strpos($body, 'renderPager') === false
+	&& strpos($body, 'Next ›') === false);
 
 // ---------------------------------------------------------------------------
 section('2. Proxy search — anonymous vs session identity');
