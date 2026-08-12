@@ -538,6 +538,153 @@ class StraboSearchSync {
 		}
 	}
 
+	/**
+	 * Max affected spots that get a full per-spot re-extract (touchSpot,
+	 * searchtext ride-along included) when a project-level tag change is
+	 * propagated; above the cap the refresh falls back to PG-only updates
+	 * of the tag-derived columns (rock_types, met_facies, tag_names,
+	 * tag_types, tag_text_tsv), leaving each spot's searchtext_tsv tag
+	 * ride-along stale until its next re-extract. That is the same
+	 * accepted staleness class as the documented Field project rename;
+	 * U10 tag search reads tag_text_tsv / tag_names and stays exact.
+	 */
+	const FIELD_TAG_TOUCH_CAP = 50;
+
+	/**
+	 * json_tags amendment: propagate a PROJECT-ONLY tag edit into the
+	 * index. The web version of the StraboField app saves surgically: a
+	 * tag assign/rename/unassign changes nothing but Project.json_tags,
+	 * so no spot or dataset write follows and the per-spot / per-dataset
+	 * hooks never fire. Without this hook the tag-derived index columns
+	 * stay stale forever (the nightly verify checks spot presence at the
+	 * id level and the spots themselves never changed).
+	 *
+	 * Diff-gated: resolves each spot's tag facets from the OLD and NEW
+	 * blobs via the shared fieldTagsForSpot and refreshes only spots
+	 * whose resolved facets differ, so the common no-tag-change autosave
+	 * costs one decode and no writes.
+	 */
+	public static function touchFieldProjectTags($db, $neodb, $projectId, $ownerPkey, $oldJsonTags, $newJsonTags) {
+		try {
+			if (!self::enabled($db)) return false;
+			// Bulk uploads re-extract every spot at end-of-dataset with the
+			// fresh blob; nothing to do here.
+			if (self::$fieldTouchesSuppressed) return true;
+			$upk = (int)$ownerPkey;
+			$oldMap = fieldTagMapFromJsonTags($oldJsonTags);
+			$newMap = fieldTagMapFromJsonTags($newJsonTags);
+			$affected = array();
+			$vocabIgnored = array();
+			$allSpotIds = array_unique(array_merge(array_keys($oldMap), array_keys($newMap)));
+			foreach ($allSpotIds as $sid) {
+				if (fieldTagsForSpot($oldMap, $sid, $vocabIgnored)
+						!== fieldTagsForSpot($newMap, $sid, $vocabIgnored)) {
+					$affected[] = (string)$sid;
+				}
+			}
+			if (!$affected) return true;
+			return self::refreshFieldProjectTagColumns($db, $neodb, $projectId, $upk,
+				$newJsonTags, $affected);
+		} catch (\Throwable $e) {
+			self::resetNeo($neodb);
+			return self::fail("touchFieldProjectTags $projectId/$ownerPkey", $e);
+		}
+	}
+
+	/**
+	 * Refresh the tag-derived index columns for the given spots of one
+	 * Field project from a json_tags blob. Two strategies:
+	 *
+	 *   - small set (<= FIELD_TAG_TOUCH_CAP) with a live $neodb: full
+	 *     per-spot touchSpot re-extract, so every column (searchtext_tsv
+	 *     included) is exact. This is the typical surgical web-app edit
+	 *     (one tag on a handful of spots).
+	 *   - large set or $neodb === null: chunked PG-only UPDATEs of
+	 *     item_hit + image_hit tag columns. No Neo4j walk (the reason the
+	 *     inline whole-project rebuild was rejected for renames), at the
+	 *     cost of the documented searchtext tag ride-along staleness.
+	 *
+	 * Spots without an index row are silently unaffected (a not-yet-
+	 * uploaded spot gets indexed with fresh tags by its own upload).
+	 * Shared by the insertProject hook and searchdb/heal_project_tags.php.
+	 */
+	public static function refreshFieldProjectTagColumns($db, $neodb, $projectId, $ownerPkey, $newJsonTags, $spotIds) {
+		try {
+			if (!self::enabled($db)) return false;
+			$upk = (int)$ownerPkey;
+			$spotIds = array_values(array_unique(array_filter(
+				array_map('strval', (array)$spotIds), 'strlen')));
+			if (!$spotIds) return true;
+
+			if ($neodb !== null && count($spotIds) <= self::FIELD_TAG_TOUCH_CAP) {
+				foreach ($spotIds as $sid) {
+					self::touchSpot($db, $neodb, $sid, $upk, false);
+				}
+				return true;
+			}
+
+			$newMap = fieldTagMapFromJsonTags($newJsonTags);
+			$pidEsc = pg_escape_string((string)$projectId);
+			$key = 'fieldtags:' . $projectId . ':' . $upk;
+			self::lock($db, $key);
+			try {
+				$vocabSeen = array();
+				// Self-typed NULLs: an all-NULL VALUES column (mass unassign)
+				// would otherwise resolve to text and break the ::text[] /
+				// ::tsvector casts in the SET list.
+				$typedArr = function ($arr) {
+					$l = pgTextArray($arr);
+					return $l === 'NULL' ? 'NULL::TEXT[]' : $l;
+				};
+				foreach (array_chunk($spotIds, 500) as $chunk) {
+					$rows = array();
+					foreach ($chunk as $sid) {
+						list($rockTypes, $metFacies, $tagNames, $tagTypes)
+							= fieldTagsForSpot($newMap, $sid, $vocabSeen);
+						$tsv = pgTsvector(implode(' ', $tagNames));
+						$rows[] = '(' . implode(',', array(
+							pgText($sid, 64),
+							$typedArr($rockTypes),
+							$typedArr($metFacies),
+							$typedArr($tagNames),
+							$typedArr($tagTypes),
+							$tsv === 'NULL' ? 'NULL::tsvector' : $tsv,
+						)) . ')';
+					}
+					$values = implode(",\n", $rows);
+					$sets = "rock_types = v.rock_types::text[],
+						met_facies = v.met_facies::text[],
+						tag_names = v.tag_names::text[],
+						tag_types = v.tag_types::text[],
+						tag_text_tsv = v.tag_text_tsv::tsvector,
+						last_synced = now()";
+					$vAlias = "(VALUES $values) AS v(item_id, rock_types, met_facies, tag_names, tag_types, tag_text_tsv)";
+					if ($db->query("UPDATE strabosearch.item_hit i SET $sets
+						FROM $vAlias
+						WHERE i.item_type = 'spot' AND i.project_subsystem = 'field'
+						  AND i.project_id = '$pidEsc' AND i.project_userpkey = $upk
+						  AND i.item_id = v.item_id::text") === false) {
+						throw new \RuntimeException('item_hit tag refresh failed: ' . $db->last_error);
+					}
+					if ($db->query("UPDATE strabosearch.image_hit i SET $sets
+						FROM $vAlias
+						WHERE i.image_subsystem = 'field'
+						  AND i.project_id = '$pidEsc' AND i.project_userpkey = $upk
+						  AND i.parent_spot_id = v.item_id::text") === false) {
+						throw new \RuntimeException('image_hit tag refresh failed: ' . $db->last_error);
+					}
+				}
+				if ($vocabSeen) upsertVocabTagTypes($db, $vocabSeen, 'field');
+				self::markSync($db, 'field', count($spotIds));
+			} finally {
+				self::unlock($db, $key);
+			}
+			return true;
+		} catch (\Throwable $e) {
+			return self::fail("refreshFieldProjectTagColumns $projectId/$ownerPkey", $e);
+		}
+	}
+
 	/** Samples linked (subsystem='field') to any of the given spot ids. */
 	private static function touchSamplesLinkedToSpots($db, $spotIds, $refUserpkey) {
 		$spotIds = array_values(array_filter((array)$spotIds, function ($v) {

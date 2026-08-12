@@ -4301,6 +4301,7 @@ public function getSpotName($id){
 		// Mutual exclusion for the existence-probe → createNode window; see
 		// lockUploadKey. Released at every return below.
 		$projectLockKey = null;
+		$server_json_tags = null;
 
 		if($thisid != ""){
 
@@ -4310,7 +4311,12 @@ public function getSpotName($id){
 			$record=$this->neodb->getRecord("match (p:Project {id:$thisid, userpkey:$ownerPkey}) return id(p) as id,p");
 			if($record){
 				$projectid=$record->get("id");
-				$server_timestamp = $record->get("p")->values()["modified_timestamp"];
+				$node_values = $record->get("p")->values();
+				$server_timestamp = $node_values["modified_timestamp"];
+				// Pre-update json_tags, kept for the search-sync tag diff below.
+				if(isset($node_values["json_tags"])){
+					$server_json_tags = $node_values["json_tags"];
+				}
 
 
 				$dbaction="update";
@@ -4575,10 +4581,21 @@ public function getSpotName($id){
 
 		// StraboSearch live-sync (§5.3): refresh the denormalized
 		// project_name / project_ispublic on this project's index slice from
-		// the PG row buildPgProject just rebuilt. Cheap UPDATE — the
+		// the PG row buildPgProject just rebuilt. Cheap UPDATE; the
 		// documented Field-rename searchtext staleness applies.
 		require_once __DIR__ . '/lib/search_sync.php';
 		field_search_sync_project_meta($this->db, $thisid, $ownerPkey);
+
+		// json_tags amendment: a PROJECT-ONLY upload (the web app's surgical
+		// save) can change tag assignments with no spot or dataset write
+		// following, so a changed json_tags must propagate into the
+		// tag-derived index columns here. Diff-gated inside the hook; the
+		// common tag-unchanged autosave costs one string compare.
+		if($dbaction == "update" && isset($newproject['json_tags'])
+				&& (string)$newproject['json_tags'] !== (string)$server_json_tags){
+			field_search_sync_project_tags($this->db, $this->neodb, $thisid, $ownerPkey,
+				$server_json_tags, $newproject['json_tags']);
+		}
 
 		$totalprojecttime = microtime(true)-$projectstarttime;
 		//$this->logToFile("buildprojectrelationships took: ".$totalprojecttime." secs","Project Time");
