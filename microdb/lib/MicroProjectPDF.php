@@ -24,6 +24,12 @@
  *                  date/time/modifiedTimestamp/notes) + tags + reuse of
  *                  addFeatureInfoSections via the polymorphic loadFeatureInfo
  *                  hook on spot_id.
+ *              2026-08-13 (fix/micro-server-pdf-tree-order):
+ *                  Content pages AND the TOC now emit in tree order
+ *                  (dataset, then its samples, each followed by its
+ *                  micrographs and their spots) instead of clumped flat
+ *                  lists, mirroring StraboMicro2 pdfReactExport.js commit
+ *                  bcd067c. TOC links bind sequentially, not by title.
  *
  *              Data source: micro_projectmetadata + micro_datasetmetadata
  *              + micro_samplemetadata + micro_micrographmetadata. The
@@ -80,13 +86,14 @@ class MicroProjectPDF extends tFPDF
     /** @var array Datasets — each has ->samples (and samples each have ->micrographs) loaded eagerly */
     protected $datasets = array();
 
-    /** @var array Flat list of {sample, dataset} pairs for the per-sample pass */
+    /** @var array Flat list of {sample, dataset} pairs (cover-page counts;
+     *  pages themselves are emitted by the tree walk in generateToFile) */
     protected $allSamples = array();
 
-    /** @var array Flat list of {micrograph, sample, dataset} pairs */
+    /** @var array Flat list of {micrograph, sample, dataset} pairs (counts) */
     protected $allMicrographs = array();
 
-    /** @var array Flat list of {spot, micrograph, sample, dataset} pairs */
+    /** @var array Flat list of {spot, micrograph, sample, dataset} pairs (counts) */
     protected $allSpots = array();
 
     /** @var array TOC entries: [{ title, link, level }] — link is the tFPDF AddLink() id */
@@ -100,6 +107,15 @@ class MicroProjectPDF extends tFPDF
     public function getRenderedSectionHeaders()
     {
         return $this->renderedSectionHeaders;
+    }
+
+    /** Test-only: TOC entry titles in registration order. Lets tests verify
+     *  the TOC sequence matches the rendered page sequence (tree order). */
+    public function getTocTitles()
+    {
+        $titles = array();
+        foreach ($this->tocEntries as $entry) $titles[] = $entry['title'];
+        return $titles;
     }
 
     public function __construct($db, $projectInternalId, $ownerPkey)
@@ -149,42 +165,38 @@ class MicroProjectPDF extends tFPDF
         $this->AddPage();
         $this->generateTableOfContents();
 
-        // Project details + datasets + samples — one new page per section.
+        // Content sections in tree order, matching the table of contents
+        // (and StraboMicro2's pdfReactExport.js fix of 2026-08-13): each
+        // dataset, then each of its samples, each sample followed by its
+        // micrographs and their spots. Emission order is exactly the
+        // order preallocateTocLinks() registered entries, so every page
+        // binds the next TOC link in sequence.
         $this->AddPage();
-        $this->bindTocLink('Project Details');
+        $this->bindNextTocLink();
         $this->generateProjectDetailsContent();
 
         foreach ($this->datasets as $d) {
             $this->AddPage();
-            $this->bindTocLink('Dataset: ' . ($d->name ?: 'Unnamed'));
+            $this->bindNextTocLink();
             $this->generateDatasetSectionContent($d);
-        }
 
-        foreach ($this->allSamples as $row) {
-            $sample  = $row['sample'];
-            $dataset = $row['dataset'];
-            $this->AddPage();
-            $this->bindTocLink('Sample: ' . $this->sampleDisplayName($sample));
-            $this->generateSampleSectionContent($sample, $dataset);
-        }
+            foreach ($d->samples as $s) {
+                $this->AddPage();
+                $this->bindNextTocLink();
+                $this->generateSampleSectionContent($s, $d);
 
-        foreach ($this->allMicrographs as $row) {
-            $micrograph = $row['micrograph'];
-            $sample     = $row['sample'];
-            $dataset    = $row['dataset'];
-            $this->AddPage();
-            $this->bindTocLink('Micrograph: ' . ($micrograph->name ?: 'Unnamed'));
-            $this->generateMicrographSectionContent($micrograph, $sample, $dataset);
-        }
+                foreach ($s->micrographs as $m) {
+                    $this->AddPage();
+                    $this->bindNextTocLink();
+                    $this->generateMicrographSectionContent($m, $s, $d);
 
-        foreach ($this->allSpots as $row) {
-            $spot       = $row['spot'];
-            $micrograph = $row['micrograph'];
-            $sample     = $row['sample'];
-            $dataset    = $row['dataset'];
-            $this->AddPage();
-            $this->bindTocLink('Spot: ' . ($spot->name ?: 'Unnamed'));
-            $this->generateSpotSectionContent($spot, $micrograph, $sample, $dataset);
+                    foreach ($m->spots as $spot) {
+                        $this->AddPage();
+                        $this->bindNextTocLink();
+                        $this->generateSpotSectionContent($spot, $m, $s, $d);
+                    }
+                }
+            }
         }
 
         $this->Output('F', $outputPath);
@@ -420,24 +432,28 @@ class MicroProjectPDF extends tFPDF
     // TOC link bookkeeping
     // -----------------------------------------------------------------
 
-    /** @var array title → tFPDF link id (created up front, bound when the page is added) */
-    protected $tocLinkByTitle = array();
+    /** @var int Next tocEntries index bindNextTocLink() will bind (page
+     *  emission in generateToFile() follows TOC registration order exactly) */
+    protected $tocBindCursor = 0;
 
     protected function preallocateTocLinks()
     {
+        // Tree order: dataset, then its samples, each followed by its
+        // micrographs and their spots. Must stay in lockstep with the
+        // page-emission walk in generateToFile().
         $this->tocEntries = array();
         $this->_pushToc('Project Details', 0);
         foreach ($this->datasets as $d) {
             $this->_pushToc('Dataset: ' . ($d->name ?: 'Unnamed'), 0);
-        }
-        foreach ($this->allSamples as $row) {
-            $this->_pushToc('Sample: ' . $this->sampleDisplayName($row['sample']), 1);
-        }
-        foreach ($this->allMicrographs as $row) {
-            $this->_pushToc('Micrograph: ' . ($row['micrograph']->name ?: 'Unnamed'), 1);
-        }
-        foreach ($this->allSpots as $row) {
-            $this->_pushToc('Spot: ' . ($row['spot']->name ?: 'Unnamed'), 2);
+            foreach ($d->samples as $s) {
+                $this->_pushToc('Sample: ' . $this->sampleDisplayName($s), 1);
+                foreach ($s->micrographs as $m) {
+                    $this->_pushToc('Micrograph: ' . ($m->name ?: 'Unnamed'), 1);
+                    foreach ($m->spots as $spot) {
+                        $this->_pushToc('Spot: ' . ($spot->name ?: 'Unnamed'), 2);
+                    }
+                }
+            }
         }
     }
 
@@ -445,15 +461,17 @@ class MicroProjectPDF extends tFPDF
     {
         $link = $this->AddLink();
         $this->tocEntries[] = array('title' => $title, 'link' => $link, 'level' => $level);
-        $this->tocLinkByTitle[$title] = $link;
     }
 
-    /** Bind a TOC link to the current page so the TOC entry jumps here. */
-    protected function bindTocLink($title)
+    /** Bind the next TOC link (registration order) to the current page.
+     *  Sequential binding, not title-keyed: duplicate display names would
+     *  collide in a title map and send both TOC entries to the same page. */
+    protected function bindNextTocLink()
     {
-        if (isset($this->tocLinkByTitle[$title])) {
-            $this->SetLink($this->tocLinkByTitle[$title]);
+        if (isset($this->tocEntries[$this->tocBindCursor])) {
+            $this->SetLink($this->tocEntries[$this->tocBindCursor]['link']);
         }
+        $this->tocBindCursor++;
     }
 
     // -----------------------------------------------------------------

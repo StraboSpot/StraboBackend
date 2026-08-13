@@ -37,6 +37,12 @@
  *                        in the final list — once for the micrograph, once for
  *                        the spot — proving the helper fired against the spot
  *                        entity).
+ *                Part 9: Tree-order emission (fix/micro-server-pdf-tree-order).
+ *                        Two-sample fixture proves sections render dataset >
+ *                        sample > its micrographs > their spots (NOT the old
+ *                        clumped all-samples-then-all-micrographs order) and
+ *                        that TOC titles are the same sequence (sequential
+ *                        link binding depends on that lockstep).
  *
  *              Hermetic: seeds micro_*metadata + on-disk straboMicroFiles
  *              dir + strabosamples row, then tears down in finally{}.
@@ -76,10 +82,11 @@ $datasetStraboId = "smoketest-mspdf-ds-$stamp";
 $sampleStraboId  = "smoketest-mspdf-sample-$stamp";
 $apiOnlySampleId = "smoketest-mspdf-apionly-$stamp";
 
-$projectInternalId = null;
-$datasetInternalId = null;
-$sampleInternalId  = null;
-$straboFilesDir    = null;
+$projectInternalId  = null;
+$datasetInternalId  = null;
+$sampleInternalId   = null;
+$sample2InternalId  = null;
+$straboFilesDir     = null;
 $cleanupSamples    = array($sampleStraboId, $apiOnlySampleId);
 
 try {
@@ -338,6 +345,32 @@ try {
         array($spotFabricInfoId, 'S2', 'lineation', 'linear', 'discrete', 'quartz')
     );
 
+    // Tree-order fixtures (Part 9): a SECOND sample in the same dataset with
+    // its own micrograph. With one of everything the clumped flat-list
+    // ordering bug is invisible; two samples make it observable (clumped
+    // order renders Sample A, Sample B, Micrograph A, Micrograph B while
+    // tree order renders Sample A, Micrograph A, ..., Sample B, Micrograph B).
+    // Seeded AFTER sample 1 so its sequence id sorts second (ORDER BY id).
+    // No strabosamples spine row on purpose: the overlay must leave it alone.
+    $sample2StraboId  = "smoketest-mspdf-sample2-$stamp";
+    $sample2InternalId = (int)$db->get_var("select nextval('micro_samplemetadata_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_samplemetadata
+            (id, dataset_id, strabo_id, label, sampleid, sampledescription)
+         VALUES ($1, $2, $3, $4, $5, $6)",
+        array($sample2InternalId, $datasetInternalId, $sample2StraboId,
+              'Second-Sample-B', 'Second-Sample-B', 'second sample, no spine row')
+    );
+    $micrograph2StraboId = "smoketest-mspdf-micro2-$stamp";
+    $micrograph2InternalId = (int)$db->get_var("select nextval('micro_micrographmetadata_id_seq')");
+    $db->prepare_query(
+        "INSERT INTO micro_micrographmetadata
+            (id, sample_id, strabo_id, name, imagetype, width, height)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)",
+        array($micrograph2InternalId, $sample2InternalId, $micrograph2StraboId,
+              'Second Micrograph', 'PPL', 1024, 768)
+    );
+
     // Pretend the desktop client uploaded the project — create the on-disk
     // dir + a placeholder client PDF (which we'll later overwrite via regen).
     $docRoot = '/srv/app/www';
@@ -474,10 +507,10 @@ try {
     $direct = file_get_contents($directOut);
     check("PDF ends with %%EOF",                                          substr_count($direct, '%%EOF') >= 1);
     check("PDF references DejaVu font",                                   stripos($direct, 'DejaVu') !== false);
-    // Cover + TOC + Project Details + 1 Dataset + 1 Sample + 1 Micrograph
-    // + 1 Spot = at least 7 pages (image embed may bump higher if it page-breaks).
+    // Cover + TOC + Project Details + 1 Dataset + 2 Samples + 2 Micrographs
+    // + 1 Spot = at least 9 pages (image embed may bump higher if it page-breaks).
     $pageCount = preg_match_all('|/Type\s*/Page[^s]|', $direct, $m);
-    check("PDF has at least 7 pages (Cover, TOC, Project, Dataset, Sample, Micrograph, Spot)", $pageCount >= 7);
+    check("PDF has at least 9 pages (Cover, TOC, Project, Dataset, 2 Samples, 2 Micrographs, Spot)", $pageCount >= 9);
 
     $headers = $gen->getRenderedSectionHeaders();
     check("rendered headers include 'Project Details'",                   in_array('Project Details', $headers, true));
@@ -519,6 +552,45 @@ try {
     check("'Mineralogy' rendered for BOTH micrograph and spot",            count(array_keys($headers, 'Mineralogy', true)) === 2);
     check("'Grain Information' rendered for BOTH micrograph and spot",     count(array_keys($headers, 'Grain Information', true)) === 2);
     check("'Fabric Information' rendered for BOTH micrograph and spot",    count(array_keys($headers, 'Fabric Information', true)) === 2);
+
+    // -------------------------------------------------------------------
+    // PART 9: Tree-order emission (fix/micro-server-pdf-tree-order).
+    // The old flat-list emission rendered ALL samples, then ALL
+    // micrographs, then ALL spots. With the two-sample fixture the tree
+    // order must be: Sample 1, Micrograph 1, Spot, Sample 2, Micrograph 2.
+    // The load-bearing check is "Sample 2 comes AFTER Sample 1's spot":
+    // under clumped ordering Sample 2 renders before ANY micrograph.
+    // Also verifies the TOC entry sequence is the same walk, since TOC
+    // links now bind sequentially and depend on that lockstep.
+    // -------------------------------------------------------------------
+    echo "\n=== Part 9: tree-order emission + TOC lockstep ===\n";
+    $idxMicro1  = array_search('Micrograph: Smoketest Micrograph', $headers, true);
+    $idxSpot1   = array_search('Spot: Smoketest Spot', $headers, true);
+    $idxSample2 = array_search('Sample: Second-Sample-B', $headers, true);
+    $idxMicro2  = array_search('Micrograph: Second Micrograph', $headers, true);
+    $idxSample1 = false;
+    foreach ($headers as $i => $h) {
+        if (strpos($h, 'Sample: ') === 0 && $h !== 'Sample: Second-Sample-B') { $idxSample1 = $i; break; }
+    }
+    check("both samples + both micrographs rendered",
+          $idxSample1 !== false && $idxMicro1 !== false && $idxSpot1 !== false &&
+          $idxSample2 !== false && $idxMicro2 !== false);
+    check("Micrograph 1 renders after Sample 1",                          $idxMicro1  > $idxSample1);
+    check("Spot renders after Micrograph 1",                              $idxSpot1   > $idxMicro1);
+    check("Sample 2 renders AFTER Sample 1's spot (tree, not clumped)",   $idxSample2 > $idxSpot1);
+    check("Micrograph 2 renders after Sample 2",                          $idxMicro2  > $idxSample2);
+
+    // TOC lockstep: the section headers, filtered to TOC-level titles in
+    // render order, must equal the TOC titles in registration order.
+    $sectionHeaders = array_values(array_filter($headers, function ($h) {
+        return $h === 'Project Details'
+            || strpos($h, 'Dataset: ') === 0
+            || strpos($h, 'Sample: ') === 0
+            || strpos($h, 'Micrograph: ') === 0
+            || strpos($h, 'Spot: ') === 0;
+    }));
+    check("TOC titles match rendered section sequence exactly",
+          $gen->getTocTitles() === $sectionHeaders);
 
 } finally {
     if ($projectInternalId !== null) {
@@ -638,6 +710,12 @@ try {
                            array($sampleInternalId));
         $db->prepare_query("DELETE FROM micro_samplemetadata WHERE id=$1",
                            array($sampleInternalId));
+        if ($sample2InternalId !== null) {
+            $db->prepare_query("DELETE FROM micro_micrographmetadata WHERE sample_id=$1",
+                               array($sample2InternalId));
+            $db->prepare_query("DELETE FROM micro_samplemetadata WHERE id=$1",
+                               array($sample2InternalId));
+        }
         $db->prepare_query("DELETE FROM micro_datasetmetadata WHERE id=$1",
                            array($datasetInternalId));
         $db->prepare_query("DELETE FROM micro_projectmetadata WHERE id=$1",
