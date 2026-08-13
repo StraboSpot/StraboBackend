@@ -57,6 +57,10 @@ $rawProjectJson = json_encode(array(
         'samples' => array(array(
             'id'                => $sampStraboId,
             'sampleID'          => 'OrigName',
+            // Divergent legacy-style label + null name; overlay must bring
+            // all three name fields to the spine value (modal parity).
+            'label'             => 'OrigLabel',
+            'name'              => null,
             'sampleDescription' => 'orig desc',
             'micrographs'       => array(),
         )),
@@ -110,6 +114,10 @@ try {
     $diskJson = json_decode(file_get_contents("$dir/project.json"));
     check("A: on-disk project.json sampleID overlaid",
         $diskJson && $diskJson->datasets[0]->samples[0]->sampleID === 'EditedName');
+    check("A: on-disk project.json label overlaid (viewers render label)",
+        $diskJson && $diskJson->datasets[0]->samples[0]->label === 'EditedName');
+    check("A: on-disk project.json name overlaid (modal parity)",
+        $diskJson && $diskJson->datasets[0]->samples[0]->name === 'EditedName');
     check("A: on-disk project.json description overlaid",
         $diskJson && $diskJson->datasets[0]->samples[0]->sampleDescription === 'edited desc');
     $zipJson = zipEntryJson("$dir/project.zip", $zipEntry);
@@ -159,6 +167,33 @@ try {
     $reverted = json_decode(file_get_contents("$dir/project.json"));
     check("D: on-disk sampleID reverted to raw upload ('OrigName')",
         $reverted && $reverted->datasets[0]->samples[0]->sampleID === 'OrigName');
+    check("D: on-disk label reverted to raw upload ('OrigLabel')",
+        $reverted && $reverted->datasets[0]->samples[0]->label === 'OrigLabel');
+
+    // ===================================================================
+    // PART E: parse-failure keeps files_dirty set (no permanent staleness)
+    // ===================================================================
+    echo "\n=== E: unparseable projectjson leaves the flag set for retry ===\n";
+    $db->prepare_query(
+        "UPDATE micro_projectmetadata SET projectjson = $1, files_dirty = TRUE WHERE id = $2",
+        array('{ not valid json', $pmid));
+    file_put_contents("$dir/project.json", '{"sentinel":"parsefail"}');
+    micro_regenerate_files_if_dirty($db, $pmid, $owner);
+    check("E: files_dirty STILL set after parse failure",
+        $db->get_var_prepared("SELECT files_dirty FROM micro_projectmetadata WHERE id=$1", array($pmid)) === 't');
+    check("E: on-disk file untouched by the failed regen",
+        trim(file_get_contents("$dir/project.json")) === '{"sentinel":"parsefail"}');
+
+    // Repairing projectjson lets the next access recover and clear the flag.
+    $db->prepare_query(
+        "UPDATE micro_projectmetadata SET projectjson = $1 WHERE id = $2",
+        array($rawProjectJson, $pmid));
+    micro_regenerate_files_if_dirty($db, $pmid, $owner);
+    check("E: recovery regen rewrites the file once projectjson is repaired",
+        ($rec = json_decode(file_get_contents("$dir/project.json")))
+        && $rec->datasets[0]->samples[0]->sampleID === 'OrigName');
+    check("E: recovery regen clears the flag",
+        $db->get_var_prepared("SELECT files_dirty FROM micro_projectmetadata WHERE id=$1", array($pmid)) === 'f');
 
 } finally {
     $db->prepare_query("DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($sampStraboId, $owner));
