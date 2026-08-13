@@ -22,7 +22,13 @@
  *
  *              Spine → JSON key mapping (mirrors micro_sample_sync's
  *              forward direction in microdb/lib/sample_sync.php):
- *                  name                   → sampleID
+ *                  name                   → sampleID + label + name
+ *                                           (the StraboMicro2 new/edit sample
+ *                                           modal writes its single "Sample ID"
+ *                                           field to all three, so the overlay
+ *                                           reproduces an in-app edit; viewers
+ *                                           display label, the desktop app and
+ *                                           server PDF key on sampleID)
  *                  description            → sampleDescription
  *                  notes                  → sampleNotes
  *                  latitude / longitude   → latitude / longitude
@@ -108,7 +114,15 @@ if (!function_exists('micro_sample_overlay_apply')) {
                 if (!isset($spineById[$sid])) continue;
                 $sp = $spineById[$sid];
 
-                if ($sp->name                   !== null) $s->sampleID            = $sp->name;
+                if ($sp->name !== null) {
+                    // Triple-write mirrors the StraboMicro2 sample modal
+                    // (NewSampleDialog/EditSampleDialog write one value to
+                    // name, label, and sampleID). Viewers render label,
+                    // the desktop app and server PDF prefer sampleID.
+                    $s->sampleID = $sp->name;
+                    $s->label    = $sp->name;
+                    $s->name     = $sp->name;
+                }
                 if ($sp->description            !== null) $s->sampleDescription   = $sp->description;
                 if ($sp->notes                  !== null) $s->sampleNotes         = $sp->notes;
                 if ($sp->latitude               !== null) $s->latitude            = (float)$sp->latitude;
@@ -277,6 +291,12 @@ if (!function_exists('micro_sample_overlay_apply')) {
                 $pid     = (int)$projectInternalId;
 
                 // 1. Standalone straboMicroFiles/<id>/project.json.
+                //    NOTE: the /microview/ React viewer fetches
+                //    microview/smzFiles/<id>/project.json, and microview/smzFiles
+                //    is a SYMLINK to ../straboMicroFiles (gitignored, created by
+                //    hand on each box). This write is what keeps that viewer
+                //    fresh — if a viewer deploy ever replaces the symlink with a
+                //    real directory, the viewer goes permanently stale.
                 $mainDir = "$docRoot/straboMicroFiles/$pid";
                 if (is_dir($mainDir)) {
                     @file_put_contents("$mainDir/project.json", $encoded);
@@ -307,12 +327,18 @@ if (!function_exists('micro_sample_overlay_apply')) {
                 if (is_dir($viewDir)) {
                     @file_put_contents("$viewDir/project.json", $encoded);
                 }
-            }
 
-            $db->prepare_query(
-                "UPDATE micro_projectmetadata SET files_dirty = FALSE WHERE id = $1",
-                array((int)$projectInternalId)
-            );
+                // Clear the flag ONLY after a successful re-derive. An
+                // unparseable projectjson used to clear it anyway, leaving
+                // every static copy permanently stale with nothing left to
+                // retry; now the flag stays set so the next access retries
+                // (and keeps retrying — acceptable, the regen is cheap and
+                // the row is broken anyway until projectjson is repaired).
+                $db->prepare_query(
+                    "UPDATE micro_projectmetadata SET files_dirty = FALSE WHERE id = $1",
+                    array((int)$projectInternalId)
+                );
+            }
         } catch (\Throwable $e) {
             // Swallow — a stale static file is better than a 500 on download.
         }

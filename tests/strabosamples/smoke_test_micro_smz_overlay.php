@@ -80,6 +80,12 @@ try {
                     array(
                         'id'                  => $sampleId,
                         'sampleID'            => 'OriginalUploadName',
+                        // Divergent label + null name = the legacy-data shape
+                        // (StraboMicro2's modal writes all three identically,
+                        // but v1-era uploads can differ). The overlay must
+                        // bring all three to the spine name.
+                        'label'               => 'OriginalUploadLabel',
+                        'name'                => null,
                         'sampleDescription'   => 'original upload description',
                         'sampleNotes'         => 'original upload notes',
                         'materialType'        => 'intact_rock',
@@ -91,6 +97,7 @@ try {
                     array(  // no spine row — must pass through unchanged
                         'id'                => $untrackedId,
                         'sampleID'          => 'UntrackedSample',
+                        'label'             => 'UntrackedLabel',
                         'sampleDescription' => 'untracked desc',
                     ),
                 ),
@@ -137,6 +144,8 @@ try {
 
     $s0 = $servedJson->datasets[0]->samples[0];
     check("sampleID overlaid from spine (name)",            $s0->sampleID === 'EditedSampleName');
+    check("label overlaid too (viewers render label)",      $s0->label === 'EditedSampleName');
+    check("name overlaid too (modal triple-write parity)",  $s0->name === 'EditedSampleName');
     check("sampleDescription overlaid",                     $s0->sampleDescription === 'edited via Samples app');
     check("sampleNotes overlaid",                           $s0->sampleNotes === 'edited notes');
     check("latitude overlaid",                              (float)$s0->latitude === 45.5);
@@ -146,6 +155,7 @@ try {
 
     $s1 = $servedJson->datasets[0]->samples[1];
     check("untracked sample left unchanged (no spine row)", $s1->sampleID === 'UntrackedSample');
+    check("untracked sample label untouched",               $s1->label === 'UntrackedLabel');
 
     check("other zip entry (tile metadata) preserved byte-for-byte",
           zip_entry($served, $otherEntry) === $otherPayload);
