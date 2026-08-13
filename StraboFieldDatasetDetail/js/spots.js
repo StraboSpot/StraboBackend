@@ -217,6 +217,10 @@
 
 		var extent = source.getExtent();
 		if (extent && isFinite(extent[0]) && isFinite(extent[2])) {
+			// renderSpots has already started an animated fit to the dataset
+			// envelope; left running, it wins over this fit and the page
+			// settles on the envelope instead of the spot. Cancel it first.
+			map.getView().cancelAnimations();
 			map.getView().fit(extent, {
 				padding: [80, 80, 80, 80],
 				maxZoom: 16,
