@@ -47,7 +47,13 @@
 	};
 
 	if (cfg.dataset_id && window.DatasetDetailSpots) {
-		DatasetDetailSpots.loadSpots(map, cfg.dataset_id);
+		DatasetDetailSpots.loadSpots(map, cfg.dataset_id, function () {
+			// ?sample_id= arrival: the server resolved the sample to its
+			// containing spot — select it once the layer exists.
+			if (cfg.highlight_spot_id) {
+				DatasetDetailSpots.highlightSpot(map, cfg.highlight_spot_id);
+			}
+		});
 	}
 
 	function isSpotsLayer(layer) {

@@ -26,6 +26,7 @@ function dsd_asset($path) {
 }
 
 $dataset_id = isset($_GET['dataset_id']) ? (int)$_GET['dataset_id'] : 0;
+$sample_id  = isset($_GET['sample_id'])  ? (int)$_GET['sample_id']  : 0;
 
 $error_message = null;
 $owner_pkey = null;
@@ -33,9 +34,31 @@ $project_id = null;
 $project_name = '';
 $dataset_name = '';
 $is_public = false;
+$highlight_spot_id = null;
 
-if(!$dataset_id){
-	$error_message = 'No dataset id provided. Use ?dataset_id=XXXXXXXX.';
+// ?sample_id= entry (replaces the legacy /spotdetails/?s= page): resolve the
+// sample's internal id to its containing dataset + spot, then load the page
+// exactly as if that dataset_id had been requested, with the spot highlighted.
+// An explicit ?dataset_id= wins if both are given.
+if(!$dataset_id && $sample_id){
+	$sample_rows = $neodb->get_results("
+		MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_SAMPLE]->(smp:Sample)
+		WHERE smp.id = $sample_id
+		RETURN d.id AS dataset_id, s.id AS spot_id
+		LIMIT 1
+	");
+	if(!$sample_rows || count($sample_rows) === 0){
+		$error_message = 'Sample not found.';
+	}else{
+		$dataset_id        = (int)$sample_rows[0]->value('dataset_id');
+		$highlight_spot_id = $sample_rows[0]->value('spot_id');
+	}
+}
+
+if($error_message){
+	// Sample lookup already failed — fall through to the error page.
+}elseif(!$dataset_id){
+	$error_message = 'No dataset id provided. Use ?dataset_id=XXXXXXXX or ?sample_id=XXXXXXXX.';
 }else{
 	$records = $neodb->get_results("
 		MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)
@@ -128,7 +151,8 @@ window.DATASET_DETAIL_CONFIG = {
 	owner_pkey: <?= (int)$owner_pkey ?>,
 	dataset_name: <?= json_encode($dataset_name) ?>,
 	project_name: <?= json_encode($project_name) ?>,
-	is_public: <?= $is_public ? 'true' : 'false' ?>
+	is_public: <?= $is_public ? 'true' : 'false' ?>,
+	highlight_spot_id: <?= json_encode($highlight_spot_id) ?>
 };
 </script>
 <script src="https://cdn.jsdelivr.net/npm/ol@10.4.0/dist/ol.js"></script>

@@ -7,6 +7,8 @@
 
 	var POINT_FEATURE_FILL_COLOR   = 'rgba(0, 120, 255, 0.6)';
 	var POINT_FEATURE_STROKE_COLOR = '#1155aa';
+	var HIGHLIGHT_STROKE_COLOR = '#FFB300';
+	var HIGHLIGHT_FILL_COLOR   = 'rgba(255, 179, 0, 0.20)';
 	var LINE_DEFAULT_COLOR  = '#663300';
 	var POLY_DEFAULT_FILL   = 'rgba(0, 0, 255, 0.35)';
 	var POLY_DEFAULT_STROKE = '#000099';
@@ -178,8 +180,83 @@
 		return new ol.style.Stroke({ color: color, width: width, lineDash: lineDash });
 	}
 
+	/**
+	 * Highlight one spot after the layer is built (?sample_id= arrivals):
+	 * open its sidebar with the Samples section expanded, and — when the
+	 * spot renders on the geographic map — draw a halo under it and zoom
+	 * to it. Spots living on an image basemap or strat section keep the
+	 * sidebar (their card links into those modes) but skip the map work.
+	 */
+	function highlightSpot(map, spotId) {
+		var spot = global.DatasetDetail.spotsById && global.DatasetDetail.spotsById[spotId];
+		if (!spot) return;
+
+		if (global.DatasetDetailSidebar) {
+			global.DatasetDetailSidebar.open(spot);
+			expandSection('Samples');
+		}
+
+		if (!spot.geometry) return;
+		if (spot.properties && (spot.properties.image_basemap || spot.properties.strat_section_id)) return;
+
+		var source = new ol.source.Vector({
+			features: new ol.format.GeoJSON().readFeatures(
+				{ type: 'Feature', geometry: spot.geometry, properties: {} },
+				{ featureProjection: 'EPSG:3857', dataProjection: 'EPSG:4326' }
+			)
+		});
+
+		var haloLayer = new ol.layer.Vector({
+			source: source,
+			style: highlightStyle,
+			zIndex: 5
+		});
+		haloLayer.set('name', 'highlightLayer');
+		haloLayer.set('displayInLayerSwitcher', false);
+		map.addLayer(haloLayer);
+
+		var extent = source.getExtent();
+		if (extent && isFinite(extent[0]) && isFinite(extent[2])) {
+			map.getView().fit(extent, {
+				padding: [80, 80, 80, 80],
+				maxZoom: 16,
+				duration: 1200
+			});
+		}
+	}
+
+	// Expand a sidebar section via its own header handler so the sidebar's
+	// open-section memory stays in sync, then scroll it into view.
+	function expandSection(title) {
+		var section = document.querySelector('.ds-section[data-title="' + title + '"]');
+		if (!section) return;
+		if (section.classList.contains('ds-collapsed')) {
+			var header = section.querySelector('.ds-section-header');
+			if (header) header.click();
+		}
+		if (section.scrollIntoView) section.scrollIntoView({ block: 'nearest' });
+	}
+
+	function highlightStyle(feature) {
+		var geomType = feature.getGeometry().getType();
+		if (geomType === 'Point' || geomType === 'MultiPoint') {
+			return new ol.style.Style({
+				image: new ol.style.Circle({
+					radius: 16,
+					stroke: new ol.style.Stroke({ color: HIGHLIGHT_STROKE_COLOR, width: 4 }),
+					fill: new ol.style.Fill({ color: HIGHLIGHT_FILL_COLOR })
+				})
+			});
+		}
+		return new ol.style.Style({
+			stroke: new ol.style.Stroke({ color: HIGHLIGHT_STROKE_COLOR, width: 6 }),
+			fill: new ol.style.Fill({ color: HIGHLIGHT_FILL_COLOR })
+		});
+	}
+
 	global.DatasetDetailSpots = {
 		loadSpots: loadSpots,
-		styleForFeature: styleForFeature
+		styleForFeature: styleForFeature,
+		highlightSpot: highlightSpot
 	};
 })(window);

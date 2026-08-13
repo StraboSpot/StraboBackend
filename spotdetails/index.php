@@ -17,6 +17,13 @@ if($sample_id=="" || !is_int($sample_id)){
 	exit();
 }
 
+// This legacy sample landing page is replaced by the StraboFieldDatasetDetail
+// landing page, which accepts the same internal sample id and highlights the
+// containing spot. 302 (not 301) so the redirect stays revocable while the
+// new flow soaks; the code below is retained for easy rollback.
+header('Location: /StraboFieldDatasetDetail/?sample_id=' . $sample_id, true, 302);
+exit();
+
 include_once "../includes/config.inc.php"; //credentials, etc
 include "../db.php"; //postgres database abstraction layer
 include "../neodb.php"; //neo4j database abstraction layer
