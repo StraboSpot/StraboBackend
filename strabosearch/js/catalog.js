@@ -120,7 +120,7 @@
 		{ value: 'field',   label: 'Field' },
 		{ value: 'micro',   label: 'Micro' },
 		{ value: 'exp',     label: 'Experimental' },
-		{ value: 'samples', label: 'Samples' }
+		//{ value: 'samples', label: 'Samples' } //Let's not show this for now 20260816 JMA
 	];
 
 	var byId = {};
