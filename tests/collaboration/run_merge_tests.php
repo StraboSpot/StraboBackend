@@ -344,6 +344,150 @@ test("B6. Owner upload merges measurementTemplates by id",
     $r['code'] == 201 && in_array(2001, $ids, true) && in_array(2002, $ids, true),
     "HTTP {$r['code']} | mtemp ids=" . json_encode($ids));
 
+// B7. Collab project, tag on both sides: incoming PROPERTIES win, spots union.
+// (Regression pin for the tag color/rename revert: combineNormalProject used
+// to keep the server tag object wholesale.)
+resetProject($neodb, $projectCollabId, $ownerPkey);
+seedProject($neodb, $projectCollabId, $ownerPkey, [
+    'tags' => [['id' => 3101, 'name' => 'OldName', 'color' => 'red', 'spots' => [7777777702]]],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectCollabId", $ownerEmail, $testPassword,
+    projectPayload($projectCollabId, [
+        'tags' => [['id' => 3101, 'name' => 'NewName', 'color' => 'blue', 'spots' => [7777777703]]],
+    ]));
+$g = fetchProject($baseUrl, $projectCollabId, $ownerEmail, $testPassword);
+$t = findTag($g['body'], 3101);
+test("B7. Collab project + overlapping tag → incoming color/name win, spots union",
+    $r['code'] == 201 && $t !== null
+    && ($t['color'] ?? '') === 'blue' && ($t['name'] ?? '') === 'NewName'
+    && in_array(7777777702, $t['spots'] ?? []) && in_array(7777777703, $t['spots'] ?? []),
+    "HTTP {$r['code']} | tag=" . json_encode($t));
+
+// B8. Collab project: tag DELETION still does not stick (union re-adds the
+// server copy). Documented pending the tombstone design; this pin exists so
+// a future change here is deliberate, not accidental.
+resetProject($neodb, $projectCollabId, $ownerPkey);
+seedProject($neodb, $projectCollabId, $ownerPkey, [
+    'tags' => [['id' => 3103, 'name' => 'Undeletable', 'spots' => []]],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectCollabId", $ownerEmail, $testPassword,
+    projectPayload($projectCollabId, ['tags' => []]));
+$g = fetchProject($baseUrl, $projectCollabId, $ownerEmail, $testPassword);
+test("B8. Collab project + tag omitted from upload → server tag survives (union, tombstones later)",
+    $r['code'] == 201 && findTag($g['body'], 3103) !== null,
+    "HTTP {$r['code']} | T3103=" . (findTag($g['body'], 3103) ? 'yes' : 'no'));
+
+// ===========================================================================
+// SECTION B-S: Solo-project tag snapshot semantics (no collaborator rows)
+// ===========================================================================
+// A project nobody but the owner has ever held has exactly one writer, so the
+// uploaded tag list is the authoritative snapshot: deletions, spot-removals
+// and property edits must all stick. This was the behavior from 2024-09-13
+// (JMA overwrite fix) until the Dec-2025 collaboration work reintroduced the
+// union unconditionally; these are the regression pins for that fix
+// (user reports 2026-07-04 and 2026-08-16 / Monte_Grappa).
+section("B-S. Solo project tag snapshot (POST /db/project, no collaborators)");
+
+// BS1. Deleting one of two units sticks.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [
+        ['id' => 3001, 'name' => 'Unit Kept',    'type' => 'geologic_unit', 'spots' => [7777777701]],
+        ['id' => 3002, 'name' => 'Unit Deleted', 'type' => 'geologic_unit', 'spots' => [7777777701]],
+    ],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, [
+        'tags' => [['id' => 3001, 'name' => 'Unit Kept', 'type' => 'geologic_unit', 'spots' => [7777777701]]],
+    ]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BS1. Solo: tag absent from upload is DELETED (no resurrection)",
+    $r['code'] == 201 && findTag($g['body'], 3001) !== null && findTag($g['body'], 3002) === null,
+    "HTTP {$r['code']} | kept=" . (findTag($g['body'], 3001) ? 'yes' : 'no') .
+    " deleted=" . (findTag($g['body'], 3002) ? 'STILL PRESENT' : 'gone'));
+
+// BS2. Removing a spot from a unit sticks.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [['id' => 3003, 'name' => 'Shrinking', 'spots' => [7777777701, 7777777702]]],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, [
+        'tags' => [['id' => 3003, 'name' => 'Shrinking', 'spots' => [7777777701]]],
+    ]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+$t = findTag($g['body'], 3003);
+test("BS2. Solo: spot removed from tag stays removed",
+    $r['code'] == 201 && $t !== null
+    && in_array(7777777701, $t['spots'] ?? []) && !in_array(7777777702, $t['spots'] ?? []),
+    "HTTP {$r['code']} | spots=" . ($t ? json_encode($t['spots']) : 'tag missing'));
+
+// BS3. Property edits (color, name) stick.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [['id' => 3004, 'name' => 'Old Unit', 'color' => 'red', 'spots' => [7777777701]]],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, [
+        'tags' => [['id' => 3004, 'name' => 'New Unit', 'color' => 'blue', 'spots' => [7777777701]]],
+    ]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+$t = findTag($g['body'], 3004);
+test("BS3. Solo: tag color + name edits stick",
+    $r['code'] == 201 && $t !== null
+    && ($t['color'] ?? '') === 'blue' && ($t['name'] ?? '') === 'New Unit',
+    "HTTP {$r['code']} | tag=" . json_encode($t));
+
+// BS4. Deleting the LAST tag clears the stored copy (empty list must write
+// through as "[]", not silently keep the stale server json_tags).
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [['id' => 3005, 'name' => 'Last Unit', 'spots' => []]],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => []]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+$storedTags = $neodb->get_var("MATCH (p:Project {id: $projectSoloId, userpkey: $ownerPkey}) RETURN p.json_tags");
+test("BS4. Solo: deleting the last tag clears stored json_tags",
+    $r['code'] == 201 && findTag($g['body'], 3005) === null
+    && json_decode((string)$storedTags) === [],
+    "HTTP {$r['code']} | stored json_tags=" . var_export($storedTags, true));
+
+// BS5. A payload with NO tags field is a partial upload: server tags are
+// retained (pre-collaboration overwrite parity; only an explicit list
+// replaces).
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [['id' => 3006, 'name' => 'Survivor', 'spots' => []]],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BS5. Solo: upload without a tags field retains server tags",
+    $r['code'] == 201 && findTag($g['body'], 3006) !== null,
+    "HTTP {$r['code']} | T3006=" . (findTag($g['body'], 3006) ? 'yes' : 'no'));
+
+// BS6. Convergence loop (the reporter's exact scenario): delete-then-redownload
+// then re-upload the downloaded state → deletion survives the round trip.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [
+        ['id' => 3007, 'name' => 'Maiolica',          'type' => 'geologic_unit', 'spots' => [7777777701]],
+        ['id' => 3008, 'name' => 'Scaglia Variegata', 'type' => 'geologic_unit', 'spots' => [7777777701]],
+    ],
+]);
+makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, [
+        'tags' => [['id' => 3007, 'name' => 'Maiolica', 'type' => 'geologic_unit', 'spots' => [7777777701]]],
+    ]));
+$g1 = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => $g1['body']['tags'] ?? []]));
+$g2 = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BS6. Solo: delete → download → re-upload round trip converges (deleted unit stays gone)",
+    $r['code'] == 201 && findTag($g2['body'], 3007) !== null && findTag($g2['body'], 3008) === null,
+    "HTTP {$r['code']} | tags=" . json_encode($g2['body']['tags'] ?? null));
+
 // ===========================================================================
 // SECTION C: Per-report ownership merge
 // ===========================================================================
@@ -774,6 +918,7 @@ foreach ($testImageIds as $iid) {
 // ---------------------------------------------------------------------------
 resetProject($neodb, $projectCollabId, $ownerPkey);
 resetProject($neodb, $projectHaltedId, $ownerPkey);
+resetProject($neodb, $projectSoloId, $ownerPkey);
 
 // ---------------------------------------------------------------------------
 // RESULTS

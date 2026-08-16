@@ -3790,28 +3790,61 @@ public function getSpotName($id){
 			$out_tags = [];
 		}
 
-		$ex_tag_ids = [];
-		foreach($out_tags as $o){
-			$ex_tag_ids[] = $o->id;
-		}
+		// Tag semantics depend on whether anyone besides the owner has ever
+		// held this project. The union below exists to protect tags held by
+		// collaborator devices from being wiped by a stale upload; on a
+		// project with no collaborator rows the uploading device is the only
+		// writer, so its tag list is the authoritative snapshot: deletions,
+		// spot-removals and property edits (color, name) must all stick.
+		// (Restores the pre-collaboration overwrite semantics of JMA 20240913
+		// for solo projects; see docs/GeologicUnits_TagDeletion_Proposal.md.)
+		$tags_present = isset($injson->tags) && is_array($injson->tags);
+		$replace_tags = false;
 
-		foreach($in_tags as $in_tag){
+		$collabcount = (int)$this->db->get_var_prepared(
+			"select count(*) from collaborators where strabo_project_id = $1 and project_owner_user_pkey = $2",
+			array((string)$project_id, $this->userpkey));
 
-			if(in_array($in_tag->id, $ex_tag_ids)){
-				//combine spots
-				foreach($out_tags as $o){
-					if($o->id == $in_tag->id){
-						foreach($in_tag->spots as $sp){
-							if(!in_array($sp, $o->spots)){
-								$o->spots[] = $sp;
-							}
-						}
-					}
-				}
-			}else{
-				$out_tags[] = $in_tag;
+		if($collabcount == 0 && $tags_present){
+			// Solo project: incoming snapshot replaces the server copy.
+			// An explicit empty list means "all tags deleted" and must
+			// clear the stored copy; an ABSENT tags field (partial upload)
+			// keeps the server copy via the union path below.
+			$out_tags = $in_tags;
+			$replace_tags = true;
+		}else{
+
+			$ex_tag_ids = [];
+			foreach($out_tags as $o){
+				$ex_tag_ids[] = $o->id;
 			}
 
+			foreach($in_tags as $in_tag){
+
+				if(in_array($in_tag->id, $ex_tag_ids)){
+					// Tag exists on both sides: the incoming object wins so
+					// property edits (color, name) propagate, matching
+					// combineCollaborativeProject; server-only spot ids are
+					// unioned in so stale devices cannot strip memberships.
+					foreach($out_tags as $key=>$o){
+						if($o->id == $in_tag->id){
+							$merged_spots = isset($in_tag->spots) && is_array($in_tag->spots) ? $in_tag->spots : [];
+							if(isset($o->spots) && is_array($o->spots)){
+								foreach($o->spots as $sp){
+									if(!in_array($sp, $merged_spots)){
+										$merged_spots[] = $sp;
+									}
+								}
+							}
+							$in_tag->spots = $merged_spots;
+							$out_tags[$key] = $in_tag;
+						}
+					}
+				}else{
+					$out_tags[] = $in_tag;
+				}
+
+			}
 		}
 
 
@@ -3820,6 +3853,11 @@ public function getSpotName($id){
 
 		if(count($out_tags) > 0){
 			$injson->tags = $out_tags;
+		}else if($replace_tags){
+			// Deleting the LAST tag must still reach storage: an empty array
+			// json-encodes to "[]", which insertProject writes through
+			// (unset tags would silently keep the stale server json_tags).
+			$injson->tags = [];
 		}
 
 		//tags done, now reports!!
