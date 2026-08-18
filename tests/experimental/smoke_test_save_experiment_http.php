@@ -19,8 +19,10 @@
  *                heal   — an experiment left broken by the bug window
  *                         (embedded strabo_id, no sample row) re-saved via
  *                         HTTP gets its row back on the SAME strabo_id
- *                guard  — a strabo_id already claimed by another sample row
- *                         is not adopted; garbage strabo_id is not adopted
+ *                link   — a strabo_id claimed by another sample row AND
+ *                         backed by an owned spine sample IS adopted
+ *                         (multi-link, Exp_StraboSamples_Linking.md D1);
+ *                         garbage strabo_id is still not adopted
  *
  *              Spine (strabosamples.*) assertions run only when the checked-
  *              out sample_sync.php writes the spine (samples/* branches), so
@@ -182,28 +184,40 @@ try {
         check('heal: spine converged on one row', $n === 1);
     }
 
-    // ---- Part 4: claimed / garbage strabo_id not adopted ----------------
-    echo "\n== guard ==\n";
-    $stealData = makeSampleData('Claim Thief', 'SMK-THIEF');
-    $stealData['sample']['strabo_id'] = $sid1; // already claimed by exp1's row
-    $r = hit($sid, array('project_pkey' => $project_pkey, 'experiment_id' => 'SMK-THIEF', 'data' => $stealData));
+    // ---- Part 4: spine-backed claimed id IS adopted (multi-link D1);
+    //      garbage still is not ---------------------------------------
+    echo "\n== link ==\n";
+    $stealData = makeSampleData('Claim Sharer', 'SMK-SHARE');
+    $stealData['sample']['strabo_id'] = $sid1; // claimed by exp1's row AND backed by exp1's spine sample
+    $r = hit($sid, array('project_pkey' => $project_pkey, 'experiment_id' => 'SMK-SHARE', 'data' => $stealData));
     $exp3 = is_object($r['json']) ? (int)$r['json']->pkey : 0;
     $sid3 = is_object($r['json']) && !empty($r['json']->strabo_id) ? $r['json']->strabo_id : null;
     if ($sid3) $spine_ids[] = $sid3;
-    check('guard: claimed id not adopted — fresh mint', $sid3 !== null && $sid3 !== $sid1);
+    check('link: spine-backed claimed id adopted (multi-link)', $sid3 !== null && $sid3 === $sid1);
     $row = $db->get_row_prepared(
         "SELECT strabo_id FROM straboexp.sample WHERE experiment_pkey = $1", array($exp3));
-    check('guard: row written under the fresh id', $row && $row->strabo_id === $sid3);
+    check('link: row written under the shared id', $row && $row->strabo_id === $sid1);
     $still = $db->get_var_prepared(
         "SELECT strabo_id FROM straboexp.sample WHERE experiment_pkey = $1", array($exp1));
-    check('guard: original owner untouched', $still === $sid1);
+    check('link: original owner untouched', $still === $sid1);
+    if ($SPINE) {
+        $n = (int)$db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.sample_subsystem_links
+              WHERE sample_id = $1 AND sample_userpkey = $2 AND subsystem = 'experimental'",
+            array($sid1, $userpkey));
+        check('link: two experimental link rows on the shared sample', $n === 2);
+        $n = (int)$db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.samples WHERE id = $1 AND userpkey = $2",
+            array($sid1, $userpkey));
+        check('link: still exactly one spine row', $n === 1);
+    }
 
     $junkData = makeSampleData('Junk Id', 'SMK-JUNK');
     $junkData['sample']['strabo_id'] = 'not-a-uuid-at-all';
     $r = hit($sid, array('project_pkey' => $project_pkey, 'experiment_id' => 'SMK-JUNK', 'data' => $junkData));
     $sid4 = is_object($r['json']) && !empty($r['json']->strabo_id) ? $r['json']->strabo_id : null;
     if ($sid4) $spine_ids[] = $sid4;
-    check('guard: garbage id rejected — clean JSON + fresh uuid',
+    check('link: garbage id rejected — clean JSON + fresh uuid',
         $r['json'] !== null && $sid4 !== null
         && preg_match('/^[0-9a-f-]{36}$/', $sid4) === 1);
 
@@ -298,7 +312,9 @@ try {
         check('junk heal: junk spine row removed', $n === 0);
     }
 
-    // 5d: clearing a REAL sample via skeleton removes its rows
+    // 5d: clearing a REAL sample via skeleton removes its rows. exp1's
+    // spine sample is SHARED with exp3 since Part 4 (multi-link), so the
+    // spine row must SURVIVE exp1's departure and go only with exp3's.
     $r = hit($sid, array('pkey' => $exp1, 'experiment_id' => 'SMK-1',
                          'data' => array('facility' => array('name' => 'Smoke Facility'),
                                          'sample' => $skeleton)));
@@ -311,7 +327,25 @@ try {
         $n = (int)$db->get_var_prepared(
             "SELECT count(*) FROM strabosamples.samples WHERE id = $1 AND userpkey = $2",
             array($sid1, $userpkey));
-        check('clear: spine row removed', $n === 0);
+        check('clear: spine row SURVIVES while exp3 still links it', $n === 1);
+        $n = (int)$db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.sample_subsystem_links
+              WHERE sample_id = $1 AND sample_userpkey = $2 AND subsystem = 'experimental'",
+            array($sid1, $userpkey));
+        check('clear: only exp3 link row remains', $n === 1);
+    }
+
+    // 5e: clearing the LAST linked experiment removes the spine row too.
+    $r = hit($sid, array('pkey' => $exp3, 'experiment_id' => 'SMK-SHARE',
+                         'data' => array('facility' => array('name' => 'Smoke Facility'),
+                                         'sample' => $skeleton)));
+    check('clear-last: HTTP 200 + strabo_id null',
+        $r['status'] === 200 && is_object($r['json']) && $r['json']->strabo_id === null);
+    if ($SPINE) {
+        $n = (int)$db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.samples WHERE id = $1 AND userpkey = $2",
+            array($sid1, $userpkey));
+        check('clear-last: spine row removed with the last link', $n === 0);
     }
 
 } finally {

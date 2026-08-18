@@ -114,11 +114,16 @@ if (!empty($input->pkey)) {
         error_log("Failed to create version backup before updating experiment $experiment_pkey: " . $e->getMessage());
     }
 
-    // Sync the normalized sample rows (1:1 with experiment). Preserves strabo_id
-    // across edits by anchoring on experiment_pkey; mints fresh only on first
-    // appearance of a sample for this experiment.
+    // Sync the normalized sample rows (one per experiment, anchored on
+    // experiment_pkey). The incoming sample.strabo_id expresses LINK INTENT
+    // (Exp_StraboSamples_Linking.md D3): absent = keep current identity,
+    // explicit null = unlink (fresh mint), a spine id the user owns =
+    // link/relink. Keyed on the experiment OWNER's userpkey (matches
+    // delete_experiment.php — admin edits must not re-home the sample or
+    // validate links against the admin's spine).
+    $owner_userpkey = (int)$row->userpkey;
     $sample_obj = isset($json_data->sample) ? $json_data->sample : null;
-    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj);
+    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $owner_userpkey, $sample_obj, $neodb);
     if ($strabo_id !== null && is_object($json_data->sample)) {
         $json_data->sample->strabo_id = $strabo_id;
     } elseif (is_object($json_data->sample) && isset($json_data->sample->strabo_id)) {
@@ -219,9 +224,17 @@ if (!empty($input->pkey)) {
     // sends a sample key (empty {} when untouched), and PHP's empty() is
     // false for ANY object, so an object-presence check alone would mint a
     // junk sample for every experiment saved without sample data.
+    //
+    // LINK INTENT exception (Exp_StraboSamples_Linking.md D3): an incoming
+    // strabo_id that resolves to a spine sample this user owns is a
+    // deliberate link (picker selection, or Load Data carryover of a linked
+    // sample) and is preserved instead of overwritten with a fresh mint.
     $sample_obj = isset($json_data->sample) ? $json_data->sample : null;
     if (exp_sample_has_data($sample_obj)) {
-        $sample_obj->strabo_id = $uuid_gen->v4();
+        $intent = exp_sample_link_intent($db, $sample_obj, $userpkey);
+        if (!($intent['mode'] === 'id' && $intent['spine_owned'])) {
+            $sample_obj->strabo_id = $uuid_gen->v4();
+        }
     } elseif (is_object($sample_obj) && isset($sample_obj->strabo_id)) {
         // Contentless sample carrying a round-tripped id (e.g. loaded from
         // a previous experiment's JSON) — don't persist the stale id.
@@ -237,7 +250,7 @@ if (!empty($input->pkey)) {
     ", array($experiment_pkey, $project_pkey, $userpkey, $experiment_id, $json_string, $uuid));
 
     // Normalized sample rows (straboexp.sample + children + strabosamples spine)
-    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj);
+    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj, $neodb);
 
     // Update parent project's full-text search keywords
     updateExpProjectKeywords($db, $project_pkey);

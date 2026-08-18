@@ -56,6 +56,7 @@
         :section="activeSection"
         :data="getSectionData(activeSection)"
         :readonly="true"
+        :sample-link-owner="ownerPkey"
         @close="activeSection = null"
       />
 
@@ -86,6 +87,7 @@ const loading = ref(true)
 const error = ref(null)
 const experimentId = ref('')
 const experimentUuid = ref('')
+const ownerPkey = ref(null)
 const modifiedDate = ref('')
 const activeSection = ref(null)
 const showDownloadModal = ref(false)
@@ -110,6 +112,7 @@ onMounted(async () => {
     const experiment = await experimentService.get(props.e)
     experimentId.value = experiment.experiment_id || ''
     experimentUuid.value = experiment.uuid || ''
+    ownerPkey.value = experiment.owner_pkey || null
     modifiedDate.value = experiment.modified_date || ''
 
     // Load LAPS data

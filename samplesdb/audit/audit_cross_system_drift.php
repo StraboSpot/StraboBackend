@@ -720,72 +720,103 @@ $rows = $db->get_results("
      WHERE es.strabo_id IS NOT NULL$userAndE
 ");
 if (is_array($rows)) {
+    // Multi-link (Exp_StraboSamples_Linking.md §7): several experiments may
+    // share one spine sample, and the slice/spine/children reflect the LAST
+    // writer among them (LWW). Fidelity therefore evaluates per GROUP of
+    // source rows sharing (strabo_id, userpkey): the group is clean when ANY
+    // member's projection matches (the Micro "fidelity groups per sample"
+    // precedent). $checked still counts source rows (coverage semantics).
+    $groups = array();
     foreach ($rows as $r) {
         $checked++;
+        $groups[$r->sample_id . '|' . $r->userpkey][] = $r;
+    }
+    foreach ($groups as $group) {
+        $r0 = $group[0];
+        $suffix = count($group) > 1
+            ? ' [multi-link group of ' . count($group) . ' experiments; no member matches]'
+            : '';
 
-        // experimental_data JSONB vs source columns.
-        $ed = decode_jsonb($r->experimental_data);
-        $dataDiff = array();
-        if ($ed === null) {
-            $dataDiff[] = 'experimental_data(null)';
-        } else {
-            $map = array('id' => 'id', 'name' => 'e_name', 'igsn' => 'e_igsn',
-                         'description' => 'e_description', 'material_type' => 'material_type',
-                         'provenance_loc_latitude' => 'provenance_loc_latitude',
-                         'provenance_loc_longitude' => 'provenance_loc_longitude');
-            foreach ($map as $jsonKey => $col) {
-                $src = isset($r->$col) ? $r->$col : null;
-                $mir = isset($ed[$jsonKey]) ? $ed[$jsonKey] : null;
-                if (!eq_val($src, $mir)) $dataDiff[] = $jsonKey;
+        // experimental_data JSONB vs source columns — match-any member.
+        $bestDataDiff = null;
+        foreach ($group as $r) {
+            $ed = decode_jsonb($r->experimental_data);
+            $dataDiff = array();
+            if ($ed === null) {
+                $dataDiff[] = 'experimental_data(null)';
+            } else {
+                $map = array('id' => 'id', 'name' => 'e_name', 'igsn' => 'e_igsn',
+                             'description' => 'e_description', 'material_type' => 'material_type',
+                             'provenance_loc_latitude' => 'provenance_loc_latitude',
+                             'provenance_loc_longitude' => 'provenance_loc_longitude');
+                foreach ($map as $jsonKey => $col) {
+                    $src = isset($r->$col) ? $r->$col : null;
+                    $mir = isset($ed[$jsonKey]) ? $ed[$jsonKey] : null;
+                    if (!eq_val($src, $mir)) $dataDiff[] = $jsonKey;
+                }
             }
+            if (empty($dataDiff)) { $bestDataDiff = array(); break; }
+            if ($bestDataDiff === null || count($dataDiff) < count($bestDataDiff)) $bestDataDiff = $dataDiff;
         }
-        if (!empty($dataDiff)) {
-            $writer = last_jsonb_writer($db, $r->sample_id, $r->userpkey, 'experimental_data');
+        if (!empty($bestDataDiff)) {
+            $writer = last_jsonb_writer($db, $r0->sample_id, $r0->userpkey, 'experimental_data');
             $class = ($writer === 'samples_api') ? 'INFO' : 'DRIFT';
             $kind  = ($writer === 'samples_api') ? 'exp_data_api_edited' : 'exp_data_mismatch';
-            finding('exp_fidelity', $class, $kind, $r->sample_id, $r->userpkey,
-                'experimental_data vs source differs on: ' . implode(', ', $dataDiff) . " (last jsonb writer: " . ($writer ?: 'unknown') . ")");
+            finding('exp_fidelity', $class, $kind, $r0->sample_id, $r0->userpkey,
+                'experimental_data vs source differs on: ' . implode(', ', $bestDataDiff) . " (last jsonb writer: " . ($writer ?: 'unknown') . ")$suffix");
         }
 
-        // Spine fidelity — only when Experimental owns the spine.
-        if ($r->field_data === null && $r->micro_data === null && $r->experimental_data !== null) {
+        // Spine fidelity — only when Experimental owns the spine (spine
+        // columns are identical across the group; sources differ).
+        if ($r0->field_data === null && $r0->micro_data === null && $r0->experimental_data !== null) {
             $stored = (object)array(
-                'name' => $r->name, 'igsn' => $r->igsn, 'description' => $r->description,
-                'notes' => $r->notes, 'latitude' => $r->s_latitude, 'longitude' => $r->s_longitude,
-                'display_sample_type' => $r->display_sample_type,
-                'display_sample_purpose' => $r->display_sample_purpose,
+                'name' => $r0->name, 'igsn' => $r0->igsn, 'description' => $r0->description,
+                'notes' => $r0->notes, 'latitude' => $r0->s_latitude, 'longitude' => $r0->s_longitude,
+                'display_sample_type' => $r0->display_sample_type,
+                'display_sample_purpose' => $r0->display_sample_purpose,
             );
-            $proj = project_exp_spine((object)array(
-                'name' => $r->e_name, 'igsn' => $r->e_igsn, 'id' => $r->id,
-                'description' => $r->e_description, 'material_type' => $r->material_type,
-                'provenance_loc_latitude' => $r->provenance_loc_latitude,
-                'provenance_loc_longitude' => $r->provenance_loc_longitude,
-            ));
-            $diff = spine_diff($stored, $proj);
-            if (!empty($diff)) {
-                $writer = last_spine_writer($db, $r->sample_id, $r->userpkey);
+            $bestDiff = null;
+            foreach ($group as $r) {
+                $proj = project_exp_spine((object)array(
+                    'name' => $r->e_name, 'igsn' => $r->e_igsn, 'id' => $r->id,
+                    'description' => $r->e_description, 'material_type' => $r->material_type,
+                    'provenance_loc_latitude' => $r->provenance_loc_latitude,
+                    'provenance_loc_longitude' => $r->provenance_loc_longitude,
+                ));
+                $diff = spine_diff($stored, $proj);
+                if (empty($diff)) { $bestDiff = array(); break; }
+                if ($bestDiff === null || count($diff) < count($bestDiff)) $bestDiff = $diff;
+            }
+            if (!empty($bestDiff)) {
+                $writer = last_spine_writer($db, $r0->sample_id, $r0->userpkey);
                 if ($writer === 'samples_api') {
-                    finding('exp_fidelity', 'INFO', 'manual_edit_no_writeback', $r->sample_id, $r->userpkey,
-                        'spine differs from Exp source on: ' . implode(', ', $diff) . ' (samples_api edit, by design)');
+                    finding('exp_fidelity', 'INFO', 'manual_edit_no_writeback', $r0->sample_id, $r0->userpkey,
+                        'spine differs from Exp source on: ' . implode(', ', $bestDiff) . ' (samples_api edit, by design)' . $suffix);
                 } else {
-                    finding('exp_fidelity', 'DRIFT', 'spine_mismatch', $r->sample_id, $r->userpkey,
-                        'spine differs from Exp source on: ' . implode(', ', $diff) . " (last spine writer: " . ($writer ?: 'unknown') . ")");
+                    finding('exp_fidelity', 'DRIFT', 'spine_mismatch', $r0->sample_id, $r0->userpkey,
+                        'spine differs from Exp source on: ' . implode(', ', $bestDiff) . " (last spine writer: " . ($writer ?: 'unknown') . ")$suffix");
                 }
             }
         }
 
-        // Children counts (composition / parameters / documents).
-        $cDiff = array();
-        if ((int)$r->src_comp  !== (int)$r->sp_comp)  $cDiff[] = "composition {$r->src_comp}→{$r->sp_comp}";
-        if ((int)$r->src_param !== (int)$r->sp_param) $cDiff[] = "parameters {$r->src_param}→{$r->sp_param}";
-        if ((int)$r->src_doc   !== (int)$r->sp_doc)   $cDiff[] = "documents {$r->src_doc}→{$r->sp_doc}";
-        if (!empty($cDiff)) {
-            if (children_edited_via_api($db, $r->sample_id, $r->userpkey)) {
-                finding('exp_fidelity', 'INFO', 'children_api_edited', $r->sample_id, $r->userpkey,
-                    'child row counts differ (' . implode('; ', $cDiff) . ') — samples_api children edit is newer than the last Exp save');
+        // Children counts (composition / parameters / documents) — the spine
+        // children mirror the last writer's, so match-any member.
+        $bestCDiff = null;
+        foreach ($group as $r) {
+            $cDiff = array();
+            if ((int)$r->src_comp  !== (int)$r->sp_comp)  $cDiff[] = "composition {$r->src_comp}→{$r->sp_comp}";
+            if ((int)$r->src_param !== (int)$r->sp_param) $cDiff[] = "parameters {$r->src_param}→{$r->sp_param}";
+            if ((int)$r->src_doc   !== (int)$r->sp_doc)   $cDiff[] = "documents {$r->src_doc}→{$r->sp_doc}";
+            if (empty($cDiff)) { $bestCDiff = array(); break; }
+            if ($bestCDiff === null || count($cDiff) < count($bestCDiff)) $bestCDiff = $cDiff;
+        }
+        if (!empty($bestCDiff)) {
+            if (children_edited_via_api($db, $r0->sample_id, $r0->userpkey)) {
+                finding('exp_fidelity', 'INFO', 'children_api_edited', $r0->sample_id, $r0->userpkey,
+                    'child row counts differ (' . implode('; ', $bestCDiff) . ') — samples_api children edit is newer than the last Exp save' . $suffix);
             } else {
-                finding('exp_fidelity', 'DRIFT', 'children_count_mismatch', $r->sample_id, $r->userpkey,
-                    'child row counts differ (source→spine): ' . implode('; ', $cDiff));
+                finding('exp_fidelity', 'DRIFT', 'children_count_mismatch', $r0->sample_id, $r0->userpkey,
+                    'child row counts differ (source→spine): ' . implode('; ', $bestCDiff) . $suffix);
             }
         }
     }

@@ -201,6 +201,12 @@ try {
 
         // Set experiment data and generate on a new page
         $pdf->setExperimentData($experimentData, $exp_row->experiment_id, $row->name);
+        // Per-experiment StraboSamples drill-down link (owner = the
+        // EXPERIMENT owner, which can differ from the project owner).
+        $samplesUrl = !empty($experimentData->sample->strabo_id)
+            ? experimental_samples_detail_url((int)$exp_row->userpkey, $experimentData->sample->strabo_id)
+            : null;
+        $pdf->setSamplesLink($samplesUrl);
         $pdf->AddPage();
         $pdf->generateTitleSection();
 

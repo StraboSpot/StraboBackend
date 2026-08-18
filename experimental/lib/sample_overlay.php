@@ -183,4 +183,18 @@ if (!function_exists('experimental_sample_overlay_apply')) {
         }
     }
 
+/**
+ * Absolute URL of the sample's StraboSamples detail page
+ * (/samples/{owner}/{id}, the .htaccess pretty form of samples_detail.php).
+ * Used by the PDF export, where a relative URL is useless. Host comes from
+ * the serving request so dev PDFs link to dev; falls back to production
+ * for CLI/backfill contexts.
+ */
+function experimental_samples_detail_url($ownerPkey, $straboId) {
+    $host = !empty($_SERVER['HTTP_HOST']) ? $_SERVER['HTTP_HOST'] : 'strabospot.org';
+    $scheme = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https' : 'http';
+    if ($host === 'strabospot.org') $scheme = 'https';
+    return $scheme . '://' . $host . '/samples/' . (int)$ownerPkey . '/' . rawurlencode((string)$straboId);
+}
+
 }

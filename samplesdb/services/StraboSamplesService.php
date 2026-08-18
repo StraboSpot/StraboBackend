@@ -97,12 +97,27 @@ class StraboSamplesService
      */
     public function listMySamples($filters = array())
     {
+        // Optional picker support (Exp linking, Exp_StraboSamples_Linking.md
+        // §5.4): subsystem-slice presence + experimental link count computed
+        // in the list query instead of one round-trip per row.
+        $withFlags = !empty($filters['include_subsystem_flags']);
+        $flagCols = $withFlags
+            ? ",
+                    (s.field_data IS NOT NULL) AS has_field_data,
+                    (s.micro_data IS NOT NULL) AS has_micro_data,
+                    (SELECT count(*)
+                       FROM strabosamples.sample_subsystem_links l
+                      WHERE l.sample_id = s.id
+                        AND l.sample_userpkey = s.userpkey
+                        AND l.subsystem = 'experimental') AS experimental_link_count"
+            : "";
+
         $rows = $this->db->get_results_prepared(
             "SELECT s.id, s.userpkey, s.name, s.igsn, s.description, s.notes,
                     s.latitude, s.longitude,
                     s.display_sample_type, s.display_sample_purpose,
                     s.parent_sample_id, s.parent_userpkey,
-                    s.created_at, s.created_by, s.modified_at, s.modified_by
+                    s.created_at, s.created_by, s.modified_at, s.modified_by{$flagCols}
                FROM strabosamples.samples s
               WHERE s.userpkey = $1
                  OR EXISTS (
@@ -120,7 +135,13 @@ class StraboSamplesService
         $out = array();
         if (is_array($rows)) {
             foreach ($rows as $r) {
-                $out[] = $this->normalizeSpineRow($r);
+                $item = $this->normalizeSpineRow($r);
+                if ($withFlags) {
+                    $item['has_field_data'] = ($r->has_field_data === true || $r->has_field_data === 't');
+                    $item['has_micro_data'] = ($r->has_micro_data === true || $r->has_micro_data === 't');
+                    $item['experimental_link_count'] = (int)$r->experimental_link_count;
+                }
+                $out[] = $item;
             }
         }
         return $out;
@@ -1964,6 +1985,56 @@ class StraboSamplesService
         StraboSearchSync::touchSample($this->db, $sampleId, $ownerPkey);
 
         return array('ok' => true, 'removed' => false);
+    }
+
+    /**
+     * Reference-scoped counterpart to removeSubsystemSample (multi-link,
+     * Exp_StraboSamples_Linking.md §5.3): remove ONE subsystem-instance
+     * link (e.g. one experiment's) instead of every link the source holds.
+     * While other links of the SAME source remain, the source's JSONB slice
+     * and children stay in place — the surviving instance's next save
+     * refreshes them LWW. When this was the last link of the source, falls
+     * through to removeSubsystemSample semantics (clear this source's
+     * slice; delete the whole sample only when no other source cares).
+     */
+    public function removeSubsystemSampleReference($source, $sampleId, $ownerPkey, $referenceId, $referenceUserpkey)
+    {
+        if (!isset(self::SOURCE_PRIORITY[$source])) {
+            return array('ok' => false, 'error' => 'invalid_source');
+        }
+        $ownerPkey = (int)$ownerPkey;
+        $referenceUserpkey = (int)$referenceUserpkey;
+        $referenceId = (string)$referenceId;
+
+        $this->db->prepare_query(
+            "DELETE FROM strabosamples.sample_subsystem_links
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND subsystem=$3
+                AND reference_id=$4 AND reference_userpkey=$5",
+            array($sampleId, $ownerPkey, $source, $referenceId, $referenceUserpkey)
+        );
+
+        $sameSourceRemains = (bool)$this->db->get_var_prepared(
+            "SELECT 1 FROM strabosamples.sample_subsystem_links
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND subsystem=$3 LIMIT 1",
+            array($sampleId, $ownerPkey, $source)
+        );
+
+        if ($sameSourceRemains) {
+            // Another instance of this source still projects the sample.
+            // Recompute search fan-out (this reference's rows drop).
+            require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+            StraboSearchSync::touchSample($this->db, $sampleId, $ownerPkey);
+            return array('ok' => true, 'removed' => false, 'last_reference' => false);
+        }
+
+        // Last link of this source — the link delete above is now a no-op
+        // inside removeSubsystemSample, which applies the all-of-source
+        // semantics (slice clear / whole-sample delete / search sync).
+        $result = $this->removeSubsystemSample($source, $sampleId, $ownerPkey);
+        if (is_array($result)) {
+            $result['last_reference'] = true;
+        }
+        return $result;
     }
 
     // ---- upsertSample internals ----
