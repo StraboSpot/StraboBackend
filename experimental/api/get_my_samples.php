@@ -49,7 +49,10 @@ $svc->setUserpkey($userpkey);
 
 $samples = $svc->listMySamples(array('include_subsystem_flags' => true));
 
+// viewer_pkey lets the picker distinguish own vs collaborated samples (the
+// Exp Vue app has no client-side auth store to compare against).
 echo json_encode(array(
-    'samples' => $samples,
-    'count'   => count($samples),
+    'samples'     => $samples,
+    'count'       => count($samples),
+    'viewer_pkey' => $userpkey,
 ), JSON_PRETTY_PRINT);

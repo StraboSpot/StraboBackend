@@ -3,6 +3,10 @@
     <!-- Basic Information -->
     <section class="view-section">
       <h3 class="section-title">Basic Information</h3>
+      <div v-if="data.strabo_id" class="strabo-linked-note mb-3">
+        <i class="pi pi-link" />
+        Linked to StraboSamples (ID: {{ data.strabo_id }})
+      </div>
       <div class="info-grid">
         <InfoField label="Sample Name" :value="data.name" />
         <InfoField label="Sample ID" :value="data.id" />
@@ -270,6 +274,19 @@ const hasAnyData = computed(() => {
 .sample-view {
   max-width: 1100px;
   margin: 0 auto;
+}
+
+/* strabo-accent is a Tailwind token, not a CSS var — hex per tailwind.config.js */
+.strabo-linked-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--p-surface-400, #9e9e9e);
+}
+
+.strabo-linked-note .pi-link {
+  color: #f4511e;
 }
 
 .view-section {
