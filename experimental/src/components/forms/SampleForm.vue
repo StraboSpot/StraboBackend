@@ -766,10 +766,17 @@ defineExpose({ isDirty, trySubmit: handleSubmit })
 /* "Link Sample From StraboSamples" — matches the StraboMicro treatment
    (accent text on an outlined full-width button). strabo-* are Tailwind
    tokens, not CSS vars, so use the palette's accent hex directly here
-   (tailwind.config.js strabo.accent). */
-.link-samples-btn {
-  color: #f4511e;
-  border-color: #f4511e;
+   (tailwind.config.js strabo.accent). The app's global button theme paints
+   buttons solid red, so the outlined look needs !important. */
+.link-samples-btn.p-button {
+  background: transparent !important;
+  color: #f4511e !important;
+  border: 1px solid #f4511e !important;
+}
+
+.link-samples-btn.p-button:hover {
+  background: rgba(244, 81, 30, 0.12) !important;
+  color: #f4511e !important;
 }
 
 .linked-chip {
