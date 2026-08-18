@@ -306,17 +306,22 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $
         //      (picker selection, or a Load Data carryover). Since
         //      multi-link (D1), other experiments may already claim the
         //      same id; that is the feature, not a conflict.
-        //   2. HEAL — the id resolves to NO spine sample and NO other
-        //      straboexp.sample row claims it: the create path pre-mints
-        //      the id so the experiment JSON can carry it before this row
-        //      is written, and experiments saved while the FK-ordering bug
-        //      was live (create ran this sync BEFORE the experiment
-        //      insert, so this INSERT failed) have the embedded id but no
-        //      row — reusing it heals them onto the same id instead of
-        //      minting a divergent one. An id claimed by another row but
-        //      backed by no owned spine sample stays REJECTED (a stale
-        //      JSON copy must not silently hijack another sample's id).
-        // Everything else (absent/null/malformed/foreign id) mints fresh.
+        //   2. HEAL — the id resolves to NO spine sample under ANY owner
+        //      and NO other straboexp.sample row claims it: the create path
+        //      pre-mints the id so the experiment JSON can carry it before
+        //      this row is written, and experiments saved while the
+        //      FK-ordering bug was live (create ran this sync BEFORE the
+        //      experiment insert, so this INSERT failed) have the embedded
+        //      id but no row — reusing it heals them onto the same id
+        //      instead of minting a divergent one. Pre-minted ids by
+        //      construction exist NOWHERE in the spine, so an id that
+        //      exists under a DIFFERENT owner is a foreign sample and is
+        //      REJECTED (adopting it would mint a duplicate (id, owner)
+        //      spine row — the cross-owner poison the CrossOwner_Micro_
+        //      Linking design guards against). Likewise an id claimed by
+        //      another straboexp row but backed by no owned spine sample
+        //      (a stale JSON copy must not hijack another sample's id).
+        // Everything else (absent/null/malformed id) mints fresh.
         $strabo_id = null;
         $intent = exp_sample_link_intent($db, $sample, $userpkey);
         if ($intent['mode'] === 'id') {
@@ -327,7 +332,11 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $
                     "SELECT 1 FROM straboexp.sample WHERE strabo_id = $1",
                     array($intent['id'])
                 );
-                if (!$claimed) {
+                $spine_any_owner = $db->get_var_prepared(
+                    "SELECT 1 FROM strabosamples.samples WHERE id = $1",
+                    array($intent['id'])
+                );
+                if (!$claimed && !$spine_any_owner) {
                     $strabo_id = $intent['id'];
                 }
             }
