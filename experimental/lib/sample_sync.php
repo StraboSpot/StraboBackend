@@ -6,10 +6,14 @@
  *              document rows. Single source of truth for the JSON-to-rows
  *              projection used by save_experiment.php and the backfill tool.
  *
- * The experiment-to-sample relationship is 1:1 (one sample per experiment),
- * which makes idempotency anchor-able on experiment_pkey alone: on update,
- * an existing sample row is preserved (including its strabo_id) and the
- * children are replaced.
+ * Each experiment carries at most ONE straboexp.sample row (anchored on
+ * experiment_pkey), so idempotency still keys on experiment_pkey alone: on
+ * update, the existing row is preserved and the children are replaced.
+ * Since the multi-link change (Exp_StraboSamples_Linking.md D1), several
+ * experiments MAY share one strabo_id — one straboexp.sample row each, all
+ * pointing at the same strabosamples spine sample, one spine link row per
+ * experiment. The incoming sample JSON's strabo_id expresses link intent
+ * (picker selection / unlink); see exp_sample_link_intent().
  *
  * @package    StraboExperimental
  * @author     Jason Ash <jasonash@ku.edu>
@@ -58,6 +62,48 @@ function exp_sample_has_data($sample) {
 }
 
 /**
+ * Resolve the link intent carried by the incoming sample JSON
+ * (Exp_StraboSamples_Linking.md §5.1 / D3):
+ *
+ *   - strabo_id property ABSENT          -> mode 'none'   (no intent;
+ *     identity stays stable — an update keeps the row's existing id)
+ *   - property present but null/''       -> mode 'unlink' (explicit)
+ *   - well-formed UUID string            -> mode 'id' with 'spine_owned'
+ *     TRUE when a strabosamples spine sample with that id exists under
+ *     $userpkey (a deliberate picker link / Load Data carryover)
+ *   - malformed non-empty value          -> mode 'none'   (garbage never
+ *     destroys identity)
+ *
+ * Cross-owner ids resolve with spine_owned FALSE (the picker greys
+ * collaborated samples out; the server must never trust the client).
+ *
+ * @return array ('mode' => 'none'|'unlink'|'id', 'id' => string|null,
+ *                'spine_owned' => bool)
+ */
+function exp_sample_link_intent($db, $sample, $userpkey) {
+    $none = array('mode' => 'none', 'id' => null, 'spine_owned' => false);
+    if (!is_object($sample) || !property_exists($sample, 'strabo_id')) {
+        return $none;
+    }
+    $raw = $sample->strabo_id;
+    if ($raw === null || $raw === '') {
+        return array('mode' => 'unlink', 'id' => null, 'spine_owned' => false);
+    }
+    if (!is_scalar($raw)) {
+        return $none;
+    }
+    $candidate = strtolower(trim((string)$raw));
+    if (!preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $candidate)) {
+        return $none;
+    }
+    $spine_owned = (bool)$db->get_var_prepared(
+        "SELECT 1 FROM strabosamples.samples WHERE id = $1 AND userpkey = $2",
+        array($candidate, (int)$userpkey)
+    );
+    return array('mode' => 'id', 'id' => $candidate, 'spine_owned' => $spine_owned);
+}
+
+/**
  * Synchronize the normalized sample rows for an experiment.
  *
  * Writes the projected sample data to:
@@ -103,9 +149,15 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $
         );
 
         if ($strabo_id_to_remove !== null) {
+            // Reference-scoped (multi-link): remove only THIS experiment's
+            // link row; the slice/spine sample survives while other
+            // experiments (or other subsystems) still reference it.
             $svc = new StraboSamplesService($db, $neodb);
             $svc->setUserpkey($userpkey);
-            $svc->removeSubsystemSample('experimental', $strabo_id_to_remove, $userpkey);
+            $svc->removeSubsystemSampleReference(
+                'experimental', $strabo_id_to_remove, $userpkey,
+                (string)$experiment_pkey, $userpkey
+            );
         }
         return null;
     }
@@ -163,7 +215,34 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $
 
     if ($existing && !empty($existing->pkey)) {
         $sample_pkey = (int)$existing->pkey;
-        $strabo_id   = $existing->strabo_id;
+        $strabo_id   = strtolower((string)$existing->strabo_id);
+
+        // Link transitions (Exp_StraboSamples_Linking.md D3): the incoming
+        // strabo_id expresses intent. Anything short of an explicit unlink
+        // or a valid owned relink target leaves identity untouched.
+        $intent = exp_sample_link_intent($db, $sample, $userpkey);
+        $unlink_from = null;
+        if ($intent['mode'] === 'unlink') {
+            // Explicit unlink: detach from the old spine sample and mint a
+            // fresh identity — the sample becomes free-standing again.
+            $unlink_from = $strabo_id;
+            $strabo_id = $uuid_gen->v4();
+        } elseif ($intent['mode'] === 'id' && $intent['id'] !== $strabo_id && $intent['spine_owned']) {
+            // Relink to a different spine sample the user owns (picker).
+            $unlink_from = $strabo_id;
+            $strabo_id = $intent['id'];
+        }
+
+        if ($unlink_from !== null) {
+            // Reference-scoped: only THIS experiment's link leaves the old
+            // spine sample; Field/Micro/other experiments keep theirs.
+            $svc = new StraboSamplesService($db, $neodb);
+            $svc->setUserpkey($userpkey);
+            $svc->removeSubsystemSampleReference(
+                'experimental', $unlink_from, $userpkey,
+                (string)$experiment_pkey, $userpkey
+            );
+        }
 
         $db->prepare_query("
             UPDATE straboexp.sample SET
@@ -196,8 +275,9 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $
                 texture_lineation = $27,
                 texture_foliation = $28,
                 texture_fault = $29,
-                json = $30
-            WHERE pkey = $31
+                json = $30,
+                strabo_id = $31
+            WHERE pkey = $32
         ", array(
             $userpkey,
             $name, $igsn, $id_str, $description,
@@ -208,6 +288,7 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $
             $loc_state, $loc_country, $loc_latitude, $loc_longitude,
             $tex_bedding, $tex_lineation, $tex_foliation, $tex_fault,
             $sample_json,
+            $strabo_id,
             $sample_pkey
         ));
 
@@ -218,23 +299,36 @@ function exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample, $
         $db->prepare_query("DELETE FROM straboexp.document            WHERE sample_pkey = $1", array($sample_pkey));
 
     } else {
-        // Reuse a strabo_id already embedded in the sample JSON: the create
-        // path pre-mints it so the experiment JSON can carry it before this
-        // row is written, and experiments saved while the FK-ordering bug
-        // was live (create ran this sync BEFORE the experiment insert, so
-        // this INSERT failed) have the embedded id but no row — reusing it
-        // heals them onto the same id instead of minting a divergent one.
-        // Never adopt an id another sample row already claims.
+        // First appearance of a sample for this experiment. An embedded
+        // strabo_id is honored in two cases (Exp_StraboSamples_Linking.md
+        // §5.1):
+        //   1. LINK — the id resolves to a spine sample this user owns
+        //      (picker selection, or a Load Data carryover). Since
+        //      multi-link (D1), other experiments may already claim the
+        //      same id; that is the feature, not a conflict.
+        //   2. HEAL — the id resolves to NO spine sample and NO other
+        //      straboexp.sample row claims it: the create path pre-mints
+        //      the id so the experiment JSON can carry it before this row
+        //      is written, and experiments saved while the FK-ordering bug
+        //      was live (create ran this sync BEFORE the experiment
+        //      insert, so this INSERT failed) have the embedded id but no
+        //      row — reusing it heals them onto the same id instead of
+        //      minting a divergent one. An id claimed by another row but
+        //      backed by no owned spine sample stays REJECTED (a stale
+        //      JSON copy must not silently hijack another sample's id).
+        // Everything else (absent/null/malformed/foreign id) mints fresh.
         $strabo_id = null;
-        if (!empty($sample->strabo_id)) {
-            $candidate = strtolower(trim((string)$sample->strabo_id));
-            if (preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/', $candidate)) {
+        $intent = exp_sample_link_intent($db, $sample, $userpkey);
+        if ($intent['mode'] === 'id') {
+            if ($intent['spine_owned']) {
+                $strabo_id = $intent['id'];
+            } else {
                 $claimed = $db->get_var_prepared(
                     "SELECT 1 FROM straboexp.sample WHERE strabo_id = $1",
-                    array($candidate)
+                    array($intent['id'])
                 );
                 if (!$claimed) {
-                    $strabo_id = $candidate;
+                    $strabo_id = $intent['id'];
                 }
             }
         }
