@@ -105,6 +105,11 @@ $experiment->modified_date = $row->modified_date;
 $experiment->created_timestamp = (int)$row->created_timestamp;
 $experiment->modified_timestamp = (int)$row->modified_timestamp;
 
+// Owner pkey: needed by the SPA to build the StraboSamples drill-down URL
+// (/samples/{owner}/{id} — the spine PK is composite). Pkeys are already
+// public in those URLs, so exposing it here leaks nothing new.
+$experiment->owner_pkey = (int)$row->userpkey;
+
 // Permission flags
 $experiment->is_owner = ((int)$row->userpkey === $userpkey);
 $experiment->can_edit = ($experiment->is_owner || $is_admin);

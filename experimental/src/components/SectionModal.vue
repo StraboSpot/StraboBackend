@@ -36,7 +36,7 @@
 
     <!-- Sample View (readonly) -->
     <div v-else-if="section === 'sample' && readonly">
-      <SampleView :data="data" />
+      <SampleView :data="data" :link-owner="sampleLinkOwner" />
       <div class="flex justify-center mt-6">
         <Button label="Close" outlined @click="handleClose" />
       </div>
@@ -224,6 +224,12 @@ const props = defineProps({
   selectedFeatures: {
     type: Array,
     default: () => []
+  },
+  // For the readonly Sample view: owner pkey of the linked StraboSamples
+  // record, enabling the drill-down link. Null hides the link.
+  sampleLinkOwner: {
+    type: [Number, String],
+    default: null
   }
 })
 

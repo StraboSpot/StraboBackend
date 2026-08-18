@@ -208,6 +208,13 @@ include("includes/mheader.php");
                         render_labeled_field('ID', $sample->id ?? '');
                         render_labeled_field('IGSN', $sample->igsn ?? '');
                         render_labeled_field('Description', $sample->description ?? '');
+                        // Drill-down into the StraboSamples record (login-gated
+                        // there; owner keys the composite spine PK).
+                        if (!empty($sample->strabo_id)) {
+                            $samplesHref = '/samples/' . (int)$row->experiment_owner . '/' . rawurlencode((string)$sample->strabo_id);
+                            echo '<tr><td style="width:200px;font-weight:600;color:#6c757d;vertical-align:top;">StraboSamples</td>';
+                            echo '<td><a href="' . h($samplesHref) . '">View this sample in StraboSamples</a></td></tr>';
+                        }
                         ?>
                     </tbody></table>
 

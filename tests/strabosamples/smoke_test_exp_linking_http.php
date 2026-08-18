@@ -85,7 +85,26 @@ $db->prepare_query(
      VALUES ($1, $2, $3, 'readonly', $4, TRUE, now(), $2)",
     array($collabId, $strangerPkey, $ownerPkey, "collabuuid-$stamp"));
 
-echo "owner=$ownerPkey stranger=$strangerPkey\n\n";
+// Experiment fixture carrying a link to the owned sample, for the
+// drill-down surfaces (view API / overview page / PDF export).
+$projPkey = (int)$db->get_var("SELECT nextval('straboexp.project_pkey_seq')");
+$db->prepare_query(
+    "INSERT INTO straboexp.project (pkey, userpkey, uuid, name, ispublic)
+     VALUES ($1, $2, $3, $4, FALSE)",
+    array($projPkey, $ownerPkey, "explinkhttp-proj-$stamp", "explink-http-$stamp"));
+$expPkey = (int)$db->get_var("SELECT nextval('straboexp.experiment_pkey_seq')");
+$expUuid = sprintf('%08x-eeee-4eee-8eee-%012x', $stamp, $stamp);
+$expJson = json_encode(array('sample' => array(
+    'strabo_id' => $ownId, 'name' => "HTTP Own Rock $stamp", 'igsn' => '',
+    'id' => "explink-$stamp", 'description' => 'own fixture',
+    'material' => array('material' => array('type' => 'Igneous Rock', 'name' => 'Basalt')),
+)));
+$db->prepare_query(
+    "INSERT INTO straboexp.experiment (pkey, project_pkey, userpkey, id, uuid, json)
+     VALUES ($1, $2, $3, $4, $5, $6)",
+    array($expPkey, $projPkey, $ownerPkey, "explink-http-$stamp", $expUuid, $expJson));
+
+echo "owner=$ownerPkey stranger=$strangerPkey exp=$expPkey\n\n";
 
 try {
     echo "== auth gates ==\n";
@@ -140,8 +159,25 @@ try {
     $s = is_object($r['json']) && isset($r['json']->sample) ? $r['json']->sample : null;
     check('collaborated record name matches',            $s !== null && $s->name === "HTTP Collab Rock $stamp");
 
+    echo "\n== drill-down surfaces (samples detail link) ==\n";
+    $linkPath = "/samples/$ownerPkey/$ownId";
+
+    $r = httpGet('/experimental/api/get_experiment.php?id=' . $expPkey, $sid);
+    check('get_experiment exposes owner_pkey',
+        $r['status'] === 200 && is_object($r['json'])
+        && isset($r['json']->owner_pkey) && (int)$r['json']->owner_pkey === $ownerPkey);
+
+    $r = httpGet('/experimental/overview_experiment.php?u=' . $expUuid, $sid);
+    check('overview page renders the samples link',
+        $r['status'] === 200 && strpos($r['body'], 'href="' . $linkPath . '"') !== false);
+
+    $r = httpGet('/experimental/api/download_pdf.php?id=' . $expPkey, $sid);
+    check('PDF export embeds the samples link',
+        $r['status'] === 200 && strpos($r['body'], $linkPath) !== false);
+
 } finally {
     @unlink($sessFile);
+    $db->prepare_query("DELETE FROM straboexp.project WHERE pkey=$1", array($projPkey));
     $db->prepare_query("DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($ownId, $ownerPkey));
     $db->prepare_query("DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($foreignId, $strangerPkey));
     $db->prepare_query("DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($collabId, $strangerPkey));

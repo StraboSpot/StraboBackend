@@ -110,6 +110,11 @@ require_once(__DIR__ . '/../lib/ExperimentPDF.php');
 try {
     $pdf = new ExperimentPDF();
     $pdf->setExperimentData($experimentData, $row->experiment_id, $row->project_name);
+    // Clickable drill-down into the linked StraboSamples record (keyed on
+    // the experiment OWNER — the spine PK is composite (id, userpkey)).
+    if (!empty($experimentData->sample->strabo_id)) {
+        $pdf->setSamplesLink(experimental_samples_detail_url((int)$row->userpkey, $experimentData->sample->strabo_id));
+    }
     $pdf->generate();
 
     // Generate filename

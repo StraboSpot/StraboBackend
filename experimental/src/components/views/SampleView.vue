@@ -5,7 +5,13 @@
       <h3 class="section-title">Basic Information</h3>
       <div v-if="data.strabo_id" class="strabo-linked-note mb-3">
         <i class="pi pi-link" />
-        Linked to StraboSamples (ID: {{ data.strabo_id }})
+        <a v-if="samplesUrl" :href="samplesUrl" target="_blank" rel="noopener">
+          Linked to StraboSamples (ID: {{ data.strabo_id }})
+          <i class="pi pi-external-link text-xs" />
+        </a>
+        <template v-else>
+          Linked to StraboSamples (ID: {{ data.strabo_id }})
+        </template>
       </div>
       <div class="info-grid">
         <InfoField label="Sample Name" :value="data.name" />
@@ -163,7 +169,18 @@ const props = defineProps({
   data: {
     type: Object,
     default: () => ({})
+  },
+  // Owner pkey of the linked StraboSamples record — enables the drill-down
+  // link (/samples/{owner}/{id}, composite spine PK). Null = plain text.
+  linkOwner: {
+    type: [Number, String],
+    default: null
   }
+})
+
+const samplesUrl = computed(() => {
+  if (!props.linkOwner || !props.data?.strabo_id) return null
+  return `/samples/${props.linkOwner}/${encodeURIComponent(props.data.strabo_id)}`
 })
 
 // Helper to check if a value is "Other" (case-insensitive)
@@ -287,6 +304,15 @@ const hasAnyData = computed(() => {
 
 .strabo-linked-note .pi-link {
   color: #f4511e;
+}
+
+.strabo-linked-note a {
+  color: #f4511e;
+  text-decoration: none;
+}
+
+.strabo-linked-note a:hover {
+  text-decoration: underline;
 }
 
 .view-section {

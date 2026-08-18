@@ -19,7 +19,11 @@
         <i class="pi pi-link" />
         <span>
           Linked to StraboSamples:
-          <strong>{{ linkedLabel }}</strong>
+          <a v-if="linkedUrl" :href="linkedUrl" target="_blank" rel="noopener" class="linked-chip-link">
+            <strong>{{ linkedLabel }}</strong>
+            <i class="pi pi-external-link text-xs" />
+          </a>
+          <strong v-else>{{ linkedLabel }}</strong>
         </span>
         <span v-if="identityLocked" class="text-xs italic text-surface-400">
           identity managed by {{ managedByLabel }}
@@ -527,6 +531,12 @@ const linkedInfo = ref(null)
 const linkedId = computed(() => form.value.strabo_id || null)
 const linkedLabel = computed(() =>
   (linkedInfo.value && linkedInfo.value.name) || linkedId.value || '')
+// Drill-down URL into the StraboSamples record (composite spine PK needs
+// the owner pkey, carried on the fetched record).
+const linkedUrl = computed(() => {
+  if (!linkedId.value || !linkedInfo.value || !linkedInfo.value.owner) return null
+  return `/samples/${linkedInfo.value.owner}/${encodeURIComponent(linkedId.value)}`
+})
 // Lock rule (D2): a higher-priority system (Field or Micro) manages the
 // sample's identity; the server suppresses Exp spine writes in that case,
 // so editable fields would silently lie.
@@ -548,10 +558,10 @@ const hydrateLink = async (id) => {
   try {
     const record = await sampleLinkService.getSample(id)
     linkedInfo.value = record
-      ? { name: record.name || id, hasField: !!record.field_data, hasMicro: !!record.micro_data }
-      : { name: id, hasField: false, hasMicro: false, unresolved: true }
+      ? { name: record.name || id, owner: record.userpkey, hasField: !!record.field_data, hasMicro: !!record.micro_data }
+      : { name: id, owner: null, hasField: false, hasMicro: false, unresolved: true }
   } catch (err) {
-    linkedInfo.value = { name: id, hasField: false, hasMicro: false, unresolved: true }
+    linkedInfo.value = { name: id, owner: null, hasField: false, hasMicro: false, unresolved: true }
   }
 }
 
@@ -561,6 +571,7 @@ const handleSelectSample = (record) => {
   form.value.strabo_id = record.id
   linkedInfo.value = {
     name: record.name || record.id,
+    owner: record.userpkey,
     hasField: !!record.field_data,
     hasMicro: !!record.micro_data
   }
@@ -791,5 +802,14 @@ defineExpose({ isDirty, trySubmit: handleSubmit })
 
 .linked-chip .pi-link {
   color: #f4511e;
+}
+
+.linked-chip-link {
+  color: #f4511e;
+  text-decoration: none;
+}
+
+.linked-chip-link:hover {
+  text-decoration: underline;
 }
 </style>
