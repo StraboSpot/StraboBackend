@@ -11,6 +11,7 @@
  */
 
 include("sessioncheck.php");
+include_once(__DIR__ . "/session_config.php");
 
 session_start();
 
@@ -104,6 +105,20 @@ if($userpkey == "adsf"){
 		<link rel="stylesheet" href="/assets/js/k/k.css" type="text/css" />
 		<script src="/assets/js/featherlight/featherlight.js"></script>
 		<script src="/assets/js/clipboardjs/clipboard.js"></script>
+
+		<?php
+		if($_SESSION['loggedin']=="yes"){
+		?>
+		<script>
+		window.straboSessionConfig = {
+			timeoutSeconds: <?php echo (int)SESSION_IDLE_TIMEOUT; ?>,
+			warningSeconds: <?php echo (int)SESSION_WARNING_SECONDS; ?>
+		};
+		</script>
+		<script src="/assets/js/session_timeout.js"></script>
+		<?php
+		}
+		?>
 
 		<?php
 		if($_SERVER['PHP_SELF']=="/register.php"){
