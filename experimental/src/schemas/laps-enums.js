@@ -5,176 +5,168 @@
 // ===== FACILITY TYPES =====
 // From old app lines 252-258
 export const FACILITY_TYPES = [
-  'University Lab',
   'Government Facility',
+  'Military',
   'Private Industry Lab',
   'Shared Facility',
-  'Military',
+  'University Lab',
   'Other'
 ]
 
 // ===== APPARATUS TYPES =====
 // From old app - 47 types plus "Other Apparatus"
 export const APPARATUS_TYPES = [
-  'Uniaxial',
-  'Triaxial (conventional)',
-  'Biaxial',
-  'True Triaxial',
-  'Direct Shear',
-  'Shear Box',
-  'Rotary Shear Friction Apparatus',
-  'Creep Cell',
-  'Indentation Cell',
-  'Piston Cylinder',
-  'Multi Anvil',
-  'D-DIA',
-  'Rotational Drickamer Apparatus (RDA)',
-  'Large Volume Torsion Apparatus (LVT)',
   '1 Atm Gas Mixing Furnace',
-  'Vacuum Furnace',
-  'Other Gas Medium Apparatus',
-  'Other Solid Medium Apparatus',
-  'Other Liquid Medium Apparatus',
-  'Vickers Hardness Tester',
-  'Nanoindenter',
-  'Diamond Anvil Cell',
-  'Brazilian Test',
-  'Paterson Apparatus',
-  'Heard Apparatus',
-  'Griggs Apparatus',
-  'Schmidt Hammer',
-  'Split Hopkinson Pressure Bar',
-  'Double Torsion apparatus',
-  'Point Load',
+  'Ancillary Equipment',
   'Atomic Force Microscope',
-  'Rheometer',
-  'Permeameter',
-  'Pycnometer',
-  'Viscosimeter',
+  'Biaxial',
+  'Brazilian Test',
+  'Chevron Notch Test',
+  'Commercial Apparatus',
+  'Creep Cell',
+  'D-DIA',
+  'Diamond Anvil Cell',
+  'Direct Shear',
+  'Double Torsion apparatus',
+  'Griggs Apparatus',
+  'Heard Apparatus',
+  'Indentation Cell',
+  'Large Volume Torsion Apparatus (LVT)',
   'Laser Profilometer',
   'Light Interferometer',
   'Load Stamp',
-  'Chevron Notch Test',
-  'Paris-Edinburgh Rig',
-  'NER Rig',
-  'Sanchez Rig',
   'Micro-Deformation Cell',
-  'Ancillary Equipment',
-  'Commercial Apparatus',
+  'Multi Anvil',
+  'Nanoindenter',
+  'NER Rig',
+  'Other Gas Medium Apparatus',
+  'Other Liquid Medium Apparatus',
+  'Other Solid Medium Apparatus',
+  'Paris-Edinburgh Rig',
+  'Paterson Apparatus',
+  'Permeameter',
+  'Piston Cylinder',
+  'Point Load',
+  'Pycnometer',
+  'Rheometer',
+  'Rotary Shear Friction Apparatus',
+  'Rotational Drickamer Apparatus (RDA)',
+  'Sanchez Rig',
+  'Schmidt Hammer',
+  'Shear Box',
+  'Split Hopkinson Pressure Bar',
+  'Triaxial (conventional)',
+  'True Triaxial',
+  'Uniaxial',
+  'Vacuum Furnace',
+  'Vickers Hardness Tester',
+  'Viscosimeter',
   'Other Apparatus'
 ]
 
 // ===== APPARATUS FEATURES =====
 // All unique features from GROUPED_FEATURES (flat list for compatibility)
 export const APPARATUS_FEATURES = [
-  // Type of Experiment
-  'Loading',
-  'Unloading',
-  'Uniaxial Stress/Strain',
-  'Biaxial Stress/Strain',
-  'Triaxial Stress/Strain',
-  'True Triaxial Stress/Strain',
-  'Pure Shear',
-  'Simple Shear',
-  'General Shear',
-  'Rotary Shear',
-  'Indentation',
-  'Hydraulic Fracturing',
-  'Hydrothermal Fracturing',
-  'Stepping',
-  'Cyclic',
-  'Slide-Hold-Slide',
-  'Dynamic Deformation (Tests)',
-  'Shock Deformation (shockwave)',
-  // Mechanical Behavior
-  'Elasticity',
-  'Fracture',
-  'Compaction (Pore Volume Compaction)',
-  'Friction',
-  '(Frictional Sliding)',
-  'Plastic',
-  'Hardness',
-  'Viscous Deformation',
-  'Creep & Rate dependent deformation',
-  'Brittle-Plastic',
-  'Brittle-Ductile',
-  'Brittle-Viscous',
-  // Mechanical Measurements
-  'Stress',
-  'Strain',
+  'Acoustic Events (AE)',
+  'Acoustic Velocity',
+  'AE Source Location',
+  'Axial Strain',
   'Axial Stress',
-  'Lateral Stress(es)',
+  'Biaxial Stress/Strain',
+  'Brittle-Ductile',
+  'Brittle-Plastic',
+  'Brittle-Viscous',
+  'Cold Pressed',
+  'Compaction (Pore Volume Compaction)',
+  'Compression',
+  'Conductivity (Electrical Conductivity)',
+  'Cooling',
+  'Creep & Rate dependent deformation',
+  'Cyclic',
+  'Deposition/Evaporation',
   'Differential Stress',
-  'Strength',
-  'Yield Strength',
+  'Drained/Undrained Pore Fluid',
+  'Dynamic Deformation (Tests)',
+  'EDS or WDS Probe Analyses',
+  'Elastic Moduli',
+  'Elasticity',
+  'Electrical Capacitance',
+  'Electron Microscopy (SEM, TEM)',
+  'Extension',
   'Failure Strength',
   'Flow Strength',
-  'Axial Strain',
-  'Radial Strain',
-  'Lateral Strain(s)',
-  'Shear Strain',
-  'Elastic Moduli',
-  'Acoustic Velocity',
-  'Acoustic Events (AE)',
-  'P-wave Velocity',
-  'S-wave Velocity',
-  'AE Source Location',
-  '(Pore Fluid) Permeability',
   'Fluid storage capacity',
-  'Steady-state fluid flow (permeability)',
-  'Transient fluid flow (permeability)',
-  'Hydraulic Conductivity',
-  'Resistivity (Electrical Resistivity)',
-  'Conductivity (Electrical Conductivity)',
-  'Electrical Capacitance',
-  'Streaming Potential',
-  // Sample / Starting Material
-  'Single Crystal',
-  'Natural Rock',
-  'Natural Gouge',
-  'Synthetic Gouge',
-  'Sintered',
+  'Fracture',
+  'Friction',
+  '(Frictional Sliding)',
   'Gel-synthesized',
-  'Cold Pressed',
-  'HIP Synthesized',
-  // Sample / Starting Material Characterization
-  'Visual',
-  'Optical Microscopy',
-  'Electron Microscopy (SEM, TEM)',
-  'X-ray Diffraction',
-  'EDS or WDS Probe Analyses',
-  'Infrared Spectroscopy',
-  'Raman Spectroscopy',
-  'Tomography',
-  'In-situ X-ray Diffraction',
-  'Other',
-  // Pore Fluids and Geochemical Processes
-  'Pore Fluid',
-  'Permeable fluid flow',
-  'Hydrothermal Reactions',
-  'Mineral Reactions',
-  'Deposition/Evaporation',
-  'Reactive Flow',
-  // Experimental Conditions (Pressure / Stress)
-  'High Pressure',
-  'Ultra-high Pressure',
-  'Hydrostatic',
-  'HIP (Hot Isostatic Pressing) Synthesis',
-  'Pore Pressure',
-  'Drained/Undrained Pore Fluid',
-  'Pore Fluid Control',
-  'Pore Fluid Chemistry',
-  'Compression',
-  'Extension',
-  'Tension',
-  'Torsion',
-  // Experimental Conditions (Thermal)
+  'General Shear',
+  'Hardness',
   'Heating',
-  'Cooling',
+  'High Pressure',
   'High Temperature',
-  'Ultra-High Temperature',
+  'HIP (Hot Isostatic Pressing) Synthesis',
+  'HIP Synthesized',
+  'Hydraulic Conductivity',
+  'Hydraulic Fracturing',
+  'Hydrostatic',
+  'Hydrothermal Fracturing',
+  'Hydrothermal Reactions',
+  'In-situ X-ray Diffraction',
+  'Indentation',
+  'Infrared Spectroscopy',
+  'Lateral Strain(s)',
+  'Lateral Stress(es)',
+  'Loading',
   'Low Temperature',
-  'Sub-Zero Temperature'
+  'Mineral Reactions',
+  'Natural Gouge',
+  'Natural Rock',
+  'Optical Microscopy',
+  'P-wave Velocity',
+  'Permeable fluid flow',
+  'Plastic',
+  'Pore Fluid',
+  'Pore Fluid Chemistry',
+  'Pore Fluid Control',
+  '(Pore Fluid) Permeability',
+  'Pore Pressure',
+  'Pure Shear',
+  'Radial Strain',
+  'Raman Spectroscopy',
+  'Reactive Flow',
+  'Resistivity (Electrical Resistivity)',
+  'Rotary Shear',
+  'S-wave Velocity',
+  'Shear Strain',
+  'Shock Deformation (shockwave)',
+  'Simple Shear',
+  'Single Crystal',
+  'Sintered',
+  'Slide-Hold-Slide',
+  'Steady-state fluid flow (permeability)',
+  'Stepping',
+  'Strain',
+  'Streaming Potential',
+  'Strength',
+  'Stress',
+  'Sub-Zero Temperature',
+  'Synthetic Gouge',
+  'Tension',
+  'Tomography',
+  'Torsion',
+  'Transient fluid flow (permeability)',
+  'Triaxial Stress/Strain',
+  'True Triaxial Stress/Strain',
+  'Ultra-high Pressure',
+  'Ultra-High Temperature',
+  'Uniaxial Stress/Strain',
+  'Unloading',
+  'Viscous Deformation',
+  'Visual',
+  'X-ray Diffraction',
+  'Yield Strength',
+  'Other'
 ]
 
 // ===== GROUPED APPARATUS/TEST FEATURES =====
@@ -328,69 +320,68 @@ export const GROUPED_FEATURES = [
 // ===== APPARATUS PARAMETER TYPES =====
 // From old app
 export const PARAMETER_TYPES = [
-  'Confining Pressure Pc',
-  'Pore Pressure Pp',
-  'Differential Stress σ1-σ3',
-  'Maximum Stress σ1',
-  'Intermediate Stress σ2',
-  'Minimum Stress σ3',
-  'Temperature T',
-  'Displacement',
-  'Strain Rate',
-  'Force',
-  'Torque',
-  'RPM',
-  'Frequency',
-  'Amplitude',
+  'σ1-Displacement',
+  'σ1-Load',
+  'σ2-Displacement',
+  'σ2-Load',
+  'σ3-Displacement',
+  'σ3-Load',
+  'Confining Pressure',
+  'Displacement Rate',
+  'Effective Pressure',
+  'Loading Rate',
+  'Permeability',
+  'Pore Pressure',
   'Sample Diameter',
   'Sample Length',
-  'Other'
+  'Stiffness',
+  'Temperature'
 ]
 
 // ===== UNIT TYPES =====
 // From old app lines 2888-2930 and 1417-1460 (same list used in multiple places)
 export const UNIT_TYPES = [
+  '%',
+  'Amperage',
+  'bar',
+  'cc',
+  'cm',
+  'count',
+  'Darcy',
   'degC',
   'degK',
-  'sec',
-  'min',
-  'hour',
-  'Volt',
-  'mV',
-  'Amperage',
-  'mA',
-  'Ohm',
-  'Pa',
-  'MPa',
-  'GPa',
-  'bar',
-  'kbar',
-  'N',
-  'kN',
   'g',
-  'mg',
   'μg',
-  'm',
-  'cm',
-  'mm',
-  'μm',
+  'GPa',
+  'hour',
   'Hz',
+  'kbar',
   'kHz',
-  'MHz',
-  'Pa·s',
-  'Darcy',
-  'mDarcy',
+  'kN',
+  'kN·mm-1',
+  'm',
+  'μm',
   'm-1',
   'm2',
+  'mA',
+  'mDarcy',
+  'mg',
+  'MHz',
   'milistrain',
+  'min',
+  'mm',
   'mm·sec-1',
+  'mm3',
+  'MPa',
+  'mV',
+  'N',
   'N·sec-1',
+  'Ohm',
+  'Pa',
+  'Pa·s',
+  'sec',
   'sec-1',
-  'kN·mm-1',
-  '%',
-  'count',
-  'cc',
-  'mm3'
+  'Volt'
 ]
 
 // ===== UNIT PREFIXES =====
@@ -414,28 +405,28 @@ export const UNIT_PREFIXES = [
 // ===== DOCUMENT TYPES =====
 // From old app add_experiment.php lines 676-684
 export const DOCUMENT_TYPES = [
-  'Manual',
-  'Diagram',
-  'Picture',
-  'Video',
-  'Data',
-  'Software',
   'ASTM',
+  'Data',
+  'Diagram',
+  'Manual',
+  'Picture',
   'Publication',
+  'Software',
+  'Video',
   'Other'
 ]
 
 // ===== DOCUMENT FORMATS =====
 // From old app add_experiment.php lines 695-703
 export const DOCUMENT_FORMATS = [
-  'jpg',
-  'png',
-  'txt',
   'csv',
-  'zip',
-  'rar',
-  'pdf',
   'docx',
+  'jpg',
+  'pdf',
+  'png',
+  'rar',
+  'txt',
+  'zip',
   'Other'
 ]
 
@@ -443,65 +434,64 @@ export const DOCUMENT_FORMATS = [
 
 // Material Types - from old app lines 2560-2574
 export const MATERIAL_TYPES = [
+  'Ceramic',
+  'Commodity',
+  'Epos Lithologies',
   'Glass',
   'Ice',
-  'Ceramic',
-  'Plastic',
-  'Metal',
-  'Soil',
-  'Mineral',
   'Igneous Rock',
-  'Sedimentary Rock',
+  'Metal',
   'Metamorphic Rock',
-  'Epos Lithologies',
-  'Standards',
-  'Commodity'
+  'Mineral',
+  'Plastic',
+  'Sedimentary Rock',
+  'Soil',
+  'Standards'
 ]
 
 // Material State - from old app lines 2590-2598
 export const MATERIAL_STATES = [
-  'Homogeneous',
-  'Heterogeneous',
-  'Powder/Gauge',
-  'Discontinuous',
+  'Composite',
   'Continuous',
-  'Composite'
+  'Discontinuous',
+  'Heterogeneous',
+  'Homogeneous',
+  'Powder/Gauge'
 ]
 
 // Provenance Source - from old app lines 2655-2659 (NO "Other" option!)
 export const PROVENANCE_SOURCES = [
-  'Surface',
   'Quarry',
+  'Surface',
   'Well'
 ]
 
 // Mineral Phase Unit - from old app lines 2829-2834
 export const FRACTION_UNITS = [
-  'Vol%',
   'Mol%',
-  'Wt%',
-  'MPa'
+  'MPa',
+  'Vol%',
+  'Wt%'
 ]
 
 // Sample Parameter Variables - from old app lines 2857-2870
 export const SAMPLE_PARAMETER_TYPES = [
-  'Weight',
   'Connected Porosity',
-  'Unconnected Porosity',
-  'Total Porosity',
   'Density',
+  'Fluid Saturation',
+  'Humidity',
   'Permeability (Gas)',
   'Permeability (Water)',
-  'Temperature',
-  'Humidity',
-  'Fluid Saturation',
   'Stress',
+  'Temperature',
+  'Total Porosity',
+  'Unconnected Porosity',
+  'Weight',
   'Other'
 ]
 
 // Mineral Types - from old app sourceSelectMineral
 export const MINERAL_TYPES = [
-  'Other',
   'Actinolite',
   'Aegirine',
   'Albite',
@@ -542,10 +532,10 @@ export const MINERAL_TYPES = [
   'Enstatite',
   'Epidote',
   'Epidote Group',
-  'Feldspar',
   'Fe - Mg clinoamphibole',
-  'Ferrosilite',
   'Fe - Ti oxide',
+  'Feldspar',
+  'Ferrosilite',
   'Galena',
   'Garnet',
   'Gedrite',
@@ -561,12 +551,12 @@ export const MINERAL_TYPES = [
   'Humite',
   'Hydroxides',
   'Jadeite',
+  'K - feldspar',
+  'K feldspar',
   'Kaersutite',
   'Kalsilite',
   'Kaolinite',
   'Katophorite',
-  'K feldspar',
-  'K - feldspar',
   'Kyanite',
   'Labradorite',
   'Larnite',
@@ -592,8 +582,8 @@ export const MINERAL_TYPES = [
   'Olivine',
   'Omphacite',
   'Opaque',
-  'Orthoamphibole',
   'Ortho - and Ring Silicates',
+  'Orthoamphibole',
   'Orthoclase',
   'Orthopyroxene',
   'Oxides',
@@ -646,18 +636,18 @@ export const MINERAL_TYPES = [
   'Xenotime',
   'Zeolite',
   'Zircon',
-  'Zoisite'
+  'Zoisite',
+  'Other'
 ]
 
 // Soil Types - from old app sourceSelectSoil
 export const SOIL_TYPES = [
-  'Other',
-  'Bentonite'
+  'Bentonite',
+  'Other'
 ]
 
 // Igneous Rock Types - from old app sourceSelectIgneous
 export const IGNEOUS_ROCK_TYPES = [
-  'Other',
   'alkali feldspar granite',
   'andesite',
   'anorthosite',
@@ -693,12 +683,12 @@ export const IGNEOUS_ROCK_TYPES = [
   'troctolite',
   'tuff',
   'tuff breccia',
-  'wehrlite'
+  'wehrlite',
+  'Other'
 ]
 
 // Sedimentary Rock Types - from old app sourceSelectSedimentary
 export const SEDIMENTARY_ROCK_TYPES = [
-  'Other',
   'argillite',
   'arkose',
   'breccia',
@@ -716,11 +706,11 @@ export const SEDIMENTARY_ROCK_TYPES = [
   'graywacke',
   'gypsum rock',
   'ironite formation',
+  'ite',
   'limestone',
   'marl',
   'mudstone',
   'oil shale',
-  'ite',
   'organic',
   'phosphatic',
   'rock salt',
@@ -729,12 +719,12 @@ export const SEDIMENTARY_ROCK_TYPES = [
   'siltstone',
   'travertine',
   'volcaniclastic',
-  'wackestone'
+  'wackestone',
+  'Other'
 ]
 
 // Metamorphic Rock Types - from old app sourceSelectMetamorphic
 export const METAMORPHIC_ROCK_TYPES = [
-  'Other',
   'amphibolite',
   'anthracite',
   'blackwall',
@@ -746,20 +736,20 @@ export const METAMORPHIC_ROCK_TYPES = [
   'gneiss',
   'granofels',
   'granulite',
-  'greenstone',
   'greenschist',
+  'greenstone',
   'hornfels',
   'marble',
+  'meta-iron formation',
+  'meta-ultramafic',
   'metaarkose',
   'metabasite',
   'metacarbonate',
   'metagranite',
   'metagraywacke',
   'metaigneous',
-  'meta-iron formation',
   'metapelite',
   'metasandstone',
-  'meta-ultramafic',
   'migmatite',
   'mylonite',
   'orthogneiss',
@@ -775,21 +765,21 @@ export const METAMORPHIC_ROCK_TYPES = [
   'skarn',
   'slate',
   'soapstone',
-  'whiteschist'
+  'whiteschist',
+  'Other'
 ]
 
 // Epos Lithology Types - from old app sourceSelectEpos (extensive list)
 export const EPOS_LITHOLOGY_TYPES = [
-  'Other',
   'acidic_igneous_material',
   'acidic_igneous_rock',
+  'alkali - olivine_basalt',
   'alkali_feldspar_granite',
   'alkali_feldspar_rhyolite',
   'alkali_feldspar_syenite',
   'alkali_feldspar_syenitic_rock',
   'alkali_feldspar_trachyte',
   'alkali_feldspar_trachytic_rock',
-  'alkali - olivine_basalt',
   'amphibolite',
   'andesite',
   'anorthosite',
@@ -817,18 +807,18 @@ export const EPOS_LITHOLOGY_TYPES = [
   'boundstone',
   'breccia',
   'breccia_gouge_series',
-  'calcarite_carbonate_sediment',
   'calcareous_carbonate_sedimentary_material',
   'calcareous_carbonate_sedimentary_rock',
-  'calclite',
-  'calciumite',
+  'calcarite_carbonate_sediment',
   'calcite calciumite calcium calcium calcium calcium_calcium',
   'calcium car',
-  'calcium te calcium te calcium te calcium te calcium te',
-  'calcium te calcium te calcium te calcium te',
-  'calcium te calcium te calcium te',
-  'calcium te calcium te',
   'calcium te',
+  'calcium te calcium te',
+  'calcium te calcium te calcium te',
+  'calcium te calcium te calcium te calcium te',
+  'calcium te calcium te calcium te calcium te calcium te',
+  'calciumite',
+  'calclite',
   'car bonite',
   'carbonate_mud',
   'carbonate_mudstone',
@@ -865,10 +855,10 @@ export const EPOS_LITHOLOGY_TYPES = [
   'dioritic_rock',
   'dioritoid',
   'doleritic_rock',
+  'doloite',
   'dolomitic_or_magnesian_sedimentary_material',
   'dolomitic_or_magnesian_sedimentary_rock',
   'dolomitic_sediment',
-  'doloite',
   'dolostone',
   'duricrust',
   'eclogite',
@@ -923,7 +913,6 @@ export const EPOS_LITHOLOGY_TYPES = [
   'granulite',
   'gravel',
   'gravel_size_sediment',
-  'ite',
   'high_magnesium_fine_grained_igneous_rocks',
   'hornblendite',
   'hornfels',
@@ -943,6 +932,7 @@ export const EPOS_LITHOLOGY_TYPES = [
   'iron_rich_sediment',
   'iron_rich_sedimentary_material',
   'iron_rich_sedimentary_rock',
+  'ite',
   'kalsilitic_and_melilitic_rock',
   'komatiitic_rock',
   'latite',
@@ -1056,30 +1046,30 @@ export const EPOS_LITHOLOGY_TYPES = [
   'ultrabasic_igneous_rock',
   'ultramafic_igneous_rock',
   'unconsolidated_material',
-  'wacke'
+  'wacke',
+  'Other'
 ]
 
 // Lab Standards - from old app sourceSelectStandards
 export const LAB_STANDARDS = [
-  'Other',
+  'Arkansas Novaculite',
   'Austin Chalk',
   'Berea Sandstone',
+  'Black Hills Quartzite',
   'Carrara Marble',
-  'Indiana Limestone',
+  'Cheshire Quartzite',
   'Frederick Maryland Diabase',
   'Heavitree Quartzite',
-  'Solnhofen Limestone',
+  'Indiana Limestone',
   'Simpson Quartzite',
-  'Black Hills Quartzite',
   'Sioux Quartzite',
-  'Cheshire Quartzite',
-  'Arkansas Novaculite',
-  'Westerley Granite'
+  'Solnhofen Limestone',
+  'Westerley Granite',
+  'Other'
 ]
 
 // Commodity Types - from old app sourceSelectCommodity (extensive list)
 export const COMMODITY_TYPES = [
-  'Other',
   'agate',
   'aggregate',
   'alumina',
@@ -1175,8 +1165,8 @@ export const COMMODITY_TYPES = [
   'gallium',
   'garnet',
   'garnet - gemstone',
-  'gaseous - hydrocarbons',
   'gas - hydrate',
+  'gaseous - hydrocarbons',
   'gemstones',
   'germanium',
   'glauconite',
@@ -1372,16 +1362,17 @@ export const COMMODITY_TYPES = [
   'zircon',
   'zircon - gemstone',
   'zirconia',
-  'zirconium'
+  'zirconium',
+  'Other'
 ]
 
 // Material types that use text input for name (instead of dropdown)
 export const TEXT_INPUT_MATERIAL_TYPES = [
+  'Ceramic',
   'Glass',
   'Ice',
-  'Ceramic',
-  'Plastic',
-  'Metal'
+  'Metal',
+  'Plastic'
 ]
 
 // Mapping of material type to label for the name field
@@ -1417,99 +1408,99 @@ export const MATERIAL_NAME_OPTIONS = {
 
 // Geometry component types
 export const GEOMETRY_COMPONENT_TYPES = [
-  'Sample',
-  'Jacket',
   'Forcing Block',
+  'Jacket',
+  'Sample',
   'Spacer'
 ]
 
 // Geometry shape options
 export const GEOMETRY_SHAPES = [
-  'Cylinder',
-  'Rectangular',
   'Circular',
-  'Precut',
+  'Cylinder',
   'Dogbone',
+  'Precut',
+  'Rectangular',
   'Split Cylinder',
   'Tube'
 ]
 
 // Geometry material options
 export const GEOMETRY_MATERIALS = [
-  'Sample',
-  'PET',
-  'PVC',
-  'PTFE',
-  'Rubber',
-  'Viton',
+  'Alumina',
   'Copper',
+  'Gold',
   'Iron',
   'Nickel',
-  'Gold',
+  'PET',
   'Platinum',
-  'Silver',
-  'Alumina',
   'Porous Alumina',
-  'Zirconia',
-  'PZT'
+  'PTFE',
+  'PVC',
+  'PZT',
+  'Rubber',
+  'Sample',
+  'Silver',
+  'Viton',
+  'Zirconia'
 ]
 
 // Dimension variable options
 export const DIMENSION_VARIABLES = [
-  'Length',
-  'Diameter',
-  'Width',
-  'Span',
-  'Height',
-  'Wall Thickness',
   'Bore Diameter',
-  'Fault Angle'
+  'Diameter',
+  'Fault Angle',
+  'Height',
+  'Length',
+  'Span',
+  'Wall Thickness',
+  'Width'
 ]
 
 // ===== DAQ (Data Acquisition) ENUMS =====
 
 // DAQ system types - from old app
 export const DAQ_TYPES = [
-  'Standard',
   'Conventional',
-  'Proprietary'
+  'Proprietary',
+  'Standard'
 ]
 
 // Channel Header Types - from old app lines 1084-1094
 export const CHANNEL_HEADER_TYPES = [
-  'Time',
-  'Temperature',
+  'Chemistry',
+  'Displacement',
+  'Electrical',
+  'Load',
   'Pressure',
   'Strain',
-  'Displacement',
   'Stress',
-  'Load',
-  'Electrical',
-  'Chemistry',
+  'Temperature',
+  'Time',
   'Other'
 ]
 
 // Channel types (signal types) - from old app lines 1197-1206
 export const CHANNEL_TYPES = [
-  'Calculated',
   'Analog Input',
   'Analog Output',
+  'Calculated',
   'Digital Input',
   'Digital Output',
-  'System Data',
-  'System Clock'
+  'System Clock',
+  'System Data'
 ]
 
 // Channel electrical configurations - from old app lines 1212-1222
 export const CHANNEL_CONFIGURATIONS = [
-  'System',
   'Differential',
-  'Single Ended',
+  'Line',
+  'Parallel',
   'Referenced Single Ended',
   'Serial',
-  'Parallel',
   'Single',
-  'Line'
+  'Single Ended',
+  'System'
 ]
 
 // Channel gain (amplification) options - from old app lines 1266-1276
@@ -1529,29 +1520,29 @@ export const CHANNEL_NUMBERS = Array.from({ length: 33 }, (_, i) => String(i))
 
 // Sensor/Actuator types - from old app lines 1291-1317
 export const SENSOR_ACTUATOR_TYPES = [
-  'Clock',
-  'LVDT',
-  'Load Cell',
-  'Capacitive Load Cell',
-  'Pressure Transducer',
-  'Thermocouple',
-  'Hall Sensor',
-  'P-Wave Sensor',
-  'S-Wave Sensor',
-  'Encoder',
-  'Strain Gauge',
-  'Thermistor',
-  'Force Gauge',
-  'DCDT',
-  'pH-Meter',
-  'Flow Meter',
   '--',
+  'Actuator',
+  'Capacitive Load Cell',
+  'Clock',
+  'DCDT',
+  'Encoder',
+  'Flow Meter',
+  'Force Gauge',
+  'Hall Sensor',
+  'Heater',
   'Linear Motor',
+  'Load Cell',
+  'LVDT',
+  'P-Wave Sensor',
+  'pH-Meter',
+  'Power',
+  'Pressure Transducer',
+  'S-Wave Sensor',
   'Servo Motor',
   'Step Motor',
-  'Actuator',
-  'Heater',
-  'Power',
+  'Strain Gauge',
+  'Thermistor',
+  'Thermocouple',
   'Trigger'
 ]
 
@@ -1564,30 +1555,30 @@ export const SENSOR_ACTIVE_PASSIVE_TYPES = [
 // IEEE Sensor Templates - from old app lines 1323-1341
 export const IEEE_SENSOR_TEMPLATES = [
   'Accelerometer & Force',
+  'Bridge Sensors',
   'Charge Amplifier (w/ attached accelerometer)',
   'Charge Amplifier (w/ attached force transducer)',
-  'Microphone with built-in preamplifier',
-  'Microphone Preamplfiers (w/ attached microphone)',
-  'Microphones (capacitive)',
-  'High-Level Voltage Output Sensors',
   'Current Loop Output Sensors',
-  'Resistance Sensors',
-  'Bridge Sensors',
+  'High-Level Voltage Output Sensors',
   'LVDT/RVDT Sensors',
-  'Strain Gage',
-  'Thermocouple',
+  'Microphone Preamplfiers (w/ attached microphone)',
+  'Microphone with built-in preamplifier',
+  'Microphones (capacitive)',
+  'Potentiometric Voltage Divider',
+  'Resistance Sensors',
   'Resistance Temperature Detectors (RTDs)',
+  'Strain Gage',
   'Thermistor',
-  'Potentiometric Voltage Divider'
+  'Thermocouple'
 ]
 
 // Calibration Templates - from old app lines 1404-1411
 export const CALIBRATION_TEMPLATES = [
-  'Input:Unit',
-  'Input@0:Input/Unit',
   '(a0:a1)(a2:a3)',
   'Base:Exponent',
-  'Frequency:Amplitude'
+  'Frequency:Amplitude',
+  'Input:Unit',
+  'Input@0:Input/Unit'
 ]
 
 // ===== DAQ CHANNEL HEADER DATA FIELDS =====
@@ -1879,15 +1870,15 @@ export function getDAQOptionsForHeader(headerType, fieldType) {
 
 // Contact affiliation roles
 export const CONTACT_AFFILIATIONS = [
-  'PI',
   'Co-PI',
-  'Technician',
-  'Student',
-  'Postdoc',
-  'Engineer',
-  'Scientist',
-  'Manager',
   'Director',
+  'Engineer',
+  'Manager',
+  'PI',
+  'Postdoc',
+  'Scientist',
+  'Student',
+  'Technician',
   'Other'
 ]
 
@@ -1896,57 +1887,57 @@ export const CONTACT_AFFILIATIONS = [
 
 // Data source types (the main "Data" dropdown)
 export const DATA_SOURCE_TYPES = [
-  'Parameters',
-  'Time Series',
-  'Sample Description',
-  'Pore Fluid',
-  'Imaging',
-  'EBSD',
-  'WDS',
-  'Thin Section',
-  'Raman',
-  'Infrared Spectroscopy',
-  'TEM',
-  'CL',
-  'Profilometry',
   'Acid Etching',
-  'Evaporative Grid',
-  'Neutron Diffraction',
-  'X-Ray Spectra',
-  'X-Ray Graphs',
-  'Thermal Etching',
-  'Fiducal Marks',
-  'XRCT',
+  'CL',
+  'Confocal Microscopy',
   'CT Scan',
-  'SEM',
+  'EBSD',
   'EDS',
   'EDX',
-  'Optical Microscopy',
+  'Evaporative Grid',
+  'Fiducal Marks',
+  'Fluorescence',
+  'Imaging',
   'Infrared',
-  'Raman',
-  'XRD',
-  'XRF',
-  'Confocal Microscopy',
+  'Infrared Spectroscopy',
+  'Neutron Diffraction',
+  'Optical Microscopy',
+  'Parameters',
   'Photoelasticity',
   'Polarized Microscopy',
-  'Fluorescence'
+  'Pore Fluid',
+  'Profilometry',
+  'Raman',
+  'Raman',
+  'Sample Description',
+  'SEM',
+  'TEM',
+  'Thermal Etching',
+  'Thin Section',
+  'Time Series',
+  'WDS',
+  'X-Ray Graphs',
+  'X-Ray Spectra',
+  'XRCT',
+  'XRD',
+  'XRF'
 ]
 
 // Data type options (Picture, Video, etc.)
 export const DATA_TYPE_OPTIONS = [
-  'Picture',
-  'Video',
   'Data',
+  'Picture',
   'Software',
+  'Video',
   'Other'
 ]
 
 // File format options
 export const DATA_FILE_FORMATS = [
-  'text',
   'csv',
-  'zip',
   'rar',
+  'text',
+  'zip',
   'Other'
 ]
 
@@ -1961,60 +1952,60 @@ export const DATA_QUALITY_RATINGS = [
 
 // Data parameter control variables - from old app lines 3994-4029
 export const DATA_PARAMETER_CONTROLS = [
-  'Weight',
-  'Connected Porosity',
-  'Unconnected Porosity',
-  'Length',
-  'Diameter',
-  'Width',
-  'Span',
-  'Height',
   'Bore Diameter',
-  'Fault Angle',
-  'Total Porosity',
-  'Density',
-  'Gas Permeability',
-  'Fluid Permeability',
-  'Final Strain ε',
+  'Compressive Strength (σ1=σ2)',
+  'Compressive Strength (σ2=σ3)',
+  'Connected Porosity',
   'Corrected Strain Rate ε/dt',
+  'Density',
+  'Diameter',
+  'Fault Angle',
   'Final Displacement Δs',
+  'Final Strain ε',
+  'Flow Strength',
+  'Fluid Permeability',
+  'Fracture Strength',
+  'Friction Parameter',
+  'Gas Permeability',
+  'Height',
+  'Length',
+  'Machine Stiffness N/mm',
   'Maximum Force F',
   'Maximum Stress σ',
-  'Yield Stress σ',
-  'Machine Stiffness N/mm',
   'Roughness',
-  'Friction Parameter',
-  'Unconfined Compressive Strength (UCS)',
-  'Ultimate Tensile Strength',
-  'Ultimate Shear Strength',
-  'True Tension Strength',
-  'Compressive Strength (σ2=σ3)',
-  'Compressive Strength (σ1=σ2)',
-  'True Triaxial Strength',
-  'Yield Strength',
+  'Span',
   'Tensional Strength',
   'Torsion Strength',
-  'Flow Strength',
-  'Fracture Strength'
+  'Total Porosity',
+  'True Tension Strength',
+  'True Triaxial Strength',
+  'Ultimate Shear Strength',
+  'Ultimate Tensile Strength',
+  'Unconfined Compressive Strength (UCS)',
+  'Unconnected Porosity',
+  'Weight',
+  'Width',
+  'Yield Strength',
+  'Yield Stress σ'
 ]
 
 // Data header channel types - from old app lines 4365-4372
 export const DATA_HEADER_CHANNEL_TYPES = [
   'Analog Input',
   'Analog Output',
+  'Calculated',
   'Digital Input',
   'Digital Output',
-  'System Data',
   'System Clock',
-  'Calculated'
+  'System Data'
 ]
 
 // Pore fluid phase unit options - from old app lines 4171-4174
 export const PHASE_UNIT_OPTIONS = [
-  'Vol%',
   'Mol%',
-  'Wt%',
-  'MPa'
+  'MPa',
+  'Vol%',
+  'Wt%'
 ]
 
 // Pore fluid chemistry data options - from old app lines 4182-4183
@@ -2026,32 +2017,32 @@ export const CHEMISTRY_DATA_OPTIONS = [
 // Solute component options - from old app lines 4233-4246
 // Note: "Resitivity" is a typo in the old app, kept for compatibility
 export const SOLUTE_COMPONENTS = [
-  'pH',
-  'pOH',
-  'Na+',
-  'K+',
   'Ca++',
-  'Mg++',
-  'Sr++',
-  'HCO3-',
-  'TOC',
-  'TIC',
   'CO2(gas)',
   'CO2(sol)',
+  'HCO3-',
+  'K+',
+  'Mg++',
+  'Na+',
+  'pH',
+  'pOH',
   'Resitivity',
-  'Temperature'
+  'Sr++',
+  'Temperature',
+  'TIC',
+  'TOC'
 ]
 
 // Solute unit options - from old app lines 4257-4264
 export const SOLUTE_UNITS = [
-  'Vol%',
-  'Mol%',
-  'Wt%',
-  'Mol/L',
-  'mMol/L',
-  'S/Mol',
+  'deg C',
   'log [C]',
-  'deg C'
+  'mMol/L',
+  'Mol/L',
+  'Mol%',
+  'S/Mol',
+  'Vol%',
+  'Wt%'
 ]
 
 // ===== PROTOCOL ENUMS =====
@@ -2059,28 +2050,156 @@ export const SOLUTE_UNITS = [
 // Protocol control variables - from old app edit_experiment.php lines 3493-3517
 // These are the parameter variables for protocol steps
 export const PROTOCOL_CONTROL_VARIABLES = [
-  'Temperature T',
-  'Confining Pressure Pc',
-  'Pore Pressure Pp',
-  'Time t',
-  'Frequency',
   'Amplitude',
-  'Stress σ1',
-  'Strain ε1',
-  'Strain Rate ε1/dt',
+  'Confining Pressure Pc',
+  'Count',
   'Displacement Δs1',
-  'Force F2',
-  'Stress σ2',
-  'Strain ε2',
-  'Strain Rate ε2/dt',
   'Displacement Δs2',
-  'Force F2',
-  'Stress σ3',
-  'Strain ε3',
-  'Strain Rate ε3/dt',
   'Displacement Δs3',
+  'Force F2',
+  'Force F2',
   'Force F3',
-  'Saturation',
+  'Frequency',
   'Humidity',
-  'Count'
+  'Pore Pressure Pp',
+  'Saturation',
+  'Strain Rate ε1/dt',
+  'Strain Rate ε2/dt',
+  'Strain Rate ε3/dt',
+  'Strain ε1',
+  'Strain ε2',
+  'Strain ε3',
+  'Stress σ1',
+  'Stress σ2',
+  'Stress σ3',
+  'Temperature T',
+  'Time t'
 ]
+
+// ===== VARIABLE-TO-UNIT MAPPING =====
+// Maps physical quantity categories to applicable UNIT_TYPES values
+// Used to filter the unit dropdown based on the selected variable/parameter
+
+const UNIT_CATEGORIES = {
+  temperature: ['degC', 'degK'],
+  time: ['sec', 'min', 'hour'],
+  electrical: ['Volt', 'mV', 'Amperage', 'mA', 'Ohm'],
+  pressure: ['Pa', 'MPa', 'GPa', 'bar', 'kbar'],
+  force: ['N', 'kN'],
+  mass: ['g', 'mg', 'μg'],
+  length: ['m', 'cm', 'mm', 'μm'],
+  frequency: ['Hz', 'kHz', 'MHz'],
+  viscosity: ['Pa·s'],
+  permeability: ['Darcy', 'mDarcy'],
+  strain: ['milistrain', '%'],
+  rate: ['mm·sec-1', 'N·sec-1', 'sec-1'],
+  stiffness: ['kN·mm-1'],
+  percentage: ['%'],
+  count: ['count'],
+  volume: ['cc', 'mm3'],
+  area: ['m2'],
+  inverseLength: ['m-1']
+}
+
+// Maps variable/parameter names to their applicable unit categories
+// Variables not listed here fall back to the full UNIT_TYPES list
+const VARIABLE_TO_CATEGORIES = {
+  // PARAMETER_TYPES (Apparatus)
+  'Confining Pressure': ['pressure'],
+  'Effective Pressure': ['pressure'],
+  'Pore Pressure': ['pressure'],
+  'σ1-Displacement': ['length'],
+  'σ2-Displacement': ['length'],
+  'σ3-Displacement': ['length'],
+  'σ1-Load': ['force'],
+  'σ2-Load': ['force'],
+  'σ3-Load': ['force'],
+  'Displacement Rate': ['rate'],
+  'Loading Rate': ['rate'],
+  'Stiffness': ['stiffness'],
+  'Sample Diameter': ['length'],
+  'Sample Length': ['length'],
+  'Permeability': ['permeability'],
+
+  // SAMPLE_PARAMETER_TYPES
+  'Weight': ['mass'],
+  'Connected Porosity': ['percentage'],
+  'Unconnected Porosity': ['percentage'],
+  'Total Porosity': ['percentage'],
+  // Note: Density (mass/volume) has no matching compound unit in UNIT_TYPES, so it falls back to the full list
+  'Permeability (Gas)': ['permeability'],
+  'Permeability (Water)': ['permeability'],
+  'Temperature': ['temperature'],
+  'Humidity': ['percentage'],
+  'Fluid Saturation': ['percentage'],
+  'Stress': ['pressure'],
+
+  // DIMENSION_VARIABLES
+  'Length': ['length'],
+  'Diameter': ['length'],
+  'Width': ['length'],
+  'Span': ['length'],
+  'Height': ['length'],
+  'Wall Thickness': ['length'],
+  'Bore Diameter': ['length'],
+
+  // PROTOCOL_CONTROL_VARIABLES
+  'Time t': ['time'],
+  'Stress σ1': ['pressure'],
+  'Strain ε1': ['strain'],
+  'Strain Rate ε1/dt': ['rate'],
+  'Displacement Δs1': ['length'],
+  'Force F2': ['force'],
+  'Stress σ2': ['pressure'],
+  'Strain ε2': ['strain'],
+  'Strain Rate ε2/dt': ['rate'],
+  'Displacement Δs2': ['length'],
+  'Stress σ3': ['pressure'],
+  'Strain ε3': ['strain'],
+  'Strain Rate ε3/dt': ['rate'],
+  'Displacement Δs3': ['length'],
+  'Force F3': ['force'],
+  'Saturation': ['percentage'],
+  'Count': ['count'],
+
+  // DATA_PARAMETER_CONTROLS
+  'Gas Permeability': ['permeability'],
+  'Fluid Permeability': ['permeability'],
+  'Final Strain ε': ['strain'],
+  'Corrected Strain Rate ε/dt': ['rate'],
+  'Final Displacement Δs': ['length'],
+  'Maximum Force F': ['force'],
+  'Maximum Stress σ': ['pressure'],
+  'Yield Stress σ': ['pressure'],
+  'Machine Stiffness N/mm': ['stiffness'],
+  'Roughness': ['length'],
+  'Friction Parameter': ['percentage', 'count'],
+  'Unconfined Compressive Strength (UCS)': ['pressure'],
+  'Ultimate Tensile Strength': ['pressure'],
+  'Ultimate Shear Strength': ['pressure'],
+  'True Tension Strength': ['pressure'],
+  'Compressive Strength (σ2=σ3)': ['pressure'],
+  'Compressive Strength (σ1=σ2)': ['pressure'],
+  'True Triaxial Strength': ['pressure'],
+  'Yield Strength': ['pressure'],
+  'Tensional Strength': ['pressure'],
+  'Torsion Strength': ['pressure'],
+  'Flow Strength': ['pressure'],
+  'Fracture Strength': ['pressure']
+}
+
+// Returns the applicable unit options for a given variable/parameter name.
+// Falls back to the full UNIT_TYPES list for unknown variables (e.g., "Other", "Fault Angle").
+export function getUnitsForVariable(variableName) {
+  if (!variableName) return UNIT_TYPES
+
+  const categories = VARIABLE_TO_CATEGORIES[variableName]
+  if (!categories) return UNIT_TYPES
+
+  const units = []
+  for (const cat of categories) {
+    const catUnits = UNIT_CATEGORIES[cat]
+    if (catUnits) units.push(...catUnits)
+  }
+  return [...new Set(units)]
+}

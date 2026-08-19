@@ -46,7 +46,7 @@ include("includes/mheader.php");
 		$('#mdl-'+pkey).find(":selected").prop('selected', false);
 		switch(selected){
 			case "view":
-				window.location=murl;
+				window.open(murl, '_blank');
 				break;
 			case "download":
 				window.location='/download_micro_file?project_id='+pkey;

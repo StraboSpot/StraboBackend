@@ -75,14 +75,14 @@ if($_GET['n']){
 ?>
 
 <div style="text-align:center">
-	<a href="https://osf.io" target="_blank">
-		<img src="/includes/images/osf_logo_dark.png" width="200px"/>
+	<a href="https://zenodo.org/communities/strabospot" target="_blank">
+		<img src="/includes/images/zenodo_logo.png" width="200px"/>
 	</a>
 </div>
 <div style="text-align:center;padding-top:10px;padding-bottom:15px;">
-You can now proceed to <a href="https://osf.io" target="_blank">OSF</a> to create a new DOI project.<br>
-Use the links below to gather data for DOI submission.<br>
-Once a DOI has been generated, use the form below to update your project.
+You can now proceed to <a href="https://zenodo.org/communities/strabospot" target="_blank">Zenodo</a> and click &quot;New upload&quot; on the StraboSpot community page.<br>
+Use the links below to gather data for DOI submission. Attach the project files and add the landing page URL as a Related identifier.<br>
+Once Zenodo has assigned a DOI, use the form below to update your project.
 </div>
 <?php
 }

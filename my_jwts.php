@@ -10,6 +10,7 @@
  * @link       https://strabospot.org
  */
 
+header("Location: /");exit(); //20250515 JMA - No longer needed. New JWT system in place.
 
 include("logincheck.php");
 

@@ -65,15 +65,15 @@ $serv = print_r($_SERVER, true);
 
 if(file_exists("log.txt")){
 	if($_SERVER["REQUEST_URI"] != "/db/imagexxx"){
-		if($username=="jasonash@ku.edu" || $username=="jasonash1@gmail.com" || $username=="nathan.novak79@gmail.comdd"){
+		if($username=="jasonash@ku.edu" || $username=="jasonash1@gmail.com" || $username=="canadarheology@gmail.com"){
 
 			file_put_contents ("log.txt", "\n\n************************************************************************************************************************\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "REQUEST: ".ucfirst($request->url_elements[1])."\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "REQUEST_URI: ".$_SERVER["REQUEST_URI"]."\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "username: $username\n\n", FILE_APPEND);
 			file_put_contents ("log.txt", "Raw Input:\n\n".$rawinput."\n\n", FILE_APPEND);
-			file_put_contents ("log.txt", "Request Method: ".$_SERVER['REQUEST_METHOD'], FILE_APPEND);
-			file_put_contents ("log.txt", "Server: ".$serv, FILE_APPEND);
+			//file_put_contents ("log.txt", "Request Method: ".$_SERVER['REQUEST_METHOD'], FILE_APPEND);
+			//file_put_contents ("log.txt", "Server: ".$serv, FILE_APPEND);
 		}
 	}
 }
@@ -153,7 +153,11 @@ if(class_exists($view_name)) {
 	$ch = curl_init();
 	curl_setopt($ch, CURLOPT_URL, $url);
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, 1);
-	//$output = curl_exec($ch); //Turn off for debugging JMA 20260102
+	//tracking is fire-and-forget: without these timeouts an unreachable
+	//stats host blocks every response here and piles up Apache workers
+	curl_setopt($ch, CURLOPT_CONNECTTIMEOUT_MS, 1000);
+	curl_setopt($ch, CURLOPT_TIMEOUT_MS, 1500);
+	$output = curl_exec($ch);
 	curl_close($ch);
 
 	$view = new $view_name();

@@ -99,8 +99,14 @@ include("includes/mheader.php");
 			window.location='/searchdownload?type=download_images&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="kml_dev"){
 			window.location='/searchdownload?type=kml_dev&userpkey=<?php echo $userpkey?>&dsids='+id;
+		}else if(selected=="gpkg"){
+			window.location='/searchdownload?type=gpkg&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="geojson"){
 			window.location='/searchdownload?type=geojson&userpkey=<?php echo $userpkey?>&dsids='+id;
+		}else if(selected=="gems"){
+			window.location='/gems_export?dsids='+id;
+		}else if(selected=="custom_template"){
+			window.location='/TemplateWizard/export.php?dataset_id='+id;
 		}else if(selected=="geologic_units"){
 			window.location='/searchdownload?type=geologic_units&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="debug"){
@@ -391,8 +397,10 @@ if($datasetCreatedBy == $userpkey || $collaboration_level == "admin"){
 															<option value="download_images">Download Photos</option>
 															<option value="landing_page">Landing Page</option>
 															<option value="sample_list">Sample List</option>
+															<option value="gpkg">GeoPackage</option>
 															<option value="geojson">GeoJSON</option>
-															<option value="image_basemaps">Image Basemaps</option>
+															<option value="gems">USGS GeMS</option>
+																<option value="image_basemaps">Image Basemaps</option>
 														</select>
 													</td>
 													<td><?php echo $name?></td>
@@ -489,7 +497,13 @@ if(count($projectrows)==0){
 													<option value="edit">View/Edit/Add Data</option>
 													<option value="field">Download/Share StraboMobile Project File</option>
 													<option value="doi">Get DOI for Project</option>
+<?php
+if(in_array($userpkey, $acollaboration_testing_pkeys)){
+?>
 													<option value="collaborate">Invite Collaborators</option>
+<?php
+}
+?>													
 													<option value="json">Download Project in Strabo JSON Format</option>
 													<option value="geologic_units">Download Geologic Units</option>
 													<option value="delete">Delete Project</option>
@@ -567,8 +581,10 @@ if($userpkey==3 || $userpkey==3){
 <?php
 }
 ?>
+															<option value="gpkg">GeoPackage</option>
 															<option value="geojson">GeoJSON</option>
-															<option value="image_basemaps">Image Basemaps</option>
+															<option value="gems">USGS GeMS</option>
+																<option value="image_basemaps">Image Basemaps</option>
 														</select>
 													</td>
 													<td><?php echo $name?></td>

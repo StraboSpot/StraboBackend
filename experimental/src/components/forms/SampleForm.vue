@@ -3,22 +3,52 @@
     <!-- Sample Info Section -->
     <fieldset class="form-section">
       <legend>SAMPLE INFO</legend>
+
+      <!-- StraboSamples link (Exp_StraboSamples_Linking.md) -->
+      <div v-if="!linkedId" class="mb-4">
+        <Button
+          type="button"
+          class="w-full link-samples-btn"
+          outlined
+          icon="pi pi-link"
+          label="Link Sample From StraboSamples"
+          @click="showLinkDialog = true"
+        />
+      </div>
+      <div v-else class="linked-chip mb-4">
+        <i class="pi pi-link" />
+        <span>
+          Linked to StraboSamples:
+          <a v-if="linkedUrl" :href="linkedUrl" target="_blank" rel="noopener" class="linked-chip-link">
+            <strong>{{ linkedLabel }}</strong>
+            <i class="pi pi-external-link text-xs" />
+          </a>
+          <strong v-else>{{ linkedLabel }}</strong>
+        </span>
+        <span v-if="identityLocked" class="text-xs italic text-surface-400">
+          identity managed by {{ managedByLabel }}
+        </span>
+        <span class="flex-1"></span>
+        <Button type="button" label="Change" size="small" text @click="showLinkDialog = true" />
+        <Button type="button" label="Unlink" size="small" text severity="danger" @click="handleUnlink" />
+      </div>
+
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
         <div class="field">
           <label class="text-sm">Sample Name *</label>
-          <InputText v-model="form.name" :invalid="!form.name" />
+          <InputText v-model="form.name" :invalid="!form.name" :disabled="identityLocked" />
         </div>
         <div class="field">
           <label class="text-sm">IGSN</label>
-          <InputText v-model="form.igsn" />
+          <InputText v-model="form.igsn" :disabled="identityLocked" />
         </div>
         <div class="field">
           <label class="text-sm">Sample ID *</label>
-          <InputText v-model="form.id" :invalid="!form.id" />
+          <InputText v-model="form.id" :invalid="!form.id" :disabled="identityLocked" />
         </div>
         <div class="field">
           <label class="text-sm">Description</label>
-          <InputText v-model="form.description" />
+          <InputText v-model="form.description" :disabled="identityLocked" />
         </div>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3">
@@ -52,6 +82,8 @@
             :options="MATERIAL_TYPES"
             placeholder="Select..."
             showClear
+            filter
+            resetFilterOnHide
             :invalid="!form.material.material.type"
             @update:modelValue="handleMaterialTypeChange"
           />
@@ -73,6 +105,7 @@
             placeholder="Select..."
             showClear
             filter
+            resetFilterOnHide
             filterPlaceholder="Search..."
             :invalid="!form.material.material.name"
           />
@@ -115,6 +148,8 @@
                   :options="MINERAL_TYPES"
                   placeholder="Select..."
                   showClear
+                  filter
+                  resetFilterOnHide
                 />
               </div>
               <div class="field flex-1" v-if="isOther(item.mineral)">
@@ -208,11 +243,11 @@
         </div>
         <div class="field">
           <label class="text-sm">Latitude</label>
-          <InputText v-model="form.material.provenance.location.latitude" />
+          <InputText v-model="form.material.provenance.location.latitude" :disabled="identityLocked" />
         </div>
         <div class="field">
           <label class="text-sm">Longitude</label>
-          <InputText v-model="form.material.provenance.location.longitude" />
+          <InputText v-model="form.material.provenance.location.longitude" :disabled="identityLocked" />
         </div>
       </div>
     </fieldset>
@@ -258,10 +293,12 @@
                 <label class="text-sm">Variable *</label>
                 <Select
                   :modelValue="item.control"
-                  @update:modelValue="update('control', $event)"
+                  @update:modelValue="(val) => { const u = {}; u.control = val; if (item.unit && !getUnitsForVariable(val).includes(item.unit)) u.unit = ''; update(u) }"
                   :options="SAMPLE_PARAMETER_TYPES"
                   placeholder="Select..."
                   showClear
+                  filter
+                  resetFilterOnHide
                 />
               </div>
               <div class="field flex-1" v-if="isOther(item.control)">
@@ -284,8 +321,10 @@
                 <Select
                   :modelValue="item.unit"
                   @update:modelValue="update('unit', $event)"
-                  :options="UNIT_TYPES"
+                  :options="getUnitsForVariable(item.control)"
                   showClear
+                  :filter="getUnitsForVariable(item.control).length > 8"
+                  resetFilterOnHide
                 />
               </div>
               <div class="field w-24">
@@ -294,6 +333,8 @@
                   :modelValue="item.prefix"
                   @update:modelValue="update('prefix', $event)"
                   :options="prefixOptions"
+                  filter
+                  resetFilterOnHide
                 />
               </div>
             </div>
@@ -324,7 +365,7 @@
         type="button"
         severity="secondary"
         outlined
-        label="Cancel"
+        label="Discard Changes"
         @click="$emit('cancel')"
       />
       <Button
@@ -333,17 +374,28 @@
         :disabled="!isValid"
       />
     </div>
+
+    <!-- StraboSamples picker -->
+    <LinkSampleDialog
+      v-if="showLinkDialog"
+      :current-id="linkedId"
+      @close="showLinkDialog = false"
+      @select="handleSelectSample"
+    />
   </form>
 </template>
 
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
+import { useFormDirty } from '@/composables/useFormDirty'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
 import ListDetailEditor from '@/components/ListDetailEditor.vue'
 import DocumentsEditor from '@/components/DocumentsEditor.vue'
+import LinkSampleDialog from '@/components/LinkSampleDialog.vue'
+import { sampleLinkService } from '@/services/api'
 import {
   MATERIAL_TYPES,
   MINERAL_TYPES,
@@ -351,6 +403,7 @@ import {
   FRACTION_UNITS,
   UNIT_TYPES,
   UNIT_PREFIXES,
+  getUnitsForVariable,
   MATERIAL_STATES,
   TEXT_INPUT_MATERIAL_TYPES,
   MATERIAL_NAME_LABELS,
@@ -415,6 +468,10 @@ const handleMaterialTypeChange = (newType) => {
 }
 
 const createEmptyForm = () => ({
+  // StraboSamples spine id. Semantics (Exp_StraboSamples_Linking.md D3):
+  // undefined = no link intent (key drops out of the JSON), a UUID = linked
+  // to that spine sample, null = explicit unlink (server mints fresh).
+  strabo_id: undefined,
   name: '',
   id: '',
   igsn: '',
@@ -463,10 +520,94 @@ const createEmptyForm = () => ({
 
 const form = ref(createEmptyForm())
 
+const { isDirty, resetDirty } = useFormDirty(form)
+
+// ===== StraboSamples link state (Exp_StraboSamples_Linking.md) =====
+const showLinkDialog = ref(false)
+// Display info for the linked spine sample: { name, hasField, hasMicro,
+// unresolved }. Populated by the picker selection or by hydration on load.
+const linkedInfo = ref(null)
+
+const linkedId = computed(() => form.value.strabo_id || null)
+const linkedLabel = computed(() =>
+  (linkedInfo.value && linkedInfo.value.name) || linkedId.value || '')
+// Drill-down URL into the StraboSamples record (composite spine PK needs
+// the owner pkey, carried on the fetched record).
+const linkedUrl = computed(() => {
+  if (!linkedId.value || !linkedInfo.value || !linkedInfo.value.owner) return null
+  return `/samples/${linkedInfo.value.owner}/${encodeURIComponent(linkedId.value)}`
+})
+// Lock rule (D2): a higher-priority system (Field or Micro) manages the
+// sample's identity; the server suppresses Exp spine writes in that case,
+// so editable fields would silently lie.
+const identityLocked = computed(() =>
+  !!(linkedInfo.value && (linkedInfo.value.hasField || linkedInfo.value.hasMicro)))
+const managedByLabel = computed(() => {
+  if (!linkedInfo.value) return ''
+  return linkedInfo.value.hasField ? 'StraboField' : 'StraboMicro'
+})
+
+// Resolve chip text + lock flags for a strabo_id that arrived with the data
+// (edit round-trip, Load Data carryover). Degrades to an unlocked chip
+// showing the raw id when the sample no longer resolves.
+const hydrateLink = async (id) => {
+  if (!id) {
+    linkedInfo.value = null
+    return
+  }
+  try {
+    const record = await sampleLinkService.getSample(id)
+    linkedInfo.value = record
+      ? { name: record.name || id, owner: record.userpkey, hasField: !!record.field_data, hasMicro: !!record.micro_data }
+      : { name: id, owner: null, hasField: false, hasMicro: false, unresolved: true }
+  } catch (err) {
+    linkedInfo.value = { name: id, owner: null, hasField: false, hasMicro: false, unresolved: true }
+  }
+}
+
+// Picker selection: adopt the spine id and prefill (D2). Material Type is
+// deliberately NOT prefilled — the LAPS and Field vocabularies are disjoint.
+const handleSelectSample = (record) => {
+  form.value.strabo_id = record.id
+  linkedInfo.value = {
+    name: record.name || record.id,
+    owner: record.userpkey,
+    hasField: !!record.field_data,
+    hasMicro: !!record.micro_data
+  }
+  form.value.name = record.name || ''
+  form.value.igsn = record.igsn || ''
+  form.value.description = record.description || ''
+  if (!form.value.id || form.value.id.trim() === '') {
+    form.value.id = record.name || ''
+  }
+  if (record.latitude !== null && record.latitude !== undefined) {
+    form.value.material.provenance.location.latitude = String(record.latitude)
+  }
+  if (record.longitude !== null && record.longitude !== undefined) {
+    form.value.material.provenance.location.longitude = String(record.longitude)
+  }
+  if (record.parent) {
+    form.value.parent.name = record.parent.name || form.value.parent.name
+    form.value.parent.igsn = record.parent.igsn || form.value.parent.igsn
+    form.value.parent.description = record.parent.description || form.value.parent.description
+  }
+  showLinkDialog.value = false
+}
+
+// Unlink (D3): explicit null tells the server to detach this experiment
+// from the spine sample and mint a fresh identity on save. Field values
+// stay as they are.
+const handleUnlink = () => {
+  form.value.strabo_id = null
+  linkedInfo.value = null
+}
+
 // Populate form with initial data
 watch(() => props.initialData, (data) => {
   if (data && Object.keys(data).length > 0) {
     form.value = {
+      strabo_id: data.strabo_id || undefined,
       name: data.name || '',
       id: data.id || '',
       igsn: data.igsn || '',
@@ -513,6 +654,11 @@ watch(() => props.initialData, (data) => {
       documents: data.documents?.map(d => ({ ...d })) || []
     }
   }
+  resetDirty()
+  // Hydrate the linked-sample chip (name + lock flags) for an id that rode
+  // in with the data — including Load Data carryover, which must surface
+  // the link visibly rather than silently (D3). Async, does not touch form.
+  hydrateLink(data && data.strabo_id ? data.strabo_id : null)
 }, { immediate: true, deep: true })
 
 // Validate form and return array of error messages
@@ -587,10 +733,13 @@ function handleSubmit() {
       detail: errors.join('\n'),
       life: 5000
     })
-    return
+    return false
   }
   emit('submit', form.value)
+  return true
 }
+
+defineExpose({ isDirty, trySubmit: handleSubmit })
 </script>
 
 <style scoped>
@@ -623,5 +772,44 @@ function handleSubmit() {
 
 .field label {
   margin-bottom: 2px;
+}
+
+/* "Link Sample From StraboSamples" — matches the StraboMicro treatment
+   (accent text on an outlined full-width button). strabo-* are Tailwind
+   tokens, not CSS vars, so use the palette's accent hex directly here
+   (tailwind.config.js strabo.accent). The app's global button theme paints
+   buttons solid red, so the outlined look needs !important. */
+.link-samples-btn.p-button {
+  background: transparent !important;
+  color: #f4511e !important;
+  border: 1px solid #f4511e !important;
+}
+
+.link-samples-btn.p-button:hover {
+  background: rgba(244, 81, 30, 0.12) !important;
+  color: #f4511e !important;
+}
+
+.linked-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.75rem;
+  border: 1px solid var(--p-surface-600);
+  border-radius: 4px;
+  background: var(--p-surface-800, #27272a);
+}
+
+.linked-chip .pi-link {
+  color: #f4511e;
+}
+
+.linked-chip-link {
+  color: #f4511e;
+  text-decoration: none;
+}
+
+.linked-chip-link:hover {
+  text-decoration: underline;
 }
 </style>

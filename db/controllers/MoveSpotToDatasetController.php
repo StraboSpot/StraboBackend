@@ -49,12 +49,32 @@ class MoveSpotToDatasetController extends MyController
 			return $data;
 		}
 
-		// Get the original dataset for this spot
-		$originaldatasetid = $this->strabo->getDatasetId($spotid);
+		// Check permissions on the TARGET dataset first (this also yields the
+		// effectiveOwner used to resolve the source dataset below).
+		$originalUserpkey = $this->strabo->userpkey;
+		$targetContext = $this->auth->getDatasetContext($originalUserpkey, $datasetid);
+		if ($targetContext !== null && !$this->auth->canEditDataset($targetContext, $targetContext->datasetCreatedBy)) {
+			if ($targetContext->permissionLevel === 'none') {
+				return $this->notFound("Target dataset not found");
+			}
+			return $this->forbidden("You don't have permission to add spots to target dataset");
+		}
 
-		// Check permissions on source dataset (where spot is coming from)
+		// effectiveOwner - for collaboration, the target project's owner.
+		$userpkey = $targetContext ? $targetContext->effectiveOwner : $originalUserpkey;
+
+		// Resolve the source dataset UNDER THE EFFECTIVE OWNER. A collaborator's
+		// spots are stored under the project owner's pkey, so resolving with the
+		// requester's own pkey (getDatasetId's default) would miss the spot and
+		// silently skip the source-permission check - letting an editor move
+		// another editor's spot out of a dataset they cannot edit.
+		$this->strabo->setuserpkey($userpkey);
+		$originaldatasetid = $this->strabo->getDatasetId($spotid);
+		$this->strabo->setuserpkey($originalUserpkey);
+
+		// Check permissions on the source dataset with the REQUESTER's rights.
 		if ($originaldatasetid) {
-			$sourceContext = $this->auth->getDatasetContext($this->strabo->userpkey, $originaldatasetid);
+			$sourceContext = $this->auth->getDatasetContext($originalUserpkey, $originaldatasetid);
 			if ($sourceContext !== null && !$this->auth->canEditDataset($sourceContext, $sourceContext->datasetCreatedBy)) {
 				if ($sourceContext->permissionLevel === 'none') {
 					return $this->notFound("Spot not found");
@@ -63,19 +83,7 @@ class MoveSpotToDatasetController extends MyController
 			}
 		}
 
-		// Check permissions on target dataset (where spot is going to)
-		$targetContext = $this->auth->getDatasetContext($this->strabo->userpkey, $datasetid);
-		if ($targetContext !== null && !$this->auth->canEditDataset($targetContext, $targetContext->datasetCreatedBy)) {
-			if ($targetContext->permissionLevel === 'none') {
-				return $this->notFound("Target dataset not found");
-			}
-			return $this->forbidden("You don't have permission to add spots to target dataset");
-		}
-
-		// Determine effectiveOwner - should be consistent across both datasets
-		// For collaboration, use the target project's owner
-		$userpkey = $targetContext ? $targetContext->effectiveOwner : $this->strabo->userpkey;
-		$originalUserpkey = $this->strabo->userpkey;
+		// Swap to the effective owner for the actual move.
 		if ($userpkey !== $originalUserpkey) {
 			$this->strabo->setuserpkey($userpkey);
 		}
@@ -95,6 +103,20 @@ class MoveSpotToDatasetController extends MyController
 
 				//add
 				$this->strabo->addSpotToDataset($datasetid,$spotid);
+
+				// StraboSearch live-sync (§5.3): re-derive the moved spot's
+				// project context from the graph (stale sweep drops the OLD
+				// project's row). BEFORE the sample resync below, so its
+				// search hook resolves against the fresh index.
+				require_once __DIR__ . '/../lib/search_sync.php';
+				field_search_sync_touch_spot($this->strabo->db, $this->strabo->neodb, $spotid, $userpkey);
+
+				// Re-mirror the moved spot's samples under the NEW project/dataset
+				// context so the strabosamples link metadata (dataset_id/project_id)
+				// and auto-seed collaborators follow the move. Without this the
+				// spine link keeps pointing at the OLD dataset/project.
+				// (userpkey is already set to effectiveOwner above.)
+				$this->strabo->resyncSpotSamples($spotid, $projectid, $datasetid);
 
 				//Update all modified_timestamps
 
@@ -238,6 +260,16 @@ class MoveSpotToDatasetController extends MyController
 						//this turns pixel coordinates into real-world coordinates so we can do spatial searches
 						$features=$this->strabo->fixIncomingBasemaps($features);
 
+						// Resolve project context for the strabosamples mirror hook
+						// (samples/field-integration).
+						$projectStraboIdForSync = $this->strabo->getProjectId($feature_id);
+						$this->strabo->setSampleSyncContext($projectStraboIdForSync, $feature_id);
+
+						// StraboSearch live-sync (§5.3.4): suppress per-spot
+						// touches; batch sync fires beside buildPgDataset below.
+						require_once __DIR__ . '/../lib/search_sync.php';
+						field_search_sync_suppress();
+
 						foreach($features as $feature){
 
 							$spotid = $feature->properties->id;
@@ -272,6 +304,7 @@ class MoveSpotToDatasetController extends MyController
 							}
 
 						}
+						$this->strabo->clearSampleSyncContext();
 
 						//now look on server to see if any spots need to be deleted
 						$serverspots = $this->strabo->getDatasetSpotIds($feature_id);
@@ -297,6 +330,10 @@ class MoveSpotToDatasetController extends MyController
 
 						//also add dataset to Postgres Database here.
 						$this->strabo->buildPgDataset($feature_id); //need to re-implement JMA 02282020
+
+						// StraboSearch live-sync (§5.3.4): end-of-dataset batch sync.
+						field_search_sync_resume();
+						field_search_sync_dataset($this->strabo->db, $this->strabo->neodb, $feature_id, $this->strabo->userpkey);
 					}
 
 				}else{

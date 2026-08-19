@@ -75,6 +75,7 @@ if($scriptname=="/index.php"){
 		$scriptname=="/view_project.php"||
 		$scriptname=="/edit_project.php"||
 		$scriptname=="/change_password.php"||
+		$scriptname=="/change_email.php"||
 		$scriptname=="/versioning.php" ||
 		$scriptname=="/instrumentcatalog.php"
 		){
@@ -628,6 +629,7 @@ if($_SESSION['userpkey']=="3"){
 							<li id=''><a href='/geotiff' ><span class='wsite-menu-title'>My Maps</span></a></li>
 
 							<li id=''><a href='/change_password' ><span class='wsite-menu-title'>Change Password</span></a></li>
+							<li id=''><a href='/change_email' ><span class='wsite-menu-title'>Change Email</span></a></li>
 							<li id=''><a href='/versioning' ><span class='wsite-menu-title'>Versioning</span></a></li>
 					<?php
 					}else{

@@ -2539,6 +2539,17 @@ input, select, textarea {
 				text-shadow: 1px 0 0 #ffffff, -1px 0 0 #ffffff, 0 1px 0 #ffffff, 0 -1px 0 #ffffff;
 			}
 
+		a > .icon.major {
+			cursor: pointer;
+			-webkit-transition: background 0.2s ease-in-out;
+			-ms-transition: background 0.2s ease-in-out;
+			transition: background 0.2s ease-in-out;
+		}
+
+		a:hover > .icon.major {
+			background: #e44c65;
+		}
+
 		.icon.major {
 			background: #272833;
 			border-radius: 100%;
@@ -3466,6 +3477,34 @@ input, select, textarea {
 			position: absolute;
 			top: 0;
 		}
+
+		#header #nav-left {
+			position: absolute;
+			left: 10em;
+			top: 0;
+		}
+
+			#header #nav-left ul {
+				margin: 0;
+			}
+
+				#header #nav-left ul li {
+					display: inline-block;
+					margin-left: 1em;
+				}
+
+					#header #nav-left ul li a {
+						border: 0;
+						color: inherit;
+						display: inline-block;
+						height: inherit;
+						line-height: inherit;
+						outline: 0;
+					}
+
+					#header #nav-left ul li a:hover {
+						color: #e44c65;
+					}
 
 		#header nav {
 			position: absolute;
@@ -5380,7 +5419,6 @@ Download:
 }
 
 .micro-feature-card:hover {
-	transform: translateY(-3px);
 	box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
 }
 
@@ -6081,4 +6119,230 @@ Download:
 	.exp-feature-box h4 {
 		font-size: 1em;
 	}
+}
+
+/* ============================================
+   Shared Landing Page Styles (New Design)
+   Used by StraboMicro, StraboField, StraboExperimental
+   ============================================ */
+
+/* Hero with Background Image */
+.landing-hero {
+	margin: -2em -2em 3em -2em;
+}
+
+.landing-hero-background {
+	background-size: cover;
+	background-position: center top;
+	background-repeat: no-repeat;
+	min-height: 450px;
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.landing-hero-overlay {
+	background: linear-gradient(to top, rgba(28, 29, 38, 0.95) 0%, rgba(28, 29, 38, 0.75) 50%, rgba(28, 29, 38, 0.3) 100%);
+	min-height: 450px;
+	display: flex;
+	flex-direction: column;
+	justify-content: center;
+	padding: 3em;
+}
+
+.landing-hero-title {
+	text-align: center;
+	color: #ffffff;
+	font-size: 3.5em;
+	font-weight: 300;
+	margin: 0 0 0.1em 0;
+}
+
+.landing-hero-divider {
+	display: block;
+	width: 300px;
+	height: 0;
+	margin: 0 auto 1.5em auto;
+	border: none;
+	border-top: 3px solid #e44c65;
+}
+
+.landing-hero-tagline {
+	color: #ffffff;
+	font-size: 1.8em;
+	font-weight: 700;
+	margin: 0 0 0.5em 0;
+	line-height: 1.3;
+}
+
+.landing-hero-description {
+	color: rgba(255, 255, 255, 0.85);
+	font-size: 1.05em;
+	line-height: 1.6;
+	margin-bottom: 0;
+}
+
+/* CTA Button Bar (below hero image) */
+.landing-hero-buttons {
+	display: flex;
+	justify-content: center;
+	gap: 2.5em;
+	padding: 1em 0;
+	border-top: 1px solid rgba(255, 255, 255, 0.15);
+	border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+	margin-bottom: 3em;
+}
+
+.landing-hero-btn {
+	display: inline-block;
+	background-color: #cc3366;
+	color: #ffffff !important;
+	font-size: 1em;
+	font-weight: 700;
+	padding: 0.5em 1.5em;
+	text-decoration: none !important;
+	border: none;
+	transition: background-color 0.2s ease;
+}
+
+.landing-hero-btn:hover {
+	background-color: #e44c65 !important;
+	color: #ffffff !important;
+}
+
+/* Highlights Heading */
+.landing-highlights-title {
+	color: #e44c65;
+	font-size: 2.2em;
+	font-weight: 700;
+	margin-bottom: 1.5em;
+}
+
+/* Why / Built For Section */
+.landing-why-section {
+	border-top: 1px solid rgba(255, 255, 255, 0.1);
+	padding-top: 2em;
+	margin-top: 2em;
+}
+
+.landing-why-title {
+	color: #e44c65;
+	font-size: 1.3em;
+	font-weight: 700;
+	margin-bottom: 0.75em;
+}
+
+.landing-why-list {
+	list-style: disc;
+	padding-left: 1.5em;
+	margin: 0;
+}
+
+.landing-why-list li {
+	color: rgba(255, 255, 255, 0.85);
+	margin-bottom: 0.6em;
+	line-height: 1.5em;
+}
+
+/* Responsive adjustments for new landing pages */
+@media screen and (max-width: 980px) {
+	.landing-hero-title {
+		font-size: 2.8em;
+	}
+
+	.landing-hero-tagline {
+		font-size: 1.5em;
+	}
+
+	.landing-hero-background,
+	.landing-hero-overlay {
+		min-height: 380px;
+	}
+}
+
+@media screen and (max-width: 736px) {
+	.landing-hero {
+		margin: -1em -1em 2em -1em;
+	}
+
+	.landing-hero-overlay {
+		padding: 2em 1.5em;
+		min-height: 320px;
+	}
+
+	.landing-hero-background {
+		min-height: 320px;
+	}
+
+	.landing-hero-title {
+		font-size: 2.2em;
+	}
+
+	.landing-hero-tagline {
+		font-size: 1.3em;
+	}
+
+	.landing-hero-buttons {
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75em;
+	}
+
+	.landing-hero-btn {
+		width: 100%;
+		max-width: 220px;
+		text-align: center;
+	}
+
+	.landing-highlights-title {
+		font-size: 1.8em;
+	}
+}
+
+@media screen and (max-width: 480px) {
+	.landing-hero-title {
+		font-size: 1.8em;
+	}
+
+	.landing-hero-tagline {
+		font-size: 1.1em;
+	}
+
+	.landing-highlights-title {
+		font-size: 1.5em;
+	}
+}
+
+/* ============================================
+   Return to Top Button
+   ============================================ */
+
+#return-to-top {
+	position: fixed;
+	bottom: 2em;
+	right: 2em;
+	z-index: 99;
+	width: 40px;
+	height: 40px;
+	border-radius: 50%;
+	background: rgba(39, 40, 51, 0.7);
+	border: 1px solid rgba(255, 255, 255, 0.15);
+	color: rgba(255, 255, 255, 0.5);
+	font-size: 14px;
+	line-height: 40px;
+	text-align: center;
+	text-decoration: none;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.3s ease, background 0.2s ease;
+}
+
+#return-to-top.visible {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+#return-to-top:hover {
+	background: rgba(39, 40, 51, 0.95);
+	color: rgba(255, 255, 255, 0.85);
+	border-color: rgba(255, 255, 255, 0.3);
 }

@@ -148,16 +148,31 @@ class DatasetController extends MyController
 		$upload = $request->parameters;
 		unset($upload['apiformat']);
 
+		// The Field client's sync posts datasets to bare /db/dataset with the
+		// id only in the JSON body. Resolve it here so the collaboration
+		// context check below covers that path too. Without this, a
+		// collaborator re-uploading an owner-linked dataset runs insertDataset
+		// under their own userpkey, misses the owner-scoped lookup, and
+		// creates an ORPHAN copy — which addDatasetToProject then links into
+		// the owner's project alongside the original (duplicate dataset).
+		// Observed on prod 2026-06-08: dataset 17794144325906 duplicated 4x
+		// by exactly this sequence.
+		if (!$thisid && isset($upload['id']) && $upload['id'] != "") {
+			$thisid = $upload['id'];
+		}
+
 		// Check if this is an update to an existing linked dataset
 		if ($thisid) {
 			$context = $this->auth->getDatasetContext($this->strabo->userpkey, $thisid);
 
-			if ($context !== null) {
-				// Dataset is linked to a project - check edit permission
+			// Only apply collaboration rules when the requester has a real relationship
+			// (owner or collaborator) to the project containing this dataset. getDatasetContext
+			// falls back to an unfiltered lookup when the requester has no copy, so $context
+			// may describe another user's project with permissionLevel='none' — in that case
+			// the requester is a stranger uploading a shared project file and should get their
+			// own copy of the dataset (preserves pre-collaboration behavior).
+			if ($context !== null && $context->permissionLevel !== 'none') {
 				if (!$this->auth->canEditDataset($context, $context->datasetCreatedBy)) {
-					if ($context->permissionLevel === 'none') {
-						return $this->notFound("Dataset not found");
-					}
 					return $this->forbidden("You don't have permission to edit this dataset");
 				}
 
@@ -176,9 +191,8 @@ class DatasetController extends MyController
 					$this->strabo->setuserpkey($originalUserpkey);
 				}
 			} else {
-				// Dataset not linked to project - allow create/update
+				// No context, or stranger uploading a shared project file
 				$injson=json_encode($upload);
-				// User is the creator
 				$data = $this->strabo->insertDataset($injson, $thisid, $this->strabo->userpkey);
 			}
 		} else {

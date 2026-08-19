@@ -51,13 +51,19 @@ class DatasetSpotsController extends MyController
 
 	public function postAction($request) {
 
+		// Large dataset uploads can exceed default PHP CPU-time limits and may
+		// outlast a flaky client connection. Disable the script timeout and keep
+		// running on client disconnect so partial inserts don't get stranded.
+		set_time_limit(0);
+		ignore_user_abort(true);
+
 		if(isset($request->url_elements[2])) {
 
 			//*******************************************************************************
 			//update attributes for feature
 
 
-			
+
 			$feature_id = $request->url_elements[2];
 			$datasetid = $feature_id;
 
@@ -75,7 +81,7 @@ class DatasetSpotsController extends MyController
 			// Check if user can edit this dataset
 			// Uses created_by field to determine who can edit (new model)
 			if (!$this->auth->canEditDataset($context, $context->datasetCreatedBy)) {
-				return $this->forbidden("You don't have permission to edit this dataset");
+				return $this->forbidden("You don't have permission to edit this dataset: $datasetid");
 			}
 
 			// Save original uploader for image ownership tracking (before any userpkey swap)
@@ -187,7 +193,16 @@ class DatasetSpotsController extends MyController
 						//this turns pixel coordinates into real-world coordinates so we can do spatial searches
 						$features=$this->strabo->fixIncomingBasemaps($features);
 
+						// Resolve project context for the strabosamples mirror hook
+						// (samples/field-integration). Looked up once per request.
+						$projectStraboIdForSync = $this->strabo->getProjectId($feature_id);
+						$this->strabo->setSampleSyncContext($projectStraboIdForSync, $feature_id);
 
+						// StraboSearch live-sync (§5.3.4): suppress per-spot
+						// touches during the bulk loop; one batch sync fires
+						// beside buildPgDataset below. Spot DELETES stay live.
+						require_once __DIR__ . '/../lib/search_sync.php';
+						field_search_sync_suppress();
 
 						foreach($features as $feature){
 
@@ -225,6 +240,7 @@ class DatasetSpotsController extends MyController
 							}
 
 						}
+						$this->strabo->clearSampleSyncContext();
 
 						//Roll through imagefilenames and update images with filenames
 						$this->strabo->fixImageFileNames($imagefilenames);
@@ -272,6 +288,12 @@ class DatasetSpotsController extends MyController
 
 						//also add dataset to Postgres Database here.
 						$this->strabo->buildPgDataset($feature_id, $ownerPkey);
+
+						// StraboSearch live-sync (§5.3.4): end-of-dataset
+						// batch sync (upsert current spots + images, re-touch
+						// linked samples).
+						field_search_sync_resume();
+						field_search_sync_dataset($this->strabo->db, $this->strabo->neodb, $feature_id, $ownerPkey);
 					}
 
 				}else{

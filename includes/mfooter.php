@@ -42,7 +42,7 @@
 
 					<div class="row gtr-uniform gtr-50">
 						<div class="footerLink col-4 col-12-medium">
-							<a href="https://www.nsf.gov/" target="_blank"><div><img class="footerImage" src="/includes/mimages/NSFLogo_grey.png"></div><div>Funded by the National Science Foundation</div></a>
+							<a href="/nsf_funding"><div><img class="footerImage" src="/includes/mimages/NSFLogo_grey.png"></div><div>Funded by the National Science Foundation</div></a>
 						</div>
 						<div class="footerLink col-4 col-12-medium">
 							<a href="https://www.mapbox.com/" target="_blank"><div><img class="footerImage" src="/includes/mimages/mapbox_grey.png"></div><div>Maps Provided by Mapbox</div></a>
@@ -56,7 +56,7 @@
 
 
 					<ul class="copyright">
-						<li>&copy; 2025 StraboSpot. All rights reserved.</li><!--<li>Design: <a href="http://html5up.net">HTML5 UP</a></li>-->
+						<li>&copy; 2026 StraboSpot. All rights reserved.</li><!--<li>Design: <a href="http://html5up.net">HTML5 UP</a></li>-->
 					</ul>
 				</footer>
 
@@ -76,5 +76,19 @@
 		<script src="/geotiff/js/jquery.fileupload.js"></script>
 		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/js/bootstrap.min.js"></script>
 		<script src="//cdn.rawgit.com/noelboss/featherlight/1.7.13/release/featherlight.min.js" type="text/javascript" charset="utf-8"></script>
+		<!-- Return to Top Button -->
+		<a href="#" id="return-to-top" title="Return to top" aria-label="Return to top">&#9650;</a>
+		<script>
+		(function() {
+			var btn = document.getElementById('return-to-top');
+			window.addEventListener('scroll', function() {
+				btn.classList.toggle('visible', window.scrollY > 300);
+			});
+			btn.addEventListener('click', function(e) {
+				e.preventDefault();
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+			});
+		})();
+		</script>
 	</body>
 </html>

@@ -7,7 +7,8 @@
  *   id - Experiment pkey (required)
  *
  * Returns experiment JSON with all LAPS sections.
- * Requires login - user must own the experiment OR parent project must be public.
+ * Access: user must own the experiment OR parent project must be public
+ * (public experiments are served to anonymous visitors too).
  */
 
 // Change to root directory for proper include path resolution
@@ -31,11 +32,11 @@ if ($experiment_pkey <= 0) {
     exit;
 }
 
-// Require login for experiment access
+// Anonymous or expired sessions proceed with no identity; prepare_connections.php
+// maps that to the no-user sentinel (99999) and the access-control query below
+// (owner OR public project) decides visibility. See softlogincheck.php.
 if ($_SESSION['loggedin'] != "yes") {
-    http_response_code(401);
-    echo json_encode(['error' => 'Authentication required']);
-    exit;
+    $_SESSION['userpkey'] = "";
 }
 
 $userpkey = $_SESSION['userpkey'];
@@ -104,6 +105,11 @@ $experiment->modified_date = $row->modified_date;
 $experiment->created_timestamp = (int)$row->created_timestamp;
 $experiment->modified_timestamp = (int)$row->modified_timestamp;
 
+// Owner pkey: needed by the SPA to build the StraboSamples drill-down URL
+// (/samples/{owner}/{id} — the spine PK is composite). Pkeys are already
+// public in those URLs, so exposing it here leaks nothing new.
+$experiment->owner_pkey = (int)$row->userpkey;
+
 // Permission flags
 $experiment->is_owner = ((int)$row->userpkey === $userpkey);
 $experiment->can_edit = ($experiment->is_owner || $is_admin);
@@ -114,6 +120,11 @@ $experiment->project_is_public = ($row->project_is_public === 't' || $row->proje
 if (!empty($row->json)) {
     $json_data = json_decode($row->json);
     if ($json_data) {
+        // Overlay strabosamples.* spine edits onto the embedded sample so the
+        // SPA's primary read reflects Samples-app edits (same as
+        // download_experiment.php). Owner pkey is e.userpkey.
+        require_once(__DIR__ . '/../lib/sample_overlay.php');
+        experimental_sample_overlay_apply($json_data, $db, (int)$row->userpkey);
         $experiment->data = $json_data;
     } else {
         $experiment->data = new stdClass();

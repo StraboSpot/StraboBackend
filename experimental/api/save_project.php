@@ -58,6 +58,7 @@ if (empty($input->name) || trim($input->name) === '') {
 include_once("adminkeys.php");
 include("prepare_connections.php");
 include_once("includes/UUID.php");
+include_once("experimental/api/update_keywords.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 $uuid_gen = new UUID();
@@ -107,6 +108,15 @@ if (!empty($input->pkey)) {
         ", array($name, $description, $project_pkey, $userpkey));
     }
 
+    // Update full-text search keywords
+    updateExpProjectKeywords($db, $project_pkey);
+
+    // StraboSearch live-sync (§5.3): a rename must re-extract every hosted
+    // index row (experiment searchtext embeds the project name) + refresh
+    // the sample fan-out denorm.
+    require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+    StraboSearchSync::touchExpProject($db, $project_pkey);
+
     // Return updated project
     $result = new stdClass();
     $result->pkey = $project_pkey;
@@ -125,6 +135,9 @@ if (!empty($input->pkey)) {
         INSERT INTO straboexp.project (pkey, userpkey, uuid, created_timestamp, modified_timestamp, name, notes, ispublic, keywords)
         VALUES ($1, $2, $3, NOW(), NOW(), $4, $5, false, NULL)
     ", array($project_pkey, $userpkey, $uuid, $name, $description));
+
+    // Update full-text search keywords
+    updateExpProjectKeywords($db, $project_pkey);
 
     // Return created project
     $result = new stdClass();

@@ -31,6 +31,8 @@
                   :options="DATA_SOURCE_TYPES"
                   placeholder="Select..."
                   showClear
+                  filter
+                  resetFilterOnHide
                   class="w-full"
                   @change="onDataSourceChange"
                 />
@@ -136,7 +138,10 @@
                       :options="DATA_PARAMETER_CONTROLS"
                       placeholder="Select..."
                       showClear
+                      filter
+                      resetFilterOnHide
                       class="w-full"
+                      @update:modelValue="(val) => { if (param.unit && !getUnitsForVariable(val).includes(param.unit)) param.unit = '' }"
                     />
                   </div>
                   <div class="param-col param-col-value">
@@ -148,9 +153,11 @@
                   <div class="param-col param-col-unit">
                     <Select
                       v-model="param.unit"
-                      :options="UNIT_TYPES"
+                      :options="getUnitsForVariable(param.control)"
                       placeholder="Unit"
                       showClear
+                      :filter="getUnitsForVariable(param.control).length > 8"
+                      resetFilterOnHide
                       class="w-full"
                     />
                   </div>
@@ -160,6 +167,8 @@
                       :options="UNIT_PREFIXES"
                       placeholder="-"
                       showClear
+                      filter
+                      resetFilterOnHide
                       class="w-full"
                     />
                   </div>
@@ -230,6 +239,8 @@
                           :options="CHANNEL_HEADER_TYPES"
                           placeholder="Select..."
                           showClear
+                          filter
+                          resetFilterOnHide
                           class="w-full"
                           @change="onHeaderTypeChange"
                         />
@@ -246,6 +257,8 @@
                           :options="specAOptions"
                           placeholder="Select..."
                           showClear
+                          :filter="specAOptions.length > 8"
+                          resetFilterOnHide
                           class="w-full"
                         />
                         <InputText
@@ -262,6 +275,8 @@
                           :options="specBOptions"
                           placeholder="Select..."
                           showClear
+                          :filter="specBOptions.length > 8"
+                          resetFilterOnHide
                           class="w-full"
                         />
                         <InputText
@@ -285,6 +300,8 @@
                           :options="unitOptions"
                           placeholder="Select..."
                           showClear
+                          :filter="unitOptions.length > 8"
+                          resetFilterOnHide
                           class="w-full"
                         />
                         <InputText
@@ -314,6 +331,8 @@
                           :options="channelNumbers"
                           placeholder="Select..."
                           showClear
+                          filter
+                          resetFilterOnHide
                           class="w-full"
                         />
                       </div>
@@ -480,6 +499,8 @@
                               :options="SOLUTE_COMPONENTS"
                               placeholder="Select..."
                               showClear
+                              filter
+                              resetFilterOnHide
                               class="w-full"
                             />
                           </div>
@@ -609,7 +630,7 @@
         type="button"
         severity="secondary"
         outlined
-        label="Cancel"
+        label="Discard Changes"
         @click="$emit('cancel')"
       />
       <Button
@@ -623,6 +644,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
+import { useFormDirty } from '@/composables/useFormDirty'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Textarea from 'primevue/textarea'
@@ -642,7 +664,8 @@ import {
   CHEMISTRY_DATA_OPTIONS,
   SOLUTE_COMPONENTS,
   SOLUTE_UNITS,
-  getDAQOptionsForHeader
+  getDAQOptionsForHeader,
+  getUnitsForVariable
 } from '@/schemas/laps-enums.js'
 
 const props = defineProps({
@@ -704,6 +727,8 @@ function generateUUID() {
   })
 }
 
+const { isDirty, resetDirty } = useFormDirty(form)
+
 // Initialize form from initial data
 const initForm = () => {
   if (props.initialData?.datasets && Array.isArray(props.initialData.datasets) && props.initialData.datasets.length > 0) {
@@ -738,6 +763,7 @@ const initForm = () => {
     form.value = []
     selectedDatasetIdx.value = null
   }
+  resetDirty()
 }
 
 initForm()
@@ -970,7 +996,7 @@ const handleSubmit = () => {
       detail: errors.join('\n'),
       life: 5000
     })
-    return
+    return false
   }
 
   const cleanedData = {
@@ -984,7 +1010,10 @@ const handleSubmit = () => {
     datasets: form.value.filter(ds => ds.data || ds.type || ds.id)
   }
   emit('submit', cleanedData)
+  return true
 }
+
+defineExpose({ isDirty, trySubmit: handleSubmit })
 </script>
 
 <style scoped>

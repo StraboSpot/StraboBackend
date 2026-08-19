@@ -5,63 +5,27 @@
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
- * @copyright  2025 StraboSpot
+ * @copyright  2026 StraboSpot
  * @license    https://opensource.org/licenses/MIT MIT License
  * @link       https://strabospot.org
  */
 
 include("logincheck.php");
 
-$userpkey = $_SESSION['userpkey'];
+$userpkey = (int)$_SESSION['userpkey'];
 
 include("prepare_connections.php");
 
 $credentials = $_SESSION['credentials'];
 
 include 'includes/mheader.php';
-//get groups based on userpkey
 ?>
 
-			<!-- Main -->
-				<div id="main" class="wrapper style1">
-					<div class="container">
-
-<style type="text/css">
-
-.rowdiv {
-	text-align:left;
-	padding-top:5px;
-}
-
-.rowheader {
-	text-align:center;
-	font-weight:bold;
-	color:#FFF;
-	font-size:1.2em;
-	margin-top: 20px;
-}
-
-.redred {
-	color:#ab1424;
-	font-weigth:bold;
-	padding-right:5px;
-}
-
-.button {
-   /* Green */
-  
-  
-  padding: 3px 20px;
-  text-align: center;
-  text-decoration: none;
-  display: inline-block;
-  font-size: 14px;
-}
-
-</style>
+<!-- Main -->
+<div id="main" class="wrapper style1">
+	<div class="container">
 
 <script src='/assets/js/jquery/jquery.min.js'></script>
-<script src="/assets/js/featherlight/featherlight.js"></script>
 
 <?php
 
@@ -72,7 +36,6 @@ if($_POST['submit']!=""){
 		exit();
 	}
 
-	//check values
 	$institution_pkey = $_POST["i"];
 	$instrument_name=$_POST["instrument_name"];
 	$instrument_type=$_POST["instrument_type"];
@@ -87,18 +50,6 @@ if($_POST['submit']!=""){
 	$filament_type=$_POST["filament_type"];
 	$instrument_notes=$_POST["instrument_notes"];
 
-	$detectortype0=$_POST["detectortype0"]; $detectormake0=$_POST["detectormake0"]; $detectormodel0=$_POST["detectormodel0"];
-	$detectortype1=$_POST["detectortype1"]; $detectormake1=$_POST["detectormake1"]; $detectormodel1=$_POST["detectormodel1"];
-	$detectortype2=$_POST["detectortype2"]; $detectormake2=$_POST["detectormake2"]; $detectormodel2=$_POST["detectormodel2"];
-	$detectortype3=$_POST["detectortype3"]; $detectormake3=$_POST["detectormake3"]; $detectormodel3=$_POST["detectormodel3"];
-	$detectortype4=$_POST["detectortype4"]; $detectormake4=$_POST["detectormake4"]; $detectormodel4=$_POST["detectormodel4"];
-	$detectortype5=$_POST["detectortype5"]; $detectormake5=$_POST["detectormake5"]; $detectormodel5=$_POST["detectormodel5"];
-	$detectortype6=$_POST["detectortype6"]; $detectormake6=$_POST["detectormake6"]; $detectormodel6=$_POST["detectormodel6"];
-	$detectortype7=$_POST["detectortype7"]; $detectormake7=$_POST["detectormake7"]; $detectormodel7=$_POST["detectormodel7"];
-	$detectortype8=$_POST["detectortype8"]; $detectormake8=$_POST["detectormake8"]; $detectormodel8=$_POST["detectormodel8"];
-	$detectortype9=$_POST["detectortype9"]; $detectormake9=$_POST["detectormake9"]; $detectormodel9=$_POST["detectormodel9"];
-	$detectortype10 =$_POST["detectortype10 "]; $detectormake10 =$_POST["detectormake10 "]; $detectormodel10 =$_POST["detectormodel10 "];
-
 	$error = "";
 
 	if($instrument_name=="" || $instrument_type==""){
@@ -106,8 +57,6 @@ if($_POST['submit']!=""){
 	}
 
 	if($error==""){
-
-		//put in database here and show success message
 
 		$db->prepare_query("
 				update instrument set
@@ -128,34 +77,30 @@ if($_POST['submit']!=""){
 
 		$db->prepare_query("delete from instrument_detector where instrument_pkey = $1", array($instrument_pkey));
 
-		if($detectortype0!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype0, $detectormake0, $detectormodel0)); }
-		if($detectortype1!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype1, $detectormake1, $detectormodel1)); }
-		if($detectortype2!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype2, $detectormake2, $detectormodel2)); }
-		if($detectortype3!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype3, $detectormake3, $detectormodel3)); }
-		if($detectortype4!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype4, $detectormake4, $detectormodel4)); }
-		if($detectortype5!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype5, $detectormake5, $detectormodel5)); }
-		if($detectortype6!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype6, $detectormake6, $detectormodel6)); }
-		if($detectortype7!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype7, $detectormake7, $detectormodel7)); }
-		if($detectortype8!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype8, $detectormake8, $detectormodel8)); }
-		if($detectortype9!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype9, $detectormake9, $detectormodel9)); }
-		if($detectortype10!=""){$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $detectortype10, $detectormake10, $detectormodel10)); }
+		for ($d = 0; $d <= 10; $d++) {
+			$dtype = $_POST["detectortype{$d}"];
+			$dmake = $_POST["detectormake{$d}"];
+			$dmodel = $_POST["detectormodel{$d}"];
+			if ($dtype != "") {
+				$db->prepare_query("insert into instrument_detector values ( nextval('instrument_detector_pkey_seq'), $1, $2, $3, $4 )", array($instrument_pkey, $dtype, $dmake, $dmodel));
+			}
+		}
 
 		?>
 
-<div class="rowdiv">
-	<h2 style="color:#009933;">Success!</h2>
-</div>
+		<header class="major"><h2>Success!</h2></header>
 
-<div class="rowdiv">
-	Instrument has been successfully updated.
-</div>
+		<div style="text-align: center;">
+			<p style="color: rgba(255,255,255,0.85); font-size: 1.1em; margin-bottom: 1.5em;">Instrument has been successfully updated.</p>
+			<a href="instrumentcatalog" class="button primary" style="margin-right: 10px;">Back to Catalog</a>
+			<a href="view_instrument?ii=<?php echo (int)$instrument_pkey; ?>" class="button">View Instrument</a>
+		</div>
 
-<div class="rowdiv">
-	<a href="instrumentcatalog">Continue</a>
+		<div class="bottomSpacer"></div>
+	</div>
 </div>
-
 		<?php
-
+		include 'includes/mfooter.php';
 		exit();
 	}
 
@@ -167,7 +112,6 @@ if($_POST['submit']!=""){
 	}
 }
 
-//fix this query to look for instrument
 $instcount = $db->get_var_prepared("
 	select count(*)
 	from
@@ -200,157 +144,210 @@ $postprocessingsoftwareversion=$irow->postprocessingsoftwareversion;
 $filamenttype=$irow->filamenttype;
 $instrumentnotes=$irow->instrumentnotes;
 
-?>
+// Get institute name
+$institute = $db->get_row_prepared("SELECT * FROM institute WHERE pkey = $1", array($institution_pkey));
 
-<form method="POST" onsubmit="return validateForm()">
-
-<?php
-if($error!=""){
-?>
-<div class="rowdiv" style="color:red; font-size:1.5em;"><?php echo $error?></div>
-<?php
-}
-?>
-
-<div class="rowdiv">
-	<h2>Edit Instrument</h2>
-</div>
-
-<div class="rowdiv">
-	<div>Instrument Name: <span class="redred">*</span><input type="text" name="instrument_name" id="instrument_name" placeholder="e.g. SEM 1" value="<?php echo $instrumentname?>"></div>
-</div>
-
-<div class="rowdiv">
-	<div>Instrument Type: <span class="redred">*</span><select name="instrument_type" id="instrument_type">
-		<option value="">Select...</option>
-		<option value="Optical Microscopy"<?php if($instrumenttype=="Optical Microscopy") echo " selected";?>>Optical Microscopy</option>
-		<option value="Scanner"<?php if($instrumenttype=="Scanner") echo " selected";?>>Scanner</option>
-		<option value="Transmission Electron Microscopy (TEM)"<?php if($instrumenttype=="Transmission Electron Microscopy (TEM)") echo " selected";?>>Transmission Electron Microscopy (TEM)</option>
-		<option value="Scanning Transmission Electron Microscopy (STEM)"<?php if($instrumenttype=="Scanning Transmission Electron Microscopy (STEM)") echo " selected";?>>Scanning Transmission Electron Microscopy (STEM)</option>
-		<option value="Scanning Electron Microscopy (SEM)"<?php if($instrumenttype=="Scanning Electron Microscopy (SEM)") echo " selected";?>>Scanning Electron Microscopy (SEM)</option>
-		<option value="Electron Microprobe"<?php if($instrumenttype=="Electron Microprobe") echo " selected";?>>Electron Microprobe</option>
-		<option value="Fourier Transform Infrared Spectroscopy (FTIR)"<?php if($instrumenttype=="Fourier Transform Infrared Spectroscopy (FTIR)") echo " selected";?>>Fourier Transform Infrared Spectroscopy (FTIR)</option>
-		<option value="Raman Spectroscopy"<?php if($instrumenttype=="Raman Spectroscopy") echo " selected";?>>Raman Spectroscopy</option>
-		<option value="Atomic Force Microscopy (AFM)"<?php if($instrumenttype=="Atomic Force Microscopy (AFM)") echo " selected";?>>Atomic Force Microscopy (AFM)</option>
-	</select></div>
-</div>
-
-<div class="rowdiv">
-	<div class="rowheader">Instrument Make:</div>
-<div>
-
-<div class="rowdiv">
-	Brand: <input type="text" name="instrument_brand" placeholder="e.g. JEOL, Zeiss" value="<?php echo $instrumentbrand?>">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="instrument_model" placeholder="e.g. HM5000" value="<?php echo $instrumentmodel?>">
-</div>
-
-<div class="rowdiv">
-	<div class="rowheader">Instrument Location:</div>
-<div>
-
-<div class="rowdiv">
-	University: <input type="text" name="university" placeholder="e.g. Texas A&M" value="<?php echo $university?>">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Lab: <input type="text" name="instrument_lab" placeholder="e.g. Geo Lab" value="<?php echo $laboratory?>">
-</div>
-
-<div class="rowdiv">
-	<div class="rowheader">Software (Data Collection):</div>
-<div>
-
-<div class="rowdiv">
-	Application: <input type="text" name="data_collection_software" placeholder="e.g. Aztec" value="<?php echo $datacollectionsoftware?>">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Version: <input type="text" name="data_collection_software_version" placeholder="e.g. 1.2.3" value="<?php echo $datacollectionsoftwareversion?>">
-</div>
-
-<div class="rowdiv">
-	<div class="rowheader">Software (Post-Processing):</div>
-<div>
-
-<div class="rowdiv">
-	Application: <input type="text" name="post_processing_software" placeholder="e.g. Aztec" value="<?php echo $postprocessingsoftware?>">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Version: <input type="text" name="post_processing_software_version" placeholder="e.g. 1.2.3" value="<?php echo $postprocessingsoftwareversion?>">
-</div>
-
-<?php
-if($instrumenttype=="Transmission Electron Microscopy (TEM)" || $instrumenttype=="Scanning Transmission Electron Microscopy (STEM)" || $instrumenttype=="Scanning Electron Microscopy (SEM)" || $instrumenttype=="Electron Microprobe" ){
-	$showdetector = "block";
-}else{
-	$showdetector = "none";
-}
-
-$showdrow0 = "none";
-$showdrow1 = "none";
-$showdrow2 = "none";
-$showdrow3 = "none";
-$showdrow4 = "none";
-$showdrow5 = "none";
-$showdrow6 = "none";
-$showdrow7 = "none";
-$showdrow8 = "none";
-$showdrow9 = "none";
-$showdrow10 = "none";
+// Get existing detectors
+$electronTypes = array(
+	"Transmission Electron Microscopy (TEM)",
+	"Scanning Transmission Electron Microscopy (STEM)",
+	"Scanning Electron Microscopy (SEM)",
+	"Electron Microprobe"
+);
+$showdetector = in_array($instrumenttype, $electronTypes) ? "block" : "none";
 
 $drows = $db->get_results_prepared("select * from instrument_detector where instrument_pkey = $1 order by pkey", array($instrument_pkey));
-$y=0;
-foreach($drows as $drow){
-	eval("\$detectortype".$y." = \$drow->type;");
-	eval("\$detectormake".$y." = \$drow->make;");
-	eval("\$detectormodel".$y." = \$drow->model;");
-	eval("\$showdrow".$y." = \"block\";");
-	$y++;
+$detectorData = array();
+$y = 0;
+if ($drows) {
+	foreach ($drows as $drow) {
+		$detectorData[$y] = array('type' => $drow->type, 'make' => $drow->make, 'model' => $drow->model);
+		$y++;
+	}
 }
-if($y==0) $y=1;
+if ($y == 0) $y = 1;
+
 ?>
 
-<div id="detectordetail" style="display:<?php echo $showdetector?>;">
-	<div class="rowdiv">
-		Filament Type: <input type="text" name="filament_type" value="<?php echo $filamenttype?>">
-	</div>
+<header class="major"><h2>Edit Instrument</h2></header>
 
-	<div class="rowdiv">
-		<div class="rowheader">Detectors:</div>
-	</div>
-
-	<div class="rowdiv" id="detectorrow0" style="display:block;">Type: <input type="text" name="detectortype0" id="detectortype0" value="<?php echo $detectortype0?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake0" id="detectormake0" value="<?php echo $detectormake0?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel0" id="detectormodel0" value="<?php echo $detectormodel0?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow1" style="display:<?php echo $showdrow1?>;">Type: <input type="text" name="detectortype1" id="detectortype1" value="<?php echo $detectortype1?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake1" id="detectormake1" value="<?php echo $detectormake1?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel1" id="detectormodel1" value="<?php echo $detectormodel1?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow2" style="display:<?php echo $showdrow2?>;">Type: <input type="text" name="detectortype2" id="detectortype2" value="<?php echo $detectortype2?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake2" id="detectormake2" value="<?php echo $detectormake2?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel2" id="detectormodel2" value="<?php echo $detectormodel2?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow3" style="display:<?php echo $showdrow3?>;">Type: <input type="text" name="detectortype3" id="detectortype3" value="<?php echo $detectortype3?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake3" id="detectormake3" value="<?php echo $detectormake3?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel3" id="detectormodel3" value="<?php echo $detectormodel3?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow4" style="display:<?php echo $showdrow4?>;">Type: <input type="text" name="detectortype4" id="detectortype4" value="<?php echo $detectortype4?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake4" id="detectormake4" value="<?php echo $detectormake4?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel4" id="detectormodel4" value="<?php echo $detectormodel4?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow5" style="display:<?php echo $showdrow5?>;">Type: <input type="text" name="detectortype5" id="detectortype5" value="<?php echo $detectortype5?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake5" id="detectormake5" value="<?php echo $detectormake5?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel5" id="detectormodel5" value="<?php echo $detectormodel5?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow6" style="display:<?php echo $showdrow6?>;">Type: <input type="text" name="detectortype6" id="detectortype6" value="<?php echo $detectortype6?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake6" id="detectormake6" value="<?php echo $detectormake6?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel6" id="detectormodel6" value="<?php echo $detectormodel6?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow7" style="display:<?php echo $showdrow7?>;">Type: <input type="text" name="detectortype7" id="detectortype7" value="<?php echo $detectortype7?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake7" id="detectormake7" value="<?php echo $detectormake7?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel7" id="detectormodel7" value="<?php echo $detectormodel7?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow8" style="display:<?php echo $showdrow8?>;">Type: <input type="text" name="detectortype8" id="detectortype8" value="<?php echo $detectortype8?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake8" id="detectormake8" value="<?php echo $detectormake8?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel8" id="detectormodel8" value="<?php echo $detectormodel8?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow9" style="display:<?php echo $showdrow9?>;">Type: <input type="text" name="detectortype9" id="detectortype9" value="<?php echo $detectortype9?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake9" id="detectormake9" value="<?php echo $detectormake9?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel9" id="detectormodel9" value="<?php echo $detectormodel9?>" placeholder="e.g. Nordlys"></div>
-	<div class="rowdiv" id="detectorrow10" style="display:<?php echo $showdrow10?>;">Type: <input type="text" name="detectortype10" id="detectortype10" value="<?php echo $detectortype10?>" placeholder="e.g. EBSD, Spectrometer">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Make: <input type="text" name="detectormake10" id="detectormake10" value="<?php echo $detectormake10?>" placeholder="e.g. Oxford">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Model: <input type="text" name="detectormodel10" id="detectormodel10" value="<?php echo $detectormodel10?>" placeholder="e.g. Nordlys"></div>
-
-	<div class="rowdiv">
-		 <button onclick="adddetectorrow(); return false;" class="button">Add Additional Detector</button>
-	</div>
+<!-- Back Link -->
+<div style="margin-bottom: 1.5em;">
+	<a href="instrumentcatalog" style="color: #e44c65;">&larr; Back to Instrument Catalog</a>
+	<a href="view_instrument?ii=<?php echo (int)$instrument_pkey; ?>" style="color: #e44c65; margin-left: 20px;">View Instrument</a>
 </div>
 
-<div class="rowdiv">
-	<div class="rowheader">Notes:</div>
-<div>
-
-<div class="rowdiv">
-	<textarea name="instrument_notes" rows="5" cols="60"><?php echo $instrumentnotes?></textarea>
-<div>
-
-<div style="padding-top:10px; width:800px; text-align:right;">
-	<input class="primary" type="submit" value="Save" name="submit" class="button">
+<?php if($error!=""){ ?>
+<div style="background: rgba(228,76,101,0.15); border: 1px solid #e44c65; border-radius: 4px; padding: 1em; margin-bottom: 1.5em; color: #e44c65; font-size: 1.1em;">
+	<?php echo htmlspecialchars($error); ?>
 </div>
+<?php } ?>
 
-<input type="hidden" name="instrument_pkey" value="<?php echo $instrument_pkey?>">
+<div class="form-card">
+<form method="POST" onsubmit="return validateForm()">
+
+	<p style="color: rgba(255,255,255,0.6); margin-bottom: 1.5em;">Editing instrument at: <strong style="color: #fff;"><?php echo htmlspecialchars($institute->institute_name); ?></strong></p>
+
+	<!-- Basic Info -->
+	<div class="form-section">
+		<h3 class="form-section-title">Instrument Information</h3>
+		<div class="form-grid">
+			<div class="form-field">
+				<label>Instrument Name <span class="required">*</span></label>
+				<input type="text" name="instrument_name" id="instrument_name" placeholder="e.g. SEM 1" value="<?php echo htmlspecialchars($instrumentname); ?>">
+			</div>
+			<div class="form-field">
+				<label>Instrument Type <span class="required">*</span></label>
+				<select name="instrument_type" id="instrument_type">
+					<option value="">Select...</option>
+					<?php
+					$types = array(
+						"Optical Microscopy", "Scanner",
+						"Transmission Electron Microscopy (TEM)",
+						"Scanning Transmission Electron Microscopy (STEM)",
+						"Scanning Electron Microscopy (SEM)",
+						"Electron Microprobe",
+						"Fourier Transform Infrared Spectroscopy (FTIR)",
+						"Raman Spectroscopy",
+						"Atomic Force Microscopy (AFM)"
+					);
+					foreach ($types as $t) {
+						$sel = ($instrumenttype == $t) ? " selected" : "";
+						echo "<option value=\"" . htmlspecialchars($t) . "\"{$sel}>" . htmlspecialchars($t) . "</option>\n";
+					}
+					?>
+				</select>
+			</div>
+		</div>
+	</div>
+
+	<!-- Make -->
+	<div class="form-section">
+		<h3 class="form-section-title">Instrument Make</h3>
+		<div class="form-grid">
+			<div class="form-field">
+				<label>Brand</label>
+				<input type="text" name="instrument_brand" placeholder="e.g. JEOL, Zeiss" value="<?php echo htmlspecialchars($instrumentbrand); ?>">
+			</div>
+			<div class="form-field">
+				<label>Model</label>
+				<input type="text" name="instrument_model" placeholder="e.g. HM5000" value="<?php echo htmlspecialchars($instrumentmodel); ?>">
+			</div>
+		</div>
+	</div>
+
+	<!-- Location -->
+	<div class="form-section">
+		<h3 class="form-section-title">Instrument Location</h3>
+		<div class="form-grid">
+			<div class="form-field">
+				<label>University</label>
+				<input type="text" name="university" placeholder="e.g. Texas A&M" value="<?php echo htmlspecialchars($university); ?>">
+			</div>
+			<div class="form-field">
+				<label>Lab</label>
+				<input type="text" name="instrument_lab" placeholder="e.g. Geo Lab" value="<?php echo htmlspecialchars($laboratory); ?>">
+			</div>
+		</div>
+	</div>
+
+	<!-- Software -->
+	<div class="form-section">
+		<h3 class="form-section-title">Software (Data Collection)</h3>
+		<div class="form-grid">
+			<div class="form-field">
+				<label>Application</label>
+				<input type="text" name="data_collection_software" placeholder="e.g. Aztec" value="<?php echo htmlspecialchars($datacollectionsoftware); ?>">
+			</div>
+			<div class="form-field">
+				<label>Version</label>
+				<input type="text" name="data_collection_software_version" placeholder="e.g. 1.2.3" value="<?php echo htmlspecialchars($datacollectionsoftwareversion); ?>">
+			</div>
+		</div>
+	</div>
+
+	<div class="form-section">
+		<h3 class="form-section-title">Software (Post-Processing)</h3>
+		<div class="form-grid">
+			<div class="form-field">
+				<label>Application</label>
+				<input type="text" name="post_processing_software" placeholder="e.g. Aztec" value="<?php echo htmlspecialchars($postprocessingsoftware); ?>">
+			</div>
+			<div class="form-field">
+				<label>Version</label>
+				<input type="text" name="post_processing_software_version" placeholder="e.g. 1.2.3" value="<?php echo htmlspecialchars($postprocessingsoftwareversion); ?>">
+			</div>
+		</div>
+	</div>
+
+	<!-- Detectors -->
+	<div id="detectordetail" style="display:<?php echo $showdetector; ?>;">
+		<div class="form-section">
+			<h3 class="form-section-title">Filament &amp; Detectors</h3>
+			<div class="form-field" style="margin-bottom: 1.5em;">
+				<label>Filament Type</label>
+				<input type="text" name="filament_type" value="<?php echo htmlspecialchars($filamenttype); ?>">
+			</div>
+
+			<?php for ($d = 0; $d <= 10; $d++) {
+				$dval = isset($detectorData[$d]) ? $detectorData[$d] : array('type'=>'','make'=>'','model'=>'');
+				$showrow = ($d == 0 || isset($detectorData[$d])) ? "block" : "none";
+			?>
+			<div class="detector-row" id="detectorrow<?php echo $d; ?>" style="display:<?php echo $showrow; ?>;">
+				<div class="form-grid form-grid-3">
+					<div class="form-field">
+						<label>Type</label>
+						<input type="text" name="detectortype<?php echo $d; ?>" id="detectortype<?php echo $d; ?>" value="<?php echo htmlspecialchars($dval['type']); ?>" placeholder="e.g. EBSD, Spectrometer">
+					</div>
+					<div class="form-field">
+						<label>Make</label>
+						<input type="text" name="detectormake<?php echo $d; ?>" id="detectormake<?php echo $d; ?>" value="<?php echo htmlspecialchars($dval['make']); ?>" placeholder="e.g. Oxford">
+					</div>
+					<div class="form-field">
+						<label>Model</label>
+						<input type="text" name="detectormodel<?php echo $d; ?>" id="detectormodel<?php echo $d; ?>" value="<?php echo htmlspecialchars($dval['model']); ?>" placeholder="e.g. Nordlys">
+					</div>
+				</div>
+			</div>
+			<?php } ?>
+
+			<div style="margin-top: 0.5em;">
+				<button onclick="adddetectorrow(); return false;" class="button small">Add Additional Detector</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- Notes -->
+	<div class="form-section">
+		<h3 class="form-section-title">Notes</h3>
+		<div class="form-field">
+			<textarea name="instrument_notes" rows="5" style="width: 100%;"><?php echo htmlspecialchars($instrumentnotes); ?></textarea>
+		</div>
+	</div>
+
+	<!-- Submit -->
+	<div style="text-align: center; padding-top: 1em;">
+		<input class="primary" type="submit" value="Save Changes" name="submit">
+	</div>
+
+	<input type="hidden" name="instrument_pkey" value="<?php echo (int)$instrument_pkey; ?>">
 
 </form>
+</div>
 
 <script type='text/javascript'>
-	addrownum = <?php echo $y?>;
+	var addrownum = <?php echo $y; ?>;
 
 	function adddetectorrow(){
-		$("#detectorrow" + addrownum).show();
-		addrownum++;
+		if (addrownum <= 10) {
+			$("#detectorrow" + addrownum).show();
+			addrownum++;
+		}
 	}
 
 	function validateForm(){
 		var instrumentName = $("#instrument_name").val();
-		var instrumentType = $( "#instrument_type" ).val();
+		var instrumentType = $("#instrument_type").val();
 		if(instrumentName=="" || instrumentType==""){
 			alert("Instrument Type and Instrument Name are required!");
 			return false;
@@ -358,46 +355,97 @@ if($y==0) $y=1;
 	}
 
 	function checkform(){
-		var instrumentName = $("#instrument_name").val();
-		var instrumentType = $( "#instrument_type" ).val();
+		var instrumentType = $("#instrument_type").val();
+		var electronTypes = [
+			"Transmission Electron Microscopy (TEM)",
+			"Scanning Transmission Electron Microscopy (STEM)",
+			"Scanning Electron Microscopy (SEM)",
+			"Electron Microprobe"
+		];
 
-		if(instrumentType != "Transmission Electron Microscopy (TEM)" && instrumentType != "Scanning Transmission Electron Microscopy (STEM)" && instrumentType != "Scanning Electron Microscopy (SEM)" && instrumentType != "Electron Microprobe"){
-			//clear and hide
+		if(electronTypes.indexOf(instrumentType) === -1){
 			$("#detectordetail").hide();
-			$("#detectortype0").val(""); $("#detectormake0").val(""); $("#detectormodel0").val("");
-			$("#detectortype1").val(""); $("#detectormake1").val(""); $("#detectormodel1").val(""); $("#detectorrow1").hide();
-			$("#detectortype2").val(""); $("#detectormake2").val(""); $("#detectormodel2").val(""); $("#detectorrow2").hide();
-			$("#detectortype3").val(""); $("#detectormake3").val(""); $("#detectormodel3").val(""); $("#detectorrow3").hide();
-			$("#detectortype4").val(""); $("#detectormake4").val(""); $("#detectormodel4").val(""); $("#detectorrow4").hide();
-			$("#detectortype5").val(""); $("#detectormake5").val(""); $("#detectormodel5").val(""); $("#detectorrow5").hide();
-			$("#detectortype6").val(""); $("#detectormake6").val(""); $("#detectormodel6").val(""); $("#detectorrow6").hide();
-			$("#detectortype7").val(""); $("#detectormake7").val(""); $("#detectormodel7").val(""); $("#detectorrow7").hide();
-			$("#detectortype8").val(""); $("#detectormake8").val(""); $("#detectormodel8").val(""); $("#detectorrow8").hide();
-			$("#detectortype9").val(""); $("#detectormake9").val(""); $("#detectormodel9").val(""); $("#detectorrow9").hide();
-			$("#detectortype10").val(""); $("#detectormake10").val(""); $("#detectormodel10").val(""); $("#detectorrow10").hide();
-
+			for (var i = 0; i <= 10; i++) {
+				$("#detectortype" + i).val("");
+				$("#detectormake" + i).val("");
+				$("#detectormodel" + i).val("");
+				if (i > 0) $("#detectorrow" + i).hide();
+			}
 		}else{
 			$("#detectordetail").show();
 		}
-
 	}
 
-	$("#instrument_type").change(function() {
-		console.log( "Handler for .change() called." );
-		checkform();
-	});
-
-	$("#instrument_name").keyup(function() {
-		console.log( "Handler for .change() called." );
-		checkform();
-	});
-
+	$("#instrument_type").change(function() { checkform(); });
 </script>
 
-						<div class="bottomSpacer"></div>
+<style>
+.form-card {
+	background: rgba(255, 255, 255, 0.04);
+	border: 1px solid rgba(255, 255, 255, 0.1);
+	border-radius: 6px;
+	padding: 2em;
+}
 
-					</div>
-				</div>
+.form-section {
+	margin-bottom: 2em;
+	padding-bottom: 1.5em;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.form-section:last-child {
+	margin-bottom: 0;
+	padding-bottom: 0;
+	border-bottom: none;
+}
+
+.form-section-title {
+	color: #fff;
+	font-size: 1.1em;
+	font-weight: 600;
+	margin-bottom: 1em;
+	text-transform: uppercase;
+	letter-spacing: 0.05em;
+}
+
+.form-grid {
+	display: grid;
+	grid-template-columns: 1fr 1fr;
+	gap: 1.2em;
+}
+
+.form-grid-3 {
+	grid-template-columns: 1fr 1fr 1fr;
+}
+
+@media (max-width: 768px) {
+	.form-grid, .form-grid-3 {
+		grid-template-columns: 1fr;
+	}
+}
+
+.form-field label {
+	display: block;
+	color: rgba(255, 255, 255, 0.7);
+	font-size: 0.9em;
+	margin-bottom: 0.4em;
+}
+
+.required {
+	color: #e44c65;
+}
+
+.detector-row {
+	margin-bottom: 0.8em;
+	padding-bottom: 0.8em;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+</style>
+
+		<div class="bottomSpacer"></div>
+
+	</div>
+</div>
 
 <?php
 include 'includes/mfooter.php';

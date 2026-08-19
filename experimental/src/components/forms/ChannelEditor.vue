@@ -12,6 +12,8 @@
             :options="CHANNEL_HEADER_TYPES"
             placeholder="Select..."
             showClear
+            filter
+            resetFilterOnHide
           />
         </div>
         <!-- Other Channel Header - shown when "Other" is selected -->
@@ -34,6 +36,8 @@
             :options="specAOptions"
             placeholder="Select..."
             showClear
+            :filter="specAOptions.length > 8"
+            resetFilterOnHide
           />
           <InputText
             v-else
@@ -51,6 +55,8 @@
             :options="specBOptions"
             placeholder="Select..."
             showClear
+            :filter="specBOptions.length > 8"
+            resetFilterOnHide
           />
           <InputText
             v-else
@@ -76,6 +82,8 @@
             :options="unitOptions"
             placeholder="Select..."
             showClear
+            :filter="unitOptions.length > 8"
+            resetFilterOnHide
           />
           <InputText
             v-else
@@ -98,6 +106,8 @@
             @update:modelValue="$emit('update', 'number', $event)"
             :options="CHANNEL_NUMBERS"
             placeholder="#"
+            filter
+            resetFilterOnHide
           />
         </div>
         <div class="field">
@@ -118,6 +128,8 @@
             :options="CHANNEL_CONFIGURATIONS"
             placeholder="Select..."
             showClear
+            filter
+            resetFilterOnHide
           />
         </div>
         <div class="field">
@@ -178,6 +190,8 @@
             :options="CHANNEL_GAINS"
             placeholder="Gain"
             showClear
+            filter
+            resetFilterOnHide
           />
         </div>
       </div>
@@ -195,6 +209,8 @@
             :options="SENSOR_ACTUATOR_TYPES"
             placeholder="Select..."
             showClear
+            filter
+            resetFilterOnHide
           />
         </div>
         <div class="field md:col-span-2">
@@ -205,6 +221,8 @@
             :options="IEEE_SENSOR_TEMPLATES"
             placeholder="Select..."
             showClear
+            filter
+            resetFilterOnHide
           />
         </div>
       </div>
@@ -289,6 +307,8 @@
             :options="UNIT_TYPES"
             placeholder="Select..."
             showClear
+            filter
+            resetFilterOnHide
           />
         </div>
         <div class="field">
@@ -299,6 +319,8 @@
             :options="UNIT_TYPES"
             placeholder="Select..."
             showClear
+            filter
+            resetFilterOnHide
           />
         </div>
         <div class="field">

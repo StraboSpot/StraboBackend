@@ -14,7 +14,7 @@ include("logincheck.php");
 include("prepare_connections.php");
 
 $credentials = $_SESSION['credentials'];
-$experimentalrows = $db->get_results_prepared("SELECT pkey, name, notes, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, ispublic FROM straboexp.project WHERE userpkey = $1 ORDER BY modified_timestamp DESC", array($userpkey));
+$experimentalrows = $db->get_results_prepared("SELECT pkey, uuid, name, notes, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, ispublic FROM straboexp.project WHERE userpkey = $1 ORDER BY modified_timestamp DESC", array($userpkey));
 $total=0;
 
 include("adminkeys.php");
@@ -33,21 +33,24 @@ include("includes/mheader.php");
 
 	function  projectExperimentalPub(projectid){
 		if(document.getElementById('switch_'+projectid).checked){
-			console.log("https://strabospot.org/experimental/project_public?projectid="+projectid+"&state=public");
-			$.get("/experimental/project_public?projectid="+projectid+"&state=public");
+			console.log("https://strabospot.org/experimental/api/project_public.php?projectid="+projectid+"&state=public");
+			$.get("/experimental/api/project_public.php?projectid="+projectid+"&state=public");
 		}else{
-			console.log("https://strabospot.org/experimental/project_public?projectid="+projectid+"&state=private");
-			$.get("/experimental/project_public?projectid="+projectid+"&state=private");
+			console.log("https://strabospot.org/experimental/api/project_public.php?projectid="+projectid+"&state=private");
+			$.get("/experimental/api/project_public.php?projectid="+projectid+"&state=private");
 		}
 	}
 
-	function doExperimentalProjectDownload(pid, projectname){
+	function doExperimentalProjectDownload(pid, projectname, puuid){
 		var selected = $('#edl-'+pid).find(":selected").val();
 		$('#edl-'+pid).find(":selected").prop('selected', false);
 
 		switch(selected){
 			case "newexperiment":
 				window.location='/experimental/add_experiment?ppk='+pid;
+				break;
+			case "overview":
+				window.open('/experimental/overview_project.php?u='+puuid+'&from=mydata', '_blank');
 				break;
 			case "delete":
 				if (confirm("Are you sure you want to delete project "+projectname+"?") == true) {
@@ -58,7 +61,7 @@ include("includes/mheader.php");
 				window.location='/experimental/edit_project?ppk='+pid;
 				break;
 			case "download":
-				window.location='/experimental/download_project?ppk='+pid;
+				window.location='/experimental/download_project.php?u='+puuid;
 				break;
 			case "json":
 				javascript:alert('Coming Soon...');
@@ -76,7 +79,7 @@ include("includes/mheader.php");
 
 	}
 
-	function doExperimentalExperimentDownload(pkey, experimentname){
+	function doExperimentalExperimentDownload(pkey, experimentname, euuid){
 		var selected = $('#exp-'+pkey).find(":selected").val();
 		$('#exp-'+pkey).find(":selected").prop('selected', false);
 
@@ -87,8 +90,11 @@ include("includes/mheader.php");
 			case "edit":
 				window.location='/experimental/edit_experiment?e='+pkey;
 				break;
+			case "overview":
+				window.open('/experimental/overview_experiment.php?u='+euuid+'&from=mydata', '_blank');
+				break;
 			case "download":
-				window.location='/experimental/download_experiment?e='+pkey;
+				window.location='/experimental/download_experiment.php?u='+euuid;
 				break;
 			case "delete":
 				if (confirm("Are you sure you want to delete experiment "+experimentname+"?") == true) {
@@ -139,10 +145,13 @@ if(count($experimentalrows)==0){
 										<ul class="actions MyDataUL">
 											<li>Last Modified: <?php echo $modified_timestamp?></li>
 											<li>
-												<select class="myDataSelect" id="edl-<?php echo $er->pkey?>" onChange="doExperimentalProjectDownload(<?php echo $er->pkey?>,'<?php echo $projectname?>');">
+												<select class="myDataSelect" id="edl-<?php echo $er->pkey?>" onChange="doExperimentalProjectDownload(<?php echo $er->pkey?>,'<?php echo $projectname?>','<?php echo $er->uuid?>');">
 													<option value=""  style="display:none">Options...</option>
 													<option value="newexperiment">Add Experiment</option>
-													<option value="landing">Landing Page</option>
+													<option value="overview">Overview</option>
+													<?php 
+													///<option value="landing">Landing Page</option> Let's hide this one for now per conversation with Claire 20260729
+													?>
 													<option value="edit">Edit Project</option>
 													<option value="download">Download Project</option>
 													<option value="delete">Delete Project</option>
@@ -160,7 +169,7 @@ if(count($experimentalrows)==0){
 									</div>
 
 								<?php
-								$erows = $db->get_results_prepared("SELECT pkey, id, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, json FROM straboexp.experiment WHERE project_pkey = $1 ORDER BY modified_timestamp DESC", array($pkey));
+								$erows = $db->get_results_prepared("SELECT pkey, uuid, id, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, json FROM straboexp.experiment WHERE project_pkey = $1 ORDER BY modified_timestamp DESC", array($pkey));
 								if(count($erows) > 0){
 								?>
 									<div class="table-wrapper">
@@ -182,6 +191,7 @@ if(count($experimentalrows)==0){
 
 												//gather data
 												$epkey = $erow->pkey;
+												$euuid = $erow->uuid;
 												$experiment_id = $erow->id;
 												$modified_timestamp = $erow->timestamp;
 
@@ -216,10 +226,11 @@ if(count($experimentalrows)==0){
 												<!-- foreach dataset -->
 												<tr>
 													<td>
-														<select class="myDataSelect" id="exp-<?php echo $epkey?>" onChange="doExperimentalExperimentDownload(<?php echo $epkey?>,'<?php echo $experiment_id?>');">
+														<select class="myDataSelect" id="exp-<?php echo $epkey?>" onChange="doExperimentalExperimentDownload(<?php echo $epkey?>,'<?php echo $experiment_id?>','<?php echo $euuid?>');">
 															<option value="" style="display:none;">Options...</option>
 															<option value="view">View</option>
 															<option value="edit">Edit</option>
+															<option value="overview">Overview</option>
 															<option value="download">Download</option>
 															<option value="delete">Delete</option>
 

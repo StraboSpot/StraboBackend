@@ -30,12 +30,11 @@ if ($experiment_pkey <= 0) {
     exit;
 }
 
-// Require login
+// Anonymous or expired sessions proceed with no identity; prepare_connections.php
+// maps that to the no-user sentinel (99999) and the access-control query below
+// (owner OR public project) decides visibility. See softlogincheck.php.
 if ($_SESSION['loggedin'] != "yes") {
-    header('Content-type: application/json');
-    http_response_code(401);
-    echo json_encode(['error' => 'Authentication required']);
-    exit;
+    $_SESSION['userpkey'] = "";
 }
 
 $userpkey = $_SESSION['userpkey'];
@@ -45,12 +44,15 @@ include("prepare_connections.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 
-// Query experiment - must be owned by user, parent project is public, or user is admin
+// Query experiment - must be owned by user, parent project is public, or user is admin.
+// e.userpkey is selected for the spine-overlay lookup (samples-app edits flow
+// back via strabosamples.* spine, keyed on owner).
 if ($is_admin) {
     $row = $db->get_row_prepared("
         SELECT
             e.pkey,
             e.project_pkey,
+            e.userpkey,
             e.id as experiment_id,
             e.uuid,
             e.json,
@@ -64,6 +66,7 @@ if ($is_admin) {
         SELECT
             e.pkey,
             e.project_pkey,
+            e.userpkey,
             e.id as experiment_id,
             e.uuid,
             e.json,
@@ -94,6 +97,12 @@ if (empty($experimentData)) {
     exit;
 }
 
+// Overlay strabosamples spine onto the embedded sample block BEFORE PDF
+// rendering, so the generated PDF reflects any Samples-app spine edits.
+// See experimental/lib/sample_overlay.php for the spine → JSON path mapping.
+require_once(__DIR__ . '/../lib/sample_overlay.php');
+experimental_sample_overlay_apply($experimentData, $db, (int)$row->userpkey);
+
 // Include the PDF generator
 require_once(__DIR__ . '/../lib/ExperimentPDF.php');
 
@@ -101,6 +110,11 @@ require_once(__DIR__ . '/../lib/ExperimentPDF.php');
 try {
     $pdf = new ExperimentPDF();
     $pdf->setExperimentData($experimentData, $row->experiment_id, $row->project_name);
+    // Clickable drill-down into the linked StraboSamples record (keyed on
+    // the experiment OWNER — the spine PK is composite (id, userpkey)).
+    if (!empty($experimentData->sample->strabo_id)) {
+        $pdf->setSamplesLink(experimental_samples_detail_url((int)$row->userpkey, $experimentData->sample->strabo_id));
+    }
     $pdf->generate();
 
     // Generate filename

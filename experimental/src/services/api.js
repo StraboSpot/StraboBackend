@@ -361,4 +361,44 @@ export const bulkLoadService = {
   }
 }
 
+// StraboSamples Link Service - "Link Sample From StraboSamples" picker
+export const sampleLinkService = {
+  // List the user's StraboSamples spine samples (own + collaborated) with
+  // picker flags (has_field_data / has_micro_data / experimental_link_count)
+  // plus viewer_pkey to tell own from collaborated rows.
+  getMySamples: async () => {
+    const response = await fetch('/experimental/api/get_my_samples.php', {
+      credentials: 'include'
+    })
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to fetch StraboSamples list')
+    }
+    return response.json()
+  },
+
+  // Full spine record for prefill after a picker selection. Returns null on
+  // 404 (sample gone or not readable) so callers can degrade gracefully.
+  getSample: async (id, owner = null) => {
+    const params = new URLSearchParams({ id })
+    if (owner) params.set('owner', owner)
+    const response = await fetch(`/experimental/api/get_sample.php?${params.toString()}`, {
+      credentials: 'include'
+    })
+    if (response.status === 404) {
+      return null
+    }
+    if (!response.ok) {
+      if (response.status === 401) {
+        window.location.href = '/login?redirect=' + encodeURIComponent(window.location.pathname)
+      }
+      throw new Error('Failed to fetch sample')
+    }
+    const data = await response.json()
+    return data.sample || null
+  }
+}
+
 export default api

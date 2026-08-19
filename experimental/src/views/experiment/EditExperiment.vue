@@ -10,8 +10,20 @@
     </div>
 
     <template v-else>
-      <!-- Download button (top right, only visible when there's data) -->
-      <div class="flex justify-end px-4 mb-4">
+      <!-- Action buttons (top right) -->
+      <div class="flex justify-end px-4 mb-4 gap-2">
+        <a
+          v-if="experimentUuid"
+          :href="`/experimental/overview_experiment.php?u=${experimentUuid}`"
+          target="_blank"
+          class="download-btn"
+          title="Overview"
+        >
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+          </svg>
+        </a>
         <button
           v-if="hasData"
           @click="handleDownload"
@@ -56,15 +68,27 @@
         @open-section="handleOpenSection"
       />
 
-      <!-- Action Buttons -->
-      <div class="flex justify-center gap-4 mt-8 mb-8">
-        <a href="/my_experimental_data.php" class="btn-secondary">
-          Cancel
-        </a>
-        <button @click="handleSave" :disabled="saving" class="btn-primary">
-          {{ saving ? 'Saving...' : 'Save Changes' }}
-        </button>
-      </div>
+      <!-- Spacer so content isn't hidden behind the fixed save bar -->
+      <div class="h-28"></div>
+
+      <!-- Sticky save bar -->
+      <SaveBar
+        :dirty="isDirty"
+        :saving="saving"
+        save-label="Save Changes"
+        clean-text="All changes saved"
+        @save="handleSave"
+        @cancel="handleCancel"
+      />
+
+      <!-- Unsaved-changes prompt when leaving the page -->
+      <UnsavedChangesDialog
+        :visible="showLeaveDialog"
+        :saving="saving"
+        @save="handleLeaveSave"
+        @discard="handleLeaveDiscard"
+        @stay="handleLeaveStay"
+      />
 
       <!-- Section Modals -->
       <SectionModal
@@ -109,8 +133,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
@@ -119,6 +143,9 @@ import DownloadModal from '@/components/DownloadModal.vue'
 import BulkLoadBar from '@/components/BulkLoadBar.vue'
 import ChooseExperimentModal from '@/components/ChooseExperimentModal.vue'
 import ChooseApparatusModal from '@/components/ChooseApparatusModal.vue'
+import SaveBar from '@/components/SaveBar.vue'
+import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { experimentService, bulkLoadService } from '@/services/api'
 
 const props = defineProps({
@@ -132,6 +159,7 @@ const loading = ref(true)
 const error = ref(null)
 const saving = ref(false)
 const experimentId = ref('')
+const experimentUuid = ref('')
 const projectName = ref('')
 const activeSection = ref(null)
 const showDownloadModal = ref(false)
@@ -149,6 +177,15 @@ const experimentData = ref({
   experiment: {},
   data: {}
 })
+
+// Unsaved-changes tracking: baseline set after load, refreshed after save
+const serializeState = () => JSON.stringify({
+  experiment_id: experimentId.value,
+  data: experimentData.value
+})
+const { isDirty, markSaved, suppressGuards } = useUnsavedChanges(serializeState)
+const showLeaveDialog = ref(false)
+let pendingRoute = null
 
 // Sync experimentId (front page) with experiment.id (Experimental Setup form)
 watch(experimentId, (newVal) => {
@@ -207,6 +244,7 @@ onMounted(async () => {
     }
 
     experimentId.value = experiment.experiment_id || ''
+    experimentUuid.value = experiment.uuid || ''
     projectName.value = experiment.project_name || ''
 
     // Load LAPS data
@@ -226,7 +264,56 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+
+  // Let the experimentId → experiment.id sync watcher settle, then baseline
+  await nextTick()
+  markSaved()
 })
+
+// Guard in-app navigation away from unsaved changes (browser/tab close and
+// full-page links are covered by the composable's beforeunload handler)
+onBeforeRouteLeave((to) => {
+  if (!isDirty.value) return true
+  pendingRoute = to
+  showLeaveDialog.value = true
+  return false
+})
+
+const navigateToHub = () => {
+  suppressGuards()
+  window.location.href = '/my_experimental_data.php'
+}
+
+const handleCancel = () => {
+  if (!isDirty.value) {
+    navigateToHub()
+    return
+  }
+  showLeaveDialog.value = true
+}
+
+const handleLeaveSave = async () => {
+  showLeaveDialog.value = false
+  pendingRoute = null
+  await handleSave()
+}
+
+const handleLeaveDiscard = () => {
+  showLeaveDialog.value = false
+  if (pendingRoute) {
+    const target = pendingRoute
+    pendingRoute = null
+    suppressGuards()
+    router.push(target)
+  } else {
+    navigateToHub()
+  }
+}
+
+const handleLeaveStay = () => {
+  showLeaveDialog.value = false
+  pendingRoute = null
+}
 
 const handleOpenSection = (section) => {
   activeSection.value = section
@@ -325,6 +412,10 @@ const handleSave = async () => {
       experiment_id: experimentId.value,
       data: experimentData.value
     })
+
+    // Saved — disarm the unsaved-changes guards before the redirect
+    markSaved()
+    suppressGuards()
 
     // Show success toast
     toast.add({

@@ -24,9 +24,41 @@ class StraboSpot
 	 public function setuserpkey($userpkey){
 		 $this->userpkey=$userpkey;
 	 }
-	 
+
 	 public function getuserpkey(){
 		 return $this->userpkey;
+	 }
+
+	 /**
+	  * Inject project/dataset context for the strabosamples mirror hook
+	  * inside insertSpot / deleteSingleSpot. Bulk controllers should call
+	  * this before their spot loops so auto-seed collaborators and link
+	  * metadata get populated on first write. Single-spot edit paths can
+	  * skip it — insertSpot falls back to a Cypher lookup.
+	  */
+	 public function setSampleSyncContext($projectStraboId, $datasetStraboId){
+		 $this->currentProjectStraboId = $projectStraboId !== null && $projectStraboId !== '' ? (string)$projectStraboId : null;
+		 $this->currentDatasetStraboId = $datasetStraboId !== null && $datasetStraboId !== '' ? (string)$datasetStraboId : null;
+	 }
+	 public function clearSampleSyncContext(){
+		 $this->currentProjectStraboId = null;
+		 $this->currentDatasetStraboId = null;
+	 }
+
+	 /**
+	  * Re-mirror a moved spot's samples under a new project/dataset context.
+	  * The Neo4j Spot is unchanged by a move, but its owning dataset/project
+	  * changed — so the strabosamples link metadata + auto-seed collaborators
+	  * must be refreshed. Reads the spot from Neo4j and re-runs the sync hook
+	  * with the new context (geometry/lat-lng preserved). Uses the currently
+	  * set userpkey (effectiveOwner on the collaborator path).
+	  */
+	 public function resyncSpotSamples($spotid, $projectStraboId, $datasetStraboId){
+		 require_once __DIR__ . '/lib/sample_sync.php';
+		 return field_sample_sync_resync_spot(
+			 $this->db, $this->neodb, $spotid, $this->userpkey,
+			 $projectStraboId, $datasetStraboId
+		 );
 	 }
 
 	 public function settesting($testing){
@@ -114,6 +146,33 @@ class StraboSpot
 		return $id;
 	}
 
+	/**
+	 * Serialize the check-then-create sections of insertSpot /
+	 * insertDataset / insertProject across concurrent API requests.
+	 *
+	 * Neo4j has no uniqueness constraint on (id, userpkey) — two
+	 * simultaneous uploads of the same entity (e.g. two collaborators
+	 * syncing the same project at once) both miss the existence probe and
+	 * both CREATE, leaving duplicate nodes. The duplicates then poison
+	 * collaboration auth (getDatasetContext resolves an arbitrary copy, so
+	 * collaborators draw spurious 403s) and double every export.
+	 *
+	 * A PostgreSQL advisory lock keyed on (entity class, id, userpkey)
+	 * makes probe+create mutually exclusive. PG releases advisory locks
+	 * automatically when the connection closes, so a fatal mid-request
+	 * cannot leak the lock beyond that request's lifetime. Lock class
+	 * 7501 namespaces these away from any other advisory-lock use.
+	 * hashtext() collisions across distinct keys only cause harmless
+	 * extra serialization, never missed mutual exclusion for the same key.
+	 */
+	private function lockUploadKey($key){
+		$this->db->prepare_query("SELECT pg_advisory_lock(7501, hashtext($1))", array($key));
+	}
+
+	private function unlockUploadKey($key){
+		$this->db->prepare_query("SELECT pg_advisory_unlock(7501, hashtext($1))", array($key));
+	}
+
 	public function getSingleSpot($feature_id){
 
 		$querystring="MATCH (s:Spot {id:$feature_id,userpkey:$this->userpkey}) optional match (s)-[b:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
@@ -197,8 +256,20 @@ class StraboSpot
 		}else{
 			$userpkey = $this->userpkey;
 		}
-		
+
+		// Mirror sample removal into strabosamples.* BEFORE the Neo4j delete
+		// so we can still read json_samples + isSample (samples/field-integration).
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_spot($this->db, $this->neodb, $id, $userpkey);
+
 		$this->neodb->query("MATCH (s:Spot {id: $id,userpkey:$userpkey})-[*0..]->(downstreamNode) DETACH DELETE s, downstreamNode");
+
+		// StraboSearch live-sync (§5.3): drop the spot's item + image index
+		// rows (post-delete — identity is denormalized in the index). NOT
+		// suppressed during bulk uploads: server-only spots deleted mid-loop
+		// must leave the index regardless.
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_spot($this->db, $id, $userpkey);
 		
 		/*
 		$this->neodb->query("match (sp:Spot {id:$id,userpkey:$this->userpkey})-[r:IS_RELATED_TO]-() delete r;");
@@ -620,11 +691,21 @@ class StraboSpot
 
 		}
 
+		// Mutual exclusion for the findSpot-probe → createNode window; see
+		// lockUploadKey. Keyed per (spot id, acting userpkey) — collaborative
+		// controllers swap userpkey to the project owner before this call, so
+		// concurrent owner+collaborator uploads of the same spot contend on
+		// the same key. Released at the single return at the method tail.
+		$spotLockKey = null;
+
 		if(!is_int($thisid)){
 
 			$dbaction = "interror";
 
 		}elseif($thisid != ""){
+
+			$spotLockKey = "spot:" . $thisid . ":" . $this->userpkey;
+			$this->lockUploadKey($spotLockKey);
 
 			$spotid=$this->findSpot($thisid);
 			if($spotid){
@@ -674,6 +755,19 @@ class StraboSpot
 				$hasgeometry="no";
 			}
 
+		}
+
+		// Mirror the computed wkt onto the properties object so the
+		// strabosamples sample-sync helper (field_sample_sync_spot →
+		// samples_field_extract_geom_from_spot) can extract lat/lng. The
+		// sync is invoked AFTER Neo4j writes with $upload->properties as
+		// its input, and the input rarely carries wkt — geometry comes
+		// in as a GeoJSON object. Without this assignment, every new
+		// Field upload would produce strabosamples rows with NULL
+		// lat/lng. The 2026-06-05 fix corrected the migration path but
+		// missed this live path; e2e_workflows.php B.1 surfaced it.
+		if ($hasgeometry === "yes") {
+			$upload->properties->wkt = $wkt;
 		}
 
 		if($properties->origwkt!=""){
@@ -752,6 +846,23 @@ class StraboSpot
 			$upload->properties->self="https://strabospot.org/db/feature/$thisid";
 
 			$upload->properties->id=$thisid;
+
+			// StraboSearch live-sync (§5.3): index the spot BEFORE the sample
+			// mirror below, so the spine sync's own search hook resolves field
+			// links against the freshly indexed spot. No-ops during bulk
+			// suppression (batch sync runs at end-of-dataset).
+			require_once __DIR__ . '/lib/search_sync.php';
+			field_search_sync_touch_spot($this->db, $this->neodb, $thisid, $newspot['userpkey']);
+
+			// Mirror sample writes into strabosamples.* (samples/field-integration).
+			// Helper handles rich/legacy detection, stub-skipping, and idempotent upsert.
+			require_once __DIR__ . '/lib/sample_sync.php';
+			field_sample_sync_spot(
+				$this->db, $this->neodb,
+				$upload->properties, $thisid, $newspot['userpkey'],
+				isset($this->currentProjectStraboId) ? $this->currentProjectStraboId : null,
+				isset($this->currentDatasetStraboId) ? $this->currentDatasetStraboId : null
+			);
 
 			$data=$upload;
 
@@ -850,6 +961,20 @@ class StraboSpot
 					$upload->properties->self="https://strabospot.org/db/feature/$thisid";
 					$data=$upload;
 
+					// StraboSearch live-sync (§5.3): index before the sample
+					// mirror — same ordering rationale as the create branch.
+					require_once __DIR__ . '/lib/search_sync.php';
+					field_search_sync_touch_spot($this->db, $this->neodb, $thisid, $newspot['userpkey']);
+
+					// Mirror sample writes into strabosamples.* (samples/field-integration).
+					require_once __DIR__ . '/lib/sample_sync.php';
+					field_sample_sync_spot(
+						$this->db, $this->neodb,
+						$upload->properties, $thisid, $newspot['userpkey'],
+						isset($this->currentProjectStraboId) ? $this->currentProjectStraboId : null,
+						isset($this->currentDatasetStraboId) ? $this->currentDatasetStraboId : null
+					);
+
 				}
 
 			}//end if featuretype==""
@@ -858,6 +983,10 @@ class StraboSpot
 
 			$data["Error"] = "Feature ID must be integer.";
 
+		}
+
+		if($spotLockKey !== null){
+			$this->unlockUploadKey($spotLockKey);
 		}
 
 		$totalspottime = microtime(true)-$spotstarttime;
@@ -1211,7 +1340,10 @@ class StraboSpot
 			foreach($properties->samples as $samp){
 				unset($thissamp);
 				foreach($samp as $key=>$value){
-					if($key=="id"){$value = (int)$value;}
+					// Sample ids may be strings (UUIDs from the samples system);
+					// only cast the all-digit legacy form. An unconditional (int)
+					// turned UUID ids into 0/truncated garbage on the :Sample node.
+					if($key=="id" && ctype_digit((string)$value)){$value = (int)$value;}
 					if($value!=""){
 						if(is_array($value)){$value=json_encode($value);}
 						$thissamp[$key]=$value;
@@ -1475,6 +1607,19 @@ class StraboSpot
 			$this->createVersion($projectid);
 		}
 
+		// Mirror sample removal into strabosamples.* BEFORE the bulk Neo4j
+		// delete (spots still exist + json_samples readable). The DETACH
+		// DELETE below never reaches Field's per-spot remove hook, so without
+		// this the dataset's mirrored samples would be orphaned.
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_dataset($this->db, $this->neodb, $datasetid, $this->userpkey);
+
+		// StraboSearch live-sync (§5.3): drop the dataset's spots from the
+		// index. Pre-delete — spot ids are only enumerable while the graph
+		// still has them (item_hit carries no dataset id).
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_dataset($this->db, $this->neodb, $datasetid, $this->userpkey);
+
 		//next, delete images;
 		$rows=$this->neodb->query("match (d:Dataset)
 						where d.userpkey=$this->userpkey and d.id=$datasetid
@@ -1562,11 +1707,18 @@ class StraboSpot
 			$feature_id = $thisjson->id;
 		}
 
+		// Mutual exclusion for the getDatasetById-probe → createNode window;
+		// see lockUploadKey. Released at the single return at the method tail.
+		$datasetLockKey = null;
+
 		// Look for existing dataset by ID
 		// New model: userpkey = project owner, created_by = who can edit
 		// Look for dataset where userpkey matches OR created_by matches current user
 		$dataset = null;
 		if($feature_id != ""){
+			$datasetLockKey = "dataset:" . (int)$feature_id . ":" . $this->userpkey;
+			$this->lockUploadKey($datasetLockKey);
+
 			// First try by userpkey (owner's dataset)
 			$dataset = $this->getDatasetById($feature_id);
 		}
@@ -1614,8 +1766,14 @@ class StraboSpot
 			$injson['datecreated'] = $datecreated;
 			$injson['datasettype'] = "app";
 
-			// Preserve existing userpkey and created_by
-			$injson['userpkey'] = $dataset->userpkey ?? $this->userpkey;
+			// Normalize ownership to the acting user. getDatasetById only returns
+			// a node the acting user owns or that lives in a project they own, so
+			// $this->userpkey is always the rightful owner here (the project owner
+			// during a collaborative upload — controllers swap it before calling).
+			// Assigning it heals any node whose userpkey was left as the
+			// collaborator's, which is the state that produced duplicate dataset
+			// nodes. created_by is preserved so the original creator is retained.
+			$injson['userpkey'] = $this->userpkey;
 			if(isset($dataset->created_by)){
 				$injson['created_by'] = $dataset->created_by;
 			}
@@ -1624,8 +1782,11 @@ class StraboSpot
 
 			$injson = json_encode($injson);
 
-			$modified_timestamp = 0;
-
+			// $modified_timestamp holds the EXISTING server timestamp (extracted
+			// from the dataset node above). Only overwrite when the incoming copy
+			// is strictly newer; otherwise leave the server copy untouched and
+			// return it. Do NOT reset $modified_timestamp to 0 here — that made the
+			// comparison always true and overwrote the dataset regardless of age.
 			if($inmodified_timestamp > $modified_timestamp){
 				$self = $this->neodb->updateNode($neoid, $injson, "Dataset");
 				$upload->modified_on_server = true;
@@ -1685,19 +1846,39 @@ class StraboSpot
 
 		}
 
+		if($datasetLockKey !== null){
+			$this->unlockUploadKey($datasetLockKey);
+		}
+
 		return $data;
 
 	}
 
 	/**
-	 * Get a dataset by ID without userpkey filtering.
-	 * Used internally when we need to find a dataset regardless of ownership.
+	 * Get the dataset the current user is authorized to upsert, by ID.
+	 *
+	 * Matches a node in either of two cases:
+	 *   (a) the current user directly owns it (n.userpkey == $this->userpkey), or
+	 *   (b) it is linked to a project the current user owns. During a
+	 *       collaborative upload the controller swaps $this->userpkey to the
+	 *       project owner, so case (b) resolves to the collaborator's dataset
+	 *       sitting in the owner's project — even though that node's userpkey is
+	 *       still the collaborator's.
+	 *
+	 * Case (b) is what stops insertDataset from creating a parallel
+	 * owner-userpkey node on every collaborator upload (the duplicate-datasets
+	 * bug). Scoping case (b) to a project OWNED by the current user keeps the
+	 * non-collaborative file-sharing fix intact: a same-id dataset living in
+	 * some other user's separate project is never matched.
+	 *
+	 * When several nodes match (an already-corrupted project), the node the
+	 * current user directly owns is preferred for a deterministic result.
 	 *
 	 * @param int $feature_id The dataset ID
 	 * @return object|null The dataset data or null if not found
 	 */
 	private function getDatasetById($feature_id){
-		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id RETURN n, id(n) as id;";
+		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id AND (n.userpkey = $this->userpkey OR (:Project {userpkey: $this->userpkey})-[:HAS_DATASET]->(n)) RETURN n, id(n) as id ORDER BY CASE WHEN n.userpkey = $this->userpkey THEN 0 ELSE 1 END;";
 		$records = $this->neodb->query($querystring);
 
 		if(count($records) > 0){
@@ -2561,6 +2742,16 @@ class StraboSpot
 
 	public function deleteDatasetSpots($feature_id){
 
+		// Mirror sample removal BEFORE the bulk Neo4j delete (spots still
+		// exist). Only the DELETE-verb actions reach this; the bulk-upload
+		// path uses per-spot deleteSingleSpot, so re-uploads are unaffected.
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_dataset($this->db, $this->neodb, $feature_id, $this->userpkey);
+
+		// StraboSearch live-sync (§5.3): pre-delete spot enumeration + index drop.
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_dataset($this->db, $this->neodb, $feature_id, $this->userpkey);
+
 		$this->neodb->query("optional match ()-[r:IS_RELATED_TO {datasetid:$feature_id,userpkey:$this->userpkey}]-(), ()-[rr:IS_TAGGED {datasetid:$feature_id,userpkey:$this->userpkey}]-() delete r,rr;");
 		$this->neodb->query("match (d:Dataset {id:$feature_id,userpkey:$this->userpkey})-[dr:HAS_SPOT]->(sp:Spot)
 							optional match (ds:Dataset)-[dsetr:HAS_SPOT]->(sp)
@@ -2661,6 +2852,12 @@ class StraboSpot
 		// Check if image still exists (wasn't deleted)
 		$stillExists = $this->neodb->get_var("MATCH (n:Image) WHERE n.id = $image_id RETURN count(n);");
 
+		if($stillExists == 0){
+			// StraboSearch live-sync (§5.3): direct-ownership delete succeeded.
+			require_once __DIR__ . '/lib/search_sync.php';
+			field_search_sync_remove_image($this->db, $image_id, $this->userpkey);
+		}
+
 		if($stillExists > 0){
 			// Try collaborative deletion - find image and check permissions
 			$imageInfo = $this->neodb->getNode("
@@ -2696,6 +2893,11 @@ class StraboSpot
 					$querystring = "MATCH (n:Image) WHERE n.id = $image_id
 									OPTIONAL MATCH (a:Spot)-[b:HAS_IMAGE]-(n) DELETE b,n;";
 					$this->neodb->query($querystring);
+					// StraboSearch live-sync (§5.3): collaborative delete —
+					// the indexed image_userpkey is the project owner's, not
+					// the session collaborator's.
+					require_once __DIR__ . '/lib/search_sync.php';
+					field_search_sync_remove_image($this->db, $image_id, $imageInfo['ownerPkey']);
 					return true;
 				}
 			}
@@ -2799,6 +3001,11 @@ class StraboSpot
 				//move_uploaded_file ( $imagefiletmp_name , "/srv/app/www/dbimages/$filename" );
 				copy ( $imagefiletmp_name , "/srv/app/www/dbimages/$filename" );
 
+				// StraboSearch live-sync (§5.3): re-index via the parent spot
+				// (image metadata + has_images ride the spot touch).
+				require_once __DIR__ . '/lib/search_sync.php';
+				field_search_sync_touch_image($this->db, $this->neodb, $id, $this->userpkey);
+
 				header("Image updated", true, 201);
 				$data['self']="https://strabospot.org/db/image/$id";
 				$data['id']=$id;
@@ -2840,6 +3047,12 @@ class StraboSpot
 				// Now move image to folder
 				//********************************************************************
 				move_uploaded_file ( $imagefiletmp_name , "/srv/app/www/dbimages/$newfilename" );
+
+				// StraboSearch live-sync (§5.3): index via the parent spot if
+				// one is linked; a spot-less image is unservable (§5.5) and
+				// stays out of the index until its spot upload links it.
+				require_once __DIR__ . '/lib/search_sync.php';
+				field_search_sync_touch_image($this->db, $this->neodb, $id, $this->userpkey);
 
 				header("Image created", true, 201);
 				$data['self']="https://strabospot.org/db/image/$id";
@@ -2916,9 +3129,16 @@ class StraboSpot
 
 	public function getMyProjects(){ //order by p.uploaddate desc
 
-		
+
 		$x=0;
-		
+
+		// Track owner pkey per project index for batch lookup after both loops
+		$ownerPkeys = array();
+		$ownerByIdx = array();
+
+		require_once(__DIR__ . '/services/CollaborationAuth.php');
+		$collabAuth = new CollaborationAuth($this->db, $this->neodb);
+
 		$collabs = $this->getCollaborationProjects();
 		
 /*
@@ -2984,14 +3204,26 @@ stdClass Object
 			}else{
 				$data['projects'][$x]['isReadOnly'] = TRUE;
 			}
-			
+
 			$data['projects'][$x]['isOwner'] = FALSE;
+
+			$ownerPkey = $fd->userpkey;
+			if($ownerPkey !== null && $ownerPkey !== ""){
+				$ownerPkeys[$ownerPkey] = true;
+				$ownerByIdx[$x] = $ownerPkey;
+
+				$status = $collabAuth->getCollaborationStatus((string)$id, (int)$ownerPkey);
+				$data['projects'][$x]['isCollaborativeProject'] = $status['isCollaborative'];
+				if($status['isCollaborative']){
+					$data['projects'][$x]['isCollaborationHalted'] = $status['isHalted'];
+				}
+			}
 
 			$x++;
 
 		}
-		
-		
+
+
 		//get the feature from neo4j
 		$querystring = "MATCH (n:Project) WHERE n.userpkey = $this->userpkey RETURN n order by n.uploaddate desc;";
 		$rows = $this->neodb->get_results($querystring);
@@ -3039,13 +3271,48 @@ stdClass Object
 				$mod = $fd->modified_timestamp;
 
 				$data['projects'][$x]['modified_timestamp'] = (int) $mod;
-				
+
 				$data['projects'][$x]['isOwner'] = TRUE;
 				$data['projects'][$x]['isReadOnly'] = FALSE;
+
+				$ownerPkey = $fd->userpkey;
+				if($ownerPkey !== null && $ownerPkey !== ""){
+					$ownerPkeys[$ownerPkey] = true;
+					$ownerByIdx[$x] = $ownerPkey;
+				}
+
+				$status = $collabAuth->getCollaborationStatus((string)$id, (int)$this->userpkey); //race condition?
+				$data['projects'][$x]['isCollaborativeProject'] = $status['isCollaborative'];
+				if($status['isCollaborative']){
+					$data['projects'][$x]['isCollaborationHalted'] = $status['isHalted'];
+				}
 
 				$x++;
 			}
 
+		}
+
+		// Batch lookup owner names and emails from PostgreSQL
+		if(count($ownerPkeys) > 0){
+			$ownerInfo = array();
+			foreach(array_keys($ownerPkeys) as $pkey){
+				$user = $this->db->get_row_prepared("SELECT pkey, firstname, lastname, email FROM users WHERE pkey = $1", array($pkey));
+				if($user){
+					$ownerInfo[$pkey] = array(
+						'name' => trim($user->firstname . ' ' . $user->lastname),
+						'email' => $user->email,
+						'userpkey' => $user->pkey
+					);
+				}
+			}
+
+			foreach($ownerByIdx as $idx => $pkey){
+				if(isset($ownerInfo[$pkey])){
+					$data['projects'][$idx]['owner_name'] = $ownerInfo[$pkey]['name'];
+					$data['projects'][$idx]['owner_email'] = $ownerInfo[$pkey]['email'];
+					$data['projects'][$idx]['owner_straboUserId'] = $ownerInfo[$pkey]['userpkey'];
+				}
+			}
 		}
 
 		return $data;
@@ -3150,7 +3417,10 @@ stdClass Object
 					}
 				}
 			}
+
 		}
+
+		$data->straboUserId = $u['userpkey'];
 
 		$pgrow = $this->db->get_row("select orcid_token from users where pkey = $this->userpkey");
 
@@ -3271,6 +3541,13 @@ stdClass Object
 		$this->db->query("update project set ispublic = false where user_pkey = $this->userpkey");
 		$this->db->query("update micro_projectmetadata set ispublic = false where userpkey = $this->userpkey");
 		$this->db->query("update users set active = false, deleted = true where pkey = $this->userpkey");
+
+		// StraboSearch live-sync (§5.3): the ACL-relevant flip — every index
+		// row of this user's Field + Micro projects goes private immediately
+		// (public search must not keep serving a deleted account's data).
+		require_once __DIR__ . '/lib/search_sync.php';
+		StraboSearchSync::touchProjectMeta($this->db, 'field', null, $this->userpkey, null, false);
+		StraboSearchSync::touchProjectMeta($this->db, 'micro', null, $this->userpkey, null, false);
 	}
 
 	public function insertProfileImage($post,$file){
@@ -3345,6 +3622,18 @@ stdClass Object
 		if($this->projectExists($project_id)){
 			$this->createVersion($project_id);
 		}
+
+		// Mirror sample removal into strabosamples.* BEFORE the bulk Neo4j
+		// delete so the project's mirrored samples aren't orphaned. Also
+		// covers version-restore (switchVersion deletes via this path before
+		// re-inserting the snapshot's spots).
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_project($this->db, $this->neodb, $project_id, $this->userpkey);
+
+		// StraboSearch live-sync (§5.3): drop the project's whole Field index
+		// slice (spots + images + hosted sample fan-out rows).
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_project($this->db, $project_id, $this->userpkey);
 
 		//then, delete images;
 		$rows=$this->neodb->query("match (p:Project)
@@ -3501,54 +3790,84 @@ public function getSpotName($id){
 			$out_tags = [];
 		}
 
-		$ex_tag_ids = [];
-		foreach($out_tags as $o){
-			$ex_tag_ids[] = $o->id;
-		}
+		// Tag semantics depend on whether anyone besides the owner has ever
+		// held this project. The union below exists to protect tags held by
+		// collaborator devices from being wiped by a stale upload; on a
+		// project with no collaborator rows the uploading device is the only
+		// writer, so its tag list is the authoritative snapshot: deletions,
+		// spot-removals and property edits (color, name) must all stick.
+		// (Restores the pre-collaboration overwrite semantics of JMA 20240913
+		// for solo projects; see docs/GeologicUnits_TagDeletion_Proposal.md.)
+		$tags_present = isset($injson->tags) && is_array($injson->tags);
+		$replace_tags = false;
 
-		foreach($in_tags as $in_tag){
+		$collabcount = (int)$this->db->get_var_prepared(
+			"select count(*) from collaborators where strabo_project_id = $1 and project_owner_user_pkey = $2",
+			array((string)$project_id, $this->userpkey));
 
-			if(in_array($in_tag->id, $ex_tag_ids)){
-				//combine spots
-				foreach($out_tags as $o){
-					if($o->id == $in_tag->id){
-						foreach($in_tag->spots as $sp){
-							if(!in_array($sp, $o->spots)){
-								$o->spots[] = $sp;
-							}
-						}
-					}
-				}
-			}else{
-				$out_tags[] = $in_tag;
+		if($collabcount == 0 && $tags_present){
+			// Solo project: incoming snapshot replaces the server copy.
+			// An explicit empty list means "all tags deleted" and must
+			// clear the stored copy; an ABSENT tags field (partial upload)
+			// keeps the server copy via the union path below.
+			$out_tags = $in_tags;
+			$replace_tags = true;
+		}else{
+
+			$ex_tag_ids = [];
+			foreach($out_tags as $o){
+				$ex_tag_ids[] = $o->id;
 			}
 
+			foreach($in_tags as $in_tag){
+
+				if(in_array($in_tag->id, $ex_tag_ids)){
+					// Tag exists on both sides: the incoming object wins so
+					// property edits (color, name) propagate, matching
+					// combineCollaborativeProject; server-only spot ids are
+					// unioned in so stale devices cannot strip memberships.
+					foreach($out_tags as $key=>$o){
+						if($o->id == $in_tag->id){
+							$merged_spots = isset($in_tag->spots) && is_array($in_tag->spots) ? $in_tag->spots : [];
+							if(isset($o->spots) && is_array($o->spots)){
+								foreach($o->spots as $sp){
+									if(!in_array($sp, $merged_spots)){
+										$merged_spots[] = $sp;
+									}
+								}
+							}
+							$in_tag->spots = $merged_spots;
+							$out_tags[$key] = $in_tag;
+						}
+					}
+				}else{
+					$out_tags[] = $in_tag;
+				}
+
+			}
 		}
 
-		
+
 
 		unset($injson->tags);
 
 		if(count($out_tags) > 0){
 			$injson->tags = $out_tags;
+		}else if($replace_tags){
+			// Deleting the LAST tag must still reach storage: an empty array
+			// json-encodes to "[]", which insertProject writes through
+			// (unset tags would silently keep the stale server json_tags).
+			$injson->tags = [];
 		}
 
 		//tags done, now reports!!
 
-		$in_reports = $injson->reports;
-		$in_report_ids = [];
-		foreach($in_reports as $inr){
-			$in_report_ids[] = $inr->id;
-		}
-
-		$ex_reports = $ex_project->reports;
-		foreach($ex_reports as $exr){
-			if(!in_array($exr->id, $in_report_ids)){
-				$in_reports[] = $exr;
-			}
-		}
-
-		$injson->reports = $in_reports;
+		$injson->reports = $this->mergeReports(
+			$injson->reports,
+			$ex_project->reports,
+			$this->userpkey,
+			$this->userpkey
+		);
 
 		
 
@@ -3632,7 +3951,7 @@ public function getSpotName($id){
 
 
 
-	public function combineCollaborativeProject($injson, $collabuserpkey){ //Accepts JSON and combines incoming project tags with project in server and returns JSON string with combined based on server (only changes tags).
+	public function combineCollaborativeProject($injson, $collabuserpkey, $uploader_pkey = null){ //Accepts JSON and combines incoming project tags with project in server and returns JSON string with combined based on server (only changes tags). $uploader_pkey identifies the actual uploader for per-report ownership checks; falls back to $this->userpkey for callers that haven't swapped it.
 
 		$ex_project = json_decode($injson);
 		
@@ -3687,21 +4006,18 @@ public function getSpotName($id){
 		}
 
 		//tags done, now reports!!
+		// In this function $ex_project is the incoming upload and $injson is the server copy.
 
-		$in_reports = $injson->reports;
-		$in_report_ids = [];
-		foreach($in_reports as $inr){
-			$in_report_ids[] = $inr->id;
-		}
-
-		$ex_reports = $ex_project->reports;
-		foreach($ex_reports as $exr){
-			if(!in_array($exr->id, $in_report_ids)){
-				$in_reports[] = $exr;
-			}
-		}
-
-		$injson->reports = $in_reports;
+		// Controllers swap $this->userpkey to the project owner before calling
+		// insertProject. Use the explicit $uploader_pkey when provided so the
+		// per-report ownership check sees the real uploader, not the owner.
+		$effective_uploader = $uploader_pkey ?? $this->userpkey;
+		$injson->reports = $this->mergeReports(
+			$ex_project->reports,
+			$injson->reports,
+			$effective_uploader,
+			$collabuserpkey
+		);
 
 		
 
@@ -3781,6 +4097,85 @@ public function getSpotName($id){
 
 		return $outproject;
 
+	}
+
+	// Per-report merge with per-section ownership rules:
+	//   - If uploader owns the report (report.straboUserId === uploader pkey),
+	//     the incoming report wins everywhere except comments, which are merged.
+	//   - Otherwise the server's report wins everywhere except comments.
+	// Reports missing straboUserId are treated as owned by the project owner so
+	// legacy data behaves the same as it did before this rule existed (owner
+	// uploads still fully overwrite their own reports; collaborators stay locked
+	// out of them).
+	private function mergeReports($incoming_reports, $server_reports, $uploader_pkey, $project_owner_pkey){
+		if(!is_array($incoming_reports) && !is_object($incoming_reports)){
+			$incoming_reports = [];
+		}
+		if(!is_array($server_reports) && !is_object($server_reports)){
+			$server_reports = [];
+		}
+
+		$server_by_id = [];
+		foreach($server_reports as $sr){
+			$server_by_id[$sr->id] = $sr;
+		}
+
+		$out = [];
+		$seen_ids = [];
+
+		foreach($incoming_reports as $in_r){
+			$seen_ids[$in_r->id] = true;
+			$server_r = isset($server_by_id[$in_r->id]) ? $server_by_id[$in_r->id] : null;
+
+			if($server_r === null){
+				$out[] = $in_r;
+				continue;
+			}
+
+			$report_owner_pkey = $in_r->straboUserId ?? $server_r->straboUserId ?? $project_owner_pkey;
+			$uploader_is_owner = ((int)$uploader_pkey === (int)$report_owner_pkey);
+
+			$base = $uploader_is_owner ? $in_r : $server_r;
+			$base->comments = $this->mergeReportComments(
+				$in_r->comments ?? [],
+				$server_r->comments ?? []
+			);
+
+			$out[] = $base;
+		}
+
+		foreach($server_reports as $sr){
+			if(!isset($seen_ids[$sr->id])){
+				$out[] = $sr;
+			}
+		}
+
+		return $out;
+	}
+
+	private function mergeReportComments($incoming_comments, $server_comments){
+		if(!is_array($incoming_comments) && !is_object($incoming_comments)){
+			$incoming_comments = [];
+		}
+		if(!is_array($server_comments) && !is_object($server_comments)){
+			$server_comments = [];
+		}
+
+		$incoming_ids = [];
+		foreach($incoming_comments as $c){
+			$incoming_ids[$c->id] = true;
+		}
+
+		$out = [];
+		foreach($incoming_comments as $c){
+			$out[] = $c;
+		}
+		foreach($server_comments as $c){
+			if(!isset($incoming_ids[$c->id])){
+				$out[] = $c;
+			}
+		}
+		return $out;
 	}
 
 	/**
@@ -3883,9 +4278,10 @@ public function getSpotName($id){
 	 * @param int|null $thisid Project ID (optional, can be in JSON)
 	 * @param bool $isCollaborativeEdit If true, merge data using combineCollaborativeProject
 	 * @param int|null $ownerPkeyOverride Override the owner pkey (for collaborative edits)
+	 * @param int|null $uploaderPkey The real uploading user's pkey, before any controller-side userpkey swap. Used by the per-report ownership check in combineCollaborativeProject; falls back to $this->userpkey when not provided.
 	 * @return object The created/updated project data
 	 */
-	public function insertProject($injson, $thisid=null, $isCollaborativeEdit=false, $ownerPkeyOverride=null){
+	public function insertProject($injson, $thisid=null, $isCollaborativeEdit=false, $ownerPkeyOverride=null, $uploaderPkey=null){
 
 		if($thisid != ""){
 			$thisid = (int) $thisid;
@@ -3903,7 +4299,7 @@ public function getSpotName($id){
 		// For collaborative edits: merge tags, reports, etc. with existing project
 		// For normal edits: standard combination
 		if($isCollaborativeEdit && $ownerPkeyOverride !== null){
-			$injson = $this->combineCollaborativeProject($injson, $ownerPkeyOverride);
+			$injson = $this->combineCollaborativeProject($injson, $ownerPkeyOverride, $uploaderPkey);
 		}else{
 			$injson = $this->combineNormalProject($injson);
 		}
@@ -3940,12 +4336,25 @@ public function getSpotName($id){
 
 		}
 
+		// Mutual exclusion for the existence-probe → createNode window; see
+		// lockUploadKey. Released at every return below.
+		$projectLockKey = null;
+		$server_json_tags = null;
+
 		if($thisid != ""){
+
+			$projectLockKey = "project:" . $thisid . ":" . $ownerPkey;
+			$this->lockUploadKey($projectLockKey);
 
 			$record=$this->neodb->getRecord("match (p:Project {id:$thisid, userpkey:$ownerPkey}) return id(p) as id,p");
 			if($record){
 				$projectid=$record->get("id");
-				$server_timestamp = $record->get("p")->values()["modified_timestamp"];
+				$node_values = $record->get("p")->values();
+				$server_timestamp = $node_values["modified_timestamp"];
+				// Pre-update json_tags, kept for the search-sync tag diff below.
+				if(isset($node_values["json_tags"])){
+					$server_json_tags = $node_values["json_tags"];
+				}
 
 
 				$dbaction="update";
@@ -3959,6 +4368,9 @@ public function getSpotName($id){
 			$collabAuth = new CollaborationAuth($this->db, $this->neodb);
 			$canUpload = $collabAuth->canUploadProjectAsOwner($thisid, $this->userpkey);
 			if(!$canUpload['allowed']){
+				if($projectLockKey !== null){
+					$this->unlockUploadKey($projectLockKey);
+				}
 				$result = new stdClass();
 				$result->Error = $canUpload['reason'];
 				return $result;
@@ -4106,18 +4518,25 @@ public function getSpotName($id){
 
 		if($dbaction=="new"){
 
-			$this->logToFile("New Project");
+			//$this->logToFile("New Project");
 
 			//********************************************************************
 			// create new project node, and then add other nodes
 			//********************************************************************
 			$projectid = $this->neodb->createNode($newprojectjson,"Project");
 			$userid = $this->neodb->get_var("match (a:User) where a.userpkey=".$ownerPkey." return id(a)");
-			//$this->neodb->addRelationship($userid, $projectid, "HAS_PROJECT","User","Project");
+			// (u)-[:HAS_PROJECT]->(p) is the authoritative ownership edge —
+			// StraboSearch extraction and every anchored walk require it;
+			// without it the project is invisible to search. (Disabled
+			// 2025-12-06 during collab work; projects created since lack
+			// the edge — heal_ownerless_projects.php repairs them.)
+			if($userid !== null && $userid !== ""){
+				$this->neodb->addRelationship($userid, $projectid, "HAS_PROJECT","User","Project");
+			}
 
 		}elseif($dbaction=="update"){
 
-			$this->logToFile("Update Project");
+			//$this->logToFile("Update Project");
 
 			//********************************************************************
 			// existing project was found, update here
@@ -4135,6 +4554,13 @@ public function getSpotName($id){
 			//$this->neodb->query("match (a:Project)-[rt]-(t:Tag) where id(a)=$projectid and a.userpkey=$this->userpkey delete rt,t;");
 
 			$this->neodb->updateNode($projectid,$newprojectjson,"Project");
+
+			// Self-heal the ownership edge (CREATE UNIQUE = no-op when
+			// present): projects created 2025-12→2026-08 lack it.
+			$userid = $this->neodb->get_var("match (a:User) where a.userpkey=".$ownerPkey." return id(a)");
+			if($userid !== null && $userid !== ""){
+				$this->neodb->addRelationship($userid, $projectid, "HAS_PROJECT","User","Project");
+			}
 
 			$totalprojecttime = microtime(true)-$projectstarttime;
 			//$this->logToFile("Update project took: ".$totalprojecttime." secs","Project Time");
@@ -4182,7 +4608,32 @@ public function getSpotName($id){
 			//$this->buildProjectRelationships($thisid);
 		}
 
+		// Ensure Postgres has a project row mirroring Neo4j. This was previously only
+		// written from buildPgDataset, which never fires for empty projects (no spots
+		// -> no centroid -> guarded query short-circuits), leaving the collaboration
+		// flow unable to find the project. Runs on every project POST so updates
+		// flow through to PG too.
+		$this->buildPgProject($thisid, $ownerPkey);
+
 		$this->setProjectCenter($thisid, $ownerPkey);
+
+		// StraboSearch live-sync (§5.3): refresh the denormalized
+		// project_name / project_ispublic on this project's index slice from
+		// the PG row buildPgProject just rebuilt. Cheap UPDATE; the
+		// documented Field-rename searchtext staleness applies.
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_project_meta($this->db, $thisid, $ownerPkey);
+
+		// json_tags amendment: a PROJECT-ONLY upload (the web app's surgical
+		// save) can change tag assignments with no spot or dataset write
+		// following, so a changed json_tags must propagate into the
+		// tag-derived index columns here. Diff-gated inside the hook; the
+		// common tag-unchanged autosave costs one string compare.
+		if($dbaction == "update" && isset($newproject['json_tags'])
+				&& (string)$newproject['json_tags'] !== (string)$server_json_tags){
+			field_search_sync_project_tags($this->db, $this->neodb, $thisid, $ownerPkey,
+				$server_json_tags, $newproject['json_tags']);
+		}
 
 		$totalprojecttime = microtime(true)-$projectstarttime;
 		//$this->logToFile("buildprojectrelationships took: ".$totalprojecttime." secs","Project Time");
@@ -4190,6 +4641,10 @@ public function getSpotName($id){
 		$upload->id=$thisid;
 		$upload->self="https://strabospot.org/db/project/$thisid";
 		$data=$upload;
+
+		if($projectLockKey !== null){
+			$this->unlockUploadKey($projectLockKey);
+		}
 
 		return $data;
 
@@ -4355,6 +4810,25 @@ public function getSpotName($id){
 			$data->isReadOnly = $readonly;
 			$data->isOwner = $isowner;
 
+			// Attach project owner name/email
+			$ownerPkey = $properties['userpkey'];
+			if($ownerPkey !== null && $ownerPkey !== ""){
+				$user = $this->db->get_row_prepared("SELECT firstname, lastname, email FROM users WHERE pkey = $1", array($ownerPkey));
+				if($user){
+					$data->owner_name = trim($user->firstname . ' ' . $user->lastname);
+					$data->owner_email = $user->email;
+					$data->owner_straboUserId = $ownerPkey;
+				}
+
+				require_once(__DIR__ . '/services/CollaborationAuth.php');
+				$collabAuth = new CollaborationAuth($this->db, $this->neodb);
+				$status = $collabAuth->getCollaborationStatus((string)$feature_id, (int)$ownerPkey);
+				$data->isCollaborativeProject = $status['isCollaborative'];
+				if($status['isCollaborative']){
+					$data->isCollaborationHalted = $status['isHalted'];
+				}
+			}
+
 		}else{
 			//Error, sample not found
 			$data->Error = "Project $feature_id not found.";
@@ -4486,19 +4960,43 @@ public function getSpotName($id){
 
 		if($count > 0){
 
-			$x = 0;
+			// Collect unique owner pkeys for batch lookup
+			$ownerPkeys = array();
+			$datasetRows = array();
 
 			foreach($featuredata as $fd){
-
 				$fd = $fd->get("d")->values();
+				$datasetRows[] = $fd;
+				$ownerPkey = $fd['created_by'] ?? $fd['userpkey'];
+				if($ownerPkey !== null){
+					$ownerPkeys[$ownerPkey] = true;
+				}
+			}
+
+			// Batch lookup owner names and emails from PostgreSQL
+			$ownerInfo = array();
+			foreach(array_keys($ownerPkeys) as $pkey){
+				$user = $this->db->get_row_prepared("SELECT firstname, lastname, email FROM users WHERE pkey = $1", array($pkey));
+				if($user){
+					$ownerInfo[$pkey] = array(
+						'name' => trim($user->firstname . ' ' . $user->lastname),
+						'email' => $user->email,
+						'userpkey' => $pkey
+					);
+				}
+			}
+
+			$x = 0;
+
+			foreach($datasetRows as $fd){
 
 				// Determine readonly status using new collaboration model
 				$readonly = true;
+				$datasetOwnerPkey = $fd['created_by'] ?? $fd['userpkey'];
 
 				if($isOwner){
 					// Owner can always edit their own datasets (created_by matches or no created_by)
-					$datasetCreatedBy = $fd['created_by'] ?? $fd['userpkey'];
-					if($datasetCreatedBy == $originalUserpkey || $isHalted){
+					if($datasetOwnerPkey == $originalUserpkey || $isHalted){
 						// Owner's dataset or halted project
 						$readonly = false;
 					}
@@ -4513,6 +5011,13 @@ public function getSpotName($id){
 
 				$data['datasets'][$x] = $this->singleDatasetJSON($fd);
 				$data['datasets'][$x]['isReadOnly'] = $readonly;
+
+				// Add dataset owner info
+				if($datasetOwnerPkey !== null && isset($ownerInfo[$datasetOwnerPkey])){
+					$data['datasets'][$x]['owner_name'] = $ownerInfo[$datasetOwnerPkey]['name'];
+					$data['datasets'][$x]['owner_email'] = $ownerInfo[$datasetOwnerPkey]['email'];
+					$data['datasets'][$x]['owner_straboUserId'] = $ownerInfo[$datasetOwnerPkey]['userpkey'];
+				}
 
 				$x++;
 			}
@@ -4654,7 +5159,20 @@ public function getSpotName($id){
 		}
 
 		// Not an orphaned dataset - check if it already exists somewhere
-		if($this->findDataset($datasetid)){
+		// Check with current user first, then with effectiveOwner (collaborative case
+		// where dataset userpkey was reassigned to the project owner)
+		$datasetFound = $this->findDataset($datasetid);
+		if(!$datasetFound && $effectiveOwner != $this->userpkey){
+			$originalPkey = $this->userpkey;
+			$this->setuserpkey($effectiveOwner);
+			$datasetFound = $this->findDataset($datasetid);
+			if(!$datasetFound){
+				$this->setuserpkey($originalPkey);
+			}
+			// If found, keep effectiveOwner set so downstream calls work correctly
+		}
+
+		if($datasetFound){
 
 			if(!$this->datasetExistsInOtherProject($datasetid, $feature_id)){
 
@@ -4668,20 +5186,24 @@ public function getSpotName($id){
 
 					header("Dataset added to project", true, 201);
 					$data['message']="Dataset $datasetid added to project $feature_id.";
-					return $data;
 				}else{
-					// Dataset already exists in this project
-					header("Dataset $datasetid already exists in project $feature_id.", true, 200);
-					$data["Error"] = "Dataset $datasetid already exists in project $feature_id.";
-					return $data;
+					// Dataset already exists in this project - return same success for idempotency
+					header("Dataset added to project", true, 201);
+					$data['message']="Dataset $datasetid added to project $feature_id.";
 				}
 
 			}else{
 				// Dataset already exists in another project
 				header("Dataset $datasetid already exists in another project.", true, 200);
 				$data["Error"] = "Dataset $datasetid already exists in another project.";
-				return $data;
 			}
+
+			// Restore original userpkey if it was swapped
+			if(isset($originalPkey)){
+				$this->setuserpkey($originalPkey);
+			}
+
+			return $data;
 
 		}else{
 			// Dataset not found
@@ -4692,6 +5214,16 @@ public function getSpotName($id){
 	}
 
 	public function deleteProjectDatasets($project_id){
+
+		// Mirror sample removal BEFORE the bulk Neo4j delete (spots still
+		// exist). Without this the project's datasets' mirrored samples orphan.
+		require_once __DIR__ . '/lib/sample_sync.php';
+		field_sample_sync_remove_project($this->db, $this->neodb, $project_id, $this->userpkey);
+
+		// StraboSearch live-sync (§5.3): drop the project's whole Field index
+		// slice (spots + images + hosted sample fan-out rows).
+		require_once __DIR__ . '/lib/search_sync.php';
+		field_search_sync_remove_project($this->db, $project_id, $this->userpkey);
 
 		//need to delete dataset and all spots beneath it too
 		$this->neodb->query("optional match ()-[r:IS_RELATED_TO {projectid:$project_id,userpkey:$this->userpkey}]-(), ()-[rr:IS_TAGGED {projectid:$project_id,userpkey:$this->userpkey}]-() delete r,rr;");
@@ -4997,6 +5529,15 @@ public function getSpotName($id){
 
 					$this->addDatasetToProject($projectid,$datasetid,"HAS_DATASET");
 
+					$this->setSampleSyncContext($projectid, $datasetid);
+
+					// StraboSearch live-sync (§5.3.4): suppress per-spot
+					// touches during the restore loop; one batch sync per
+					// dataset below (also covers the inline Image createNode
+					// above, which bypasses insertImage).
+					require_once __DIR__ . '/lib/search_sync.php';
+					field_search_sync_suppress();
+
 					//loop over spots and put in images first, then spot
 					foreach($spots as $spot){
 
@@ -5034,10 +5575,17 @@ public function getSpotName($id){
 
 					}
 
+					$this->clearSampleSyncContext();
+
 					//$this->buildDatasetRelationships($datasetid); 20251205
 					$this->setDatasetCenter($datasetid);
 					$this->setProjectCenter($projectid);
 					$this->buildPgDataset($datasetid);
+
+					// StraboSearch live-sync (§5.3.4): end-of-dataset batch
+					// sync, mirroring the buildPgDataset precedent.
+					field_search_sync_resume();
+					field_search_sync_dataset($this->db, $this->neodb, $datasetid, $this->userpkey);
 				}
 
 			}else{
@@ -5245,6 +5793,93 @@ public function getSpotName($id){
 
 	}
 
+	public function buildPgProject($projectid, $ownerPkey = null){
+		// Insert/update the Postgres `project` row from current Neo4j state.
+		// Runs on every project upload (including empty projects with no spots),
+		// which is what the collaboration flow needs to find the project in PG.
+		// $ownerPkey: pass the project owner's pkey when collaborating; defaults to current user.
+
+		$thisuserpkey = $ownerPkey ?? $this->userpkey;
+
+		$userrow = $this->db->get_row("select * from users where pkey = $thisuserpkey");
+		if(!$userrow){
+			return;
+		}
+		$firstname = pg_escape_string($userrow->firstname);
+		$lastname  = pg_escape_string($userrow->lastname);
+
+		$neo_project = (object)$this->neodb->getNode("match (p:Project {id:$projectid, userpkey:$thisuserpkey}) return p limit 1");
+		if(empty($neo_project->id)){
+			return;
+		}
+
+		$strabo_project_id = $neo_project->id;
+		$project_name = pg_escape_string($neo_project->desc_project_name);
+		$notes = pg_escape_string($neo_project->desc_notes);
+
+		$ispublic = "false";
+		$prefs = $neo_project->preferences;
+		if($prefs != ""){
+			$prefs = json_decode($prefs);
+			if($prefs->public){
+				$ispublic = "true";
+			}
+		}
+		if($neo_project->public == 1){
+			$ispublic = "true";
+		}
+
+		$projectkeywords = "";
+		$projectkeywords .= " ".$project_name;
+		$projectkeywords .= " ".$notes;
+		$projectkeywords .= " ".$firstname;
+		$projectkeywords .= " ".$lastname;
+
+		if($projectkeywords!=""){
+			$projectvectors = "to_tsvector('$projectkeywords')";
+		}else{
+			$projectvectors = "null";
+		}
+
+		$pg_project = $this->db->get_row("select project_pkey from project where strabo_project_id='$strabo_project_id' and user_pkey = $thisuserpkey limit 1");
+
+		if($pg_project && $pg_project->project_pkey != ""){
+			// Refresh name, public flag, notes, vectors. Location is owned by
+			// setProjectCenter — leave it alone so we don't wipe a good centroid
+			// from a re-upload that has no spots.
+			$this->db->query("update project set
+									project_name = '$project_name',
+									ispublic = $ispublic,
+									notes = '$notes',
+									keywords = $projectvectors,
+									last_modified = now()
+								where strabo_project_id = '$strabo_project_id'
+								  and user_pkey = $thisuserpkey");
+		}else{
+			$project_pkey = $this->db->get_var("select nextval('project_project_pkey_seq')");
+
+			$project_location = trim($neo_project->centroid);
+			if($project_location!=""){
+				$project_location = "ST_GeomFromText('$project_location')";
+			}else{
+				$project_location = "null";
+			}
+
+			$this->db->query("insert into project values
+									(	$project_pkey,
+										$thisuserpkey,
+										'$project_name',
+										'$strabo_project_id',
+										$ispublic,
+										$project_location,
+										now(),
+										'$notes',
+										$projectvectors
+									)
+								");
+		}
+	}
+
 	public function buildPgDataset($datasetid, $ownerPkey = null){
 		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
 
@@ -5278,63 +5913,14 @@ public function getSpotName($id){
 		}
 
 		if($projectid){
-			//first, check postgres to see if project for this dataset exists
-			$pg_project = $this->db->get_row("select * from project where strabo_project_id='$projectid' and user_pkey = $thisuserpkey limit 1");
+			// Make sure the PG project row exists & is current before we hang a
+			// dataset off it. buildPgProject handles both insert and update paths.
+			$this->buildPgProject($projectid, $thisuserpkey);
+
+			$pg_project = $this->db->get_row("select project_pkey, project_name from project where strabo_project_id='$projectid' and user_pkey = $thisuserpkey limit 1");
 
 			$project_pkey = $pg_project->project_pkey;
 			$project_name = $pg_project->project_name;
-
-			//Need to update project here if already exists...
-			if($project_pkey == ""){
-
-				//project doesn't exist, we need to put it in.
-				$project_pkey = $this->db->get_var("select nextval('project_project_pkey_seq')");
-				$project_name = pg_escape_string($neo_project->desc_project_name);
-				$strabo_project_id = $neo_project->id;
-				$project_location = trim($neo_project->centroid);
-
-				if($neo_project->public == 1){
-					$ispublic = "true";
-				}else{
-					$ispublic = "false";
-				}
-
-				$notes = pg_escape_string($neo_project->desc_notes) ;
-
-				if($project_location!=""){
-					$project_location = "ST_GeomFromText('$project_location')";
-				}else{
-					$project_location = "null";
-				}
-
-				$projectkeywords = "";
-				$projectkeywords .= " ".$project_name;
-				$projectkeywords .= " ".$notes;
-				$projectkeywords .= " ".$firstname;
-				$projectkeywords .= " ".$lastname;
-
-				if($projectkeywords!=""){
-					$projectvectors = "to_tsvector('$projectkeywords')";
-				}else{
-					$projectvectors = "null";
-				}
-
-				//Add vectors?
-				$this->db->query("insert into project values
-										(	$project_pkey,
-											$thisuserpkey,
-											'$project_name',
-											'$strabo_project_id',
-											$ispublic,
-											$project_location,
-											now(),
-											'$notes',
-											$projectvectors
-										)
-									");
-
-				
-			}
 
 			//OK, now we have project and project_pkey... let's move on to dataset
 			//first, delete existing.
@@ -5578,8 +6164,8 @@ public function getSpotName($id){
 							$image_type = $image['image_type'];
 							$strabo_image_id = $image['id'];
 
-							$image_title = $image['title'];
-							$image_caption = $image['caption'];
+							$image_title = pg_escape_string($image['title']);
+							$image_caption = pg_escape_string($image['caption']);
 
 							//Also put in image title and caption here 20241105
 
@@ -5734,6 +6320,271 @@ public function getSpotName($id){
 		}
 
 		return $out;
+	}
+
+	/**********************************************************************
+	*  StraboTools analyses
+	*
+	*  StraboTools analyses are fully separate from the StraboField
+	*  workflow by design (Jason, 2026-07-07): no :Image nodes, no
+	*  dbimages/ storage, no HAS_IMAGE links, invisible to StraboField
+	*  endpoints. Analyses are flat per-user records with no graph
+	*  relationships, so they live entirely in PostgreSQL: one
+	*  strabotools_analyses row per (client record UUID, userpkey).
+	*  Files live in /srv/app/www/straboToolsImages/ named by the
+	*  strabotools_image_seq sequence. Queryable scalars are individual
+	*  columns; the full client payload (including arrays like
+	*  attitudeRowMajor) is kept losslessly in the analysis jsonb column.
+	*/
+
+	private function toolsUuidValid($id){
+		if(!is_string($id)){ return false; }
+		return preg_match('/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/', $id) === 1;
+	}
+
+	public function insertToolsAnalysis($post,$file){
+
+		$data = array();
+
+		$imagefilename = $file['name'];
+		$imagefiletmp_name = $file['tmp_name'];
+
+		$error="";
+
+		if($imagefiletmp_name==""){
+			$error.="No image file provided. ";
+		}
+
+		$analysisraw = isset($post['analysis']) ? $post['analysis'] : "";
+		$analysis = json_decode($analysisraw, true);
+
+		if(!is_array($analysis)){
+			$error.="Field 'analysis' must be a JSON object. ";
+		}
+
+		$id = (is_array($analysis) && isset($analysis['id'])) ? $analysis['id'] : "";
+		if(!$this->toolsUuidValid($id)){
+			$error.="analysis.id must be a UUID. ";
+		}
+
+		if($error!=""){
+			$data["Error"] = $error;
+			return $data;
+		}
+
+		$imagesha1 = sha1_file($imagefiletmp_name);
+		$modified_timestamp = (int)round(microtime(true)*1000);
+
+		//searchable scalar projections out of the analysis payload
+		//(absent/invalid values stay null -> SQL NULL via pg_execute)
+		$scalars = array(
+			'spot_name' => null, 'notes' => null, 'capture_date' => null,
+			'saved_date' => null, 'app_version' => null, 'device_model' => null,
+			'schema_version' => null, 'azimuth_offset_degrees' => null, 'attitude_gap_seconds' => null,
+			'latitude' => null, 'longitude' => null, 'horizontal_error_meters' => null,
+			'vertical_error_meters' => null, 'elevation_meters' => null,
+			'fabric_azimuth_degrees' => null, 'fabric_rake_degrees' => null,
+			'axial_ratio' => null, 'trend_degrees' => null, 'plunge_degrees' => null,
+			'color_index_percent' => null, 'mode_phase_count' => null,
+			'color_index_adaptive' => null,
+		);
+
+		foreach(array('spotName'=>'spot_name','notes'=>'notes','captureDate'=>'capture_date','savedDate'=>'saved_date','appVersion'=>'app_version','deviceModel'=>'device_model') as $key=>$col){
+			if(isset($analysis[$key]) && is_string($analysis[$key]) && $analysis[$key]!==""){
+				$scalars[$col] = $analysis[$key];
+			}
+		}
+
+		foreach(array('schemaVersion'=>'schema_version','azimuthOffsetDegrees'=>'azimuth_offset_degrees','attitudeGapSeconds'=>'attitude_gap_seconds') as $key=>$col){
+			if(isset($analysis[$key]) && is_numeric($analysis[$key])){
+				$scalars[$col] = $analysis[$key]+0;
+			}
+		}
+
+		if(isset($analysis['position']) && is_array($analysis['position'])){
+			foreach(array('latitude'=>'latitude','longitude'=>'longitude','horizontalErrorMeters'=>'horizontal_error_meters','verticalErrorMeters'=>'vertical_error_meters','elevationMeters'=>'elevation_meters') as $key=>$col){
+				if(isset($analysis['position'][$key]) && is_numeric($analysis['position'][$key])){
+					$scalars[$col] = $analysis['position'][$key]+0;
+				}
+			}
+		}
+
+		if(isset($analysis['measurements']) && is_array($analysis['measurements'])){
+			foreach(array('fabricAzimuthDegrees'=>'fabric_azimuth_degrees','fabricRakeDegrees'=>'fabric_rake_degrees','axialRatio'=>'axial_ratio','trendDegrees'=>'trend_degrees','plungeDegrees'=>'plunge_degrees','colorIndexPercent'=>'color_index_percent','modePhaseCount'=>'mode_phase_count') as $key=>$col){
+				if(isset($analysis['measurements'][$key]) && is_numeric($analysis['measurements'][$key])){
+					$scalars[$col] = $analysis['measurements'][$key]+0;
+				}
+			}
+			if(isset($analysis['measurements']['colorIndexAdaptive']) && is_bool($analysis['measurements']['colorIndexAdaptive'])){
+				//pg_execute would send PHP false as '', so pass PG boolean literals
+				$scalars['color_index_adaptive'] = $analysis['measurements']['colorIndexAdaptive'] ? 't' : 'f';
+			}
+		}
+
+		//full lossless payload (arrays like attitudeRowMajor/modePercentages live here)
+		$analysisjson = json_encode($analysis, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+
+		//********************************************************************
+		// check to see if analysis already exists (idempotent by client UUID)
+		//********************************************************************
+		$existing = $this->db->get_row_prepared("SELECT filename, created_timestamp FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($id, (int)$this->userpkey));
+
+		if($existing !== null){
+			//analysis exists: update in place, keep filename + created_timestamp
+			$filename = $existing->filename;
+			$created_timestamp = (int)$existing->created_timestamp;
+		}else{
+			//new analysis
+			$filename = (string)$this->db->get_var("SELECT nextval('strabotools_image_seq');");
+			$created_timestamp = $modified_timestamp;
+		}
+
+		//single upsert; ON CONFLICT keeps the stored filename/created_timestamp/created_by
+		//even if a concurrent upload of the same UUID slipped in after the SELECT above
+		$this->db->prepare_query("
+			INSERT INTO strabotools_analyses (
+				id, userpkey, created_by, filename, origfilename, imagesha1,
+				created_timestamp, modified_timestamp,
+				spot_name, notes, capture_date, saved_date, app_version, device_model,
+				schema_version, azimuth_offset_degrees, attitude_gap_seconds,
+				latitude, longitude, horizontal_error_meters, vertical_error_meters, elevation_meters,
+				fabric_azimuth_degrees, fabric_rake_degrees, axial_ratio, trend_degrees,
+				plunge_degrees, color_index_percent, mode_phase_count, color_index_adaptive,
+				analysis
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8,
+				$9, $10, $11, $12, $13, $14,
+				$15, $16, $17,
+				$18, $19, $20, $21, $22,
+				$23, $24, $25, $26,
+				$27, $28, $29, $30,
+				$31::jsonb
+			)
+			ON CONFLICT (id, userpkey) DO UPDATE SET
+				origfilename = EXCLUDED.origfilename,
+				imagesha1 = EXCLUDED.imagesha1,
+				modified_timestamp = EXCLUDED.modified_timestamp,
+				spot_name = EXCLUDED.spot_name,
+				notes = EXCLUDED.notes,
+				capture_date = EXCLUDED.capture_date,
+				saved_date = EXCLUDED.saved_date,
+				app_version = EXCLUDED.app_version,
+				device_model = EXCLUDED.device_model,
+				schema_version = EXCLUDED.schema_version,
+				azimuth_offset_degrees = EXCLUDED.azimuth_offset_degrees,
+				attitude_gap_seconds = EXCLUDED.attitude_gap_seconds,
+				latitude = EXCLUDED.latitude,
+				longitude = EXCLUDED.longitude,
+				horizontal_error_meters = EXCLUDED.horizontal_error_meters,
+				vertical_error_meters = EXCLUDED.vertical_error_meters,
+				elevation_meters = EXCLUDED.elevation_meters,
+				fabric_azimuth_degrees = EXCLUDED.fabric_azimuth_degrees,
+				fabric_rake_degrees = EXCLUDED.fabric_rake_degrees,
+				axial_ratio = EXCLUDED.axial_ratio,
+				trend_degrees = EXCLUDED.trend_degrees,
+				plunge_degrees = EXCLUDED.plunge_degrees,
+				color_index_percent = EXCLUDED.color_index_percent,
+				mode_phase_count = EXCLUDED.mode_phase_count,
+				color_index_adaptive = EXCLUDED.color_index_adaptive,
+				analysis = EXCLUDED.analysis
+		", array(
+			$id, (int)$this->userpkey, (int)$this->userpkey, $filename, (string)$imagefilename, (string)$imagesha1,
+			$created_timestamp, $modified_timestamp,
+			$scalars['spot_name'], $scalars['notes'], $scalars['capture_date'], $scalars['saved_date'], $scalars['app_version'], $scalars['device_model'],
+			$scalars['schema_version'], $scalars['azimuth_offset_degrees'], $scalars['attitude_gap_seconds'],
+			$scalars['latitude'], $scalars['longitude'], $scalars['horizontal_error_meters'], $scalars['vertical_error_meters'], $scalars['elevation_meters'],
+			$scalars['fabric_azimuth_degrees'], $scalars['fabric_rake_degrees'], $scalars['axial_ratio'], $scalars['trend_degrees'],
+			$scalars['plunge_degrees'], $scalars['color_index_percent'], $scalars['mode_phase_count'], $scalars['color_index_adaptive'],
+			$analysisjson
+		));
+
+		copy ( $imagefiletmp_name , "/srv/app/www/straboToolsImages/$filename" );
+
+		$data['self']="https://strabospot.org/db/strabotools/$id";
+		$data['id']=$id;
+		$data['filename']=$filename;
+
+		return $data;
+
+	}
+
+	public function getToolsAnalysisInfo($analysis_id){
+
+		$data = new stdClass();
+		$data->count = 0;
+
+		if(!$this->toolsUuidValid($analysis_id)){
+			return $data;
+		}
+
+		$row = $this->db->get_row_prepared("SELECT filename, origfilename, created_timestamp, modified_timestamp, analysis FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($analysis_id, (int)$this->userpkey));
+
+		if($row === null){
+			return $data;
+		}
+
+		$data->count = 1;
+		$data->id = $analysis_id;
+		$data->filename = $row->filename;
+		$data->origfilename = $row->origfilename !== null ? $row->origfilename : "";
+		$extension = $data->origfilename != "" ? strtolower(pathinfo($data->origfilename, PATHINFO_EXTENSION)) : "";
+		if($extension=="" || $extension=="jpg"){ $extension = "jpeg"; }
+		$data->extension = $extension;
+		//bigints come back from PG as strings; the API contract serves numbers
+		$data->modified_timestamp = (int)$row->modified_timestamp;
+		$data->created_timestamp = (int)$row->created_timestamp;
+		$data->analysis = json_decode($row->analysis);
+
+		return $data;
+
+	}
+
+	public function getMyToolsAnalyses(){
+
+		$data['analyses'] = array();
+
+		$rows = $this->db->get_results_prepared("SELECT id, filename, created_timestamp, modified_timestamp, analysis FROM strabotools_analyses WHERE userpkey = $1 ORDER BY modified_timestamp DESC", array((int)$this->userpkey));
+
+		foreach((array)$rows as $row){
+
+			$entry = array();
+			$entry['id'] = $row->id;
+			$entry['self'] = "https://strabospot.org/db/strabotools/".$entry['id'];
+			$entry['filename'] = $row->filename;
+			$entry['modified_timestamp'] = (int)$row->modified_timestamp;
+			$entry['created_timestamp'] = (int)$row->created_timestamp;
+			$entry['analysis'] = json_decode($row->analysis);
+
+			$data['analyses'][] = $entry;
+
+		}
+
+		return $data;
+
+	}
+
+	public function deleteToolsAnalysis($analysis_id){
+
+		if(!$this->toolsUuidValid($analysis_id)){
+			return false;
+		}
+
+		$row = $this->db->get_row_prepared("SELECT filename FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($analysis_id, (int)$this->userpkey));
+
+		if($row === null){
+			return false;
+		}
+
+		$filename = $row->filename !== null ? $row->filename : "";
+
+		$this->db->prepare_query("DELETE FROM strabotools_analyses WHERE id = $1 AND userpkey = $2", array($analysis_id, (int)$this->userpkey));
+
+		if($filename!="" && file_exists("/srv/app/www/straboToolsImages/$filename")){
+			unlink("/srv/app/www/straboToolsImages/$filename");
+		}
+
+		return true;
+
 	}
 
 }

@@ -43,7 +43,8 @@ class CollaborationAuth {
             // User is the owner
             $context->effectiveOwner = $userpkey;
             $context->permissionLevel = 'owner';
-            $context->isHalted = $this->isCollaborationHalted($projectId, $userpkey);
+            $context->hasCollaborators = $this->hasAnyCollaborators($projectId, $userpkey);
+            $context->isHalted = $context->hasCollaborators && $this->isCollaborationHalted($projectId, $userpkey);
             return $context;
         }
 
@@ -60,6 +61,7 @@ class CollaborationAuth {
         if ($collab) {
             $context->effectiveOwner = (int)$collab->project_owner_user_pkey;
             $context->collaborationId = (int)$collab->pkey;
+            $context->hasCollaborators = true;
 
             // Check if this specific collaborator is disabled (halted)
             $isDisabled = ($collab->disabled === true || $collab->disabled === 't');
@@ -92,6 +94,7 @@ class CollaborationAuth {
     /**
      * Check if user can edit a specific dataset
      *
+     * No collaboration on project: owner can edit any dataset
      * During active collaboration: only creator can edit
      * When halted: only owner can edit
      *
@@ -111,6 +114,13 @@ class CollaborationAuth {
         if ($context->isHalted) {
             // When halted, only owner can edit
             return $context->permissionLevel === 'owner';
+        }
+
+        // If no collaboration exists on this project, owner can edit any dataset.
+        // Preserves pre-collaboration behavior where a user could upload a shared
+        // project file to their own account and edit it freely.
+        if (!$context->hasCollaborators) {
+            return true;
         }
 
         // During active collaboration, only creator can edit
@@ -174,6 +184,52 @@ class CollaborationAuth {
     }
 
     /**
+     * Get collaboration status booleans for a project.
+     *
+     * isCollaborative: true iff any collaborator row exists for (projectId, ownerPkey).
+     * isHalted: true iff collaborators exist AND all are currently disabled.
+     *
+     * Matches the semantics used internally by getProjectContext().
+     *
+     * @param string $projectId
+     * @param int $ownerPkey
+     * @return array ['isCollaborative' => bool, 'isHalted' => bool]
+     */
+    public function getCollaborationStatus(string $projectId, int $ownerPkey): array {
+        $row = $this->db->get_row_prepared(
+            "SELECT COUNT(*) AS total,
+                    COUNT(*) FILTER (WHERE disabled = false) AS enabled_count
+             FROM collaborators
+             WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2",
+            array($projectId, $ownerPkey)
+        );
+
+        $total = $row ? (int)$row->total : 0;
+        $enabled = $row ? (int)$row->enabled_count : 0;
+
+        return array(
+            'isCollaborative' => $total > 0,
+            'isHalted' => $total > 0 && $enabled === 0,
+        );
+    }
+
+    /**
+     * Check if any collaborator rows exist for a project (accepted or not, enabled or not)
+     *
+     * @param string $projectId
+     * @param int $ownerPkey
+     * @return bool
+     */
+    private function hasAnyCollaborators(string $projectId, int $ownerPkey): bool {
+        $count = $this->db->get_var_prepared(
+            "SELECT COUNT(*) FROM collaborators
+             WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2",
+            array($projectId, $ownerPkey)
+        );
+        return $count > 0;
+    }
+
+    /**
      * Check if collaboration is halted for a project
      *
      * Collaboration is considered "halted" when:
@@ -185,15 +241,8 @@ class CollaborationAuth {
      * @return bool
      */
     private function isCollaborationHalted(string $projectId, int $ownerPkey): bool {
-        // Check if any collaborators exist
-        $totalCount = $this->db->get_var_prepared(
-            "SELECT COUNT(*) FROM collaborators
-             WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2",
-            array($projectId, $ownerPkey)
-        );
-
-        if ($totalCount == 0) {
-            return false; // No collaboration exists
+        if (!$this->hasAnyCollaborators($projectId, $ownerPkey)) {
+            return false;
         }
 
         // Check if all are disabled
@@ -344,11 +393,21 @@ class CollaborationAuth {
      * @return ProjectContext|null - Returns null if dataset not found or not linked to a project
      */
     public function getDatasetContext(int $userpkey, string $datasetId): ?ProjectContext {
-        // Find the project that contains this dataset (without userpkey filter)
+        // Project IDs are not unique across users - multiple users may have
+        // datasets with the same ID. Prefer the requesting user's own copy first,
+        // then fall back to any project containing the dataset (for collaborator lookups).
         $records = $this->neodb->query(
             "MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset {id:$datasetId})
+             WHERE p.userpkey = $userpkey
              RETURN p.id as projectId, p.userpkey as ownerPkey, d.created_by as createdBy"
         );
+
+        if (count($records) === 0) {
+            $records = $this->neodb->query(
+                "MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset {id:$datasetId})
+                 RETURN p.id as projectId, p.userpkey as ownerPkey, d.created_by as createdBy"
+            );
+        }
 
         if (count($records) === 0) {
             // Dataset not found or not linked to a project

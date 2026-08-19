@@ -18,7 +18,7 @@ $hash = preg_replace('/[^a-zA-Z0-9]/', '', $hash);
 $datasetid = $db->get_var_prepared("SELECT datasetid FROM landing_pages WHERE hash=$1", array($hash));
 
 if($datasetid != ""){
-	header("Location: /search/?datasetid=$datasetid");
+	header("Location: /StraboFieldDatasetDetail/?dataset_id=" . rawurlencode($datasetid));
 }else{
 	header("Location: /d404");
 }

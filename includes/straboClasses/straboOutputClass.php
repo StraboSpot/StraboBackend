@@ -46,6 +46,75 @@ class straboOutputClass
 		echo "</pre>";
 	}
 
+	/**
+	 * Explode a multi-orientation spot into multiple features, one per orientation.
+	 * Mirrors the mobile app's getSpotsAsFeatures() logic: each orientation (including
+	 * associated orientations) becomes a separate feature at the same geometry.
+	 * Each feature gets that orientation's data mapped to the primary po/lo/to columns.
+	 *
+	 * @param array $spot A spot that has already been through fixSpot() with orientation_data preserved
+	 * @return array Array of spot features (one per orientation, or just the original if single/no orientation)
+	 */
+	public function explodeOrientations($spot){
+		// Parse the raw orientation_data JSON if available
+		$odJson = $spot['properties']['orientation_data'] ?? null;
+		if(!$odJson || $odJson == ''){
+			return [$spot];
+		}
+
+		$orientations = json_decode($odJson);
+		if(!is_array($orientations) || count($orientations) <= 1){
+			// Single or no orientation — check for associated_orientation on the single entry
+			if(count($orientations) == 1 && isset($orientations[0]->associated_orientation) && !empty($orientations[0]->associated_orientation)){
+				// Has associated orientations — fall through to explosion logic
+			}else{
+				return [$spot];
+			}
+		}
+
+		// Collect all individual orientations (including associated ones)
+		$allOrientations = [];
+		foreach($orientations as $or){
+			if(isset($or->associated_orientation) && !empty($or->associated_orientation)){
+				foreach($or->associated_orientation as $assoc){
+					$allOrientations[] = $assoc;
+				}
+			}
+			$allOrientations[] = $or;
+		}
+
+		// Strip all orientation columns from the base properties
+		$baseProps = [];
+		foreach($spot['properties'] as $key => $value){
+			if(!preg_match('/^(po_|lo_|to_)\d*/', $key) && $key !== 'orientation_data'){
+				$baseProps[$key] = $value;
+			}
+		}
+
+		// Create one feature per orientation
+		$features = [];
+		foreach($allOrientations as $or){
+			$feature = $spot;
+			$feature['properties'] = $baseProps;
+
+			// Flatten this single orientation into primary columns
+			$type = $or->type ?? '';
+			$prefix = 'po_';
+			if($type == 'linear_orientation') $prefix = 'lo_';
+			if($type == 'tabular_orientation') $prefix = 'to_';
+
+			foreach($or as $key => $value){
+				if($key != 'type' && $key != 'id' && $key != 'associated_orientation'){
+					$feature['properties'][$prefix . $key] = $value;
+				}
+			}
+
+			$features[] = $feature;
+		}
+
+		return $features;
+	}
+
 	public function gatherOrientations($orientations){
 
 		$this->neworientations = array();
@@ -305,11 +374,17 @@ class straboOutputClass
 
 	}
 
-	public function fixSpot($spot){
+	public function fixSpot($spot, $preserveOrientationJson = false){
 
 		$id = $spot['properties']['id'];
 
 		unset($spot['original_geometry']);
+
+		// For GeoPackage export: preserve orientation_data as a JSON string
+		// so QGIS QML GeometryGenerator can parse it for orientation arrows
+		if($preserveOrientationJson && $spot['properties']['orientation_data']){
+			$rawOrientationJson = json_encode($spot['properties']['orientation_data']);
+		}
 
 		if($spot['properties']['orientation_data']){
 			$orientations = $this->gatherOrientations($spot['properties']['orientation_data']);
@@ -447,7 +522,11 @@ class straboOutputClass
 		unset($spot['properties']['samples']);
 		unset($spot['properties']['_3d_structures']);
 		unset($spot['properties']['geometrytype']);
-		unset($spot['properties']['orientation_data']);
+		if($preserveOrientationJson && isset($rawOrientationJson)){
+			$spot['properties']['orientation_data'] = $rawOrientationJson;
+		}else{
+			unset($spot['properties']['orientation_data']);
+		}
 		unset($spot['properties']['other_features']);
 
 		unset($spot['properties']['image_basemap']);
@@ -25752,6 +25831,869 @@ $html.='
 
 	}
 
+	/**
+	 * Build a SimpleMarker layer XML element for QGIS QML styles.
+	 *
+	 * @param string $shape  SimpleMarker shape name (line, circle, diamond, filled_arrowhead, etc.)
+	 * @param string $size   Marker size in MM
+	 * @param array  $opts   Optional overrides: color, outlineColor, outlineWidth, outlineStyle,
+	 *                       rotationExpr, vAnchor, hAnchor, joinstyle, angle
+	 * @return string XML for one <layer> element
+	 */
+	private function qmlMarkerLayer($shape, $size, $opts = []){
+		$color        = $opts['color']        ?? '0,0,0,255';
+		$outlineColor = $opts['outlineColor'] ?? '0,0,0,255';
+		$outlineWidth = $opts['outlineWidth'] ?? '0.5';
+		$outlineStyle = $opts['outlineStyle'] ?? 'solid';
+		$vAnchor      = $opts['vAnchor']      ?? '1';
+		$hAnchor      = $opts['hAnchor']      ?? '1';
+		$angle        = $opts['angle']        ?? '0';
+		$rotationExpr = $opts['rotationExpr'] ?? null;
+		$joinstyle    = $opts['joinstyle']    ?? null;
+
+		$joinstyleOpt = $joinstyle
+			? '<Option value="' . $joinstyle . '" name="joinstyle" type="QString"/>' . "\n            "
+			: '';
+
+		if($rotationExpr !== null){
+			$esc = htmlspecialchars($rotationExpr, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+			$ddProps = <<<XML
+          <data_defined_properties>
+            <Option type="Map">
+              <Option value="" name="name" type="QString"/>
+              <Option name="properties" type="Map">
+                <Option name="angle" type="Map">
+                  <Option value="true" name="active" type="bool"/>
+                  <Option value="$esc" name="expression" type="QString"/>
+                  <Option value="3" name="type" type="int"/>
+                </Option>
+              </Option>
+              <Option value="collection" name="type" type="QString"/>
+            </Option>
+          </data_defined_properties>
+XML;
+		}else{
+			$ddProps = <<<XML
+          <data_defined_properties>
+            <Option type="Map">
+              <Option value="" name="name" type="QString"/>
+              <Option name="properties"/>
+              <Option value="collection" name="type" type="QString"/>
+            </Option>
+          </data_defined_properties>
+XML;
+		}
+
+		return <<<XML
+        <layer locked="0" class="SimpleMarker" pass="0" enabled="1">
+          <Option type="Map">
+            <Option value="$angle" name="angle" type="QString"/>
+            <Option value="$color" name="color" type="QString"/>
+            <Option value="$hAnchor" name="horizontal_anchor_point" type="QString"/>
+            $joinstyleOpt<Option value="$shape" name="name" type="QString"/>
+            <Option value="0,0" name="offset" type="QString"/>
+            <Option value="3x:0,0,0,0,0,0" name="offset_map_unit_scale" type="QString"/>
+            <Option value="MM" name="offset_unit" type="QString"/>
+            <Option value="$outlineColor" name="outline_color" type="QString"/>
+            <Option value="$outlineStyle" name="outline_style" type="QString"/>
+            <Option value="$outlineWidth" name="outline_width" type="QString"/>
+            <Option value="3x:0,0,0,0,0,0" name="outline_width_map_unit_scale" type="QString"/>
+            <Option value="MM" name="outline_width_unit" type="QString"/>
+            <Option value="diameter" name="scale_method" type="QString"/>
+            <Option value="$size" name="size" type="QString"/>
+            <Option value="3x:0,0,0,0,0,0" name="size_map_unit_scale" type="QString"/>
+            <Option value="MM" name="size_unit" type="QString"/>
+            <Option value="$vAnchor" name="vertical_anchor_point" type="QString"/>
+          </Option>
+$ddProps
+        </layer>
+XML;
+	}
+
+	/**
+	 * Build a GeometryGenerator layer that draws lines from a QGIS expression.
+	 * The expression should return a line or multi-line geometry in MM units.
+	 * Used for complex symbols like contact (ladder) and shear zone (wavy).
+	 *
+	 * Note: In GeometryGenerator with MM units, project($geometry, dist, angle) uses
+	 * angle in radians measured counterclockwise from east. To project at compass
+	 * bearing B, use: project($geometry, dist, radians(-B))
+	 */
+	private function qmlGeometryGeneratorLayer($expression, $opts = []){
+		$lineWidth = $opts['lineWidth'] ?? '0.5';
+		$lineColor = $opts['lineColor'] ?? '0,0,0,255';
+
+		$esc = htmlspecialchars($expression, ENT_XML1 | ENT_COMPAT, 'UTF-8');
+
+		return <<<XML
+        <layer locked="0" class="GeometryGenerator" pass="0" enabled="1">
+          <Option type="Map">
+            <Option value="Line" name="SymbolType" type="QString"/>
+            <Option value="$esc" name="geometryModifier" type="QString"/>
+            <Option value="MM" name="units" type="QString"/>
+          </Option>
+          <data_defined_properties>
+            <Option type="Map">
+              <Option value="" name="name" type="QString"/>
+              <Option name="properties"/>
+              <Option value="collection" name="type" type="QString"/>
+            </Option>
+          </data_defined_properties>
+          <symbol name="@@geom" force_rhr="0" type="line" clip_to_extent="1" is_animated="0" frame_rate="10" alpha="1">
+            <data_defined_properties>
+              <Option type="Map">
+                <Option value="" name="name" type="QString"/>
+                <Option name="properties"/>
+                <Option value="collection" name="type" type="QString"/>
+              </Option>
+            </data_defined_properties>
+            <layer locked="0" class="SimpleLine" pass="0" enabled="1">
+              <Option type="Map">
+                <Option value="0" name="align_dash_pattern" type="QString"/>
+                <Option value="square" name="capstyle" type="QString"/>
+                <Option value="$lineColor" name="line_color" type="QString"/>
+                <Option value="solid" name="line_style" type="QString"/>
+                <Option value="$lineWidth" name="line_width" type="QString"/>
+                <Option value="MM" name="line_width_unit" type="QString"/>
+              </Option>
+              <data_defined_properties>
+                <Option type="Map">
+                  <Option value="" name="name" type="QString"/>
+                  <Option name="properties"/>
+                  <Option value="collection" name="type" type="QString"/>
+                </Option>
+              </data_defined_properties>
+            </layer>
+          </symbol>
+        </layer>
+XML;
+	}
+
+	/**
+	 * Wrap marker layers in a QGIS symbol element.
+	 */
+	private function qmlSymbol($name, $layersXml){
+		return <<<XML
+      <symbol name="$name" force_rhr="0" type="marker" clip_to_extent="1" is_animated="0" frame_rate="10" alpha="1">
+        <data_defined_properties>
+          <Option type="Map">
+            <Option value="" name="name" type="QString"/>
+            <Option name="properties"/>
+            <Option value="collection" name="type" type="QString"/>
+          </Option>
+        </data_defined_properties>
+$layersXml
+      </symbol>
+XML;
+	}
+
+	/**
+	 * Generate QML style XML for orientation symbology in QGIS.
+	 * Rule-based renderer matching the StraboField mobile app's symbol logic.
+	 *
+	 * QGIS SimpleMarker rotation conventions (determined empirically):
+	 *   - "line" at angle=0: vertical (N-S). Rotation is clockwise.
+	 *   - "filled_arrowhead" at angle=0: points RIGHT (East). Rotation is clockwise.
+	 *   - For dip direction (strike+90), use po_strike directly as the arrowhead angle
+	 *     because arrowhead default (0°=East) is already 90° offset from line default (0°=vertical).
+	 *   - For a one-sided tick extending in the dip direction: use a "line" marker with
+	 *     vertical_anchor_point=0 (top at point) and rotation = po_strike - 90.
+	 */
+	private function generateOrientationQml($layerName){
+
+		// ----------------------------------------------------------------
+		// Rules: evaluated top-to-bottom, first match wins.
+		// Maps each orientation type/feature_type/dip combo to a symbol index.
+		// ----------------------------------------------------------------
+		// IMPORTANT: QGIS RuleRenderer applies ALL matching rules (not first-match-wins).
+		// Every rule must be mutually exclusive to avoid overlapping symbols.
+		// The lineation rule excludes spots that also have planar data (those get the planar symbol).
+		$rules = [
+			// Bedding variants (overturned checked first)
+			['key' => 'bed_ot',  'filter' => "po_facing = 'overturned' AND po_feature_type = 'bedding'",     'label' => 'Bedding (overturned)',  'symbol' => '0'],
+			['key' => 'bed_hz',  'filter' => "po_feature_type = 'bedding' AND po_dip = 0",                   'label' => 'Bedding (horizontal)',  'symbol' => '1'],
+			['key' => 'bed_vt',  'filter' => "po_feature_type = 'bedding' AND po_dip = 90",                  'label' => 'Bedding (vertical)',    'symbol' => '2'],
+			['key' => 'bed_in',  'filter' => "po_feature_type = 'bedding' AND po_dip > 0 AND po_dip < 90",   'label' => 'Bedding (inclined)',    'symbol' => '3'],
+			// Foliation variants
+			['key' => 'fol_hz',  'filter' => "po_feature_type = 'foliation' AND po_dip = 0",                 'label' => 'Foliation (horizontal)','symbol' => '4'],
+			['key' => 'fol_vt',  'filter' => "po_feature_type = 'foliation' AND po_dip = 90",                'label' => 'Foliation (vertical)',  'symbol' => '5'],
+			['key' => 'fol_in',  'filter' => "po_feature_type = 'foliation' AND po_dip > 0 AND po_dip < 90", 'label' => 'Foliation (inclined)',  'symbol' => '6'],
+			// Contact variants
+			['key' => 'cnt_vt',  'filter' => "po_feature_type = 'contact' AND po_dip = 90",                  'label' => 'Contact (vertical)',    'symbol' => '7'],
+			['key' => 'cnt_in',  'filter' => "po_feature_type = 'contact' AND po_dip > 0 AND po_dip < 90",   'label' => 'Contact (inclined)',    'symbol' => '8'],
+			// Shear zone variants
+			['key' => 'sz_vt',   'filter' => "po_feature_type = 'shear_zone' AND po_dip = 90",               'label' => 'Shear zone (vertical)', 'symbol' => '9'],
+			['key' => 'sz_in',   'filter' => "po_feature_type = 'shear_zone' AND po_dip > 0 AND po_dip < 90",'label' => 'Shear zone (inclined)', 'symbol' => '10'],
+			// Features with no dip-dependent variant
+			['key' => 'fault',   'filter' => "po_feature_type = 'fault'",                                    'label' => 'Fault',                 'symbol' => '11'],
+			['key' => 'frac',    'filter' => "po_feature_type = 'fracture'",                                  'label' => 'Fracture',              'symbol' => '12'],
+			['key' => 'vein',    'filter' => "po_feature_type = 'vein'",                                      'label' => 'Vein',                  'symbol' => '13'],
+			// Linear orientation (only when no planar data — if both exist, planar rule handles it)
+			['key' => 'linear',  'filter' => "lo_trend IS NOT NULL AND po_strike IS NULL",                    'label' => 'Lineation',             'symbol' => '14'],
+			// Fallback for unmapped planar types (e.g., joint, fold_axial_surface, other)
+			['key' => 'planar',  'filter' => "po_strike IS NOT NULL AND po_feature_type != 'bedding' AND po_feature_type != 'foliation' AND po_feature_type != 'contact' AND po_feature_type != 'shear_zone' AND po_feature_type != 'fault' AND po_feature_type != 'fracture' AND po_feature_type != 'vein'", 'label' => 'Other planar', 'symbol' => '15'],
+			// Tabular zone orientations — use to_strike/to_feature_type columns
+			['key' => 'tab_sz',  'filter' => "to_feature_type = 'shear_zone' AND to_strike IS NOT NULL",     'label' => 'Tabular shear zone',    'symbol' => '17'],
+			['key' => 'tab_oth', 'filter' => "to_strike IS NOT NULL AND po_strike IS NULL AND to_feature_type != 'shear_zone'", 'label' => 'Tabular zone', 'symbol' => '18'],
+			// Plain point (no orientation data at all)
+			['key' => 'plain',   'filter' => "po_strike IS NULL AND lo_trend IS NULL AND to_strike IS NULL",  'label' => 'Plain point',           'symbol' => '16'],
+		];
+
+		$rulesXml = '';
+		foreach($rules as $r){
+			$f = htmlspecialchars($r['filter'], ENT_XML1 | ENT_COMPAT, 'UTF-8');
+			$l = htmlspecialchars($r['label'],  ENT_XML1 | ENT_COMPAT, 'UTF-8');
+			$rulesXml .= '      <rule key="{' . $r['key'] . '}" filter="' . $f . '" label="' . $l . '" symbol="' . $r['symbol'] . '"/>' . "\n";
+		}
+
+		// ----------------------------------------------------------------
+		// Symbols: one per rule (17 total). Each rule gets its own symbol
+		// to avoid QGIS rendering quirks with shared symbol references.
+		// ----------------------------------------------------------------
+
+		// Common marker layer snippets
+		$strikeLine = $this->qmlMarkerLayer('line', '8', [
+			'outlineWidth' => '0.5',
+			'rotationExpr' => '"po_strike"',
+		]);
+
+		$strikeLineForTrend = $this->qmlMarkerLayer('line', '6', [
+			'outlineWidth' => '0.5',
+			'rotationExpr' => '"lo_trend"',
+		]);
+
+		$arrowheadLayer = $this->qmlMarkerLayer('filled_arrowhead', '3', [
+			'outlineWidth' => '0',
+			'joinstyle'    => 'bevel',
+			'hAnchor'      => '0',
+			'rotationExpr' => '"po_strike"',
+		]);
+
+		$dipTickLayer = $this->qmlMarkerLayer('line', '2.5', [
+			'outlineWidth' => '0.5',
+			'vAnchor'      => '0',
+			'rotationExpr' => '"po_strike" - 90',
+		]);
+
+		$centeredPerpLayer = $this->qmlMarkerLayer('line', '3', [
+			'outlineWidth' => '0.5',
+			'rotationExpr' => '"po_strike" + 90',
+		]);
+
+		// Symbol builders for each visual type
+		$makeArrowhead   = function($idx) use ($strikeLine, $arrowheadLayer)    { return $this->qmlSymbol($idx, $strikeLine . $arrowheadLayer); };
+		$makeDipTick     = function($idx) use ($strikeLine, $dipTickLayer)      { return $this->qmlSymbol($idx, $strikeLine . $dipTickLayer); };
+		$makeVertPlanar  = function($idx) use ($strikeLine, $centeredPerpLayer) { return $this->qmlSymbol($idx, $strikeLine . $centeredPerpLayer); };
+
+		// --- 0: bedding_overturned — strike line + D-shaped arc on dip side ---
+		// GeometryGenerator project() bearing convention (determined empirically):
+		//   project($geometry, dist, radians(-B)) projects at compass bearing B.
+		// Shortcuts: strike=radians(-S), anti-strike=radians(-(S+180)), dip=radians(-(S+90))
+		$overturnedArcExpr = 'smooth(make_line('
+			. 'project($geometry, 2, radians(-"po_strike")),'
+			. 'project(project($geometry, 1.2, radians(-"po_strike")), 2, radians(-("po_strike"+90))),'
+			. 'project($geometry, 2, radians(-("po_strike"+90))),'
+			. 'project(project($geometry, 1.2, radians(-("po_strike"+180))), 2, radians(-("po_strike"+90))),'
+			. 'project($geometry, 2, radians(-("po_strike"+180)))'
+			. '), 3)';
+		$sym0 = $this->qmlSymbol('0',
+			$strikeLine .
+			$this->qmlGeometryGeneratorLayer($overturnedArcExpr)
+		);
+
+		// --- 1: bedding_horizontal — circle + cross (no rotation) ---
+		$sym1 = $this->qmlSymbol('1',
+			$this->qmlMarkerLayer('circle', '6', [
+				'color'        => '255,255,255,0',
+				'outlineWidth' => '0.5',
+			]) .
+			$this->qmlMarkerLayer('cross', '6', [
+				'outlineWidth' => '0.5',
+			])
+		);
+
+		$sym2  = $makeVertPlanar('2');   // 2: bedding_vertical
+		$sym3  = $makeDipTick('3');      // 3: bedding_inclined
+
+		// --- 4: foliation_horizontal — circle + filled diamond (no rotation) ---
+		$sym4 = $this->qmlSymbol('4',
+			$this->qmlMarkerLayer('circle', '6', [
+				'color'        => '255,255,255,0',
+				'outlineWidth' => '0.5',
+			]) .
+			$this->qmlMarkerLayer('diamond', '2.5', [
+				'outlineWidth' => '0',
+			])
+		);
+
+		// --- 5: foliation_vertical — strike line + filled diamond at center ---
+		$sym5 = $this->qmlSymbol('5',
+			$strikeLine .
+			$this->qmlMarkerLayer('diamond', '2.5', [
+				'outlineWidth' => '0',
+			])
+		);
+
+		$sym6  = $makeArrowhead('6');    // 6: foliation_inclined
+
+		// --- 7: contact_vertical — strike line + 5 short ticks crossing BOTH sides ---
+		// 5 ticks at -3, -1.5, 0, +1.5, +3mm along strike. Each 1.5mm per side.
+		$contactVertExpr = 'collect_geometries('
+			. 'make_line(project($geometry,1.5,radians(-("po_strike"+90))),project($geometry,1.5,radians(-("po_strike"+270)))),'
+			. 'make_line(project(project($geometry,1.5,radians(-"po_strike")),1.5,radians(-("po_strike"+90))),project(project($geometry,1.5,radians(-"po_strike")),1.5,radians(-("po_strike"+270)))),'
+			. 'make_line(project(project($geometry,1.5,radians(-("po_strike"+180))),1.5,radians(-("po_strike"+90))),project(project($geometry,1.5,radians(-("po_strike"+180))),1.5,radians(-("po_strike"+270)))),'
+			. 'make_line(project(project($geometry,3,radians(-"po_strike")),1.5,radians(-("po_strike"+90))),project(project($geometry,3,radians(-"po_strike")),1.5,radians(-("po_strike"+270)))),'
+			. 'make_line(project(project($geometry,3,radians(-("po_strike"+180))),1.5,radians(-("po_strike"+90))),project(project($geometry,3,radians(-("po_strike"+180))),1.5,radians(-("po_strike"+270))))'
+			. ')';
+		$sym7 = $this->qmlSymbol('7',
+			$strikeLine .
+			$this->qmlGeometryGeneratorLayer($contactVertExpr)
+		);
+
+		// --- 8: contact_inclined — strike line + 5 short ticks on DIP side only ---
+		// Dip direction in GeometryGenerator: radians(-(po_strike-90)) not radians(-(po_strike+90))
+		// because project() with radians(-B) projects at bearing (B+180), so to get dip at
+		// bearing (strike+90) we use radians(-(strike+90-180)) = radians(-(strike-90)).
+		$contactInclExpr = 'collect_geometries('
+			. 'make_line($geometry,project($geometry,2,radians(-("po_strike"-90)))),'
+			. 'make_line(project($geometry,1.5,radians(-"po_strike")),project(project($geometry,1.5,radians(-"po_strike")),2,radians(-("po_strike"-90)))),'
+			. 'make_line(project($geometry,1.5,radians(-("po_strike"+180))),project(project($geometry,1.5,radians(-("po_strike"+180))),2,radians(-("po_strike"-90)))),'
+			. 'make_line(project($geometry,3,radians(-"po_strike")),project(project($geometry,3,radians(-"po_strike")),2,radians(-("po_strike"-90)))),'
+			. 'make_line(project($geometry,3,radians(-("po_strike"+180))),project(project($geometry,3,radians(-("po_strike"+180))),2,radians(-("po_strike"-90))))'
+			. ')';
+		$sym8 = $this->qmlSymbol('8',
+			$strikeLine .
+			$this->qmlGeometryGeneratorLayer($contactInclExpr)
+		);
+
+		// --- 9: shear_zone_vertical — S-curve + centered tick on BOTH sides ---
+		// S-curve: endpoints along strike, control points offset to dip/anti-dip sides.
+		$szCurveExpr = 'smooth(make_line('
+			. 'project($geometry, 4, radians(-"po_strike")),'
+			. 'project(project($geometry, 2, radians(-"po_strike")), 2, radians(-("po_strike"-90))),'
+			. '$geometry,'
+			. 'project(project($geometry, 2, radians(-("po_strike"+180))), 2, radians(-("po_strike"+90))),'
+			. 'project($geometry, 4, radians(-("po_strike"+180)))'
+			. '), 3)';
+		$sym9 = $this->qmlSymbol('9',
+			$this->qmlGeometryGeneratorLayer($szCurveExpr) .
+			$centeredPerpLayer
+		);
+
+		// --- 10: shear_zone_inclined — S-curve + dip tick on one side ---
+		$sym10 = $this->qmlSymbol('10',
+			$this->qmlGeometryGeneratorLayer($szCurveExpr) .
+			$dipTickLayer
+		);
+
+		// --- 11: fault — strike line + short shaft + arrowhead ---
+		// The fault PNG shows a strike line with a small arrow (shaft + arrowhead) pointing
+		// toward the dip side. The shaft is a short line from center to the arrowhead.
+		$sym11 = $this->qmlSymbol('11',
+			$strikeLine .
+			$dipTickLayer .
+			$arrowheadLayer
+		);
+
+		// --- 12: fracture — strike line + small open square on dip side ---
+		$sym12 = $this->qmlSymbol('12',
+			$strikeLine .
+			$this->qmlMarkerLayer('square', '2', [
+				'color'        => '255,255,255,0',
+				'outlineWidth' => '0.4',
+				'vAnchor'      => '0',
+				'rotationExpr' => '"po_strike" - 90',
+			])
+		);
+
+		// --- 13: vein — strike line + small filled square on dip side ---
+		$sym13 = $this->qmlSymbol('13',
+			$strikeLine .
+			$this->qmlMarkerLayer('square', '2', [
+				'outlineWidth' => '0',
+				'vAnchor'      => '0',
+				'rotationExpr' => '"po_strike" - 90',
+			])
+		);
+
+		// --- 14: lineation — arrow pointing in trend direction ---
+		// Arrowhead base at point, tip toward trend (hAnchor=0).
+		// Short shaft extends backward from point (vAnchor=0) to show arrow origin.
+		// Shaft kept short (3mm) to minimize overlap with other symbols at same location.
+		// Uses GeometryGenerator so arrowhead is at the TIP, not the base.
+		// Bearing formula: radians(180 - B) projects at compass bearing B.
+		$lineationExpr = 'collect_geometries('
+			. 'make_line($geometry, project($geometry, 5, radians(180-"lo_trend"))),'
+			. 'make_line(project($geometry, 5, radians(180-"lo_trend")), project(project($geometry, 5, radians(180-"lo_trend")), 1.5, radians(30-"lo_trend"))),'
+			. 'make_line(project($geometry, 5, radians(180-"lo_trend")), project(project($geometry, 5, radians(180-"lo_trend")), 1.5, radians(330-"lo_trend")))'
+			. ')';
+		$sym14 = $this->qmlSymbol('14',
+			$this->qmlGeometryGeneratorLayer($lineationExpr)
+		);
+
+		// --- 15: other_planar (fallback) — plain dot for unmapped types ---
+		// Mobile app renders unmapped feature_types as default_point (circle)
+		$sym15 = $this->qmlSymbol('15',
+			$this->qmlMarkerLayer('circle', '2.5', [
+				'outlineWidth' => '0',
+			])
+		);
+
+		// --- 16: plain — filled black circle ---
+		$sym16 = $this->qmlSymbol('16',
+			$this->qmlMarkerLayer('circle', '2.5', [
+				'outlineWidth' => '0',
+			])
+		);
+
+		// --- 17: tabular_shear_zone — S-curve using to_strike (same visual as shear zone) ---
+		$szCurveExprTab = str_replace('"po_strike"', '"to_strike"', $szCurveExpr);
+		$sym17 = $this->qmlSymbol('17',
+			$this->qmlGeometryGeneratorLayer($szCurveExprTab) .
+			$this->qmlMarkerLayer('line', '2.5', [
+				'outlineWidth' => '0.5',
+				'vAnchor'      => '0',
+				'rotationExpr' => '"to_strike" - 90',
+			])
+		);
+
+		// --- 18: tabular_other — strike line rotated by to_strike + tick ---
+		$sym18 = $this->qmlSymbol('18',
+			$this->qmlMarkerLayer('line', '8', [
+				'outlineWidth' => '0.5',
+				'rotationExpr' => '"to_strike"',
+			]) .
+			$this->qmlMarkerLayer('line', '2.5', [
+				'outlineWidth' => '0.5',
+				'vAnchor'      => '0',
+				'rotationExpr' => '"to_strike" - 90',
+			])
+		);
+
+		$symbolsXml = $sym0 . $sym1 . $sym2 . $sym3 . $sym4 . $sym5 . $sym6
+			. $sym7 . $sym8 . $sym9 . $sym10 . $sym11 . $sym12 . $sym13
+			. $sym14 . $sym15 . $sym16 . $sym17 . $sym18;
+
+		// ----------------------------------------------------------------
+		// Labeling: show dip or plunge value next to oriented spots.
+		// ----------------------------------------------------------------
+		$labelExpr = htmlspecialchars('coalesce("po_dip", "lo_plunge")', ENT_XML1 | ENT_COMPAT, 'UTF-8');
+
+		$qml = <<<QML
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis simplifyDrawingHints="0" version="3.28.11-Firenze" styleCategories="AllStyleCategories" labelsEnabled="1">
+  <renderer-v2 type="RuleRenderer" symbollevels="0" forceraster="0" enableorderby="0">
+    <rules key="{root}">
+$rulesXml    </rules>
+    <symbols>
+$symbolsXml    </symbols>
+  </renderer-v2>
+  <labeling type="simple">
+    <settings calloutType="simple">
+      <text-style allowHtml="0" capitalization="0" textOpacity="1" fontItalic="0" forcedItalic="0" blendMode="0" isExpression="1" legendString="Aa" fontUnderline="0" forcedBold="0" fieldName="$labelExpr" fontWeight="75" fontLetterSpacing="0" fontWordSpacing="0" multilineHeight="1" fontSizeMapUnitScale="3x:0,0,0,0,0,0" fontKerning="1" fontSize="8" multilineHeightUnit="Percentage" namedStyle="Bold" fontSizeUnit="Point" fontFamily="Sans Serif" previewBkgrdColor="255,255,255,255" textColor="0,0,0,255" useSubstitutions="0" textOrientation="horizontal" fontStrikeout="0">
+        <families/>
+        <text-buffer bufferJoinStyle="128" bufferSizeMapUnitScale="3x:0,0,0,0,0,0" bufferSize="1" bufferSizeUnits="MM" bufferOpacity="1" bufferDraw="1" bufferColor="255,255,255,255" bufferNoFill="1" bufferBlendMode="0"/>
+        <text-mask maskJoinStyle="128" maskSize="1.5" maskEnabled="0" maskSizeMapUnitScale="3x:0,0,0,0,0,0" maskedSymbolLayers="" maskSizeUnits="MM" maskType="0" maskOpacity="1"/>
+        <background shapeDraw="0" shapeType="0" shapeSizeType="0" shapeSizeX="0" shapeSizeY="0" shapeSizeUnit="MM" shapeRotationType="0" shapeRotation="0" shapeOffsetX="0" shapeOffsetY="0" shapeOffsetUnit="MM" shapeRadiiX="0" shapeRadiiY="0" shapeRadiiUnit="MM" shapeFillColor="255,255,255,255" shapeBorderColor="128,128,128,255" shapeBorderWidth="0" shapeBorderWidthUnit="MM" shapeOpacity="1" shapeBlendMode="0" shapeJoinStyle="64" shapeSVGFile="" shapeSizeMapUnitScale="3x:0,0,0,0,0,0" shapeOffsetMapUnitScale="3x:0,0,0,0,0,0" shapeRadiiMapUnitScale="3x:0,0,0,0,0,0" shapeBorderWidthMapUnitScale="3x:0,0,0,0,0,0">
+          <symbol name="markerSymbol" force_rhr="0" type="marker" clip_to_extent="1" is_animated="0" frame_rate="10" alpha="1">
+            <data_defined_properties>
+              <Option type="Map">
+                <Option value="" name="name" type="QString"/>
+                <Option name="properties"/>
+                <Option value="collection" name="type" type="QString"/>
+              </Option>
+            </data_defined_properties>
+            <layer locked="0" class="SimpleMarker" pass="0" enabled="1">
+              <Option type="Map">
+                <Option value="0" name="angle" type="QString"/>
+                <Option value="square" name="cap_style" type="QString"/>
+                <Option value="145,82,45,255" name="color" type="QString"/>
+                <Option value="1" name="horizontal_anchor_point" type="QString"/>
+                <Option value="bevel" name="joinstyle" type="QString"/>
+                <Option value="circle" name="name" type="QString"/>
+                <Option value="0,0" name="offset" type="QString"/>
+                <Option value="3x:0,0,0,0,0,0" name="offset_map_unit_scale" type="QString"/>
+                <Option value="MM" name="offset_unit" type="QString"/>
+                <Option value="35,35,35,255" name="outline_color" type="QString"/>
+                <Option value="solid" name="outline_style" type="QString"/>
+                <Option value="0" name="outline_width" type="QString"/>
+                <Option value="3x:0,0,0,0,0,0" name="outline_width_map_unit_scale" type="QString"/>
+                <Option value="MM" name="outline_width_unit" type="QString"/>
+                <Option value="diameter" name="scale_method" type="QString"/>
+                <Option value="2" name="size" type="QString"/>
+                <Option value="3x:0,0,0,0,0,0" name="size_map_unit_scale" type="QString"/>
+                <Option value="MM" name="size_unit" type="QString"/>
+                <Option value="1" name="vertical_anchor_point" type="QString"/>
+              </Option>
+              <data_defined_properties>
+                <Option type="Map">
+                  <Option value="" name="name" type="QString"/>
+                  <Option name="properties"/>
+                  <Option value="collection" name="type" type="QString"/>
+                </Option>
+              </data_defined_properties>
+            </layer>
+          </symbol>
+          <symbol name="fillSymbol" force_rhr="0" type="fill" clip_to_extent="1" is_animated="0" frame_rate="10" alpha="1">
+            <data_defined_properties>
+              <Option type="Map">
+                <Option value="" name="name" type="QString"/>
+                <Option name="properties"/>
+                <Option value="collection" name="type" type="QString"/>
+              </Option>
+            </data_defined_properties>
+            <layer locked="0" class="SimpleFill" pass="0" enabled="1">
+              <Option type="Map">
+                <Option value="3x:0,0,0,0,0,0" name="border_width_map_unit_scale" type="QString"/>
+                <Option value="255,255,255,255" name="color" type="QString"/>
+                <Option value="bevel" name="joinstyle" type="QString"/>
+                <Option value="0,0" name="offset" type="QString"/>
+                <Option value="3x:0,0,0,0,0,0" name="offset_map_unit_scale" type="QString"/>
+                <Option value="MM" name="offset_unit" type="QString"/>
+                <Option value="128,128,128,255" name="outline_color" type="QString"/>
+                <Option value="no" name="outline_style" type="QString"/>
+                <Option value="0" name="outline_width" type="QString"/>
+                <Option value="MM" name="outline_width_unit" type="QString"/>
+                <Option value="solid" name="style" type="QString"/>
+              </Option>
+              <data_defined_properties>
+                <Option type="Map">
+                  <Option value="" name="name" type="QString"/>
+                  <Option name="properties"/>
+                  <Option value="collection" name="type" type="QString"/>
+                </Option>
+              </data_defined_properties>
+            </layer>
+          </symbol>
+        </background>
+        <shadow shadowDraw="0" shadowOffsetDist="1" shadowOffsetUnit="MM" shadowOffsetAngle="135" shadowOffsetGlobal="1" shadowRadius="1.5" shadowRadiusUnit="MM" shadowOpacity="0.7" shadowScale="100" shadowColor="0,0,0,255" shadowBlendMode="6" shadowUnder="0" shadowRadiusAlphaOnly="0" shadowRadiusMapUnitScale="3x:0,0,0,0,0,0" shadowOffsetMapUnitScale="3x:0,0,0,0,0,0"/>
+        <dd_properties>
+          <Option type="Map">
+            <Option value="" name="name" type="QString"/>
+            <Option name="properties"/>
+            <Option value="collection" name="type" type="QString"/>
+          </Option>
+        </dd_properties>
+        <substitutions/>
+      </text-style>
+      <text-format placeDirectionSymbol="0" leftDirectionSymbol="&lt;" plussign="0" multilineAlign="3" addDirectionSymbol="0" decimals="3" useMaxLineLengthForAutoWrap="1" reverseDirectionSymbol="0" formatNumbers="0" wrapChar="" autoWrapLength="0" rightDirectionSymbol="&gt;"/>
+      <placement overrunDistanceMapUnitScale="3x:0,0,0,0,0,0" polygonPlacementFlags="2" geometryGeneratorType="PointGeometry" fitInPolygonOnly="0" placementFlags="10" centroidWhole="0" repeatDistanceMapUnitScale="3x:0,0,0,0,0,0" overlapHandling="PreventOverlap" offsetUnits="MM" predefinedPositionOrder="TR,TL,BR,BL,R,L,TSR,BSR" distMapUnitScale="3x:0,0,0,0,0,0" allowDegraded="0" lineAnchorClipping="0" overrunDistance="0" repeatDistanceUnits="MM" centroidInside="0" repeatDistance="0" dist="0" xOffset="0" quadOffset="4" maxCurvedCharAngleIn="25" labelOffsetMapUnitScale="3x:0,0,0,0,0,0" geometryGenerator="" rotationAngle="0" layerType="PointGeometry" preserveRotation="1" placement="6" yOffset="0" rotationUnit="AngleDegrees" lineAnchorType="0" distUnits="MM" overrunDistanceUnit="MM" geometryGeneratorEnabled="0" priority="5" offsetType="1" lineAnchorTextPoint="FollowPlacement" lineAnchorPercent="0.5" maxCurvedCharAngleOut="-25"/>
+      <rendering obstacleType="1" upsidedownLabels="0" fontLimitPixelSize="0" scaleVisibility="0" zIndex="0" drawLabels="1" minFeatureSize="0" scaleMax="0" fontMinPixelSize="3" labelPerPart="0" scaleMin="0" obstacleFactor="1" unplacedVisibility="0" mergeLines="0" maxNumLabels="2000" obstacle="1" fontMaxPixelSize="10000" limitNumLabels="0"/>
+      <dd_properties>
+        <Option type="Map">
+          <Option value="" name="name" type="QString"/>
+          <Option name="properties"/>
+          <Option value="collection" name="type" type="QString"/>
+        </Option>
+      </dd_properties>
+      <callout type="simple">
+        <Option type="Map">
+          <Option value="pole_of_inaccessibility" name="anchorPoint" type="QString"/>
+          <Option value="0" name="blendMode" type="int"/>
+          <Option name="ddProperties" type="Map">
+            <Option value="" name="name" type="QString"/>
+            <Option name="properties"/>
+            <Option value="collection" name="type" type="QString"/>
+          </Option>
+          <Option value="false" name="drawToAllParts" type="bool"/>
+          <Option value="0" name="enabled" type="QString"/>
+          <Option value="point_on_exterior" name="labelAnchorPoint" type="QString"/>
+          <Option value="&lt;symbol name=&quot;symbol&quot; force_rhr=&quot;0&quot; type=&quot;line&quot; clip_to_extent=&quot;1&quot; is_animated=&quot;0&quot; frame_rate=&quot;10&quot; alpha=&quot;1&quot;>&lt;data_defined_properties>&lt;Option type=&quot;Map&quot;>&lt;Option value=&quot;&quot; name=&quot;name&quot; type=&quot;QString&quot;/>&lt;Option name=&quot;properties&quot;/>&lt;Option value=&quot;collection&quot; name=&quot;type&quot; type=&quot;QString&quot;/>&lt;/Option>&lt;/data_defined_properties>&lt;layer locked=&quot;0&quot; class=&quot;SimpleLine&quot; pass=&quot;0&quot; enabled=&quot;1&quot;>&lt;Option type=&quot;Map&quot;>&lt;Option value=&quot;0&quot; name=&quot;align_dash_pattern&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;square&quot; name=&quot;capstyle&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;5;2&quot; name=&quot;customdash&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;customdash_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;customdash_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;dash_pattern_offset&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;dash_pattern_offset_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;dash_pattern_offset_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;draw_inside_polygon&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;bevel&quot; name=&quot;joinstyle&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;60,60,60,255&quot; name=&quot;line_color&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;solid&quot; name=&quot;line_style&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0.3&quot; name=&quot;line_width&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;line_width_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;offset&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;offset_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;offset_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;ring_filter&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;trim_distance_end&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;trim_distance_end_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;trim_distance_end_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;trim_distance_start&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;trim_distance_start_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;MM&quot; name=&quot;trim_distance_start_unit&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;tweak_dash_pattern_on_corners&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;0&quot; name=&quot;use_custom_dash&quot; type=&quot;QString&quot;/>&lt;Option value=&quot;3x:0,0,0,0,0,0&quot; name=&quot;width_map_unit_scale&quot; type=&quot;QString&quot;/>&lt;/Option>&lt;data_defined_properties>&lt;Option type=&quot;Map&quot;>&lt;Option value=&quot;&quot; name=&quot;name&quot; type=&quot;QString&quot;/>&lt;Option name=&quot;properties&quot;/>&lt;Option value=&quot;collection&quot; name=&quot;type&quot; type=&quot;QString&quot;/>&lt;/Option>&lt;/data_defined_properties>&lt;/layer>&lt;/symbol>" name="lineSymbol" type="QString"/>
+          <Option value="0" name="minLength" type="double"/>
+          <Option value="3x:0,0,0,0,0,0" name="minLengthMapUnitScale" type="QString"/>
+          <Option value="MM" name="minLengthUnit" type="QString"/>
+          <Option value="0" name="offsetFromAnchor" type="double"/>
+          <Option value="3x:0,0,0,0,0,0" name="offsetFromAnchorMapUnitScale" type="QString"/>
+          <Option value="MM" name="offsetFromAnchorUnit" type="QString"/>
+          <Option value="0" name="offsetFromLabel" type="double"/>
+          <Option value="3x:0,0,0,0,0,0" name="offsetFromLabelMapUnitScale" type="QString"/>
+          <Option value="MM" name="offsetFromLabelUnit" type="QString"/>
+        </Option>
+      </callout>
+    </settings>
+  </labeling>
+</qgis>
+QML;
+
+		return $qml;
+	}
+
+	/**
+	 * Generate a simple QML style for line or polygon layers.
+	 */
+	private function generateSimpleQml($geometryType){
+
+		if($geometryType == 'line'){
+			$qml = <<<QML
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis simplifyDrawingHints="1" version="3.28.11-Firenze" styleCategories="AllStyleCategories" labelsEnabled="0">
+  <renderer-v2 type="singleSymbol" symbollevels="0" forceraster="0" enableorderby="0">
+    <symbols>
+      <symbol name="0" force_rhr="0" type="line" clip_to_extent="1" is_animated="0" frame_rate="10" alpha="1">
+        <data_defined_properties>
+          <Option type="Map">
+            <Option value="" name="name" type="QString"/>
+            <Option name="properties"/>
+            <Option value="collection" name="type" type="QString"/>
+          </Option>
+        </data_defined_properties>
+        <layer locked="0" class="SimpleLine" pass="0" enabled="1">
+          <Option type="Map">
+            <Option value="0" name="align_dash_pattern" type="QString"/>
+            <Option value="square" name="capstyle" type="QString"/>
+            <Option value="5;2" name="customdash" type="QString"/>
+            <Option value="3x:0,0,0,0,0,0" name="customdash_map_unit_scale" type="QString"/>
+            <Option value="MM" name="customdash_unit" type="QString"/>
+            <Option value="0" name="draw_inside_polygon" type="QString"/>
+            <Option value="bevel" name="joinstyle" type="QString"/>
+            <Option value="30,120,180,255" name="line_color" type="QString"/>
+            <Option value="solid" name="line_style" type="QString"/>
+            <Option value="0.5" name="line_width" type="QString"/>
+            <Option value="MM" name="line_width_unit" type="QString"/>
+            <Option value="0" name="offset" type="QString"/>
+            <Option value="3x:0,0,0,0,0,0" name="offset_map_unit_scale" type="QString"/>
+            <Option value="MM" name="offset_unit" type="QString"/>
+            <Option value="0" name="ring_filter" type="QString"/>
+            <Option value="0" name="use_custom_dash" type="QString"/>
+            <Option value="3x:0,0,0,0,0,0" name="width_map_unit_scale" type="QString"/>
+          </Option>
+          <data_defined_properties>
+            <Option type="Map">
+              <Option value="" name="name" type="QString"/>
+              <Option name="properties"/>
+              <Option value="collection" name="type" type="QString"/>
+            </Option>
+          </data_defined_properties>
+        </layer>
+      </symbol>
+    </symbols>
+    <rotation/>
+    <sizescale/>
+  </renderer-v2>
+</qgis>
+QML;
+		}else{
+			$qml = <<<QML
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis simplifyDrawingHints="1" version="3.28.11-Firenze" styleCategories="AllStyleCategories" labelsEnabled="0">
+  <renderer-v2 type="singleSymbol" symbollevels="0" forceraster="0" enableorderby="0">
+    <symbols>
+      <symbol name="0" force_rhr="0" type="fill" clip_to_extent="1" is_animated="0" frame_rate="10" alpha="1">
+        <data_defined_properties>
+          <Option type="Map">
+            <Option value="" name="name" type="QString"/>
+            <Option name="properties"/>
+            <Option value="collection" name="type" type="QString"/>
+          </Option>
+        </data_defined_properties>
+        <layer locked="0" class="SimpleFill" pass="0" enabled="1">
+          <Option type="Map">
+            <Option value="3x:0,0,0,0,0,0" name="border_width_map_unit_scale" type="QString"/>
+            <Option value="30,120,180,80" name="color" type="QString"/>
+            <Option value="bevel" name="joinstyle" type="QString"/>
+            <Option value="0,0" name="offset" type="QString"/>
+            <Option value="3x:0,0,0,0,0,0" name="offset_map_unit_scale" type="QString"/>
+            <Option value="MM" name="offset_unit" type="QString"/>
+            <Option value="30,120,180,255" name="outline_color" type="QString"/>
+            <Option value="solid" name="outline_style" type="QString"/>
+            <Option value="0.5" name="outline_width" type="QString"/>
+            <Option value="MM" name="outline_width_unit" type="QString"/>
+            <Option value="solid" name="style" type="QString"/>
+          </Option>
+          <data_defined_properties>
+            <Option type="Map">
+              <Option value="" name="name" type="QString"/>
+              <Option name="properties"/>
+              <Option value="collection" name="type" type="QString"/>
+            </Option>
+          </data_defined_properties>
+        </layer>
+      </symbol>
+    </symbols>
+    <rotation/>
+    <sizescale/>
+  </renderer-v2>
+</qgis>
+QML;
+		}
+
+		return $qml;
+	}
+
+	/**
+	 * Inject QGIS layer_styles table into a GeoPackage using ogrinfo.
+	 */
+	private function injectGpkgStyles($gpkgPath, $layers){
+
+		// Create the layer_styles table
+		$createSql = "CREATE TABLE IF NOT EXISTS layer_styles ("
+			. "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+			. "f_table_catalog TEXT DEFAULT '',"
+			. "f_table_schema TEXT DEFAULT '',"
+			. "f_table_name TEXT NOT NULL,"
+			. "f_geometry_column TEXT NOT NULL,"
+			. "styleName TEXT,"
+			. "styleQML TEXT,"
+			. "styleSLD TEXT,"
+			. "useAsDefault BOOLEAN DEFAULT 1,"
+			. "description TEXT,"
+			. "owner TEXT DEFAULT '',"
+			. "ui TEXT,"
+			. "update_time TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ','now'))"
+			. ")";
+
+		exec("ogrinfo " . escapeshellarg($gpkgPath) . " -sql " . escapeshellarg($createSql) . " 2>&1");
+
+		// Insert style for each layer
+		foreach($layers as $layerName => $layerType){
+
+			if($layerType == 'point'){
+				$qml = $this->generateOrientationQml($layerName);
+				$styleName = 'StraboSpot Orientations';
+			}else{
+				$qml = $this->generateSimpleQml($layerType);
+				$styleName = 'StraboSpot Default';
+			}
+
+			// Write SQL to temp file to avoid shell argument length limits
+			$escapedQml = str_replace("'", "''", $qml);
+			$insertSql = "INSERT INTO layer_styles (f_table_name, f_geometry_column, styleName, styleQML, useAsDefault, description) "
+				. "VALUES ('$layerName', 'geom', '$styleName', '$escapedQml', 1, 'Auto-generated by StraboSpot export')";
+
+			// Write SQL to temp file and use @file syntax to avoid shell argument length limits
+			$sqlFile = dirname($gpkgPath) . "/style_{$layerName}.sql";
+			file_put_contents($sqlFile, $insertSql);
+			exec("ogrinfo " . escapeshellarg($gpkgPath) . " -sql @" . escapeshellarg($sqlFile) . " 2>&1");
+			unlink($sqlFile);
+		}
+	}
+
+	/**
+	 * Export dataset as GeoPackage (.gpkg) format.
+	 * GeoPackage is an OGC standard based on SQLite that supports
+	 * multiple geometry types and embedded QGIS styles.
+	 */
+	public function gpkgOut(){
+
+		if($this->get['dsids']!=""){
+
+			$dsids=$this->get['dsids'];
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+
+			// Get spots by geometry type
+			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$this->get);
+			if($polygonjson!=""){
+				$newjson = array();
+				$newjson['type']="FeatureCollection";
+				$features = array();
+				foreach($polygonjson['features'] as $spot){
+					$spot = $this->fixSpot($spot, true);
+					$features[]=$spot;
+				}
+				$newjson['features']=$features;
+				$polygonjson = json_encode($newjson,JSON_PRETTY_PRINT);
+			}
+
+			$pointjson = $this->strabo->getDatasetSpotsSearch('point',$this->get);
+			if($pointjson!=""){
+				$newjson = array();
+				$newjson['type']="FeatureCollection";
+				$features = array();
+				foreach($pointjson['features'] as $spot){
+					$spot = $this->fixSpot($spot, true);
+					// Explode multi-orientation spots into separate features
+					// (one per orientation, same geometry) for correct symbol rendering
+					$exploded = $this->explodeOrientations($spot);
+					foreach($exploded as $f){
+						$features[] = $f;
+					}
+				}
+				$newjson['features']=$features;
+				$pointjson = json_encode($newjson,JSON_PRETTY_PRINT);
+			}
+
+			$linejson = $this->strabo->getDatasetSpotsSearch('line',$this->get);
+			if($linejson!=""){
+				$newjson = array();
+				$newjson['type']="FeatureCollection";
+				$features = array();
+				foreach($linejson['features'] as $spot){
+					$spot = $this->fixSpot($spot, true);
+					$features[]=$spot;
+				}
+				$newjson['features']=$features;
+				$linejson = json_encode($newjson,JSON_PRETTY_PRINT);
+			}
+
+			if($polygonjson!="" || $pointjson!="" || $linejson!=""){
+
+				$randnum=$this->strabo->db->get_var("select nextval('file_seq')");
+
+				// Create temp directory
+				mkdir("ogrtemp/$randnum");
+
+				$gpkgFile = "ogrtemp/$randnum/export.gpkg";
+				$firstLayer = true;
+				$layers = array();
+
+				// Build GeoPackage - first layer creates file, subsequent layers append
+				if($pointjson!=""){
+					file_put_contents("ogrtemp/$randnum/point.json", $pointjson);
+					exec("ogr2ogr -f GPKG -nlt POINT -nln points -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/point.json 2>&1");
+					unlink("ogrtemp/$randnum/point.json");
+					$layers['points'] = 'point';
+					$firstLayer = false;
+				}
+
+				if($linejson!=""){
+					$appendFlag = $firstLayer ? "" : "-append";
+					file_put_contents("ogrtemp/$randnum/line.json", $linejson);
+					exec("ogr2ogr -f GPKG $appendFlag -nlt LINESTRING -nln lines -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/line.json 2>&1");
+					unlink("ogrtemp/$randnum/line.json");
+					$layers['lines'] = 'line';
+					$firstLayer = false;
+				}
+
+				if($polygonjson!=""){
+					$appendFlag = $firstLayer ? "" : "-append";
+					file_put_contents("ogrtemp/$randnum/polygon.json", $polygonjson);
+					exec("ogr2ogr -f GPKG $appendFlag -nlt POLYGON -nln polygons -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/polygon.json 2>&1");
+					unlink("ogrtemp/$randnum/polygon.json");
+					$layers['polygons'] = 'polygon';
+				}
+
+				// Inject QGIS styles
+				if(file_exists($gpkgFile)){
+					$this->injectGpkgStyles($gpkgFile, $layers);
+				}
+
+				// Get dataset name for filename
+				$dsname = $this->strabo->getDatasetName($dsids);
+				$fixedname = $this->fixFileName($dsname);
+				if($fixedname == ""){
+					$fixedname = "strabo_export";
+				}
+
+				// Serve the GeoPackage file
+				if(file_exists($gpkgFile)){
+					header("Content-Type: application/geopackage+sqlite3");
+					header("Content-Disposition: attachment; filename={$fixedname}.gpkg");
+					header("Content-Length: " . filesize($gpkgFile));
+					readfile($gpkgFile);
+
+					// Clean up temp files
+					unlink($gpkgFile);
+					rmdir("ogrtemp/$randnum");
+				}
+
+			}else{
+				echo "No data found for this dataset.";
+			}
+
+		}
+
+	}
+
 	public function shapefileOut(){
 
 		if($this->get['dsids']!=""){
@@ -26456,6 +27398,1138 @@ $html.='
 			// Write file to the browser
 			$objWriter->save('php://output');
 		}
+	}
+
+	// =========================================================================
+	// GeMS (Geologic Map Schema) Export Methods
+	// Ported from Python StraboGeMSTranslator by Andrew Hoxey (NM Bureau of Geology)
+	// =========================================================================
+
+	// GeMS config constants
+	private $gemsLnSortOptions = ["ContactsAndFaults", "GeologicLines", "MapUnitLines", "CartographicLines"];
+
+	private $gemsLnTypeOptions = [
+		// ContactsAndFaults
+		"contact","igneous contact", "intrusive contact", "metamorphic contact",
+		"internal contact", "angular unconformity",
+		"disconformity", "nonconformity", "paraconformity",
+		"unconformity", "fault", "normal fault", "thrust fault",
+		"reverse fault","right-lateral strike-slip fault",
+		"left-lateral strike-slip fault", "right-lateral oblique-slip fault",
+		"left-lateral oblique-slip fault", "detachment fault",
+		"low-angle normal fault", "fault scarp", "scarp",
+		"elevation profile", "eolian", "escarpment", "geophysical fault",
+		"gradational contact", "headscarp", "joint", "breccia",
+		"miscellaneous map element", "map boundary",
+		// GeologicLines
+		"anticline", "asymmetric anticline", "syncline", "asymmetric syncline", "breccia",
+		"crest", "escarpment", "geophysical boundary", "geophysical survey",
+		"headscarp", "landslide", "lineament", "lineation", "metamorphic facies",
+		"monocline", "monocline, anticlinal bend", "monocline, synclinal bend",
+		"overturned anticline", "overturned syncline", "scarp", "sedimentary facies",
+		"shear zone",
+		// MapUnitLines
+		"key bed", "dike", "clay bed", "coal bed", "N/A",
+		// CartographicLines
+		"analytical", "bedding line", "crest", "cross-section line",
+		"feature label", "geophysical survey", "leader", "measured-section line",
+		"miscellaneous map element", "scale change", "trench", "well"
+	];
+
+	private $gemsPtTypeOptions = [
+		"anticline", "bedding", "crenulation lineation", "cumulate foliation", "dike inclination",
+		"eolian", "fault", "fault decoration", "fault inclination", "fault offset", "fluvial",
+		"fold decoration", "fold hinge", "foliation", "groundwater movement", "intersection lineation",
+		"joint", "landslide", "lineation", "local fault offset", "mineral lineation", "minor fault",
+		"minor fold", "modern current", "overturned bedding", "paleocurrent", "plunge",
+		"primary foliation", "secondary foliation", "slickenline", "spring", "stretching lineation",
+		"syncline", "Toreva block"
+	];
+
+	private $gemsFgdcTable = null;
+
+	/**
+	 * Load the FGDC Symbols Table CSV into an associative array keyed by Symbol.
+	 */
+	public function gemsLoadFGDCTable(){
+		if($this->gemsFgdcTable !== null) return $this->gemsFgdcTable;
+
+		$this->gemsFgdcTable = [];
+		$csvPath = dirname(__FILE__) . '/../data/FGDC_Symbols_Table.csv';
+		if(($handle = fopen($csvPath, 'r')) !== false){
+			$headers = fgetcsv($handle);
+			while(($row = fgetcsv($handle)) !== false){
+				$assoc = array_combine($headers, $row);
+				$symbol = $assoc['Symbol'];
+				$this->gemsFgdcTable[$symbol] = $assoc;
+			}
+			fclose($handle);
+		}
+		return $this->gemsFgdcTable;
+	}
+
+	// =========================================================================
+	// GeMS Scanning Methods (called by gems_export.php)
+	// =========================================================================
+
+	/**
+	 * Scan a dataset and separate features into lines and points.
+	 * Returns raw (un-fixSpot'd) features so nested trace/orientation_data are intact.
+	 */
+	public function gemsScanDataset($dsids){
+		$result = ['lines' => [], 'points' => [], 'errors' => []];
+
+		// Fetch all spots for the dataset
+		$getParams = ['dsids' => $dsids, 'userpkey' => $this->get['userpkey']];
+		$json = $this->strabo->getDatasetSpotsSearch(null, $getParams);
+
+		// Convert stdClass objects to arrays recursively
+		$json = json_decode(json_encode($json), true);
+
+		if(!isset($json['features']) || empty($json['features'])){
+			return $result;
+		}
+
+		// Load tags for unit label lookups
+		$this->alltags = json_decode(json_encode($this->strabo->getTagsFromDatasetIds($dsids)), true);
+
+		foreach($json['features'] as $feature){
+			$geomType = $feature['geometry']['type'] ?? '';
+			$props = $feature['properties'] ?? [];
+
+			// Attach tags to properties
+			if(isset($this->alltags) && !empty($this->alltags)){
+				$spotId = $props['id'] ?? '';
+				foreach($this->alltags as $tag){
+					if(isset($tag['spots']) && in_array($spotId, $tag['spots'])){
+						$props['tags'][] = $tag;
+					}
+				}
+				$feature['properties'] = $props;
+			}
+
+			if($geomType === 'LineString'){
+				if(!isset($props['trace'])){
+					$result['errors'][] = $props['name'] ?? 'Unknown';
+				} else {
+					$result['lines'][] = $feature;
+				}
+			} elseif($geomType === 'Point'){
+				$result['points'][] = $feature;
+			}
+			// Polygons and other geometry types are silently skipped (not used in GeMS)
+		}
+
+		return $result;
+	}
+
+	/**
+	 * Extract unique line trace type strings from an array of line features.
+	 */
+	public function gemsGetUniqueLineTypes($lines){
+		$types = [];
+		$seen = [];
+		foreach($lines as $line){
+			$str = $this->gemsGetLineTraceString($line['properties']);
+			if(!in_array($str, $seen)){
+				$seen[] = $str;
+				$types[] = $str;
+			}
+		}
+		return $types;
+	}
+
+	/**
+	 * Extract unique orientation type strings from an array of point features.
+	 */
+	public function gemsGetUniqueOrientationTypes($points){
+		$types = [];
+		$seen = [];
+		foreach($points as $point){
+			$props = $point['properties'];
+			if(!isset($props['orientation_data']) || empty($props['orientation_data'])){
+				continue;
+			}
+			$orientations = $this->gemsOrientationParser($props['orientation_data']);
+			foreach($orientations as $orDict){
+				$str = $this->gemsGetOrientationString($orDict);
+				if(!in_array($str, $seen)){
+					$seen[] = $str;
+					$types[] = $str;
+				}
+			}
+		}
+		return $types;
+	}
+
+	/**
+	 * Auto-compute FGDC symbol, GeMS sort, and GeMS type for each unique line type.
+	 */
+	public function gemsAutoMapLines($uniqueLineTypes){
+		$this->gemsLoadFGDCTable();
+		$sb = [];
+		$symbols = [];
+		$sorts = [];
+		$types = [];
+		foreach($uniqueLineTypes as $lt){
+			$sb[] = $lt;
+			$sym = $this->gemsGetLineSymbol($lt);
+			$symbols[] = $sym;
+			$sorts[] = $this->gemsSortLineFeatureClass($lt);
+			$types[] = $this->gemsGetLineType($lt, $sym);
+		}
+		return ['sb' => $sb, 'symbol' => $symbols, 'sort' => $sorts, 'type' => $types];
+	}
+
+	/**
+	 * Auto-compute FGDC symbol and GeMS type for each unique orientation type.
+	 */
+	public function gemsAutoMapOrientations($uniqueOrTypes){
+		$sb = [];
+		$symbols = [];
+		$types = [];
+		foreach($uniqueOrTypes as $ot){
+			$sb[] = $ot;
+			$sym = $this->gemsGetOrSymbol($ot);
+			$symbols[] = $sym;
+			$types[] = $this->gemsGetOrType($ot, $sym);
+		}
+		return ['sb' => $sb, 'symbol' => $symbols, 'type' => $types];
+	}
+
+	// =========================================================================
+	// GeMS Line Translation Methods (ported from StraboLineAttributeTranslators.py)
+	// =========================================================================
+
+	/**
+	 * Build a trace type string from a line feature's properties.
+	 * Concatenates type/quality fields from the trace dict.
+	 */
+	public function gemsGetLineTraceString($properties){
+		$trace = $properties['trace'] ?? [];
+		$traceType = '';
+		foreach($trace as $key => $val){
+			if(strpos($key, 'type') !== false || strpos($key, 'quality') !== false){
+				$traceType .= $val . ' ';
+			}
+		}
+		return $traceType;
+	}
+
+	/**
+	 * Compute FGDC symbol code from a trace type string.
+	 * Port of Python getSymbol() - integer arithmetic approach.
+	 */
+	public function gemsGetLineSymbol($sbLineStr){
+		$gemSymbol = 0;
+
+		// Contacts
+		if(strpos($sbLineStr, 'contact') !== false || strpos($sbLineStr, 'bedding') !== false){
+			$gemSymbol += 10100;
+			if(strpos($sbLineStr, 'unconformity') !== false){
+				$gemSymbol += 24;
+			} elseif(strpos($sbLineStr, 'bedding') !== false){
+				$gemSymbol += 8;
+			} elseif(strpos($sbLineStr, 'gradational') !== false){
+				$gemSymbol += 16;
+			} elseif(strpos($sbLineStr, 'volcanic') !== false){
+				$gemSymbol += 723;
+			} elseif(strpos($sbLineStr, 'marker_layer') !== false){
+				$gemSymbol += 100;
+				if(strpos($sbLineStr, 'clay') !== false) $gemSymbol += 8;
+				if(strpos($sbLineStr, 'economic') !== false) $gemSymbol += 16;
+				if(strpos($sbLineStr, 'coal') !== false) $gemSymbol += 24;
+				if(strpos($sbLineStr, 'clinker') !== false) $gemSymbol += 32;
+			}
+		}
+
+		// Dikes
+		if(strpos($sbLineStr, 'dike') !== false){
+			$gemSymbol += 200;
+		}
+
+		// Faults
+		if(strpos($sbLineStr, 'fault') !== false){
+			$gemSymbol += 20000;
+			if(strpos($sbLineStr, 'dextral') !== false && strpos($sbLineStr, 'normal') === false && strpos($sbLineStr, 'reverse') === false){
+				$gemSymbol += 600;
+			} elseif(strpos($sbLineStr, 'sinistral') !== false && strpos($sbLineStr, 'normal') === false && strpos($sbLineStr, 'reverse') === false){
+				$gemSymbol += 608;
+			} elseif(strpos($sbLineStr, 'nomal') !== false && strpos($sbLineStr, 'low_angle') === false && strpos($sbLineStr, 'sinistral') === false && strpos($sbLineStr, 'dextral') === false){
+				$gemSymbol += 200;
+			} elseif(strpos($sbLineStr, 'low_angle_norm') !== false){
+				$gemSymbol += 1000;
+			} elseif(strpos($sbLineStr, 'reverse') !== false && strpos($sbLineStr, 'sinistral') === false && strpos($sbLineStr, 'dextral') === false){
+				$gemSymbol += 400;
+			} elseif(strpos($sbLineStr, 'thrust') !== false){
+				$gemSymbol += 800;
+			} elseif(strpos($sbLineStr, 'dextral_reverse') !== false || strpos($sbLineStr, 'dextral_normal') !== false){
+				$gemSymbol += 700;
+			} elseif(strpos($sbLineStr, 'sinistral_reverse') !== false || strpos($sbLineStr, 'sinistral_normal') !== false){
+				$gemSymbol += 708;
+			} else {
+				$gemSymbol += 100;
+			}
+		}
+
+		if(strpos($sbLineStr, 'fault') !== false && strpos($sbLineStr, 'scarp') !== false){
+			$gemSymbol = 1200;
+		}
+
+		// Folds
+		if(strpos($sbLineStr, 'fold_axial_tra') !== false){
+			$gemSymbol += 50000;
+			if(strpos($sbLineStr, 'syncline') !== false){
+				$gemSymbol += 500;
+			} elseif(strpos($sbLineStr, 'anticline') !== false){
+				$gemSymbol += 100;
+			} elseif(strpos($sbLineStr, 'monocline') !== false){
+				$gemSymbol += 900;
+			} elseif(strpos($sbLineStr, 'antiformal_syn') !== false){
+				$gemSymbol += 732;
+			} elseif(strpos($sbLineStr, 'synformal_anti') !== false){
+				$gemSymbol += 332;
+			} elseif(strpos($sbLineStr, 'synform') !== false){
+				$gemSymbol += 600;
+			} elseif(strpos($sbLineStr, 'antiform') !== false){
+				$gemSymbol += 200;
+			} elseif(strpos($sbLineStr, 's_fold') !== false || strpos($sbLineStr, 'z_fold') !== false || strpos($sbLineStr, 'm_fold') !== false){
+				$gemSymbol += 1100;
+			} elseif(strpos($sbLineStr, 'ptygmatic') !== false || strpos($sbLineStr, 'unknown') !== false){
+				$gemSymbol += 1000;
+			}
+		}
+
+		if(strpos($sbLineStr, 'sheath') !== false){
+			$gemSymbol += 200;
+		}
+
+		// Geomorphic
+		if(strpos($sbLineStr, 'geomorphic_fea') !== false){
+			$gemSymbol = 11000;
+			if(strpos($sbLineStr, 'glacial') !== false) $gemSymbol += 300;
+			elseif(strpos($sbLineStr, 'fluvial') !== false) $gemSymbol += 200;
+			elseif(strpos($sbLineStr, 'marine') !== false) $gemSymbol += 500;
+			elseif(strpos($sbLineStr, 'lacustine') !== false) $gemSymbol += 500;
+			elseif(strpos($sbLineStr, 'arid') !== false) $gemSymbol += 600;
+			elseif(strpos($sbLineStr, 'debris') !== false || strpos($sbLineStr, 'landslide') !== false) $gemSymbol += 700;
+			elseif(strpos($sbLineStr, 'volcanic') !== false) $gemSymbol += 801;
+
+			if(strpos($sbLineStr, 'ridge') !== false) $gemSymbol += 10;
+			elseif(strpos($sbLineStr, 'shoreline') !== false) $gemSymbol += 13;
+		}
+
+		// Anthropogenic
+		if(strpos($sbLineStr, 'anthropenic_fe') !== false){
+			$gemSymbol = 12800;
+			if(strpos($sbLineStr, 'fence_line') !== false) $gemSymbol += 107;
+			if(strpos($sbLineStr, 'property_line') !== false) $gemSymbol += 106;
+			if(strpos($sbLineStr, 'road') !== false) $gemSymbol += 2;
+			if(strpos($sbLineStr, 'trail') !== false) $gemSymbol += 15;
+			if(strpos($sbLineStr, 'other') !== false) $gemSymbol += 19;
+		}
+
+		// Final digit - accuracy/confidence
+		if(strpos($sbLineStr, 'known') !== false){
+			$gemSymbol += 1;
+		} elseif(strpos($sbLineStr, 'approximate(?)') !== false){
+			$gemSymbol += 4;
+		} elseif(strpos($sbLineStr, 'approximate') !== false){
+			$gemSymbol += 3;
+		} elseif(strpos($sbLineStr, 'inferred(?)') !== false){
+			$gemSymbol += 6;
+		} elseif(strpos($sbLineStr, 'inferred') !== false){
+			$gemSymbol += 5;
+		} elseif(strpos($sbLineStr, 'concealed') !== false){
+			$gemSymbol += 7;
+		} else {
+			$gemSymbol += 31;
+		}
+
+		// Convert integer to dotted string
+		$gemSymbol = '0' . strval($gemSymbol);
+		$gemSymbol = substr($gemSymbol, 0, 2) . '.' . substr($gemSymbol, 2, 2) . '.' . substr($gemSymbol, 4);
+
+		if(strpos($sbLineStr, 'anthropenic_fe') !== false || strpos($sbLineStr, 'geomorphic_fea') !== false){
+			$gemSymbol = substr($gemSymbol, 3);
+		}
+
+		// Special cases
+		if(strpos($sbLineStr, 'deformation_zo') !== false) $gemSymbol = '14.02';
+		if(strpos($sbLineStr, 'shear_zone') !== false) $gemSymbol = '14.01';
+		if(strpos($sbLineStr, 'plunging') !== false && strpos($sbLineStr, 'anticline') !== false) $gemSymbol = '05.10.05';
+		if(strpos($sbLineStr, 'plunging') !== false && strpos($sbLineStr, 'syncline') !== false) $gemSymbol = '05.10.06';
+		if(strpos($sbLineStr, 'other_feature') !== false && strpos($sbLineStr, 'extent_of_map') !== false) $gemSymbol = '31.08';
+		if(strpos($sbLineStr, 'cross_section') !== false) $gemSymbol = '31.10';
+		if(strpos($sbLineStr, 'stratigraphic_section') !== false) $gemSymbol = '31.05';
+
+		return $gemSymbol;
+	}
+
+	/**
+	 * Determine GeMS line type via fuzzy string matching against FGDC description.
+	 * Port of Python getType() using similar_text() instead of fuzzywuzzy.
+	 */
+	public function gemsGetLineType($sbLineStr, $gmSymbol){
+		$options = $this->gemsLnTypeOptions;
+		// Remove "fault scarp" temporarily to avoid fuzz issues
+		$options = array_values(array_filter($options, function($o){ return $o !== 'fault scarp'; }));
+
+		// Apply substitutions like the Python code
+		$sbStr = str_replace('sinistral', 'left-lateral', $sbLineStr);
+		$sbStr = str_replace('dextral', 'right-lateral', $sbStr);
+		$sbStr = str_replace('marker_layer', 'key bed', $sbStr);
+
+		// Get FGDC description for this symbol
+		$fgdcTable = $this->gemsLoadFGDCTable();
+		$fgdcDesc = isset($fgdcTable[$gmSymbol]) ? $fgdcTable[$gmSymbol]['Description'] : 'No description found';
+
+		// Compare first 10 chars of FGDC description against all options
+		$descPrefix = substr($fgdcDesc, 0, 10);
+		$ratios = [];
+		foreach($options as $opt){
+			similar_text($descPrefix, $opt, $pct);
+			$ratios[] = $pct;
+		}
+
+		// Get top 3 matches
+		$indexed = $ratios;
+		arsort($indexed);
+		$topIndices = array_slice(array_keys($indexed), 0, 3);
+		$bestMatches = [];
+		foreach($topIndices as $idx){
+			$bestMatches[] = $options[$idx];
+		}
+
+		// Compare top results against last 20 chars of Strabo string
+		$sbSuffix = substr($sbStr, -20);
+		$topRatios = [];
+		foreach($bestMatches as $match){
+			similar_text($sbSuffix, $match, $pct);
+			$topRatios[] = $pct;
+		}
+
+		$bestIdx = array_search(max($topRatios), $topRatios);
+		$gemType = $bestMatches[$bestIdx];
+
+		if(strpos($fgdcDesc, 'No description') !== false){
+			$gemType = 'miscellaneous map element';
+		}
+
+		return $gemType;
+	}
+
+	/**
+	 * Sort a line trace string into a GeMS feature class category.
+	 */
+	public function gemsSortLineFeatureClass($sbTraceStr){
+		if(strpos($sbTraceStr, 'contact') !== false || strpos($sbTraceStr, 'geologic_struc') !== false){
+			$sort = 'ContactsAndFaults';
+			if(strpos($sbTraceStr, 'dike') !== false || strpos($sbTraceStr, 'sill') !== false || strpos($sbTraceStr, 'marker_layer') !== false){
+				$sort = 'MapUnitLines';
+			} elseif(strpos($sbTraceStr, 'fold_axial_tra') !== false){
+				$sort = 'GeologicLines';
+			}
+		} elseif(strpos($sbTraceStr, 'geomorphic_fea') !== false){
+			$sort = 'GeologicLines';
+		} elseif(strpos($sbTraceStr, 'anthro') !== false){
+			$sort = 'DefaultUnsorted';
+		} elseif(strpos($sbTraceStr, 'scale_bar') !== false){
+			$sort = 'DefaultUnsorted';
+		} elseif(strpos($sbTraceStr, 'bedding') !== false){
+			$sort = 'DefaultUnsorted';
+		} elseif(strpos($sbTraceStr, 'geologic_cross') !== false){
+			$sort = 'CartographicLines';
+		} elseif(strpos($sbTraceStr, 'geophysical_cross') !== false){
+			$sort = 'CartographicLines';
+		} elseif(strpos($sbTraceStr, 'other_feature') !== false){
+			$sort = 'DefaultUnsorted';
+		} else {
+			$sort = 'DefaultUnsorted';
+		}
+		return $sort;
+	}
+
+	/**
+	 * Determine identity confidence from trace string keywords.
+	 */
+	public function gemsGetLineIdentity($sbLineStr){
+		if(strpos($sbLineStr, 'approximate(?)') !== false || strpos($sbLineStr, 'inferred(?)') !== false){
+			return 'questionable';
+		}
+		return 'certain';
+	}
+
+	/**
+	 * Determine existence confidence from trace string keywords.
+	 */
+	public function gemsGetLineExistence($sbLineStr){
+		if(strpos($sbLineStr, 'approximate(?)') !== false || strpos($sbLineStr, 'inferred(?)') !== false){
+			return 'questionable';
+		}
+		return 'certain';
+	}
+
+	/**
+	 * Determine if line is concealed from trace string keywords.
+	 */
+	public function gemsGetLineConcealed($sbLineStr){
+		return (strpos($sbLineStr, 'concealed') !== false) ? 'y' : 'n';
+	}
+
+	/**
+	 * Determine location confidence in meters from trace string keywords.
+	 */
+	public function gemsGetLineLocation($sbLineStr){
+		if(strpos($sbLineStr, 'known') !== false) return 5;
+		if(strpos($sbLineStr, 'concealed') !== false) return 100;
+		if(strpos($sbLineStr, 'approximate') !== false || strpos($sbLineStr, 'inferred') !== false) return 50;
+		return 5;
+	}
+
+	// =========================================================================
+	// GeMS Point Translation Methods (ported from StraboPointAttributeTranslators.py + StraboUtils.py)
+	// =========================================================================
+
+	/**
+	 * Flatten orientation_data array including associated orientations into a flat list.
+	 */
+	public function gemsOrientationParser($orientationData){
+		$orientationList = [];
+		if(!is_array($orientationData)) return $orientationList;
+
+		foreach($orientationData as $orItem){
+			if(isset($orItem['associated_orientation']) && is_array($orItem['associated_orientation'])){
+				foreach($orItem['associated_orientation'] as $assoc){
+					$orientationList[] = $assoc;
+				}
+				$copy = $orItem;
+				unset($copy['associated_orientation']);
+				$orientationList[] = $copy;
+			} else {
+				$orientationList[] = $orItem;
+			}
+		}
+		return $orientationList;
+	}
+
+	/**
+	 * Build an orientation type string from an orientation dict.
+	 */
+	public function gemsGetOrientationString($orDict){
+		$orType = '';
+		foreach($orDict as $key => $val){
+			if(strpos($key, 'type') !== false){
+				$orType .= $val . ' ';
+			}
+		}
+		return $orType;
+	}
+
+	/**
+	 * Sort a point into GeMS feature class categories.
+	 * Returns an array of sort codes (a single spot can produce multiple features).
+	 * 1=Station, 2=GenericSamples, 3=OrientationPoints, 5=MapUnitPolyLabels
+	 */
+	public function gemsSortPointFeatureClass($properties){
+		$sort = [];
+
+		if(!empty($properties['images'])){
+			$sort[] = 1;
+		}
+		if(!empty($properties['notes'])){
+			$sort[] = 1;
+		}
+		if(!empty($properties['samples'])){
+			$sort[] = 2;
+		}
+		if(!empty($properties['orientation_data'])){
+			$sort[] = 1; // Also create a Station so OrientationPoints have valid StationsID
+			$sort[] = 3;
+		}
+		if(!empty($properties['tags'])){
+			foreach($properties['tags'] as $tag){
+				if(isset($tag['type']) && $tag['type'] === 'concept'){
+					$sort[] = 1;
+				} else {
+					$sort[] = 5;
+				}
+			}
+		}
+		return array_unique($sort);
+	}
+
+	/**
+	 * Compute FGDC orientation symbol from an orientation type string.
+	 */
+	public function gemsGetOrSymbol($sbOrStr){
+		$gmOrSym = '';
+
+		if(strpos($sbOrStr, 'fault') !== false){
+			$gmOrSym = '02.11.';
+		} elseif(strpos($sbOrStr, 'joint') !== false){
+			$gmOrSym = '04.03.';
+		} elseif(strpos($sbOrStr, 'fold hinge') !== false){
+			$gmOrSym = '05.11.';
+		} elseif(strpos($sbOrStr, 'bedding') !== false){
+			$gmOrSym = '06.';
+		} elseif(strpos($sbOrStr, 'foliation') !== false){
+			$gmOrSym = '08.01.';
+		} elseif(strpos($sbOrStr, 'mineral alignment') !== false){
+			$gmOrSym = '09.001';
+		} elseif(strpos($sbOrStr, 'slickenlines') !== false){
+			$gmOrSym = '09.017';
+		} else {
+			$gmOrSym = '31.';
+		}
+
+		// Digit 3
+		if(strpos($sbOrStr, 'upright') !== false){
+			$gmOrSym .= '02';
+		} elseif(strpos($sbOrStr, 'overturned') !== false){
+			$gmOrSym .= '04';
+		} else {
+			$gmOrSym .= '01';
+		}
+
+		return $gmOrSym;
+	}
+
+	/**
+	 * Determine GeMS orientation type from an orientation type string.
+	 */
+	public function gemsGetOrType($sbOrStr, $gmOrSym){
+		if(strpos($sbOrStr, 'fault') !== false) return 'fault';
+		if(strpos($sbOrStr, 'joint') !== false) return 'joint';
+		if(strpos($sbOrStr, 'fracture') !== false) return 'joint';
+		if(strpos($sbOrStr, 'fold hinge') !== false) return 'fold hinge';
+		if(strpos($sbOrStr, 'foliation') !== false) return 'foliation';
+		if(strpos($sbOrStr, 'mineral alignment') !== false) return 'mineral lineation';
+		if(strpos($sbOrStr, 'slickenlines') !== false) return 'slickenline';
+		if(strpos($sbOrStr, 'striation') !== false) return 'slickenline';
+		if(strpos($sbOrStr, 'bedding') !== false) return 'bedding';
+		if(strpos($sbOrStr, 'linear') !== false) return 'lineation';
+		if(strpos($sbOrStr, 'planar') !== false) return 'bedding';
+		return 'bedding';
+	}
+
+	/**
+	 * Convert orientation quality (1-5) to confidence in degrees.
+	 */
+	public function gemsGetOrConfidence($orDict){
+		$quality = isset($orDict['quality']) ? intval($orDict['quality']) : 5;
+		if($quality <= 0) $quality = 5;
+		return intdiv(15, $quality);
+	}
+
+	/**
+	 * Convert unit label abbreviation to FGDC font characters for geologic periods.
+	 */
+	public function gemsGetUnitLabel($tagDict){
+		$abbrev = $tagDict['unit_label_abbreviation'] ?? '';
+		$gmLabel = $abbrev;
+
+		// Build string from tag fields for period detection
+		$tagStr = '';
+		$excludeKeys = ['type', 'name', 'unit_label_abbreviation', 'map_unit_name', 'rock_type', 'id', 'continuousTagging'];
+		foreach($tagDict as $key => $val){
+			if(!in_array($key, $excludeKeys)){
+				if(is_array($val)){
+					$tagStr .= implode(' ', $val) . ' ';
+				} else {
+					$tagStr .= $val . ' ';
+				}
+			}
+		}
+		$tagStr = strtolower($tagStr);
+
+		if(strpos($tagStr, 'paleogene') !== false){
+			$gmLabel = str_replace('P', ':', $abbrev);
+		} elseif(strpos($tagStr, 'triassic') !== false){
+			$gmLabel = str_replace('Tr', '^', $abbrev);
+		} elseif(strpos($tagStr, 'pennsylvanian') !== false){
+			$gmLabel = str_replace('P', '*', $abbrev);
+		} elseif(strpos($tagStr, 'cambrian') !== false){
+			$gmLabel = str_replace('C', '_', $abbrev);
+		} elseif(strpos($tagStr, 'precambrian') !== false){
+			$gmLabel = str_replace('PC', '=', $abbrev);
+		}
+
+		return $gmLabel;
+	}
+
+	/**
+	 * Get sample type string (currently returns "field sample" as default).
+	 */
+	public function gemsGetSampleType($sampleDict){
+		return 'field sample';
+	}
+
+	/**
+	 * Extract the first geologic_unit tag from a properties dict.
+	 */
+	public function gemsGetUnitTag($properties){
+		if(!isset($properties['tags']) || !is_array($properties['tags'])){
+			return null;
+		}
+		foreach($properties['tags'] as $tag){
+			if(isset($tag['type']) && $tag['type'] === 'geologic_unit'){
+				return $tag;
+			}
+		}
+		return null;
+	}
+
+	// =========================================================================
+	// GeMS Feature Builder Methods (ported from StraboUtils.py)
+	// =========================================================================
+
+	/**
+	 * Build GeMS ContactsAndFaults properties for a line feature.
+	 */
+	public function gemsBuildContactsAndFaults($sbLineStr, $spotName, $traceNotes, $config){
+		$index = array_search($sbLineStr, $config['ln_sb']);
+		$props = [
+			'Type' => ($index !== false) ? $config['ln_type'][$index] : 'miscellaneous map element',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['ln_symbol'][$index] : '',
+			'IsConcealed' => $this->gemsGetLineConcealed($sbLineStr),
+			'IdentityConfidence' => $this->gemsGetLineIdentity($sbLineStr),
+			'ExistenceConfidence' => $this->gemsGetLineExistence($sbLineStr),
+			'LocationConfidenceMeters' => $this->gemsGetLineLocation($sbLineStr),
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => $spotName . ' Notes: ' . $traceNotes
+		];
+		return $props;
+	}
+
+	/**
+	 * Build GeMS GeologicLines properties for a line feature.
+	 */
+	public function gemsBuildGeologicLines($sbLineStr, $spotName, $traceNotes, $config){
+		$index = array_search($sbLineStr, $config['ln_sb']);
+		$props = [
+			'Type' => ($index !== false) ? $config['ln_type'][$index] : 'miscellaneous map element',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['ln_symbol'][$index] : '',
+			'IsConcealed' => $this->gemsGetLineConcealed($sbLineStr),
+			'IdentityConfidence' => $this->gemsGetLineIdentity($sbLineStr),
+			'ExistenceConfidence' => $this->gemsGetLineExistence($sbLineStr),
+			'LocationConfidenceMeters' => $this->gemsGetLineLocation($sbLineStr),
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => $spotName . ' Notes: ' . $traceNotes
+		];
+		return $props;
+	}
+
+	/**
+	 * Build GeMS MapUnitLines properties for a line feature.
+	 */
+	public function gemsBuildMapUnitLines($sbLineStr, $properties, $spotName, $traceNotes, $config){
+		$index = array_search($sbLineStr, $config['ln_sb']);
+		$props = [
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['ln_symbol'][$index] : '',
+			'IsConcealed' => $this->gemsGetLineConcealed($sbLineStr),
+			'IdentityConfidence' => $this->gemsGetLineIdentity($sbLineStr),
+			'ExistenceConfidence' => $this->gemsGetLineExistence($sbLineStr),
+			'LocationConfidenceMeters' => $this->gemsGetLineLocation($sbLineStr),
+			'PlotAtScale' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => $spotName . ' Notes: ' . $traceNotes
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+		} else {
+			$props['MapUnit'] = 'unassigned';
+		}
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS CartographicLines properties for a line feature.
+	 */
+	public function gemsBuildCartographicLines($sbLineStr, $spotName, $traceNotes, $config){
+		$index = array_search($sbLineStr, $config['ln_sb']);
+		$props = [
+			'Type' => ($index !== false) ? $config['ln_type'][$index] : 'miscellaneous map element',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['ln_symbol'][$index] : '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => $spotName . ' Notes: ' . $traceNotes
+		];
+		return $props;
+	}
+
+	/**
+	 * Build GeMS Station properties for a point feature.
+	 */
+	public function gemsBuildStation($properties){
+		$props = [
+			'FieldID' => $properties['name'] ?? '',
+			'ObservedMapUnit' => '',
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => '',
+			'LocationConfidenceMeters' => '',
+			'PlotAtScale' => '',
+			'LocationMethod' => '',
+			'GPSX' => '',
+			'GPSY' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => ''
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+			$props['Symbol'] = $unitTag['unit_label_abbreviation'] ?? '';
+		}
+
+		$notes = 'Notes: ' . ($properties['notes'] ?? '') . ' Images: ';
+		if(isset($properties['images']) && is_array($properties['images'])){
+			foreach($properties['images'] as $img){
+				$notes .= ($img['self'] ?? '') . ' ';
+			}
+		}
+		$props['Notes'] = $notes;
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS GenericSamples properties for a sample.
+	 */
+	public function gemsBuildSample($sampleDict, $properties){
+		$props = [
+			'Type' => $this->gemsGetSampleType($sampleDict),
+			'FieldSampleID' => $sampleDict['sample_id_name'] ?? '',
+			'AlternateSampleID' => '',
+			'ObservedMapUnit' => '',
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => '31.21',
+			'LocationConfidenceMeters' => '',
+			'PlotAtScale' => '',
+			'MaterialAnalyzed' => '',
+			'StationsID' => $properties['name'] ?? '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'AnalysisSourceID' => '',
+			'Notes' => 'Notes: ' . ($sampleDict['sample_description'] ?? '') . ' / ' . ($sampleDict['sample_notes'] ?? '')
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+		}
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS OrientationPoints properties for a single orientation measurement.
+	 */
+	public function gemsBuildOrientationPoint($orStr, $orDict, $properties, $config){
+		$index = array_search($orStr, $config['pt_sb']);
+		$props = [
+			'Type' => ($index !== false) ? $config['pt_type'][$index] : 'undefined',
+			'Azimuth' => '',
+			'Inclination' => '',
+			'ObservedMapUnit' => '',
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => ($index !== false) ? $config['pt_symbol'][$index] : '',
+			'LocationConfidenceMeters' => '',
+			'OrientationConfidenceDegrees' => $this->gemsGetOrConfidence($orDict),
+			'PlotAtScale' => '',
+			'StationsID' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'OrientationSourceID' => '',
+			'Notes' => ''
+		];
+
+		// Azimuth: strike+90 for planar, trend for linear
+		if(isset($orDict['strike'])){
+			$props['Azimuth'] = ($orDict['strike'] + 90) % 360;
+		} elseif(isset($orDict['trend'])){
+			$props['Azimuth'] = $orDict['trend'];
+		}
+
+		// Inclination: dip for planar, plunge for linear
+		if(isset($orDict['dip'])){
+			$props['Inclination'] = $orDict['dip'];
+		} elseif(isset($orDict['plunge'])){
+			$props['Inclination'] = $orDict['plunge'];
+		}
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+		}
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS MapUnitPoints properties for a point feature.
+	 */
+	public function gemsBuildMapUnitPoints($properties){
+		$props = [
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => '',
+			'IdentityConfidence' => '',
+			'ExistenceConfidence' => '',
+			'LocationConfidenceMeters' => '',
+			'PlotAtScale' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => '',
+			'Notes' => 'Notes: ' . ($properties['notes'] ?? '')
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+			$props['Symbol'] = $unitTag['unit_label_abbreviation'] ?? '';
+		}
+
+		return $props;
+	}
+
+	/**
+	 * Build GeMS MapUnitPolyLabels properties for a point feature.
+	 */
+	public function gemsBuildMapUnitPolyLabels($properties){
+		$props = [
+			'MapUnit' => '',
+			'Label' => '',
+			'Symbol' => '',
+			'IdentityConfidence' => '',
+			'DataSourceID' => '',
+			'LocationSourceID' => ''
+		];
+
+		$unitTag = $this->gemsGetUnitTag($properties);
+		if($unitTag){
+			$props['MapUnit'] = $unitTag['unit_label_abbreviation'] ?? '';
+			$props['Label'] = $this->gemsGetUnitLabel($unitTag);
+			$props['Symbol'] = $unitTag['unit_label_abbreviation'] ?? '';
+		}
+
+		return $props;
+	}
+
+	// =========================================================================
+	// GeMS Main Export Entry Point
+	// =========================================================================
+
+	/**
+	 * Main GeMS export method. Called from searchdownload.php.
+	 * Reads POST data with metadata and user-customized mappings,
+	 * fetches raw spots, runs translation, outputs zipped GeoJSON files.
+	 */
+	public function gemsOut(){
+		// Read metadata from POST
+		$dsids = $_POST['dsids'] ?? ($this->get['dsids'] ?? '');
+		$dsid = $_POST['gems_dsid'] ?? '';
+		$lsid = $_POST['gems_lsid'] ?? '';
+		$osid = $_POST['gems_osid'] ?? '';
+		$datasetName = $_POST['gems_dataset_name'] ?? 'GeMS_Export';
+		$datasetName = $this->fixFileName($datasetName);
+
+		if(empty($dsids)){
+			echo 'Error: No dataset specified.';
+			return;
+		}
+
+		// Build config from POST mapping arrays
+		$config = [
+			'ln_sb' => $_POST['ln_sb'] ?? [],
+			'ln_symbol' => $_POST['ln_symbol'] ?? [],
+			'ln_sort' => $_POST['ln_sort'] ?? [],
+			'ln_type' => $_POST['ln_type'] ?? [],
+			'pt_sb' => $_POST['pt_sb'] ?? [],
+			'pt_symbol' => $_POST['pt_symbol'] ?? [],
+			'pt_type' => $_POST['pt_type'] ?? [],
+		];
+
+		// Scan dataset
+		$scanResult = $this->gemsScanDataset($dsids);
+		$lines = $scanResult['lines'];
+		$points = $scanResult['points'];
+
+		// Initialize 9 feature collections
+		$contactsAndFaults = [];
+		$geologicLines = [];
+		$mapUnitLines = [];
+		$cartographicLines = [];
+		$stations = [];
+		$genericSamples = [];
+		$orientationPoints = [];
+		$mapUnitPoints = [];
+		$mapUnitPolyLabels = [];
+
+		// Process lines
+		foreach($lines as $line){
+			$props = $line['properties'];
+			$geometry = $line['geometry'];
+			$spotName = $props['name'] ?? '';
+			$traceNotes = $props['trace']['trace_notes'] ?? '';
+			$sbLineStr = $this->gemsGetLineTraceString($props);
+
+			$index = array_search($sbLineStr, $config['ln_sb']);
+			$sort = ($index !== false) ? ($config['ln_sort'][$index] ?? 'DefaultUnsorted') : 'DefaultUnsorted';
+
+			$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+
+			if($sort === 'ContactsAndFaults'){
+				$feature['properties'] = $this->gemsBuildContactsAndFaults($sbLineStr, $spotName, $traceNotes, $config);
+				$feature['properties']['DataSourceID'] = $dsid;
+				$feature['properties']['LocationSourceID'] = $lsid;
+				$contactsAndFaults[] = $feature;
+			} elseif($sort === 'GeologicLines'){
+				$feature['properties'] = $this->gemsBuildGeologicLines($sbLineStr, $spotName, $traceNotes, $config);
+				$feature['properties']['DataSourceID'] = $dsid;
+				$feature['properties']['LocationSourceID'] = $lsid;
+				$geologicLines[] = $feature;
+			} elseif($sort === 'MapUnitLines'){
+				$feature['properties'] = $this->gemsBuildMapUnitLines($sbLineStr, $props, $spotName, $traceNotes, $config);
+				$feature['properties']['DataSourceID'] = $dsid;
+				$feature['properties']['LocationSourceID'] = $lsid;
+				$mapUnitLines[] = $feature;
+			} elseif($sort === 'CartographicLines'){
+				$feature['properties'] = $this->gemsBuildCartographicLines($sbLineStr, $spotName, $traceNotes, $config);
+				$feature['properties']['DataSourceID'] = $dsid;
+				$feature['properties']['LocationSourceID'] = $lsid;
+				$cartographicLines[] = $feature;
+			}
+		}
+
+		// Process points
+		foreach($points as $point){
+			$props = $point['properties'];
+			$geometry = $point['geometry'];
+			$spotName = $props['name'] ?? '';
+			$daughterCount = 0;
+
+			$sortCodes = $this->gemsSortPointFeatureClass($props);
+
+			// Stations (sort code 1)
+			if(in_array(1, $sortCodes)){
+				$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+				$stProps = $this->gemsBuildStation($props);
+				$stProps['DataSourceID'] = $dsid;
+				$stProps['LocationSourceID'] = $lsid;
+				$stProps['Notes'] = $spotName . '_' . $daughterCount . ' ' . $stProps['Notes'];
+				$feature['properties'] = $stProps;
+				$stations[] = $feature;
+				$daughterCount++;
+			}
+
+			// GenericSamples (sort code 2)
+			if(in_array(2, $sortCodes) && !empty($props['samples'])){
+				foreach($props['samples'] as $sample){
+					$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+					$samProps = $this->gemsBuildSample($sample, $props);
+					$samProps['DataSourceID'] = $dsid;
+					$samProps['LocationSourceID'] = $lsid;
+					$samProps['Notes'] = $spotName . '_' . $daughterCount . ' ' . $samProps['Notes'];
+					$feature['properties'] = $samProps;
+					$genericSamples[] = $feature;
+					$daughterCount++;
+				}
+			}
+
+			// OrientationPoints (sort code 3)
+			if(in_array(3, $sortCodes) && !empty($props['orientation_data'])){
+				$orientations = $this->gemsOrientationParser($props['orientation_data']);
+				foreach($orientations as $orDict){
+					$orStr = $this->gemsGetOrientationString($orDict);
+					$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+					$orProps = $this->gemsBuildOrientationPoint($orStr, $orDict, $props, $config);
+					$orProps['DataSourceID'] = $dsid;
+					$orProps['LocationSourceID'] = $lsid;
+					$orProps['OrientationSourceID'] = $osid;
+					$orProps['StationsID'] = $spotName . '_' . $daughterCount;
+					$orProps['Notes'] = $spotName . '_' . $daughterCount;
+					$feature['properties'] = $orProps;
+					$orientationPoints[] = $feature;
+					$daughterCount++;
+				}
+			}
+
+			// MapUnitPolyLabels (sort code 5)
+			if(in_array(5, $sortCodes)){
+				$feature = ['type' => 'Feature', 'geometry' => $geometry, 'properties' => []];
+				$muplProps = $this->gemsBuildMapUnitPolyLabels($props);
+				$muplProps['DataSourceID'] = $dsid;
+				$muplProps['LocationSourceID'] = $lsid;
+				$muplProps['Notes'] = $spotName . '_' . $daughterCount;
+				$feature['properties'] = $muplProps;
+				$mapUnitPolyLabels[] = $feature;
+				$daughterCount++;
+			}
+		}
+
+		// Assemble 9 FeatureCollections
+		$collections = [
+			'ContactsAndFaults' => ['type' => 'FeatureCollection', 'features' => $contactsAndFaults],
+			'GeologicLines' => ['type' => 'FeatureCollection', 'features' => $geologicLines],
+			'MapUnitLines' => ['type' => 'FeatureCollection', 'features' => $mapUnitLines],
+			'CartographicLines' => ['type' => 'FeatureCollection', 'features' => $cartographicLines],
+			'Stations' => ['type' => 'FeatureCollection', 'features' => $stations],
+			'GenericSamples' => ['type' => 'FeatureCollection', 'features' => $genericSamples],
+			'OrientationPoints' => ['type' => 'FeatureCollection', 'features' => $orientationPoints],
+			'MapUnitPoints' => ['type' => 'FeatureCollection', 'features' => $mapUnitPoints],
+			'MapUnitPolyLabels' => ['type' => 'FeatureCollection', 'features' => $mapUnitPolyLabels],
+		];
+
+		// Write to temp directory and zip
+		$randnum = $this->strabo->db->get_var("select nextval('file_seq')");
+		mkdir("ogrtemp/$randnum");
+		mkdir("ogrtemp/$randnum/data");
+
+		foreach($collections as $name => $collection){
+			$filename = $datasetName . '_' . $name . '.json';
+			file_put_contents("ogrtemp/$randnum/data/$filename", json_encode($collection, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE));
+		}
+
+		// Create zip
+		$zipName = $datasetName . '_GeMS.zip';
+		exec("zip -j ogrtemp/$randnum/$zipName ogrtemp/$randnum/data/* 2>&1", $results);
+
+		// Serve download
+		$zipFile = "ogrtemp/$randnum/$zipName";
+		if(file_exists($zipFile)){
+			header('Content-Type: application/zip');
+			header('Content-Disposition: attachment; filename="' . $zipName . '"');
+			header('Content-Length: ' . filesize($zipFile));
+			readfile($zipFile);
+		} else {
+			echo 'Error: Failed to create zip file.';
+		}
+
+		// Cleanup
+		array_map('unlink', glob("ogrtemp/$randnum/data/*"));
+		if(is_dir("ogrtemp/$randnum/data")) rmdir("ogrtemp/$randnum/data");
+		if(file_exists($zipFile)) unlink($zipFile);
+		if(is_dir("ogrtemp/$randnum")) rmdir("ogrtemp/$randnum");
 	}
 
 }

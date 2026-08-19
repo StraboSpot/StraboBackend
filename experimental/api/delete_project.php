@@ -84,6 +84,30 @@ try {
     error_log("Failed to create version backup before deleting project $project_pkey: " . $e->getMessage());
 }
 
+// Mirror sample removal into strabosamples.* for every experiment in the
+// project BEFORE the bulk delete (rows still exist). exp_sample_sync's
+// empty-sample branch removes each straboexp.sample row + spine link, keyed
+// on the experiment owner's userpkey. Enumerate with the SAME filter as the
+// delete below so spine cleanup matches exactly what gets deleted.
+include_once("experimental/lib/sample_sync.php");
+if (!isset($uuid_gen)) { $uuid_gen = new UUID(); }
+if ($is_admin) {
+    $exp_rows = $db->get_results_prepared(
+        "SELECT pkey, userpkey FROM straboexp.experiment WHERE project_pkey = $1",
+        array($project_pkey)
+    );
+} else {
+    $exp_rows = $db->get_results_prepared(
+        "SELECT pkey, userpkey FROM straboexp.experiment WHERE project_pkey = $1 AND userpkey = $2",
+        array($project_pkey, $userpkey)
+    );
+}
+if (is_array($exp_rows)) {
+    foreach ($exp_rows as $er) {
+        exp_sample_sync($db, $uuid_gen, (int)$er->pkey, (int)$er->userpkey, null, $neodb);
+    }
+}
+
 // Delete all experiments for this project first - include userpkey for extra security
 if ($is_admin) {
     $db->prepare_query(
@@ -109,6 +133,12 @@ if ($is_admin) {
         array($project_pkey, $userpkey)
     );
 }
+
+// StraboSearch live-sync (§5.3): drop every index row hosted by this
+// project (experiments + sample fan-out). Keyed on uuid alone — the Exp
+// convention sets project_userpkey per experiment owner.
+require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+StraboSearchSync::removeExpProject($db, $row->uuid);
 
 // Return success
 $result = new stdClass();

@@ -12,10 +12,11 @@
 
 
 include_once("adminkeys.php");
+include_once(__DIR__ . "/includes/session_config.php");
 session_start();
 
-if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > 7200)) {
-	// last request was more than 30 minutes ago
+if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > SESSION_IDLE_TIMEOUT)) {
+	// last request was longer ago than the idle timeout
 	session_unset();     // unset $_SESSION variable for the run-time
 	session_destroy();   // destroy session data in storage
 }

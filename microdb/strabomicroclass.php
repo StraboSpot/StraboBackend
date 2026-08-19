@@ -70,6 +70,13 @@ class StraboMicro
 
 			$p = json_decode($project->projectjson);
 
+			// Overlay strabosamples.* spine edits onto the samples so this
+			// app-facing read reflects Samples-app edits (consistency with
+			// getWebProject / the .smz + PDF downloads). The project row was
+			// fetched WHERE userpkey = $this->userpkey, so the owner is us.
+			require_once __DIR__ . '/lib/sample_overlay.php';
+			micro_sample_overlay_apply($p, $this->db, (int)$this->userpkey);
+
 			foreach($p->datasets as $d){
 				foreach($d->samples as $s){
 					foreach($s->micrographs as $m){
@@ -86,11 +93,31 @@ class StraboMicro
 		return $out;
 	}
 
+	/**
+	 * Lazily regenerate straboMicroFiles/<pkey>/project.pdf via the
+	 * server-side MicroProjectPDF when pdf_dirty=TRUE for the project.
+	 * Called by every Micro download path (getProjectPDF / getProjectURL /
+	 * getWebProject / getSharedURL) before the PDF is read/copied. No-op
+	 * when the flag is FALSE — the desktop client's uploaded PDF stays
+	 * authoritative until a Samples-app spine edit flips the flag (see
+	 * StraboSamplesService::markMicroProjectPdfsDirty in samples/micro-
+	 * server-pdf). Errors are swallowed: a stale PDF is preferable to a
+	 * 500 on a successful download.
+	 */
+	protected function regenerateProjectPdfIfDirty($project_internal_id, $owner_pkey) {
+		// Delegates to the shared free function so the website PDF download
+		// endpoint (download_micro_pdf.php) and the app/REST download paths
+		// share one regen implementation. See microdb/lib/MicroProjectPDF.php.
+		require_once __DIR__ . '/lib/MicroProjectPDF.php';
+		micro_regenerate_pdf_if_dirty($this->db, (int)$project_internal_id, (int)$owner_pkey);
+	}
+
 	public function getWebProject($project_id){
 		$project = $this->db->get_row("select * from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='$project_id'");
 		$out = new stdClass();
 		if($project->id != ""){
 			$pkey = $project->id;
+			$this->regenerateProjectPdfIfDirty($pkey, $this->userpkey);
 			$uuid = $this->uuid->v4();
 
 			$docRoot = $_SERVER['DOCUMENT_ROOT'];
@@ -98,7 +125,16 @@ class StraboMicro
 			mkdir("$docRoot/ziptemp/$uuid");
 			mkdir("$docRoot/ziptemp/$uuid/$project_id");
 
-			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.json $docRoot/ziptemp/$uuid/$project_id/");
+			// Write project.json with strabosamples.* spine overlay so the
+			// download reflects any Samples-app edits made after upload.
+			// See microdb/lib/sample_overlay.php for the mapping + v1 notes.
+			require_once __DIR__ . '/lib/sample_overlay.php';
+			micro_sample_overlay_write_json(
+				$this->db,
+				"$docRoot/straboMicroFiles/$pkey/project.json",
+				"$docRoot/ziptemp/$uuid/$project_id/project.json",
+				(int)$this->userpkey
+			);
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/associatedFiles $docRoot/ziptemp/$uuid/$project_id/");
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/webImages $docRoot/ziptemp/$uuid/$project_id/");
@@ -159,6 +195,7 @@ class StraboMicro
 		$out = new stdClass();
 		if($project->id != ""){
 			$pkey = $project->id;
+			$this->regenerateProjectPdfIfDirty($pkey, $this->userpkey);
 			$uuid = $this->uuid->v4();
 
 			$docRoot = $_SERVER['DOCUMENT_ROOT'];
@@ -166,16 +203,26 @@ class StraboMicro
 			mkdir("$docRoot/ziptemp/$uuid");
 			mkdir("$docRoot/ziptemp/$uuid/$project_id");
 
-			$mod = $this->db->get_var("select round(extract(epoch from uploaddate)*1000) as modifiedtimestamp from micro_projectmetadata where strabo_id = '$project_id'");
+			$mod = $this->db->get_var("select
+										CASE
+											WHEN modifiedtimestamp IS NULL OR modifiedtimestamp = '' THEN NULL
+											WHEN modifiedtimestamp ~ '^[0-9]+$' THEN modifiedtimestamp::bigint
+											ELSE (extract(epoch from modifiedtimestamp::timestamptz) * 1000)::bigint
+										END as modifiedtimestamp
 
-			$json = file_get_contents("$docRoot/straboMicroFiles/$pkey/project.json");
-			$json = json_decode($json);
+							from micro_projectmetadata where userpkey = $this->userpkey and strabo_id = '$project_id'");
 
-			unset($json->modifiedTimestamp);
-			$json->modifiedtimestamp = (int)$mod;
-
-			$json = json_encode($json, JSON_PRETTY_PRINT);
-			file_put_contents("$docRoot/ziptemp/$uuid/$project_id/project.json", $json);
+			// Write project.json with strabosamples.* spine overlay + the
+			// existing modifiedtimestamp patch. See microdb/lib/sample_overlay.php
+			// for the mapping + v1 notes.
+			require_once __DIR__ . '/lib/sample_overlay.php';
+			micro_sample_overlay_write_json(
+				$this->db,
+				"$docRoot/straboMicroFiles/$pkey/project.json",
+				"$docRoot/ziptemp/$uuid/$project_id/project.json",
+				(int)$this->userpkey,
+				(int)$mod
+			);
 
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
 			//Just using the PDF for now. We can re-implement these later if the web viewer is needed. JMA 20241121
@@ -203,8 +250,41 @@ class StraboMicro
 		if($project->id != ""){
 
 			$id = $project->id;
-			$out->url = "/straboMicroFiles/".$id."/project.zip";
-			$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");
+			$this->regenerateProjectPdfIfDirty($id, $this->userpkey);
+			// Build a fresh ZIP into ziptemp with the strabosamples.* spine
+			// overlay applied to project.json. The previous implementation
+			// returned a URL to the static, upload-frozen project.zip; that
+			// went stale on any Samples-app spine edit. The URL contract
+			// (return-then-fetch) is preserved — only the path under
+			// DOCUMENT_ROOT changes. See microdb/lib/sample_overlay.php.
+			require_once __DIR__ . '/lib/sample_overlay.php';
+			$uuid = $this->uuid->v4();
+			$docRoot = $_SERVER['DOCUMENT_ROOT'];
+			mkdir("$docRoot/ziptemp/$uuid");
+			mkdir("$docRoot/ziptemp/$uuid/$project_id");
+
+			micro_sample_overlay_write_json(
+				$this->db,
+				"$docRoot/straboMicroFiles/$id/project.json",
+				"$docRoot/ziptemp/$uuid/$project_id/project.json",
+				(int)$this->userpkey
+			);
+			if (file_exists("$docRoot/straboMicroFiles/$id/project.pdf")) {
+				exec("cp -rp $docRoot/straboMicroFiles/$id/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
+			}
+			if (is_dir("$docRoot/straboMicroFiles/$id/associatedFiles")) {
+				exec("cp -rp $docRoot/straboMicroFiles/$id/associatedFiles $docRoot/ziptemp/$uuid/$project_id/");
+			}
+			if (is_dir("$docRoot/straboMicroFiles/$id/webImages")) {
+				exec("cp -rp $docRoot/straboMicroFiles/$id/webImages $docRoot/ziptemp/$uuid/$project_id/");
+			}
+			if (is_dir("$docRoot/straboMicroFiles/$id/webThumbnails")) {
+				exec("cp -rp $docRoot/straboMicroFiles/$id/webThumbnails $docRoot/ziptemp/$uuid/$project_id/");
+			}
+			exec("cd $docRoot/ziptemp/$uuid; zip -r $project_id.zip $project_id");
+
+			$out->url = "/ziptemp/$uuid/$project_id.zip";
+			$out->bytes = filesize("$docRoot/ziptemp/$uuid/$project_id.zip");
 
 			$out->micrograph_count = $this->db->get_var("
 				select count(mg.id)
@@ -258,8 +338,53 @@ class StraboMicro
 
 		$out = new stdClass();
 
-		$out->url = "/straboMicroFiles/".$id."/project.zip";
-		$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");
+		// Build a fresh ZIP into ziptemp with strabosamples.* spine overlay.
+		// Share URLs don't carry $this->userpkey (the share may be accessed
+		// by someone other than the owner), so the owner's pkey is looked
+		// up from micro_projectmetadata via the internal id passed in. The
+		// strabo_id is also needed to construct the in-zip folder name to
+		// preserve the desktop client's existing extract path convention.
+		require_once __DIR__ . '/lib/sample_overlay.php';
+		$meta = $this->db->get_row_prepared(
+			"SELECT userpkey, strabo_id FROM micro_projectmetadata WHERE id = $1 LIMIT 1",
+			array((int)$id)
+		);
+		if (!$meta || $meta->strabo_id === null || $meta->strabo_id === '') {
+			$out->bytes = 0;
+			return $out;
+		}
+		$ownerPkey = (int)$meta->userpkey;
+		$strabo_project_id = (string)$meta->strabo_id;
+
+		$this->regenerateProjectPdfIfDirty($id, $ownerPkey);
+		$uuid = $this->uuid->v4();
+		$docRoot = $_SERVER['DOCUMENT_ROOT'];
+		mkdir("$docRoot/ziptemp/$uuid");
+		mkdir("$docRoot/ziptemp/$uuid/$strabo_project_id");
+
+		micro_sample_overlay_write_json(
+			$this->db,
+			"$docRoot/straboMicroFiles/$id/project.json",
+			"$docRoot/ziptemp/$uuid/$strabo_project_id/project.json",
+			$ownerPkey
+		);
+		if (file_exists("$docRoot/straboMicroFiles/$id/project.pdf")) {
+			exec("cp -rp $docRoot/straboMicroFiles/$id/project.pdf $docRoot/ziptemp/$uuid/$strabo_project_id/");
+		}
+		if (is_dir("$docRoot/straboMicroFiles/$id/associatedFiles")) {
+			exec("cp -rp $docRoot/straboMicroFiles/$id/associatedFiles $docRoot/ziptemp/$uuid/$strabo_project_id/");
+		}
+		if (is_dir("$docRoot/straboMicroFiles/$id/webImages")) {
+			exec("cp -rp $docRoot/straboMicroFiles/$id/webImages $docRoot/ziptemp/$uuid/$strabo_project_id/");
+		}
+		if (is_dir("$docRoot/straboMicroFiles/$id/webThumbnails")) {
+			exec("cp -rp $docRoot/straboMicroFiles/$id/webThumbnails $docRoot/ziptemp/$uuid/$strabo_project_id/");
+		}
+		$safeProjectId = escapeshellarg($strabo_project_id);
+		exec("cd $docRoot/ziptemp/$uuid; zip -r {$safeProjectId}.zip $safeProjectId");
+
+		$out->url = "/ziptemp/$uuid/$strabo_project_id.zip";
+		$out->bytes = filesize("$docRoot/ziptemp/$uuid/$strabo_project_id.zip");
 
 		return $out;
 	}
@@ -325,7 +450,11 @@ class StraboMicro
 										id,
 										strabo_id,
 										name,
-										round(extract(epoch from uploaddate)*1000) as modifiedtimestamp,
+										CASE
+											WHEN modifiedtimestamp IS NULL OR modifiedtimestamp = '' THEN NULL
+											WHEN modifiedtimestamp ~ '^[0-9]+$' THEN modifiedtimestamp::bigint
+											ELSE (extract(epoch from modifiedtimestamp::timestamptz) * 1000)::bigint
+										END as modifiedtimestamp,
 										TO_CHAR(uploaddate, 'mm/dd/yyyy HH:MMPM TZ OF') as uploaddate
 										from micro_projectmetadata where userpkey = $this->userpkey order by id desc");
 		foreach($rows as $row){
@@ -1654,6 +1783,13 @@ class StraboMicro
 
 				$this->db->query("update micro_projectmetadata set original_filename = '".$files['name']."' where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
 
+				// StraboSearch live-sync (§5.3): rebuild this project's index
+				// slice from the just-committed rows (whole-project replace —
+				// hook granularity matches write granularity). Runs even on a
+				// partial load so the index mirrors whatever the source holds.
+				require_once __DIR__ . '/lib/search_sync.php';
+				micro_search_sync_project($this->db, $project_metadata_id, $strabo_project_id, $this->userpkey);
+
 				if($data->Error != ""){
 					return $data;
 				}
@@ -1717,6 +1853,11 @@ class StraboMicro
 				$this->deleteTempFiles($project_metadata_id, $strabo_project_id);
 
 				$this->db->query("update micro_projectmetadata set original_filename = '".$files['name']."' where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
+
+				// StraboSearch live-sync (§5.3): rebuild this project's index
+				// slice — same rationale as insertProject.
+				require_once __DIR__ . '/lib/search_sync.php';
+				micro_search_sync_project($this->db, $project_metadata_id, $strabo_project_id, $this->userpkey);
 
 				if($data->Error != ""){
 					return $data;
@@ -2195,6 +2336,24 @@ class StraboMicro
 						$query .= ")\n";
 
 						$this->db->query($query);
+
+						// Mirror into strabosamples.* via the unified sync helper
+						// (samples/micro-integration). Auto-seeds project
+						// collaborators on first creation per §7.3.1. Bridge id
+						// is the sample's strabo_id ($thissamplemetadata->id).
+						require_once __DIR__ . '/lib/sample_sync.php';
+						$thisMicrographCount = (is_array($thissamplemetadata->micrographs ?? null) || (is_object($thissamplemetadata->micrographs ?? null)))
+							? count((array)$thissamplemetadata->micrographs)
+							: 0;
+						micro_sample_sync(
+							$this->db,
+							$thissamplemetadata,
+							(string)$thisprojectmetadata->id,
+							(int)$project_metadata_id,
+							(int)$userpkey,
+							(int)$datasetmetadata_id,
+							$thisMicrographCount
+						);
 
 						if($thissamplemetadata->micrographs != ""){
 
@@ -4842,6 +5001,17 @@ class StraboMicro
 		$pkey = $this->db->get_var("select id from micro_projectmetadata where strabo_id='$projectid' and userpkey=$this->userpkey");
 
 		if($pkey != ""){
+			// Mirror sample removals into strabosamples.* BEFORE the cascade
+			// DELETE runs against the source tables — once those rows are
+			// gone, we can no longer resolve the strabo_ids.
+			require_once __DIR__ . '/lib/sample_sync.php';
+			micro_sample_sync_remove_project($this->db, $projectid, (int)$this->userpkey);
+
+			// StraboSearch live-sync (§5.3): drop the project's index slice
+			// (micrographs + micrograph images + hosted sample fan-out rows).
+			require_once __DIR__ . '/lib/search_sync.php';
+			micro_search_sync_remove_project($this->db, $projectid, (int)$this->userpkey);
+
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey);
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey.".zip");
 

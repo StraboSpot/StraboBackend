@@ -42,6 +42,13 @@ foreach($exprows as $exprow){
 	$json = $exprow->json;
 	$exp = json_decode($json);
 
+	// Overlay strabosamples.* spine edits onto the embedded sample BEFORE
+	// freezing into the permanent DOI snapshot. A DOI is a citable, immutable
+	// artifact, so it must capture the sample values as they are at mint time,
+	// not the pre-spine-edit upload values. Owner is the experiment's userpkey.
+	require_once(__DIR__ . '/experimental/lib/sample_overlay.php');
+	experimental_sample_overlay_apply($exp, $db, (int)$exprow->userpkey);
+
 	$met = new stdClass();
 	$met->name = $exprow->id;
 	$met->uuid = $uuid->v4();

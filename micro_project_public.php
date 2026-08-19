@@ -28,6 +28,17 @@ if($_SESSION['loggedin']=="yes"){
 		}else{
 			$db->prepare_query("UPDATE micro_projectmetadata SET ispublic = false WHERE id=$1 AND userpkey = $2", array($projectid, $userpkey));
 		}
+
+		// StraboSearch live-sync (§5.3): flip project_ispublic on the
+		// project's index slice (ACL-relevant — a public→private toggle must
+		// not leave items publicly searchable until the nightly heal).
+		$straboProjectId = $db->get_var_prepared(
+			"SELECT strabo_id FROM micro_projectmetadata WHERE id=$1 AND userpkey=$2",
+			array($projectid, $userpkey));
+		if($straboProjectId){
+			require_once __DIR__ . '/microdb/lib/search_sync.php';
+			micro_search_sync_ispublic($db, $straboProjectId, $userpkey, $state === 'public');
+		}
 	}
 }
 

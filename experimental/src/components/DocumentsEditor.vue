@@ -20,6 +20,8 @@
                 @update:modelValue="handleTypeChange(item, $event, update)"
                 :options="documentTypes"
                 placeholder="Select..."
+                filter
+                resetFilterOnHide
                 class="w-full"
               />
             </div>
@@ -32,6 +34,8 @@
                 @update:modelValue="handleFormatChange(item, $event, update)"
                 :options="documentFormats"
                 placeholder="Select..."
+                filter
+                resetFilterOnHide
                 class="w-full"
               />
             </div>

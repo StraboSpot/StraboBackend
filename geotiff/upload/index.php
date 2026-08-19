@@ -41,8 +41,6 @@ function doLog($text){
 	if(file_exists("/srv/app/www/log.txt")){
 		file_put_contents ("/srv/app/www/log.txt", "Text: ".$text, FILE_APPEND);
 		file_put_contents ("/srv/app/www/log.txt", "\n\n*************************************************\n\n", FILE_APPEND);
-	}else{
-		echo "doesnt exist";
 	}
 }
 

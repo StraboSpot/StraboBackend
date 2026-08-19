@@ -156,6 +156,16 @@ class UpdateDatasetSpotsController extends MyController
 						//this turns pixel coordinates into real-world coordinates so we can do spatial searches
 						$features=$this->strabo->fixIncomingBasemaps($features);
 
+						// Resolve project context for the strabosamples mirror hook
+						// (samples/field-integration).
+						$projectStraboIdForSync = $this->strabo->getProjectId($datasetId);
+						$this->strabo->setSampleSyncContext($projectStraboIdForSync, $datasetId);
+
+						// StraboSearch live-sync (§5.3.4): suppress per-spot
+						// touches; batch sync fires beside buildPgDataset below.
+						require_once __DIR__ . '/../lib/search_sync.php';
+						field_search_sync_suppress();
+
 						foreach($features as $feature){
 
 							$spotid = $feature->properties->id;
@@ -188,6 +198,7 @@ class UpdateDatasetSpotsController extends MyController
 							}
 
 						}
+						$this->strabo->clearSampleSyncContext();
 
 						// Log upload stats (use original user for tracking)
 						$spotcount = count($features);
@@ -227,6 +238,10 @@ class UpdateDatasetSpotsController extends MyController
 
 						//also add dataset to Postgres Database here.
 						$this->strabo->buildPgDataset($datasetId, $effectiveUserpkey);
+
+						// StraboSearch live-sync (§5.3.4): end-of-dataset batch sync.
+						field_search_sync_resume();
+						field_search_sync_dataset($this->strabo->db, $this->strabo->neodb, $datasetId, $effectiveUserpkey);
 					}
 
 				}else{

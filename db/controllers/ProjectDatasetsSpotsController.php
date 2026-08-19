@@ -106,8 +106,8 @@ class ProjectDatasetsSpotsController extends MyController
 			$injson = json_encode($upload['project'], JSON_PRETTY_PRINT);
 
 			// Determine if this is a collaborative edit (user is collaborator, not owner)
-			$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner);
-			$this->strabo->insertProject($injson, null, $isCollaborativeEdit, $ownerPkey);
+			$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner());
+			$this->strabo->insertProject($injson, null, $isCollaborativeEdit, $ownerPkey, $originalUploader);
 
 			if($datasets != ""){
 				foreach($datasets as $dataset){
@@ -140,6 +140,12 @@ class ProjectDatasetsSpotsController extends MyController
 								if($spots->features != ""){
 
 									$this->strabo->setuserpkey((int)$ownerPkey);
+									$this->strabo->setSampleSyncContext($projectid, $datasetid);
+
+									// StraboSearch live-sync (§5.3.4): suppress
+									// per-spot touches; per-dataset batch sync below.
+									require_once __DIR__ . '/../lib/search_sync.php';
+									field_search_sync_suppress();
 
 									foreach($spots->features as $spot){
 
@@ -150,10 +156,11 @@ class ProjectDatasetsSpotsController extends MyController
 											$injson = json_encode($spot, JSON_PRETTY_PRINT);
 											$this->strabo->insertSpot($injson,null,$ownerPkey,$originalUploader);
 											$this->strabo->addSpotToDataset($datasetid,$spotid,"HAS_SPOT");
-		
+
 										}
-		
+
 									}
+									$this->strabo->clearSampleSyncContext();
 								}
 							
 							//}
@@ -184,6 +191,12 @@ class ProjectDatasetsSpotsController extends MyController
 							$this->strabo->setDatasetCenter($datasetid, $ownerPkey);
 
 							//also add dataset to Postgres Database here.
+
+							// StraboSearch live-sync (§5.3.4): per-dataset
+							// batch sync at end of this dataset's spot loop.
+							require_once __DIR__ . '/../lib/search_sync.php';
+							field_search_sync_resume();
+							field_search_sync_dataset($this->strabo->db, $this->strabo->neodb, $datasetid, $ownerPkey);
 						}
 					}
 

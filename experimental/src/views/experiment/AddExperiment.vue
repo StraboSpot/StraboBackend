@@ -6,9 +6,9 @@
 
     <div v-else-if="error" class="text-center py-12">
       <p class="text-red-500 mb-4">{{ error }}</p>
-      <router-link :to="`/view_project?ppk=${ppk}`" class="btn-secondary">
-        Back to Project
-      </router-link>
+      <a href="/my_experimental_data" class="btn-secondary">
+        Back to My Data
+      </a>
     </div>
 
     <template v-else>
@@ -59,15 +59,27 @@
         @open-section="handleOpenSection"
       />
 
-      <!-- Action Buttons -->
-      <div class="flex justify-center gap-4 mt-8 mb-8">
-        <a href="/my_experimental_data.php" class="btn-secondary">
-          Cancel
-        </a>
-        <button @click="handleSave" :disabled="saving" class="btn-primary">
-          {{ saving ? 'Saving...' : 'Save Experiment' }}
-        </button>
-      </div>
+      <!-- Spacer so content isn't hidden behind the fixed save bar -->
+      <div class="h-28"></div>
+
+      <!-- Sticky save bar -->
+      <SaveBar
+        :dirty="isDirty"
+        :saving="saving"
+        save-label="Save Experiment"
+        clean-text="Nothing to save yet"
+        @save="handleSave"
+        @cancel="handleCancel"
+      />
+
+      <!-- Unsaved-changes prompt when leaving the page -->
+      <UnsavedChangesDialog
+        :visible="showLeaveDialog"
+        :saving="saving"
+        @save="handleLeaveSave"
+        @discard="handleLeaveDiscard"
+        @stay="handleLeaveStay"
+      />
 
       <!-- Section Modals -->
       <SectionModal
@@ -111,8 +123,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, watch, onMounted, nextTick } from 'vue'
+import { useRouter, onBeforeRouteLeave } from 'vue-router'
 import { useToast } from 'primevue/usetoast'
 import InputText from 'primevue/inputtext'
 import ExperimentTiles from '@/components/ExperimentTiles.vue'
@@ -121,6 +133,9 @@ import DownloadModal from '@/components/DownloadModal.vue'
 import BulkLoadBar from '@/components/BulkLoadBar.vue'
 import ChooseExperimentModal from '@/components/ChooseExperimentModal.vue'
 import ChooseApparatusModal from '@/components/ChooseApparatusModal.vue'
+import SaveBar from '@/components/SaveBar.vue'
+import UnsavedChangesDialog from '@/components/UnsavedChangesDialog.vue'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { projectService, experimentService, bulkLoadService } from '@/services/api'
 
 const props = defineProps({
@@ -152,6 +167,15 @@ const experimentData = ref({
   experiment: {},
   data: {}
 })
+
+// Unsaved-changes tracking: baseline is the empty form set after mount
+const serializeState = () => JSON.stringify({
+  experiment_id: experimentId.value,
+  data: experimentData.value
+})
+const { isDirty, markSaved, suppressGuards } = useUnsavedChanges(serializeState)
+const showLeaveDialog = ref(false)
+let pendingRoute = null
 
 // Sync experimentId (front page) with experiment.id (Experimental Setup form)
 watch(experimentId, (newVal) => {
@@ -210,7 +234,56 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+
+  // Let the experimentId → experiment.id sync watcher settle, then baseline
+  await nextTick()
+  markSaved()
 })
+
+// Guard in-app navigation away from unsaved changes (browser/tab close and
+// full-page links are covered by the composable's beforeunload handler)
+onBeforeRouteLeave((to) => {
+  if (!isDirty.value) return true
+  pendingRoute = to
+  showLeaveDialog.value = true
+  return false
+})
+
+const navigateToHub = () => {
+  suppressGuards()
+  window.location.href = '/my_experimental_data.php'
+}
+
+const handleCancel = () => {
+  if (!isDirty.value) {
+    navigateToHub()
+    return
+  }
+  showLeaveDialog.value = true
+}
+
+const handleLeaveSave = async () => {
+  showLeaveDialog.value = false
+  pendingRoute = null
+  await handleSave()
+}
+
+const handleLeaveDiscard = () => {
+  showLeaveDialog.value = false
+  if (pendingRoute) {
+    const target = pendingRoute
+    pendingRoute = null
+    suppressGuards()
+    router.push(target)
+  } else {
+    navigateToHub()
+  }
+}
+
+const handleLeaveStay = () => {
+  showLeaveDialog.value = false
+  pendingRoute = null
+}
 
 const handleOpenSection = (section) => {
   activeSection.value = section
@@ -309,6 +382,10 @@ const handleSave = async () => {
       experiment_id: experimentId.value,
       data: experimentData.value
     })
+
+    // Saved — disarm the unsaved-changes guards before the redirect
+    markSaved()
+    suppressGuards()
 
     // Show success toast
     toast.add({

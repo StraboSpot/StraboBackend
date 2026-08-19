@@ -26,6 +26,15 @@ if($row->id == ""){
 
 $json = $row->projectjson;
 $json = json_decode($json);
+// Defensive: overlay strabosamples.* spine edits onto the samples so any
+// sample-field rendering in this pane reflects Samples-app edits. showMicrograph
+// currently renders only the image/scale-bar/spot-map (no sample fields), but
+// keep this consistent with the other Micro read surfaces (microproject.php,
+// micrographDetailsPane.php) so a future field add here can't go stale. Owner is
+// the project owner ($row->userpkey), which differs from the viewer on a public
+// project. No-op when there are no spine edits.
+require_once __DIR__ . '/microdb/lib/sample_overlay.php';
+micro_sample_overlay_apply($json, $db, (int)$row->userpkey);
 $json->pkey = $pkey;
 $ml = new MicroLanding($json);
 

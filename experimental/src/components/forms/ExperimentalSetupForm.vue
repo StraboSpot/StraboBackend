@@ -120,6 +120,8 @@
                   :options="GEOMETRY_MATERIALS"
                   placeholder="Select..."
                   showClear
+                  filter
+                  resetFilterOnHide
                 />
               </div>
             </div>
@@ -145,9 +147,11 @@
                     <label class="text-xs" v-if="dimIdx === 0">Variable</label>
                     <Select
                       :modelValue="dim.variable"
-                      @update:modelValue="updateDimension(item, dimIdx, 'variable', $event, update)"
+                      @update:modelValue="(val) => { const c = { variable: val }; if (dim.unit && !getUnitsForVariable(val).includes(dim.unit)) c.unit = ''; updateDimension(item, dimIdx, c, update) }"
                       :options="DIMENSION_VARIABLES"
                       placeholder="Select..."
+                      filter
+                      resetFilterOnHide
                     />
                   </div>
                   <div class="field dim-value">
@@ -162,7 +166,9 @@
                     <Select
                       :modelValue="dim.unit"
                       @update:modelValue="updateDimension(item, dimIdx, 'unit', $event, update)"
-                      :options="UNIT_TYPES"
+                      :options="getUnitsForVariable(dim.variable)"
+                      :filter="getUnitsForVariable(dim.variable).length > 8"
+                      resetFilterOnHide
                     />
                   </div>
                   <div class="field dim-prefix">
@@ -171,6 +177,8 @@
                       :modelValue="dim.prefix"
                       @update:modelValue="updateDimension(item, dimIdx, 'prefix', $event, update)"
                       :options="prefixOptions"
+                      filter
+                      resetFilterOnHide
                     />
                   </div>
                   <div class="field flex-1">
@@ -212,7 +220,7 @@
         type="button"
         severity="secondary"
         outlined
-        label="Cancel"
+        label="Discard Changes"
         @click="$emit('cancel')"
       />
       <Button
@@ -227,6 +235,7 @@
 <script setup>
 import { ref, computed, watch } from 'vue'
 import { useToast } from 'primevue/usetoast'
+import { useFormDirty } from '@/composables/useFormDirty'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
 import Button from 'primevue/button'
@@ -242,7 +251,8 @@ import {
   GEOMETRY_MATERIALS,
   DIMENSION_VARIABLES,
   UNIT_TYPES,
-  UNIT_PREFIXES
+  UNIT_PREFIXES,
+  getUnitsForVariable
 } from '@/schemas/laps-enums'
 
 const props = defineProps({
@@ -281,6 +291,8 @@ const createEmptyForm = () => ({
 
 const form = ref(createEmptyForm())
 
+const { isDirty, resetDirty } = useFormDirty(form)
+
 // Populate form with initial data
 watch(() => props.initialData, (data) => {
   if (data && Object.keys(data).length > 0) {
@@ -311,6 +323,7 @@ watch(() => props.initialData, (data) => {
       documents: data.documents?.map(d => ({ ...d })) || []
     }
   }
+  resetDirty()
 }, { immediate: true, deep: true })
 
 const isValid = computed(() => {
@@ -338,10 +351,17 @@ function addDimension(item, update) {
   update('dimensions', newDimensions)
 }
 
-function updateDimension(item, dimIdx, field, value, update) {
+function updateDimension(item, dimIdx, fieldOrObj, valueOrUpdate, maybeUpdate) {
   const newDimensions = [...item.dimensions]
-  newDimensions[dimIdx] = { ...newDimensions[dimIdx], [field]: value }
-  update('dimensions', newDimensions)
+  if (typeof fieldOrObj === 'object') {
+    // Batch update: updateDimension(item, dimIdx, { variable: 'x', unit: '' }, update)
+    newDimensions[dimIdx] = { ...newDimensions[dimIdx], ...fieldOrObj }
+    valueOrUpdate('dimensions', newDimensions)
+  } else {
+    // Single field: updateDimension(item, dimIdx, 'variable', 'x', update)
+    newDimensions[dimIdx] = { ...newDimensions[dimIdx], [fieldOrObj]: valueOrUpdate }
+    maybeUpdate('dimensions', newDimensions)
+  }
 }
 
 function removeDimension(item, dimIdx, update) {
@@ -363,7 +383,7 @@ function handleSubmit() {
       detail: errors.join('\n'),
       life: 5000
     })
-    return
+    return false
   }
 
   // Convert dates to ISO strings for storage
@@ -374,7 +394,10 @@ function handleSubmit() {
   }
 
   emit('submit', formData)
+  return true
 }
+
+defineExpose({ isDirty, trySubmit: handleSubmit })
 </script>
 
 <style scoped>

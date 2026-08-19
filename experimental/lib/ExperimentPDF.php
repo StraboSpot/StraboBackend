@@ -25,6 +25,8 @@ class ExperimentPDF extends tFPDF
     protected $lightBg = [248, 249, 250];     // Light gray
     protected $textDark = [33, 37, 41];       // Near black
     protected $textMuted = [108, 117, 125];   // Gray
+    protected $linkBlue = [13, 110, 253];     // Hyperlink blue
+    protected $samplesLink = null;            // StraboSamples detail URL (per experiment)
 
     public function __construct($orientation = 'P', $unit = 'mm', $size = 'A4')
     {
@@ -46,6 +48,16 @@ class ExperimentPDF extends tFPDF
         $this->experimentData = $data;
         $this->experimentId = $experimentId;
         $this->projectName = $projectName;
+    }
+
+    /**
+     * Absolute URL of the linked StraboSamples record for THIS experiment's
+     * sample (per experiment — project PDFs set it before each generate()).
+     * Null = no link row rendered.
+     */
+    public function setSamplesLink($url)
+    {
+        $this->samplesLink = $url;
     }
 
     // Page header
@@ -121,7 +133,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate title section
      */
-    protected function generateTitleSection()
+    public function generateTitleSection()
     {
         $this->SetFont('DejaVu', 'B', 20);
         $this->SetTextColor($this->textDark[0], $this->textDark[1], $this->textDark[2]);
@@ -235,9 +247,28 @@ class ExperimentPDF extends tFPDF
     }
 
     /**
+     * Labeled row whose value is a clickable hyperlink. The URL itself is
+     * the display text so the destination survives printing.
+     */
+    protected function labeledLinkField($label, $url, $labelWidth = 45)
+    {
+        if (empty($url)) return;
+
+        $this->SetFont('DejaVu', 'B', 9);
+        $this->SetTextColor($this->textMuted[0], $this->textMuted[1], $this->textMuted[2]);
+        $this->Cell($labelWidth, 5, $label . ':', 0, 0);
+
+        $this->SetFont('DejaVu', '', 9);
+        $this->SetTextColor($this->linkBlue[0], $this->linkBlue[1], $this->linkBlue[2]);
+        $this->Write(5, $url, $url);
+        $this->Ln(5);
+        $this->SetTextColor($this->textDark[0], $this->textDark[1], $this->textDark[2]);
+    }
+
+    /**
      * Generate Sample section
      */
-    protected function generateSampleSection($sample)
+    public function generateSampleSection($sample)
     {
         $this->sectionHeader('Sample');
 
@@ -246,6 +277,7 @@ class ExperimentPDF extends tFPDF
         $this->labeledField('ID', $sample->id ?? '');
         $this->labeledField('IGSN', $sample->igsn ?? '');
         $this->labeledField('Description', $sample->description ?? '');
+        $this->labeledLinkField('StraboSamples', $this->samplesLink);
 
         // Parent sample
         if (!empty($sample->parent)) {
@@ -383,7 +415,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate Facility & Apparatus section
      */
-    protected function generateFacilityApparatusSection($facility, $apparatus)
+    public function generateFacilityApparatusSection($facility, $apparatus)
     {
         $this->sectionHeader('Facility & Apparatus');
 
@@ -462,7 +494,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate Experimental Setup section
      */
-    protected function generateExperimentalSetupSection($experiment)
+    public function generateExperimentalSetupSection($experiment)
     {
         // Skip if already shown in title
         // Just show geometry here
@@ -517,7 +549,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate DAQ section
      */
-    protected function generateDAQSection($daq)
+    public function generateDAQSection($daq)
     {
         $this->sectionHeader('Data Acquisition (DAQ)');
 
@@ -573,7 +605,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate Protocol section
      */
-    protected function generateProtocolSection($protocol)
+    public function generateProtocolSection($protocol)
     {
         $this->sectionHeader('Experimental Protocol');
 
@@ -614,7 +646,7 @@ class ExperimentPDF extends tFPDF
     /**
      * Generate Data section
      */
-    protected function generateDataSection($data)
+    public function generateDataSection($data)
     {
         $this->sectionHeader('Data');
 

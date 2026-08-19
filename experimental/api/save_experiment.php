@@ -52,6 +52,8 @@ if (!$input) {
 include_once("adminkeys.php");
 include("prepare_connections.php");
 include_once("includes/UUID.php");
+include_once("experimental/api/update_keywords.php");
+include_once("experimental/lib/sample_sync.php");
 
 $is_admin = in_array($userpkey, $admin_pkeys);
 $uuid_gen = new UUID();
@@ -77,8 +79,6 @@ if (!empty($input->data)) {
     if (isset($input->data->data)) $json_data->data = $input->data->data;
 }
 
-$json_string = pg_escape_string(json_encode($json_data));
-
 // Check if updating existing experiment
 if (!empty($input->pkey)) {
     $experiment_pkey = (int)$input->pkey;
@@ -102,6 +102,38 @@ if (!empty($input->pkey)) {
         exit;
     }
 
+    // Version snapshot BEFORE overwriting the experiment (restores the
+    // pre-Vue-rewrite inEditExperiment behavior). Log-and-continue: a
+    // snapshot failure must not block the save.
+    try {
+        include_once("expdb/straboexpclass.php");
+        $exp = new StraboExp($neodb, $userpkey, $db);
+        $exp->setuuid($uuid_gen);
+        $exp->createProjectVersion((int)$row->project_pkey);
+    } catch (Exception $e) {
+        error_log("Failed to create version backup before updating experiment $experiment_pkey: " . $e->getMessage());
+    }
+
+    // Sync the normalized sample rows (one per experiment, anchored on
+    // experiment_pkey). The incoming sample.strabo_id expresses LINK INTENT
+    // (Exp_StraboSamples_Linking.md D3): absent = keep current identity,
+    // explicit null = unlink (fresh mint), a spine id the user owns =
+    // link/relink. Keyed on the experiment OWNER's userpkey (matches
+    // delete_experiment.php — admin edits must not re-home the sample or
+    // validate links against the admin's spine).
+    $owner_userpkey = (int)$row->userpkey;
+    $sample_obj = isset($json_data->sample) ? $json_data->sample : null;
+    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $owner_userpkey, $sample_obj, $neodb);
+    if ($strabo_id !== null && is_object($json_data->sample)) {
+        $json_data->sample->strabo_id = $strabo_id;
+    } elseif (is_object($json_data->sample) && isset($json_data->sample->strabo_id)) {
+        // Sync judged the sample contentless (rows removed) — drop the
+        // round-tripped strabo_id so the stored JSON heals too.
+        unset($json_data->sample->strabo_id);
+    }
+
+    $json_string = json_encode($json_data);
+
     // Update experiment - include userpkey in WHERE for extra security
     if ($is_admin) {
         $db->prepare_query("
@@ -121,12 +153,22 @@ if (!empty($input->pkey)) {
         ", array($experiment_id, $json_string, $experiment_pkey, $userpkey));
     }
 
+    // Update parent project's full-text search keywords
+    updateExpProjectKeywords($db, (int)$row->project_pkey);
+
+    // StraboSearch live-sync (§5.3): re-extract this experiment's index row
+    // AFTER the UPDATE commits. Keys on the experiment OWNER from the source
+    // row (never the session user — admin edits must land under e.userpkey).
+    require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+    StraboSearchSync::touchExperiment($db, $experiment_pkey);
+
     // Return updated experiment
     $result = new stdClass();
     $result->pkey = $experiment_pkey;
     $result->experiment_id = $experiment_id;
     $result->uuid = $row->uuid;
     $result->project_pkey = (int)$row->project_pkey;
+    $result->strabo_id = $strabo_id;
     $result->success = true;
     $result->message = 'Experiment updated successfully';
 
@@ -159,9 +201,47 @@ if (!empty($input->pkey)) {
         exit;
     }
 
+    // Version snapshot BEFORE adding the experiment (restores the
+    // pre-Vue-rewrite inNewExperiment behavior). Log-and-continue.
+    try {
+        include_once("expdb/straboexpclass.php");
+        $exp = new StraboExp($neodb, $userpkey, $db);
+        $exp->setuuid($uuid_gen);
+        $exp->createProjectVersion($project_pkey);
+    } catch (Exception $e) {
+        error_log("Failed to create version backup before adding experiment to project $project_pkey: " . $e->getMessage());
+    }
+
     // Generate new pkey and uuid
-    $experiment_pkey = $db->get_var("SELECT nextval('straboexp.experiment_pkey_seq')");
+    $experiment_pkey = (int)$db->get_var("SELECT nextval('straboexp.experiment_pkey_seq')");
     $uuid = $uuid_gen->v4();
+
+    // Pre-mint the strabo_id and embed it in the JSON, but do NOT write the
+    // normalized sample rows yet: straboexp.sample.experiment_pkey has an FK
+    // to straboexp.experiment, so the experiment row must be inserted first.
+    // exp_sample_sync() reuses the embedded id instead of minting its own.
+    // Only when actual sample metadata was entered — the Vue Add page always
+    // sends a sample key (empty {} when untouched), and PHP's empty() is
+    // false for ANY object, so an object-presence check alone would mint a
+    // junk sample for every experiment saved without sample data.
+    //
+    // LINK INTENT exception (Exp_StraboSamples_Linking.md D3): an incoming
+    // strabo_id that resolves to a spine sample this user owns is a
+    // deliberate link (picker selection, or Load Data carryover of a linked
+    // sample) and is preserved instead of overwritten with a fresh mint.
+    $sample_obj = isset($json_data->sample) ? $json_data->sample : null;
+    if (exp_sample_has_data($sample_obj)) {
+        $intent = exp_sample_link_intent($db, $sample_obj, $userpkey);
+        if (!($intent['mode'] === 'id' && $intent['spine_owned'])) {
+            $sample_obj->strabo_id = $uuid_gen->v4();
+        }
+    } elseif (is_object($sample_obj) && isset($sample_obj->strabo_id)) {
+        // Contentless sample carrying a round-tripped id (e.g. loaded from
+        // a previous experiment's JSON) — don't persist the stale id.
+        unset($sample_obj->strabo_id);
+    }
+
+    $json_string = json_encode($json_data);
 
     // Insert new experiment
     $db->prepare_query("
@@ -169,12 +249,23 @@ if (!empty($input->pkey)) {
         VALUES ($1, $2, $3, $4, NOW(), NOW(), $5, $6)
     ", array($experiment_pkey, $project_pkey, $userpkey, $experiment_id, $json_string, $uuid));
 
+    // Normalized sample rows (straboexp.sample + children + strabosamples spine)
+    $strabo_id = exp_sample_sync($db, $uuid_gen, $experiment_pkey, $userpkey, $sample_obj, $neodb);
+
+    // Update parent project's full-text search keywords
+    updateExpProjectKeywords($db, $project_pkey);
+
+    // StraboSearch live-sync (§5.3): index the new experiment.
+    require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+    StraboSearchSync::touchExperiment($db, $experiment_pkey);
+
     // Return created experiment
     $result = new stdClass();
     $result->pkey = (int)$experiment_pkey;
     $result->experiment_id = $experiment_id;
     $result->uuid = $uuid;
     $result->project_pkey = $project_pkey;
+    $result->strabo_id = $strabo_id;
     $result->success = true;
     $result->message = 'Experiment created successfully';
 }

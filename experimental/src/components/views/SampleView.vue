@@ -3,6 +3,16 @@
     <!-- Basic Information -->
     <section class="view-section">
       <h3 class="section-title">Basic Information</h3>
+      <div v-if="data.strabo_id" class="strabo-linked-note mb-3">
+        <i class="pi pi-link" />
+        <a v-if="samplesUrl" :href="samplesUrl" target="_blank" rel="noopener">
+          Linked to StraboSamples (ID: {{ data.strabo_id }})
+          <i class="pi pi-external-link text-xs" />
+        </a>
+        <template v-else>
+          Linked to StraboSamples (ID: {{ data.strabo_id }})
+        </template>
+      </div>
       <div class="info-grid">
         <InfoField label="Sample Name" :value="data.name" />
         <InfoField label="Sample ID" :value="data.id" />
@@ -159,7 +169,18 @@ const props = defineProps({
   data: {
     type: Object,
     default: () => ({})
+  },
+  // Owner pkey of the linked StraboSamples record — enables the drill-down
+  // link (/samples/{owner}/{id}, composite spine PK). Null = plain text.
+  linkOwner: {
+    type: [Number, String],
+    default: null
   }
+})
+
+const samplesUrl = computed(() => {
+  if (!props.linkOwner || !props.data?.strabo_id) return null
+  return `/samples/${props.linkOwner}/${encodeURIComponent(props.data.strabo_id)}`
 })
 
 // Helper to check if a value is "Other" (case-insensitive)
@@ -270,6 +291,28 @@ const hasAnyData = computed(() => {
 .sample-view {
   max-width: 1100px;
   margin: 0 auto;
+}
+
+/* strabo-accent is a Tailwind token, not a CSS var — hex per tailwind.config.js */
+.strabo-linked-note {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+  color: var(--p-surface-400, #9e9e9e);
+}
+
+.strabo-linked-note .pi-link {
+  color: #f4511e;
+}
+
+.strabo-linked-note a {
+  color: #f4511e;
+  text-decoration: none;
+}
+
+.strabo-linked-note a:hover {
+  text-decoration: underline;
 }
 
 .view-section {

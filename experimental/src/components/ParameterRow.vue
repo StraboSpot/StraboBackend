@@ -12,6 +12,7 @@
           :placeholder="namePlaceholder"
           showClear
           filter
+          resetFilterOnHide
           class="w-full"
         />
         <InputText
@@ -72,7 +73,8 @@
           :options="unitOptions"
           placeholder="Select..."
           showClear
-          filter
+          :filter="unitOptions.length > 8"
+          resetFilterOnHide
           class="w-full"
         />
       </div>
@@ -106,7 +108,7 @@
 import { computed } from 'vue'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
-import { UNIT_TYPES, UNIT_PREFIXES } from '@/schemas/laps-enums'
+import { UNIT_TYPES, UNIT_PREFIXES, getUnitsForVariable } from '@/schemas/laps-enums'
 
 const props = defineProps({
   modelValue: {
@@ -164,14 +166,19 @@ const props = defineProps({
 
 const emit = defineEmits(['update:modelValue'])
 
-const unitOptions = UNIT_TYPES
+const unitOptions = computed(() => getUnitsForVariable(props.modelValue[props.nameField]))
 const prefixOptions = computed(() => ['-', ...UNIT_PREFIXES])
 
 function updateField(field, value) {
-  emit('update:modelValue', {
-    ...props.modelValue,
-    [field]: value
-  })
+  const updated = { ...props.modelValue, [field]: value }
+  // Clear unit if the variable changed and the current unit is no longer applicable
+  if (field === props.nameField && props.modelValue.unit) {
+    const validUnits = getUnitsForVariable(value)
+    if (validUnits !== UNIT_TYPES && !validUnits.includes(props.modelValue.unit)) {
+      updated.unit = ''
+    }
+  }
+  emit('update:modelValue', updated)
 }
 </script>
 

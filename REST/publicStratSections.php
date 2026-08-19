@@ -75,7 +75,7 @@ if($xmin == "" || $xmax == "" || $ymin == "" || $ymax == ""){
 		$poly = "$xmin $ymin, $xmin $ymax, $xmax $ymax, $xmax $ymin, $xmin $ymin";
 
 		$rows = $db->get_results_prepared("
-			select strat.*, strat.strabo_spot_id from 
+			select strat.*, d.*, strat.strabo_spot_id from 
 				project p,
 				dataset d,
 				spot s,
@@ -91,10 +91,14 @@ if($xmin == "" || $xmax == "" || $ymin == "" || $ymax == ""){
 
 
 		foreach($rows as $row){
+		
+			//$db->dumpVar($row->strabo_dataset_id);exit();
 			
 			$feature = new stdClass();
 			$feature->properties->id = $row->spot_pkey;
 			$feature->properties->detail_url = "https://strabospot.org/REST/publicStratSectionDetail/".$row->strabo_spot_id;
+			$feature->properties->view_url = "https://strabospot.org/strat_section?id=".$row->strabo_spot_id."&did=".$row->strabo_dataset_id;
+
 			
 			$json = json_decode($row->json);
 			

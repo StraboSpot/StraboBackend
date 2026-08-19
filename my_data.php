@@ -269,7 +269,7 @@ input:checked + .slider:before {
 
 		switch(selected){
 			case "newexperiment":
-				window.location='https://strabospot.org/experimental/add_experiment?ppk='+pid;
+				window.location='/experimental/add_experiment?ppk='+pid;
 				break;
 			case "delete":
 				if (confirm("Are you sure you want to delete project "+projectname+"?") == true) {
@@ -385,7 +385,7 @@ if(count($experimentalrows) > 0){
 			</span>
 			<?php
 
-			$erows = $db->get_results_prepared("select pkey, id, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, json from straboexp.experiment where project_pkey = $1 order by modified_timestamp desc", array($pkey));
+			$erows = $db->get_results_prepared("select pkey, uuid, id, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, json from straboexp.experiment where project_pkey = $1 order by modified_timestamp desc", array($pkey));
 			if(count($erows) > 0){
 				?>
 				<div class="strabotable" style="margin-left:0px;margin-top:3px;">
@@ -404,6 +404,7 @@ if(count($experimentalrows) > 0){
 
 					//gather data
 					$epkey = $erow->pkey;
+					$euuid = $erow->uuid;
 					$experiment_id = $erow->id;
 					$modified_timestamp = $erow->timestamp;
 
@@ -437,11 +438,10 @@ if(count($experimentalrows) > 0){
 						<tr>
 							<td nowrap>
 								&nbsp;&nbsp;&nbsp;&nbsp;
-								<!--<a href="https://strabospot.org/experimental/view_experiment?e=<?php echo $epkey?>">View</a>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;-->
-								<a href="https://strabospot.org/experimental/view_experiment?e=<?php echo $epkey?>">View</a>&nbsp;&nbsp;&nbsp;&nbsp;
-								<a href="https://strabospot.org/experimental/edit_experiment?e=<?php echo $epkey?>">Edit</a>&nbsp;&nbsp;&nbsp;&nbsp;
-								<a href="https://strabospot.org/experimental/download_experiment?e=<?php echo $epkey?>">Download</a>&nbsp;&nbsp;&nbsp;&nbsp;
-								<a href="https://strabospot.org/experimental/delete_experiment?e=<?php echo $epkey?>" OnClick="return confirm('Are you sure you want to delete <?php echo $experiment_id?>?')">Delete</a>&nbsp;&nbsp;&nbsp;&nbsp;
+								<a href="/experimental/view_experiment?e=<?php echo $epkey?>">View</a>&nbsp;&nbsp;&nbsp;&nbsp;
+								<a href="/experimental/edit_experiment?e=<?php echo $epkey?>">Edit</a>&nbsp;&nbsp;&nbsp;&nbsp;
+								<a href="/experimental/download_experiment.php?u=<?php echo $euuid?>">Download</a>&nbsp;&nbsp;&nbsp;&nbsp;
+								<a href="/experimental/delete_experiment?e=<?php echo $epkey?>" OnClick="return confirm('Are you sure you want to delete <?php echo $experiment_id?>?')">Delete</a>&nbsp;&nbsp;&nbsp;&nbsp;
 
 							</td>
 							<td nowrap><?php echo $experiment_id?></td>

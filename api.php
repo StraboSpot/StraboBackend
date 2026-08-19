@@ -13,6 +13,12 @@
 include("includes/mheader.php");
 ?>
 
+<style>
+  a {
+    scroll-margin-top: 100px;
+  }
+</style>
+
 			<!-- Main -->
 				<div id="main" class="wrapper style1">
 					<div class="container">
@@ -27,9 +33,7 @@ include("includes/mheader.php");
 The StraboSpot REST API uses HTTP Basic Auth for authentication. An account can be obtained
 by clicking on the "<a href="register">ACCOUNT->REGISTER</a>" link above. Once an account is created, it will need
 to be validated by email. When using the StraboSpot REST API, you will use your email address as the username and your
-password as entered during registration. Alternatively, the StraboSpot system also supports JWT (JSON Web Tokens) for
-access all API endpoints. The path for JWT access is "/jwtdb/" instead of "/db/" for all requests. JSON web tokens can
-be acquired by clicking <a href="/my_jwts">here</a>.
+password as entered during registration.
 </div>
 
 <!--
@@ -50,8 +54,8 @@ will eventually require more attributes determined by a set of contrained vocabu
 
 	<div style="font-weight:bold;">StraboField:</div>
 	<div style="padding-left:5px;">
-	<a href="#createmultiplefeatures">Upload Spot(s)</a><br>
-
+	<a href="#createmultiplefeatures">Upload Spot(s) to Dataset</a><br>
+	<a href="#uploadsinglespot">Upload Single Spot to Dataset</a><br>
 	<a href="#getfeature">Get Spot</a><br>
 	<a href="#deletefeature">Delete Spot</a><br>
 	<!--
@@ -208,6 +212,9 @@ will eventually require more attributes determined by a set of contrained vocabu
 				</li>
 				<li class="listitem">
 					<span class="strong"><code class="literal"><strong>Note:</strong> This function accepts a GeoJSON FeatureCollection and populates it as individual spot(s) for the given dataset. An existing dataset is required.</code></span>
+				</li>
+				<li class="listitem">
+					<span class="strong"><code class="literal"><strong><span style="color:#ed7287;">IMPORTANT!!! ALL spots for the given dataset will be overwritten! You must upload the entire feature collection each time you POST!</span></strong></code></span>
 				</li>
 			</ul>
 		</div>
@@ -612,6 +619,176 @@ will eventually require more attributes determined by a set of contrained vocabu
 	}
   ]
 }
+</pre>
+</div>
+	</div>
+
+<!-- ******************************************************************************** -->
+
+	<A name="uploadsinglespot"></A>
+	<h2 class="wsite-content-title">Upload Single Spot to Dataset</h2>
+	<div style="padding-left:20px;padding-bottom:30px;">
+		<span class="emphasis"><em>Example request</em></span>
+		<div class="itemizedlist">
+			<ul class="itemizedlist" style="list-style-type: disc; ">
+
+				<li class="listitem">
+					<span class="strong"><code class="literal"><strong>POST:</strong>https://strabospot.org/db/datasetsinglespot/12345</code></span>
+				</li>
+				<li class="listitem">
+					<span class="strong"><code class="literal"><strong>Where:</strong> 12345 is the dataset id.</code></span>
+				</li>
+				<li class="listitem">
+					<span class="strong"><code class="literal"><strong>Accept:</strong> application/json; charset=UTF-8</code></span>
+				</li>
+				<li class="listitem">
+					<span class="strong"><code class="literal"><strong>Note:</strong> This function accepts a single GeoJSON feature and populates it as individual spot for the given dataset. An existing dataset is required.</code></span>
+				</li>
+				<li class="listitem">
+					<span class="strong"><code class="literal"><strong><span style="color:#ed7287;">IMPORTANT!!! This request is cumulative, meaning that single spots will be APPENDED to the dataset. Uploading the same spot subsequently will overwrite that spot.</span></strong></code></span>
+				</li>
+			</ul>
+		</div>
+<div style="padding-left:30px;">
+<pre class="programlisting cm-s-default" data-lang="javascript">
+{
+  "type": "Feature",
+  "properties": {
+	"images": [
+	  {
+		"height": 1999,
+		"id": 1122334455667788991,
+		"annotated": true,
+		"title": "new image here",
+		"width": 720,
+		"caption": "caption here"
+	  },
+	  {
+		"height": 999,
+		"id": 1122334455667788992,
+		"annotated": true,
+		"title": "title of image here",
+		"width": 720,
+		"caption": "caption here"
+	  },
+	  {
+		"height": 669,
+		"id": 1122334455667788993,
+		"annotated": false,
+		"title": "",
+		"width": 500,
+		"caption": "caption here"
+	  }
+	],
+	"time": "2016-02-18T21:10:35.000Z",
+	"id": 12345678901,
+	"orientation_data": [
+	  {
+		"dip_direction": 65,
+		"strike": 55,
+		"dip": 45,
+		"facing": "upright",
+		"orientation_type": "planar_orientation"
+	  }
+	],
+	"modified_timestamp": 1455830604745,
+	"date": "2016-02-18T21:10:35.000Z",
+	"samples": [
+	  {
+		"sample_id_name": "id2",
+		"oriented_sample": "yes",
+		"sample_description": "Hhh",
+		"sample_orientation_notes": "Fffhhh"
+	  }
+	],
+	"name": "My test point1"
+  },
+  "geometry": {
+	"type": "Point",
+	"coordinates": [
+	  -97.678707920763003,
+	  38.576879262485001
+	]
+  }
+}
+</pre>
+</div>
+		<span class="emphasis"><em>Example response</em></span>
+		<div class="itemizedlist">
+			<ul class="itemizedlist" style="list-style-type: disc; ">
+
+				<li class="listitem">
+					<span class="strong"><code class="literal"><strong>20O:</strong> OK</code></span>
+				</li>
+				<li class="listitem">
+					<span class="strong"><code class="literal"><strong>Content-Type:</strong> application/json; charset=UTF-8</code></span>
+				</li>
+
+			</ul>
+		</div>
+<div style="padding-left:30px;">
+<pre class="programlisting cm-s-default" data-lang="javascript">
+{
+  "type": "Feature",
+  "properties": {
+	"images": [
+	  {
+		"height": 1999,
+		"id": 1122334455667788991,
+		"annotated": true,
+		"title": "new image here",
+		"width": 720,
+		"caption": "caption here"
+	  },
+	  {
+		"height": 999,
+		"id": 1122334455667788992,
+		"annotated": true,
+		"title": "title of image here",
+		"width": 720,
+		"caption": "caption here"
+	  },
+	  {
+		"height": 669,
+		"id": 1122334455667788993,
+		"annotated": false,
+		"title": "",
+		"width": 500,
+		"caption": "caption here"
+	  }
+	],
+	"time": "2016-02-18T21:10:35.000Z",
+	"id": 12345678901,
+	"orientation_data": [
+	  {
+		"dip_direction": 65,
+		"strike": 55,
+		"dip": 45,
+		"facing": "upright",
+		"orientation_type": "planar_orientation"
+	  }
+	],
+	"modified_timestamp": 1455830604745,
+	"date": "2016-02-18T21:10:35.000Z",
+	"samples": [
+	  {
+		"sample_id_name": "id2",
+		"oriented_sample": "yes",
+		"sample_description": "Hhh",
+		"sample_orientation_notes": "Fffhhh"
+	  }
+	],
+	"name": "My test point1"
+  },
+  "geometry": {
+	"type": "Point",
+	"coordinates": [
+	  -97.678707920763003,
+	  38.576879262485001
+	]
+  }
+}
+
 </pre>
 </div>
 	</div>

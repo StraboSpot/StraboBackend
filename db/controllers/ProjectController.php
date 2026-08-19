@@ -131,7 +131,7 @@ class ProjectController extends MyController
 
 				// Determine if this is a collaborative edit (user is collaborator, not owner)
 				$originalUserpkey = $this->strabo->userpkey;
-				$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner);
+				$isCollaborativeEdit = ($context->permissionLevel === 'edit' && !$context->isOwner());
 				$ownerPkey = $context->effectiveOwner;
 
 				// Set effective owner for the operation
@@ -148,7 +148,7 @@ class ProjectController extends MyController
 				$injson = json_encode($upload);
 
 				// Pass collaborative edit flag and owner pkey
-				$data = $this->strabo->insertProject($injson, $thisid, $isCollaborativeEdit, $ownerPkey);
+				$data = $this->strabo->insertProject($injson, $thisid, $isCollaborativeEdit, $ownerPkey, $originalUserpkey);
 
 				// Restore original userpkey if changed
 				if ($ownerPkey !== $originalUserpkey) {

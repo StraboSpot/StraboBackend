@@ -1,22 +1,13 @@
-<?php
-/**
- * File: manual_download.php
- * Description: Handles manual download operations
- *
- * @package    StraboSpot Web Site
- * @author     Jason Ash <jasonash@ku.edu>
- * @copyright  2025 StraboSpot
- * @license    https://opensource.org/licenses/MIT MIT License
- * @link       https://strabospot.org
- */
+<?
 
-
-$manualtype = isset($_GET['t']) ? $_GET['t'] : '';
+$manualtype = pg_escape_string($_GET['t']);
 
 if($manualtype == "field"){
 	$filename = "StraboField_Manual.pdf";
 }elseif($manualtype == "micro"){
 	$filename = "StraboMicro_Manual.pdf";
+}elseif($manualtype == "micro2"){
+	$filename = "StraboMicro2_Manual.pdf";
 }elseif($manualtype == "experimental"){
 	$filename = "StraboExperimental_Manual.pdf";
 }elseif($manualtype == "tools"){

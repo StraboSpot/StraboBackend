@@ -28,14 +28,15 @@
     <!-- Sample Form -->
     <SampleForm
       v-if="section === 'sample' && !readonly"
+      ref="activeForm"
       :initial-data="data"
       @submit="handleFormSubmit"
-      @cancel="handleClose"
+      @cancel="handleDiscard"
     />
 
     <!-- Sample View (readonly) -->
     <div v-else-if="section === 'sample' && readonly">
-      <SampleView :data="data" />
+      <SampleView :data="data" :link-owner="sampleLinkOwner" />
       <div class="flex justify-center mt-6">
         <Button label="Close" outlined @click="handleClose" />
       </div>
@@ -44,9 +45,10 @@
     <!-- Facility & Apparatus Form -->
     <FacilityApparatusForm
       v-else-if="section === 'facilityApparatus' && !readonly"
+      ref="activeForm"
       :initial-data="data"
       @submit="handleFormSubmit"
-      @cancel="handleClose"
+      @cancel="handleDiscard"
     />
 
     <!-- Facility & Apparatus View (readonly) -->
@@ -60,9 +62,10 @@
     <!-- Experimental Setup Form -->
     <ExperimentalSetupForm
       v-else-if="section === 'experiment' && !readonly"
+      ref="activeForm"
       :initial-data="data"
       @submit="handleFormSubmit"
-      @cancel="handleClose"
+      @cancel="handleDiscard"
     />
 
     <!-- Experimental Setup View (readonly) -->
@@ -76,9 +79,10 @@
     <!-- DAQ Form -->
     <DAQForm
       v-else-if="section === 'daq' && !readonly"
+      ref="activeForm"
       :initial-data="data"
       @submit="handleFormSubmit"
-      @cancel="handleClose"
+      @cancel="handleDiscard"
     />
 
     <!-- DAQ View (readonly) -->
@@ -92,10 +96,11 @@
     <!-- Protocol Form -->
     <ProtocolForm
       v-else-if="section === 'protocol' && !readonly"
+      ref="activeForm"
       :initial-data="data"
       :selected-features="selectedFeatures"
       @submit="handleFormSubmit"
-      @cancel="handleClose"
+      @cancel="handleDiscard"
     />
 
     <!-- Protocol View (readonly) -->
@@ -109,9 +114,10 @@
     <!-- Data Form -->
     <DataForm
       v-else-if="section === 'data' && !readonly"
+      ref="activeForm"
       :initial-data="data"
       @submit="handleFormSubmit"
-      @cancel="handleClose"
+      @cancel="handleDiscard"
     />
 
     <!-- Data View (readonly) -->
@@ -156,11 +162,35 @@
         />
       </div>
     </div>
+
+    <!-- Confirm discarding section edits (from the Discard Changes button) -->
+    <Dialog
+      v-model:visible="showDiscardConfirm"
+      modal
+      header="Discard Changes?"
+      :style="{ width: '380px', maxWidth: '95vw' }"
+      :pt="{ root: { class: 'dark-mode' } }"
+    >
+      <p class="mb-5">Your changes to this section will be lost.</p>
+      <div class="flex justify-end gap-2">
+        <Button
+          label="Keep Editing"
+          severity="secondary"
+          outlined
+          @click="showDiscardConfirm = false"
+        />
+        <Button
+          label="Discard"
+          severity="danger"
+          @click="confirmDiscard"
+        />
+      </div>
+    </Dialog>
   </Dialog>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import Dialog from 'primevue/dialog'
 import Button from 'primevue/button'
 import LoadDataBar from '@/components/LoadDataBar.vue'
@@ -194,6 +224,12 @@ const props = defineProps({
   selectedFeatures: {
     type: Array,
     default: () => []
+  },
+  // For the readonly Sample view: owner pkey of the linked StraboSamples
+  // record, enabling the drill-down link. Null hides the link.
+  sampleLinkOwner: {
+    type: [Number, String],
+    default: null
   }
 })
 
@@ -233,7 +269,32 @@ const hasData = computed(() => {
   return props.data && Object.keys(props.data).length > 0
 })
 
+// Ref to whichever section form is currently rendered (exposes isDirty/trySubmit)
+const activeForm = ref(null)
+const showDiscardConfirm = ref(false)
+
+// X button / Esc / backdrop: apply the edits rather than silently discarding.
+// If the form fails validation, its toast explains why and the modal stays
+// open — the user can fix the fields or click "Discard Changes" explicitly.
 const handleClose = () => {
+  if (props.readonly || !activeForm.value || !activeForm.value.isDirty) {
+    emit('close')
+    return
+  }
+  activeForm.value.trySubmit()
+}
+
+// "Discard Changes" button in the section forms
+const handleDiscard = () => {
+  if (props.readonly || !activeForm.value || !activeForm.value.isDirty) {
+    emit('close')
+    return
+  }
+  showDiscardConfirm.value = true
+}
+
+const confirmDiscard = () => {
+  showDiscardConfirm.value = false
   emit('close')
 }
 

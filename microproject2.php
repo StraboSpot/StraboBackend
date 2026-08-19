@@ -60,6 +60,11 @@ if($row->id == ""){
 
 $json = $row->projectjson;
 $json = json_decode($json);
+// Overlay strabosamples.* spine edits onto the samples so this public view
+// reflects Samples-app edits. Owner is the project owner ($row->userpkey),
+// which differs from the session viewer for a public project.
+require_once __DIR__ . '/microdb/lib/sample_overlay.php';
+micro_sample_overlay_apply($json, $db, (int)$row->userpkey);
 $json->pkey = $id;
 $ml = new MicroLanding($json);
 

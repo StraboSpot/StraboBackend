@@ -70,6 +70,12 @@ class StraboMicro
 
 			$p = json_decode($project->projectjson);
 
+			// Overlay strabosamples.* spine edits onto the samples (reuses
+			// microdb's lib — jwtmicrodb has no own lib/). Owner == this->userpkey
+			// (project row fetched WHERE userpkey = $this->userpkey).
+			require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+			micro_sample_overlay_apply($p, $this->db, (int)$this->userpkey);
+
 			foreach($p->datasets as $d){
 				foreach($d->samples as $s){
 					foreach($s->micrographs as $m){
@@ -98,7 +104,18 @@ class StraboMicro
 			mkdir("$docRoot/ziptemp/$uuid");
 			mkdir("$docRoot/ziptemp/$uuid/$project_id");
 
-			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.json $docRoot/ziptemp/$uuid/$project_id/");
+			// Regenerate the PDF if a Samples-app edit dirtied it, then write
+			// project.json with the strabosamples.* spine overlay (reuses
+			// microdb's lib — jwtmicrodb has none). Mirrors microdb getWebProject.
+			require_once __DIR__ . '/../microdb/lib/MicroProjectPDF.php';
+			micro_regenerate_pdf_if_dirty($this->db, (int)$pkey, (int)$this->userpkey);
+			require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+			micro_sample_overlay_write_json(
+				$this->db,
+				"$docRoot/straboMicroFiles/$pkey/project.json",
+				"$docRoot/ziptemp/$uuid/$project_id/project.json",
+				(int)$this->userpkey
+			);
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/associatedFiles $docRoot/ziptemp/$uuid/$project_id/");
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/webImages $docRoot/ziptemp/$uuid/$project_id/");
@@ -171,12 +188,20 @@ class StraboMicro
 			$json = file_get_contents("$docRoot/straboMicroFiles/$pkey/project.json");
 			$json = json_decode($json);
 
+			// Overlay strabosamples.* spine edits onto the samples (reuses
+			// microdb's lib). Mirrors microdb getProjectPDF.
+			require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+			micro_sample_overlay_apply($json, $this->db, (int)$this->userpkey);
+
 			unset($json->modifiedTimestamp);
 			$json->modifiedtimestamp = (int)$mod;
 
 			$json = json_encode($json, JSON_PRETTY_PRINT);
 			file_put_contents("$docRoot/ziptemp/$uuid/$project_id/project.json", $json);
 
+			// Regenerate the PDF if a Samples-app edit dirtied it before copying it.
+			require_once __DIR__ . '/../microdb/lib/MicroProjectPDF.php';
+			micro_regenerate_pdf_if_dirty($this->db, (int)$pkey, (int)$this->userpkey);
 			exec("cp -rp $docRoot/straboMicroFiles/$pkey/project.pdf $docRoot/ziptemp/$uuid/$project_id/");
 			//Just using the PDF for now. We can re-implement these later if the web viewer is needed. JMA 20241121
 
@@ -203,6 +228,13 @@ class StraboMicro
 		if($project->id != ""){
 
 			$id = $project->id;
+
+			// Refresh the static project.zip with the spine overlay if a
+			// Samples-app edit dirtied it (baked in on-disk; no per-file PHP
+			// serving hook exists for the static URL). Reuses microdb's lib.
+			require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+			micro_regenerate_files_if_dirty($this->db, (int)$id, (int)$this->userpkey);
+
 			$out->url = "/straboMicroFiles/".$id."/project.zip";
 			$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");
 
@@ -257,6 +289,13 @@ class StraboMicro
 	public function getSharedURL($id){
 
 		$out = new stdClass();
+
+		// Refresh the static project.zip with the spine overlay if dirty. A
+		// shared link carries no auth context, so resolve the owner pkey from
+		// the project row for the spine lookup scope.
+		$ownerPkey = (int)$this->db->get_var("select userpkey from micro_projectmetadata where id = '".(int)$id."'");
+		require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
+		micro_regenerate_files_if_dirty($this->db, (int)$id, $ownerPkey);
 
 		$out->url = "/straboMicroFiles/".$id."/project.zip";
 		$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");
@@ -1654,6 +1693,11 @@ class StraboMicro
 
 				$this->db->query("update micro_projectmetadata set original_filename = '".$files['name']."' where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
 
+				// StraboSearch live-sync (§5.3): rebuild this project's index
+				// slice (jwtmicrodb reuses microdb's search-sync lib).
+				require_once __DIR__ . '/../microdb/lib/search_sync.php';
+				micro_search_sync_project($this->db, $project_metadata_id, $strabo_project_id, $this->userpkey);
+
 				if($data->Error != ""){
 					return $data;
 				}
@@ -1718,6 +1762,11 @@ class StraboMicro
 
 				$this->db->query("update micro_projectmetadata set original_filename = '".$files['name']."' where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
 
+				// StraboSearch live-sync (§5.3): rebuild this project's index
+				// slice — same rationale as insertProject.
+				require_once __DIR__ . '/../microdb/lib/search_sync.php';
+				micro_search_sync_project($this->db, $project_metadata_id, $strabo_project_id, $this->userpkey);
+
 				if($data->Error != ""){
 					return $data;
 				}
@@ -1740,6 +1789,8 @@ class StraboMicro
 		return $data;
 	}
 
+
+
 		//First, check to see if project exists
 				//error here
 				//Delete project just in case
@@ -1751,7 +1802,7 @@ class StraboMicro
 
 	public function deleteTempFiles($project_metadata_id){
 		exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/compositeImages/");
-		exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/compositeThumbnails/");
+		//exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/compositeThumbnails/");
 		exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/thumbnailImages");
 		exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/uiImages");
 	}
@@ -2196,6 +2247,25 @@ class StraboMicro
 
 						$this->db->query($query);
 
+						// Mirror into strabosamples.* via the shared micro sync
+						// helper (samples spine). jwtmicrodb has no own lib/, so it
+						// reuses microdb's function-library. Without this, Micro
+						// projects uploaded through the JWT API never mirror into
+						// the spine. Mirrors microdb/strabomicroclass.php.
+						require_once __DIR__ . '/../microdb/lib/sample_sync.php';
+						$thisMicrographCount = (is_array($thissamplemetadata->micrographs ?? null) || (is_object($thissamplemetadata->micrographs ?? null)))
+							? count((array)$thissamplemetadata->micrographs)
+							: 0;
+						micro_sample_sync(
+							$this->db,
+							$thissamplemetadata,
+							(string)$thisprojectmetadata->id,
+							(int)$project_metadata_id,
+							(int)$userpkey,
+							(int)$datasetmetadata_id,
+							$thisMicrographCount
+						);
+
 						if($thissamplemetadata->micrographs != ""){
 
 							foreach($thissamplemetadata->micrographs as $thismicrographmetadata){
@@ -2377,7 +2447,7 @@ class StraboMicro
 											$query = "";
 											$vars = ['id','graininfo_id'];
 											$vals = [$grainsize_id, $graininfo_id];
-											if($thisgrainsize->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainsize->phases); }
+											if($thisgrainsize->phases!=""){ $vars[]='phases'; $vals[]= "'".implode(", ", $thisgrainsize->phases)."'"; }
 											if($thisgrainsize->mean!=""){ $vars[]='mean'; $vals[]= $thisgrainsize->mean; }
 											if($thisgrainsize->median!=""){ $vars[]='median'; $vals[]= $thisgrainsize->median; }
 											if($thisgrainsize->mode!=""){ $vars[]='mode'; $vals[]= $thisgrainsize->mode; }
@@ -2403,7 +2473,7 @@ class StraboMicro
 											$query = "";
 											$vars = ['id','graininfo_id'];
 											$vals = [$grainshape_id, $graininfo_id];
-											if($thisgrainshape->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainshape->phases); }
+											if($thisgrainshape->phases!=""){ $vars[]='phases'; $vals[]= "'".implode(", ", $thisgrainshape->phases)."'"; }
 											if($thisgrainshape->shape!="") {$vars[]='shape'; $vals[]= "'".pg_escape_string($thisgrainshape->shape)."'"; }
 											$query = "insert into micro_grainshape (\n";
 											$query .= implode(",\n", $vars);
@@ -2425,7 +2495,7 @@ class StraboMicro
 											$query = "";
 											$vars = ['id','graininfo_id'];
 											$vals = [$grainorientation_id, $graininfo_id];
-											if($thisgrainorientation->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainorientation->phases); }
+											if($thisgrainorientation->phases!=""){ $vars[]='phases'; $vals[]= "'".implode(", ", $thisgrainorientation->phases)."'"; }
 											if($thisgrainorientation->meanOrientation!=""){ $vars[]='meanorientation'; $vals[]= $thisgrainorientation->meanOrientation; }
 											if($thisgrainorientation->relativeTo!="") {$vars[]='relativeto'; $vals[]= "'".pg_escape_string($thisgrainorientation->relativeTo)."'"; }
 											if($thisgrainorientation->software!="") {$vars[]='software'; $vals[]= "'".pg_escape_string($thisgrainorientation->software)."'"; }
@@ -4842,6 +4912,17 @@ class StraboMicro
 		$pkey = $this->db->get_var("select id from micro_projectmetadata where strabo_id='$projectid' and userpkey=$this->userpkey");
 
 		if($pkey != ""){
+			// Mirror sample removals into strabosamples.* BEFORE the cascade
+			// DELETE runs against the source tables — once those rows are gone
+			// the strabo_ids can't be resolved. jwtmicrodb reuses microdb's
+			// sync lib (no own lib/). Mirrors microdb deleteProject.
+			require_once __DIR__ . '/../microdb/lib/sample_sync.php';
+			micro_sample_sync_remove_project($this->db, $projectid, (int)$this->userpkey);
+
+			// StraboSearch live-sync (§5.3): drop the project's index slice.
+			require_once __DIR__ . '/../microdb/lib/search_sync.php';
+			micro_search_sync_remove_project($this->db, $projectid, (int)$this->userpkey);
+
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey);
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey.".zip");
 

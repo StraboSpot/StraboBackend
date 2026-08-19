@@ -33,6 +33,8 @@
                   optionValue="value"
                   placeholder="Select step type..."
                   showClear
+                  :filter="availableFeatures.length > 8"
+                  resetFilterOnHide
                   class="w-full"
                 />
               </div>
@@ -84,7 +86,10 @@
                       :options="PROTOCOL_CONTROL_VARIABLES"
                       placeholder="Select..."
                       showClear
+                      filter
+                      resetFilterOnHide
                       class="w-full"
+                      @update:modelValue="(val) => { if (param.unit && !getUnitsForVariable(val).includes(param.unit)) param.unit = '' }"
                     />
                   </div>
                   <div class="param-col param-col-value">
@@ -97,9 +102,11 @@
                   <div class="param-col param-col-unit">
                     <Select
                       v-model="param.unit"
-                      :options="UNIT_TYPES"
+                      :options="getUnitsForVariable(param.control)"
                       placeholder="Unit"
                       showClear
+                      :filter="getUnitsForVariable(param.control).length > 8"
+                      resetFilterOnHide
                       class="w-full"
                     />
                   </div>
@@ -186,7 +193,7 @@
         type="button"
         severity="secondary"
         outlined
-        label="Cancel"
+        label="Discard Changes"
         @click="$emit('cancel')"
       />
       <Button
@@ -199,10 +206,11 @@
 
 <script setup>
 import { ref, computed, watch } from 'vue'
+import { useFormDirty } from '@/composables/useFormDirty'
 import Button from 'primevue/button'
 import InputText from 'primevue/inputtext'
 import Select from 'primevue/select'
-import { PROTOCOL_CONTROL_VARIABLES, UNIT_TYPES, APPARATUS_FEATURES } from '@/schemas/laps-enums.js'
+import { PROTOCOL_CONTROL_VARIABLES, UNIT_TYPES, APPARATUS_FEATURES, getUnitsForVariable } from '@/schemas/laps-enums.js'
 
 const props = defineProps({
   initialData: {
@@ -237,6 +245,8 @@ const availableFeatures = computed(() => {
 })
 
 // Initialize form from initial data
+const { isDirty, resetDirty } = useFormDirty(form)
+
 const initForm = () => {
   if (props.initialData && Array.isArray(props.initialData) && props.initialData.length > 0) {
     // Deep copy with default parameter arrays
@@ -256,6 +266,7 @@ const initForm = () => {
     form.value = []
     selectedStepIdx.value = null
   }
+  resetDirty()
 }
 
 initForm()
@@ -357,7 +368,10 @@ const handleSubmit = () => {
   }).filter(step => step.test || step.objective || step.description || (step.parameters && step.parameters.length > 0))
 
   emit('submit', cleanedData)
+  return true
 }
+
+defineExpose({ isDirty, trySubmit: handleSubmit })
 </script>
 
 <style scoped>

@@ -24,12 +24,12 @@ if($strat_spot_id == "" || $dataset_id == ""){
 	exit("no parameters given");
 }
 
-$parent_spot = $strabo->getSingleSpot($strat_spot_id);
+$parent_spot = $strabo->getPublicSingleSpot($strat_spot_id);
 
 $strat_section_id = $parent_spot->properties->sed->strat_section->strat_section_id;
 $strat_section = $parent_spot->properties->sed->strat_section;
 
-$spots = $strabo->getDatasetSpots($dataset_id);
+$spots = $strabo->getPublicDatasetSpots($dataset_id);
 $spots = $spots['features'];
 
 $allspots = [];
