@@ -157,6 +157,7 @@ if($userpkey == "adsf"){
 									<li><a href="/interoperability">Interoperability</a></li>
 									<li><a href="/api">API</a></li>
 									<li><a href="/citations">Citations</a></li>
+									<li><a href="/nsf_funding">NSF Funding</a></li>
 									<li><a href="/privacy">Privacy Policy</a></li>
 								</ul>
 							</li>

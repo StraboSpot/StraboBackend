@@ -3,6 +3,37 @@
 This repository contains code necessary for the server-side functions of the StraboSpot project, including the strabospot.org web site, the database API, and the shapefile parser.
 
 
+## NSF Funding ##
+
+Development and operation of StraboSpot ([strabospot.org](https://strabospot.org/)) is supported by the U.S. National Science Foundation (NSF). We gratefully acknowledge the following NSF awards, as well as all prior NSF support of the StraboSpot project. See also the [NSF Funding page](https://strabospot.org/nsf_funding) at strabospot.org.
+
+**Collaborative Research: Frameworks: Automated Quality Assurance and Quality Control for the StraboSpot Geologic Information System and Observational Data** (NSF CSSI)
+* [2311819](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2311819) University of Kansas
+* [2311820](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2311820) Temple University
+* [2311821](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2311821) Oregon State University
+* [2311822](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2311822) University of Wisconsin-Madison
+* [2311823](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2311823) Texas A&M University
+
+**Collaborative Research: GEO OSE Track 2: Developing CI-enabled collaborative workflows to integrate data for the SZ4D (Subduction Zones in Four Dimensions) community**
+* [2324709](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2324709) University of Kansas
+* [2324710](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2324710) University of Wisconsin-Madison
+* [2324711](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2324711) Texas A&M University
+* [2324712](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2324712) University of California-Santa Cruz
+* [2324713](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2324713) University of Washington
+* [2324714](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2324714) Northern Arizona University
+
+**Collaborative Research: GEO OSE Track 2: Building a multiscale community-led ecosystem for crustal geology through the integration of Macrostrat and StraboSpot**
+* [2324579](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2324579) University of Wisconsin-Madison
+* [2324580](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2324580) University of Kansas
+
+**Collaborative Research: Sustained Resources: Prototyping a Framework for FAIR Data Communities: The Tephra Information Portal (TIP)**
+* [2411331](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2411331) Concord University
+* [2411332](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2411332) University of Maine
+* [2411333](https://www.nsf.gov/awardsearch/show-award/?AWD_ID=2411333) Columbia University
+
+Any opinions, findings, and conclusions or recommendations expressed in this material are those of the authors and do not necessarily reflect the views of the National Science Foundation.
+
+
 
 ## Server Requirements: ##
 

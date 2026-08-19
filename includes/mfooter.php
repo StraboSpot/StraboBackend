@@ -42,7 +42,7 @@
 
 					<div class="row gtr-uniform gtr-50">
 						<div class="footerLink col-4 col-12-medium">
-							<a href="https://www.nsf.gov/" target="_blank"><div><img class="footerImage" src="/includes/mimages/NSFLogo_grey.png"></div><div>Funded by the National Science Foundation</div></a>
+							<a href="/nsf_funding"><div><img class="footerImage" src="/includes/mimages/NSFLogo_grey.png"></div><div>Funded by the National Science Foundation</div></a>
 						</div>
 						<div class="footerLink col-4 col-12-medium">
 							<a href="https://www.mapbox.com/" target="_blank"><div><img class="footerImage" src="/includes/mimages/mapbox_grey.png"></div><div>Maps Provided by Mapbox</div></a>
