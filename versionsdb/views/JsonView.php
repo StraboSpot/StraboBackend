@@ -14,7 +14,9 @@
 class JsonView extends ApiView {
 	public function render($content) {
 		header('Content-Type: application/json');
-		echo json_encode($content);
+		//pretty output to match the stored snapshots, which createVersion
+		//already writes with JSON_PRETTY_PRINT
+		echo json_encode($content, JSON_PRETTY_PRINT);
 		return true;
 	}
 }

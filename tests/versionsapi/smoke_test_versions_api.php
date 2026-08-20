@@ -178,6 +178,7 @@ section("myprojects");
 list($c, $b) = http("$BASE/versionsdb/myprojects", array('basic' => $OWNER));
 $j = json_decode($b, true);
 check("returns JSON with projects array", is_array($j) && isset($j['projects']));
+check("output is pretty-printed", strpos($b, "\n    ") !== false);
 $projects = isset($j['projects']) ? $j['projects'] : array();
 $ids = array_map(function($p){ return $p['projectid']; }, $projects);
 check("owner sees exactly projects A and B", count($projects) == 2 && in_array($projA, $ids) && in_array($projB, $ids));
