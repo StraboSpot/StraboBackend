@@ -53,6 +53,17 @@ require_once '/srv/app/www/db.php';
 require_once '/srv/app/www/neodb.php';
 require_once '/srv/app/www/includes/UUID.php';
 require_once '/srv/app/www/samplesdb/services/StraboSamplesService.php';
+require_once '/srv/app/www/microdb/lib/permalink.php';
+
+// Micro cards now emit upload-stable permalinks (/microproject?m=<slug>).
+// Resolve the slug back to a metadata pkey so the checks below can assert
+// WHICH project copy the link lands on (the (strabo_id, userpkey)
+// disambiguation matters more than the URL string).
+function permalinkTargetPkey($db, $href) {
+    if (!is_string($href) || !preg_match('#^/microproject\?m=([a-z0-9]+)$#', $href, $mm)) return null;
+    $row = micro_permalink_resolve($db, $mm[1]);
+    return ($row !== null) ? (int)$row->id : null;
+}
 
 if (empty($_SERVER['DOCUMENT_ROOT'])) $_SERVER['DOCUMENT_ROOT'] = '/srv/app/www';
 
@@ -216,6 +227,7 @@ function authmxCleanup($db) {
     // Samples first (CASCADE clears collaborators/links/changelog/children rows).
     $db->prepare_query("DELETE FROM strabosamples.samples WHERE id LIKE 'authmx-%'", array());
     $db->prepare_query("DELETE FROM micro_projectmetadata WHERE strabo_id LIKE 'authmx-%'", array());
+    $db->prepare_query("DELETE FROM micro_permalinks WHERE strabo_id LIKE 'authmx-%'", array());
     $db->prepare_query("DELETE FROM straboexp.experiment WHERE uuid LIKE 'authmx-%'", array());
     $db->prepare_query("DELETE FROM straboexp.project WHERE uuid LIKE 'authmx-%'", array());
 }
@@ -821,8 +833,8 @@ check("stranger: PRIVATE micro card disabled with privacy explanation",
     && stripos($l['view_unavailable'], 'private') !== false);
 
 $l = findLink($payload, 'micro', (string)$microPubId);
-check("stranger: PUBLIC micro card links to /microproject?id=" . $microPubId,
-    $l && $l['view_href'] === '/microproject?id=' . $microPubId);
+check("stranger: PUBLIC micro card permalink resolves to pkey " . $microPubId,
+    $l && permalinkTargetPkey($db, $l['view_href']) === $microPubId);
 
 $l = findLink($payload, 'experimental', 'authmx-exp-priv-ref');
 check("stranger: PRIVATE exp card disabled with privacy explanation",
@@ -838,7 +850,7 @@ $p = httpPage($pageMain, $sidOwner);
 $payload = parseSdPayload($p['body']);
 $l = findLink($payload, 'micro', (string)$microPrivId);
 check("owner: PRIVATE micro card links out (host owner)",
-    $l && $l['view_href'] === '/microproject?id=' . $microPrivId);
+    $l && permalinkTargetPkey($db, $l['view_href']) === $microPrivId);
 $l = findLink($payload, 'experimental', 'authmx-exp-priv-ref');
 check("owner: PRIVATE exp card links out (host owner)",
     $l && $l['view_href'] === '/experimental/view_experiment?e=' . $expPrivPkey);
@@ -856,7 +868,7 @@ check("editor: private micro card stays disabled despite same-strabo_id public d
     && stripos($l['view_unavailable'], 'private') !== false);
 $l = findLink($payload, 'micro', (string)$microPubId);
 check("editor: public micro card resolves to the OWNER's copy, not the decoy",
-    $l && $l['view_href'] === '/microproject?id=' . $microPubId);
+    $l && permalinkTargetPkey($db, $l['view_href']) === $microPubId);
 
 // -------------------------------------------------------------------------
 // Part 9 — owner delete (the matrix's only YES delete cell) + cascade

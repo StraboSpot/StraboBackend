@@ -134,6 +134,7 @@ function e2e_cleanup($db, $UPK, $PFX) {
 	$db->prepare_query("DELETE FROM dataset WHERE user_pkey = $1", array($UPK));
 	$db->prepare_query("DELETE FROM project WHERE user_pkey = $1", array($UPK));
 	$db->prepare_query("DELETE FROM strabomicro.micro_projectmetadata WHERE userpkey = $1", array($UPK));
+	$db->prepare_query("DELETE FROM strabomicro.micro_permalinks WHERE userpkey = $1", array($UPK));
 	$db->prepare_query("DELETE FROM straboexp.experiment WHERE userpkey = $1", array($UPK));
 	$db->prepare_query("DELETE FROM straboexp.project WHERE userpkey = $1", array($UPK));
 	$db->prepare_query("DELETE FROM users WHERE pkey = $1", array($UPK));
@@ -197,8 +198,9 @@ $db->query("INSERT INTO strabosearch.image_hit
 
 // -- MICRO: native metadata row (what /mpl/ reads) + index row
 $db->query("INSERT INTO strabomicro.micro_projectmetadata
-	(strabo_id, userpkey, name, ispublic, modifiedtimestamp, notes)
-	VALUES ('{$PFX}_mp_pub', $UPK, 'spse2e micro project', TRUE, '1722400005000', '')");
+	(strabo_id, userpkey, name, ispublic, modifiedtimestamp, notes, projectjson)
+	VALUES ('{$PFX}_mp_pub', $UPK, 'spse2e micro project', TRUE, '1722400005000', '',
+	 '{\"name\":\"spse2e micro project\",\"datasets\":[]}')");
 $mpid = (int)$db->insert_id;
 $db->query("INSERT INTO strabosearch.item_hit
 	(item_type, item_id, item_userpkey, project_id, project_userpkey, project_subsystem,
@@ -450,8 +452,11 @@ check('anon search finds public micro project', $r !== null
 
 list($st, $h, $body) = http_raw('GET', $BASE . landingUrl($r), null);
 check('anon /mpl/ answers 302 into the micro viewer', $st === 302, "got $st");
-check('redirect targets microproject?id=<pkey>',
-	strpos(locationHeader($h), 'microproject?id=' . $mpid) !== false, locationHeader($h));
+check('redirect targets the upload-stable permalink form (microproject?m=)',
+	preg_match('#^/microproject\?m=[a-z0-9]{8}$#', locationHeader($h)) === 1, locationHeader($h));
+list($st, $h, $body) = http_raw('GET', $BASE . locationHeader($h), null);
+check('permalink serves the micro landing page (200 with project name)',
+	$st === 200 && strpos($body, 'spse2e micro project') !== false, "st=$st");
 
 // ---------------------------------------------------------------------------
 section('3. EXP — search → result → /epl/; private gated (Phase 5 fix)');

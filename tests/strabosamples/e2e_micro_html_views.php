@@ -42,7 +42,9 @@ function note($msg) { echo "        $msg\n"; }
 
 function httpGet($path) {
     $bodyFile = tempnam(sys_get_temp_dir(), 'e2emichtml_');
-    $status = (int)shell_exec("curl -s -o " . escapeshellarg($bodyFile) . " -w '%{http_code}' " . escapeshellarg("http://localhost" . $path));
+    // -L: /microproject?id= now 302-upgrades to its permalink (?m=) form;
+    // follow it so the checks still assert on the rendered landing page.
+    $status = (int)shell_exec("curl -sL -o " . escapeshellarg($bodyFile) . " -w '%{http_code}' " . escapeshellarg("http://localhost" . $path));
     $body = file_get_contents($bodyFile); @unlink($bodyFile);
     return array('status' => $status, 'body' => $body);
 }
@@ -108,6 +110,7 @@ try {
 } finally {
     $db->prepare_query("DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($sampStraboId, $owner));
     $db->query("DELETE FROM micro_projectmetadata WHERE id=$pmid");
+    $db->prepare_query("DELETE FROM micro_permalinks WHERE strabo_id=$1", array($projStraboId));
 }
 
 echo "\n=================================================\n";

@@ -21,13 +21,15 @@ if($_SESSION['userpkey']!=""){
 
 $p = $_GET['p'];
 include("prepare_connections.php");
+require_once(__DIR__ . '/microdb/lib/permalink.php');
 
-$project_pkey = $db->get_var_prepared("select id from micro_projectmetadata where strabo_id=$1 and (ispublic or userpkey = $2)", array($p, $userpkey));
+$project_row = $db->get_row_prepared("select * from micro_projectmetadata where strabo_id=$1 and (ispublic or userpkey = $2)", array($p, $userpkey));
+$project_pkey = ($project_row && $project_row->id != "") ? $project_row->id : "";
 
-if(is_dir("straboMicroFiles/$project_pkey/webImages")){
-	$murl = "https://strabospot.org/straboMicroView/view?p=$project_pkey";
-}else{
-	$murl = "https://strabospot.org/microproject?id=$project_pkey";
+if($project_pkey != ""){
+	// Upload-stable permalink into the tier-agnostic front door; falls back
+	// to the legacy pkey form if a slug cannot be minted.
+	$murl = micro_permalink_landing_url($db, $project_row);
 }
 
 if($project_pkey == ""){

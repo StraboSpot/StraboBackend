@@ -39,6 +39,7 @@ include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . "/samplesdb/services/StraboSamplesService.php";
 require_once __DIR__ . "/samplesdb/lib/vocab.php";
+require_once __DIR__ . "/microdb/lib/permalink.php";
 
 $ownerPkey = isset($_GET['owner']) ? (int)$_GET['owner'] : 0;
 $sampleId  = isset($_GET['id'])    ? trim((string)$_GET['id']) : '';
@@ -196,11 +197,14 @@ if (!$notFound) {
                 $isPublic = ($pr->ispublic === 't' || $pr->ispublic === true || $pr->ispublic === 'true');
                 $isOwner  = ((int)$pr->userpkey === $viewerPkey);
                 if ($isPublic || $isOwner) {
-                    // Viewer varies by uploading app (same branch as my_micro_data.php):
-                    // StraboMicro2 uploads carry a webImages dir and use the new
-                    // straboMicroView viewer; legacy projects use /microproject.
+                    // Upload-stable permalink into the tier-agnostic front door
+                    // (/microproject routes tiers itself); the old tier-picked
+                    // pkey URLs remain as fallback if a slug cannot be minted.
                     $microPid = (int)$pr->id;
-                    if (is_dir(__DIR__ . "/straboMicroFiles/$microPid/webImages")) {
+                    $mslug = micro_permalink_get_or_create($db, $sid, (int)$pr->userpkey);
+                    if ($mslug !== null) {
+                        $l['view_href'] = '/microproject?m=' . $mslug;
+                    } elseif (is_dir(__DIR__ . "/straboMicroFiles/$microPid/webImages")) {
                         $l['view_href'] = '/straboMicroView/view?p=' . $microPid;
                     } else {
                         $l['view_href'] = '/microproject?id=' . $microPid;

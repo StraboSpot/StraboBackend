@@ -17,23 +17,55 @@ if($userpkey == "") $userpkey = 999999;
 //<script src='/assets/js/mapZoom/mapzoom.js'></script>
 
 
-$id = $_GET['id'];
+require_once(__DIR__ . '/microdb/lib/permalink.php');
 
-$row = $db->get_row("select * from micro_projectmetadata where id = $id and (ispublic or userpkey=$userpkey)");
+// This page is the tier-agnostic front door for Micro landing URLs.
+// Preferred form: ?m=<permalink slug> (upload-stable, see microdb/lib/permalink.php).
+// Legacy form:    ?id=<pkey> (still honored; upgraded to ?m= when possible).
+$m = isset($_GET['m']) ? strtolower(trim($_GET['m'])) : '';
+$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$row = null;
 
-if($row->id == ""){
+if($m !== ''){
+	$resolved = micro_permalink_resolve($db, $m);
+	if($resolved !== null){
+		$row = $db->get_row_prepared("select * from micro_projectmetadata where id = $1 and (ispublic or userpkey = $2)", array((int)$resolved->id, (int)$userpkey));
+		if($row && $row->id != "") $id = (int)$row->id; else $row = null;
+	}
+}elseif($id > 0){
+	$row = $db->get_row_prepared("select * from micro_projectmetadata where id = $1 and (ispublic or userpkey = $2)", array($id, (int)$userpkey));
+	if(!$row || $row->id == "") $row = null;
+}
+
+if($row === null){
 	echo "Error! Project not found.";
 	exit();
+}
+
+// Legacy pkey arrival: upgrade the address bar to the upload-stable permalink
+// so refresh and re-share keep working after the project's next upload.
+if($m === ''){
+	$slug = micro_permalink_get_or_create($db, $row->strabo_id, (int)$row->userpkey);
+	if($slug !== null){
+		header("Location: /microproject?m=$slug");exit();
+	}
 }
 
 
 //echo $_SERVER['DOCUMENT_ROOT'];exit(); ///srv/app/www
 
-//Now check for the existence of a /tiles directory and redirect to the new StraboMicro web-viewer if /tiles exists
+// Tier routing by straboMicroFiles/<pkey> contents. Slug arrivals redirect
+// slug-to-slug so the address bar never holds a perishable pkey URL.
 //Look for directory: /straboMicroFiles/726/tiles
 if (is_dir($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/$id/tiles")) {
+	if($m !== ''){
+		header("Location: /microview/?m=$m");exit();
+	}
 	header("Location: /microview/?p=$id");exit();
 	//echo "found it!";
+}
+if ($m !== '' && is_dir($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/$id/webImages")) {
+	header("Location: /straboMicroView/view?m=$m");exit();
 }
 
 include 'includes/header.php';
