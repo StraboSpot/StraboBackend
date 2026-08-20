@@ -11,14 +11,18 @@
 -- Rows are minted lazily (get-or-create) by microdb/lib/permalink.php when
 -- a landing link is rendered or visited. No backfill required.
 --
--- Deploy: apply BEFORE pulling the code that references it.
---   Dev:  docker exec -i strabo-php psql -h strabo-postgres -U strabodbuser -d strabospot -f /srv/app/www/sql/micro_permalinks.sql
---   Prod: run as -U postgres, then ALTER TABLE micro_permalinks OWNER TO strabodbuser;
+-- Deploy: apply BEFORE pulling the code that references it. Must run as
+-- -U postgres (strabodbuser cannot create tables in the strabomicro
+-- schema), and ownership must land on strabodbuser afterwards:
+--   docker exec -i strabo-postgres psql -U postgres -d strabospot < sql/micro_permalinks.sql
+-- (Applied to dev 2026-08-20.)
 
-CREATE TABLE micro_permalinks (
+CREATE TABLE strabomicro.micro_permalinks (
     permakey  varchar(20)       NOT NULL PRIMARY KEY,
     strabo_id character varying NOT NULL,
     userpkey  integer           NOT NULL,
     created   timestamp         NOT NULL DEFAULT now(),
     CONSTRAINT micro_permalinks_identity UNIQUE (strabo_id, userpkey)
 );
+
+ALTER TABLE strabomicro.micro_permalinks OWNER TO strabodbuser;
