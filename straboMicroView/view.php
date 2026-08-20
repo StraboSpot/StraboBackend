@@ -17,13 +17,36 @@ session_start();
 include("../prepare_connections.php");
 
 //$userpkey
-$p = (int)$_GET['p'];
+require_once(__DIR__ . '/../microdb/lib/permalink.php');
+
+// Preferred form: ?m=<permalink slug> (upload-stable). Legacy form: ?p=<pkey>.
+$m = isset($_GET['m']) ? strtolower(trim($_GET['m'])) : '';
+$p = isset($_GET['p']) ? (int)$_GET['p'] : 0;
+
+if($m !== ''){
+	$resolved = micro_permalink_resolve($db, $m);
+	$p = ($resolved !== null) ? (int)$resolved->id : 0;
+}
 
 //determine if project exists
 $row = $db->get_row_prepared("select * from micro_projectmetadata where id = $1 and (ispublic or userpkey = $2)", array($p, $userpkey));
 if($row->id == ""){
-	echo "Unable to load project $p.";
+	echo "Unable to load project.";
 	exit();
+}
+
+// Tier self-heal: if a later upload moved this project off the webImages
+// tier, bounce through the front door so it re-routes to the right viewer.
+if($m !== '' && !is_dir($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/$p/webImages")){
+	header("Location: /microproject?m=$m");
+	exit();
+}
+
+// Legacy pkey arrival: mint the slug so the replaceState below upgrades the
+// address bar to the upload-stable form (no redirect needed).
+if($m === ''){
+	$slug = micro_permalink_get_or_create($db, $row->strabo_id, (int)$row->userpkey);
+	if($slug !== null) $m = $slug;
 }
 
 // Refresh the static ./smzFiles/<id>/project.json (which microView.js fetches
@@ -38,6 +61,14 @@ micro_regenerate_files_if_dirty($db, (int)$p, (int)$row->userpkey);
 <!DOCTYPE html>
 <html>
 <head>
+<?php if($m !== ''){ ?>
+<script>
+	// Keep the upload-stable permalink in the address bar while exposing the
+	// current pkey as ?p= for microView.js (which reads it on DOMContentLoaded,
+	// safely after this inline script runs).
+	history.replaceState(null, '', '/straboMicroView/view?m=<?php echo $m?>&p=<?php echo $p?>');
+</script>
+<?php } ?>
 <link rel="stylesheet" href="assets/microView.css" type="text/css" />
 <link rel="stylesheet" href="assets/jquery-ui/jquery-ui.css">
 <script src='assets/jquery.min.js'></script>

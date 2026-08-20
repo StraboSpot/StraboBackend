@@ -12,6 +12,7 @@
 
 include("logincheck.php");
 include("prepare_connections.php");
+require_once(__DIR__ . '/microdb/lib/permalink.php');
 
 $credentials = $_SESSION['credentials'];
 $microrows = $db->get_results_prepared("SELECT id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson FROM micro_projectmetadata WHERE userpkey = $1 ORDER BY id DESC", array($userpkey));
@@ -111,7 +112,12 @@ if(count($microrows)==0){
 			}
 		}
 
-		if(is_dir("straboMicroFiles/$projectid/webImages")){
+		// Upload-stable permalink into the tier-agnostic front door; the old
+		// tier-picked pkey URLs remain as fallback if a slug cannot be minted.
+		$mslug = micro_permalink_get_or_create($db, $mr->strabo_id, (int)$userpkey);
+		if($mslug !== null){
+			$murl = "microproject?m=$mslug";
+		}elseif(is_dir("straboMicroFiles/$projectid/webImages")){
 			$murl = "straboMicroView/view?p=$projectid";
 		}else{
 			$murl = "microproject?id=$projectid";

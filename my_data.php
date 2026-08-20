@@ -17,6 +17,7 @@ exit();
 include("logincheck.php");
 
 include("prepare_connections.php");
+require_once(__DIR__ . '/microdb/lib/permalink.php');
 
 $credentials = $_SESSION['credentials'];
 
@@ -508,7 +509,12 @@ if(count($microrows) > 0){
 			}
 		}
 
-		if(is_dir("straboMicroFiles/$projectid/webImages")){
+		// Upload-stable permalink into the tier-agnostic front door; the old
+		// tier-picked pkey URLs remain as fallback if a slug cannot be minted.
+		$mslug = micro_permalink_get_or_create($db, $mr->strabo_id, (int)$userpkey);
+		if($mslug !== null){
+			$murl = "https://strabospot.org/microproject?m=$mslug";
+		}elseif(is_dir("straboMicroFiles/$projectid/webImages")){
 			$murl = "https://strabospot.org/straboMicroView/view?p=$projectid";
 		}else{
 			$murl = "https://strabospot.org/microproject?id=$projectid";
