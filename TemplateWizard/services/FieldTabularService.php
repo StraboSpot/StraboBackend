@@ -795,10 +795,13 @@ class FieldTabularService
 
     public function myProjects()
     {
+        // Recent-first to match My Field Data (getMyProjects orders the same
+        // way; nulls-first on DESC matches too). Find-by-name still works via
+        // the browser's native select typeahead.
         $records = $this->neodb->get_results(
             "MATCH (p:Project) WHERE p.userpkey = {$this->userpkey}
              RETURN p.id AS id, coalesce(p.desc_project_name, p.projectname) AS name
-             ORDER BY name");
+             ORDER BY p.uploaddate DESC");
         $out = array();
         if (is_array($records)) {
             foreach ($records as $r) {
@@ -2020,6 +2023,13 @@ class FieldTabularService
                 "UPDATE field_tabular_runs SET status = 'committed', finished_at = now() WHERE pkey = $1 RETURNING pkey",
                 array($runId));
 
+            // My Field Data reads these off the nodes; the app upload path
+            // refreshes them via insertProject/insertDataset, which this
+            // direct-write path bypasses.
+            if (!empty($createdDone) || !empty($updatedDone) || $datasetCreated) {
+                $this->touchTargetTimestamps($projectId, $datasetId, $datasetCreated, $nowMs);
+            }
+
             // StraboSearch live-sync (§5.3.4): end-of-import batch sync.
             field_search_sync_dataset($this->db, $this->neodb, $datasetId, $this->userpkey);
 
@@ -2079,6 +2089,33 @@ class FieldTabularService
                 ? "Nothing was imported. Cause: $failure"
                 : "Import failed AND rollback hit errors — contact support with run #$runId. Cause: $failure",
         );
+    }
+
+    /**
+     * Stamp "something was uploaded here" metadata after a successful commit:
+     * Project.uploaddate (seconds; the My Field Data "Last Uploaded" line) and,
+     * for an existing dataset, Dataset.modified_timestamp (ms; the "Modified"
+     * column). A freshly created dataset was already stamped at creation.
+     * Non-fatal on purpose: the import itself is already committed, and a
+     * cosmetic stamp must never trigger the rollback path.
+     */
+    protected function touchTargetTimestamps($projectId, $datasetId, $datasetCreated, $nowMs)
+    {
+        $projectId = (int)$projectId;
+        $datasetId = (int)$datasetId;
+        $nowMs     = (int)$nowMs;
+        try {
+            $this->neodb->query(
+                "MATCH (p:Project {id: $projectId, userpkey: {$this->userpkey}}) SET p.uploaddate = " . time());
+            if (!$datasetCreated) {
+                $this->neodb->query(
+                    "MATCH (d:Dataset {id: $datasetId, userpkey: {$this->userpkey}}) SET d.modified_timestamp = $nowMs");
+            }
+        } catch (Exception $e) {
+            // A failed Cypher poisons the Bolt connection for every later query
+            // (the batch search sync still needs it) — reconnect before moving on.
+            $this->neodb->reconnect();
+        }
     }
 
     protected function insertSucceeded($result, $spotId)
