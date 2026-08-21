@@ -300,6 +300,20 @@ try {
     check('export emits 5 long rows (3 orient + sample on A rows, 1 B row)', count($export['rows']) === 5);
     check('all-point export omits geometry_type', !in_array('geometry_type', $export['headers']));
 
+    // Role column materializes (dataset has an associated orientation) and
+    // primary rows say "primary" explicitly, never blank (Jason 2026-08-21:
+    // blank-on-export read as data loss; import keeps accepting blank).
+    $roleTally = array();
+    foreach ($export['rows'] as $r0) {
+        $rv = isset($r0['orientation_role']) ? $r0['orientation_role'] : '(no col)';
+        $roleTally[$rv] = (isset($roleTally[$rv]) ? $roleTally[$rv] : 0) + 1;
+    }
+    check('export writes explicit primary roles (3 primary / 1 associated / 1 blank sample row)',
+        in_array('orientation_role', $export['headers'])
+        && isset($roleTally['primary']) && $roleTally['primary'] === 3
+        && isset($roleTally['associated']) && $roleTally['associated'] === 1
+        && isset($roleTally['']) && $roleTally[''] === 1);
+
     $wb2 = $svc->buildWorkbook($export, false, "smokewiz-tpl-$stamp");
     $exPath = tempnam(sys_get_temp_dir(), 'wizsmoke_') . '.xlsx';
     $tmpFiles[] = $exPath;
