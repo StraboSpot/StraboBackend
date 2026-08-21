@@ -795,10 +795,13 @@ class FieldTabularService
 
     public function myProjects()
     {
+        // Recent-first to match My Field Data (getMyProjects orders the same
+        // way; nulls-first on DESC matches too). Find-by-name still works via
+        // the browser's native select typeahead.
         $records = $this->neodb->get_results(
             "MATCH (p:Project) WHERE p.userpkey = {$this->userpkey}
              RETURN p.id AS id, coalesce(p.desc_project_name, p.projectname) AS name
-             ORDER BY name");
+             ORDER BY p.uploaddate DESC");
         $out = array();
         if (is_array($records)) {
             foreach ($records as $r) {
