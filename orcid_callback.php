@@ -55,7 +55,7 @@ if($creds == ""){
 			$pkey = (int)$pkey;
 
 			//use curl to get id_token - SECURE: Using escapeshellarg to prevent command injection
-			exec("curl -H 'Accept: application/json' --data " . escapeshellarg("code=$code&client_id=APP-YW6QNFNBJZQERER4&client_secret=ed8d9c53-db53-4cab-8d46-0435035d793f&grant_type=authorization_code&redirect_uri=https://www.strabospot.org/orcid_callback?creds=$origcreds") . " https://orcid.org/oauth/token", $results);
+			exec("curl -H 'Accept: application/json' --data " . escapeshellarg("code=$code&client_id=APP-YW6QNFNBJZQERER4&client_secret=d38e8fc0-c0a3-4a19-9cdf-cf462b54c2a3&grant_type=authorization_code&redirect_uri=https://www.strabospot.org/orcid_callback?creds=$origcreds") . " https://orcid.org/oauth/token", $results);
 			$results = $results[0] ?? '';
 
 			if(!isJson($results)){
