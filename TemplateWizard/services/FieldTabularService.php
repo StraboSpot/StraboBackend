@@ -2439,7 +2439,7 @@ class FieldTabularService
             $payloads = array();
             $orientList = isset($props['orientation_data']) && is_array($props['orientation_data']) ? $props['orientation_data'] : array();
             foreach ($orientList as $el) {
-                $payloads[] = array('kind' => 'orientation', 'el' => $el, 'role' => '');
+                $payloads[] = array('kind' => 'orientation', 'el' => $el, 'role' => 'primary');
                 if (isset($el['associated_orientation']) && is_array($el['associated_orientation'])) {
                     foreach ($el['associated_orientation'] as $child) {
                         $payloads[] = array('kind' => 'orientation', 'el' => $child, 'role' => 'associated');
@@ -2712,8 +2712,8 @@ class FieldTabularService
             '',
             'ORIENTATIONS',
             'orientation_type: planar / linear / tabular_zone — required on any row',
-            'carrying orientation values. orientation_role: leave blank for a normal',
-            '(primary) measurement; "associated" attaches the row to the primary',
+            'carrying orientation values. orientation_role: "primary" (blank works too)',
+            'for a normal measurement; "associated" attaches the row to the primary',
             'measurement above it (keep associated rows directly beneath their primary).',
             '',
             'CREATING vs UPDATING',
