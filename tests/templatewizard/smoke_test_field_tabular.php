@@ -247,6 +247,11 @@ try {
     $A = (int)$commit['minted'][0];
     $B = (int)$commit['minted'][1];
 
+    // My Field Data "Last Uploaded" reads Project.uploaddate — a wizard
+    // import must stamp it (regression: it bypassed insertProject).
+    $projUpload = (int)$neodb->get_var("MATCH (p:Project {id: $PROJECT_ID, userpkey: $owner}) RETURN p.uploaddate");
+    check('project uploaddate stamped by create commit', $projUpload >= $stamp);
+
     $edgeCount = (int)$neodb->get_var("MATCH (d:Dataset {id: $DS1, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) RETURN count(s)");
     check('dataset has 2 HAS_SPOT edges', $edgeCount === 2);
 
@@ -318,6 +323,18 @@ try {
     check('round-trip == all-noop', $rtPlan['counts']['noop'] === 2
         && $rtPlan['counts']['create'] === 0 && $rtPlan['counts']['update'] === 0);
 
+    // Confirming an all-noop plan writes nothing, so it must not pretend an
+    // upload happened: both display stamps stay untouched.
+    $neodb->query("MATCH (p:Project {id: $PROJECT_ID, userpkey: $owner}) SET p.uploaddate = 1000");
+    $neodb->query("MATCH (d:Dataset {id: $DS1, userpkey: $owner}) SET d.modified_timestamp = 2000");
+    $rtCommit = $svc->commit($rtPlan);
+    check('all-noop commit ok with zero writes',
+        !empty($rtCommit['ok']) && $rtCommit['created'] === 0 && $rtCommit['updated'] === 0);
+    check('all-noop commit leaves project uploaddate alone',
+        (int)$neodb->get_var("MATCH (p:Project {id: $PROJECT_ID, userpkey: $owner}) RETURN p.uploaddate") === 1000);
+    check('all-noop commit leaves dataset modified_timestamp alone',
+        (int)$neodb->get_var("MATCH (d:Dataset {id: $DS1, userpkey: $owner}) RETURN d.modified_timestamp") === 2000);
+
     // ------------------------------------------------------------------
     echo "\n=== 6. round trip survives row sorting ===\n";
     // ------------------------------------------------------------------
@@ -356,8 +373,17 @@ try {
     check('update plan clean', !empty($upPlan['clean']));
     check('1 update (A: notes+strike+altitude), 1 noop (B)',
         $upPlan['counts']['update'] === 1 && $upPlan['counts']['noop'] === 1);
+    // Stale both display stamps first: a commit with real writes into an
+    // EXISTING dataset must refresh Project.uploaddate ("Last Uploaded")
+    // and Dataset.modified_timestamp ("Modified" column).
+    $neodb->query("MATCH (p:Project {id: $PROJECT_ID, userpkey: $owner}) SET p.uploaddate = 1000");
+    $neodb->query("MATCH (d:Dataset {id: $DS1, userpkey: $owner}) SET d.modified_timestamp = 2000");
     $upCommit = $svc->commit($upPlan);
     check('update commit ok', !empty($upCommit['ok']) && $upCommit['updated'] === 1);
+    check('project uploaddate refreshed by update commit',
+        (int)$neodb->get_var("MATCH (p:Project {id: $PROJECT_ID, userpkey: $owner}) RETURN p.uploaddate") >= $stamp);
+    check('existing dataset modified_timestamp refreshed by update commit',
+        (float)$neodb->get_var("MATCH (d:Dataset {id: $DS1, userpkey: $owner}) RETURN d.modified_timestamp") >= $stamp * 1000);
 
     $pa = spotProps($neodb, $A, $owner);
     check('notes updated', $pa['notes'] === 'dark shale');
