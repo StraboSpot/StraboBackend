@@ -398,11 +398,11 @@ include("includes/mheader.php");
 								<hr>
 								<ul class="actions">
 									<?php if (empty($plan['hard_errors'])): ?>
-									<li><button type="submit" class="button primary" id="confirmBtn"
-										onclick="document.getElementById('tw-action').value='confirm';">Confirm &amp; Import</button></li>
+									<li><input type="submit" class="primary" id="confirmBtn" value="Confirm &amp; Import"
+										onclick="document.getElementById('tw-action').value='confirm';"></li>
 									<?php endif; ?>
-									<li><button type="submit" class="button"
-										onclick="document.getElementById('tw-action').value='cancel';">Cancel</button></li>
+									<li><input type="submit" value="Cancel"
+										onclick="document.getElementById('tw-action').value='cancel';"></li>
 								</ul>
 							<?php endif; ?>
 							</form>
