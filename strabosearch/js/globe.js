@@ -142,8 +142,36 @@
 		handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 		handler.setInputAction(onLeftClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
+		viewer.scene.preRender.addEventListener(updateOcclusion);
+
 		// Console-debugging handle (harmless in production).
 		window.__ssGlobeViewer = viewer;
+	}
+
+	/**
+	 * Explicit horizon culling for bins (2026-08-23 pt5). Depth-based
+	 * approaches flickered for Jason two rounds running: fragment-level
+	 * globe-depth tests jitter per frame at planetary camera distances,
+	 * and the honest depth test z-fought the surface. Bins therefore
+	 * render with the depth test OFF (the configuration that never
+	 * flickered in per-frame pick sampling) and the far side is culled
+	 * HERE instead — one geometric test per bin per rendered frame,
+	 * against the lifted position, flipping a single show flag so the
+	 * circle and its count label always appear and vanish TOGETHER.
+	 */
+	function updateOcclusion() {
+		if (!dataSource || renderedMode !== 'bins') return;
+		var occ = new Cesium.EllipsoidalOccluder(
+			viewer.scene.globe.ellipsoid, viewer.camera.position);
+		var now = Cesium.JulianDate.now();
+		var vals = dataSource.entities.values;
+		for (var i = 0; i < vals.length; i++) {
+			var e = vals[i];
+			var pos = e.position && e.position.getValue(now);
+			if (!pos) continue;
+			var vis = occ.isPointVisible(pos);
+			if (e.show !== vis) e.show = vis;
+		}
 	}
 
 	// ══════════════════════════════════════════════════════════════════
@@ -306,11 +334,10 @@
 					ent.properties.lat = b.lat;
 					return;
 				}
-				// NO disableDepthTestDistance on bins: the world-bbox fetch
-				// keeps far-side bins as entities, and depth-test-off would
-				// draw them THROUGH the planet. The cell lift keeps the
-				// depth test honest instead: facing bins float clear of the
-				// surface, limb bins occlude naturally, far-side bins hide.
+				// Depth test OFF (the flicker-free configuration) — the
+				// far side is handled by updateOcclusion() instead, which
+				// would otherwise bleed through the planet under the
+				// world-bbox fetch.
 				ents.add({
 					id: id,
 					position: pos,
@@ -318,7 +345,8 @@
 						pixelSize: px,
 						color: Cesium.Color.fromCssColorString(BIN_COLOR).withAlpha(0.75),
 						outlineColor: Cesium.Color.WHITE.withAlpha(0.9),
-						outlineWidth: 2
+						outlineWidth: 2,
+						disableDepthTestDistance: Number.POSITIVE_INFINITY
 					},
 					label: {
 						text: fmtCount(b.n),
@@ -327,7 +355,8 @@
 						// Default anchor is LEFT — counts render clipped at
 						// the circle's edge without these.
 						horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-						verticalOrigin: Cesium.VerticalOrigin.CENTER
+						verticalOrigin: Cesium.VerticalOrigin.CENTER,
+						disableDepthTestDistance: Number.POSITIVE_INFINITY
 					},
 					properties: { kind: 'bin', n: b.n, lng: b.lng, lat: b.lat,
 						cell: resp.cell_deg }
@@ -365,6 +394,7 @@
 		for (var i = 0; i < all.length; i++) {
 			if (!keep[all[i].id]) ents.remove(all[i]);
 		}
+		updateOcclusion();   // hide far-side bins before the next frame
 		viewer.scene.requestRender();
 	}
 
