@@ -30,7 +30,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'd7-project-markers-r2-honest-depth';
+	var BUILD = 'd7-project-markers-r3-fly-to-results';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -297,7 +297,79 @@
 			setStatus(n ? fmtCount(n) + ' projects with locations'
 				: 'No matching projects have locations');
 		}
+		flyToFeatures(resp.features || []);
 		viewer.scene.requestRender();
+	}
+
+	/**
+	 * Orient the camera to the marker set when a search renders (Jason
+	 * 2026-08-23: an owner query came up entirely on the far side of the
+	 * globe). Runs once per search render, never on camera moves or
+	 * List/Globe re-toggles (those don't refetch). A user drag cancels
+	 * the flight, so it never fights active interaction.
+	 */
+	function flyToFeatures(features) {
+		if (!features.length) return;
+
+		// Spherical mean: the dominant direction of the marker mass. A
+		// short mean vector means the results wrap the whole planet and
+		// no orientation is "right", so leave the camera alone.
+		var sx = 0, sy = 0, sz = 0;
+		var lons = [], latMin = 90, latMax = -90;
+		features.forEach(function (f) {
+			var lon = f.lng * Math.PI / 180, lat = f.lat * Math.PI / 180;
+			sx += Math.cos(lat) * Math.cos(lon);
+			sy += Math.cos(lat) * Math.sin(lon);
+			sz += Math.sin(lat);
+			lons.push(f.lng);
+			if (f.lat < latMin) latMin = f.lat;
+			if (f.lat > latMax) latMax = f.lat;
+		});
+		var norm = Math.sqrt(sx * sx + sy * sy + sz * sz) / features.length;
+		if (norm < 0.3) return;
+
+		// Smallest longitude window containing every marker: the largest
+		// gap between sorted longitudes (wraparound included) is the
+		// complement of the window, so the seam is handled for free.
+		lons.sort(function (a, b) { return a - b; });
+		var last = lons.length - 1;
+		var gap = (lons[0] + 360) - lons[last];   // wraparound gap
+		var west = lons[0], east = lons[last];
+		for (var i = 1; i < lons.length; i++) {
+			var g = lons[i] - lons[i - 1];
+			if (g > gap) { gap = g; west = lons[i]; east = lons[i - 1]; }
+		}
+		var width = 360 - gap;
+
+		if (width > 140) {
+			// Too wide to frame as a rectangle but still one-sided (the
+			// mean vector was long): face the centroid at browse height.
+			var cLon = Math.atan2(sy, sx) * 180 / Math.PI;
+			var cLat = Math.atan2(sz, Math.sqrt(sx * sx + sy * sy)) * 180 / Math.PI;
+			viewer.camera.flyTo({
+				destination: Cesium.Cartesian3.fromDegrees(cLon, cLat, 22000000),
+				duration: 1.5
+			});
+			return;
+		}
+
+		// Pad 15% per side (minimum 2°) and keep a sane floor so a
+		// single-project result frames a region, not a rooftop.
+		var height = latMax - latMin;
+		var padLon = Math.max(2, width * 0.15);
+		var padLat = Math.max(2, height * 0.15);
+		west -= padLon; east += padLon;
+		if (east - west < 4 && east >= west) { west -= 2; east += 2; }
+		if (west < -180) west += 360;
+		if (east > 180) east -= 360;
+		var south = Math.max(-88, latMin - padLat);
+		var north = Math.min(88, latMax + padLat);
+		if (north - south < 4) { south = Math.max(-88, south - 2); north = Math.min(88, north + 2); }
+
+		viewer.camera.flyTo({
+			destination: Cesium.Rectangle.fromDegrees(west, south, east, north),
+			duration: 1.5
+		});
 	}
 
 	// Cluster point + label carry NO disableDepthTestDistance either (see
