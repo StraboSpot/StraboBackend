@@ -1098,6 +1098,238 @@ SELECT json_build_object(
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // Geo pathway (Globe View M2 — GlobeView_Design_Proposal.md §4)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** Point mode engages at or below this many located rows in view. */
+    const GEO_POINT_LIMIT = 1500;
+    /** Bin rows returned per request, largest counts first. */
+    const GEO_BIN_LIMIT = 5000;
+    /** Server-side grid columns across the requested viewport. */
+    const GEO_GRID_COLS = 48;
+
+    /**
+     * Validate + normalize the geo block of a search_geo request:
+     *   {bbox: [w, s, e, n], include_counter?: bool}
+     * bbox is the camera viewport; west > east means the viewport crosses
+     * the antimeridian. Missing/oversized bbox degrades to the whole world.
+     */
+    public function validateGeo($geo)
+    {
+        $out = array(
+            'bbox' => array(-180.0, -90.0, 180.0, 90.0),
+            'include_counter' => false,
+        );
+        if (!is_array($geo)) return $out;
+
+        if (isset($geo['bbox'])) {
+            $b = $geo['bbox'];
+            if (!is_array($b) || count($b) !== 4) {
+                throw new SearchDslError('geo.bbox must be [w, s, e, n].');
+            }
+            foreach ($b as $n) {
+                if (!is_numeric($n)) throw new SearchDslError('geo.bbox values must be numeric.');
+            }
+            $w = max(-180.0, min(180.0, (float)$b[0]));
+            $s = max(-90.0,  min(90.0,  (float)$b[1]));
+            $e = max(-180.0, min(180.0, (float)$b[2]));
+            $n = max(-90.0,  min(90.0,  (float)$b[3]));
+            if ($s > $n) { $t = $s; $s = $n; $n = $t; }
+            $out['bbox'] = array($w, $s, $e, $n);
+        }
+        $out['include_counter'] = !empty($geo['include_counter']);
+        return $out;
+    }
+
+    /** Viewport width in degrees, antimeridian-aware. */
+    private static function geoBboxWidth($bbox)
+    {
+        list($w, , $e) = array($bbox[0], $bbox[1], $bbox[2]);
+        return ($e >= $w) ? ($e - $w) : ((180.0 - $w) + ($e + 180.0));
+    }
+
+    /**
+     * Viewport envelope predicate over $alias.location. A west > east bbox
+     * (antimeridian crossing) splits into two OR'd envelopes — the grid
+     * keys stay absolute so bins never straddle the seam.
+     */
+    private function geoEnvelopeClause($alias, $bbox)
+    {
+        list($w, $s, $e, $n) = $bbox;
+        $env = function ($w1, $e1) use ($alias, $s, $n) {
+            return "$alias.location && ST_MakeEnvelope("
+                . $this->bind($w1) . "::float8, " . $this->bind($s) . "::float8, "
+                . $this->bind($e1) . "::float8, " . $this->bind($n) . "::float8, 4326)";
+        };
+        if ($e >= $w) return '(' . $env($w, $e) . ')';
+        return '(' . $env($w, 180.0) . ' OR ' . $env(-180.0, $e) . ')';
+    }
+
+    /**
+     * Globe results for one viewport (§4 GlobeView proposal). Runs the DSL
+     * WHERE (itemWhere — the same ACL + criteria the list view uses) over
+     * located rows in the viewport:
+     *   1. grid-bin aggregate (avg-centroid: 3.7x cheaper than
+     *      ST_Centroid(ST_Collect()) on the match-all world view, 2026-08-23
+     *      dev spike) — cell size = viewport width / GEO_GRID_COLS;
+     *   2. if the viewport's located total ≤ GEO_POINT_LIMIT, a second
+     *      cheap query swaps bins for real item points (project routing +
+     *      popup-card fields).
+     * The location counter (globally matched vs located, no bbox) is
+     * computed only when geo.include_counter is set — the client asks once
+     * per search, not on every camera move.
+     */
+    public function runGeoQuery($dsl, $geo)
+    {
+        $bbox = $geo['bbox'];
+        $cell = self::geoBboxWidth($bbox) / self::GEO_GRID_COLS;
+        if ($cell < 0.0002) $cell = 0.0002;
+        if ($cell > 7.5)    $cell = 7.5;
+
+        // ---- pass 1: bins --------------------------------------------------
+        $this->resetParams();
+        list($where) = $this->itemWhere($dsl);
+        $env = $this->geoEnvelopeClause('ih', $bbox);
+        $c = $this->bind($cell);
+
+        $sql = "
+SELECT floor(ST_X(ih.location) / $c::float8)::int AS cx,
+       floor(ST_Y(ih.location) / $c::float8)::int AS cy,
+       count(*)             AS n,
+       avg(ST_X(ih.location)) AS lng,
+       avg(ST_Y(ih.location)) AS lat
+FROM strabosearch.item_hit ih
+WHERE $where
+  AND ih.location IS NOT NULL
+  AND $env
+GROUP BY 1, 2
+ORDER BY n DESC
+LIMIT " . self::GEO_BIN_LIMIT;
+
+        $rows = $this->execPrepared($sql);
+        $inView = 0;
+        foreach ($rows as $r) $inView += (int)$r->n;
+
+        $out = array(
+            'cell_deg'        => $cell,
+            'in_view_located' => $inView,
+        );
+
+        if ($inView === 0) {
+            $out['mode'] = 'points';
+            $out['features'] = array();
+        } elseif ($inView <= self::GEO_POINT_LIMIT) {
+            // ---- pass 2: real points (small by construction) ---------------
+            $this->resetParams();
+            list($where) = $this->itemWhere($dsl);
+            $env = $this->geoEnvelopeClause('ih', $bbox);
+            $sql = "
+SELECT ih.item_type, ih.item_id, ih.sample_name,
+       ih.project_id, ih.project_userpkey, ih.project_subsystem,
+       ih.project_name, ih.project_ispublic, ih.dataset_ids,
+       ST_X(ih.location) AS lng, ST_Y(ih.location) AS lat,
+       trim(coalesce(u.firstname, '') || ' ' || coalesce(u.lastname, '')) AS owner_name
+FROM strabosearch.item_hit ih
+LEFT JOIN users u ON u.pkey = ih.project_userpkey
+WHERE $where
+  AND ih.location IS NOT NULL
+  AND $env
+ORDER BY ih.item_hit_pkey
+LIMIT " . self::GEO_POINT_LIMIT;
+
+            $pts = array();
+            foreach ($this->execPrepared($sql) as $r) {
+                $pts[] = array(
+                    'item_type'         => $r->item_type,
+                    'item_id'           => $r->item_id,
+                    'sample_name'       => $r->sample_name,
+                    'project_id'        => $r->project_id,
+                    'project_userpkey'  => (int)$r->project_userpkey,
+                    'project_subsystem' => $r->project_subsystem,
+                    'project_name'      => $r->project_name,
+                    'project_ispublic'  => (bool)self::pgBool($r->project_ispublic),
+                    'dataset_ids'       => self::pgTextArray($r->dataset_ids),
+                    'owner_name'        => $r->owner_name,
+                    'lng'               => (float)$r->lng,
+                    'lat'               => (float)$r->lat,
+                );
+            }
+            $out['mode'] = 'points';
+            $out['features'] = $pts;
+        } else {
+            $bins = array();
+            foreach ($rows as $r) {
+                $bins[] = array(
+                    'cx'  => (int)$r->cx,
+                    'cy'  => (int)$r->cy,
+                    'n'   => (int)$r->n,
+                    'lng' => (float)$r->lng,
+                    'lat' => (float)$r->lat,
+                );
+            }
+            $out['mode'] = 'bins';
+            $out['features'] = $bins;
+            $out['capped'] = (count($bins) === self::GEO_BIN_LIMIT);
+        }
+
+        // ---- global location counter (once per search) ---------------------
+        if ($geo['include_counter']) {
+            $this->resetParams();
+            list($where) = $this->itemWhere($dsl);
+            // located = renderable locations only: a residue of source rows
+            // carries out-of-range coordinates (UTM-looking values in
+            // lon/lat, 1,597 public rows on dev 2026-08-23) that no
+            // viewport can ever show — counting them would overpromise.
+            $rows = $this->execPrepared(
+                "SELECT count(*) AS total,
+                        count(*) FILTER (WHERE ih.location IS NOT NULL
+                          AND ih.location && ST_MakeEnvelope(-180, -90, 180, 90, 4326)) AS located
+                 FROM strabosearch.item_hit ih WHERE $where");
+            $out['counter'] = array(
+                'total'   => $rows ? (int)$rows[0]->total : 0,
+                'located' => $rows ? (int)$rows[0]->located : 0,
+            );
+        }
+
+        return $out;
+    }
+
+    /** PG driver booleans arrive as 't'/'f' strings. */
+    private static function pgBool($v)
+    {
+        return $v === true || $v === 't' || $v === 'true' || $v === '1' || $v === 1;
+    }
+
+    /** Parse a PG text[] literal ({a,b,"c d"}) into a PHP list. */
+    private static function pgTextArray($lit)
+    {
+        if ($lit === null || $lit === '' || $lit === '{}') return array();
+        $out = array();
+        // Simple state machine — values are project-controlled dataset ids
+        // (no embedded braces), quotes/backslashes still honored.
+        $body = substr((string)$lit, 1, -1);
+        $cur = '';
+        $inq = false;
+        for ($i = 0, $len = strlen($body); $i < $len; $i++) {
+            $ch = $body[$i];
+            if ($inq) {
+                if ($ch === '\\' && $i + 1 < $len) { $cur .= $body[++$i]; }
+                elseif ($ch === '"') { $inq = false; }
+                else { $cur .= $ch; }
+            } elseif ($ch === '"') {
+                $inq = true;
+            } elseif ($ch === ',') {
+                $out[] = $cur;
+                $cur = '';
+            } else {
+                $cur .= $ch;
+            }
+        }
+        if ($cur !== '' || $out) $out[] = $cur;
+        return $out;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // Facet counts (§5.4.3)
     // ═══════════════════════════════════════════════════════════════════
 

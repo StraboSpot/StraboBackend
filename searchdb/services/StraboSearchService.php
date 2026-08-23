@@ -104,6 +104,27 @@ class StraboSearchService
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // POST search_geo — Globe View M2 (GlobeView_Design_Proposal.md §4)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Zoom-adaptive globe read over the same DSL WHERE the list uses.
+     * Body = the §4.4 DSL plus a `geo` block ({bbox, include_counter}).
+     * Empty criteria are legal here (v1: globe view only allows them);
+     * pathway/page/sort keys are validated but ignored — the globe is
+     * item-side only.
+     */
+    public function runGeoSearch($params)
+    {
+        $p = self::assoc($params);
+        $dsl = $this->qb->validate($p);
+        $geo = $this->qb->validateGeo(isset($p['geo']) ? $p['geo'] : null);
+        $r = $this->qb->runGeoQuery($dsl, $geo);
+        $r['pathway'] = 'geo';
+        return $r;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // GET /searchdb/facets — empty-search initial state (§5.4.3)
     // ═══════════════════════════════════════════════════════════════════
 

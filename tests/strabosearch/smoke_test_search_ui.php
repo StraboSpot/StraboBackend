@@ -326,6 +326,33 @@ check('image row carries image_hit_pkey', $j && isset($j['results'][0]['image_hi
 list($st, $j) = api('search', $sid, $imgDsl);
 check('owner image search: both images', $j && $j['total'] === 2, 'total=' . ($j ? $j['total'] : '?'));
 
+// ---- search_geo through the proxy (Globe View M2) ------------------------
+// The geo pathway's own logic lives in smoke_test_search_geo.php; here we
+// prove the proxy routes it with the same session-identity semantics.
+$db->prepare_query(
+	"UPDATE strabosearch.item_hit SET location = ST_SetSRID(ST_MakePoint(-105.0, 39.0), 4326)
+	 WHERE project_id LIKE $1", array($PFX . '_%'));
+
+$geoDsl = array(
+	'criteria' => array(array('id' => 'U1', 'value' => 'UNIQSSUI')),
+	'geo' => array('bbox' => array(-110, 35, -100, 42), 'include_counter' => true));
+
+list($st, $j) = api('search_geo', null, $geoDsl);
+check('anon search_geo 200 + geo pathway', $st === 200 && $j && $j['pathway'] === 'geo', "got $st");
+check('anon search_geo sees ONLY the public point', $j && $j['mode'] === 'points'
+	&& count($j['features']) === 1 && $j['features'][0]['project_id'] === $PFX . '_proj_pub',
+	'n=' . ($j ? count($j['features']) : '?'));
+check('anon search_geo counter rides along', $j && isset($j['counter'])
+	&& $j['counter']['total'] === 1 && $j['counter']['located'] === 1);
+
+list($st, $j) = api('search_geo', $sid, $geoDsl);
+check('owner search_geo sees both points', $st === 200 && $j
+	&& count($j['features']) === 2, 'n=' . ($j ? count($j['features']) : '?'));
+
+list($st, $j) = api('search_geo', null, array(
+	'criteria' => array(), 'geo' => array('bbox' => array(1, 2, 3))));
+check('search_geo bad bbox 400 w/ Error', $st === 400 && isset($j['Error']), "got $st");
+
 // ---------------------------------------------------------------------------
 section('3. Facets + vocab (incl. new province)');
 
