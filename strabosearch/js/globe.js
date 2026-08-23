@@ -79,9 +79,11 @@
 	function initViewer() {
 		if (viewer) return;
 		viewer = new Cesium.Viewer('ssGlobeContainer', {
-			baseLayer: Cesium.ImageryLayer.fromProviderAsync(
-				Cesium.TileMapServiceImageryProvider.fromUrl(
-					Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII'))),
+			// Base imagery is added explicitly below: with requestRenderMode
+			// on, the fromProviderAsync path resolves AFTER the initial
+			// frames stop and nothing wakes the render loop — the globe
+			// stays black with zero tile requests.
+			baseLayer: false,
 			baseLayerPicker: false,
 			geocoder: false,
 			homeButton: false,
@@ -97,6 +99,16 @@
 			maximumRenderTimeChange: Infinity
 		});
 		viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1c1d26');
+
+		// Self-hosted NaturalEarthII (ships inside the Cesium build — zero
+		// external requests). Satellite/Macrostrat layers arrive in M3.
+		Cesium.TileMapServiceImageryProvider.fromUrl(
+			Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
+		).then(function (provider) {
+			if (!viewer) return;
+			viewer.imageryLayers.addImageryProvider(provider);
+			viewer.scene.requestRender();
+		});
 
 		dataSource = new Cesium.CustomDataSource('ss-hits');
 		// Residual client-side clustering for point mode (§2 core scope).
@@ -117,6 +129,9 @@
 
 		handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 		handler.setInputAction(onLeftClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
+
+		// Console-debugging handle (harmless in production).
+		window.__ssGlobeViewer = viewer;
 	}
 
 	// ══════════════════════════════════════════════════════════════════

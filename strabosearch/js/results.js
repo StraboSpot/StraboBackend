@@ -38,6 +38,9 @@
 	//   loadingMore, observer, sentinel, status
 	// }
 	var onStateChange = function () {};   // app.js mirrors URL
+	// Survives clear(): a globe user who edits criteria (which resets
+	// results) gets the globe back on the next Search, not the list.
+	var lastView = 'list';
 
 	function el(tag, cls, text) {
 		var e = document.createElement(tag);
@@ -195,7 +198,7 @@
 		disconnectObserver();
 		// The chosen view survives re-searches — a globe user refining
 		// criteria stays on the globe (Globe View M2).
-		var prevView = state ? state.view : 'list';
+		var prevView = state ? state.view : lastView;
 		state = {
 			baseDsl: baseDsl,
 			sort: (opts && opts.sort) || null,
@@ -210,6 +213,7 @@
 			status: null
 		};
 		if (state.view === 'globe' && state.tab === 'images') state.tab = 'projects';   // D6
+		lastView = state.view;
 		renderShell();
 		window.SSGlobe.setQuery(baseDsl);
 		applyView();
@@ -298,6 +302,7 @@
 	function setView(v) {
 		if (!state || state.view === v) return;
 		state.view = v;
+		lastView = v;
 		if (v === 'globe' && state.tab === 'images') {
 			// D6: the Images pathway stays list-only.
 			state.tab = 'projects';
