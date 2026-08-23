@@ -30,7 +30,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'd7-project-markers-r1';
+	var BUILD = 'd7-project-markers-r2-honest-depth';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -136,6 +136,10 @@
 		viewer.camera.setView({
 			destination: Cesium.Cartesian3.fromDegrees(-40.0, 25.0, 22000000)
 		});
+		// Keep zoom-out inside the validated envelope: beyond ~30,000 km
+		// the globe is a speck and marker rendering was only verified up
+		// to here (FF harness sweep, 2026-08-23 post-pivot).
+		viewer.scene.screenSpaceCameraController.maximumZoomDistance = 30000000;
 
 		handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 		handler.setInputAction(onLeftClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
@@ -147,16 +151,17 @@
 	}
 
 	/**
-	 * Far-side culling, evaluated ON THE GPU (§9, carried over from M2
-	 * pt8): markers must keep the flicker-free depth-test-off
-	 * configuration, so the far side is culled by scaleByDistance
-	 * instead. The scalar zeroes a marker once its CAMERA DISTANCE
-	 * passes the horizon distance sqrt(h² + 2Rh); the comparison runs
-	 * per frame in the shader with ZERO buffer writes (the M2 bisection
-	 * cleared scaleByDistance of any blink involvement). The scalar is
-	 * only reassigned when camera height leaves an 8% band (and on
-	 * marker creation); clusters restyle themselves on camera change and
-	 * pick up a fresh scalar in styleCluster.
+	 * Horizon fade, evaluated ON THE GPU (§9, carried over from M2 pt8).
+	 * Markers depth-test honestly (see the renderFeatures marker comment
+	 * for why depth-test-off is unusable on points), which already hides
+	 * the far side; this scalar additionally fades rim markers out just
+	 * past the horizon distance sqrt(h² + 2Rh) instead of letting them
+	 * pop at the limb. The comparison runs per frame in the shader with
+	 * ZERO buffer writes (the M2 bisection cleared scaleByDistance of
+	 * any blink involvement). The scalar is only reassigned when camera
+	 * height leaves an 8% band (and on marker creation); clusters
+	 * restyle themselves on camera change and pick up a fresh scalar in
+	 * styleCluster.
 	 */
 	var lastScaleHeight = 0;
 
@@ -178,10 +183,13 @@
 		}
 		lastScaleHeight = h;
 		var s = horizonScalar();
-		var vals = dataSource.entities.values;
+		var ents = dataSource.entities;
+		ents.suspendEvents();   // coalesce 1 event per pass, not per marker
+		var vals = ents.values;
 		for (var i = 0; i < vals.length; i++) {
 			if (vals[i].point) vals[i].point.scaleByDistance = s;
 		}
+		ents.resumeEvents();
 	}
 
 	// ══════════════════════════════════════════════════════════════════
@@ -266,10 +274,15 @@
 					color: Cesium.Color.fromCssColorString(color),
 					outlineColor: Cesium.Color.WHITE.withAlpha(0.85),
 					outlineWidth: 1.5,
-					scaleByDistance: scal,
-					// Depth test OFF is the flicker-free configuration (§8
-					// pt5); the far side is culled by scaleByDistance above.
-					disableDepthTestDistance: Number.POSITIVE_INFINITY
+					scaleByDistance: scal
+					// NO disableDepthTestDistance here, unlike the M2 bins:
+					// the POINT-primitive vertex shader's depth-disable branch
+					// clips the marker entirely once camera height passes
+					// ~22,000 km (FF harness bisect, 2026-08-23 post-pivot),
+					// which read as "all dots vanish zoomed out". Honest depth
+					// measured MORE stable for surface points (0-1% frame
+					// spread vs 15-24% with the flag) and culls the far side
+					// for free; scaleByDistance still fades the rim.
 				},
 				properties: { hit: f }
 			});
@@ -287,6 +300,9 @@
 		viewer.scene.requestRender();
 	}
 
+	// Cluster point + label carry NO disableDepthTestDistance either (see
+	// the marker comment in renderFeatures) so the pair depth-tests
+	// identically and can never disagree (the pt4 circle/label split).
 	function styleCluster(entities, cluster) {
 		var scal = horizonScalar();
 		cluster.billboard.show = false;
@@ -296,7 +312,6 @@
 		cluster.point.outlineColor = Cesium.Color.WHITE.withAlpha(0.9);
 		cluster.point.outlineWidth = 2;
 		cluster.point.scaleByDistance = scal;
-		cluster.point.disableDepthTestDistance = Number.POSITIVE_INFINITY;
 		cluster.label.show = true;
 		cluster.label.text = String(entities.length);
 		cluster.label.font = '700 12px "Source Sans Pro", sans-serif';
@@ -304,7 +319,6 @@
 		cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
 		cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
 		cluster.label.scaleByDistance = scal;
-		cluster.label.disableDepthTestDistance = Number.POSITIVE_INFINITY;
 	}
 
 	// ══════════════════════════════════════════════════════════════════
