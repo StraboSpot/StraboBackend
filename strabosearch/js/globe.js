@@ -30,7 +30,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'd7-project-markers-r3-fly-to-results';
+	var BUILD = 'd7-project-markers-r4-fresh-datasource';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -84,6 +84,28 @@
 		return cesiumLoading;
 	}
 
+	/**
+	 * Destroy and recreate the marker data source. Called per search
+	 * render, NOT per camera move: EntityCluster's incremental
+	 * bookkeeping does not survive a wholesale entity replacement (a
+	 * field search followed by a micro search left the old 315 point
+	 * primitives in the cluster's internal collection plus orphaned
+	 * cluster badges that ignored zoom and clicks, Jason 2026-08-23).
+	 * A fresh source rebuilds clustering from scratch by construction;
+	 * the cost is negligible once per search.
+	 */
+	function rebuildDataSource() {
+		if (dataSource) {
+			viewer.dataSources.remove(dataSource, true);   // true = destroy
+		}
+		dataSource = new Cesium.CustomDataSource('ss-projects');
+		dataSource.clustering.enabled = true;
+		dataSource.clustering.pixelRange = 42;
+		dataSource.clustering.minimumClusterSize = 3;
+		dataSource.clustering.clusterEvent.addEventListener(styleCluster);
+		viewer.dataSources.add(dataSource);
+	}
+
 	function initViewer() {
 		if (viewer) return;
 		viewer = new Cesium.Viewer('ssGlobeContainer', {
@@ -126,12 +148,7 @@
 			credit: new Cesium.Credit('© Mapbox © OpenStreetMap · StraboSpot tiles')
 		}));
 
-		dataSource = new Cesium.CustomDataSource('ss-projects');
-		dataSource.clustering.enabled = true;
-		dataSource.clustering.pixelRange = 42;
-		dataSource.clustering.minimumClusterSize = 3;
-		dataSource.clustering.clusterEvent.addEventListener(styleCluster);
-		viewer.dataSources.add(dataSource);
+		rebuildDataSource();
 
 		viewer.camera.setView({
 			destination: Cesium.Cartesian3.fromDegrees(-40.0, 25.0, 22000000)
@@ -258,12 +275,12 @@
 	 */
 	function renderFeatures(resp) {
 		hidePopup();
+		rebuildDataSource();
 		var ents = dataSource.entities;
 		var scal = horizonScalar();
 		lastScaleHeight = viewer.camera.positionCartographic.height;
 
 		ents.suspendEvents();
-		ents.removeAll();
 		(resp.features || []).forEach(function (f) {
 			var color = SUB_COLORS[f.project_subsystem] || SUB_COLORS.field;
 			ents.add({
@@ -573,9 +590,9 @@
 			baseDsl = null;
 			counter = null;
 			needFetch = false;
-			if (dataSource) {
-				dataSource.entities.removeAll();
-				if (viewer) viewer.scene.requestRender();
+			if (viewer && dataSource) {
+				rebuildDataSource();   // fresh source, no cluster residue
+				viewer.scene.requestRender();
 			}
 		},
 
