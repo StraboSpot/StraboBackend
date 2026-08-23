@@ -681,7 +681,7 @@
 		state = null;
 		region.innerHTML = '';
 		region.appendChild(el('div', 'ss-quiet-prompt',
-			'Compose a search above to see results.'));
+			'Compose a search to see results.'));
 	}
 
 	window.SSResults = {

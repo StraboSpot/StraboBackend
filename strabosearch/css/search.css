@@ -2,7 +2,140 @@
  * StraboSearch v1 (§6) — page-local styles layered over /massets/css/main.css.
  * Everything namespaced ss- ; site components (buttons, grid, searchCountResult,
  * grayOut, loader) are reused untouched per §6.1.1.
+ *
+ * 2026-08 (Globe View M1): full-viewport app frame — criteria rail left,
+ * results pane right, panes scroll internally on desktop; stacked document
+ * flow below 1024px (GlobeView_Design_Proposal.md §3). The builder rows use
+ * the narrow column layout at EVERY width now, since the rail is narrow on
+ * desktop too.
  */
+
+/* ---- app frame (Globe View M1) ------------------------------------------ */
+
+/* Native widget chrome (select popups, scrollbars) must follow the dark
+   theme. Without this, Chrome themes each select's popup from a heuristic
+   over composited ancestor backgrounds, and a semi-transparent rail read
+   as LIGHT (grey popup, black text) while the sort select over the opaque
+   body read dark. */
+:root {
+	color-scheme: dark;
+}
+
+.ss-app-frame {
+	display: flex;
+	flex-direction: column;   /* stacked fallback; row on desktop below */
+}
+
+.ss-rail {
+	/* Opaque blend of rgba(39,40,51,0.45) over the #1c1d26 body — same
+	   look, but opaque so popup-theme heuristics can't misread it. */
+	background: #212230;
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	font-size: 0.8em;
+}
+
+.ss-rail-head {
+	padding: 1em 1.4em 0.2em;
+}
+
+.ss-rail-head h2 {
+	font-size: 1.5em;
+	margin: 0 0 0.4em 0;
+}
+
+.ss-rail-scroll {
+	min-height: 0;
+	padding: 0 1.4em;
+}
+
+.ss-rail-actions {
+	padding: 1em 1.4em 1.2em;
+	border-top: 1px solid rgba(144, 144, 144, 0.35);
+}
+
+.ss-actions-row {
+	display: flex;
+	gap: 0.6em;
+	margin-top: 0.7em;
+}
+
+.ss-actions-row .button {
+	flex: 1 1 0;
+	width: auto;
+	padding: 0 0.5em;
+}
+
+.ss-pane {
+	min-width: 0;
+	min-height: 0;
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+}
+
+.ss-results {
+	display: flex;
+	flex-direction: column;
+	min-height: 0;
+	flex: 1 1 auto;
+	padding: 0 1.2em;
+}
+
+.ss-results .ss-tabbar {
+	flex: 0 0 auto;
+	padding-top: 0.9em;
+}
+
+.ss-results .ss-tab-content {
+	flex: 1 1 auto;
+	min-height: 0;
+	padding-bottom: 1.2em;
+}
+
+/* Pre-search prompt centers in the empty pane (flex margin auto). */
+.ss-results > .ss-quiet-prompt {
+	margin: auto;
+}
+
+/* Desktop app frame: the page never scrolls, the panes do. */
+@media screen and (min-width: 1024px) {
+	body {
+		overflow: hidden;
+	}
+
+	.ss-app-frame {
+		flex-direction: row;
+		height: calc(100vh - 3.5em);   /* below the fixed #header */
+	}
+
+	.ss-rail {
+		flex: 0 0 340px;
+		border-right: 1px solid rgba(144, 144, 144, 0.35);
+	}
+
+	.ss-rail-scroll {
+		flex: 1 1 auto;
+		overflow-y: auto;
+	}
+
+	.ss-results .ss-tab-content {
+		overflow-y: auto;
+	}
+}
+
+/* Stacked fallback below desktop: normal page scroll. */
+@media screen and (max-width: 1023px) {
+	.ss-rail {
+		border-bottom: 1px solid rgba(144, 144, 144, 0.35);
+	}
+
+	.ss-rail-actions {
+		border-top: 0;
+		padding-top: 0.2em;
+	}
+}
 
 /* ---- criteria builder (§6.3) ------------------------------------------- */
 
@@ -12,11 +145,11 @@
 
 .ss-row {
 	display: flex;
-	align-items: flex-start;
-	gap: 0.75em;
-	padding: 0.6em 0;
+	flex-direction: column;
+	align-items: stretch;
+	gap: 0.55em;
+	padding: 0.7em 0;
 	border-top: 1px dotted rgba(144, 144, 144, 0.35);
-	flex-wrap: wrap;
 }
 
 .ss-row:first-child {
@@ -24,20 +157,20 @@
 }
 
 .ss-row .ss-crit-select {
-	flex: 0 0 16em;
+	flex: 0 0 auto;
 	max-width: 100%;
 }
 
 .ss-row .ss-value {
-	flex: 1 1 20em;
-	min-width: 14em;
+	flex: 0 0 auto;
+	min-width: 0;
 }
 
 .ss-row .ss-row-controls {
 	flex: 0 0 auto;
 	display: flex;
 	gap: 0.4em;
-	padding-top: 0.35em;
+	justify-content: flex-end;
 }
 
 .ss-value .ss-range-pair {
@@ -47,7 +180,7 @@
 }
 
 .ss-value .ss-range-pair input {
-	max-width: 9em;
+	max-width: 8em;
 }
 
 .ss-value .ss-hint {
@@ -131,23 +264,31 @@
 }
 
 .ss-ta-list,
-.ss-modal-card {
+.ss-modal-card,
+.ss-rail-scroll,
+.ss-tab-content {
 	scrollbar-color: rgba(255, 255, 255, 0.3) transparent;
 }
 
 .ss-ta-list::-webkit-scrollbar,
-.ss-modal-card::-webkit-scrollbar {
+.ss-modal-card::-webkit-scrollbar,
+.ss-rail-scroll::-webkit-scrollbar,
+.ss-tab-content::-webkit-scrollbar {
 	width: 8px;
 }
 
 .ss-ta-list::-webkit-scrollbar-thumb,
-.ss-modal-card::-webkit-scrollbar-thumb {
+.ss-modal-card::-webkit-scrollbar-thumb,
+.ss-rail-scroll::-webkit-scrollbar-thumb,
+.ss-tab-content::-webkit-scrollbar-thumb {
 	background: rgba(255, 255, 255, 0.25);
 	border-radius: 4px;
 }
 
 .ss-ta-list::-webkit-scrollbar-track,
-.ss-modal-card::-webkit-scrollbar-track {
+.ss-modal-card::-webkit-scrollbar-track,
+.ss-rail-scroll::-webkit-scrollbar-track,
+.ss-tab-content::-webkit-scrollbar-track {
 	background: transparent;
 }
 
@@ -191,12 +332,6 @@
 	font-size: 0.85em;
 	margin-left: 0.5em;
 	opacity: 0.85;
-}
-
-/* ---- action row --------------------------------------------------------- */
-
-.ss-action-row {
-	margin: 1em 0;
 }
 
 /* ---- anonymous note (§6.4) ---------------------------------------------- */
@@ -254,6 +389,12 @@
 
 .ss-sort select {
 	width: auto;
+}
+
+/* main.css label carries display:block + margin-bottom:1em, which shoves
+   the text upward inside this vertically-centered flex row. */
+.ss-sort label {
+	margin: 0;
 }
 
 /* ---- project hit cards (§6.5.3) ----------------------------------------- */
@@ -566,36 +707,15 @@
 }
 
 /* ---- responsive (§6.8) -------------------------------------------------- */
-
-@media screen and (max-width: 1023px) {
-	.ss-row .ss-crit-select {
-		flex-basis: 100%;
-	}
-}
+/* The builder rows are column-layout at every width now (rail); the old
+   1023px/639px row re-flow rules are gone. Remaining rules are phone-only. */
 
 @media screen and (max-width: 639px) {
-	.ss-row {
-		flex-direction: column;
-		align-items: stretch;
-	}
-
-	/* Column direction makes flex-basis the HEIGHT — the desktop
-	   16em/20em track widths would become tall empty blocks. */
-	.ss-row .ss-crit-select,
-	.ss-row .ss-value {
-		flex: 0 0 auto;
-		min-width: 0;
-	}
-
-	.ss-row .ss-row-controls {
-		padding-top: 0;
-		justify-content: flex-end;
-	}
-
+	/* Stacked fallback: the tab bar pins while the page scrolls. */
 	.ss-tabbar {
 		position: sticky;
 		top: 0;
-		background: inherit;
+		background: #1c1d26;
 		z-index: 500;
 	}
 

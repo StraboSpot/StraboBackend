@@ -13,6 +13,14 @@
  *              session proxy (/strabosearch/api.php) into the Phase 3
  *              service layer.
  *
+ *              2026-08 (Globe View M1): full-viewport app frame — the
+ *              criteria builder lives in a fixed left rail, results fill
+ *              the right pane, each scrolls internally (design doc
+ *              docs/StraboSearch/GlobeView_Design_Proposal.md §3). The
+ *              visual footer is skipped via mfooter_close.php; below the
+ *              desktop breakpoint the frame falls back to stacked
+ *              document flow (the M4 drawer treatment comes later).
+ *
  * @package    StraboSpot Web Site — StraboSearch
  * @author     Jason Ash <jasonash@ku.edu>
  * @copyright  2026 StraboSpot
@@ -38,51 +46,52 @@ function ss_asset($path) {
 			<link rel="stylesheet" href="/assets/js/leaflet/leaflet.css" />
 			<link rel="stylesheet" href="<?php echo ss_asset('/strabosearch/css/search.css'); ?>" />
 
-			<!-- Main -->
-				<div id="main" class="wrapper style1">
-					<div class="container">
+			<div id="loadingScreen" style="display:none;">
+				<div class="grayOut" style="display:inline;"></div>
+				<div id="loadingmessage" style="text-align:center;display:block;">
+					<div class="loader" style="margin-left: 100px;"></div>
+					<div id="loadingText">Searching. Please wait...</div>
+				</div>
+			</div>
 
-						<header class="major">
-							<h2>StraboSpot Search</h2>
-						</header>
+			<!-- App frame: criteria rail + results pane -->
+			<div id="ssAppFrame" class="ss-app-frame">
 
-						<div id="loadingScreen" style="display:none;">
-							<div class="grayOut" style="display:inline;"></div>
-							<div id="loadingmessage" style="text-align:center;display:block;">
-								<div class="loader" style="margin-left: 100px;"></div>
-								<div id="loadingText">Searching. Please wait...</div>
-							</div>
-						</div>
+				<div class="ss-rail">
+					<div class="ss-rail-head">
+						<h2>StraboSpot Search</h2>
+					</div>
 
-						<!-- Criteria builder (§6.3) — rows rendered by builder.js -->
-						<div id="criteriaBuilder" class="ss-criteria" aria-label="Search criteria"></div>
-
-						<!-- Action row (§6.2.3) -->
-						<div class="ss-action-row">
-							<ul class="actions fit">
-								<li><a href="javascript:void(0);" id="ssSearchBtn" class="button primary fit">Search</a></li>
-<?php if ($searchLoggedIn) { ?>
-								<li><a href="javascript:void(0);" id="ssMySearchesBtn" class="button fit">My searches &#9662;</a></li>
-								<li><a href="javascript:void(0);" id="ssSaveBtn" class="button fit">Save current</a></li>
-<?php } ?>
-							</ul>
-						</div>
-
-						<hr />
-
-						<!-- Results region (§6.5) — rendered by results.js -->
+					<div class="ss-rail-scroll">
 						<div id="ssAnonNote" style="display:none;" class="ss-anon-note">
 							Sign in to also search private projects you own or collaborate on.
 							<a href="javascript:void(0);" id="ssAnonNoteDismiss" aria-label="Dismiss note">&times;</a>
 						</div>
-						<div id="ssResults" class="ss-results">
-							<div class="ss-quiet-prompt">Compose a search above to see results.</div>
+
+						<!-- Criteria builder (§6.3) — rows rendered by builder.js -->
+						<div id="criteriaBuilder" class="ss-criteria" aria-label="Search criteria"></div>
+					</div>
+
+					<!-- Rail actions (§6.2.3) -->
+					<div class="ss-rail-actions">
+						<a href="javascript:void(0);" id="ssSearchBtn" class="button primary fit">Search</a>
+<?php if ($searchLoggedIn) { ?>
+						<div class="ss-actions-row">
+							<a href="javascript:void(0);" id="ssMySearchesBtn" class="button small fit">My searches &#9662;</a>
+							<a href="javascript:void(0);" id="ssSaveBtn" class="button small fit">Save current</a>
 						</div>
-
-						<div class="bottomSpacer"></div>
-
+<?php } ?>
 					</div>
 				</div>
+
+				<!-- Results region (§6.5) — rendered by results.js -->
+				<div class="ss-pane">
+					<div id="ssResults" class="ss-results">
+						<div class="ss-quiet-prompt">Compose a search to see results.</div>
+					</div>
+				</div>
+
+			</div>
 
 				<script>
 				window.STRABO_SEARCH = {
@@ -106,5 +115,6 @@ function ss_asset($path) {
 				<script src="<?php echo ss_asset('/strabosearch/js/app.js'); ?>"></script>
 
 <?php
-include("../includes/mfooter.php");
+// App-frame page: script stack + closers only, no visual footer (§M1).
+include("../includes/mfooter_close.php");
 ?>
