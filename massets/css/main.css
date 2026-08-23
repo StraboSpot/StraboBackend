@@ -4104,10 +4104,15 @@ input:checked + .slider:before {
 .countSearchHeader::after {
   background: #e44c65;
   content: '';
-  display: inline-block;
+  /* block, not inline-block: an inline bar only drops below the label
+     when the two don't FIT on one line, so on wide columns (the
+     strabosearch app frame) it rendered NEXT TO the header text.
+     margin:0 auto keeps it centered (text-align only centers inlines). */
+  display: block;
   height: 0.2em;
   max-width: 20em;
   width: 95%;
+  margin: 0 auto;
 }
 
 .searchDownloadButtonWrapper {
