@@ -46,9 +46,9 @@
 	var fetchSeq = 0;
 	var inflight = null;      // AbortController
 	var moveTimer = null;
-	// Last successful fetch: {bbox (padded, as sent), cell, height}. Lets
-	// small pans/zooms inside the padded viewport at the same ladder cell
-	// skip the round trip entirely (anti-blink, Jason 2026-08-23 pt3).
+	// Last successful fetch: {bbox (padded, as sent), cell}. Lets any
+	// pan/zoom that stays inside the padded viewport at the same ladder
+	// cell skip the round trip entirely (anti-blink, Jason pt3/pt4).
 	var lastFetch = null;
 	var active = false;       // globe view currently visible
 	var callbacks = {};       // {onCounter, onOpenList}
@@ -155,8 +155,13 @@
 		if (!rect) return [-180, -90, 180, 90];   // horizon/space view
 		var d = Cesium.Math.toDegrees;
 		var w = d(rect.west), s = d(rect.south), e = d(rect.east), n = d(rect.north);
-		// A whole-earth rectangle sometimes reports epsilon-shy bounds.
-		if ((e - w) > 359.9) { w = -180; e = 180; }
+		// Once most of a hemisphere is visible, snap to the whole world:
+		// the visible-disc edge otherwise sweeps across continents during
+		// far-out zooms, and every response re-crops the edge cells
+		// (markers popping at the rim = "blink", Jason pt4). A constant
+		// world bbox + the ladder cell means far-out zooming never even
+		// refetches — the skip rule sees identical coverage.
+		if (bboxWidth([w, s, e, n]) > 120 || (n - s) > 70) return [-180, -90, 180, 90];
 		return [w, s, e, n];
 	}
 
@@ -200,14 +205,14 @@
 		if (!viewer || !baseDsl) return;
 
 		var view = currentBbox();
-		var height = viewer.camera.positionCartographic.height;
 		// Skip when the view stayed inside the last padded fetch at the
-		// same ladder cell and roughly the same altitude — the data on
-		// screen is already exactly what the server would return.
+		// same ladder cell — the response is fully determined by
+		// (DSL, bbox, cell), so the data on screen is already exactly
+		// what the server would return. Camera height is deliberately
+		// NOT part of the rule: the ladder cell already encodes zoom.
 		if (!force && !needCounter && lastFetch && !inflight
 			&& ladderCell(bboxWidth(padBbox(view))) === lastFetch.cell
-			&& bboxInside(view, lastFetch.bbox)
-			&& height > lastFetch.height * 0.85 && height < lastFetch.height * 1.18) {
+			&& bboxInside(view, lastFetch.bbox)) {
 			return;
 		}
 
@@ -244,7 +249,7 @@
 				counter = resp.counter;
 				if (callbacks.onCounter) callbacks.onCounter(counter);
 			}
-			lastFetch = { bbox: padded, cell: resp.cell_deg, height: height };
+			lastFetch = { bbox: padded, cell: resp.cell_deg };
 			renderFeatures(resp);
 		}).catch(function (e) {
 			if (e.name === 'AbortError') return;
@@ -283,7 +288,13 @@
 				var id = 'b|' + resp.cell_deg + '|' + b.cx + '|' + b.cy;
 				if (keep[id]) return;
 				keep[id] = true;
-				var pos = Cesium.Cartesian3.fromDegrees(b.lng, b.lat);
+				// Cell-scaled lift (world cells ≈ 90km, zoomed-in cells sub-
+				// km): a bin exactly ON the ellipsoid is horizon-occluded
+				// the instant its centroid slips past the limb, so rim
+				// markers strobed during far-out zooms (Jason pt4 — the
+				// label survived its circle because of a legacy eyeOffset,
+				// now removed so both occlude together).
+				var pos = Cesium.Cartesian3.fromDegrees(b.lng, b.lat, resp.cell_deg * 12000);
 				var px = 18 + Math.min(30, Math.round(Math.sqrt(b.n) / 3));
 				var ent = ents.getById(id);
 				if (ent) {
@@ -295,6 +306,11 @@
 					ent.properties.lat = b.lat;
 					return;
 				}
+				// NO disableDepthTestDistance on bins: the world-bbox fetch
+				// keeps far-side bins as entities, and depth-test-off would
+				// draw them THROUGH the planet. The cell lift keeps the
+				// depth test honest instead: facing bins float clear of the
+				// surface, limb bins occlude naturally, far-side bins hide.
 				ents.add({
 					id: id,
 					position: pos,
@@ -302,8 +318,7 @@
 						pixelSize: px,
 						color: Cesium.Color.fromCssColorString(BIN_COLOR).withAlpha(0.75),
 						outlineColor: Cesium.Color.WHITE.withAlpha(0.9),
-						outlineWidth: 2,
-						disableDepthTestDistance: Number.POSITIVE_INFINITY
+						outlineWidth: 2
 					},
 					label: {
 						text: fmtCount(b.n),
@@ -312,9 +327,7 @@
 						// Default anchor is LEFT — counts render clipped at
 						// the circle's edge without these.
 						horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
-						verticalOrigin: Cesium.VerticalOrigin.CENTER,
-						disableDepthTestDistance: Number.POSITIVE_INFINITY,
-						eyeOffset: new Cesium.Cartesian3(0, 0, -1000)
+						verticalOrigin: Cesium.VerticalOrigin.CENTER
 					},
 					properties: { kind: 'bin', n: b.n, lng: b.lng, lat: b.lat,
 						cell: resp.cell_deg }
@@ -371,7 +384,6 @@
 		cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
 		cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
 		cluster.label.disableDepthTestDistance = Number.POSITIVE_INFINITY;
-		cluster.label.eyeOffset = new Cesium.Cartesian3(0, 0, -1000);
 	}
 
 	// ══════════════════════════════════════════════════════════════════
