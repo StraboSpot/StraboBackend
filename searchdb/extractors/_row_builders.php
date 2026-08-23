@@ -177,6 +177,7 @@ function fieldSpotBatchCypher($upk, $pidLit, $didLit, $cursorClause, $batchSize)
 		       substring(toString(s.notes), 0, 10000) AS notes,
 		       s.wkt AS wkt, s.modified_timestamp AS mt,
 		       s.date AS date_str, s.strat_section_id AS strat_id,
+		       s.image_basemap AS img_bm,
 		       (s.sed IS NOT NULL AND toString(s.sed) CONTAINS '\"strat_section\"') AS sed_strat,
 		       image_count
 		LIMIT $batchSize
@@ -214,6 +215,7 @@ function fieldSpotTouchCypher($upk, $sidLit) {
 		       substring(toString(s.notes), 0, 10000) AS notes,
 		       s.wkt AS wkt, s.modified_timestamp AS mt,
 		       s.date AS date_str, s.strat_section_id AS strat_id,
+		       s.image_basemap AS img_bm,
 		       (s.sed IS NOT NULL AND toString(s.sed) CONTAINS '\"strat_section\"') AS sed_strat,
 		       image_count
 	";
@@ -246,7 +248,8 @@ function fieldImagesBatchCypher($upk, $pidLit, $didLit, $cursorClause, $batchSiz
 		       substring(toString(s.orientation_data), 0, 100000) AS od_legacy,
 		       substring(toString(s.json_trace), 0, 100000) AS jtr,
 		       s.wkt AS wkt, s.modified_timestamp AS smt,
-		       s.date AS date_str,
+		       s.date AS date_str, s.strat_section_id AS strat_id,
+		       s.image_basemap AS img_bm,
 		       images
 		ORDER BY s.id
 	";
@@ -278,7 +281,8 @@ function fieldImagesTouchCypher($upk, $sidLit) {
 		       substring(toString(s.orientation_data), 0, 100000) AS od_legacy,
 		       substring(toString(s.json_trace), 0, 100000) AS jtr,
 		       s.wkt AS wkt, s.modified_timestamp AS smt,
-		       s.date AS date_str,
+		       s.date AS date_str, s.strat_section_id AS strat_id,
+		       s.image_basemap AS img_bm,
 		       images
 	";
 }
@@ -286,6 +290,25 @@ function fieldImagesTouchCypher($upk, $sidLit) {
 // ===========================================================================
 // FIELD — tuple builders
 // ===========================================================================
+
+/**
+ * Location literal for a Field spot row (also inherited by the spot's
+ * image rows). Spots INSIDE a strat section (strat_section_id) and spots
+ * drawn on an image basemap (image_basemap) store their wkt in SECTION /
+ * PIXEL space, not degrees: indexing those centroids as lon/lat put
+ * project markers in the ocean (small section values pass the world-range
+ * guard) and let U2 spatial criteria match nonsense (StraboSed Workshop,
+ * 2026-08-23, GlobeView proposal §9.7). Such spots index as UNLOCATED.
+ * Section-DEFINING spots (sed_strat) keep their real map location.
+ */
+function fieldLocationLiteral($r) {
+	$strat = $r->get('strat_id');
+	$bm    = $r->get('img_bm');
+	if (($strat !== null && $strat !== '') || ($bm !== null && $bm !== '')) {
+		return 'NULL';
+	}
+	return pgCentroidFromWkt($r->get('wkt'));
+}
 
 /**
  * json_tags amendment (2026-08, replaces the IS_TAGGED edge walk): build a
@@ -498,7 +521,7 @@ function fieldSpotTuple($r, $pid, $puk, $pname, $dname, $pispubBool, $tagMap, &$
 		pgText('field'),
 		pgText($pname, 500),
 		pgBool($pispubBool),
-		pgCentroidFromWkt($r->get('wkt')),
+		fieldLocationLiteral($r),
 		$dateLit,
 		pgTsvector($searchText),
 		pgBool($has_orientation),
@@ -542,7 +565,7 @@ function fieldImageTuples($r, $spotId, $pid, $puk, $pispubBool, $tagMap, &$vocab
 
 	$dateLit = fieldDateLiteral($r, 'smt');
 
-	$locLit = pgCentroidFromWkt($r->get('wkt'));
+	$locLit = fieldLocationLiteral($r);
 	$spotModLit = pgTimestamp($r->get('smt'));
 	$orStrikeLit  = pgNumericArray($strikes);
 	$orDipLit     = pgNumericArray($dips);
