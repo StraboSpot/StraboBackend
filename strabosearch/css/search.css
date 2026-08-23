@@ -845,6 +845,33 @@
 	margin-top: 0.3em;
 }
 
+/* Cluster popup: member-project list (unsplittable clusters). */
+.ss-gpop-list {
+	margin-top: 0.45em;
+	max-height: 240px;
+	overflow-y: auto;
+}
+
+.ss-gpop-list-row {
+	display: flex;
+	align-items: center;
+	gap: 0.45em;
+	padding: 0.18em 0;
+	min-width: 0;
+}
+
+.ss-gpop-list-row .ss-gpop-icon {
+	width: 16px;
+	height: 16px;
+}
+
+.ss-gpop-list-row a {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
 .ss-gpop-links {
 	margin-top: 0.55em;
 	display: flex;

@@ -30,7 +30,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'd7-project-markers-r4-fresh-datasource';
+	var BUILD = 'd7-project-markers-r5-cluster-click';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -394,10 +394,26 @@
 	// identically and can never disagree (the pt4 circle/label split).
 	function styleCluster(entities, cluster) {
 		var scal = horizonScalar();
+		// Cesium only assigns the entity array as the pick id on the
+		// LABEL; the point disc we actually show picks as undefined, so
+		// disc clicks were dead (Jason 2026-08-23). Assign it ourselves.
+		cluster.point.id = entities;
+		// Badge color = the dominant member subsystem (an all-micro
+		// cluster reads blue like its dots, not accent red).
+		var tally = {};
+		var best = null;
+		entities.forEach(function (e) {
+			var hit = e.properties && e.properties.hit && e.properties.hit.getValue();
+			var s = hit ? hit.project_subsystem : null;
+			if (!s) return;
+			tally[s] = (tally[s] || 0) + 1;
+			if (best === null || tally[s] > tally[best]) best = s;
+		});
+		var color = (best && SUB_COLORS[best]) || CLUSTER_COLOR;
 		cluster.billboard.show = false;
 		cluster.point.show = true;
 		cluster.point.pixelSize = 16 + Math.min(18, entities.length);
-		cluster.point.color = Cesium.Color.fromCssColorString(CLUSTER_COLOR).withAlpha(0.8);
+		cluster.point.color = Cesium.Color.fromCssColorString(color).withAlpha(0.85);
 		cluster.point.outlineColor = Cesium.Color.WHITE.withAlpha(0.9);
 		cluster.point.outlineWidth = 2;
 		cluster.point.scaleByDistance = scal;
@@ -421,12 +437,47 @@
 
 		// EntityCluster cluster: picked.id is the ARRAY of clustered entities.
 		if (Array.isArray(picked.id)) {
-			zoomToward(picked.id[0].position.getValue(Cesium.JulianDate.now()), 0.25);
+			handleClusterClick(picked.id, click.position);
 			return;
 		}
 		var ent = picked.id;
 		if (!ent || !ent.properties || !ent.properties.hit) return;
 		showPopup(ent.properties.hit.getValue(), click.position);
+	}
+
+	/**
+	 * Zoom into a cluster only when zooming can actually split it. A
+	 * cluster of CO-LOCATED projects (17 public micro projects share one
+	 * centroid on dev, Jason 2026-08-23) never separates at any zoom, so
+	 * for those (or once we're at the zoom floor) list the member
+	 * projects in the popup instead.
+	 */
+	function handleClusterClick(members, screenPos) {
+		var now = Cesium.JulianDate.now();
+		var lonMin = 180, lonMax = -180, latMin = 90, latMax = -90;
+		members.forEach(function (e) {
+			var c = Cesium.Cartographic.fromCartesian(e.position.getValue(now));
+			var lon = Cesium.Math.toDegrees(c.longitude);
+			var lat = Cesium.Math.toDegrees(c.latitude);
+			if (lon < lonMin) lonMin = lon;
+			if (lon > lonMax) lonMax = lon;
+			if (lat < latMin) latMin = lat;
+			if (lat > latMax) latMax = lat;
+		});
+		var midLat = (latMin + latMax) / 2 * Math.PI / 180;
+		var spreadM = Math.max(
+			(latMax - latMin) * 111000,
+			(lonMax - lonMin) * 111000 * Math.cos(midLat));
+
+		// After a 0.25x zoom (floored at 2,500 m) the cluster splits when
+		// its ground spread projects past the 42px cluster range; ~0.05 x
+		// height is that threshold for the default 60 degree frustum.
+		var nextH = Math.max(viewer.camera.positionCartographic.height * 0.25, 2500);
+		if (spreadM > nextH * 0.05) {
+			zoomToward(members[0].position.getValue(now), 0.25);
+			return;
+		}
+		showClusterPopup(members, screenPos);
 	}
 
 	function zoomToward(cartesian, factor) {
@@ -463,6 +514,16 @@
 		['experiment', 'experiment', 'experiments'],
 		['micrograph', 'micrograph', 'micrographs']
 	];
+
+	/** Project link target, identical routing to results.js projectCard
+	 *  (field single-dataset deep-links to the dataset viewer). */
+	function projectHref(hit) {
+		if (hit.project_subsystem === 'field' && hit.dataset_ids && hit.dataset_ids.length === 1) {
+			return CFG.fieldDataset + encodeURIComponent(hit.dataset_ids[0]);
+		}
+		return (CFG.landing[hit.project_subsystem] || CFG.landing.field) +
+			encodeURIComponent(hit.project_id);
+	}
 
 	/** Popup card: list-row parity, i.e. the same fields, meta rules and
 	 *  routing as results.js projectCard (D7). */
@@ -509,13 +570,7 @@
 
 		var links = el('div', 'ss-gpop-links');
 		var open = el('a', null, 'View Project');
-		// Field single-dataset routing, identical to projectCard.
-		if (hit.project_subsystem === 'field' && hit.dataset_ids && hit.dataset_ids.length === 1) {
-			open.href = CFG.fieldDataset + encodeURIComponent(hit.dataset_ids[0]);
-		} else {
-			open.href = (CFG.landing[hit.project_subsystem] || CFG.landing.field) +
-				encodeURIComponent(hit.project_id);
-		}
+		open.href = projectHref(hit);
 		open.target = '_blank';
 		links.appendChild(open);
 		var toList = el('a', null, 'View results in list');
@@ -529,6 +584,68 @@
 
 		popupEl.style.display = '';
 		// Clamp near the click, inside the wrap.
+		var pad = 12;
+		var x = Math.min(screenPos.x + 14, wrap.clientWidth - popupEl.offsetWidth - pad);
+		var y = Math.min(screenPos.y + 14, wrap.clientHeight - popupEl.offsetHeight - pad);
+		popupEl.style.left = Math.max(pad, x) + 'px';
+		popupEl.style.top = Math.max(pad, y) + 'px';
+	}
+
+	/** Popup listing a cluster's member projects (unsplittable clusters:
+	 *  co-located centroids or the zoom floor). */
+	function showClusterPopup(members, screenPos) {
+		popupEl.innerHTML = '';
+
+		var hits = [];
+		members.forEach(function (e) {
+			var hit = e.properties && e.properties.hit && e.properties.hit.getValue();
+			if (hit) hits.push(hit);
+		});
+		hits.sort(function (a, b) {
+			return String(a.project_name || '').localeCompare(String(b.project_name || ''));
+		});
+
+		var head = el('div', 'ss-gpop-head');
+		head.appendChild(el('div', 'ss-gpop-title',
+			hits.length + ' projects at this location'));
+		var close = el('a', 'ss-gpop-close', '×');
+		close.href = 'javascript:void(0);';
+		close.setAttribute('aria-label', 'Close');
+		close.addEventListener('click', hidePopup);
+		head.appendChild(close);
+		popupEl.appendChild(head);
+
+		var list = el('div', 'ss-gpop-list');
+		var MAX = 12;
+		hits.slice(0, MAX).forEach(function (hit) {
+			var row = el('div', 'ss-gpop-list-row');
+			var icon = el('img', 'ss-gpop-icon');
+			icon.src = CFG.icons[hit.project_subsystem] || CFG.icons.field;
+			icon.alt = hit.project_subsystem;
+			row.appendChild(icon);
+			var link = el('a', null, hit.project_name || '(unnamed project)');
+			link.href = projectHref(hit);
+			link.target = '_blank';
+			row.appendChild(link);
+			list.appendChild(row);
+		});
+		if (hits.length > MAX) {
+			list.appendChild(el('div', 'ss-gpop-meta',
+				'+ ' + (hits.length - MAX) + ' more in the list view'));
+		}
+		popupEl.appendChild(list);
+
+		var links = el('div', 'ss-gpop-links');
+		var toList = el('a', null, 'View results in list');
+		toList.href = 'javascript:void(0);';
+		toList.addEventListener('click', function () {
+			hidePopup();
+			if (callbacks.onOpenList) callbacks.onOpenList();
+		});
+		links.appendChild(toList);
+		popupEl.appendChild(links);
+
+		popupEl.style.display = '';
 		var pad = 12;
 		var x = Math.min(screenPos.x + 14, wrap.clientWidth - popupEl.offsetWidth - pad);
 		var y = Math.min(screenPos.y + 14, wrap.clientHeight - popupEl.offsetHeight - pad);
