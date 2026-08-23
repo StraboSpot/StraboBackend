@@ -12,13 +12,24 @@
 
 /* ---- app frame (Globe View M1) ------------------------------------------ */
 
+/* Native widget chrome (select popups, scrollbars) must follow the dark
+   theme. Without this, Chrome themes each select's popup from a heuristic
+   over composited ancestor backgrounds, and a semi-transparent rail read
+   as LIGHT (grey popup, black text) while the sort select over the opaque
+   body read dark. */
+:root {
+	color-scheme: dark;
+}
+
 .ss-app-frame {
 	display: flex;
 	flex-direction: column;   /* stacked fallback; row on desktop below */
 }
 
 .ss-rail {
-	background: rgba(39, 40, 51, 0.45);
+	/* Opaque blend of rgba(39,40,51,0.45) over the #1c1d26 body — same
+	   look, but opaque so popup-theme heuristics can't misread it. */
+	background: #212230;
 	display: flex;
 	flex-direction: column;
 	min-height: 0;
@@ -378,6 +389,12 @@
 
 .ss-sort select {
 	width: auto;
+}
+
+/* main.css label carries display:block + margin-bottom:1em, which shoves
+   the text upward inside this vertically-centered flex row. */
+.ss-sort label {
+	margin: 0;
 }
 
 /* ---- project hit cards (§6.5.3) ----------------------------------------- */
