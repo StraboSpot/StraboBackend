@@ -270,7 +270,7 @@
 		sortBox.appendChild(sel);
 		tabbar.appendChild(sortBox);
 
-		// "N of M results have locations" (globe view only, Globe View M2).
+		// "N of M matching projects have locations" (globe view only, D7).
 		var counterEl = el('span', 'ss-loc-counter');
 		counterEl.id = 'ssLocCounter';
 		tabbar.appendChild(counterEl);
@@ -341,7 +341,7 @@
 		if (!c) return;
 		var counter = window.SSGlobe.getCounter();
 		c.textContent = (state && state.view === 'globe' && counter)
-			? fmtInt(counter.located) + ' of ' + fmtInt(counter.total) + ' results have locations'
+			? fmtInt(counter.located) + ' of ' + fmtInt(counter.total) + ' matching projects have locations'
 			: '';
 	}
 

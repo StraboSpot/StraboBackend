@@ -326,7 +326,7 @@ check('image row carries image_hit_pkey', $j && isset($j['results'][0]['image_hi
 list($st, $j) = api('search', $sid, $imgDsl);
 check('owner image search: both images', $j && $j['total'] === 2, 'total=' . ($j ? $j['total'] : '?'));
 
-// ---- search_geo through the proxy (Globe View M2) ------------------------
+// ---- search_geo through the proxy (Globe View D7: project markers) -------
 // The geo pathway's own logic lives in smoke_test_search_geo.php; here we
 // prove the proxy routes it with the same session-identity semantics.
 $db->prepare_query(
@@ -335,18 +335,20 @@ $db->prepare_query(
 
 $geoDsl = array(
 	'criteria' => array(array('id' => 'U1', 'value' => 'UNIQSSUI')),
-	'geo' => array('bbox' => array(-110, 35, -100, 42), 'include_counter' => true));
+	'geo' => array('include_counter' => true));
 
 list($st, $j) = api('search_geo', null, $geoDsl);
 check('anon search_geo 200 + geo pathway', $st === 200 && $j && $j['pathway'] === 'geo', "got $st");
-check('anon search_geo sees ONLY the public point', $j && $j['mode'] === 'points'
-	&& count($j['features']) === 1 && $j['features'][0]['project_id'] === $PFX . '_proj_pub',
+check('anon search_geo sees ONLY the public project marker',
+	$j && count($j['features']) === 1
+	&& $j['features'][0]['project_id'] === $PFX . '_proj_pub'
+	&& (int)$j['features'][0]['match_counts']['spot'] === 1,
 	'n=' . ($j ? count($j['features']) : '?'));
-check('anon search_geo counter rides along', $j && isset($j['counter'])
+check('anon search_geo counter counts projects', $j && isset($j['counter'])
 	&& $j['counter']['total'] === 1 && $j['counter']['located'] === 1);
 
 list($st, $j) = api('search_geo', $sid, $geoDsl);
-check('owner search_geo sees both points', $st === 200 && $j
+check('owner search_geo sees both project markers', $st === 200 && $j
 	&& count($j['features']) === 2, 'n=' . ($j ? count($j['features']) : '?'));
 
 list($st, $j) = api('search_geo', null, array(

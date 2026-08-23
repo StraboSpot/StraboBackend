@@ -104,14 +104,16 @@ class StraboSearchService
     }
 
     // ═══════════════════════════════════════════════════════════════════
-    // POST search_geo — Globe View M2 (GlobeView_Design_Proposal.md §4)
+    // POST search_geo (Globe View, D7 project-level pivot:
+    // GlobeView_Design_Proposal.md §9)
     // ═══════════════════════════════════════════════════════════════════
 
     /**
-     * Zoom-adaptive globe read over the same DSL WHERE the list uses.
-     * Body = the §4.4 DSL plus a `geo` block ({bbox, include_counter}).
+     * Globe read over the same DSL WHERE the list uses: ONE marker per
+     * matching project, fetched once per search. Body = the §4.4 DSL
+     * plus a `geo` block ({bbox (unused, validated), include_counter}).
      * Empty criteria are legal here (v1: globe view only allows them);
-     * pathway/page/sort keys are validated but ignored — the globe is
+     * pathway/page/sort keys are validated but ignored, the globe is
      * item-side only.
      */
     public function runGeoSearch($params)
