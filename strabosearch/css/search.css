@@ -696,6 +696,180 @@
 	font-style: italic;
 }
 
+/* ---- globe view (Globe View M2) ----------------------------------------- */
+
+/* Segmented List | Globe toggle — selection styling in the tab-blue
+   family (§3), pushed to the tabbar's right edge after the sort box. */
+.ss-view-toggle {
+	display: inline-flex;
+	border: 1px solid rgba(144, 144, 144, 0.5);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.ss-view-btn {
+	padding: 0.35em 1.1em;
+	font-size: 0.85em;
+	background: transparent;
+	color: inherit;
+	border: 0;
+	cursor: pointer;
+}
+
+.ss-view-btn + .ss-view-btn {
+	border-left: 1px solid rgba(144, 144, 144, 0.5);
+}
+
+.ss-view-btn[aria-pressed="true"] {
+	background: #57729e;
+	color: #ffffff;
+	font-weight: bold;
+}
+
+.ss-loc-counter {
+	font-size: 0.8em;
+	opacity: 0.75;
+	white-space: nowrap;
+}
+
+.ss-loc-counter:empty {
+	display: none;
+}
+
+/* D6: Images pathway stays list-only — the tab dims and goes inert. */
+.ss-tab.ss-globe-disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+/* Globe pane replaces the tab content while the tabbar stays. */
+.ss-pane.ss-globe-active .ss-results {
+	flex: 0 0 auto;
+}
+
+.ss-pane.ss-globe-active .ss-tab-content {
+	display: none;
+}
+
+.ss-pane.ss-globe-active .ss-sort {
+	display: none;   /* sort is list-view-only (§3) */
+}
+
+.ss-pane.ss-globe-active .ss-loc-counter {
+	margin-left: auto;
+}
+
+.ss-globe-wrap {
+	position: relative;
+	display: flex;
+	flex-direction: column;
+	flex: 1 1 auto;
+	min-height: 0;
+	margin: 0 0 1.2em;
+	border: 1px solid rgba(144, 144, 144, 0.35);
+	border-radius: 4px;
+	overflow: hidden;
+}
+
+.ss-globe-container {
+	flex: 1 1 auto;
+	min-height: 0;
+}
+
+.ss-globe-status {
+	position: absolute;
+	z-index: 20;
+	top: 0.6em;
+	left: 50%;
+	transform: translateX(-50%);
+	font-size: 0.8em;
+	background: rgba(28, 29, 38, 0.85);
+	color: rgba(255, 255, 255, 0.8);
+	padding: 0.15em 0.9em;
+	border-radius: 999px;
+	pointer-events: none;
+	white-space: nowrap;
+}
+
+.ss-globe-status:empty {
+	display: none;
+}
+
+/* Point/cluster popup card — same vocabulary as .ss-card. */
+.ss-globe-popup {
+	position: absolute;
+	z-index: 30;
+	width: min(320px, 80%);
+	background: #1c1d26;
+	color: rgba(255, 255, 255, 0.75);
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: 5px;
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+	padding: 0.8em 0.9em;
+	font-size: 0.85em;
+}
+
+.ss-gpop-head {
+	display: flex;
+	align-items: center;
+	gap: 0.5em;
+}
+
+.ss-gpop-icon {
+	width: 20px;
+	height: 20px;
+	object-fit: contain;
+	flex: 0 0 auto;
+}
+
+.ss-gpop-title {
+	font-weight: bold;
+	color: #ffffff;
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.ss-gpop-close {
+	margin-left: auto;
+	border-bottom: 0;
+	font-size: 1.2em;
+	line-height: 1;
+	cursor: pointer;
+	padding: 0 0.2em;
+}
+
+.ss-gpop-meta {
+	opacity: 0.8;
+	margin-top: 0.3em;
+}
+
+.ss-gpop-links {
+	margin-top: 0.55em;
+	display: flex;
+	gap: 1.2em;
+}
+
+.ss-gpop-links a {
+	cursor: pointer;
+}
+
+/* Cesium chrome on the dark theme: compact translucent credit line. */
+.ss-globe-wrap .cesium-widget-credits {
+	background: rgba(28, 29, 38, 0.6);
+	font-size: 10px;
+}
+
+/* Stacked fallback (<1024px): the page scrolls, so the globe gets a
+   viewport-based height instead of flexing. */
+@media screen and (max-width: 1023px) {
+	.ss-globe-wrap {
+		height: 70vh;
+		flex: 0 0 auto;
+	}
+}
+
 /* ---- subsystem triptych icons (§6.5.2) ---------------------------------- */
 
 .ss-triptych-icon {

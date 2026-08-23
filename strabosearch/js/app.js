@@ -42,7 +42,8 @@
 		var payload = {
 			dsl: lastRunDsl,
 			tab: urlState ? urlState.tab : 'projects',
-			sort: urlState ? urlState.sort : null
+			sort: urlState ? urlState.sort : null,
+			view: urlState ? urlState.view : 'list'
 		};
 		var qs = '?q=' + encodeState(payload);
 		window.history.replaceState(null, '', window.location.pathname + qs);
@@ -133,7 +134,8 @@
 				window.SSBuilder.loadDsl(st.dsl);
 				updateSearchButton();
 				if (window.SSBuilder.hasActiveRow()) {
-					runSearch({ tab: st.tab || 'projects', sort: st.sort || null });
+					runSearch({ tab: st.tab || 'projects', sort: st.sort || null,
+						view: st.view || 'list' });
 				}
 			}
 		}

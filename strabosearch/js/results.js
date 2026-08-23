@@ -193,10 +193,14 @@
 	function run(baseDsl, opts) {
 		abortInflight();
 		disconnectObserver();
+		// The chosen view survives re-searches — a globe user refining
+		// criteria stays on the globe (Globe View M2).
+		var prevView = state ? state.view : 'list';
 		state = {
 			baseDsl: baseDsl,
 			sort: (opts && opts.sort) || null,
 			tab: (opts && opts.tab) || 'projects',
+			view: (opts && opts.view) === 'globe' ? 'globe' : ((opts && opts.view) === 'list' ? 'list' : prevView),
 			data: { projects: null, images: null },
 			seen: {},
 			inflight: null,
@@ -205,7 +209,10 @@
 			sentinel: null,
 			status: null
 		};
+		if (state.view === 'globe' && state.tab === 'images') state.tab = 'projects';   // D6
 		renderShell();
+		window.SSGlobe.setQuery(baseDsl);
+		applyView();
 		loadFirstPage(state.tab);
 		onStateChange(getUrlState());
 	}
@@ -259,6 +266,24 @@
 		sortBox.appendChild(sel);
 		tabbar.appendChild(sortBox);
 
+		// "N of M results have locations" (globe view only, Globe View M2).
+		var counterEl = el('span', 'ss-loc-counter');
+		counterEl.id = 'ssLocCounter';
+		tabbar.appendChild(counterEl);
+
+		// List | Globe segmented toggle (§3: selection = tab-blue family).
+		var toggle = el('div', 'ss-view-toggle');
+		toggle.setAttribute('role', 'group');
+		toggle.setAttribute('aria-label', 'Results view');
+		[['list', 'List'], ['globe', 'Globe']].forEach(function (v) {
+			var b = el('button', 'ss-view-btn', v[1]);
+			b.type = 'button';
+			b.dataset.view = v[0];
+			b.addEventListener('click', function () { setView(v[0]); });
+			toggle.appendChild(b);
+		});
+		tabbar.appendChild(toggle);
+
 		region.appendChild(tabbar);
 		var content = el('div', 'ss-tab-content');
 		content.id = 'ssTabContent';
@@ -266,8 +291,58 @@
 		region.appendChild(content);
 	}
 
+	// ══════════════════════════════════════════════════════════════════
+	// view toggle (Globe View M2 — List | Globe)
+	// ══════════════════════════════════════════════════════════════════
+
+	function setView(v) {
+		if (!state || state.view === v) return;
+		state.view = v;
+		if (v === 'globe' && state.tab === 'images') {
+			// D6: the Images pathway stays list-only.
+			state.tab = 'projects';
+			if (state.data.projects) renderAll(); else loadFirstPage('projects');
+		}
+		applyView();
+		onStateChange(getUrlState());
+	}
+
+	/** Sync every view-dependent control + pane to state.view. */
+	function applyView() {
+		var globeOn = !!state && state.view === 'globe';
+		var pane = region.parentElement;
+		if (pane) pane.classList.toggle('ss-globe-active', globeOn);
+
+		Array.prototype.forEach.call(region.querySelectorAll('.ss-view-btn'), function (b) {
+			b.setAttribute('aria-pressed',
+				b.dataset.view === (globeOn ? 'globe' : 'list') ? 'true' : 'false');
+		});
+		Array.prototype.forEach.call(region.querySelectorAll('.ss-tab'), function (t) {
+			if (t.dataset.pathway === 'images') {
+				t.classList.toggle('ss-globe-disabled', globeOn);
+				t.setAttribute('aria-disabled', globeOn ? 'true' : 'false');
+			}
+			if (state) {
+				t.setAttribute('aria-selected',
+					t.dataset.pathway === state.tab ? 'true' : 'false');
+			}
+		});
+		updateLocCounter();
+		if (globeOn) window.SSGlobe.show(); else window.SSGlobe.hide();
+	}
+
+	function updateLocCounter() {
+		var c = document.getElementById('ssLocCounter');
+		if (!c) return;
+		var counter = window.SSGlobe.getCounter();
+		c.textContent = (state && state.view === 'globe' && counter)
+			? fmtInt(counter.located) + ' of ' + fmtInt(counter.total) + ' results have locations'
+			: '';
+	}
+
 	function switchTab(pathway, focus) {
 		if (!state || state.tab === pathway) return;
+		if (state.view === 'globe' && pathway === 'images') return;   // D6: dimmed, inert
 		state.tab = pathway;
 		var tabs = region.querySelectorAll('.ss-tab');
 		Array.prototype.forEach.call(tabs, function (t) {
@@ -669,7 +744,8 @@
 		if (!state) return null;
 		return {
 			tab: state.tab,
-			sort: state.sort
+			sort: state.sort,
+			view: state.view
 		};
 	}
 
@@ -678,6 +754,8 @@
 	function clear() {
 		abortInflight();
 		disconnectObserver();
+		window.SSGlobe.clear();
+		if (region.parentElement) region.parentElement.classList.remove('ss-globe-active');
 		state = null;
 		region.innerHTML = '';
 		region.appendChild(el('div', 'ss-quiet-prompt',
@@ -688,6 +766,10 @@
 		init: function (elRegion, opts) {
 			region = elRegion;
 			onStateChange = (opts && opts.onStateChange) || function () {};
+			window.SSGlobe.init({
+				onCounter: updateLocCounter,
+				onOpenList: function () { setView('list'); }
+			});
 		},
 		run: run,
 		clear: clear,
