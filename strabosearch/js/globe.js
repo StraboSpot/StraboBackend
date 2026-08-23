@@ -23,6 +23,12 @@
 
 	var CFG = window.STRABO_SEARCH;
 
+	// Bumped on every globe change; logged on load so a stale-tab build is
+	// diagnosable in seconds (searches don't reload the page, so an open
+	// tab keeps running whatever JS it booted with).
+	var BUILD = 'm2-pt6-billboard-bins';
+	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
+
 	var SUB_COLORS = {
 		field:   '#e44c65',
 		micro:   '#6a8cc7',
@@ -293,6 +299,33 @@
 	}
 
 	/**
+	 * Bin circles are BILLBOARDS (canvas-drawn discs), not gl.POINTS.
+	 * Point primitives strobed on Jason's Mac at far zoom through three
+	 * rendering configurations (pt3-pt5) while the count labels — which
+	 * are billboards — never once flickered; billboards ride that proven
+	 * path. Cached per diameter (integer px, ~30 buckets), drawn at 2x
+	 * for retina.
+	 */
+	var circleCache = {};
+	function circleImage(px) {
+		if (circleCache[px]) return circleCache[px];
+		var c = document.createElement('canvas');
+		c.width = px * 2;
+		c.height = px * 2;
+		var ctx = c.getContext('2d');
+		ctx.scale(2, 2);
+		ctx.beginPath();
+		ctx.arc(px / 2, px / 2, px / 2 - 1.5, 0, 2 * Math.PI);
+		ctx.fillStyle = 'rgba(228, 76, 101, 0.78)';       // BIN_COLOR
+		ctx.fill();
+		ctx.lineWidth = 2;
+		ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
+		ctx.stroke();
+		circleCache[px] = c;
+		return c;
+	}
+
+	/**
 	 * Diff-based renderer: entities are keyed by stable ids and updated in
 	 * place; only stale ones are removed. The old removeAll()-per-fetch
 	 * made every marker vanish and reappear on each camera stop ("blink",
@@ -327,7 +360,9 @@
 				var ent = ents.getById(id);
 				if (ent) {
 					ent.position = pos;
-					ent.point.pixelSize = px;
+					ent.billboard.image = circleImage(px);
+					ent.billboard.width = px;
+					ent.billboard.height = px;
 					ent.label.text = fmtCount(b.n);
 					ent.properties.n = b.n;
 					ent.properties.lng = b.lng;
@@ -341,11 +376,10 @@
 				ents.add({
 					id: id,
 					position: pos,
-					point: {
-						pixelSize: px,
-						color: Cesium.Color.fromCssColorString(BIN_COLOR).withAlpha(0.75),
-						outlineColor: Cesium.Color.WHITE.withAlpha(0.9),
-						outlineWidth: 2,
+					billboard: {
+						image: circleImage(px),
+						width: px,
+						height: px,
 						disableDepthTestDistance: Number.POSITIVE_INFINITY
 					},
 					label: {
@@ -588,7 +622,9 @@
 			}
 		},
 
-		getCounter: function () { return counter; }
+		getCounter: function () { return counter; },
+
+		BUILD: BUILD
 	};
 
 })(window, document);
