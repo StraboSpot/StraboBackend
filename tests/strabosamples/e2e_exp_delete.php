@@ -156,11 +156,15 @@ function delCleanup($db, $neodb, $owner, $spineIds) {
     }
     $db->query("DELETE FROM straboexp.experiment WHERE uuid LIKE 'e2eexpdel-%'");
     $db->query("DELETE FROM straboexp.project WHERE uuid LIKE 'e2eexpdel-%'");
+    // Sync hooks index the app-endpoint fixtures; raw source deletes never
+    // unindex (orphaned globe markers, 2026-08-23).
+    $db->query("DELETE FROM strabosearch.item_hit WHERE project_id LIKE 'e2eexpdel-%'");
 }
 
 // pre-clean any stale rows
 $db->query("DELETE FROM straboexp.experiment WHERE uuid LIKE 'e2eexpdel-%'");
 $db->query("DELETE FROM straboexp.project WHERE uuid LIKE 'e2eexpdel-%'");
+$db->query("DELETE FROM strabosearch.item_hit WHERE project_id LIKE 'e2eexpdel-%'");
 
 $sidOwner    = forgeSession($ownerPkey);
 $sidStranger = forgeSession($strangerPkey);

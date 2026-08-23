@@ -220,6 +220,20 @@ function e2eCleanup($db, $neodb, $ownerPkey, $projectId, $datasetId,
         "DELETE FROM strabosamples.samples
           WHERE userpkey=$1 AND name='B.4 Exp Sample' AND experimental_data IS NOT NULL",
         array($ownerPkey));
+    // Sync hooks index the app-endpoint fixtures; the raw source deletes
+    // above never unindex (orphaned globe markers, 2026-08-23). Field by
+    // exact project id, micro by prefix, exp by fixture name (random uuid).
+    $db->prepare_query(
+        "DELETE FROM strabosearch.item_hit WHERE project_id=$1 AND project_userpkey=$2",
+        array((string)$projectId, $ownerPkey));
+    $db->prepare_query(
+        "DELETE FROM strabosearch.image_hit WHERE project_id=$1 AND project_userpkey=$2",
+        array((string)$projectId, $ownerPkey));
+    $db->prepare_query("DELETE FROM strabosearch.item_hit WHERE project_id LIKE 'e2e-micro-%'", array());
+    $db->prepare_query("DELETE FROM strabosearch.image_hit WHERE project_id LIKE 'e2e-micro-%'", array());
+    $db->prepare_query(
+        "DELETE FROM strabosearch.item_hit WHERE project_name LIKE 'B.4 e2e exp project%' AND project_userpkey=$1",
+        array($ownerPkey));
 }
 
 e2eCleanup($db, $neodb, $ownerPkey, $projectId, $datasetId, $spotRichId,
