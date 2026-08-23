@@ -4112,7 +4112,9 @@ input:checked + .slider:before {
   height: 0.2em;
   max-width: 20em;
   width: 95%;
-  margin: 0 auto;
+  /* The old wrapped-inline bar occupied its own line box, which gave it
+     breathing room for free; a block needs it back explicitly. */
+  margin: 0.5em auto 0.4em;
 }
 
 .searchDownloadButtonWrapper {
