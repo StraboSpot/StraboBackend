@@ -46,6 +46,10 @@
 	var fetchSeq = 0;
 	var inflight = null;      // AbortController
 	var moveTimer = null;
+	// Last successful fetch: {bbox (padded, as sent), cell, height}. Lets
+	// small pans/zooms inside the padded viewport at the same ladder cell
+	// skip the round trip entirely (anti-blink, Jason 2026-08-23 pt3).
+	var lastFetch = null;
 	var active = false;       // globe view currently visible
 	var callbacks = {};       // {onCounter, onOpenList}
 
@@ -100,15 +104,23 @@
 		});
 		viewer.scene.globe.baseColor = Cesium.Color.fromCssColorString('#1c1d26');
 
-		// Self-hosted NaturalEarthII (ships inside the Cesium build — zero
-		// external requests). Satellite/Macrostrat layers arrive in M3.
+		// Two-tier base imagery: self-hosted NaturalEarthII (levels 0-2,
+		// ships inside the Cesium build) paints instantly and offline; the
+		// site's own tile proxy (tiles.strabospot.org, same mapbox.outdoors
+		// set every Leaflet map on the site uses) streams sharp tiles on
+		// top down to street level. Satellite/Macrostrat toggles land in M3.
 		Cesium.TileMapServiceImageryProvider.fromUrl(
 			Cesium.buildModuleUrl('Assets/Textures/NaturalEarthII')
 		).then(function (provider) {
 			if (!viewer) return;
-			viewer.imageryLayers.addImageryProvider(provider);
+			viewer.imageryLayers.addImageryProvider(provider, 0);
 			viewer.scene.requestRender();
 		});
+		viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+			url: CFG.tiles.outdoors,
+			maximumLevel: 19,
+			credit: new Cesium.Credit('© Mapbox © OpenStreetMap · StraboSpot tiles')
+		}));
 
 		dataSource = new Cesium.CustomDataSource('ss-hits');
 		// Residual client-side clustering for point mode (§2 core scope).
@@ -148,6 +160,34 @@
 		return [w, s, e, n];
 	}
 
+	function bboxWidth(b) {
+		return (b[2] >= b[0]) ? (b[2] - b[0]) : ((180 - b[0]) + (b[2] + 180));
+	}
+
+	/** Mirror of the server's power-of-two cell ladder (7.5°/2^k). */
+	function ladderCell(width) {
+		var raw = (width > 0 ? width : 0.0002) / 48;
+		var k = Math.ceil(Math.log(7.5 / raw) / Math.LN2);
+		if (k < 0) k = 0;
+		if (k > 15) k = 15;
+		return 7.5 / Math.pow(2, k);
+	}
+
+	/** Pad the viewport 25% per side (skip when crossing the antimeridian —
+	 *  padding across the seam isn't worth the corner cases). */
+	function padBbox(b) {
+		if (b[0] > b[2]) return b;
+		var dx = (b[2] - b[0]) * 0.25, dy = (b[3] - b[1]) * 0.25;
+		return [Math.max(-180, b[0] - dx), Math.max(-90, b[1] - dy),
+		        Math.min(180, b[2] + dx),  Math.min(90, b[3] + dy)];
+	}
+
+	function bboxInside(inner, outer) {
+		if (inner[0] > inner[2] || outer[0] > outer[2]) return false;
+		return inner[0] >= outer[0] && inner[1] >= outer[1] &&
+		       inner[2] <= outer[2] && inner[3] <= outer[3];
+	}
+
 	// ══════════════════════════════════════════════════════════════════
 	// fetch + render
 	// ══════════════════════════════════════════════════════════════════
@@ -156,17 +196,31 @@
 		if (statusEl) statusEl.textContent = msg || '';
 	}
 
-	function fetchGeo() {
+	function fetchGeo(force) {
 		if (!viewer || !baseDsl) return;
+
+		var view = currentBbox();
+		var height = viewer.camera.positionCartographic.height;
+		// Skip when the view stayed inside the last padded fetch at the
+		// same ladder cell and roughly the same altitude — the data on
+		// screen is already exactly what the server would return.
+		if (!force && !needCounter && lastFetch && !inflight
+			&& ladderCell(bboxWidth(padBbox(view))) === lastFetch.cell
+			&& bboxInside(view, lastFetch.bbox)
+			&& height > lastFetch.height * 0.85 && height < lastFetch.height * 1.18) {
+			return;
+		}
+
 		if (inflight) inflight.abort();
 		var ctrl = new AbortController();
 		inflight = ctrl;
 		var seq = ++fetchSeq;
 
+		var padded = padBbox(view);
 		var body = {
 			criteria: baseDsl.criteria || [],
 			subsystems: baseDsl.subsystems,
-			geo: { bbox: currentBbox(), include_counter: needCounter }
+			geo: { bbox: padded, include_counter: needCounter }
 		};
 
 		setStatus('Loading…');
@@ -190,6 +244,7 @@
 				counter = resp.counter;
 				if (callbacks.onCounter) callbacks.onCounter(counter);
 			}
+			lastFetch = { bbox: padded, cell: resp.cell_deg, height: height };
 			renderFeatures(resp);
 		}).catch(function (e) {
 			if (e.name === 'AbortError') return;
@@ -204,17 +259,45 @@
 		return String(n);
 	}
 
-	function renderFeatures(resp) {
-		hidePopup();
-		dataSource.entities.removeAll();
-		var isBins = resp.mode === 'bins';
-		dataSource.clustering.enabled = !isBins;
+	/**
+	 * Diff-based renderer: entities are keyed by stable ids and updated in
+	 * place; only stale ones are removed. The old removeAll()-per-fetch
+	 * made every marker vanish and reappear on each camera stop ("blink",
+	 * Jason 2026-08-23 pt3). Mode switches still clear fully.
+	 */
+	var renderedMode = null;
 
+	function renderFeatures(resp) {
+		var ents = dataSource.entities;
+		var isBins = resp.mode === 'bins';
+		if (renderedMode !== resp.mode) {
+			hidePopup();
+			ents.removeAll();
+			renderedMode = resp.mode;
+			dataSource.clustering.enabled = !isBins;
+		}
+
+		var keep = {};
 		if (isBins) {
 			resp.features.forEach(function (b) {
+				var id = 'b|' + resp.cell_deg + '|' + b.cx + '|' + b.cy;
+				if (keep[id]) return;
+				keep[id] = true;
+				var pos = Cesium.Cartesian3.fromDegrees(b.lng, b.lat);
 				var px = 18 + Math.min(30, Math.round(Math.sqrt(b.n) / 3));
-				dataSource.entities.add({
-					position: Cesium.Cartesian3.fromDegrees(b.lng, b.lat),
+				var ent = ents.getById(id);
+				if (ent) {
+					ent.position = pos;
+					ent.point.pixelSize = px;
+					ent.label.text = fmtCount(b.n);
+					ent.properties.n = b.n;
+					ent.properties.lng = b.lng;
+					ent.properties.lat = b.lat;
+					return;
+				}
+				ents.add({
+					id: id,
+					position: pos,
 					point: {
 						pixelSize: px,
 						color: Cesium.Color.fromCssColorString(BIN_COLOR).withAlpha(0.75),
@@ -226,6 +309,10 @@
 						text: fmtCount(b.n),
 						font: '700 12px "Source Sans Pro", sans-serif',
 						fillColor: Cesium.Color.WHITE,
+						// Default anchor is LEFT — counts render clipped at
+						// the circle's edge without these.
+						horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
+						verticalOrigin: Cesium.VerticalOrigin.CENTER,
 						disableDepthTestDistance: Number.POSITIVE_INFINITY,
 						eyeOffset: new Cesium.Cartesian3(0, 0, -1000)
 					},
@@ -236,8 +323,15 @@
 			setStatus(fmtCount(resp.in_view_located) + ' located results in view · zoom in for detail');
 		} else {
 			resp.features.forEach(function (f) {
+				var id = 'p|' + f.project_subsystem + '|' + f.project_userpkey + '|'
+					+ f.project_id + '|' + f.item_type + '|' + f.item_id + '|'
+					+ f.lng.toFixed(6) + ',' + f.lat.toFixed(6);
+				if (keep[id]) return;
+				keep[id] = true;
+				if (ents.getById(id)) return;   // static per item — nothing to update
 				var color = SUB_COLORS[f.project_subsystem] || SUB_COLORS.field;
-				dataSource.entities.add({
+				ents.add({
+					id: id,
 					position: Cesium.Cartesian3.fromDegrees(f.lng, f.lat),
 					point: {
 						pixelSize: 9,
@@ -252,6 +346,11 @@
 			setStatus(resp.features.length
 				? fmtCount(resp.features.length) + ' located results in view'
 				: 'No located results in this view');
+		}
+
+		var all = ents.values.slice();
+		for (var i = 0; i < all.length; i++) {
+			if (!keep[all[i].id]) ents.remove(all[i]);
 		}
 		viewer.scene.requestRender();
 	}
@@ -269,6 +368,8 @@
 		cluster.label.text = String(entities.length);
 		cluster.label.font = '700 12px "Source Sans Pro", sans-serif';
 		cluster.label.fillColor = Cesium.Color.WHITE;
+		cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
+		cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
 		cluster.label.disableDepthTestDistance = Number.POSITIVE_INFINITY;
 		cluster.label.eyeOffset = new Cesium.Cartesian3(0, 0, -1000);
 	}
@@ -405,7 +506,8 @@
 			baseDsl = dsl ? { criteria: dsl.criteria, subsystems: dsl.subsystems } : null;
 			needCounter = true;
 			counter = null;
-			if (active && viewer) fetchGeo();
+			lastFetch = null;   // old data no longer answers the new DSL
+			if (active && viewer) fetchGeo(true);
 		},
 
 		/** Show the globe pane; boots Cesium on first use. */
@@ -436,6 +538,8 @@
 			this.hide();
 			baseDsl = null;
 			counter = null;
+			lastFetch = null;
+			renderedMode = null;
 			if (dataSource) {
 				dataSource.entities.removeAll();
 				if (viewer) viewer.scene.requestRender();

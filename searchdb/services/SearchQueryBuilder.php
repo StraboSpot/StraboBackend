@@ -1182,9 +1182,17 @@ SELECT json_build_object(
     public function runGeoQuery($dsl, $geo)
     {
         $bbox = $geo['bbox'];
-        $cell = self::geoBboxWidth($bbox) / self::GEO_GRID_COLS;
-        if ($cell < 0.0002) $cell = 0.0002;
-        if ($cell > 7.5)    $cell = 7.5;
+        // Cell size rides a power-of-two ladder anchored at 7.5° (7.5/2^k):
+        // a raw width/48 target re-bins on EVERY zoom step, so bins visibly
+        // reshuffle ("blink", Jason 2026-08-23 pt3); quantized cells keep
+        // the grid identical across small zoom changes and let the client
+        // skip redundant refetches.
+        $raw = self::geoBboxWidth($bbox) / self::GEO_GRID_COLS;
+        if ($raw <= 0) $raw = 0.0002;
+        $k = (int)ceil(log(7.5 / $raw, 2));
+        if ($k < 0)  $k = 0;
+        if ($k > 15) $k = 15;   // floor ≈ 0.000229° (~25m cells)
+        $cell = 7.5 / pow(2, $k);
 
         // ---- pass 1: bins --------------------------------------------------
         $this->resetParams();

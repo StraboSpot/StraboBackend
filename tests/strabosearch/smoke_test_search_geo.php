@@ -242,7 +242,8 @@ check('empty viewport: points mode with no features',
 
 $r = geo($anon, array(u4($OWNER)), array('bbox' => $BB_DENSE));
 check('dense bbox/anon: still bins (1600 > 1500)', $r['mode'] === 'bins', $r['mode']);
-check('dense bbox/anon: cell = 3/48 = 0.0625', abs($r['cell_deg'] - 0.0625) < 1e-9, $r['cell_deg']);
+// Ladder quantization: raw 3/48 = 0.0625 snaps DOWN to 7.5/2^7.
+check('dense bbox/anon: cell = 7.5/128 (ladder)', abs($r['cell_deg'] - 7.5 / 128) < 1e-9, $r['cell_deg']);
 $sum = 0; foreach ($r['features'] as $b) $sum += $b['n'];
 check('dense bbox/anon: bins sum to 1600', $sum === 1600, $sum);
 

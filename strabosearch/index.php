@@ -116,6 +116,11 @@ function ss_asset($path) {
 						base: '/assets/js/cesium/',
 						js:   '/assets/js/cesium/Cesium.js',
 						css:  '/assets/js/cesium/Widgets/widgets.css'
+					},
+					tiles: {
+						// Site tile proxy — same basemap set every Leaflet
+						// map on the site uses (map_interface.js et al.).
+						outdoors: 'https://tiles.strabospot.org/v5/mapbox.outdoors/{z}/{x}/{y}.png'
 					}
 				};
 				</script>
