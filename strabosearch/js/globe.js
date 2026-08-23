@@ -26,7 +26,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'm2-pt6-billboard-bins';
+	var BUILD = 'm2-pt8-gpu-horizon-culling';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -148,35 +148,52 @@
 		handler = new Cesium.ScreenSpaceEventHandler(viewer.scene.canvas);
 		handler.setInputAction(onLeftClick, Cesium.ScreenSpaceEventType.LEFT_CLICK);
 
-		viewer.scene.preRender.addEventListener(updateOcclusion);
+		viewer.scene.preRender.addEventListener(updateHorizonScaling);
 
 		// Console-debugging handle (harmless in production).
 		window.__ssGlobeViewer = viewer;
 	}
 
 	/**
-	 * Explicit horizon culling for bins (2026-08-23 pt5). Depth-based
-	 * approaches flickered for Jason two rounds running: fragment-level
-	 * globe-depth tests jitter per frame at planetary camera distances,
-	 * and the honest depth test z-fought the surface. Bins therefore
-	 * render with the depth test OFF (the configuration that never
-	 * flickered in per-frame pick sampling) and the far side is culled
-	 * HERE instead — one geometric test per bin per rendered frame,
-	 * against the lifted position, flipping a single show flag so the
-	 * circle and its count label always appear and vanish TOGETHER.
+	 * Far-side culling for bins, evaluated ON THE GPU (2026-08-23 pt8).
+	 * History: fragment depth tests flickered (pt3/pt4), and the pt5
+	 * CPU occluder flipped entity.show as rim bins crossed the horizon
+	 * during rotation — every flip rewrites the billboard collection's
+	 * vertex buffers, i.e. per-frame churn during exactly the far-out
+	 * panning where Jason saw strobing. scaleByDistance instead scales
+	 * a marker to zero once its CAMERA DISTANCE passes the horizon
+	 * distance sqrt(h² + 2Rh): the comparison runs per frame in the
+	 * shader with ZERO buffer writes. Rotation at constant height
+	 * touches nothing; the scalar itself is only reassigned when camera
+	 * height leaves an 8% band (and on bin creation). Circle and label
+	 * carry the same scalar, so they vanish together.
 	 */
-	function updateOcclusion() {
-		if (!dataSource || renderedMode !== 'bins') return;
-		var occ = new Cesium.EllipsoidalOccluder(
-			viewer.scene.globe.ellipsoid, viewer.camera.position);
-		var now = Cesium.JulianDate.now();
+	var lastScaleHeight = 0;
+
+	function horizonScalar() {
+		var h = viewer.camera.positionCartographic.height;
+		var R = 6371000.0;
+		var dh = Math.sqrt(h * h + 2.0 * R * h);
+		// 1.08 slack keeps lifted rim bins visible slightly past the
+		// geometric horizon so they fade out instead of popping.
+		return new Cesium.NearFarScalar(dh, 1.0, dh * 1.08, 0.0);
+	}
+
+	function updateHorizonScaling(force) {
+		if (!viewer || !dataSource || renderedMode !== 'bins') return;
+		var h = viewer.camera.positionCartographic.height;
+		if (force !== true && lastScaleHeight > 0
+			&& h > lastScaleHeight * 0.92 && h < lastScaleHeight * 1.08) {
+			return;
+		}
+		lastScaleHeight = h;
+		var s = horizonScalar();
 		var vals = dataSource.entities.values;
 		for (var i = 0; i < vals.length; i++) {
 			var e = vals[i];
-			var pos = e.position && e.position.getValue(now);
-			if (!pos) continue;
-			var vis = occ.isPointVisible(pos);
-			if (e.show !== vis) e.show = vis;
+			if (!e.billboard) continue;
+			e.billboard.scaleByDistance = s;
+			if (e.label) e.label.scaleByDistance = s;
 		}
 	}
 
@@ -300,11 +317,17 @@
 
 	/**
 	 * Bin circles are BILLBOARDS (canvas-drawn discs), not gl.POINTS.
-	 * Point primitives strobed on Jason's Mac at far zoom through three
-	 * rendering configurations (pt3-pt5) while the count labels — which
-	 * are billboards — never once flickered; billboards ride that proven
-	 * path. Cached per diameter (integer px, ~30 buckets), drawn at 2x
-	 * for retina.
+	 * Returned as DATA-URL STRINGS, never canvas objects: Cesium keys a
+	 * billboard's texture by an image id, and for a raw canvas that id is
+	 * createGuid() — A FRESH GUID PER ASSIGNMENT (Billboard.js
+	 * _computeImageTextureProperties). Every reassignment therefore
+	 * reloads the "new" image asynchronously and the billboard is NOT
+	 * RENDERED until it lands — the root cause of the circles blinking
+	 * on refetch in Firefox while their labels stayed (2026-08-23 pt7;
+	 * Chrome usually won the race so it looked Firefox-only). A string
+	 * IS its own id: identical string → cached texture → no-op reload.
+	 * Cached per diameter (integer px, ~30 buckets), drawn at 2x for
+	 * retina.
 	 */
 	var circleCache = {};
 	function circleImage(px) {
@@ -321,8 +344,8 @@
 		ctx.lineWidth = 2;
 		ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
 		ctx.stroke();
-		circleCache[px] = c;
-		return c;
+		circleCache[px] = c.toDataURL('image/png');
+		return circleCache[px];
 	}
 
 	/**
@@ -340,11 +363,13 @@
 			hidePopup();
 			ents.removeAll();
 			renderedMode = resp.mode;
+			lastScaleHeight = 0;
 			dataSource.clustering.enabled = !isBins;
 		}
 
 		var keep = {};
 		if (isBins) {
+			var scal = horizonScalar();
 			resp.features.forEach(function (b) {
 				var id = 'b|' + resp.cell_deg + '|' + b.cx + '|' + b.cy;
 				if (keep[id]) return;
@@ -360,10 +385,17 @@
 				var ent = ents.getById(id);
 				if (ent) {
 					ent.position = pos;
-					ent.billboard.image = circleImage(px);
-					ent.billboard.width = px;
-					ent.billboard.height = px;
-					ent.label.text = fmtCount(b.n);
+					// Touch the billboard ONLY when the size bucket really
+					// changed — reassignment is what used to blank circles.
+					if (ent.properties.px.getValue() !== px) {
+						ent.billboard.image = circleImage(px);
+						ent.billboard.width = px;
+						ent.billboard.height = px;
+						ent.properties.px = px;
+					}
+					if (ent.label.text.getValue() !== fmtCount(b.n)) {
+						ent.label.text = fmtCount(b.n);
+					}
 					ent.properties.n = b.n;
 					ent.properties.lng = b.lng;
 					ent.properties.lat = b.lat;
@@ -380,6 +412,7 @@
 						image: circleImage(px),
 						width: px,
 						height: px,
+						scaleByDistance: scal,
 						disableDepthTestDistance: Number.POSITIVE_INFINITY
 					},
 					label: {
@@ -390,10 +423,11 @@
 						// the circle's edge without these.
 						horizontalOrigin: Cesium.HorizontalOrigin.CENTER,
 						verticalOrigin: Cesium.VerticalOrigin.CENTER,
+						scaleByDistance: scal,
 						disableDepthTestDistance: Number.POSITIVE_INFINITY
 					},
 					properties: { kind: 'bin', n: b.n, lng: b.lng, lat: b.lat,
-						cell: resp.cell_deg }
+						cell: resp.cell_deg, px: px }
 				});
 			});
 			setStatus(fmtCount(resp.in_view_located) + ' located results in view · zoom in for detail');
@@ -428,7 +462,7 @@
 		for (var i = 0; i < all.length; i++) {
 			if (!keep[all[i].id]) ents.remove(all[i]);
 		}
-		updateOcclusion();   // hide far-side bins before the next frame
+		updateHorizonScaling(true);   // sync the horizon scalar to this camera
 		viewer.scene.requestRender();
 	}
 
