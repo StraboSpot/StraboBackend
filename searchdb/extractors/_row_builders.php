@@ -1059,15 +1059,20 @@ function expTuple($r) {
 	$projectName = (string)$r->project_name;
 	$projectPub  = ($r->project_ispublic === 't' || $r->project_ispublic === true);
 
-	// Location: facility first, fall back to first sample provenance.
+	// Location: sample provenance first (the GEOLOGICAL location, which
+	// is what the globe and the U2 spatial criterion discover by), lab
+	// facility only as a fallback (an address beats nothing). The old
+	// facility-first order averaged "where the rock came from" with
+	// "where the machine sits" into mid-ocean project centroids on the
+	// search globe (Jason 2026-08-23, GlobeView proposal §9.6).
 	$lat = null;
 	$lng = null;
-	if (is_numeric($r->facility_lat) && is_numeric($r->facility_lng)) {
-		$lat = (float)$r->facility_lat;
-		$lng = (float)$r->facility_lng;
-	} elseif (is_numeric($r->sample_lat) && is_numeric($r->sample_lng)) {
+	if (is_numeric($r->sample_lat) && is_numeric($r->sample_lng)) {
 		$lat = (float)$r->sample_lat;
 		$lng = (float)$r->sample_lng;
+	} elseif (is_numeric($r->facility_lat) && is_numeric($r->facility_lng)) {
+		$lat = (float)$r->facility_lat;
+		$lng = (float)$r->facility_lng;
 	}
 	$locLit = ($lat !== null && $lng !== null) ? pgPointLiteral($lng, $lat) : 'NULL';
 

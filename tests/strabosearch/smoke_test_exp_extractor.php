@@ -233,6 +233,20 @@ $expE = seed_exp($db,
 	false);
 
 // ---------------------------------------------------------------------------
+// SCENARIO H — BOTH facility coords AND sample provenance coords set →
+// provenance must WIN (priority swapped 2026-08-23: facility-first
+// averaged rock provenance with lab addresses into mid-ocean globe
+// project centroids).
+$expH = seed_exp($db,
+	$PREFIX . '_proj_both', 'spsxe Both Locations Project', $TEST_UPK, true, '',
+	'EXP-H-001',
+	'Griggs Apparatus', 'Griggs Both', '',
+	'MIT High Pressure Lab', '42.3601', '-71.0942',
+	array('Strain'),
+	'Sample beta', '44.0793', '10.0979',
+	false);
+
+// ---------------------------------------------------------------------------
 // SCENARIO I — Same-id decoy under DECOY_UPK with the SAME experiment.id
 // as expA (EXP-A-001). Must not leak into TEST_UPK rows.
 $expDecoy = seed_exp($db,
@@ -245,7 +259,7 @@ $expDecoy = seed_exp($db,
 	null, null, null,
 	false);
 
-echo "  seeded 4 primary experiments (A/B/D/E) + 1 decoy (same exp.id as A)\n";
+echo "  seeded 5 primary experiments (A/B/D/E/H) + 1 decoy (same exp.id as A)\n";
 
 // ===========================================================================
 section('2. Run extractor');
@@ -264,14 +278,14 @@ $itemCount = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK AND project_subsystem = 'exp'"
 );
-check('4 item_hit rows for TEST_UPK experiments', $itemCount === 4, "got $itemCount");
+check('5 item_hit rows for TEST_UPK experiments', $itemCount === 5, "got $itemCount");
 
 $pubCount = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK AND project_subsystem = 'exp'
 	   AND project_ispublic = TRUE"
 );
-check('public exp rows: 3', $pubCount === 3, "got $pubCount");
+check('public exp rows: 4', $pubCount === 4, "got $pubCount");
 
 $privCount = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
@@ -309,7 +323,7 @@ if ($rowA) {
 	check('A: has_orientation = FALSE',    $rowA->has_orientation    === 'f');
 	check('A: has_microstructure = FALSE', $rowA->has_microstructure === 'f');
 	check('A: has_strat = FALSE',          $rowA->has_strat          === 'f');
-	check('A: location ≈ MIT lab (42.36, -71.09)',
+	check('A: location = MIT lab (facility FALLBACK: sample has no provenance coords)',
 		strpos((string)$rowA->loc, 'POINT(-71.0942 42.3601)') !== false,
 		"got '{$rowA->loc}'");
 	check('A: project_name preserved',
@@ -349,6 +363,20 @@ if ($rowD) {
 	check('D: location is sample provenance LA point (-118.24, 34.05)',
 		strpos((string)$rowD->loc, 'POINT(-118.2437 34.0522)') !== false,
 		"got '{$rowD->loc}'");
+}
+
+// ===========================================================================
+section('6b. Scenario H — sample provenance WINS over facility coords');
+
+$rowH = $db->get_row(
+	"SELECT ST_AsText(location) AS loc FROM strabosearch.item_hit
+	 WHERE item_id = 'EXP-H-001' AND project_userpkey = $TEST_UPK"
+);
+check('H: row found', $rowH !== null);
+if ($rowH) {
+	check('H: location = sample provenance Carrara point, NOT the MIT facility',
+		strpos((string)$rowH->loc, 'POINT(10.0979 44.0793)') !== false,
+		"got '{$rowH->loc}'");
 }
 
 // ===========================================================================
@@ -433,7 +461,7 @@ $itemCount2 = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK AND project_subsystem = 'exp'"
 );
-check('idempotent re-run: still 4 item_hit rows', $itemCount2 === 4, "got $itemCount2");
+check('idempotent re-run: still 5 item_hit rows', $itemCount2 === 5, "got $itemCount2");
 
 $rowA2 = $db->get_row(
 	"SELECT apparatus_type FROM strabosearch.item_hit
@@ -465,8 +493,8 @@ $testItemCount = (int)$db->get_var(
 	"SELECT count(*) FROM strabosearch.item_hit
 	 WHERE project_userpkey = $TEST_UPK AND project_subsystem = 'exp'"
 );
-check('TEST_UPK row count unaffected by decoy (still 4)',
-	$testItemCount === 4, "got $testItemCount");
+check('TEST_UPK row count unaffected by decoy (still 5)',
+	$testItemCount === 5, "got $testItemCount");
 
 // ===========================================================================
 section('12. sync_state NOT updated on partial run');
