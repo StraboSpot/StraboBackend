@@ -358,6 +358,12 @@ if (!$APPLY) {
 	} else {
 		line('  sync_state NOT updated (partial run via --source-userpkey)');
 	}
+
+	// The samples slice inherits host-spot locations FROM this slice
+	// (§5.2.2 ordering) and its own timestamps do not move when spots are
+	// re-derived, so a field re-extract leaves sample rows carrying the
+	// previous spot points until samples.php runs again.
+	line('  NEXT: run samples.php --apply (sample rows inherit host-spot locations from this slice).');
 }
 
 // ---------------------------------------------------------------------------
