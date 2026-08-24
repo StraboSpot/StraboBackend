@@ -23,6 +23,31 @@
 
 require_once __DIR__ . '/../../samplesdb/services/StraboSamplesService.php';
 
+if (!function_exists('micro_coord_or_null')) {
+/**
+ * Normalize one Micro sample coordinate for BOTH the micro_samplemetadata
+ * insert and the strabosamples mirror: null / '' / non-numeric / zero all
+ * mean "no coordinate" and become null; anything else becomes a float.
+ *
+ * Why zero counts as unset: the Micro app sends latitude/longitude as
+ * numeric 0 for samples that were never located. The source insert
+ * historically skipped those because PHP 7's loose `0 != ""` is false,
+ * while the spine mirror kept 0.0 - so every un-located Micro sample
+ * carried a (0, 0) point in strabosamples (Null Island on the globe) and
+ * the cross-system drift auditor flagged latitude/longitude on each one
+ * (prod 2026-08-23). One rule, applied explicitly on both sides, keeps
+ * them identical regardless of PHP version.
+ *
+ * @param  mixed      $v
+ * @return float|null
+ */
+function micro_coord_or_null($v) {
+    if ($v === null || $v === '' || $v === false || !is_numeric($v)) return null;
+    $f = (float)$v;
+    return ($f == 0.0) ? null : $f;
+}
+}
+
 if (!function_exists('micro_sample_sync')) {
 
 /**
@@ -69,8 +94,10 @@ function micro_sample_sync($db, $sample, $project_strabo_id, $project_internal_i
           : (!empty($sample->label) ? (string)$sample->label : null);
     $description = !empty($sample->sampleDescription) ? (string)$sample->sampleDescription : null;
     $notes       = !empty($sample->sampleNotes)       ? (string)$sample->sampleNotes       : null;
-    $lat = isset($sample->latitude)  && $sample->latitude  !== '' && is_numeric($sample->latitude)  ? (float)$sample->latitude  : null;
-    $lng = isset($sample->longitude) && $sample->longitude !== '' && is_numeric($sample->longitude) ? (float)$sample->longitude : null;
+    // Same rule as the micro_samplemetadata insert (micro_coord_or_null):
+    // zero / blank = no coordinate.
+    $lat = micro_coord_or_null(isset($sample->latitude)  ? $sample->latitude  : null);
+    $lng = micro_coord_or_null(isset($sample->longitude) ? $sample->longitude : null);
 
     $displayType = !empty($sample->materialType) ? (string)$sample->materialType : null;
     if ($displayType === 'other' && !empty($sample->otherMaterialType)) {
@@ -114,8 +141,10 @@ function micro_sample_sync($db, $sample, $project_strabo_id, $project_internal_i
         'sampleunit'             => isset($sample->sampleUnit)             ? $sample->sampleUnit             : null,
         'sampleorientationnotes' => isset($sample->sampleOrientationNotes) ? $sample->sampleOrientationNotes : null,
         'othersamplingpurpose'   => isset($sample->otherSamplingPurpose)   ? $sample->otherSamplingPurpose   : null,
-        'longitude'              => isset($sample->longitude)              ? $sample->longitude              : null,
-        'latitude'               => isset($sample->latitude)               ? $sample->latitude               : null,
+        // Normalized like the source columns (zero/blank = null) so the
+        // drift auditor's micro_data-vs-source comparison holds.
+        'longitude'              => $lng,
+        'latitude'               => $lat,
     );
 
     $reference = array(

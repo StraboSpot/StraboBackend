@@ -2311,8 +2311,14 @@ class StraboMicro
 						if($thissamplemetadata->label!="") {$vars[]='label'; $vals[]= "'".pg_escape_string($thissamplemetadata->label)."'"; }
 						if($thissamplemetadata->sampleID!="") {$vars[]='sampleid'; $vals[]= "'".pg_escape_string($thissamplemetadata->sampleID)."'"; }
 
-						if($thissamplemetadata->longitude!="") {$vars[]='longitude'; $vals[]= "$thissamplemetadata->longitude"; }
-						if($thissamplemetadata->latitude!="") {$vars[]='latitude'; $vals[]= "$thissamplemetadata->latitude"; }
+						// Coordinates: zero/blank = unset (explicit; PHP 7's loose
+						// `0 != ""` used to drop numeric 0 here by accident while the
+						// strabosamples mirror kept 0.0). Same helper on both sides.
+						require_once __DIR__ . '/lib/sample_sync.php';
+						$sampleLng = micro_coord_or_null(isset($thissamplemetadata->longitude) ? $thissamplemetadata->longitude : null);
+						$sampleLat = micro_coord_or_null(isset($thissamplemetadata->latitude)  ? $thissamplemetadata->latitude  : null);
+						if($sampleLng !== null) {$vars[]='longitude'; $vals[]= sprintf('%.10F', $sampleLng); }
+						if($sampleLat !== null) {$vars[]='latitude';  $vals[]= sprintf('%.10F', $sampleLat); }
 
 						if($thissamplemetadata->mainSamplingPurpose!="") {$vars[]='mainsamplingpurpose'; $vals[]= "'".pg_escape_string($thissamplemetadata->mainSamplingPurpose)."'"; }
 						if($thissamplemetadata->sampleDescription!="") {$vars[]='sampledescription'; $vals[]= "'".pg_escape_string($thissamplemetadata->sampleDescription)."'"; }
