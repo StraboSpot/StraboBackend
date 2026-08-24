@@ -256,6 +256,11 @@ list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/', null);
 check('anonymous page 200', $st === 200, "got $st");
 check('page has title', strpos($body, 'StraboSpot Search') !== false);
 check('page loads catalog.js', strpos($body, '/strabosearch/js/catalog.js') !== false);
+check('tiles config exposes satellite + macrostrat (M3)',
+	strpos($body, 'mapbox.satellite') !== false && strpos($body, '/v5/macrostrat/') !== false);
+check('Layers panel markup present (M3)', strpos($body, 'ssLayersPanel') !== false
+	&& strpos($body, 'ssMacrostratChk') !== false && strpos($body, 'ssMacrostratOpacity') !== false);
+check('quiet prompt carries the browse door (M3)', strpos($body, 'ssBrowseGlobe') !== false);
 check('anonymous: no Save current button', strpos($body, 'ssSaveBtn') === false);
 check('anonymous: loggedIn=false bootstrap', strpos($body, 'loggedIn: false') !== false);
 
@@ -293,6 +298,29 @@ check('results.js: infinite scroll wired', strpos($body, 'IntersectionObserver')
 	&& strpos($body, 'ss-scroll-sentinel') !== false);
 check('results.js: offset pager removed', strpos($body, 'renderPager') === false
 	&& strpos($body, 'Next ›') === false);
+
+// Globe View M3: layers panel + browse-mode wiring in the served assets.
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/globe.js', null);
+check('globe.js asset 200', $st === 200, "got $st");
+check('globe.js: M3 build tag', strpos($body, 'm3-layers-browse') !== false);
+check('globe.js: satellite + macrostrat layers wired', strpos($body, 'CFG.tiles.satellite') !== false
+	&& strpos($body, 'CFG.tiles.macrostrat') !== false
+	&& strpos($body, 'raiseToTop') !== false);
+check('globe.js: browse popups drop the list link', strpos($body, 'isBrowse()') !== false);
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/results.js', null);
+check('results.js: browse mode gates the list', strpos($body, 'state.browse') !== false
+	&& strpos($body, 'ss-browse-link') !== false);
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/app.js', null);
+check('app.js: /globe door + browse entry', strpos($body, 'view=globe') !== false
+	&& strpos($body, 'browse: true') !== false);
+
+// /globe is a 302 front door into browse mode (M3; the legacy standalone
+// globe page is retired). http_raw never follows redirects, so the status
+// and Location header are directly assertable.
+list($st, $h) = http_raw('GET', $BASE . '/globe/', null);
+check('/globe redirects 302', $st === 302, "got $st");
+check('/globe Location -> /strabosearch/?view=globe',
+	stripos($h, 'Location: /strabosearch/?view=globe') !== false);
 
 // ---------------------------------------------------------------------------
 section('2. Proxy search — anonymous vs session identity');
@@ -354,6 +382,16 @@ check('owner search_geo sees both project markers', $st === 200 && $j
 list($st, $j) = api('search_geo', null, array(
 	'criteria' => array(), 'geo' => array('bbox' => array(1, 2, 3))));
 check('search_geo bad bbox 400 w/ Error', $st === 400 && isset($j['Error']), "got $st");
+
+// Browse contract (M3): empty criteria are legal on the geo path through
+// the proxy. Real dev data sits underneath, so assert shape, not counts.
+list($st, $j) = api('search_geo', null, array(
+	'criteria' => array(), 'geo' => array('include_counter' => true)));
+check('anon empty-criteria search_geo 200 (browse)', $st === 200, "got $st");
+check('browse response shape: features array + int counter',
+	$j && is_array($j['features']) && isset($j['counter'])
+	&& is_int($j['counter']['total']) && is_int($j['counter']['located'])
+	&& $j['counter']['located'] <= $j['counter']['total']);
 
 // ---------------------------------------------------------------------------
 section('3. Facets + vocab (incl. new province)');

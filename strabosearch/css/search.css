@@ -897,6 +897,92 @@
 	}
 }
 
+/* ---- Layers panel (M3) -------------------------------------------------- */
+
+.ss-globe-layers {
+	position: absolute;
+	z-index: 25;
+	top: 0.6em;
+	right: 0.6em;
+	text-align: right;
+}
+
+.ss-layers-btn {
+	font-size: 0.8em;
+	background: rgba(28, 29, 38, 0.85);
+	color: rgba(255, 255, 255, 0.85);
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: 4px;
+	padding: 0.25em 0.9em;
+	cursor: pointer;
+}
+
+.ss-layers-btn:hover {
+	background: rgba(40, 42, 56, 0.95);
+}
+
+.ss-layers-panel {
+	margin-top: 0.4em;
+	width: 215px;
+	text-align: left;
+	background: #1c1d26;
+	color: rgba(255, 255, 255, 0.8);
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: 5px;
+	box-shadow: 0 6px 24px rgba(0, 0, 0, 0.55);
+	padding: 0.7em 0.9em;
+	font-size: 0.85em;
+}
+
+.ss-layers-title {
+	font-weight: bold;
+	color: #ffffff;
+	margin: 0.45em 0 0.15em;
+}
+
+.ss-layers-group:first-child .ss-layers-title {
+	margin-top: 0;
+}
+
+.ss-layers-row {
+	padding: 0.1em 0;
+}
+
+.ss-layers-row label {
+	margin: 0;
+}
+
+.ss-layers-opacity {
+	display: flex;
+	align-items: center;
+	gap: 0.6em;
+	padding-top: 0.25em;
+}
+
+.ss-layers-opacity label {
+	margin: 0;
+	font-size: 0.85em;
+	opacity: 0.75;
+}
+
+.ss-layers-opacity input[type="range"] {
+	flex: 1 1 auto;
+	min-width: 0;
+}
+
+/* Browse mode (M3): the List toggle dims and goes inert, same treatment
+   as the D6 Images tab (the empty-query list stays gated). */
+.ss-view-btn.ss-globe-disabled {
+	opacity: 0.35;
+	cursor: default;
+}
+
+.ss-quiet-prompt .ss-browse-link {
+	display: inline-block;
+	margin-top: 0.6em;
+	cursor: pointer;
+}
+
 /* ---- subsystem triptych icons (§6.5.2) ---------------------------------- */
 
 .ss-triptych-icon {
