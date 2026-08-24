@@ -261,6 +261,11 @@ check('tiles config exposes satellite + macrostrat (M3)',
 check('Layers panel markup present (M3)', strpos($body, 'ssLayersPanel') !== false
 	&& strpos($body, 'ssMacrostratChk') !== false && strpos($body, 'ssMacrostratOpacity') !== false);
 check('quiet prompt carries the browse door (M3)', strpos($body, 'ssBrowseGlobe') !== false);
+check('mobile drawer chrome present (M4)', strpos($body, 'ssDrawerBackdrop') !== false
+	&& strpos($body, 'ssDrawerClose') !== false && strpos($body, 'ssFiltersBtn') !== false
+	&& strpos($body, 'ssFiltersBadge') !== false && strpos($body, 'ssDrawerCloseLink') !== false);
+check('globe wrap carries the pinned toggle + count pill (M4)',
+	strpos($body, 'ss-globe-toggle') !== false && strpos($body, 'ssGlobeCountPill') !== false);
 check('anonymous: no Save current button', strpos($body, 'ssSaveBtn') === false);
 check('anonymous: loggedIn=false bootstrap', strpos($body, 'loggedIn: false') !== false);
 
@@ -302,7 +307,8 @@ check('results.js: offset pager removed', strpos($body, 'renderPager') === false
 // Globe View M3: layers panel + browse-mode wiring in the served assets.
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/globe.js', null);
 check('globe.js asset 200', $st === 200, "got $st");
-check('globe.js: M3 build tag', strpos($body, 'm3-layers-browse') !== false);
+check('globe.js: M4 build tag', strpos($body, 'm4-mobile-drawer') !== false);
+check('globe.js: phone popup sheet mode (M4)', strpos($body, 'ss-gpop-sheet') !== false);
 check('globe.js: satellite + macrostrat layers wired', strpos($body, 'CFG.tiles.satellite') !== false
 	&& strpos($body, 'CFG.tiles.macrostrat') !== false
 	&& strpos($body, 'raiseToTop') !== false);
@@ -313,6 +319,15 @@ check('results.js: browse mode gates the list', strpos($body, 'state.browse') !=
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/app.js', null);
 check('app.js: /globe door + browse entry', strpos($body, 'view=globe') !== false
 	&& strpos($body, 'browse: true') !== false);
+check('app.js: mobile drawer wiring (M4)', strpos($body, 'ss-drawer-open') !== false
+	&& strpos($body, 'activeRowCount') !== false && strpos($body, "'Escape'") !== false);
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/css/search.css', null);
+check('search.css asset 200', $st === 200, "got $st");
+check('search.css: mobile drawer + full-bleed globe rules (M4)',
+	strpos($body, '.ss-app-frame.ss-drawer-open .ss-rail') !== false
+	&& strpos($body, '.ss-view-toggle.ss-globe-toggle') !== false
+	&& strpos($body, '.ss-globe-popup.ss-gpop-sheet') !== false
+	&& strpos($body, 'max-width: 950px') !== false);
 
 // /globe is a 302 front door into browse mode (M3; the legacy standalone
 // globe page is retired). http_raw never follows redirects, so the status

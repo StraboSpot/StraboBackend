@@ -30,7 +30,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'm3-layers-browse-r1';
+	var BUILD = 'm4-mobile-drawer-r1';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -728,8 +728,26 @@
 		}
 		popupEl.appendChild(links);
 
+		placePopup(screenPos);
+	}
+
+	/** Clamp the card near the tap inside the wrap; on phones (M4) it is a
+	 *  bottom sheet instead (search.css .ss-gpop-sheet). */
+	var sheetMq = window.matchMedia ? window.matchMedia('(max-width: 639px)') : null;
+	if (sheetMq && sheetMq.addEventListener) {
+		// Crossing the phone breakpoint with a card open: the two layouts
+		// don't share positioning, so drop the card rather than strand it.
+		sheetMq.addEventListener('change', function () { hidePopup(); });
+	}
+	function placePopup(screenPos) {
 		popupEl.style.display = '';
-		// Clamp near the click, inside the wrap.
+		if (sheetMq && sheetMq.matches) {
+			popupEl.classList.add('ss-gpop-sheet');
+			popupEl.style.left = '';
+			popupEl.style.top = '';
+			return;
+		}
+		popupEl.classList.remove('ss-gpop-sheet');
 		var pad = 12;
 		var x = Math.min(screenPos.x + 14, wrap.clientWidth - popupEl.offsetWidth - pad);
 		var y = Math.min(screenPos.y + 14, wrap.clientHeight - popupEl.offsetHeight - pad);
@@ -793,12 +811,7 @@
 			popupEl.appendChild(links);
 		}
 
-		popupEl.style.display = '';
-		var pad = 12;
-		var x = Math.min(screenPos.x + 14, wrap.clientWidth - popupEl.offsetWidth - pad);
-		var y = Math.min(screenPos.y + 14, wrap.clientHeight - popupEl.offsetHeight - pad);
-		popupEl.style.left = Math.max(pad, x) + 'px';
-		popupEl.style.top = Math.max(pad, y) + 'px';
+		placePopup(screenPos);
 	}
 
 	function hidePopup() {
