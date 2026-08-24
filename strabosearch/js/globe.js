@@ -30,7 +30,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'd7-project-markers-r5-cluster-click';
+	var BUILD = 'm3-layers-browse-r1';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -56,6 +56,35 @@
 	var inflight = null;      // AbortController
 	var active = false;       // globe view currently visible
 	var callbacks = {};       // {onCounter, onOpenList}
+
+	var layerOutdoors = null;   // streamed terrain basemap (default on)
+	var layerSatellite = null;  // lazy: created on first Satellite pick
+	var layerMacrostrat = null; // lazy: created on first overlay enable
+
+	// Layer choices survive reloads (per-browser convenience only; wrapped
+	// in try/catch because storage can be absent or throw).
+	var LAYER_PREFS_KEY = 'ssGlobeLayerPrefs';
+	var layerPrefs = { basemap: 'terrain', macrostrat: false, opacity: 0.6 };
+	try {
+		var lp = JSON.parse(window.localStorage.getItem(LAYER_PREFS_KEY) || '{}');
+		if (lp.basemap === 'satellite') layerPrefs.basemap = 'satellite';
+		if (lp.macrostrat === true) layerPrefs.macrostrat = true;
+		if (typeof lp.opacity === 'number' && lp.opacity >= 0.1 && lp.opacity <= 1) {
+			layerPrefs.opacity = lp.opacity;
+		}
+	} catch (e) { /* storage unavailable: defaults */ }
+
+	function saveLayerPrefs() {
+		try { window.localStorage.setItem(LAYER_PREFS_KEY, JSON.stringify(layerPrefs)); }
+		catch (e) { /* ignore */ }
+	}
+
+	/** Browse mode (M3): an empty-criteria DSL is the /globe front-door
+	 *  contract; the list view stays gated, so popups drop their
+	 *  "View results in list" links. */
+	function isBrowse() {
+		return !!(baseDsl && (!baseDsl.criteria || baseDsl.criteria.length === 0));
+	}
 
 	// ══════════════════════════════════════════════════════════════════
 	// lazy Cesium loader
@@ -142,11 +171,12 @@
 			viewer.imageryLayers.addImageryProvider(provider, 0);
 			viewer.scene.requestRender();
 		});
-		viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+		layerOutdoors = viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
 			url: CFG.tiles.outdoors,
 			maximumLevel: 19,
 			credit: new Cesium.Credit('© Mapbox © OpenStreetMap · StraboSpot tiles')
 		}));
+		applyLayerPrefs();
 
 		rebuildDataSource();
 
@@ -212,6 +242,120 @@
 	// ══════════════════════════════════════════════════════════════════
 	// fetch + render (once per search; camera moves never refetch)
 	// ══════════════════════════════════════════════════════════════════
+
+	// ------------------------------------------------------------------
+	// Layers panel (M3): basemap swap + Macrostrat geology overlay
+	// ------------------------------------------------------------------
+
+	function ensureSatellite() {
+		if (layerSatellite) return;
+		layerSatellite = viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+			url: CFG.tiles.satellite,
+			maximumLevel: 19,
+			credit: new Cesium.Credit('© Mapbox © Maxar · StraboSpot tiles')
+		}));
+		layerSatellite.show = false;
+		keepMacrostratOnTop();
+	}
+
+	function ensureMacrostrat() {
+		if (layerMacrostrat) return;
+		layerMacrostrat = viewer.imageryLayers.addImageryProvider(new Cesium.UrlTemplateImageryProvider({
+			url: CFG.tiles.macrostrat,
+			// The site proxy composes 256px tiles from Macrostrat carto 512s;
+			// real cartography runs out around z14, so let Cesium upsample
+			// past it instead of asking the proxy for near-blank deep tiles.
+			maximumLevel: 14,
+			credit: new Cesium.Credit('Geology © Macrostrat')
+		}));
+		layerMacrostrat.show = false;
+		layerMacrostrat.alpha = layerPrefs.opacity;
+	}
+
+	/** A lazily-added basemap lands ABOVE an existing overlay in Cesium's
+	 *  layer stack; the geology must stay on top of whichever basemap is
+	 *  showing. */
+	function keepMacrostratOnTop() {
+		if (layerMacrostrat) viewer.imageryLayers.raiseToTop(layerMacrostrat);
+	}
+
+	function applyLayerPrefs() {
+		if (!viewer) return;
+		if (layerPrefs.basemap === 'satellite') ensureSatellite();
+		if (layerPrefs.macrostrat) ensureMacrostrat();
+		if (layerOutdoors) layerOutdoors.show = (layerPrefs.basemap !== 'satellite');
+		if (layerSatellite) layerSatellite.show = (layerPrefs.basemap === 'satellite');
+		if (layerMacrostrat) layerMacrostrat.show = !!layerPrefs.macrostrat;
+		keepMacrostratOnTop();
+		syncLayersUI();
+		viewer.scene.requestRender();
+	}
+
+	/** Reflect prefs into the panel controls (checked state + slider). */
+	function syncLayersUI() {
+		var t = document.getElementById('ssBaseTerrain');
+		var sat = document.getElementById('ssBaseSatellite');
+		var chk = document.getElementById('ssMacrostratChk');
+		var op = document.getElementById('ssMacrostratOpacity');
+		if (t) t.checked = (layerPrefs.basemap !== 'satellite');
+		if (sat) sat.checked = (layerPrefs.basemap === 'satellite');
+		if (chk) chk.checked = !!layerPrefs.macrostrat;
+		if (op) {
+			op.value = String(Math.round(layerPrefs.opacity * 100));
+			op.disabled = !layerPrefs.macrostrat;
+		}
+	}
+
+	function wireLayersPanel() {
+		var btn = document.getElementById('ssLayersBtn');
+		var panel = document.getElementById('ssLayersPanel');
+		if (!btn || !panel) return;
+
+		btn.addEventListener('click', function (ev) {
+			ev.stopPropagation();
+			var open = panel.style.display !== 'none';
+			panel.style.display = open ? 'none' : '';
+			btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+		});
+		panel.addEventListener('click', function (ev) { ev.stopPropagation(); });
+		document.addEventListener('click', function () {
+			if (panel.style.display !== 'none') {
+				panel.style.display = 'none';
+				btn.setAttribute('aria-expanded', 'false');
+			}
+		});
+
+		[document.getElementById('ssBaseTerrain'),
+		 document.getElementById('ssBaseSatellite')].forEach(function (r) {
+			if (!r) return;
+			r.addEventListener('change', function () {
+				if (!r.checked) return;
+				layerPrefs.basemap = (r.value === 'satellite') ? 'satellite' : 'terrain';
+				saveLayerPrefs();
+				applyLayerPrefs();
+			});
+		});
+
+		var chk = document.getElementById('ssMacrostratChk');
+		if (chk) chk.addEventListener('change', function () {
+			layerPrefs.macrostrat = !!chk.checked;
+			saveLayerPrefs();
+			if (viewer) applyLayerPrefs(); else syncLayersUI();
+		});
+
+		var op = document.getElementById('ssMacrostratOpacity');
+		if (op) op.addEventListener('input', function () {
+			var v = Math.max(10, Math.min(100, parseInt(op.value, 10) || 60)) / 100;
+			layerPrefs.opacity = v;
+			saveLayerPrefs();
+			if (layerMacrostrat) {
+				layerMacrostrat.alpha = v;
+				viewer.scene.requestRender();
+			}
+		});
+
+		syncLayersUI();
+	}
 
 	function setStatus(msg) {
 		if (statusEl) statusEl.textContent = msg || '';
@@ -573,13 +717,15 @@
 		open.href = projectHref(hit);
 		open.target = '_blank';
 		links.appendChild(open);
-		var toList = el('a', null, 'View results in list');
-		toList.href = 'javascript:void(0);';
-		toList.addEventListener('click', function () {
-			hidePopup();
-			if (callbacks.onOpenList) callbacks.onOpenList();
-		});
-		links.appendChild(toList);
+		if (!isBrowse()) {
+			var toList = el('a', null, 'View results in list');
+			toList.href = 'javascript:void(0);';
+			toList.addEventListener('click', function () {
+				hidePopup();
+				if (callbacks.onOpenList) callbacks.onOpenList();
+			});
+			links.appendChild(toList);
+		}
 		popupEl.appendChild(links);
 
 		popupEl.style.display = '';
@@ -631,19 +777,21 @@
 		});
 		if (hits.length > MAX) {
 			list.appendChild(el('div', 'ss-gpop-meta',
-				'+ ' + (hits.length - MAX) + ' more in the list view'));
+				'+ ' + (hits.length - MAX) + (isBrowse() ? ' more' : ' more in the list view')));
 		}
 		popupEl.appendChild(list);
 
-		var links = el('div', 'ss-gpop-links');
-		var toList = el('a', null, 'View results in list');
-		toList.href = 'javascript:void(0);';
-		toList.addEventListener('click', function () {
-			hidePopup();
-			if (callbacks.onOpenList) callbacks.onOpenList();
-		});
-		links.appendChild(toList);
-		popupEl.appendChild(links);
+		if (!isBrowse()) {
+			var links = el('div', 'ss-gpop-links');
+			var toList = el('a', null, 'View results in list');
+			toList.href = 'javascript:void(0);';
+			toList.addEventListener('click', function () {
+				hidePopup();
+				if (callbacks.onOpenList) callbacks.onOpenList();
+			});
+			links.appendChild(toList);
+			popupEl.appendChild(links);
+		}
 
 		popupEl.style.display = '';
 		var pad = 12;
@@ -668,6 +816,7 @@
 			wrap = document.getElementById('ssGlobeWrap');
 			statusEl = document.getElementById('ssGlobeStatus');
 			popupEl = document.getElementById('ssGlobePopup');
+			wireLayersPanel();
 		},
 
 		/** New search DSL (criteria + subsystems). Fetches now if visible,

@@ -38,6 +38,7 @@
 	//   loadingMore, observer, sentinel, status
 	// }
 	var onStateChange = function () {};   // app.js mirrors URL
+	var onBrowse = function () {};        // app.js runs the empty-criteria globe browse (M3)
 	// Survives clear(): a globe user who edits criteria (which resets
 	// results) gets the globe back on the next Search, not the list.
 	var lastView = 'list';
@@ -196,14 +197,20 @@
 	function run(baseDsl, opts) {
 		abortInflight();
 		disconnectObserver();
-		// The chosen view survives re-searches — a globe user refining
-		// criteria stays on the globe (Globe View M2).
+		// Browse mode (M3): an empty-criteria DSL is legal on the GLOBE
+		// only; the match-all LIST query stays gated until benchmarked, so
+		// browse never fetches a list page and pins the view to the globe.
+		var browse = !baseDsl.criteria || baseDsl.criteria.length === 0;
+		// The chosen view survives re-searches (a globe user refining
+		// criteria stays on the globe, Globe View M2).
 		var prevView = state ? state.view : lastView;
 		state = {
 			baseDsl: baseDsl,
+			browse: browse,
 			sort: (opts && opts.sort) || null,
 			tab: (opts && opts.tab) || 'projects',
-			view: (opts && opts.view) === 'globe' ? 'globe' : ((opts && opts.view) === 'list' ? 'list' : prevView),
+			view: browse ? 'globe'
+				: ((opts && opts.view) === 'globe' ? 'globe' : ((opts && opts.view) === 'list' ? 'list' : prevView)),
 			data: { projects: null, images: null },
 			seen: {},
 			inflight: null,
@@ -217,7 +224,7 @@
 		renderShell();
 		window.SSGlobe.setQuery(baseDsl);
 		applyView();
-		loadFirstPage(state.tab);
+		if (!browse) loadFirstPage(state.tab);
 		onStateChange(getUrlState());
 	}
 
@@ -301,6 +308,7 @@
 
 	function setView(v) {
 		if (!state || state.view === v) return;
+		if (v === 'list' && state.browse) return;   // browse: list stays gated (M3)
 		state.view = v;
 		lastView = v;
 		if (v === 'globe' && state.tab === 'images') {
@@ -332,6 +340,14 @@
 					t.dataset.pathway === state.tab ? 'true' : 'false');
 			}
 		});
+		// Browse mode: the List toggle dims and goes inert (M3), the same
+		// treatment the D6 rule gives the Images tab in globe view.
+		Array.prototype.forEach.call(region.querySelectorAll('.ss-view-btn'), function (b) {
+			if (b.dataset.view === 'list') {
+				b.classList.toggle('ss-globe-disabled', !!(state && state.browse));
+				b.setAttribute('aria-disabled', state && state.browse ? 'true' : 'false');
+			}
+		});
 		updateLocCounter();
 		if (globeOn) window.SSGlobe.show(); else window.SSGlobe.hide();
 	}
@@ -341,7 +357,8 @@
 		if (!c) return;
 		var counter = window.SSGlobe.getCounter();
 		c.textContent = (state && state.view === 'globe' && counter)
-			? fmtInt(counter.located) + ' of ' + fmtInt(counter.total) + ' matching projects have locations'
+			? fmtInt(counter.located) + ' of ' + fmtInt(counter.total)
+				+ (state.browse ? ' projects have locations' : ' matching projects have locations')
 			: '';
 	}
 
@@ -763,14 +780,20 @@
 		if (region.parentElement) region.parentElement.classList.remove('ss-globe-active');
 		state = null;
 		region.innerHTML = '';
-		region.appendChild(el('div', 'ss-quiet-prompt',
-			'Compose a search to see results.'));
+		var prompt = el('div', 'ss-quiet-prompt', 'Compose a search to see results.');
+		prompt.appendChild(document.createElement('br'));
+		var browseLink = el('a', 'ss-browse-link', 'or browse everything on the globe');
+		browseLink.href = 'javascript:void(0);';
+		browseLink.addEventListener('click', function () { onBrowse(); });
+		prompt.appendChild(browseLink);
+		region.appendChild(prompt);
 	}
 
 	window.SSResults = {
 		init: function (elRegion, opts) {
 			region = elRegion;
 			onStateChange = (opts && opts.onStateChange) || function () {};
+			onBrowse = (opts && opts.onBrowse) || function () {};
 			window.SSGlobe.init({
 				onCounter: updateLocCounter,
 				onOpenList: function () { setView('list'); }

@@ -444,6 +444,13 @@ check('fixtures intact after injection attempt', $still === 1617, $still);
 $r = geo($anon, array(), array());
 check('empty criteria legal: response has a features array', is_array($r['features']));
 
+// M3 browse contract: the counter rides the empty-criteria response too
+// (the /globe front door needs it for "N of M projects have locations").
+$r = geo($anon, array(), array('include_counter' => true));
+check('browse: counter rides the empty-criteria response (int totals)',
+	isset($r['counter']) && is_int($r['counter']['total']) && is_int($r['counter']['located'])
+	&& $r['counter']['located'] <= $r['counter']['total']);
+
 // ---------------------------------------------------------------------------
 section('9. Cleanup');
 

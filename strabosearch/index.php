@@ -87,12 +87,43 @@ function ss_asset($path) {
 				<!-- Results region (§6.5) — rendered by results.js -->
 				<div class="ss-pane">
 					<div id="ssResults" class="ss-results">
-						<div class="ss-quiet-prompt">Compose a search to see results.</div>
+						<div class="ss-quiet-prompt">Compose a search to see results.<br /><a href="javascript:void(0);" id="ssBrowseGlobe" class="ss-browse-link">or browse everything on the globe</a></div>
 					</div>
 					<!-- Globe view (M2) — OUTSIDE #ssResults so results.js
 					     re-renders never destroy the Cesium canvas. -->
 					<div id="ssGlobeWrap" class="ss-globe-wrap" style="display:none;">
 						<div id="ssGlobeStatus" class="ss-globe-status" role="status"></div>
+						<!-- Layers panel (M3): basemap radio + Macrostrat overlay.
+						     Site CSS hides native radios/checkboxes; every input is
+						     immediately followed by its label[for] (the one pattern
+						     the theme styles visibly). -->
+						<div id="ssGlobeLayers" class="ss-globe-layers">
+							<button id="ssLayersBtn" class="ss-layers-btn" type="button" aria-expanded="false" aria-controls="ssLayersPanel">Layers</button>
+							<div id="ssLayersPanel" class="ss-layers-panel" style="display:none;">
+								<div class="ss-layers-group" role="radiogroup" aria-label="Basemap">
+									<div class="ss-layers-title">Basemap</div>
+									<div class="ss-layers-row">
+										<input type="radio" id="ssBaseTerrain" name="ssBasemap" value="terrain" checked>
+										<label for="ssBaseTerrain">Terrain</label>
+									</div>
+									<div class="ss-layers-row">
+										<input type="radio" id="ssBaseSatellite" name="ssBasemap" value="satellite">
+										<label for="ssBaseSatellite">Satellite</label>
+									</div>
+								</div>
+								<div class="ss-layers-group">
+									<div class="ss-layers-title">Overlay</div>
+									<div class="ss-layers-row">
+										<input type="checkbox" id="ssMacrostratChk">
+										<label for="ssMacrostratChk">Macrostrat geology</label>
+									</div>
+									<div class="ss-layers-opacity">
+										<label for="ssMacrostratOpacity">Opacity</label>
+										<input type="range" id="ssMacrostratOpacity" min="10" max="100" value="60" disabled>
+									</div>
+								</div>
+							</div>
+						</div>
 						<div id="ssGlobeContainer" class="ss-globe-container"></div>
 						<div id="ssGlobePopup" class="ss-globe-popup" style="display:none;"></div>
 					</div>
@@ -118,9 +149,11 @@ function ss_asset($path) {
 						css:  '/assets/js/cesium/Widgets/widgets.css'
 					},
 					tiles: {
-						// Site tile proxy — same basemap set every Leaflet
+						// Site tile proxy, same basemap set every Leaflet
 						// map on the site uses (map_interface.js et al.).
-						outdoors: 'https://tiles.strabospot.org/v5/mapbox.outdoors/{z}/{x}/{y}.png'
+						outdoors:   'https://tiles.strabospot.org/v5/mapbox.outdoors/{z}/{x}/{y}.png',
+						satellite:  'https://tiles.strabospot.org/v5/mapbox.satellite/{z}/{x}/{y}.png',
+						macrostrat: 'https://tiles.strabospot.org/v5/macrostrat/{z}/{x}/{y}.png'
 					}
 				};
 				</script>

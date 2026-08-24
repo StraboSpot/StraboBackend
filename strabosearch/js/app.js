@@ -52,7 +52,11 @@
 	// ---- search execution -------------------------------------------------
 
 	function runSearch(opts) {
-		if (!window.SSBuilder.hasActiveRow()) return;
+		// Browse mode (M3): the empty-criteria globe run skips the
+		// active-row gate; with active rows a browse request is just a
+		// normal search opened in globe view.
+		var browse = !!(opts && opts.browse);
+		if (!window.SSBuilder.hasActiveRow() && !browse) return;
 		lastRunDsl = window.SSBuilder.getDsl();
 		window.SSResults.run(lastRunDsl, opts || {});
 	}
@@ -82,7 +86,8 @@
 	document.addEventListener('DOMContentLoaded', function () {
 
 		window.SSResults.init(document.getElementById('ssResults'), {
-			onStateChange: mirrorUrl
+			onStateChange: mirrorUrl,
+			onBrowse: function () { runSearch({ view: 'globe', browse: true }); }
 		});
 
 		window.SSBuilder.init(document.getElementById('criteriaBuilder'), {
@@ -100,6 +105,13 @@
 
 		document.getElementById('ssSearchBtn')
 			.addEventListener('click', function () { runSearch(); });
+
+		// Quiet-prompt browse door (M3): the static link on first load
+		// (results.js clear() rebuilds its own copy via onBrowse).
+		var browseLink = document.getElementById('ssBrowseGlobe');
+		if (browseLink) browseLink.addEventListener('click', function () {
+			runSearch({ view: 'globe', browse: true });
+		});
 
 		var mine = document.getElementById('ssMySearchesBtn');
 		if (mine) mine.addEventListener('click', window.SSSaved.openMySearches);
@@ -126,7 +138,8 @@
 				});
 		}
 
-		// Shared-URL load (§6.4): repopulate + auto-run.
+		// Shared-URL load (§6.4): repopulate + auto-run. An empty-criteria
+		// dsl with view=globe is a shared BROWSE link (M3): re-enter browse.
 		var m = window.location.search.match(/[?&]q=([^&]+)/);
 		if (m) {
 			var st = decodeState(m[1]);
@@ -136,8 +149,14 @@
 				if (window.SSBuilder.hasActiveRow()) {
 					runSearch({ tab: st.tab || 'projects', sort: st.sort || null,
 						view: st.view || 'list' });
+				} else if (st.view === 'globe') {
+					runSearch({ view: 'globe', browse: true });
 				}
 			}
+		} else if (/[?&]view=globe(&|$)/.test(window.location.search)) {
+			// /globe front door (M3): the redirect lands here with no ?q=.
+			// Empty criteria in globe view = browse everything visible.
+			runSearch({ view: 'globe', browse: true });
 		}
 	});
 

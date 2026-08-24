@@ -186,6 +186,21 @@ $cases = array(
             array('id' => 'U9', 'value' => array('images')),
         )),
     ),
+
+    // -- Globe View geo pathway (M3 browse mode made match-all reachable) ---
+    'geo-keyword' => array(
+        'desc' => 'geo: keyword granite (globe fetch of a typical search)',
+        'geo'  => true,
+        'dsl'  => array('criteria' => array(
+            array('id' => 'U1', 'value' => 'granite'),
+        ), 'geo' => array('include_counter' => true)),
+    ),
+    'geo-browse-all' => array(
+        'desc' => 'geo: no criteria (the /globe browse fetch; match-all grouped query)',
+        'patho' => true,
+        'geo'  => true,
+        'dsl'  => array('criteria' => array(), 'geo' => array('include_counter' => true)),
+    ),
 );
 
 // ---------------------------------------------------------------------------
@@ -213,15 +228,23 @@ foreach ($cases as $slug => $case) {
     for ($i = 0; $i < $runs; $i++) {
         $t0 = microtime(true);
         try {
-            $resp = $svc->runSearch($case['dsl']);
+            $resp = !empty($case['geo'])
+                ? $svc->runGeoSearch($case['dsl'])
+                : $svc->runSearch($case['dsl']);
         } catch (Exception $e) {
             $error = $e->getMessage();
             break;
         }
         $times[] = microtime(true) - $t0;
         if ($total === null) {
-            $total = isset($resp['total']) ? $resp['total']
-                : (isset($resp['projects']['total']) ? $resp['projects']['total'] . '+' . $resp['images']['total'] : '?');
+            if (isset($resp['counter'])) {
+                $total = $resp['counter']['located'] . '/' . $resp['counter']['total'];
+            } elseif (isset($resp['features'])) {
+                $total = count($resp['features']);
+            } else {
+                $total = isset($resp['total']) ? $resp['total']
+                    : (isset($resp['projects']['total']) ? $resp['projects']['total'] . '+' . $resp['images']['total'] : '?');
+            }
         }
     }
 
