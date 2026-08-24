@@ -824,6 +824,11 @@
 		return rows.some(C.isActive);
 	}
 
+	/** Active (effective) criteria rows — the mobile Filters badge (M4). */
+	function activeRowCount() {
+		return rows.filter(C.isActive).length;
+	}
+
 	/** Compose the full §4.4 DSL from current rows. */
 	function getDsl(extra) {
 		var criteria = [];
@@ -859,7 +864,8 @@
 		init: init,
 		getDsl: getDsl,
 		loadDsl: loadDsl,
-		hasActiveRow: hasActiveRow
+		hasActiveRow: hasActiveRow,
+		activeRowCount: activeRowCount
 	};
 
 })(window, document);

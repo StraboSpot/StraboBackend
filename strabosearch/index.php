@@ -18,8 +18,11 @@
  *              the right pane, each scrolls internally (design doc
  *              docs/StraboSearch/GlobeView_Design_Proposal.md §3). The
  *              visual footer is skipped via mfooter_close.php; below the
- *              desktop breakpoint the frame falls back to stacked
- *              document flow (the M4 drawer treatment comes later).
+ *              desktop breakpoint (M4, 2026-08-24) the frame stays
+ *              full-viewport: the rail becomes an off-canvas criteria
+ *              drawer (Filters pill + backdrop), globe view goes
+ *              full-bleed with a pinned List|Globe toggle and a
+ *              result-count pill. Draw-on-globe was postponed (§5).
  *
  * @package    StraboSpot Web Site — StraboSearch
  * @author     Jason Ash <jasonash@ku.edu>
@@ -54,12 +57,17 @@ function ss_asset($path) {
 				</div>
 			</div>
 
-			<!-- App frame: criteria rail + results pane -->
+			<!-- App frame: criteria rail + results pane. Below 1024px the
+			     rail is an off-canvas drawer (M4): .ss-drawer-open on the
+			     frame slides it in over the dimmed backdrop. -->
 			<div id="ssAppFrame" class="ss-app-frame">
 
-				<div class="ss-rail">
+				<div class="ss-drawer-backdrop" id="ssDrawerBackdrop"></div>
+
+				<div class="ss-rail" id="ssRail" aria-label="Search criteria">
 					<div class="ss-rail-head">
 						<h2>StraboSpot Search</h2>
+						<button type="button" id="ssDrawerClose" class="ss-rail-close" aria-label="Close search criteria">&times;</button>
 					</div>
 
 					<div class="ss-rail-scroll">
@@ -81,18 +89,32 @@ function ss_asset($path) {
 							<a href="javascript:void(0);" id="ssSaveBtn" class="button small fit">Save current</a>
 						</div>
 <?php } ?>
+						<!-- Drawer-only (M4): label follows the results state. -->
+						<a href="javascript:void(0);" id="ssDrawerCloseLink" class="ss-drawer-close-link">Close</a>
 					</div>
 				</div>
 
 				<!-- Results region (§6.5) — rendered by results.js -->
 				<div class="ss-pane">
+					<!-- Filters pill (M4, drawer opener; hidden on desktop). The
+					     badge carries the active-criteria count. -->
+					<button type="button" id="ssFiltersBtn" class="ss-filters-pill" aria-controls="ssRail" aria-expanded="false">Filters<span id="ssFiltersBadge" class="ss-filters-badge" style="display:none;">0</span></button>
 					<div id="ssResults" class="ss-results">
 						<div class="ss-quiet-prompt">Compose a search to see results.<br /><a href="javascript:void(0);" id="ssBrowseGlobe" class="ss-browse-link">or browse everything on the globe</a></div>
 					</div>
 					<!-- Globe view (M2) — OUTSIDE #ssResults so results.js
 					     re-renders never destroy the Cesium canvas. -->
 					<div id="ssGlobeWrap" class="ss-globe-wrap" style="display:none;">
+						<!-- Pinned List | Globe toggle (M4, mobile globe view only;
+						     the tabbar copy serves desktop). results.js syncs
+						     every .ss-view-btn on the page. -->
+						<div class="ss-view-toggle ss-globe-toggle" role="group" aria-label="Results view">
+							<button type="button" class="ss-view-btn" data-view="list">List</button>
+							<button type="button" class="ss-view-btn" data-view="globe">Globe</button>
+						</div>
 						<div id="ssGlobeStatus" class="ss-globe-status" role="status"></div>
+						<!-- Result-count pill (M4, mobile): located count + list flip. -->
+						<div id="ssGlobeCountPill" class="ss-count-pill" style="display:none;"></div>
 						<!-- Layers panel (M3): basemap radio + Macrostrat overlay.
 						     Site CSS hides native radios/checkboxes; every input is
 						     immediately followed by its label[for] (the one pattern

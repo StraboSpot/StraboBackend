@@ -59,6 +59,53 @@
 		if (!window.SSBuilder.hasActiveRow() && !browse) return;
 		lastRunDsl = window.SSBuilder.getDsl();
 		window.SSResults.run(lastRunDsl, opts || {});
+		closeDrawer();   // mobile: reveal the results (no-op on desktop)
+	}
+
+	// ---- mobile criteria drawer (Globe View M4) ---------------------------
+	// Below 1024px the rail is an off-canvas drawer (search.css). The
+	// frame class is the single source of truth; on desktop the class is
+	// inert, so every call here is safe at any width.
+
+	var mobileMq = window.matchMedia ? window.matchMedia('(max-width: 1023px)') : null;
+	function isMobile() { return !!(mobileMq && mobileMq.matches); }
+
+	function drawerOpen() {
+		return document.getElementById('ssAppFrame').classList.contains('ss-drawer-open');
+	}
+
+	function openDrawer() {
+		if (!isMobile()) return;
+		var frame = document.getElementById('ssAppFrame');
+		frame.classList.add('ss-drawer-open');
+		document.getElementById('ssFiltersBtn').setAttribute('aria-expanded', 'true');
+		updateDrawerCloseLabel();
+		var first = frame.querySelector('.ss-rail select, .ss-rail input');
+		if (first) { try { first.focus({ preventScroll: true }); } catch (e) { first.focus(); } }
+	}
+
+	function closeDrawer() {
+		var frame = document.getElementById('ssAppFrame');
+		if (!frame.classList.contains('ss-drawer-open')) return;
+		frame.classList.remove('ss-drawer-open');
+		var pill = document.getElementById('ssFiltersBtn');
+		pill.setAttribute('aria-expanded', 'false');
+		if (isMobile() && frame.contains(document.activeElement)) pill.focus();
+	}
+
+	/** "Close" / "Close and return to globe|list" per the results state. */
+	function updateDrawerCloseLabel() {
+		var link = document.getElementById('ssDrawerCloseLink');
+		var v = window.SSResults.getView();
+		link.textContent = v ? 'Close and return to ' + v : 'Close';
+	}
+
+	/** Filters pill badge = active criteria rows (hidden at zero). */
+	function updateFiltersBadge() {
+		var badge = document.getElementById('ssFiltersBadge');
+		var n = window.SSBuilder.activeRowCount();
+		badge.textContent = String(n);
+		badge.style.display = n > 0 ? '' : 'none';
 	}
 
 	function updateSearchButton() {
@@ -67,6 +114,7 @@
 		btn.classList.toggle('disabled', !ok);
 		btn.style.opacity = ok ? '' : '0.5';
 		btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+		updateFiltersBadge();
 
 		// Displayed results must always reflect the criteria above (Jason
 		// 08-02): any change to the EFFECTIVE query — value edited, chip or
@@ -105,6 +153,19 @@
 
 		document.getElementById('ssSearchBtn')
 			.addEventListener('click', function () { runSearch(); });
+
+		// Mobile drawer wiring (M4): pill opens, X / footer link / backdrop /
+		// Escape close. Results-invalidating edits (updateSearchButton's
+		// clear) keep the drawer where it is: the user is mid-edit.
+		document.getElementById('ssFiltersBtn').addEventListener('click', function () {
+			if (drawerOpen()) closeDrawer(); else openDrawer();
+		});
+		document.getElementById('ssDrawerClose').addEventListener('click', closeDrawer);
+		document.getElementById('ssDrawerCloseLink').addEventListener('click', closeDrawer);
+		document.getElementById('ssDrawerBackdrop').addEventListener('click', closeDrawer);
+		document.addEventListener('keydown', function (ev) {
+			if (ev.key === 'Escape' && drawerOpen()) { ev.preventDefault(); closeDrawer(); }
+		});
 
 		// Quiet-prompt browse door (M3): the static link on first load
 		// (results.js clear() rebuilds its own copy via onBrowse).
@@ -158,6 +219,12 @@
 			// Empty criteria in globe view = browse everything visible.
 			runSearch({ view: 'globe', browse: true });
 		}
+
+		// Mobile first load with nothing to show (M4): open the drawer so
+		// the criteria builder is the first thing on screen, not a quiet
+		// prompt behind a pill. Shared links / the browse door land on
+		// their results instead.
+		if (!window.SSResults.hasResults()) openDrawer();
 	});
 
 })(window, document);

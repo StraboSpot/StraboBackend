@@ -326,7 +326,9 @@
 		var pane = region.parentElement;
 		if (pane) pane.classList.toggle('ss-globe-active', globeOn);
 
-		Array.prototype.forEach.call(region.querySelectorAll('.ss-view-btn'), function (b) {
+		// Every toggle on the page: the tabbar copy AND the pinned mobile
+		// copy inside #ssGlobeWrap (M4).
+		Array.prototype.forEach.call(document.querySelectorAll('.ss-view-btn'), function (b) {
 			b.setAttribute('aria-pressed',
 				b.dataset.view === (globeOn ? 'globe' : 'list') ? 'true' : 'false');
 		});
@@ -342,7 +344,7 @@
 		});
 		// Browse mode: the List toggle dims and goes inert (M3), the same
 		// treatment the D6 rule gives the Images tab in globe view.
-		Array.prototype.forEach.call(region.querySelectorAll('.ss-view-btn'), function (b) {
+		Array.prototype.forEach.call(document.querySelectorAll('.ss-view-btn'), function (b) {
 			if (b.dataset.view === 'list') {
 				b.classList.toggle('ss-globe-disabled', !!(state && state.browse));
 				b.setAttribute('aria-disabled', state && state.browse ? 'true' : 'false');
@@ -353,13 +355,32 @@
 	}
 
 	function updateLocCounter() {
-		var c = document.getElementById('ssLocCounter');
-		if (!c) return;
 		var counter = window.SSGlobe.getCounter();
-		c.textContent = (state && state.view === 'globe' && counter)
-			? fmtInt(counter.located) + ' of ' + fmtInt(counter.total)
-				+ (state.browse ? ' projects have locations' : ' matching projects have locations')
-			: '';
+		var globeOn = !!(state && state.view === 'globe' && counter);
+		var c = document.getElementById('ssLocCounter');
+		if (c) {
+			c.textContent = globeOn
+				? fmtInt(counter.located) + ' of ' + fmtInt(counter.total)
+					+ (state.browse ? ' projects have locations' : ' matching projects have locations')
+				: '';
+		}
+		// Mobile result-count pill (M4): same numbers, plus the list flip
+		// (browse keeps the list gated, so the flip is absent there).
+		var pill = document.getElementById('ssGlobeCountPill');
+		if (!pill) return;
+		pill.innerHTML = '';
+		if (!globeOn) { pill.style.display = 'none'; return; }
+		pill.appendChild(el('span', null, state.browse
+			? fmtInt(counter.located) + ' located projects'
+			: fmtInt(counter.located) + ' of ' + fmtInt(counter.total) + ' located'));
+		if (!state.browse) {
+			pill.appendChild(el('span', 'ss-count-sep', '·'));
+			var flip = el('a', null, 'view list');
+			flip.href = 'javascript:void(0);';
+			flip.addEventListener('click', function () { setView('list'); });
+			pill.appendChild(flip);
+		}
+		pill.style.display = '';
 	}
 
 	function switchTab(pathway, focus) {
@@ -798,10 +819,17 @@
 				onCounter: updateLocCounter,
 				onOpenList: function () { setView('list'); }
 			});
+			// Pinned mobile toggle inside #ssGlobeWrap (M4) — static markup,
+			// outside the results region.
+			Array.prototype.forEach.call(
+				document.querySelectorAll('.ss-globe-toggle .ss-view-btn'), function (b) {
+					b.addEventListener('click', function () { setView(b.dataset.view); });
+				});
 		},
 		run: run,
 		clear: clear,
 		hasResults: function () { return state !== null; },
+		getView: function () { return state ? state.view : null; },
 		abort: abortInflight
 	};
 

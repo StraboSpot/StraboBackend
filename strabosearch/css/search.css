@@ -4,10 +4,15 @@
  * grayOut, loader) are reused untouched per §6.1.1.
  *
  * 2026-08 (Globe View M1): full-viewport app frame — criteria rail left,
- * results pane right, panes scroll internally on desktop; stacked document
- * flow below 1024px (GlobeView_Design_Proposal.md §3). The builder rows use
- * the narrow column layout at EVERY width now, since the rail is narrow on
- * desktop too.
+ * results pane right, panes scroll internally on desktop
+ * (GlobeView_Design_Proposal.md §3). The builder rows use the narrow
+ * column layout at EVERY width now, since the rail is narrow on desktop too.
+ *
+ * 2026-08-24 (Globe View M4): below 1024px the frame stays full-viewport
+ * too; the rail becomes an off-canvas criteria drawer (Filters pill,
+ * backdrop), list content scrolls internally, and globe view goes
+ * full-bleed with a pinned List | Globe toggle + result-count pill. See
+ * the "mobile drawer" block at the end of the file.
  */
 
 /* ---- app frame (Globe View M1) ------------------------------------------ */
@@ -38,6 +43,19 @@
 
 .ss-rail-head {
 	padding: 1em 1.4em 0.2em;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+}
+
+/* M4 mobile chrome: absent on desktop, enabled in the mobile block below. */
+.ss-drawer-backdrop,
+.ss-rail-close,
+.ss-drawer-close-link,
+.ss-filters-pill,
+.ss-view-toggle.ss-globe-toggle,   /* outranks .ss-view-toggle's display */
+.ss-count-pill {
+	display: none;
 }
 
 .ss-rail-head h2 {
@@ -122,18 +140,6 @@
 
 	.ss-results .ss-tab-content {
 		overflow-y: auto;
-	}
-}
-
-/* Stacked fallback below desktop: normal page scroll. */
-@media screen and (max-width: 1023px) {
-	.ss-rail {
-		border-bottom: 1px solid rgba(144, 144, 144, 0.35);
-	}
-
-	.ss-rail-actions {
-		border-top: 0;
-		padding-top: 0.2em;
 	}
 }
 
@@ -888,15 +894,6 @@
 	font-size: 10px;
 }
 
-/* Stacked fallback (<1024px): the page scrolls, so the globe gets a
-   viewport-based height instead of flexing. */
-@media screen and (max-width: 1023px) {
-	.ss-globe-wrap {
-		height: 70vh;
-		flex: 0 0 auto;
-	}
-}
-
 /* ---- Layers panel (M3) -------------------------------------------------- */
 
 .ss-globe-layers {
@@ -998,16 +995,20 @@
    1023px/639px row re-flow rules are gone. Remaining rules are phone-only. */
 
 @media screen and (max-width: 639px) {
-	/* Stacked fallback: the tab bar pins while the page scrolls. */
-	.ss-tabbar {
-		position: sticky;
-		top: 0;
-		background: #1c1d26;
-		z-index: 500;
-	}
-
 	.ss-sort {
 		margin-left: 0;
+	}
+
+	/* Phone tabbar: the visible "Sort" label costs the width that lets
+	   the select and the List | Globe toggle share a row (M4). Keep it
+	   for assistive tech. */
+	.ss-sort label {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
 	}
 
 	.ss-modal-card {
@@ -1025,5 +1026,234 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
+	}
+}
+
+/* ---- mobile drawer + full-bleed globe (Globe View M4) ------------------ */
+/* Same full-viewport frame as desktop; the rail leaves the flow and slides
+   in as a drawer over a dimmed backdrop (.ss-drawer-open on the frame).
+   Everything is positioned INSIDE the frame (position: relative), never
+   fixed to the viewport: the site nav slides #page-wrapper with a
+   transform on phones, which would re-anchor fixed descendants. */
+@media screen and (max-width: 1023px) {
+	body {
+		overflow: hidden;
+	}
+
+	.ss-app-frame {
+		position: relative;
+		flex-direction: row;
+		height: calc(100vh - 3.5em);   /* below the fixed #header */
+		height: calc(100dvh - 3.5em);
+		overflow: hidden;
+	}
+
+	.ss-rail {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		width: min(320px, 88vw);
+		z-index: 60;
+		border-right: 1px solid rgba(255, 255, 255, 0.2);
+		box-shadow: 6px 0 30px rgba(0, 0, 0, 0.6);
+		transform: translateX(-110%);
+		visibility: hidden;   /* closed drawer is unreachable by keyboard/AT */
+		transition: transform 0.25s ease, visibility 0s linear 0.25s;
+	}
+
+	.ss-app-frame.ss-drawer-open .ss-rail {
+		transform: none;
+		visibility: visible;
+		transition: transform 0.25s ease;
+	}
+
+	.ss-rail-scroll {
+		flex: 1 1 auto;
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+	}
+
+	.ss-rail-close {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 44px;
+		height: 44px;
+		margin-right: -0.7em;
+		background: transparent;
+		border: 0;
+		color: rgba(255, 255, 255, 0.85);
+		font-size: 1.9em;
+		line-height: 1;
+		cursor: pointer;
+	}
+
+	.ss-drawer-close-link {
+		display: block;
+		text-align: center;
+		margin-top: 0.6em;
+		min-height: 44px;
+		line-height: 44px;
+		font-size: 0.95em;
+	}
+
+	.ss-drawer-backdrop {
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		z-index: 55;
+		background: rgba(0, 0, 0, 0.55);
+	}
+
+	.ss-app-frame.ss-drawer-open .ss-drawer-backdrop {
+		display: block;
+	}
+
+	.ss-pane {
+		position: relative;
+		height: 100%;
+	}
+
+	/* List view: the tab content scrolls internally; bottom padding keeps
+	   the last card clear of the Filters pill. */
+	.ss-results .ss-tab-content {
+		overflow-y: auto;
+		-webkit-overflow-scrolling: touch;
+		padding-bottom: 5em;
+	}
+
+	.ss-filters-pill,
+	.ss-count-pill {
+		position: absolute;
+		bottom: 20px;
+		z-index: 40;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5em;
+		min-height: 44px;
+		padding: 0 1.2em;
+		border-radius: 999px;
+		background: rgba(28, 29, 38, 0.92);
+		color: rgba(255, 255, 255, 0.9);
+		border: 1px solid rgba(255, 255, 255, 0.3);
+		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+		font-size: 0.9em;
+		white-space: nowrap;
+	}
+
+	.ss-filters-pill {
+		left: 16px;
+		cursor: pointer;
+	}
+
+	.ss-filters-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.6em;
+		height: 1.6em;
+		padding: 0 0.4em;
+		border-radius: 999px;
+		background: #57729e;
+		color: #ffffff;
+		font-size: 0.8em;
+		font-weight: bold;
+	}
+
+	.ss-count-pill {
+		right: 16px;
+		font-size: 0.85em;
+	}
+
+	.ss-count-pill a {
+		color: #ed7287;
+		cursor: pointer;
+	}
+
+	/* Globe view: full-bleed pane; the tabbar hides (its toggle + counter
+	   reappear pinned over the globe). */
+	.ss-pane.ss-globe-active .ss-results {
+		display: none;
+	}
+
+	.ss-globe-wrap {
+		position: absolute;
+		top: 0;
+		right: 0;
+		bottom: 0;
+		left: 0;
+		margin: 0;
+		border: 0;
+		border-radius: 0;
+	}
+
+	.ss-view-toggle.ss-globe-toggle {
+		display: inline-flex;
+		position: absolute;
+		z-index: 40;
+		top: 12px;
+		left: 50%;
+		transform: translateX(-50%);
+		background: rgba(28, 29, 38, 0.85);
+		border-color: rgba(255, 255, 255, 0.3);
+	}
+
+	.ss-globe-toggle .ss-view-btn {
+		min-height: 44px;
+		padding: 0 1.3em;
+		font-size: 0.9em;
+	}
+
+	.ss-globe-status {
+		top: 66px;   /* below the pinned toggle */
+	}
+
+	.ss-globe-layers {
+		top: 12px;
+	}
+
+	.ss-layers-btn {
+		min-height: 44px;
+		padding: 0 1em;
+	}
+
+	/* Cesium credit line clears the bottom pills (the Viewer sets its
+	   bottom offset inline, hence !important). */
+	.ss-globe-wrap .cesium-viewer-bottom {
+		bottom: 74px !important;
+	}
+
+	/* Phone tabbar (list view): tabs row, then sort + toggle on one row. */
+	.ss-results .ss-view-toggle {
+		margin-left: auto;
+	}
+}
+
+/* The site swaps the 3.5em #header for the 44px #titleBar at 950px. */
+@media screen and (max-width: 950px) {
+	.ss-app-frame {
+		height: calc(100vh - 44px);
+		height: calc(100dvh - 44px);
+	}
+}
+
+/* Phones: the globe popup becomes a bottom sheet (globe.js adds the
+   class instead of clamping near the tap). */
+@media screen and (max-width: 639px) {
+	.ss-globe-popup.ss-gpop-sheet {
+		left: 0;
+		right: 0;
+		top: auto;
+		bottom: 0;
+		width: auto;
+		max-height: 60%;
+		overflow-y: auto;
+		z-index: 45;
+		border-radius: 12px 12px 0 0;
+		border-bottom: 0;
+		padding-bottom: 1.2em;
 	}
 }
