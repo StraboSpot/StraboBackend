@@ -230,6 +230,13 @@ function authmxCleanup($db) {
     $db->prepare_query("DELETE FROM micro_permalinks WHERE strabo_id LIKE 'authmx-%'", array());
     $db->prepare_query("DELETE FROM straboexp.experiment WHERE uuid LIKE 'authmx-%'", array());
     $db->prepare_query("DELETE FROM straboexp.project WHERE uuid LIKE 'authmx-%'", array());
+    // The fixtures are created through real app endpoints, so the search
+    // sync hooks INDEX them; raw-SQL source deletes above never unindex.
+    // Without these, every run left an orphaned project marker pair in
+    // strabosearch (17 accumulated pairs surfaced on the search globe as
+    // an unsplittable co-located cluster, 2026-08-23).
+    $db->prepare_query("DELETE FROM strabosearch.item_hit WHERE project_id LIKE 'authmx-%'", array());
+    $db->prepare_query("DELETE FROM strabosearch.image_hit WHERE project_id LIKE 'authmx-%'", array());
 }
 
 authmxCleanup($db);   // catch a previous crashed run

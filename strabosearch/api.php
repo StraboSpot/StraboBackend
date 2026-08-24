@@ -13,6 +13,9 @@
  *
  *              Actions (all respond application/json):
  *                POST ?action=search        body = §4.4 DSL
+ *                POST ?action=search_geo    body = §4.4 DSL + geo block
+ *                                           (Globe View D7: one marker
+ *                                           per matching project)
  *                GET  ?action=facets[&subsystems=field,micro,...]
  *                GET  ?action=vocab&facet=<facet>
  *                GET  ?action=saved_list
@@ -80,6 +83,9 @@ try {
 
         case 'search':
             respond($svc->runSearch(jsonBody()));
+
+        case 'search_geo':
+            respond($svc->runGeoSearch(jsonBody()));
 
         case 'facets':
             $subsystems = null;

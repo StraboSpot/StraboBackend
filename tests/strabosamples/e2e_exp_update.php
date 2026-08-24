@@ -85,6 +85,9 @@ function cleanup($db, $owner) {
         array((int)$owner));
     $db->query("DELETE FROM straboexp.experiment WHERE uuid LIKE 'e2eexpupd-%'");
     $db->query("DELETE FROM straboexp.project WHERE uuid LIKE 'e2eexpupd-%'");
+    // Sync hooks index the app-endpoint fixtures; raw source deletes never
+    // unindex (orphaned globe markers, 2026-08-23).
+    $db->query("DELETE FROM strabosearch.item_hit WHERE project_id LIKE 'e2eexpupd-%'");
 }
 cleanup($db, $owner);
 

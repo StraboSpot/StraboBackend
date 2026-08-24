@@ -728,6 +728,12 @@ try {
         $db->prepare_query("DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
                            array($sid, $ownerPkey));
     }
+    // Fixtures created through app endpoints get INDEXED by the search
+    // sync hooks; the raw source deletes above never unindex (orphaned
+    // globe markers accumulated one per run, 2026-08-23). Prefix sweep
+    // also purges residue from prior crashed runs.
+    $db->prepare_query("DELETE FROM strabosearch.item_hit WHERE project_id LIKE 'smoketest-mspdf-%'", array());
+    $db->prepare_query("DELETE FROM strabosearch.image_hit WHERE project_id LIKE 'smoketest-mspdf-%'", array());
     @unlink("/tmp/mspdf_direct_$stamp.pdf");
 }
 

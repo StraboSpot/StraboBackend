@@ -1098,6 +1098,185 @@ SELECT json_build_object(
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // Geo pathway (Globe View, D7 project-level pivot:
+    // GlobeView_Design_Proposal.md §9)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /** Maximum project markers returned (largest match counts first). */
+    const GEO_PROJECT_CAP = 5000;
+
+    /**
+     * Validate + normalize the geo block of a search_geo request:
+     *   {bbox: [w, s, e, n], include_counter?: bool}
+     * bbox is validated and clamped but currently UNUSED (the D7 pivot
+     * fetches all matching projects once per search, no viewport
+     * refetch); kept for future use, e.g. a viewport-limited mode if
+     * project volumes ever outgrow the cap.
+     */
+    public function validateGeo($geo)
+    {
+        $out = array(
+            'bbox' => array(-180.0, -90.0, 180.0, 90.0),
+            'include_counter' => false,
+        );
+        if (!is_array($geo)) return $out;
+
+        if (isset($geo['bbox'])) {
+            $b = $geo['bbox'];
+            if (!is_array($b) || count($b) !== 4) {
+                throw new SearchDslError('geo.bbox must be [w, s, e, n].');
+            }
+            foreach ($b as $n) {
+                if (!is_numeric($n)) throw new SearchDslError('geo.bbox values must be numeric.');
+            }
+            $w = max(-180.0, min(180.0, (float)$b[0]));
+            $s = max(-90.0,  min(90.0,  (float)$b[1]));
+            $e = max(-180.0, min(180.0, (float)$b[2]));
+            $n = max(-90.0,  min(90.0,  (float)$b[3]));
+            if ($s > $n) { $t = $s; $s = $n; $n = $t; }
+            $out['bbox'] = array($w, $s, $e, $n);
+        }
+        $out['include_counter'] = !empty($geo['include_counter']);
+        return $out;
+    }
+
+    /**
+     * Globe results, ONE MARKER PER MATCHING PROJECT (decision D7,
+     * 2026-08-23, reversing D6's item hits: the project is the list's
+     * result unit, spots are lines/polygons reduced to pseudo-points
+     * anyway, and a few thousand project markers replace 1.7M item hits,
+     * deleting the zoom-adaptive binning apparatus where every Firefox
+     * marker-blink lived, §8).
+     *
+     * ONE grouped statement: the same itemWhere (DSL + ACL) the list
+     * view uses, grouped by (project_id, project_userpkey,
+     * project_subsystem), i.e. the groups CTE of runProjectsQuery
+     * unpaged, plus the dataset aggregation and owner join the popup
+     * card needs for list-row parity. Fetched ONCE per search: no bbox
+     * filter, camera moves never refetch.
+     *
+     * Centroids average only RENDERABLE coordinates (avg-x/avg-y, 3.7x
+     * cheaper than ST_Centroid(ST_Collect()) per the 2026-08-23 dev
+     * spike; a residue of rows carries UTM-looking values stored as
+     * lon/lat that would drag a centroid off the planet). A project
+     * whose matches are all unlocated or junk gets no marker; the
+     * include_counter block reports "N of M matching projects have
+     * locations" so the gap is visible. Accepted tradeoff (D7): a
+     * multi-region project's centroid can sit in the ocean.
+     */
+    public function runGeoQuery($dsl, $geo)
+    {
+        $this->resetParams();
+        list($where) = $this->itemWhere($dsl);
+
+        $renderable = "(location IS NOT NULL"
+            . " AND location && ST_MakeEnvelope(-180, -90, 180, 90, 4326))";
+        $ownerExpr = "trim(coalesce(u.firstname, '') || ' ' || coalesce(u.lastname, ''))";
+        $cap = $this->bind(self::GEO_PROJECT_CAP);
+
+        $sql = "
+WITH matched AS (
+  SELECT ih.project_id, ih.project_userpkey, ih.project_subsystem,
+         ih.project_name, ih.project_ispublic, ih.item_type, ih.date_value,
+         ih.location, ih.source_modified, ih.dataset_ids
+  FROM strabosearch.item_hit ih
+  WHERE $where
+),
+groups AS (
+  SELECT project_id, project_userpkey, project_subsystem,
+         max(project_name)                                AS project_name,
+         bool_or(project_ispublic)                        AS project_ispublic,
+         min(date_value)                                  AS date_min,
+         max(date_value)                                  AS date_max,
+         max(source_modified)                             AS last_modified,
+         avg(ST_X(location)) FILTER (WHERE $renderable)   AS lng,
+         avg(ST_Y(location)) FILTER (WHERE $renderable)   AS lat,
+         count(*) FILTER (WHERE item_type = 'spot')       AS c_spot,
+         count(*) FILTER (WHERE item_type = 'sample')     AS c_sample,
+         count(*) FILTER (WHERE item_type = 'experiment') AS c_experiment,
+         count(*) FILTER (WHERE item_type = 'micrograph') AS c_micrograph
+  FROM matched
+  GROUP BY 1, 2, 3
+),
+dsc AS (
+  SELECT project_id, project_userpkey, project_subsystem,
+         count(DISTINCT d)     AS c_dataset,
+         array_agg(DISTINCT d) AS ds_ids
+  FROM matched CROSS JOIN LATERAL unnest(dataset_ids) AS d
+  GROUP BY 1, 2, 3
+),
+feats AS (
+  SELECT g.project_id, g.project_userpkey, g.project_subsystem,
+         g.project_name, g.project_ispublic,
+         g.date_min::text AS date_min, g.date_max::text AS date_max,
+         g.last_modified::text AS last_modified,
+         g.lng::float8 AS lng, g.lat::float8 AS lat,
+         g.c_spot, g.c_sample, g.c_experiment, g.c_micrograph,
+         coalesce(ds.c_dataset, 0) AS c_dataset,
+         coalesce(ds.ds_ids, '{}'::text[]) AS dataset_ids,
+         $ownerExpr AS owner_name
+  FROM groups g
+  LEFT JOIN dsc ds ON ds.project_id = g.project_id
+       AND ds.project_userpkey = g.project_userpkey
+       AND ds.project_subsystem = g.project_subsystem
+  LEFT JOIN users u ON u.pkey = g.project_userpkey
+  WHERE g.lng IS NOT NULL
+  ORDER BY (g.c_spot + g.c_sample + g.c_experiment + g.c_micrograph) DESC,
+           g.project_id
+  LIMIT $cap::int
+)
+SELECT json_build_object(
+  'features', coalesce((SELECT json_agg(row_to_json(f)) FROM feats f), '[]'::json),
+  'total',    (SELECT count(*) FROM groups),
+  'located',  (SELECT count(*) FROM groups WHERE lng IS NOT NULL)
+)::text AS payload";
+
+        $rows = $this->execPrepared($sql);
+        $payload = $rows ? json_decode($rows[0]->payload, true) : null;
+        if (!is_array($payload)) {
+            throw new SearchDslError('Search failed (malformed result payload).');
+        }
+
+        $features = array();
+        foreach ($payload['features'] as $f) {
+            $features[] = array(
+                'project_id'        => $f['project_id'],
+                'project_userpkey'  => (int)$f['project_userpkey'],
+                'project_subsystem' => $f['project_subsystem'],
+                'project_name'      => $f['project_name'],
+                'project_ispublic'  => (bool)$f['project_ispublic'],
+                'owner_name'        => $f['owner_name'],
+                'dataset_ids'       => is_array($f['dataset_ids']) ? $f['dataset_ids'] : array(),
+                'date_range'        => array($f['date_min'], $f['date_max']),
+                'last_modified'     => $f['last_modified'],
+                'lng'               => (float)$f['lng'],
+                'lat'               => (float)$f['lat'],
+                'match_counts'      => array(
+                    'dataset'    => (int)$f['c_dataset'],
+                    'spot'       => (int)$f['c_spot'],
+                    'sample'     => (int)$f['c_sample'],
+                    'experiment' => (int)$f['c_experiment'],
+                    'micrograph' => (int)$f['c_micrograph'],
+                ),
+            );
+        }
+
+        $out = array(
+            'features' => $features,
+            'capped'   => ((int)$payload['located'] > self::GEO_PROJECT_CAP),
+        );
+        // The client asks once per search, not on every camera move; the
+        // counts are byproducts of the grouped statement above.
+        if ($geo['include_counter']) {
+            $out['counter'] = array(
+                'total'   => (int)$payload['total'],
+                'located' => (int)$payload['located'],
+            );
+        }
+        return $out;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // Facet counts (§5.4.3)
     // ═══════════════════════════════════════════════════════════════════
 

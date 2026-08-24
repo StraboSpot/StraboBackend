@@ -104,6 +104,29 @@ class StraboSearchService
     }
 
     // ═══════════════════════════════════════════════════════════════════
+    // POST search_geo (Globe View, D7 project-level pivot:
+    // GlobeView_Design_Proposal.md §9)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Globe read over the same DSL WHERE the list uses: ONE marker per
+     * matching project, fetched once per search. Body = the §4.4 DSL
+     * plus a `geo` block ({bbox (unused, validated), include_counter}).
+     * Empty criteria are legal here (v1: globe view only allows them);
+     * pathway/page/sort keys are validated but ignored, the globe is
+     * item-side only.
+     */
+    public function runGeoSearch($params)
+    {
+        $p = self::assoc($params);
+        $dsl = $this->qb->validate($p);
+        $geo = $this->qb->validateGeo(isset($p['geo']) ? $p['geo'] : null);
+        $r = $this->qb->runGeoQuery($dsl, $geo);
+        $r['pathway'] = 'geo';
+        return $r;
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
     // GET /searchdb/facets — empty-search initial state (§5.4.3)
     // ═══════════════════════════════════════════════════════════════════
 

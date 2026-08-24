@@ -275,6 +275,12 @@ try {
     foreach (array($spotClean, $spotRogue, $spotDeleted, $spotNoSync) as $spotId) {
         $neodb->query("MATCH (s:Spot {id:$spotId, userpkey:$ownerPkey}) DETACH DELETE s");
     }
+    // Sync hooks index the app-endpoint fixtures; the raw source deletes
+    // above never unindex (orphaned globe markers, 2026-08-23). Exp
+    // project uuids are random, so that sweep is name-based.
+    $db->prepare_query("DELETE FROM strabosearch.item_hit WHERE project_id LIKE 'smoketest-driftproj-%'", array());
+    $db->prepare_query("DELETE FROM strabosearch.image_hit WHERE project_id LIKE 'smoketest-driftproj-%'", array());
+    $db->prepare_query("DELETE FROM strabosearch.item_hit WHERE project_name LIKE 'drift audit exp proj %'", array());
     echo "teardown complete\n";
 }
 

@@ -284,6 +284,10 @@ try {
         );
     }
     $db->prepare_query("DELETE FROM straboexp.project WHERE pkey=$1", array($projectPkey));
+    // Sync hooks index the app-endpoint fixtures; the raw source deletes
+    // never unindex (orphaned globe markers, 2026-08-23). Project uuids
+    // are random, so sweep by the distinctive fixture project name.
+    $db->prepare_query("DELETE FROM strabosearch.item_hit WHERE project_name LIKE 'smoketest-explink-%'", array());
 }
 
 echo "\n";

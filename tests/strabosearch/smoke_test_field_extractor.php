@@ -583,25 +583,43 @@ if ($rowG) {
 section('10b. has_strat semantics — in/defines section TRUE, image basemap FALSE');
 
 $rowS1 = $db->get_row(
-	"SELECT has_strat FROM strabosearch.item_hit
+	"SELECT has_strat, ST_AsText(location) AS loc FROM strabosearch.item_hit
 	 WHERE item_id = '${PREFIX}_spot_S1'"
 );
 check('S1: row found', $rowS1 !== null);
-if ($rowS1) check('S1: strat_section_id spot → has_strat TRUE', $rowS1->has_strat === 't');
+if ($rowS1) {
+	check('S1: strat_section_id spot → has_strat TRUE', $rowS1->has_strat === 't');
+	// In-section spots store wkt in SECTION space (meters up-column), so
+	// they index UNLOCATED — even when the fixture value happens to look
+	// geographic, proving the gate keys off the PROPERTY, not the values
+	// (StraboSed Workshop ocean-marker fix, 2026-08-23).
+	check('S1: in-section spot indexes UNLOCATED', $rowS1->loc === null,
+		"got '{$rowS1->loc}'");
+}
 
 $rowS2 = $db->get_row(
-	"SELECT has_strat FROM strabosearch.item_hit
+	"SELECT has_strat, ST_AsText(location) AS loc FROM strabosearch.item_hit
 	 WHERE item_id = '${PREFIX}_spot_S2'"
 );
 check('S2: row found', $rowS2 !== null);
-if ($rowS2) check('S2: sed.strat_section definer → has_strat TRUE', $rowS2->has_strat === 't');
+if ($rowS2) {
+	check('S2: sed.strat_section definer → has_strat TRUE', $rowS2->has_strat === 't');
+	check('S2: section DEFINER keeps its real map location',
+		strpos((string)$rowS2->loc, 'POINT(-117.8 33.5)') !== false,
+		"got '{$rowS2->loc}'");
+}
 
 $rowS3 = $db->get_row(
-	"SELECT has_strat FROM strabosearch.item_hit
+	"SELECT has_strat, ST_AsText(location) AS loc FROM strabosearch.item_hit
 	 WHERE item_id = '${PREFIX}_spot_S3'"
 );
 check('S3: row found', $rowS3 !== null);
-if ($rowS3) check('S3: image_basemap spot → has_strat FALSE', $rowS3->has_strat === 'f');
+if ($rowS3) {
+	check('S3: image_basemap spot → has_strat FALSE', $rowS3->has_strat === 'f');
+	// Image-basemap wkt is PIXEL space → unlocated, same gate as S1.
+	check('S3: image-basemap spot indexes UNLOCATED', $rowS3->loc === null,
+		"got '{$rowS3->loc}'");
+}
 
 // ===========================================================================
 section('11. searchtext_tsv U1 keyword search');

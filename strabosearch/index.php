@@ -89,6 +89,13 @@ function ss_asset($path) {
 					<div id="ssResults" class="ss-results">
 						<div class="ss-quiet-prompt">Compose a search to see results.</div>
 					</div>
+					<!-- Globe view (M2) — OUTSIDE #ssResults so results.js
+					     re-renders never destroy the Cesium canvas. -->
+					<div id="ssGlobeWrap" class="ss-globe-wrap" style="display:none;">
+						<div id="ssGlobeStatus" class="ss-globe-status" role="status"></div>
+						<div id="ssGlobeContainer" class="ss-globe-container"></div>
+						<div id="ssGlobePopup" class="ss-globe-popup" style="display:none;"></div>
+					</div>
 				</div>
 
 			</div>
@@ -104,12 +111,23 @@ function ss_asset($path) {
 						exp:   '/strabosearch/images/beaker.png'
 					},
 					landing: { field: '/fpl/', micro: '/mpl/', exp: '/epl/' },
-					fieldDataset: '/StraboFieldDatasetDetail/?dataset_id='
+					fieldDataset: '/StraboFieldDatasetDetail/?dataset_id=',
+					cesium: {
+						base: '/assets/js/cesium/',
+						js:   '/assets/js/cesium/Cesium.js',
+						css:  '/assets/js/cesium/Widgets/widgets.css'
+					},
+					tiles: {
+						// Site tile proxy — same basemap set every Leaflet
+						// map on the site uses (map_interface.js et al.).
+						outdoors: 'https://tiles.strabospot.org/v5/mapbox.outdoors/{z}/{x}/{y}.png'
+					}
 				};
 				</script>
 				<script src="/assets/js/leaflet/leaflet.js"></script>
 				<script src="<?php echo ss_asset('/strabosearch/js/catalog.js'); ?>"></script>
 				<script src="<?php echo ss_asset('/strabosearch/js/builder.js'); ?>"></script>
+				<script src="<?php echo ss_asset('/strabosearch/js/globe.js'); ?>"></script>
 				<script src="<?php echo ss_asset('/strabosearch/js/results.js'); ?>"></script>
 				<script src="<?php echo ss_asset('/strabosearch/js/saved.js'); ?>"></script>
 				<script src="<?php echo ss_asset('/strabosearch/js/app.js'); ?>"></script>

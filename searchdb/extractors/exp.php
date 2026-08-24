@@ -56,11 +56,14 @@
  *   project_userpkey  = project.userpkey
  *   project_ispublic  = project.ispublic
  *   project_name      = project.name
- *   location          = facility lat+lng when present and parseable
- *                       (54% fill — stored as VARCHAR; we validate
- *                       text→numeric before emitting). Fallback to the
- *                       experiment's first sample provenance_loc_lat/lng
- *                       (~40% additional coverage). NULL if neither.
+ *   location          = the experiment's first sample
+ *                       provenance_loc_lat/lng when present and
+ *                       parseable (the geological location; stored as
+ *                       VARCHAR, validated text→numeric). Fallback to
+ *                       facility lat+lng (priority swapped 2026-08-23:
+ *                       facility-first averaged rock provenance with
+ *                       lab addresses into mid-ocean globe centroids).
+ *                       NULL if neither.
  *   date_value        = experiment.modified_timestamp::date
  *   searchtext_tsv    = bag of project.name + project.notes +
  *                       experiment.id + apparatus.name + .type + .description

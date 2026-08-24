@@ -32,7 +32,11 @@
  *                [exp]     experiment×project vs item_hit experiments —
  *                          pure-SQL full diff.
  *                [samples] expected spine fan-out (3 resolution joins) vs
- *                          item_hit sample rows — pure-SQL full diff.
+ *                          item_hit sample rows — pure-SQL full diff,
+ *                          INCLUDING location (spine point, else the host
+ *                          spot's indexed point) — timestamps alone cannot
+ *                          see host locations inherited before a Field
+ *                          re-extract.
  *                [acl]     project_ispublic denorm vs each subsystem's
  *                          source-of-truth flag (folds in the standalone
  *                          census/audit_acl_denorm.php check, grouped per
@@ -45,7 +49,8 @@
  *                micro    syncMicroProject / removeMicroProject
  *                exp      touchExperiment / removeExperiment
  *                samples  touchSample (recompute-from-current absorbs all
- *                         three drift kinds, including spine deletion)
+ *                         four drift kinds: missing / extra / stale /
+ *                         location, including spine deletion)
  *                acl      touchProjectMeta(ispublic)
  *
  *              Known non-failure classes (reported, never fatal):
@@ -850,11 +855,27 @@ if (in_array('samples', $ONLY, true)) {
 		// same joins + DISTINCT identity, none of the payload columns. The
 		// field branch resolves through the INDEXED spot slice by design
 		// (§5.2.2 ordering) — run [field] first for authoritative results.
+		//
+		// LOCATION is checked too (kind 'location'): a sample row's location
+		// is the spine's own point when valid (mirrors pgPointLiteral: both
+		// coords present and in world range), else for field-hosted rows the
+		// HOST SPOT's indexed point. Sample timestamps never move when the
+		// Field slice is re-extracted, so a timestamp-only diff cannot see
+		// sample rows still carrying a host location the Field slice no
+		// longer has (2026-08-23: 1,968 rows kept section-space coords after
+		// the non-geographic-geometry re-extract because samples.php was not
+		// re-run; 67 projects centroided mid-ocean on the globe). A sample
+		// linked to several spots of one project may legitimately match ANY
+		// of those spots' points (samplesFieldSql's DISTINCT ON picks one).
+		$spinePt = "CASE WHEN s.longitude IS NOT NULL AND s.latitude IS NOT NULL
+		                  AND s.longitude BETWEEN -180 AND 180 AND s.latitude BETWEEN -90 AND 90
+		            THEN ST_SetSRID(ST_MakePoint(s.longitude, s.latitude), 4326) END";
 		$rows = sqlRows($db, "
-			WITH src AS (
+			WITH src0 AS (
 				SELECT DISTINCT s.id AS item_id, s.userpkey AS upk,
 				       ih.project_id, ih.project_userpkey AS pupk,
-				       'field'::text AS subsys, s.modified_at AS src_ts
+				       'field'::text AS subsys, s.modified_at AS src_ts,
+				       coalesce($spinePt, ih.location) AS exp_loc
 				FROM strabosamples.samples s
 				JOIN strabosamples.sample_subsystem_links l
 				  ON l.sample_id = s.id AND l.sample_userpkey = s.userpkey
@@ -865,7 +886,7 @@ if (in_array('samples', $ONLY, true)) {
 				WHERE TRUE$scopeSrc
 				UNION
 				SELECT DISTINCT s.id, s.userpkey, pm.strabo_id, pm.userpkey,
-				       'micro', s.modified_at
+				       'micro', s.modified_at, $spinePt
 				FROM strabosamples.samples s
 				JOIN strabosamples.sample_subsystem_links l
 				  ON l.sample_id = s.id AND l.sample_userpkey = s.userpkey
@@ -876,7 +897,7 @@ if (in_array('samples', $ONLY, true)) {
 				WHERE TRUE$scopeSrc
 				UNION
 				SELECT DISTINCT s.id, s.userpkey, p.uuid, l.reference_userpkey,
-				       'exp', s.modified_at
+				       'exp', s.modified_at, $spinePt
 				FROM strabosamples.samples s
 				JOIN strabosamples.sample_subsystem_links l
 				  ON l.sample_id = s.id AND l.sample_userpkey = s.userpkey
@@ -884,27 +905,46 @@ if (in_array('samples', $ONLY, true)) {
 				JOIN straboexp.project p
 				  ON p.uuid = l.reference_metadata->>'project_uuid'
 				WHERE TRUE$scopeSrc
+			), src AS (
+				SELECT item_id, upk, project_id, pupk, subsys,
+				       max(src_ts) AS src_ts,
+				       bool_or(exp_loc IS NULL) AS any_null_loc,
+				       array_agg(exp_loc) FILTER (WHERE exp_loc IS NOT NULL) AS locs
+				FROM src0
+				GROUP BY item_id, upk, project_id, pupk, subsys
 			), idx AS (
 				SELECT item_id, item_userpkey AS upk, project_id,
 				       project_userpkey AS pupk, project_subsystem AS subsys,
-				       source_modified
+				       source_modified, location
 				FROM strabosearch.item_hit
 				WHERE item_type = 'sample'$scopeIdx
+			), joined AS (
+				SELECT src.item_id AS s_item_id, idx.item_id AS i_item_id,
+				       coalesce(src.item_id, idx.item_id) AS item_id,
+				       coalesce(src.upk, idx.upk)         AS upk,
+				       coalesce(src.project_id, idx.project_id) AS project_id,
+				       coalesce(src.subsys, idx.subsys)   AS subsys,
+				       (src.src_ts IS NOT NULL AND idx.source_modified IS NOT NULL
+				        AND src.src_ts > idx.source_modified + interval '2 seconds') AS ts_stale,
+				       (src.item_id IS NOT NULL AND idx.item_id IS NOT NULL AND
+				        CASE WHEN idx.location IS NULL THEN NOT src.any_null_loc
+				             ELSE src.locs IS NULL OR NOT EXISTS (
+				                    SELECT 1 FROM unnest(src.locs) g
+				                    WHERE abs(ST_X(g) - ST_X(idx.location)) < 1e-6
+				                      AND abs(ST_Y(g) - ST_Y(idx.location)) < 1e-6)
+				        END) AS loc_stale
+				FROM src FULL OUTER JOIN idx
+				  ON idx.item_id = src.item_id AND idx.upk = src.upk
+				 AND idx.project_id = src.project_id AND idx.pupk = src.pupk
+				 AND idx.subsys = src.subsys
 			)
-			SELECT coalesce(src.item_id, idx.item_id) AS item_id,
-			       coalesce(src.upk, idx.upk)         AS upk,
-			       coalesce(src.project_id, idx.project_id) AS project_id,
-			       coalesce(src.subsys, idx.subsys)   AS subsys,
-			       CASE WHEN idx.item_id IS NULL THEN 'missing'
-			            WHEN src.item_id IS NULL THEN 'extra'
-			            ELSE 'stale' END AS kind
-			FROM src FULL OUTER JOIN idx
-			  ON idx.item_id = src.item_id AND idx.upk = src.upk
-			 AND idx.project_id = src.project_id AND idx.pupk = src.pupk
-			 AND idx.subsys = src.subsys
-			WHERE idx.item_id IS NULL OR src.item_id IS NULL
-			   OR (src.src_ts IS NOT NULL AND idx.source_modified IS NOT NULL
-			       AND src.src_ts > idx.source_modified + interval '2 seconds')", $failed);
+			SELECT item_id, upk, project_id, subsys,
+			       CASE WHEN i_item_id IS NULL THEN 'missing'
+			            WHEN s_item_id IS NULL THEN 'extra'
+			            WHEN ts_stale THEN 'stale'
+			            ELSE 'location' END AS kind
+			FROM joined
+			WHERE i_item_id IS NULL OR s_item_id IS NULL OR ts_stale OR loc_stale", $failed);
 
 		// touchSample recomputes ALL of a sample's fan-out rows from current
 		// links — one heal covers every drifted row of that sample (and
