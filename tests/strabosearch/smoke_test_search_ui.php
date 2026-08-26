@@ -261,6 +261,8 @@ check('tiles config exposes satellite + macrostrat (M3)',
 check('Layers panel markup present (M3)', strpos($body, 'ssLayersPanel') !== false
 	&& strpos($body, 'ssMacrostratChk') !== false && strpos($body, 'ssMacrostratOpacity') !== false);
 check('quiet prompt carries the browse door (M3)', strpos($body, 'ssBrowseGlobe') !== false);
+check('Macrostrat click config + hint present (M5)', strpos($body, 'map_query_v2') !== false
+	&& strpos($body, 'macrostrat.org/map/loc/') !== false && strpos($body, 'ssMacrostratHint') !== false);
 check('mobile drawer chrome present (M4)', strpos($body, 'ssDrawerBackdrop') !== false
 	&& strpos($body, 'ssDrawerClose') !== false && strpos($body, 'ssFiltersBtn') !== false
 	&& strpos($body, 'ssFiltersBadge') !== false && strpos($body, 'ssDrawerCloseLink') !== false);
@@ -307,7 +309,10 @@ check('results.js: offset pager removed', strpos($body, 'renderPager') === false
 // Globe View M3: layers panel + browse-mode wiring in the served assets.
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/globe.js', null);
 check('globe.js asset 200', $st === 200, "got $st");
-check('globe.js: M4 build tag', strpos($body, 'm4-mobile-drawer') !== false);
+check('globe.js: M5 build tag', strpos($body, 'm5-geo-click') !== false);
+check('globe.js: geology click wired (M5)', strpos($body, 'CFG.macrostrat.query') !== false
+	&& strpos($body, 'function geologyClick') !== false && strpos($body, 'ss-gpop-geo') !== false
+	&& strpos($body, 'pickEllipsoid') !== false && strpos($body, "'ss-geopin'") !== false);
 check('globe.js: phone popup sheet mode (M4)', strpos($body, 'ss-gpop-sheet') !== false);
 check('globe.js: satellite + macrostrat layers wired', strpos($body, 'CFG.tiles.satellite') !== false
 	&& strpos($body, 'CFG.tiles.macrostrat') !== false
@@ -328,6 +333,11 @@ check('search.css: mobile drawer + full-bleed globe rules (M4)',
 	&& strpos($body, '.ss-view-toggle.ss-globe-toggle') !== false
 	&& strpos($body, '.ss-globe-popup.ss-gpop-sheet') !== false
 	&& strpos($body, 'max-width: 950px') !== false);
+check('search.css: geology card + affordance rules (M5)',
+	strpos($body, '.ss-globe-wrap.ss-geo-on') !== false
+	&& strpos($body, '.ss-gpop-desc') !== false
+	&& strpos($body, '.ss-layers-hint') !== false
+	&& strpos($body, '.ss-gpop-attrib') !== false);
 
 // /globe is a 302 front door into browse mode (M3; the legacy standalone
 // globe page is retired). http_raw never follows redirects, so the status

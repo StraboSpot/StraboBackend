@@ -147,7 +147,17 @@
 		dataSource.clustering.pixelRange = 42;
 		dataSource.clustering.minimumClusterSize = 3;
 		dataSource.clustering.clusterEvent.addEventListener(styleCluster);
-		viewer.dataSources.add(dataSource);
+		// Keep the marker source at index 0: the pin source (M5) is added
+		// once, so every re-render would otherwise append the markers
+		// above it (the FF harness probes read dataSources.get(0)).
+		// DataSourceCollection.add pushes ASYNCHRONOUSLY (inside a then),
+		// so the reorder must wait for it; a synchronous lowerToBottom
+		// splices whatever sits last (the pin source) and duplicates the
+		// markers, which stops Cesium rendering outright.
+		var ds = dataSource;
+		viewer.dataSources.add(ds).then(function () {
+			if (viewer && viewer.dataSources.contains(ds)) viewer.dataSources.lowerToBottom(ds);
+		});
 	}
 
 	function initViewer() {
@@ -1040,7 +1050,9 @@
 
 		units.forEach(function (u, i) {
 			if (i > 0) popupEl.appendChild(el('div', 'ss-gpop-unit', u.name || '(unnamed unit)'));
-			if (u.strat_name) popupEl.appendChild(el('div', 'ss-gpop-meta', String(u.strat_name)));
+			if (u.strat_name && String(u.strat_name) !== String(u.name || '')) {
+				popupEl.appendChild(el('div', 'ss-gpop-meta', String(u.strat_name)));
+			}
 			var age = ageLine(u);
 			if (age) popupEl.appendChild(el('div', 'ss-gpop-meta', 'Age: ' + age));
 			var lith = lithLine(u);
