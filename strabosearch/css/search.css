@@ -967,6 +967,64 @@
 	min-width: 0;
 }
 
+/* M5: "click the map" hint under the overlay controls. */
+.ss-layers-hint {
+	font-size: 0.85em;
+	opacity: 0.7;
+	line-height: 1.3;
+	padding-top: 0.4em;
+}
+
+/* M5: geology click affordance while the overlay is on. */
+.ss-globe-wrap.ss-geo-on .ss-globe-container canvas {
+	cursor: crosshair;
+}
+
+/* M5: geology card. Several mapped units with descriptions can run
+   tall, so this variant scrolls inside the wrap. */
+.ss-globe-popup.ss-gpop-geo {
+	max-height: calc(100% - 24px);
+	overflow-y: auto;
+}
+
+.ss-gpop-unit {
+	margin-top: 0.6em;
+	padding-top: 0.5em;
+	border-top: 1px dotted rgba(255, 255, 255, 0.25);
+	font-weight: bold;
+	color: #ffffff;
+}
+
+.ss-gpop-desc {
+	margin-top: 0.3em;
+	opacity: 0.8;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+	overflow: hidden;
+}
+
+.ss-gpop-desc.ss-gpop-desc-open {
+	display: block;
+	-webkit-line-clamp: unset;
+}
+
+.ss-gpop-more {
+	display: inline-block;
+	font-size: 0.9em;
+	cursor: pointer;
+}
+
+.ss-gpop-source a {
+	overflow-wrap: anywhere;
+}
+
+.ss-gpop-attrib {
+	margin-top: 0.5em;
+	font-size: 0.85em;
+	opacity: 0.6;
+}
+
 /* Browse mode (M3): the List toggle dims and goes inert, same treatment
    as the D6 Images tab (the empty-query list stays gated). */
 .ss-view-btn.ss-globe-disabled {
