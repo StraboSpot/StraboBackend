@@ -143,6 +143,8 @@ function ss_asset($path) {
 										<label for="ssMacrostratOpacity">Opacity</label>
 										<input type="range" id="ssMacrostratOpacity" min="10" max="100" value="60" disabled>
 									</div>
+									<!-- M5: shown only while the overlay is on (globe.js). -->
+									<div id="ssMacrostratHint" class="ss-layers-hint" style="display:none;">Click or tap the map for the unit name, age and lithology.</div>
 								</div>
 							</div>
 						</div>
@@ -176,6 +178,13 @@ function ss_asset($path) {
 						outdoors:   'https://tiles.strabospot.org/v5/mapbox.outdoors/{z}/{x}/{y}.png',
 						satellite:  'https://tiles.strabospot.org/v5/mapbox.satellite/{z}/{x}/{y}.png',
 						macrostrat: 'https://tiles.strabospot.org/v5/macrostrat/{z}/{x}/{y}.png'
+					},
+					macrostrat: {
+						// Point query behind the geology click (M5): called
+						// straight from the browser (CORS-open, CC-BY 4.0);
+						// swap here if Macrostrat moves the endpoint again.
+						query: 'https://macrostrat.org/api/v2/mobile/map_query_v2',
+						open:  'https://macrostrat.org/map/loc/'
 					}
 				};
 				</script>

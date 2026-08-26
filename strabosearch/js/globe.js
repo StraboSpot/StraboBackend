@@ -11,7 +11,11 @@
  *              Public badge, owner, updated, data range, match counts)
  *              plus View Project / View results in list. The "N of M
  *              matching projects have locations" counter feeds the
- *              results top bar.
+ *              results top bar. With the Macrostrat overlay on (M5,
+ *              §12) a click on empty ground runs Macrostrat's point
+ *              query straight from the browser (CORS-open, CC-BY 4.0)
+ *              and shows the mapped unit (name, age, lithology, source)
+ *              in the same card, pinned at the click.
  *
  *              Cesium is SELF-HOSTED (/assets/js/cesium/, vendored 1.144)
  *              and lazy-loaded on the first toggle to Globe; list users
@@ -30,7 +34,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'm4-mobile-drawer-r1';
+	var BUILD = 'm5-geo-click-r1';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -60,6 +64,17 @@
 	var layerOutdoors = null;   // streamed terrain basemap (default on)
 	var layerSatellite = null;  // lazy: created on first Satellite pick
 	var layerMacrostrat = null; // lazy: created on first overlay enable
+
+	// Macrostrat geology click (M5): the click pin lives in its OWN data
+	// source so search re-renders (which rebuild the marker source) never
+	// touch it; the lookup carries a sequence + abort so a fresh click,
+	// a closed card or a re-render can never be answered late.
+	var pinSource = null;
+	var geoSeq = 0;
+	var geoInflight = null;   // AbortController
+	var geoTimer = null;
+	var GEO_TIMEOUT_MS = 6000;
+	var SCALE_RANK = { large: 0, medium: 1, small: 2, tiny: 3 };
 
 	// Layer choices survive reloads (per-browser convenience only; wrapped
 	// in try/catch because storage can be absent or throw).
@@ -179,6 +194,8 @@
 		applyLayerPrefs();
 
 		rebuildDataSource();
+		pinSource = new Cesium.CustomDataSource('ss-geopin');
+		viewer.dataSources.add(pinSource);
 
 		viewer.camera.setView({
 			destination: Cesium.Cartesian3.fromDegrees(-40.0, 25.0, 22000000)
@@ -304,6 +321,16 @@
 			op.value = String(Math.round(layerPrefs.opacity * 100));
 			op.disabled = !layerPrefs.macrostrat;
 		}
+		// M5 affordances: the "click the map" hint shows only while the
+		// overlay is on, and the canvas cursor turns crosshair (CSS).
+		var hint = document.getElementById('ssMacrostratHint');
+		if (hint) hint.style.display = layerPrefs.macrostrat ? '' : 'none';
+		if (wrap) {
+			if (layerPrefs.macrostrat) wrap.classList.add('ss-geo-on');
+			else wrap.classList.remove('ss-geo-on');
+		}
+		// Turning the overlay off retires any open geology card + pin.
+		if (!layerPrefs.macrostrat && popupEl && popupEl.classList.contains('ss-gpop-geo')) hidePopup();
 	}
 
 	function wireLayersPanel() {
@@ -577,7 +604,7 @@
 	function onLeftClick(click) {
 		var picked = viewer.scene.pick(click.position);
 		hidePopup();
-		if (!Cesium.defined(picked)) return;
+		if (!Cesium.defined(picked)) { geologyClick(click.position); return; }
 
 		// EntityCluster cluster: picked.id is the ARRAY of clustered entities.
 		if (Array.isArray(picked.id)) {
@@ -585,7 +612,11 @@
 			return;
 		}
 		var ent = picked.id;
-		if (!ent || !ent.properties || !ent.properties.hit) return;
+		if (!ent || !ent.properties || !ent.properties.hit) {
+			// Not a project marker (e.g. the geology pin itself): empty ground.
+			geologyClick(click.position);
+			return;
+		}
 		showPopup(ent.properties.hit.getValue(), click.position);
 	}
 
@@ -815,7 +846,261 @@
 	}
 
 	function hidePopup() {
-		if (popupEl) { popupEl.style.display = 'none'; popupEl.innerHTML = ''; }
+		if (popupEl) {
+			popupEl.style.display = 'none';
+			popupEl.innerHTML = '';
+			popupEl.classList.remove('ss-gpop-geo');
+		}
+		cancelGeology();
+		geoSeq++;          // a late answer to a closed card is dropped
+		clearPin();
+	}
+
+	// ══════════════════════════════════════════════════════════════════
+	// Macrostrat geology click (M5, §12): empty ground + overlay on ->
+	// point query -> unit card. Markers and clusters keep priority above.
+	// ══════════════════════════════════════════════════════════════════
+
+	function geologyActive() {
+		return !!(layerPrefs.macrostrat && layerMacrostrat && CFG.macrostrat && CFG.macrostrat.query);
+	}
+
+	/**
+	 * Slippy zoom the geology tiles are drawn at around the click, from
+	 * camera height: ground meters per screen pixel at nadir is
+	 * 2 h tan(fovy/2) / canvasHeight, and the slippy pyramid runs
+	 * 156543.03 cos(lat) / 2^z meters per pixel. Rounded and clamped to
+	 * the overlay's tile range so the API names the SAME map scale the
+	 * tiles show (map_query_v2 picks tiny/small/medium/large from z the
+	 * way the carto tile service does).
+	 */
+	function estimateZoom(latDeg) {
+		var h = viewer.camera.positionCartographic.height;
+		var fovy = (viewer.camera.frustum && viewer.camera.frustum.fovy) || 1.0;
+		var px = viewer.scene.canvas.clientHeight || 1;
+		var mpp = 2 * h * Math.tan(fovy / 2) / px;
+		var z = Math.log(156543.03 * Math.cos(latDeg * Math.PI / 180) / mpp) / Math.LN2;
+		if (!isFinite(z)) return 0;
+		return Math.max(0, Math.min(14, Math.round(z)));
+	}
+
+	function geologyClick(screenPos) {
+		if (!geologyActive()) return;
+		var cart = viewer.camera.pickEllipsoid(screenPos, viewer.scene.globe.ellipsoid);
+		if (!cart) return;   // clicked the sky
+		var c = Cesium.Cartographic.fromCartesian(cart);
+		var lon = Cesium.Math.toDegrees(c.longitude);
+		var lat = Cesium.Math.toDegrees(c.latitude);
+		lookupGeology({ lon: lon, lat: lat, z: estimateZoom(lat) }, screenPos);
+	}
+
+	function lookupGeology(where, screenPos) {
+		cancelGeology();
+		dropPin(where.lon, where.lat);
+		showGeologyCard(where, { state: 'loading' }, screenPos);
+
+		var ctrl = new AbortController();
+		geoInflight = ctrl;
+		var seq = ++geoSeq;
+		var timedOut = false;
+		geoTimer = setTimeout(function () { timedOut = true; ctrl.abort(); }, GEO_TIMEOUT_MS);
+
+		var url = CFG.macrostrat.query
+			+ '?lng=' + where.lon.toFixed(5) + '&lat=' + where.lat.toFixed(5) + '&z=' + where.z;
+		fetch(url, { signal: ctrl.signal, mode: 'cors' }).then(function (r) {
+			if (!r.ok) throw new Error('Macrostrat answered ' + r.status + '.');
+			return r.json();
+		}).then(function (j) {
+			if (seq !== geoSeq) return;
+			finishGeology();
+			var d = (j && j.success && j.success.data) || {};
+			var units = (d.mapData || []).slice().sort(function (a, b) {
+				return scaleRank(a) - scaleRank(b);   // largest scale first
+			});
+			showGeologyCard(where, {
+				state: 'done', units: units,
+				license: (j && j.success && j.success.license) || 'CC-BY 4.0'
+			}, screenPos);
+		}).catch(function (e) {
+			if (seq !== geoSeq) return;
+			if (e && e.name === 'AbortError' && !timedOut) return;   // superseded
+			finishGeology();
+			showGeologyCard(where, {
+				state: 'error',
+				message: timedOut ? 'Macrostrat did not answer in time.'
+					: ((e && e.message) || 'Macrostrat lookup failed.')
+			}, screenPos);
+		});
+	}
+
+	function scaleRank(u) {
+		var r = SCALE_RANK[u && u.scale];
+		return r === undefined ? 9 : r;
+	}
+
+	function cancelGeology() {
+		if (geoTimer) { clearTimeout(geoTimer); geoTimer = null; }
+		if (geoInflight) { geoInflight.abort(); geoInflight = null; }
+	}
+
+	function finishGeology() {
+		if (geoTimer) { clearTimeout(geoTimer); geoTimer = null; }
+		geoInflight = null;
+	}
+
+	/** Ring pin at the queried point; styled unlike the project dots
+	 *  (hollow, white) so it can't read as data. Cleared with the card. */
+	function dropPin(lon, lat) {
+		clearPin();
+		if (!pinSource) return;
+		pinSource.entities.add({
+			id: 'ss-geopin',
+			position: Cesium.Cartesian3.fromDegrees(lon, lat),
+			point: {
+				pixelSize: 18,
+				color: Cesium.Color.WHITE.withAlpha(0.15),
+				outlineColor: Cesium.Color.WHITE.withAlpha(0.95),
+				outlineWidth: 2.5
+			}
+		});
+		viewer.scene.requestRender();
+	}
+
+	function clearPin() {
+		if (!pinSource || !pinSource.entities.values.length) return;
+		pinSource.entities.removeAll();
+		if (viewer) viewer.scene.requestRender();
+	}
+
+	function fmtCoord(lat, lon) {
+		return Math.abs(lat).toFixed(4) + '°' + (lat < 0 ? 'S' : 'N') + ', '
+			+ Math.abs(lon).toFixed(4) + '°' + (lon < 0 ? 'W' : 'E');
+	}
+
+	function fmtMa(v) {
+		return String(Number(Number(v).toPrecision(4)));
+	}
+
+	/** "Pleistocene · 2.58 to 0.0117 Ma" (interval string from the API,
+	 *  Ma bounds from the bounding intervals when both are numeric). */
+	function ageLine(u) {
+		var parts = [];
+		if (u.age) parts.push(String(u.age));
+		var b = u.b_int && u.b_int.b_age, t = u.t_int && u.t_int.t_age;
+		if (typeof b === 'number' && typeof t === 'number') {
+			parts.push(fmtMa(b) + ' to ' + fmtMa(t) + ' Ma');
+		}
+		return parts.join(' · ');
+	}
+
+	/** Macrostrat writes "Major:{sand,silt}, Minor:{clay,gravel}"; read it
+	 *  back as "Major: sand, silt; Minor: clay, gravel". */
+	function lithLine(u) {
+		var s = u.lith ? String(u.lith) : '';
+		if (!s && u.liths && u.liths.length) {
+			s = u.liths.map(function (l) { return l.lith; }).filter(Boolean).join(', ');
+		}
+		s = s.replace(/\}\s*,\s*(?=\w+\s*:)/g, '}; ');
+		s = s.replace(/\{([^}]*)\}/g, function (_, inner) {
+			return inner.split(',').map(function (x) { return x.trim(); }).filter(Boolean).join(', ');
+		});
+		return s.replace(/\s*:\s*/g, ': ').replace(/\s*,\s*/g, ', ').replace(/\s*;\s*/g, '; ').trim();
+	}
+
+	function macrostratHref(where) {
+		var lon = where.lon.toFixed(4), lat = where.lat.toFixed(4);
+		return CFG.macrostrat.open + lon + '/' + lat + '#x=' + lon + '&y=' + lat + '&z=' + where.z;
+	}
+
+	/** The geology card: same vocabulary as the project popup (option B,
+	 *  §12): unit name (+ strat name), age, lithology, clamped
+	 *  description, source citation, Open in Macrostrat, attribution. */
+	function showGeologyCard(where, res, screenPos) {
+		popupEl.innerHTML = '';
+		popupEl.classList.add('ss-gpop-geo');
+
+		var units = res.units || [];
+		var title;
+		if (res.state === 'loading') title = 'Looking up geology…';
+		else if (res.state === 'error') title = 'Geology lookup failed';
+		else if (!units.length) title = 'No mapped geology here';
+		else title = units[0].name || '(unnamed unit)';
+
+		var head = el('div', 'ss-gpop-head');
+		head.appendChild(el('div', 'ss-gpop-title', title));
+		var close = el('a', 'ss-gpop-close', '×');
+		close.href = 'javascript:void(0);';
+		close.setAttribute('aria-label', 'Close');
+		close.addEventListener('click', hidePopup);
+		head.appendChild(close);
+		popupEl.appendChild(head);
+
+		popupEl.appendChild(el('div', 'ss-gpop-meta', 'At ' + fmtCoord(where.lat, where.lon)));
+		if (res.state === 'error') popupEl.appendChild(el('div', 'ss-gpop-meta', res.message));
+
+		units.forEach(function (u, i) {
+			if (i > 0) popupEl.appendChild(el('div', 'ss-gpop-unit', u.name || '(unnamed unit)'));
+			if (u.strat_name) popupEl.appendChild(el('div', 'ss-gpop-meta', String(u.strat_name)));
+			var age = ageLine(u);
+			if (age) popupEl.appendChild(el('div', 'ss-gpop-meta', 'Age: ' + age));
+			var lith = lithLine(u);
+			if (lith) popupEl.appendChild(el('div', 'ss-gpop-meta', 'Lithology: ' + lith));
+			var desc = String(u.descrip || u.comments || '').trim();
+			if (desc) appendClampedText(desc, screenPos);
+			var ref = u.ref;
+			if (ref && (ref.name || ref.ref_title)) {
+				var src = el('div', 'ss-gpop-meta ss-gpop-source', 'Source: ');
+				var label = (ref.name || ref.ref_title) + (ref.ref_year ? ' (' + ref.ref_year + ')' : '');
+				if (ref.url) {
+					var a = el('a', null, label);
+					a.href = ref.url;
+					a.target = '_blank';
+					a.rel = 'noopener';
+					src.appendChild(a);
+				} else {
+					src.appendChild(document.createTextNode(label));
+				}
+				popupEl.appendChild(src);
+			}
+		});
+
+		var links = el('div', 'ss-gpop-links');
+		if (res.state === 'error') {
+			var retry = el('a', null, 'Try again');
+			retry.href = 'javascript:void(0);';
+			retry.addEventListener('click', function () { lookupGeology(where, screenPos); });
+			links.appendChild(retry);
+		}
+		if (res.state !== 'loading') {
+			var open = el('a', null, 'Open in Macrostrat');
+			open.href = macrostratHref(where);
+			open.target = '_blank';
+			open.rel = 'noopener';
+			links.appendChild(open);
+		}
+		if (links.childNodes.length) popupEl.appendChild(links);
+
+		popupEl.appendChild(el('div', 'ss-gpop-attrib',
+			'Geology © Macrostrat · ' + (res.license || 'CC-BY 4.0')));
+
+		placePopup(screenPos);
+	}
+
+	/** Two-line clamp with a more/less toggle (some sources write
+	 *  paragraphs); re-clamps the card after a toggle so it never
+	 *  strands past the wrap edge. */
+	function appendClampedText(text, screenPos) {
+		var d = el('div', 'ss-gpop-desc', text);
+		popupEl.appendChild(d);
+		if (text.length <= 110) return;
+		var more = el('a', 'ss-gpop-more', 'more');
+		more.href = 'javascript:void(0);';
+		more.addEventListener('click', function () {
+			var open = d.classList.toggle('ss-gpop-desc-open');
+			more.textContent = open ? 'less' : 'more';
+			placePopup(screenPos);
+		});
+		popupEl.appendChild(more);
 	}
 
 	// ══════════════════════════════════════════════════════════════════
