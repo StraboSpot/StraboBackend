@@ -1057,7 +1057,10 @@
 			if (age) popupEl.appendChild(el('div', 'ss-gpop-meta', 'Age: ' + age));
 			var lith = lithLine(u);
 			if (lith) popupEl.appendChild(el('div', 'ss-gpop-meta', 'Lithology: ' + lith));
-			var desc = String(u.descrip || u.comments || '').trim();
+			// Macrostrat's descrip is usually a one-liner; the paragraph
+			// (thickness, contacts, original map source) sits in comments.
+			// Show both, descrip first, so the clamp has something to clamp.
+			var desc = joinDesc(u.descrip, u.comments);
 			if (desc) appendClampedText(desc, screenPos);
 			var ref = u.ref;
 			if (ref && (ref.name || ref.ref_title)) {
@@ -1096,6 +1099,14 @@
 			'Geology © Macrostrat · ' + (res.license || 'CC-BY 4.0')));
 
 		placePopup(screenPos);
+	}
+
+	function joinDesc(a, b) {
+		a = String(a || '').trim();
+		b = String(b || '').trim();
+		if (!b || b === a) return a;
+		if (!a) return b;
+		return a + (/[.;:!?]$/.test(a) ? ' ' : '. ') + b;
 	}
 
 	/** Two-line clamp with a more/less toggle (some sources write
