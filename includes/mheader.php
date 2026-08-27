@@ -191,6 +191,7 @@ if($userpkey == "adsf"){
 									<li><a href="/my_field_data">My StraboField Data</a></li>
 									<li><a href="/my_micro_data">My StraboMicro Data</a></li>
 									<li><a href="/my_experimental_data">My StraboExperimental Data</a></li>
+									<li><a href="/my_samples">My Samples</a></li>
 <?php
 if($showcollaborationsxxx){
 ?>
