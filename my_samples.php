@@ -297,6 +297,74 @@ include("includes/mheader.php");
     color: #ffffff;
 }
 
+/* ---- Type chips: tri-state (neutral / include / exclude) ---- */
+.ms-type-chip::before {
+    display: inline-block;
+    width: 1.1em;
+    margin-left: -0.25em;
+    font-weight: 700;
+    content: '';
+}
+.ms-type-chip[data-state="include"] {
+    background: #e44c65;
+    border-color: #e44c65;
+    color: #ffffff;
+}
+.ms-type-chip[data-state="include"]::before {
+    content: '\2713';   /* check mark */
+}
+.ms-type-chip[data-state="exclude"] {
+    background: rgba(228, 76, 101, 0.10);
+    border-color: rgba(228, 76, 101, 0.75);
+    border-style: dashed;
+    color: rgba(255, 255, 255, 0.75);
+}
+.ms-type-chip[data-state="exclude"]::before {
+    content: '\2715';   /* multiplication x */
+    color: #e44c65;
+}
+.ms-type-chip[data-state="include"]:hover,
+.ms-type-chip[data-state="exclude"]:hover {
+    filter: brightness(1.12);
+}
+
+/* Match any/all pill: only rendered when 2+ chips are included. */
+.ms-type-match {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    margin-left: 0.6em;
+    padding: 0.15em 0.3em 0.15em 0.6em;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 999px;
+    font-size: 0.9em;
+}
+.ms-type-match[hidden] { display: none; }
+.ms-type-match-label {
+    font-weight: 600;
+    margin-right: 0.2em;
+}
+.ms-type-match-btn {
+    background: transparent;
+    border: 1px solid transparent;
+    color: rgba(255, 255, 255, 0.7);
+    border-radius: 999px;
+    padding: 0.15em 0.6em;
+    cursor: pointer;
+    font-size: 0.95em;
+}
+.ms-type-match-btn:hover:not(.active) {
+    background: rgba(255, 255, 255, 0.12);
+}
+.ms-type-match-btn.active {
+    background: rgba(255, 255, 255, 0.16);
+    border-color: rgba(255, 255, 255, 0.35);
+    color: #ffffff;
+}
+.ms-result-count .ms-type-readout {
+    color: rgba(255, 255, 255, 0.85);
+}
+
 .ms-result-count {
     color: rgba(255, 255, 255, 0.6);
     font-size: 0.95em;
@@ -758,12 +826,23 @@ include("includes/mheader.php");
             <button type="button" class="ms-tab ms-show-tab" data-show="shared_with_me">Shared with me</button>
         </div>
 
-        <div class="ms-type-tabs">
+        <!-- Type = subsystem membership filter. Each system chip is
+             TRI-STATE (click cycles neutral -> include -> exclude ->
+             neutral). Constrained chips combine as
+             (any|all of the included set) AND (none of the excluded set);
+             the Match pill only appears once two chips are included,
+             since any/all are identical below that. "All" resets. -->
+        <div class="ms-type-tabs" role="group" aria-label="Filter by subsystem">
             <span class="ms-type-label">Type:</span>
-            <button type="button" class="ms-tab active" data-type="all">All</button>
-            <button type="button" class="ms-tab" data-type="field">StraboField</button>
-            <button type="button" class="ms-tab" data-type="micro">StraboMicro</button>
-            <button type="button" class="ms-tab" data-type="experimental">StraboExperimental</button>
+            <button type="button" class="ms-tab active" data-type="all" title="Show samples from every subsystem">All</button>
+            <button type="button" class="ms-tab ms-type-chip" data-type="field" data-state="neutral" title="Click: only samples in StraboField. Click again: hide samples in StraboField. Third click: clear.">StraboField</button>
+            <button type="button" class="ms-tab ms-type-chip" data-type="micro" data-state="neutral" title="Click: only samples in StraboMicro. Click again: hide samples in StraboMicro. Third click: clear.">StraboMicro</button>
+            <button type="button" class="ms-tab ms-type-chip" data-type="experimental" data-state="neutral" title="Click: only samples in StraboExperimental. Click again: hide samples in StraboExperimental. Third click: clear.">StraboExperimental</button>
+            <span class="ms-type-match" id="ms-type-match" hidden>
+                <span class="ms-type-match-label">Match:</span>
+                <button type="button" class="ms-type-match-btn" data-match="any" title="Samples in at least one of the checked subsystems">any</button>
+                <button type="button" class="ms-type-match-btn" data-match="all" title="Samples in every one of the checked subsystems">all</button>
+            </span>
         </div>
 
         <div class="ms-result-count" id="ms-result-count"></div>
@@ -897,26 +976,90 @@ include("includes/mheader.php");
     // apply when params are absent.
     var urlParams = new URLSearchParams(window.location.search);
     var validSorts = {modified_desc: 1, modified_asc: 1, purpose: 1, type: 1, id_asc: 1};
-    var validTypes = {all: 1, field: 1, micro: 1, experimental: 1};
+    var TYPE_KEYS   = ['field', 'micro', 'experimental'];
+    var TYPE_LABELS = {field: 'StraboField', micro: 'StraboMicro', experimental: 'StraboExperimental'};
     var validShows = {all: 1, mine: 1, shared_by_me: 1, shared_with_me: 1};
     var initialSort = urlParams.get('sort');
-    var initialType = urlParams.get('type');
     var initialShow = urlParams.get('show');
+
+    // Type filter URL grammar: `type=field,micro,-experimental` (bare =
+    // include, leading "-" = exclude, order irrelevant) + `match=any|all`
+    // (omitted when "any", the default). A leading "+" is tolerated so a
+    // hand-typed `+field` still works even though URLSearchParams decodes
+    // it to a space. The pre-tri-state single-value form (`type=field`)
+    // parses as one include, so older links keep working.
+    function parseTypeParam(raw) {
+        var inc = {}, exc = {};
+        (raw || '').split(',').forEach(function(tok) {
+            tok = tok.trim();
+            var excl = tok.charAt(0) === '-';
+            if (excl || tok.charAt(0) === '+') tok = tok.slice(1).trim();
+            if (tok === 'all' || TYPE_KEYS.indexOf(tok) < 0) return;
+            if (excl) { exc[tok] = true; delete inc[tok]; }
+            else if (!exc[tok]) { inc[tok] = true; }
+        });
+        return {
+            inc: TYPE_KEYS.filter(function(k) { return inc[k]; }),
+            exc: TYPE_KEYS.filter(function(k) { return exc[k]; })
+        };
+    }
+    var initialTypes = parseTypeParam(urlParams.get('type'));
     var state = {
-        type:   (initialType && validTypes[initialType]) ? initialType : 'all',
+        typeInc: initialTypes.inc,   // subsystems the sample must be in (any|all per typeMatch)
+        typeExc: initialTypes.exc,   // subsystems the sample must NOT be in (always all)
+        typeMatch: urlParams.get('match') === 'all' ? 'all' : 'any',
         show:   (initialShow && validShows[initialShow]) ? initialShow : 'all',
         sort:   (initialSort && validSorts[initialSort]) ? initialSort : 'modified_desc',
         search: urlParams.get('search') || '',
         expanded: {},  // key → bool
     };
 
+    // Reflect state into the Type controls: chip data-state, the All
+    // chip, and the Match pill (hidden unless 2+ chips are included).
+    function syncTypeControls() {
+        var constrained = state.typeInc.length + state.typeExc.length > 0;
+        document.querySelectorAll('.ms-type-chip').forEach(function(b) {
+            var k = b.getAttribute('data-type');
+            var st = state.typeInc.indexOf(k) >= 0 ? 'include'
+                   : state.typeExc.indexOf(k) >= 0 ? 'exclude' : 'neutral';
+            b.setAttribute('data-state', st);
+            b.setAttribute('aria-pressed', st === 'neutral' ? 'false' : (st === 'include' ? 'true' : 'mixed'));
+        });
+        var allBtn = document.querySelector('.ms-tab[data-type="all"]');
+        allBtn.classList.toggle('active', !constrained);
+        allBtn.setAttribute('aria-pressed', constrained ? 'false' : 'true');
+        var pill = document.getElementById('ms-type-match');
+        pill.hidden = state.typeInc.length < 2;
+        pill.querySelectorAll('.ms-type-match-btn').forEach(function(b) {
+            var on = b.getAttribute('data-match') === state.typeMatch;
+            b.classList.toggle('active', on);
+            b.setAttribute('aria-pressed', on ? 'true' : 'false');
+        });
+    }
+
+    // Plain-English readout of the Type filter, shown beside the count so
+    // the any/all + exclude semantics are never left to guesswork.
+    // '' when unconstrained.
+    function typeReadout() {
+        var inc = state.typeInc.map(function(k) { return TYPE_LABELS[k]; });
+        var exc = state.typeExc.map(function(k) { return TYPE_LABELS[k]; });
+        if (!inc.length && !exc.length) return '';
+        if (!inc.length && exc.length === TYPE_KEYS.length) return 'with no subsystem links';
+        function joinWith(names, word) {
+            if (names.length <= 1) return names.join('');
+            return names.slice(0, -1).join(', ') + ' ' + word + ' ' + names[names.length - 1];
+        }
+        var parts = [];
+        if (inc.length) parts.push('in ' + joinWith(inc, state.typeMatch === 'all' ? 'and' : 'or'));
+        if (exc.length) parts.push('not in ' + joinWith(exc, 'or'));
+        return parts.join(', ');
+    }
+
     // Reflect URL-derived state into the controls before first render so
     // the inputs/dropdowns/tabs match what the user is seeing.
     document.getElementById('ms-search').value = state.search;
     document.getElementById('ms-sort').value = state.sort;
-    document.querySelectorAll('.ms-tab[data-type]').forEach(function(b) {
-        b.classList.toggle('active', b.getAttribute('data-type') === state.type);
-    });
+    syncTypeControls();
     document.querySelectorAll('.ms-tab[data-show]').forEach(function(b) {
         b.classList.toggle('active', b.getAttribute('data-show') === state.show);
     });
@@ -928,7 +1071,9 @@ include("includes/mheader.php");
         var p = new URLSearchParams();
         if (state.search)                              p.set('search', state.search);
         if (state.sort && state.sort !== 'modified_desc') p.set('sort', state.sort);
-        if (state.type && state.type !== 'all')        p.set('type', state.type);
+        var typeParam = state.typeInc.concat(state.typeExc.map(function(k) { return '-' + k; })).join(',');
+        if (typeParam)                                 p.set('type', typeParam);
+        if (state.typeInc.length >= 2 && state.typeMatch === 'all') p.set('match', 'all');
         if (state.show && state.show !== 'all')        p.set('show', state.show);
         var qs = p.toString();
         var newUrl = window.location.pathname + (qs ? '?' + qs : '');
@@ -992,9 +1137,13 @@ include("includes/mheader.php");
                 :                    'StraboExperimental';
         return '<img class="ms-badge-icon" src="' + src + '" alt="' + alt + '">';
     }
-    function matchesType(sample, type) {
-        if (type === 'all') return true;
-        return (sample.badges[type] || 0) > 0;
+    // (any|all of typeInc) AND (none of typeExc). Exclusions are always
+    // conjunctive; the Match pill governs only the included set.
+    function matchesType(sample, st) {
+        var inSys = function(k) { return ((sample.badges || {})[k] || 0) > 0; };
+        if (st.typeExc.some(inSys)) return false;
+        if (!st.typeInc.length) return true;
+        return st.typeMatch === 'all' ? st.typeInc.every(inSys) : st.typeInc.some(inSys);
     }
     function matchesShow(sample, show) {
         if (show === 'all') return true;
@@ -1095,7 +1244,7 @@ include("includes/mheader.php");
         var q = state.search.trim();
         var filtered = topLevel
             .filter(function(s) { return matchesShow(s, state.show); })
-            .filter(function(s) { return matchesType(s, state.type); })
+            .filter(function(s) { return matchesType(s, state); })
             .filter(function(s) { return matchesSearch(s, q); })
             .sort(sortFn(state.sort));
 
@@ -1104,8 +1253,10 @@ include("includes/mheader.php");
             $count.textContent = '';
             return;
         }
-        $count.textContent = filtered.length + ' sample' + (filtered.length === 1 ? '' : 's')
-                           + (q ? ' matching "' + q + '"' : '');
+        var readout = typeReadout();
+        $count.innerHTML = escapeHtml(filtered.length + ' sample' + (filtered.length === 1 ? '' : 's')
+                           + (q ? ' matching "' + q + '"' : ''))
+                         + (readout ? ' &middot; <span class="ms-type-readout" id="ms-type-readout">' + escapeHtml(readout) + '</span>' : '');
 
         if (!filtered.length) {
             $cards.innerHTML = '<div class="ms-empty">No samples match the current filters.</div>';
@@ -1126,10 +1277,34 @@ include("includes/mheader.php");
         syncUrl();
         render();
     });
+    // Type chips: "All" clears every constraint; a system chip cycles
+    // neutral -> include -> exclude -> neutral.
     $typeTabs.forEach(function(btn) {
         btn.addEventListener('click', function() {
-            state.type = btn.getAttribute('data-type');
-            $typeTabs.forEach(function(b) { b.classList.toggle('active', b === btn); });
+            var k = btn.getAttribute('data-type');
+            if (k === 'all') {
+                state.typeInc = [];
+                state.typeExc = [];
+            } else {
+                var without = function(arr) { return arr.filter(function(x) { return x !== k; }); };
+                if (state.typeInc.indexOf(k) >= 0) {
+                    state.typeInc = without(state.typeInc);
+                    state.typeExc = TYPE_KEYS.filter(function(t) { return t === k || state.typeExc.indexOf(t) >= 0; });
+                } else if (state.typeExc.indexOf(k) >= 0) {
+                    state.typeExc = without(state.typeExc);
+                } else {
+                    state.typeInc = TYPE_KEYS.filter(function(t) { return t === k || state.typeInc.indexOf(t) >= 0; });
+                }
+            }
+            syncTypeControls();
+            syncUrl();
+            render();
+        });
+    });
+    document.querySelectorAll('.ms-type-match-btn').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            state.typeMatch = btn.getAttribute('data-match') === 'all' ? 'all' : 'any';
+            syncTypeControls();
             syncUrl();
             render();
         });
