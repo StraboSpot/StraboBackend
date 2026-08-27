@@ -62,6 +62,9 @@ $SPOT_E2E  = 945303101;          // class-hook E2E spot
 $SPOT_DS2  = 945303201;          // lives in DS2 for the dataset-delete E2E
 $IMG1      = 945304001;
 $IMG_STALE = 945304002;
+$SPOT4     = 945303004;          // 4b: shares IMG_SHARED with SPOT5 + has a duplicate node
+$SPOT5     = 945303005;
+$IMG_SHARED = 945304003;
 $PFX       = 'spsync94530';
 
 $failures = array();
@@ -340,6 +343,54 @@ check('batch sync indexes new spot', itemCount($db, "item_id='$SPOT3' AND item_t
 
 StraboSearchSync::removeSpot($db, $SPOT3, $TEST_UPK);
 check('removeSpot drops item row', itemCount($db, "item_id='$SPOT3' AND item_type='spot'") === 0);
+
+// ===========================================================================
+section('4b. FIELD — batch sync survives duplicate identities in one dataset');
+// Regression for the 2026-08-27 API warning report: ONE Image node linked
+// from TWO spots of the same dataset (StraboField copy-spot) made the
+// batch image upsert propose the same image_hit identity twice in one
+// INSERT ... ON CONFLICT DO UPDATE -> PG "cannot affect row a second
+// time" -> the whole image batch was lost on EVERY save of that dataset
+// and the PHP warning leaked into the API response body. Same shape for
+// duplicate Spot nodes sharing one id (prod duplicate-node population).
+
+$neodb->query("MATCH (d:Dataset {id: $DS1})
+	CREATE (a:Spot {id: $SPOT4, userpkey: $TEST_UPK, name: 'spsync Spot Four SYNCTOK_spotfour',
+		wkt: 'POINT (-118.28 34.08)', modified_timestamp: 1722400004000})
+	CREATE (a2:Spot {id: $SPOT4, userpkey: $TEST_UPK, name: 'spsync Spot Four DUP NODE',
+		wkt: 'POINT (-118.28 34.08)', modified_timestamp: 1722400004000})
+	CREATE (b:Spot {id: $SPOT5, userpkey: $TEST_UPK, name: 'spsync Spot Five SYNCTOK_spotfive',
+		wkt: 'POINT (-118.29 34.09)', modified_timestamp: 1722400005000})
+	CREATE (i:Image {id: $IMG_SHARED, userpkey: $TEST_UPK, image_type: 'photo',
+		title: 'spsync shared image', filename: '$IMG_SHARED', modified_timestamp: 1722400006000})
+	CREATE (d)-[:HAS_SPOT]->(a) CREATE (d)-[:HAS_SPOT]->(a2) CREATE (d)-[:HAS_SPOT]->(b)
+	CREATE (a)-[:HAS_IMAGE]->(i) CREATE (b)-[:HAS_IMAGE]->(i)");
+
+$ok = StraboSearchSync::syncFieldDataset($db, $neodb, $DS1, $TEST_UPK);
+check('4b: batch sync returns true with shared image + duplicate spot node', $ok === true);
+$W4  = "item_type='spot' AND item_id='$SPOT4' AND item_userpkey=$TEST_UPK";
+$W5  = "item_type='spot' AND item_id='$SPOT5' AND item_userpkey=$TEST_UPK";
+$WIS = "image_subsystem='field' AND image_id='$IMG_SHARED' AND image_userpkey=$TEST_UPK";
+check('4b: duplicate spot node collapses to one item row', itemCount($db, $W4) === 1, 'got ' . itemCount($db, $W4));
+check('4b: other spot indexed in the same batch', itemCount($db, $W5) === 1, 'got ' . itemCount($db, $W5));
+check('4b: shared image collapses to one image row', imageCount($db, $WIS) === 1, 'got ' . imageCount($db, $WIS));
+$isr = $db->get_row("SELECT parent_spot_id FROM strabosearch.image_hit WHERE $WIS");
+check('4b: shared image keeps the first spot as parent', $isr && $isr->parent_spot_id === (string)$SPOT4,
+	'got ' . ($isr ? $isr->parent_spot_id : 'null'));
+check('4b: SPOT1 row untouched by the batch', itemCount($db, $W1) === 1);
+
+// touchSpot on a spot whose image is shared: still one image row, parent
+// follows the touched spot (single-spot path, last touch wins).
+$ok = StraboSearchSync::touchSpot($db, $neodb, $SPOT5, $TEST_UPK);
+check('4b: touchSpot on the second sharer returns true', $ok === true);
+check('4b: still one image row after touch', imageCount($db, $WIS) === 1, 'got ' . imageCount($db, $WIS));
+
+// Tear the 4b fixtures back out so sections 5/6 see DS1 as before.
+$neodb->query("MATCH (u:User {userpkey: $TEST_UPK})-[:HAS_PROJECT]->(:Project)-[:HAS_DATASET]->(d:Dataset {id: $DS1})
+	-[:HAS_SPOT]->(s:Spot) WHERE s.id IN [$SPOT4, $SPOT5]
+	OPTIONAL MATCH (s)-[:HAS_IMAGE]->(i:Image) DETACH DELETE i, s");
+StraboSearchSync::removeSpots($db, array($SPOT4, $SPOT5), $TEST_UPK);
+check('4b: fixtures removed from index', itemCount($db, $W4) === 0 && itemCount($db, $W5) === 0 && imageCount($db, $WIS) === 0);
 
 // ===========================================================================
 section('5. FIELD — project meta flip + removeFieldProject');

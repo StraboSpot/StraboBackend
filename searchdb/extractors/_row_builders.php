@@ -552,6 +552,16 @@ function fieldSpotTuple($r, $pid, $puk, $pname, $dname, $pispubBool, $tagMap, &$
  * is parsed ONCE and inherited by every image (§6 Q4a + Q4b). $tagMap is
  * the project's fieldTagMapFromJsonTags map (json_tags amendment).
  *
+ * Tuples are KEYED by the image_hit identity ('<image_id>|<image_userpkey>',
+ * the table's UNIQUE (image_subsystem, image_id, image_userpkey) minus the
+ * constant subsystem) so callers that accumulate tuples across spots can
+ * collapse duplicates by key. One Image node can hang off SEVERAL spots of
+ * one dataset (StraboField "copy spot" carries the images array along, and
+ * insertSpot re-links the existing node), and a multi-row
+ * INSERT ... ON CONFLICT DO UPDATE that proposes the same identity twice
+ * fails outright ("cannot affect row a second time") - the 2026-08-27 API
+ * warning report.
+ *
  * $stats picks up 'no_filename' / 'no_id' skip counts (the §5.5
  * servability gate: no filename ⇒ unservable ⇒ skip).
  */
@@ -632,7 +642,7 @@ function fieldImageTuples($r, $spotId, $pid, $puk, $pispubBool, $tagMap, &$vocab
 		// spot's mtime if image carries none.
 		$sourceModLit = ($imgMtLit !== 'NULL') ? $imgMtLit : $spotModLit;
 
-		$tuples[] = '(' . implode(',', array(
+		$tuples[(string)$iid . '|' . (int)$iuk] = '(' . implode(',', array(
 			pgText((string)$iid, 64),
 			pgText('field'),
 			pgInt($iuk),
