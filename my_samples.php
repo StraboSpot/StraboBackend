@@ -300,10 +300,13 @@ include("includes/mheader.php");
 /* ---- Type chips: tri-state (neutral / include / exclude) ---- */
 .ms-type-chip::before {
     display: inline-block;
-    width: 1.1em;
-    margin-left: -0.25em;
     font-weight: 700;
     content: '';
+}
+.ms-type-chip[data-state="include"]::before,
+.ms-type-chip[data-state="exclude"]::before {
+    margin-left: -0.2em;
+    margin-right: 0.35em;
 }
 .ms-type-chip[data-state="include"] {
     background: #e44c65;
