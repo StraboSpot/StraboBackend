@@ -129,6 +129,14 @@ class StraboSearchSync {
 	 * Chunked idempotent upsert. $conflictCols is the table's identity;
 	 * every other column takes EXCLUDED.*, and last_synced advances to
 	 * now() so the stale sweep spares the row.
+	 *
+	 * CALLERS MUST NOT pass two tuples with the same identity in one call:
+	 * PostgreSQL rejects a multi-row INSERT ... ON CONFLICT DO UPDATE that
+	 * touches one row twice ("cannot affect row a second time") and the
+	 * whole chunk is lost. Every Field call site therefore accumulates its
+	 * tuples in an array keyed by identity (spot id|userpkey, image
+	 * id|userpkey); the samples/micro/exp sources are DISTINCT ON identity
+	 * at the SQL level.
 	 */
 	private static function upsert($db, $table, $cols, $conflictCols, $tuples) {
 		if (!$tuples) return 0;
@@ -272,7 +280,7 @@ class StraboSearchSync {
 					  AND last_synced < '" . pg_escape_string($t0) . "'");
 
 				// --- image rows ------------------------------------------------
-				$imgTuples = array();  // keyed by image id → dedupe multi-dataset paths
+				$imgTuples = array();  // keyed by image identity → dedupe multi-dataset paths
 				$irows = $neodb->query(fieldImagesTouchCypher($upk, neoIdLiteral($spotId)));
 				if ($irows) {
 					foreach ($irows as $r) {
@@ -287,11 +295,10 @@ class StraboSearchSync {
 						$built = fieldImageTuples($r, $sid, $pid, $upk,
 							self::fieldProjectIsPublic($db, $pid, $upk),
 							$tagMaps[$pk], $vocabImageTypes, $stats);
-						// fieldImageTuples returns tuples in the images-collection
-						// order; re-key by the image id embedded at position 1 is
-						// fragile, so dedupe on the tuple text (identical paths
-						// yield byte-identical tuples).
-						foreach ($built as $tp) $imgTuples[md5($tp)] = $tp;
+						// fieldImageTuples keys tuples by image identity, so
+						// the multi-dataset fan-out paths collapse to one
+						// tuple per image (last path wins; identical anyway).
+						foreach ($built as $k => $tp) $imgTuples[$k] = $tp;
 					}
 				}
 				$n += self::upsertImages($db, fieldImageCols(), array_values($imgTuples));
@@ -462,8 +469,14 @@ class StraboSearchSync {
 								$touchedSpotIds[(string)$sid] = true;
 								// dataset_ids = the synced dataset (single-path
 								// replace; see fieldSpotTuple docblock).
-								$tuples[] = fieldSpotTuple($r, $pid, $upk, $pname, $dname,
-									$pispub, $tagMap, $vocabTagTypes, array($did));
+								// Keyed by item identity: duplicate Spot NODES
+								// sharing one id (the known prod duplicate-node
+								// population) both come back from the batch
+								// Cypher and must collapse to ONE tuple per
+								// statement (see upsert()).
+								$tuples[(string)$sid . '|' . (int)$r->get('suk')] =
+									fieldSpotTuple($r, $pid, $upk, $pname, $dname,
+										$pispub, $tagMap, $vocabTagTypes, array($did));
 							}
 							$nItems += self::upsertItems($db, fieldItemCols(), $tuples);
 							if (count($rows) < 50) break;
@@ -485,9 +498,14 @@ class StraboSearchSync {
 								$cursor = $sid;
 								$count++;
 								$stats = array('no_filename' => 0, 'no_id' => 0);
-								$tuples = array_merge($tuples, fieldImageTuples(
-									$r, $sid, $pid, $upk, $pispub, $tagMap,
-									$vocabImageTypes, $stats));
+								// One Image node can hang off several spots of
+								// the dataset (copy-spot); collapse by image
+								// identity, FIRST spot wins (matches the
+								// backfill's ON CONFLICT DO NOTHING order).
+								foreach (fieldImageTuples($r, $sid, $pid, $upk, $pispub,
+										$tagMap, $vocabImageTypes, $stats) as $k => $tp) {
+									if (!isset($tuples[$k])) $tuples[$k] = $tp;
+								}
 							}
 							$nImages += self::upsertImages($db, fieldImageCols(), $tuples);
 							if ($count < 50) break;
