@@ -77,6 +77,21 @@ process.on('unhandledRejection', (e) => { console.error(e); cleanup(); process.e
   const searchCodes = await cardCodes();
   check('search "spsty_f" finds the child card', searchCodes.includes('f'), JSON.stringify(searchCodes));
 
+  // ---- 3b. Search clear "×" ----------------------------------------------
+  const clearBtn = page.locator('#ms-search-clear');
+  check('clear × visible while searching', await clearBtn.isVisible());
+  await clearBtn.click();
+  await page.waitForTimeout(200);
+  check('clear × empties the box', (await page.inputValue('#ms-search')) === '');
+  check('clear × restores the full list', (await countText()).trim().startsWith('8 samples'), (await countText()).trim());
+  check('clear × hides itself when empty', !(await clearBtn.isVisible()));
+  check('clear × refocuses the search box',
+    await page.evaluate(() => document.activeElement && document.activeElement.id === 'ms-search'));
+
+  // URL-restored search shows the × on load.
+  await go('?search=spsty_f');
+  check('× visible on load with ?search= in URL', await page.locator('#ms-search-clear').isVisible());
+
   // ---- 4. Parent card keeps its expand toggle ----------------------------
   await page.fill('#ms-search', '');
   await page.waitForTimeout(300);

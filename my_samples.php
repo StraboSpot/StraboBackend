@@ -230,6 +230,36 @@ include("includes/mheader.php");
     background: #2a2a3a;
     color: #ffffff;
 }
+/* Search box wrapper so the clear "×" can overlay the input; the wrapper
+   takes over the input's flex sizing within .ms-controls. */
+.ms-search-wrap {
+    position: relative;
+    display: inline-block;
+    flex: 1 1 320px;
+    min-width: 220px;
+    max-width: 380px;
+}
+.ms-search-wrap input[type="text"] {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    flex: none;
+    padding-right: 2.2em;
+}
+.ms-search-clear {
+    position: absolute;
+    right: 0.4em;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 1.3em;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 0.3em;
+}
+.ms-search-clear:hover { color: #ffffff; }
 .ms-new-btn {
     background: #e44c65;
     color: #ffffff;
@@ -823,7 +853,10 @@ include("includes/mheader.php");
             <button type="button" class="ms-new-btn" id="ms-new-sample-btn">+ New Sample</button>
             <a class="ms-io-btn" href="/samples_import.php" title="Bulk-import samples from a spreadsheet (XLSX/CSV)">&#8682; Import</a>
             <a class="ms-io-btn" href="/samples_tabular_download.php?what=export" title="Download your samples as a spreadsheet"><span class="ms-io-flip">&#8682;</span> Export</a>
-            <input type="text" id="ms-search" placeholder="Search ID, location, internal…" autocomplete="off">
+            <span class="ms-search-wrap">
+                <input type="text" id="ms-search" placeholder="Search ID, location, internal…" autocomplete="off">
+                <button type="button" class="ms-search-clear" id="ms-search-clear" aria-label="Clear search" hidden>&times;</button>
+            </span>
             <select id="ms-sort">
                 <option value="modified_desc">Sort: Most recent</option>
                 <option value="modified_asc">Sort: Oldest</option>
@@ -1074,6 +1107,7 @@ include("includes/mheader.php");
     // Reflect URL-derived state into the controls before first render so
     // the inputs/dropdowns/tabs match what the user is seeing.
     document.getElementById('ms-search').value = state.search;
+    document.getElementById('ms-search-clear').hidden = !state.search;
     document.getElementById('ms-sort').value = state.sort;
     syncTypeControls();
     document.querySelectorAll('.ms-tab[data-show]').forEach(function(b) {
@@ -1099,6 +1133,7 @@ include("includes/mheader.php");
     var $cards     = document.getElementById('ms-cards');
     var $count     = document.getElementById('ms-result-count');
     var $search    = document.getElementById('ms-search');
+    var $searchClear = document.getElementById('ms-search-clear');
     var $sort      = document.getElementById('ms-sort');
     var $typeTabs  = document.querySelectorAll('.ms-tab[data-type]');
     var $showTabs  = document.querySelectorAll('.ms-tab[data-show]');
@@ -1300,8 +1335,17 @@ include("includes/mheader.php");
     // subsequent navigate-away → browser-back lands on the same view.
     $search.addEventListener('input', function(e) {
         state.search = e.target.value;
+        $searchClear.hidden = !state.search;
         syncUrl();
         render();
+    });
+    $searchClear.addEventListener('click', function() {
+        state.search = '';
+        $search.value = '';
+        $searchClear.hidden = true;
+        syncUrl();
+        render();
+        $search.focus();
     });
     $sort.addEventListener('change', function(e) {
         state.sort = e.target.value;
