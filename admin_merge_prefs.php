@@ -206,8 +206,7 @@ include("includes/mheader.php");
 <style>
 /* Palette follows the site-wide dark-theme conventions (see my_samples.php):
    translucent-white surfaces, #2a2a3a panels, #e44c65 accent. */
-.amp-wrap { max-width: 900px; margin: 0 auto; padding: 0 1em; }
-.amp-intro { max-width: 700px; margin: 0 auto 1.5em auto; }
+.amp-intro { max-width: 700px; margin: 0 auto 1.5em auto; text-align: center; }
 .amp-flash { text-align: center; margin: 10px; color: #7bd88f; }
 .amp-flash-err { text-align: center; margin: 10px; color: #f06880; }
 .amp-picker { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2);
@@ -256,10 +255,13 @@ include("includes/mheader.php");
 .amp-table td { padding: 0.35em 0.6em; }
 </style>
 
-<div class="amp-wrap">
+<div id="main" class="wrapper style1">
+	<div class="container">
 
-	<div align="center">
-		<h2>Project Merge Preferences</h2>
+		<header class="major">
+			<h2>Project Merge Preferences</h2>
+		</header>
+
 		<p class="amp-intro">
 			Projects listed here use <strong>union</strong> tag-merge semantics on upload even with no
 			collaborators: geologic units absent from a device's upload are kept, never deleted.
@@ -267,7 +269,6 @@ include("includes/mheader.php");
 			projects, deleting a unit from the app will no longer stick (remove it server-side instead),
 			and a project that later gains real collaborators no longer needs its flag.
 		</p>
-	</div>
 
 <?php if($flash != ""){ ?>
 	<div class="amp-flash"><?php echo htmlspecialchars($flash); ?></div>
@@ -348,6 +349,7 @@ if($rows){
 		</table>
 	</div>
 
+	</div>
 </div>
 
 <script>
