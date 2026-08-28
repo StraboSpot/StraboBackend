@@ -204,34 +204,55 @@ include("includes/mheader.php");
 ?>
 
 <style>
+/* Palette follows the site-wide dark-theme conventions (see my_samples.php):
+   translucent-white surfaces, #2a2a3a panels, #e44c65 accent. */
 .amp-wrap { max-width: 900px; margin: 0 auto; padding: 0 1em; }
 .amp-intro { max-width: 700px; margin: 0 auto 1.5em auto; }
-.amp-flash { text-align: center; margin: 10px; color: #2e7d32; }
-.amp-flash-err { text-align: center; margin: 10px; color: #c62828; }
-.amp-picker { border: 1px solid #ccc; border-radius: 6px; padding: 1em 1.25em; margin-bottom: 2em; }
+.amp-flash { text-align: center; margin: 10px; color: #7bd88f; }
+.amp-flash-err { text-align: center; margin: 10px; color: #f06880; }
+.amp-picker { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 6px; padding: 1em 1.25em; margin-bottom: 2em; }
 .amp-picker h4 { margin-top: 0; }
 .amp-field { margin-bottom: 0.75em; position: relative; }
-.amp-field label { display: block; font-weight: bold; margin-bottom: 0.25em; }
-.amp-field input[type=text] { width: 100%; max-width: 420px; box-sizing: border-box; }
-.amp-userlist { position: absolute; z-index: 50; background: #fff; border: 1px solid #aaa;
+.amp-field label { display: block; font-weight: bold; margin-bottom: 0.25em; color: #ffffff; }
+.amp-field input[type=text] { width: 100%; max-width: 420px; box-sizing: border-box;
+	background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 4px; color: #ffffff; padding: 0.6em 0.8em; font-size: 1em; }
+.amp-field input[type=text]:focus { border-color: #e44c65; outline: none; }
+.amp-userlist { position: absolute; z-index: 50; background: #2a2a3a;
+	border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px;
 	max-width: 420px; width: 100%; box-sizing: border-box; max-height: 260px; overflow-y: auto;
-	margin: 0; padding: 0; list-style: none; box-shadow: 0 3px 8px rgba(0,0,0,0.15); }
-.amp-userlist li { padding: 0.4em 0.6em; cursor: pointer; border-bottom: 1px solid #eee; }
-.amp-userlist li:hover { background: #f0f0f0; }
-.amp-userlist li .amp-uname { color: #666; font-size: 0.9em; }
-.amp-chosen { display: inline-block; background: #eef3f7; border: 1px solid #b8c8d4;
-	border-radius: 4px; padding: 0.3em 0.6em; margin-bottom: 0.5em; }
-.amp-chosen a { margin-left: 0.6em; cursor: pointer; }
-.amp-projlist { border: 1px solid #ccc; max-width: 640px; max-height: 320px; overflow-y: auto;
+	margin: 0; padding: 0; list-style: none; box-shadow: 0 3px 10px rgba(0, 0, 0, 0.5); }
+.amp-userlist li { padding: 0.4em 0.6em; cursor: pointer; color: #ffffff;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1); text-align: left; }
+.amp-userlist li:hover { background: rgba(255, 255, 255, 0.08); }
+.amp-userlist li .amp-uname { color: rgba(255, 255, 255, 0.6); font-size: 0.9em; }
+.amp-chosen { display: inline-block; background: rgba(255, 255, 255, 0.12);
+	border: 1px solid rgba(255, 255, 255, 0.2); border-radius: 4px; color: #ffffff;
+	padding: 0.3em 0.6em; margin-bottom: 0.5em; }
+.amp-chosen a { margin-left: 0.6em; cursor: pointer; color: #e44c65; }
+.amp-projlist { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.2);
+	border-radius: 4px; max-width: 640px; max-height: 320px; overflow-y: auto;
 	margin: 0.25em 0 0.75em 0; padding: 0; list-style: none; }
-.amp-projlist li { padding: 0.45em 0.6em; cursor: pointer; border-bottom: 1px solid #eee;
-	display: flex; justify-content: space-between; gap: 1em; }
-.amp-projlist li:hover { background: #f0f0f0; }
-.amp-projlist li.amp-selected { background: #dbe9f5; }
-.amp-projlist li.amp-alreadyflagged { color: #999; cursor: default; }
-.amp-projlist li .amp-pmeta { color: #666; font-size: 0.85em; white-space: nowrap; }
-.amp-empty { color: #666; font-style: italic; }
+.amp-projlist li { padding: 0.45em 0.6em; cursor: pointer; color: #ffffff;
+	border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+	display: flex; justify-content: space-between; gap: 1em; text-align: left; }
+.amp-projlist li:hover { background: rgba(255, 255, 255, 0.08); }
+.amp-projlist li.amp-selected { background: rgba(228, 76, 101, 0.25); }
+.amp-projlist li.amp-alreadyflagged { color: rgba(255, 255, 255, 0.4); cursor: default; }
+.amp-projlist li.amp-alreadyflagged:hover { background: transparent; }
+.amp-projlist li .amp-pmeta { color: rgba(255, 255, 255, 0.6); font-size: 0.85em; white-space: nowrap; }
+.amp-empty { color: rgba(255, 255, 255, 0.6); font-style: italic; }
 .amp-submitrow { margin-top: 0.75em; }
+.amp-submitrow button { background: #e44c65; color: #ffffff; border: none; border-radius: 4px;
+	padding: 0.6em 1.1em; font-size: 1em; cursor: pointer; }
+.amp-submitrow button:hover { background: #f06880; }
+.amp-submitrow button:disabled { background: rgba(255, 255, 255, 0.12);
+	color: rgba(255, 255, 255, 0.4); cursor: default; }
+.amp-summary { margin-left: 0.75em; color: rgba(255, 255, 255, 0.8); }
+.amp-remove-btn { background: rgba(255, 255, 255, 0.12); color: #ffffff; border: none;
+	border-radius: 4px; padding: 0.4em 0.8em; cursor: pointer; }
+.amp-remove-btn:hover { background: rgba(255, 255, 255, 0.2); }
 .amp-table td { padding: 0.35em 0.6em; }
 </style>
 
@@ -280,7 +301,7 @@ include("includes/mheader.php");
 			</div>
 			<div class="amp-submitrow">
 				<button type="submit" id="ampSubmit" disabled>Flag Project</button>
-				<span id="ampSummary" style="margin-left:0.75em; color:#444;"></span>
+				<span id="ampSummary" class="amp-summary"></span>
 			</div>
 		</form>
 	</div>
@@ -312,7 +333,7 @@ if($rows){
 					<form method="post" action="/admin_merge_prefs" onsubmit="return confirm('Remove the union-merge flag from project <?php echo htmlspecialchars($row->strabo_project_id); ?>? Its uploads go back to solo replace semantics.');">
 						<input type="hidden" name="action" value="remove">
 						<input type="hidden" name="pkey" value="<?php echo (int)$row->pkey; ?>">
-						<button type="submit">Remove</button>
+						<button type="submit" class="amp-remove-btn">Remove</button>
 					</form>
 				</td>
 			</tr>
