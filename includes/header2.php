@@ -622,6 +622,7 @@ if($_SESSION['userpkey']=="3"){
 					if($_SESSION['userpkey']=="3"){
 					?>
 							<li id=''><a href='/microErrorReports' ><span class='wsite-menu-title'>Micro Error Reports</span></a></li>
+							<li id=''><a href='/admin_merge_prefs' ><span class='wsite-menu-title'>Project Merge Prefs</span></a></li>
 							<li id=''><a href='#' onclick="acc();"><span class='wsite-menu-title'>Blink</span></a></li>
 					<?php
 					}

@@ -233,6 +233,7 @@ if(in_array($userpkey, array(3, 7217))){
 if($_SESSION['userpkey']=="3"){
 ?>
 									<li><a href="/microErrorReports">Micro Error Reports</a></li>
+									<li><a href="/admin_merge_prefs">Project Merge Prefs</a></li>
 <?php
 }
 ?>

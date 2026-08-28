@@ -3805,7 +3805,19 @@ public function getSpotName($id){
 			"select count(*) from collaborators where strabo_project_id = $1 and project_owner_user_pkey = $2",
 			array((string)$project_id, $this->userpkey));
 
-		if($collabcount == 0 && $tags_present){
+		// Multi-device shared-credential groups (several iPads uploading under
+		// one account) have zero collaborator rows and so look "solo" here, but
+		// replace semantics would let each device's upload wipe tags the other
+		// devices created. project_merge_prefs (managed via admin_merge_prefs.php)
+		// flags such projects to keep the union path.
+		$force_union = false;
+		if($collabcount == 0){
+			$force_union = (int)$this->db->get_var_prepared(
+				"select count(*) from project_merge_prefs where strabo_project_id = $1 and project_owner_user_pkey = $2 and union_tags = true",
+				array((string)$project_id, $this->userpkey)) > 0;
+		}
+
+		if($collabcount == 0 && !$force_union && $tags_present){
 			// Solo project: incoming snapshot replaces the server copy.
 			// An explicit empty list means "all tags deleted" and must
 			// clear the stored copy; an ABSENT tags field (partial upload)
