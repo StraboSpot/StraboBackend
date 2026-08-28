@@ -489,6 +489,96 @@ test("BS6. Solo: delete → download → re-upload round trip converges (deleted
     "HTTP {$r['code']} | tags=" . json_encode($g2['body']['tags'] ?? null));
 
 // ===========================================================================
+// SECTION B-M: Per-project union merge preference (project_merge_prefs)
+// Multi-device shared-credential groups (several iPads, one account) look
+// "solo" to the server; a project_merge_prefs row forces the union path so
+// one device's upload cannot wipe units another device created. Requires
+// sql/project_merge_prefs.sql applied. See docs/GeologicUnits_TagDeletion_Proposal.md.
+// ===========================================================================
+section("B-M. Union merge preference (multi-device solo project)");
+
+$db->prepare_query("delete from project_merge_prefs where strabo_project_id = $1", array((string)$projectSoloId));
+$db->prepare_query(
+    "insert into project_merge_prefs (strabo_project_id, project_owner_user_pkey, union_tags, note) values ($1, $2, true, 'merge-suite fixture')",
+    array((string)$projectSoloId, $ownerPkey));
+
+// BM1. Flagged solo project: tag absent from the upload SURVIVES (union).
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [
+        ['id' => 3101, 'name' => 'Unit Mine',   'type' => 'geologic_unit', 'spots' => [7777777701]],
+        ['id' => 3102, 'name' => 'Unit Theirs', 'type' => 'geologic_unit', 'spots' => [7777777702]],
+    ],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, [
+        'tags' => [['id' => 3101, 'name' => 'Unit Mine', 'type' => 'geologic_unit', 'spots' => [7777777701]]],
+    ]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BM1. Flagged solo: tag absent from upload is KEPT (union, no clobber)",
+    $r['code'] == 201 && findTag($g['body'], 3101) !== null && findTag($g['body'], 3102) !== null,
+    "HTTP {$r['code']} | mine=" . (findTag($g['body'], 3101) ? 'yes' : 'no') .
+    " theirs=" . (findTag($g['body'], 3102) ? 'KEPT' : 'WIPED'));
+
+// BM2. The three-iPad nightly cycle (the 2026-08-28 Wesdome report): each
+// device uploads its own local unit list; nobody's units get deleted.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+$mkUnit = function ($id, $name) {
+    return ['id' => $id, 'name' => $name, 'type' => 'geologic_unit', 'spots' => []];
+};
+makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => [$mkUnit(3103, 'Basalt')]]));
+makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => [$mkUnit(3103, 'Basalt'), $mkUnit(3104, 'Gabbro')]]));
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => [$mkUnit(3103, 'Basalt'), $mkUnit(3105, 'Granite')]]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BM2. Flagged solo: three-device alternating uploads accumulate all units",
+    $r['code'] == 201 && findTag($g['body'], 3103) !== null
+    && findTag($g['body'], 3104) !== null && findTag($g['body'], 3105) !== null,
+    "HTTP {$r['code']} | units=" . json_encode(array_map(
+        function ($t) { return $t['name'] ?? '?'; }, $g['body']['tags'] ?? [])));
+
+// BM3. Flagged solo: property edits still win under union; spots still union.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [['id' => 3106, 'name' => 'Old Name', 'color' => 'red', 'spots' => [7777777701]]],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, [
+        'tags' => [['id' => 3106, 'name' => 'New Name', 'color' => 'blue', 'spots' => [7777777702]]],
+    ]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+$t = findTag($g['body'], 3106);
+test("BM3. Flagged solo: incoming properties win, spot memberships union",
+    $r['code'] == 201 && $t !== null
+    && ($t['color'] ?? '') === 'blue' && ($t['name'] ?? '') === 'New Name'
+    && in_array(7777777701, $t['spots'] ?? []) && in_array(7777777702, $t['spots'] ?? []),
+    "HTTP {$r['code']} | tag=" . json_encode($t));
+
+// BM4. Removing the flag restores solo replace semantics.
+$db->prepare_query("delete from project_merge_prefs where strabo_project_id = $1", array((string)$projectSoloId));
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [
+        ['id' => 3107, 'name' => 'Kept',    'type' => 'geologic_unit', 'spots' => []],
+        ['id' => 3108, 'name' => 'Dropped', 'type' => 'geologic_unit', 'spots' => []],
+    ],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, [
+        'tags' => [['id' => 3107, 'name' => 'Kept', 'type' => 'geologic_unit', 'spots' => []]],
+    ]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BM4. Flag removed: solo replace semantics return (omitted tag deleted)",
+    $r['code'] == 201 && findTag($g['body'], 3107) !== null && findTag($g['body'], 3108) === null,
+    "HTTP {$r['code']} | kept=" . (findTag($g['body'], 3107) ? 'yes' : 'no') .
+    " dropped=" . (findTag($g['body'], 3108) ? 'STILL PRESENT' : 'gone'));
+
+// B-M cleanup: no pref rows left behind.
+$db->prepare_query("delete from project_merge_prefs where strabo_project_id = $1", array((string)$projectSoloId));
+
+// ===========================================================================
 // SECTION C: Per-report ownership merge
 // ===========================================================================
 section("C. Per-report ownership merge (mergeReports / mergeReportComments)");
