@@ -605,6 +605,18 @@ include("includes/mheader.php");
     grid-template-columns: 1fr 1fr;
     gap: 0 1em;
 }
+.ms-parent-chip {
+    display: inline-block;
+    font-size: 0.8em;
+    color: rgba(255, 255, 255, 0.7);
+    background: rgba(255, 255, 255, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 4px;
+    padding: 0.15em 0.5em;
+    margin: 0.2em 0 0.4em 0;
+}
+.ms-parent-chip a { color: #e44c65; text-decoration: none; }
+.ms-parent-chip a:hover { color: #f06880; }
 .ms-parent-picker { position: relative; }
 .ms-parent-clear {
     position: absolute;
@@ -927,12 +939,15 @@ include("includes/mheader.php");
 
     var rawData = JSON.parse(document.getElementById('ms-data').textContent || '[]');
 
-    // Children map keyed by `${parent_sample_id}|${parent_userpkey}`. Top-level
-    // cards = samples whose own parent isn't in the visible list (the rest
-    // surface only via their parent's expand toggle). At launch this map is
-    // empty since parent/child isn't migrated; it fills in as users set
-    // parents via the API.
+    // Children map keyed by `${parent_sample_id}|${parent_userpkey}`, used
+    // for the parent card's expand toggle. EVERY sample also keeps its own
+    // top-level card (searchable, counted, filtered) — assigning a parent
+    // must never hide a sample from the list (2026-08-28 report: a sample
+    // given a parent "vanished"; the old code nested it under the parent
+    // only). Child cards carry a "Child of …" reference instead.
     var visibleKey = new Set(rawData.map(function(s) { return s.id + '|' + s.userpkey; }));
+    var sampleByKey = {};
+    rawData.forEach(function(s) { sampleByKey[s.id + '|' + s.userpkey] = s; });
     var childrenByParent = {};
     rawData.forEach(function(s) {
         if (s.parent_sample_id && s.parent_userpkey && visibleKey.has(s.parent_sample_id + '|' + s.parent_userpkey)) {
@@ -941,9 +956,7 @@ include("includes/mheader.php");
             childrenByParent[pk].push(s);
         }
     });
-    var topLevel = rawData.filter(function(s) {
-        return !(s.parent_sample_id && s.parent_userpkey && visibleKey.has(s.parent_sample_id + '|' + s.parent_userpkey));
-    });
+    var topLevel = rawData.slice();
 
     // Scroll-position restore: when the user returns from a sample
     // detail page (browser back OR explicit Back link), put them back
@@ -1207,12 +1220,27 @@ include("includes/mheader.php");
             pillHtml = '<div class="ms-relationship-pill shared-with-me" title="' + escapeHtml('Shared by ' + ownerName) + '">Shared by ' + escapeHtml(ownerName) + '</div>';
         }
 
+        // "Child of …" reference: a parented sample stays a full card in the
+        // list; this chip is how the hierarchy shows on the child's side
+        // (linking to the parent's overview when the parent is readable).
+        var parentChip = '';
+        if (sample.parent_sample_id && sample.parent_userpkey) {
+            var parent = sampleByKey[sample.parent_sample_id + '|' + sample.parent_userpkey];
+            var parentLabel = 'Child of ' + escapeHtml(parent ? (parent.name || parent.id) : sample.parent_sample_id);
+            if (parent) {
+                parentChip = '<div class="ms-parent-chip"><a href="' + escapeHtml(viewSampleHref(parent)) + '" title="View parent sample">' + parentLabel + '</a></div>';
+            } else {
+                parentChip = '<div class="ms-parent-chip">' + parentLabel + '</div>';
+            }
+        }
+
         var html = '';
         html += '<div class="ms-card">';
         html += '  <div class="ms-card-row">';
         html += '    <div class="ms-card-meta">';
         html += '      <div class="ms-sample-id">' + highlight(sample.name || sample.id, q) + '</div>';
         html += '      ' + pillHtml;
+        html += '      ' + parentChip;
         html += '      <div class="ms-row"><strong>Material:</strong> ' + highlight(sample.display_sample_type || '—', q) + '</div>';
         html += '      <div class="ms-row"><strong>Purpose:</strong> ' + highlight(sample.display_sample_purpose || '—', q) + '</div>';
         html += '      <div class="ms-row"><strong>Updated:</strong> ' + fmtDate(sample.modified_at) + '</div>';
@@ -1617,16 +1645,15 @@ include("includes/mheader.php");
         };
         rawData.unshift(spine);
         visibleKey.add(spine.id + '|' + spine.userpkey);
+        sampleByKey[spine.id + '|' + spine.userpkey] = spine;
         if (spine.parent_sample_id && spine.parent_userpkey
             && visibleKey.has(spine.parent_sample_id + '|' + spine.parent_userpkey)) {
             var pk = spine.parent_sample_id + '|' + spine.parent_userpkey;
             if (!childrenByParent[pk]) childrenByParent[pk] = [];
             childrenByParent[pk].push(spine);
-            // Child of a visible parent — only surfaces via the parent's
-            // expand toggle, so leave topLevel alone.
-        } else {
-            topLevel.unshift(spine);
         }
+        // Every sample gets a top-level card, parented or not.
+        topLevel.unshift(spine);
         // Open the new sample's overview in a new tab. The MySamples
         // list stays as the user's anchor (matches the "View Subsystem
         // …" new-tab convention from samples/ui-newtab-subsystem-views).
