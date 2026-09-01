@@ -104,6 +104,7 @@ include("includes/mheader.php");
 
 		<div id="me-list" class="me-list" aria-live="polite"><div class="me-empty">Loading…</div></div>
 		<div class="me-footnote">Finished exports are kept for <?php echo (int)$meCfg['retention_days']; ?> days, then the file is removed. Expired exports can be re-run at any time.</div>
+		<div class="bottomSpacer"></div>
 	</div>
 </div>
 
