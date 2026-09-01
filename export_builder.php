@@ -93,7 +93,7 @@ if (isset($_GET['p']) && preg_match('/^[0-9]{1,20}$/', (string)$_GET['p'])) {
  * users that were in the result set cannot be exported and are not offered.
  * Returns {initial, note} or null when the payload is unusable.
  */
-function eb_from_search($db, $userpkey, array $projects, $dsl)
+function eb_from_search($db, $neodb, $userpkey, array $projects, $dsl)
 {
 	if (!is_array($dsl)) return null;
 	require_once __DIR__ . '/searchdb/services/SearchQueryBuilder.php';
@@ -114,6 +114,35 @@ function eb_from_search($db, $userpkey, array $projects, $dsl)
 			$note[] = 'The search filters could not be carried over (' . $e->getMessage() . ').';
 			$kept = array(); $validated = null;
 		}
+	}
+
+	// Public StraboField projects in the result set (Jason 09-01: the search
+	// door carries everything the search showed, public data included; the
+	// account-menu door stays own + collaborated). Page the same projects
+	// query the results list runs (same ACL), and add the public Field
+	// projects the picker does not already hold as a third access level.
+	$extra = array();
+	if ($validated !== null && !$fieldExcluded && $validated['criteria']) {
+		$have = array();
+		foreach ($projects as $p) $have[$p['id'] . '|' . $p['owner']] = true;
+		$pageDsl = $validated; $pageDsl['page_size'] = 100; $pageDsl['sort'] = 'modified_desc';
+		for ($page = 0; $page < 5 && count($extra) < 50; $page++) {
+			$pageDsl['page'] = $page;
+			$r = $qb->runProjectsQuery($pageDsl);
+			foreach ($r['results'] as $row) {
+				if ($row['project_subsystem'] !== 'field' || empty($row['project_ispublic'])) continue;
+				$k = $row['project_id'] . '|' . (int)$row['project_userpkey'];
+				if (isset($have[$k])) continue;
+				$have[$k] = true;
+				$pn = $neodb->get_results("MATCH (u:User {userpkey: " . (int)$row['project_userpkey'] . "})-[:HAS_PROJECT]->(p:Project {id: " . (int)$row['project_id'] . "}) OPTIONAL MATCH (p)-[:HAS_DATASET]->(d:Dataset) OPTIONAL MATCH (d)-[:HAS_SPOT]->(s:Spot) WITH p, d, count(s) AS count WITH p, collect({d: d, count: count}) AS d RETURN p, d LIMIT 1");
+				if (!$pn) continue;
+				$pn = $pn[0];
+				$extra[] = eb_project_entry($pn->get('p'), $pn->get('d'), (int)$row['project_userpkey'], 'public', isset($row['owner_name']) && $row['owner_name'] !== '' ? (string)$row['owner_name'] : ('user ' . (int)$row['project_userpkey']));
+				if (count($extra) >= 50) break;
+			}
+			if (count($r['results']) < 100) break;
+		}
+		$projects = array_merge($projects, $extra);
 	}
 
 	$candidates = array();
@@ -139,16 +168,20 @@ function eb_from_search($db, $userpkey, array $projects, $dsl)
 	}
 	if (!$fieldExcluded) {
 		$shown = implode(', ', array_slice($names, 0, 6)) . (count($names) > 6 ? ' and ' . (count($names) - 6) . ' more' : '');
+		$nPublic = 0;
+		foreach ($matched as $m) foreach ($extra as $x) if ($x['id'] === $m['project_id'] && $x['owner'] === $m['owner']) { $nPublic++; break; }
+		$nMine = $total - $nPublic;
 		$lead = $total === 0
-			? 'None of your StraboField projects have spots matching these filters. Pick projects below or loosen the filters.'
-			: ($total . ' of your StraboField project' . ($total === 1 ? ' has' : 's have') . ' spots matching these filters and ' . ($total === 1 ? 'is' : 'are') . ' preselected: ' . $shown . '.');
+			? 'No StraboField project you can see has spots matching these filters. Pick projects below or loosen the filters.'
+			: ($total . ' StraboField project' . ($total === 1 ? ' has' : 's have') . ' spots matching these filters and ' . ($total === 1 ? 'is' : 'are') . ' preselected'
+				. ($nPublic ? ' (' . $nMine . ' of yours, ' . $nPublic . ' public)' : '') . ': ' . $shown . '.');
 		array_unshift($note, $lead);
 	}
 	if ($dropped) $note[] = $dropped . ' filter row' . ($dropped === 1 ? '' : 's') . ' that cannot apply to StraboField exports (Micro, Experimental, Image, owner or subsystem rows) ' . ($dropped === 1 ? 'was' : 'were') . ' left out.';
 
 	$initial = array('scope' => $scope, 'criteria' => $kept, 'children' => 'matched_parents', 'formats' => array('geojson'),
 		'layout' => 'merged', 'extras' => array(), 'sample_list_csv' => false, 'notes' => '');
-	return array('initial' => $initial, 'note' => implode(' ', $note));
+	return array('initial' => $initial, 'note' => implode(' ', $note), 'extra' => $extra);
 }
 
 $ebInitial = null; $ebFromSummary = null; $ebFromSearch = null;
@@ -157,8 +190,8 @@ if (isset($_GET['from']) && UUID::is_valid((string)$_GET['from'])) {
 	$src = $ebSvc->get((string)$_GET['from'], $userpkey);      // owner-scoped: someone else's uuid is simply ignored
 	if ($src && is_array($src['recipe'])) { $ebInitial = $src['recipe']; $ebFromSummary = $src['recipe_summary']; }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['search_dsl'])) {
-	$door = eb_from_search($db, $userpkey, $ebProjects, json_decode((string)$_POST['search_dsl'], true));
-	if ($door) { $ebInitial = $door['initial']; $ebFromSearch = $door['note']; }
+	$door = eb_from_search($db, $neodb, $userpkey, $ebProjects, json_decode((string)$_POST['search_dsl'], true));
+	if ($door) { $ebInitial = $door['initial']; $ebFromSearch = $door['note']; $ebProjects = array_merge($ebProjects, $door['extra']); }
 }
 
 $ebFormats = array(
@@ -219,6 +252,7 @@ body { overflow: visible; }
 .eb-ds label small { color: rgba(255,255,255,0.5); margin-left: 0.4em; }
 .eb-proj input[type="checkbox"] + label { padding-left: 2.2em; margin: 0; }
 .eb-proj input[type="checkbox"] + label:before { top: 0; }
+.eb-group { padding: 0.5em 0.75em; font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .eb-empty { padding: 1.5em; text-align: center; color: rgba(255,255,255,0.6); }
 .eb-hidden { display: none !important; }
 .eb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17em, 1fr)); gap: 0.25em 1.5em; }

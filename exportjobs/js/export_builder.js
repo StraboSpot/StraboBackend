@@ -41,8 +41,13 @@
 			box.appendChild(el('div', 'eb-empty', 'You have no StraboField projects yet, and no collaborations. Upload a project from the StraboField app first.'));
 			return;
 		}
+		var publicHeaded = false;
 		CFG.projects.forEach(function (p) {
 			var key = p.id + '|' + p.owner;
+			if (p.access === 'public' && !publicHeaded) {   // door-supplied public projects follow own + shared
+				publicHeaded = true;
+				box.appendChild(el('div', 'eb-group', 'Public projects from your search'));
+			}
 			var wrap = el('div', 'eb-proj');
 			wrap.setAttribute('data-key', key);
 			wrap.setAttribute('data-name', p.name.toLowerCase());
@@ -56,7 +61,7 @@
 			var partial = el('small', 'eb-partial', '');
 			lab.appendChild(partial);
 			row.appendChild(cb); row.appendChild(lab);
-			var acc = el('span', 'eb-access', p.access === 'owner' ? 'own' : 'shared by ' + p.owner_name);
+			var acc = el('span', 'eb-access', p.access === 'owner' ? 'own' : (p.access === 'public' ? 'public \u00b7 ' : 'shared by ') + p.owner_name);
 			row.appendChild(acc);
 			var tog = el('button', 'eb-toggle', 'datasets');
 			tog.type = 'button'; tog.setAttribute('aria-expanded', 'false');
