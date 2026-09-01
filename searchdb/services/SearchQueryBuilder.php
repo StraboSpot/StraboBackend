@@ -1113,6 +1113,65 @@ SELECT json_build_object(
      * refetch); kept for future use, e.g. a viewport-limited mode if
      * project volumes ever outgrow the cap.
      */
+    // ═══════════════════════════════════════════════════════════════════
+    // Export Builder FIND stage (docs/ExportBuilder_Design.md §7.1)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Item ids matching the DSL's NON-spatial criteria inside an explicit
+     * project/dataset scope, under the standard ACL. Field spots only.
+     * Spatial (U2) rows are skipped here on purpose: the index holds a
+     * centroid point per spot, so a polygon test on it cannot honor the
+     * export's "intersects" semantics for lines/polygons; the gather stage
+     * tests full geometries with GEOS instead.
+     *
+     * @param array $dsl    validated DSL (validate())
+     * @param array $scope  list of {project_id:string, owner:int, dataset_ids:string[]|null}
+     * @param int   $limit  hard cap; the caller treats == $limit rows as overflow
+     * @return array rows {item_id, project_id, project_userpkey, dataset_ids}
+     */
+    public function runItemIdsQuery($dsl, array $scope, $limit)
+    {
+        $this->resetParams();
+        $noSpatial = $dsl;
+        $noSpatial['criteria'] = array();
+        foreach ($dsl['criteria'] as $c) {
+            if ($c['id'] !== 'U2') $noSpatial['criteria'][] = $c;
+        }
+        list($where) = $this->itemWhere($noSpatial);
+
+        $scopeParts = array();
+        foreach ($scope as $sc) {
+            $part = "(ih.project_id = " . $this->bind((string)$sc['project_id'])
+                . " AND ih.project_userpkey = " . $this->bind((int)$sc['owner']) . "::int";
+            if (!empty($sc['dataset_ids'])) {
+                $part .= " AND ih.dataset_ids && " . $this->bind(self::pgArrayLiteral($sc['dataset_ids'])) . "::text[]";
+            }
+            $scopeParts[] = $part . ")";
+        }
+        if (!$scopeParts) return array();
+        $lim = $this->bind((int)$limit);
+
+        $sql = "SELECT ih.item_id, ih.project_id, ih.project_userpkey, ih.dataset_ids
+                  FROM strabosearch.item_hit ih
+                 WHERE ih.item_type = 'spot' AND ih.project_subsystem = 'field'
+                   AND (" . implode(" OR ", $scopeParts) . ")
+                   AND $where
+                 ORDER BY ih.project_id, ih.item_id
+                 LIMIT $lim";
+        $rows = $this->execPrepared($sql);
+        $out = array();
+        foreach ($rows as $r) {
+            $out[] = array(
+                'item_id'         => (string)$r->item_id,
+                'project_id'      => (string)$r->project_id,
+                'project_userpkey'=> (int)$r->project_userpkey,
+                'dataset_ids'     => $r->dataset_ids,
+            );
+        }
+        return $out;
+    }
+
     public function validateGeo($geo)
     {
         $out = array(

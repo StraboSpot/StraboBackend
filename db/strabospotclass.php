@@ -2087,6 +2087,17 @@ class StraboSpot
 		$envelope = $get['envelope'];
 		$getuserpkey = $get['userpkey'];
 
+		// Export Builder (docs/ExportBuilder_Design.md §7.3): optional spot-id
+		// restriction so the FIND stage's resolved set drives every generator
+		// unchanged. Ids are cast to int per element (never interpolated raw);
+		// an explicitly EMPTY list matches nothing. Callers chunk large lists.
+		$spotidstring = "";
+		if(isset($get['spot_ids'])){
+			$sids = is_array($get['spot_ids']) ? $get['spot_ids'] : explode(",", (string)$get['spot_ids']);
+			$sids = array_values(array_unique(array_filter(array_map('intval', $sids))));
+			$spotidstring = count($sids) ? "and s.id in [".implode(",", $sids)."] " : "and false ";
+		}
+
 		if($range=="envelope"){
 			$parts = explode(",",$envelope);
 			$left = $parts[0]-$offset;
@@ -2124,7 +2135,7 @@ class StraboSpot
 
 		$querystring = "
 				$envelopestring
-				match (d:Dataset)-[r:HAS_SPOT]->(s:Spot) where d.id in [$dsids] $userpkeystring
+				match (d:Dataset)-[r:HAS_SPOT]->(s:Spot) where d.id in [$dsids] $userpkeystring $spotidstring
 				$imagestring
 				$orientationstring
 				$samplestring
