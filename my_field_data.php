@@ -301,7 +301,7 @@ if($collaboration_rows != ""){
 												<select class="myDataSelect" id="pdl-<?php echo $projectid?>" onChange="doProjectDownload(<?php echo $projectid?>,'<?php echo $dropdown_projectname?>');">
 													<option value="" style="display:none">Options...</option>
 <?php
-if($collaboration_level == "edit"){
+if($collaboration_level == "editttt"){ //Turn this option off for now per request from Jessica Novak 20260831
 ?>
 													<option value="edit">View/Edit/Add Data</option>
 <?php
