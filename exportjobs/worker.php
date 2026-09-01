@@ -29,6 +29,9 @@ if (php_sapi_name() !== 'cli') {
 }
 
 chdir(__DIR__ . '/..');
+// Legacy generators and their libraries resolve includes through the web
+// server's document root (e.g. includes/PDF_LabBook.php); the CLI has none.
+if (empty($_SERVER['DOCUMENT_ROOT'])) $_SERVER['DOCUMENT_ROOT'] = getcwd();
 ini_set('memory_limit', '4G');
 ini_set('max_execution_time', 0);
 require_once 'includes/config.inc.php';
@@ -38,6 +41,7 @@ require_once __DIR__ . '/lib/export_config.php';
 require_once __DIR__ . '/lib/ExportJobService.php';
 require_once __DIR__ . '/lib/ExportRunner.php';
 require_once __DIR__ . '/plugins/EchoExportPlugin.php';
+require_once __DIR__ . '/plugins/FieldExportPlugin.php';
 
 $MODE = null; $JOB = null;
 foreach (array_slice($argv, 1) as $arg) {
@@ -58,8 +62,7 @@ $log = function ($m) use ($cfg) {
 	echo $line;
 	@file_put_contents(rtrim($cfg['log_root'], '/') . '/worker.log', $line, FILE_APPEND);
 };
-$plugins = array(new EchoExportPlugin());
-// M2+: $plugins[] = new FieldExportPlugin($db, $neodb, ...);
+$plugins = array(new EchoExportPlugin(), new FieldExportPlugin($db, $neodb, $cfg));
 $runner = new ExportRunner($svc, $plugins, $log);
 
 foreach (array($cfg['results_root'], $cfg['work_root'], $cfg['log_root']) as $d) {

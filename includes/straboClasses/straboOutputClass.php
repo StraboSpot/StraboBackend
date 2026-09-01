@@ -11,6 +11,8 @@
  */
 
 
+if(!class_exists('ExportNoDataException')){ class ExportNoDataException extends Exception {} }
+
 class straboOutputClass
 {
 
@@ -39,6 +41,75 @@ class straboOutputClass
 			}
 		}
 	 }
+
+	// =====================================================================
+	// Export Builder capture seam (docs/ExportBuilder_Design.md §8.2).
+	// Legacy page downloads never set $captureDir, so every generator
+	// streams exactly as before. The export worker sets it and each
+	// generator's final delivery line writes into the bundle directory
+	// instead. Data paths are untouched: parity is by construction.
+	// =====================================================================
+	public $captureDir = null;
+	public $captured = array();
+
+	public function capturing(){ return $this->captureDir !== null; }
+
+	/** Unique target path inside the capture dir for a delivery name. */
+	private function captureTarget($name){
+		$name = preg_replace('/[^A-Za-z0-9._ -]/', '_', basename($name));
+		if($name === '' || $name === '.' || $name === '..') $name = 'output';
+		$path = rtrim($this->captureDir, '/') . '/' . $name;
+		$base = $path; $n = 1;
+		while(file_exists($path)){ $n++; $path = preg_replace('/(\.[^.]*)?$/', "_$n$1", $base, 1); }
+		return $path;
+	}
+	private function noteCaptured($path){
+		$this->captured[] = array('name' => basename($path), 'path' => $path,
+			'bytes' => is_dir($path) ? null : filesize($path));
+		return $path;
+	}
+	public function captureFile($srcPath, $name){
+		$t = $this->captureTarget($name);
+		if(!@copy($srcPath, $t)) throw new Exception("capture: could not copy $srcPath");
+		return $this->noteCaptured($t);
+	}
+	public function captureString($content, $name){
+		$t = $this->captureTarget($name);
+		if(file_put_contents($t, $content) === false) throw new Exception("capture: could not write $name");
+		return $this->noteCaptured($t);
+	}
+	public function captureWriter($objWriter, $name){
+		$t = $this->captureTarget($name);
+		$objWriter->save($t);
+		return $this->noteCaptured($t);
+	}
+	public function capturePdf($pdf, $name){
+		$t = $this->captureTarget($name);
+		$pdf->Output($t, "F");
+		return $this->noteCaptured($t);
+	}
+	/** Copy every file of a scratch dir into a named subfolder of the bundle. */
+	public function captureDirCopy($srcDir, $subdir){
+		$t = $this->captureTarget($subdir);
+		if(!mkdir($t, 0775, true)) throw new Exception("capture: could not create $subdir");
+		foreach(glob(rtrim($srcDir, '/') . '/*') as $f){ if(is_file($f)) copy($f, $t . '/' . basename($f)); }
+		return $this->noteCaptured($t);
+	}
+	/** Move a scratch dir wholesale into the bundle (big image sets). */
+	public function captureDirMove($srcDir, $subdir){
+		$t = $this->captureTarget($subdir);
+		if(!@rename($srcDir, $t)){
+			exec('cp -r ' . escapeshellarg($srcDir) . ' ' . escapeshellarg($t));
+			exec('rm -rf ' . escapeshellarg($srcDir));
+		}
+		return $this->noteCaptured($t);
+	}
+	/** Legacy "nothing to export" = echo + exit; in capture mode = throw so the worker can record a warning. */
+	public function noData($message){
+		if($this->capturing()) throw new ExportNoDataException($message);
+		echo $message; exit();
+	}
+
 
 	public function dumpVar($var){
 		echo "<pre>";
@@ -1178,10 +1249,10 @@ class straboOutputClass
 				}
 
 				/** PHPExcel */
-				include 'PHPExcel.php';
+				include_once 'PHPExcel.php';
 
 				/** PHPExcel_Writer_Excel2007 */
-				include 'PHPExcel/Writer/Excel2007.php';
+				include_once 'PHPExcel/Writer/Excel2007.php';
 
 				$objPHPExcel = new PHPExcel();
 
@@ -1322,10 +1393,10 @@ class straboOutputClass
 				}
 
 				/** PHPExcel */
-				include 'PHPExcel.php';
+				include_once 'PHPExcel.php';
 
 				/** PHPExcel_Writer_Excel2007 */
-				include 'PHPExcel/Writer/Excel2007.php';
+				include_once 'PHPExcel/Writer/Excel2007.php';
 
 				$objPHPExcel = new PHPExcel();
 
@@ -1483,10 +1554,10 @@ class straboOutputClass
 				}
 
 				/** PHPExcel */
-				include 'PHPExcel.php';
+				include_once 'PHPExcel.php';
 
 				/** PHPExcel_Writer_Excel2007 */
-				include 'PHPExcel/Writer/Excel2007.php';
+				include_once 'PHPExcel/Writer/Excel2007.php';
 
 				$objPHPExcel = new PHPExcel();
 
@@ -1589,7 +1660,7 @@ class straboOutputClass
 				$spots = $spots['features'];
 
 				if(count($spots)==0){
-				echo "no data found for dataset $id";exit();
+				$this->noData("no data found for dataset $id");
 				}
 
 				$headers = array (
@@ -1815,10 +1886,11 @@ class straboOutputClass
 					header("Content-disposition: attachment; filename=$outname");
 					header('Content-type: text/plain');
 
-					echo $out;
+					if($this->capturing()){ $this->captureString($out, $outname); }else{ echo $out; }
 
 				}else{
 
+					if($this->capturing()) $this->noData("no orientation data in this selection"); // capture mode: never render the HTML page
 					include("includes/mheader.php");
 					?>
 
@@ -1960,8 +2032,12 @@ class straboOutputClass
 				//zip folder and redirect
 				//zip -r output_file.zip file1 folder1
 
-				exec("cd /srv/app/www/ziptemp/$randnum/; zip -r StraboImages.zip StraboImages");
-				header("Location: https://strabospot.org/ziptemp/$randnum/StraboImages.zip");
+				if($this->capturing()){
+					$this->captureDirMove("/srv/app/www/ziptemp/$randnum/StraboImages", "images");
+				}else{
+					exec("cd /srv/app/www/ziptemp/$randnum/; zip -r StraboImages.zip StraboImages");
+					header("Location: https://strabospot.org/ziptemp/$randnum/StraboImages.zip");
+				}
 
 			}else{
 				//show error message
@@ -9553,7 +9629,7 @@ class straboOutputClass
 
 			if($project->Error == ""){
 
-				require('includes/PDF_LabBook.php');
+				require_once('includes/PDF_LabBook.php');
 
 				$pdf = new PDF_MemImage('P','mm','Letter');
 				$pdf->setType("doi");
@@ -10186,7 +10262,7 @@ class straboOutputClass
 
 					}
 
-					require('includes/PDF_LabBook.php');
+					require_once('includes/PDF_LabBook.php');
 
 					$pdf = new PDF_MemImage('P','mm','Letter');
 
@@ -12534,7 +12610,7 @@ class straboOutputClass
 
 					}
 
-					require('includes/PDF_LabBook.php');
+					require_once('includes/PDF_LabBook.php');
 
 					$pdf = new PDF_MemImage('P','mm','Letter');
 
@@ -12649,7 +12725,7 @@ class straboOutputClass
 
 					}
 
-					require('includes/PDF_LabBook.php');
+					require_once('includes/PDF_LabBook.php');
 
 					$pdf = new PDF_MemImage('P','mm','Letter');
 
@@ -12762,7 +12838,7 @@ class straboOutputClass
 
 					}
 
-					require('includes/PDF_LabBook.php');
+					require_once('includes/PDF_LabBook.php'); // once: the export worker renders several fieldbooks per process
 
 					$pdf = new PDF_MemImage('P','mm','Letter');
 
@@ -12815,7 +12891,7 @@ class straboOutputClass
 
 					$filedate = date("m_d_Y");
 					$pdfname="StraboSpot_Field_Book_$filedate.pdf";
-					$pdf->Output($pdfname,"I");
+					if($this->capturing()){ $this->capturePdf($pdf, $pdfname); }else{ $pdf->Output($pdfname,"I"); }
 
 				}else{
 
@@ -12875,7 +12951,7 @@ class straboOutputClass
 
 					}
 
-					require('includes/PDF_LabBook.php');
+					require_once('includes/PDF_LabBook.php');
 
 					$pdf = new PDF_MemImage('P','mm','Letter');
 
@@ -12987,7 +13063,7 @@ class straboOutputClass
 
 					}
 
-					require('includes/PDF_LabBook.php');
+					require_once('includes/PDF_LabBook.php');
 
 					$pdf = new PDF_MemImage('P','mm','Letter');
 
@@ -15351,7 +15427,7 @@ class straboOutputClass
 
 					}
 
-					require('includes/PDF_LabBook.php');
+					require_once('includes/PDF_LabBook.php');
 
 					$pdf = new PDF_MemImage('P','mm','Letter');
 
@@ -19127,7 +19203,7 @@ $html.='
 				header("Content-Disposition: attachment; filename=strabo_$filedate.kmz");
 				header("Content-Length: " . filesize("ogrtemp/$randnum/data/strabo_$filedate.kmz"));
 
-				readfile("ogrtemp/$randnum/data/strabo_$filedate.kmz");
+				if($this->capturing()){ $this->captureFile("ogrtemp/$randnum/data/strabo_$filedate.kmz", "strabo_$filedate.kmz"); }else{ readfile("ogrtemp/$randnum/data/strabo_$filedate.kmz"); }
 
 				//remove temp directory
 				if($randnum!=""){
@@ -19453,10 +19529,10 @@ $html.='
 				}
 
 				/** PHPExcel */
-				include 'PHPExcel.php';
+				include_once 'PHPExcel.php';
 
 				/** PHPExcel_Writer_Excel2007 */
-				include 'PHPExcel/Writer/Excel2007.php';
+				include_once 'PHPExcel/Writer/Excel2007.php';
 
 				$objPHPExcel = new PHPExcel();
 
@@ -20331,10 +20407,10 @@ $html.='
 				}
 
 				/** PHPExcel */
-				include 'PHPExcel.php';
+				include_once 'PHPExcel.php';
 
 				/** PHPExcel_Writer_Excel2007 */
-				include 'PHPExcel/Writer/Excel2007.php';
+				include_once 'PHPExcel/Writer/Excel2007.php';
 
 				$objPHPExcel = new PHPExcel();
 
@@ -20926,7 +21002,7 @@ $html.='
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
 				if(count($data)==0){
-				echo "no data found for dataset $id";exit();
+				$this->noData("no data found for dataset $id");
 				}
 
 				$columns['spot']['name']=0;
@@ -20940,6 +21016,10 @@ $html.='
 				$columns['spot']['Altitude(m)']=8;
 
 				$colnum=9;
+				if(!empty($this->get['attribution'])){ // Export Builder attribution columns (design §8.3)
+					$columns['spot']['proj_id']=9; $columns['spot']['proj_name']=10; $columns['spot']['ds_id']=11; $columns['spot']['ds_name']=12;
+					$colnum=13;
+				}
 
 				$x=0;
 
@@ -21268,10 +21348,10 @@ $html.='
 				}
 
 				/** PHPExcel */
-				include 'PHPExcel.php';
+				include_once 'PHPExcel.php';
 
 				/** PHPExcel_Writer_Excel2007 */
-				include 'PHPExcel/Writer/Excel2007.php';
+				include_once 'PHPExcel/Writer/Excel2007.php';
 
 				$objPHPExcel = new PHPExcel();
 
@@ -21766,6 +21846,12 @@ $html.='
 						$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,6),$latitude);
 						$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,7),$longitude);
 						$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,8),$altitude);
+						if(!empty($this->get['attribution'])){ // Export Builder attribution columns (design §8.3)
+							$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,9),(string)$feature['properties']['proj_id']);
+							$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,10),(string)$feature['properties']['proj_name']);
+							$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,11),(string)$feature['properties']['ds_id']);
+							$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,12),(string)$feature['properties']['ds_name']);
+						}
 
 						foreach($columns as $key=>$value){
 							if($key!="spot"){
@@ -21877,7 +21963,7 @@ $html.='
 			header('Content-Disposition: attachment; filename="'."StraboSpot_Output_".$filedate.".xlsx".'"');
 
 			// Write file to the browser
-			$objWriter->save('php://output');
+			if($this->capturing()){ $this->captureWriter($objWriter, "StraboSpot_Output_".$filedate.".xlsx"); }else{ $objWriter->save('php://output'); }
 
 		}
 
@@ -23833,7 +23919,7 @@ $html.='
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
 			if(count($data)==0){
-			echo "no data found for dataset $id";exit();
+			$this->noData("no data found for dataset $id");
 			}
 
 			$columns['spot']['name']=0;
@@ -23846,6 +23932,10 @@ $html.='
 			$columns['spot']['Longitude']=7;
 			$columns['spot']['Altitude(m)']=8;
 			$colnum=9;
+			if(!empty($this->get['attribution'])){ // Export Builder attribution columns (design §8.3)
+				$columns['spot']['proj_id']=9; $columns['spot']['proj_name']=10; $columns['spot']['ds_id']=11; $columns['spot']['ds_name']=12;
+				$colnum=13;
+			}
 
 			$tagcounts = [];
 			foreach($data['features'] as $spot){
@@ -24622,6 +24712,12 @@ $html.='
 						$this->addHolding($rownum,6,$latitude);
 						$this->addHolding($rownum,7,$longitude);
 						$this->addHolding($rownum,8,$altitude);
+						if(!empty($this->get['attribution'])){ // Export Builder attribution columns (design §8.3)
+							$this->addHolding($rownum,9,(string)$feature['properties']['proj_id']);
+							$this->addHolding($rownum,10,(string)$feature['properties']['proj_name']);
+							$this->addHolding($rownum,11,(string)$feature['properties']['ds_id']);
+							$this->addHolding($rownum,12,(string)$feature['properties']['ds_name']);
+						}
 
 						//spotid
 
@@ -24814,7 +24910,7 @@ $html.='
 			header("Content-Disposition: attachment; filename=search_download.zip");
 			header("Content-Length: " . filesize("ogrtemp/$randnum/strabo$randnum.zip"));
 
-			readfile("ogrtemp/$randnum/strabo$randnum.zip");
+			if($this->capturing()){ $this->captureDirCopy("ogrtemp/$randnum/data", "shapefile"); }else{ readfile("ogrtemp/$randnum/strabo$randnum.zip"); }
 
 			//remove temp directory
 			if($randnum!=""){
@@ -26679,7 +26775,7 @@ QML;
 					header("Content-Type: application/geopackage+sqlite3");
 					header("Content-Disposition: attachment; filename={$fixedname}.gpkg");
 					header("Content-Length: " . filesize($gpkgFile));
-					readfile($gpkgFile);
+					if($this->capturing()){ $this->captureFile($gpkgFile, "{$fixedname}.gpkg"); }else{ readfile($gpkgFile); }
 
 					// Clean up temp files
 					unlink($gpkgFile);
@@ -27185,12 +27281,16 @@ QML;
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			// Export Builder: a merged group spans several datasets/projects; tags come from all of them.
+			$this->alltags = $this->strabo->getTagsFromDatasetIds(!empty($this->get['all_dsids']) ? $this->get['all_dsids'] : $dsids);
 
 			$getvals = array();
 			$getvals['dsids'] = $dsids;
 			$getvals['userpkey'] = $this->strabo->userpkey;
 			$getvals['type'] = "doi";
+			// Export Builder capture mode: scope groups + attribution ride along (design §8).
+			if(!empty($this->get['scope_groups'])) $getvals['scope_groups'] = $this->get['scope_groups'];
+			if(!empty($this->get['attribution'])) $getvals['attribution'] = 1;
 			$json = $this->strabo->getDatasetSpotsSearch(null,$getvals);
 			$spots = $json['features'];
 
@@ -27230,7 +27330,7 @@ QML;
 
 			header("Content-disposition: attachment; filename=$filename");
 			header('Content-type: application/json');
-			echo json_encode($out, JSON_PRETTY_PRINT);
+			if($this->capturing()){ $this->captureString(json_encode($out, JSON_PRETTY_PRINT), $filename); }else{ echo json_encode($out, JSON_PRETTY_PRINT); }
 		}
 	}
 
@@ -27314,10 +27414,10 @@ QML;
 		if(count($foundvars) == 0) return("empty");
 
 		/** PHPExcel */
-		include 'PHPExcel.php';
+		include_once 'PHPExcel.php';
 
 		/** PHPExcel_Writer_Excel2007 */
-		include 'PHPExcel/Writer/Excel2007.php';
+		include_once 'PHPExcel/Writer/Excel2007.php';
 
 		$objPHPExcel = new PHPExcel();
 
@@ -27396,7 +27496,7 @@ QML;
 			header('Content-Disposition: attachment; filename="'."StraboSpot_Output_".$filedate.".xlsx".'"');
 
 			// Write file to the browser
-			$objWriter->save('php://output');
+			if($this->capturing()){ $this->captureWriter($objWriter, "geologic_units.xlsx"); }else{ $objWriter->save('php://output'); }
 		}
 	}
 

@@ -2098,6 +2098,7 @@ class StraboSpot
 			$spotidstring = count($sids) ? "and s.id in [".implode(",", $sids)."] " : "and false ";
 		}
 
+
 		if($range=="envelope"){
 			$parts = explode(",",$envelope);
 			$left = $parts[0]-$offset;
@@ -2133,9 +2134,50 @@ class StraboSpot
 			$userpkeystring = "and d.userpkey = $getuserpkey ";
 		}
 
-		$querystring = "
+		// Export Builder scope groups (design §8.3 merged layouts): an exact
+		// per-owner (dataset ids, spot ids) restriction so ONE fetch can span
+		// projects of different owners without cross-owner id collisions
+		// (Strabo ids are not unique across accounts). When present it
+		// replaces the dsids/userpkey/spot_ids singles above.
+		$wherestring = "where d.id in [$dsids] $userpkeystring $spotidstring";
+		if(!empty($get['scope_groups']) && is_array($get['scope_groups'])){
+			$groups = array();
+			foreach($get['scope_groups'] as $grp){
+				$gu = (int)$grp['userpkey'];
+				$gd = array_values(array_unique(array_filter(array_map('intval', (array)$grp['dsids']))));
+				if($gu <= 0 || count($gd) == 0) continue;
+				$clause = "(d.userpkey = $gu and d.id in [".implode(",", $gd)."]";
+				if(isset($grp['spot_ids']) && $grp['spot_ids'] !== null){
+					$gs = array_values(array_unique(array_filter(array_map('intval', (array)$grp['spot_ids']))));
+					$clause .= count($gs) ? " and s.id in [".implode(",", $gs)."]" : " and false";
+				}
+				$groups[] = $clause.")";
+			}
+			$wherestring = count($groups) ? "where (".implode(" or ", $groups).")" : "where false";
+		}
+
+		// Export Builder attribution (design §8.3): carry project + dataset
+		// context on every feature (proj_id/proj_name/ds_id/ds_name) so merged
+		// outputs stay self-describing. Legacy callers never set this and get
+		// the byte-identical legacy query below.
+		$attribution = !empty($get['attribution']);
+
+		if($attribution){
+			$querystring = "
 				$envelopestring
-				match (d:Dataset)-[r:HAS_SPOT]->(s:Spot) where d.id in [$dsids] $userpkeystring $spotidstring
+				match (d:Dataset)-[r:HAS_SPOT]->(s:Spot) $wherestring
+				optional match (p:Project)-[:HAS_DATASET]->(d)
+				$imagestring
+				$orientationstring
+				$samplestring
+				$_3dstructurestring
+				with s, collect(distinct i) as i, collect(distinct {ds_id: toString(d.id), ds_name: d.name, proj_id: toString(p.id), proj_name: p.desc_project_name}) as ctx
+				RETURN s, i, ctx order by s.id;
+			";
+		}else{
+			$querystring = "
+				$envelopestring
+				match (d:Dataset)-[r:HAS_SPOT]->(s:Spot) $wherestring
 				$imagestring
 				$orientationstring
 				$samplestring
@@ -2143,6 +2185,7 @@ class StraboSpot
 				with s, collect(i) as i
 				RETURN s,i order by s.id;
 			";
+		}
 
 		//set a class variable to tell the other functions that this is an arc query.
 		$this->isarc = true;
@@ -2503,6 +2546,19 @@ class StraboSpot
 					}
 				}
 				$row[1]=$imagearray;
+				// Export Builder attribution context (getDatasetSpotsSearch attribution mode):
+				// stamp project/dataset columns onto the spot object so every
+				// property-dumping generator carries them.
+				if(method_exists($record, 'hasValue') && $record->hasValue("ctx")){
+					$ctx = $record->get("ctx");
+					if(is_array($ctx) && count($ctx) > 0){
+						$c0 = $ctx[0];
+						foreach(array('proj_id','proj_name','ds_id','ds_name') as $ck){
+							$cv = is_array($c0) ? (isset($c0[$ck]) ? $c0[$ck] : null) : (is_object($c0) && isset($c0->$ck) ? $c0->$ck : null);
+							$row[0]->$ck = ($cv === null) ? "" : (string)$cv;
+						}
+					}
+				}
 				$res->row=$row;
 				$results[]=$res;
 			}
