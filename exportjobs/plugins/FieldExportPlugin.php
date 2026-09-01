@@ -12,6 +12,16 @@
  *            spot ids) through getDatasetSpotsSearch scope_groups with
  *            attribution columns on, and its delivery line lands in the
  *            bundle instead of the browser. Data paths are the legacy ones.
+ *   SAMPLES  the cross-subsystem sample list (format key sample_list, M4)
+ *            is a plugin-level format: the exported spot ids are looked up
+ *            in the StraboSamples spine link table (subsystem = field), the
+ *            linked samples are pulled through
+ *            SampleTabularService::exportRowsForIds (same workbook as the
+ *            My Samples export, plus read-only field_project / field_dataset
+ *            / field_spot_id / field_spot_name context columns) and written
+ *            as samples.xlsx (+ samples.csv when recipe.sample_list_csv).
+ *            Micro / Experimental links on those samples show up in the
+ *            linked_systems column. One list per layout group.
  *   EXTRAS   whole-project selections also get projects/<name>/project.json
  *            (doiDataOut) and geologic_units.xlsx (geologicUnitsOut).
  *
@@ -46,7 +56,13 @@ class FieldExportPlugin implements ExportPlugin
 		'geojson'   => 'geoJSONOut',
 		'gpkg'      => 'gpkgOut',
 	);
+	/** plugin-level formats (no straboOutputClass generator) => method */
+	public static $pluginFormats = array(
+		'sample_list' => 'writeSampleList',
+	);
 	public static $extras  = array('project_json', 'geologic_units');
+	/** sample-list context columns, in order (SampleTabularService ignores them on import) */
+	public static $sampleContextCols = array('field_project', 'field_dataset', 'field_spot_id', 'field_spot_name');
 	public static $layouts = array('merged', 'split_project', 'split_dataset');
 
 	private $db;
@@ -62,6 +78,7 @@ class FieldExportPlugin implements ExportPlugin
 		require_once dirname(__DIR__, 2) . '/includes/UUID.php';
 		require_once dirname(__DIR__, 2) . '/db/strabospotclass.php';
 		require_once dirname(__DIR__, 2) . '/includes/straboClasses/straboOutputClass.php';
+		require_once dirname(__DIR__, 2) . '/samplesdb/services/SampleTabularService.php';
 	}
 
 	public function key() { return 'field'; }
@@ -71,12 +88,13 @@ class FieldExportPlugin implements ExportPlugin
 	{
 		$formats = isset($recipe['formats']) && is_array($recipe['formats']) ? array_values(array_unique($recipe['formats'])) : array();
 		$extras  = isset($recipe['extras'])  && is_array($recipe['extras'])  ? array_values(array_unique($recipe['extras']))  : array();
-		foreach ($formats as $f) if (!isset(self::$formats[$f])) throw new ExportJobError("Unknown format '$f'.");
+		foreach ($formats as $f) if (!isset(self::$formats[$f]) && !isset(self::$pluginFormats[$f])) throw new ExportJobError("Unknown format '$f'.");
 		foreach ($extras as $e)  if (!in_array($e, self::$extras, true)) throw new ExportJobError("Unknown extra '$e'.");
 		if (!$formats && !$extras) throw new ExportJobError('Choose at least one output format.');
 		$layout = isset($recipe['layout']) ? (string)$recipe['layout'] : 'merged';
 		if (!in_array($layout, self::$layouts, true)) throw new ExportJobError("Unknown layout '$layout'.");
-		return array('formats' => $formats, 'extras' => $extras, 'layout' => $layout);
+		return array('formats' => $formats, 'extras' => $extras, 'layout' => $layout,
+			'sample_list_csv' => !empty($recipe['sample_list_csv']));
 	}
 
 	public function run(array $job, array $recipe, $bundleDir, $progress)
@@ -107,8 +125,8 @@ class FieldExportPlugin implements ExportPlugin
 			$meta = $this->projectMeta($sc);
 			$sc['name'] = $meta['name'];
 			$sc['dataset_names'] = $meta['datasets'];
-			// which final spots sit in which dataset (split_dataset needs it; from a scoped fetch per dataset)
-			$sc['by_dataset'] = null;
+			// spot id => {dataset id, name} for the final set (sample list context + per-dataset split)
+			$sc['spot_map'] = $sc['final_ids'] ? $this->spotMap($sc) : array();
 			$itemCount += $gr['item_count']; $childCount += $gr['child_count']; $dropped += $gr['dropped_spatial'];
 			foreach ($gr['warnings'] as $w) $warnings[] = $w;
 			$projects[] = $sc;
@@ -123,6 +141,7 @@ class FieldExportPlugin implements ExportPlugin
 		// ---- FORMAT
 		$nFmt = count($outSpec['formats']) * count($groups); $fi = 0;
 		$produced = array();
+		$sampleTotal = 0; $sampleCross = 0; $sampleLists = array();
 		foreach ($groups as $g) {
 			if (!$g['members']) continue;
 			if (!is_dir($g['dir']) && !mkdir($g['dir'], 0775, true)) throw new ExportJobError('Could not create ' . $g['dir']);
@@ -143,6 +162,17 @@ class FieldExportPlugin implements ExportPlugin
 			foreach ($outSpec['formats'] as $fmt) {
 				$fi++;
 				$progress('format:' . $fmt, $fi, $nFmt, 'writing ' . $fmt . ($g['label'] !== '' ? ' (' . $g['label'] . ')' : ''));
+				if (isset(self::$pluginFormats[$fmt])) {
+					$pm = self::$pluginFormats[$fmt];
+					$r = $this->$pm($g, $outSpec, $progress);
+					foreach ($r['produced'] as $pth) $produced[] = $pth;
+					foreach ($r['warnings'] as $w) $warnings[] = $w;
+					if (isset($r['samples'])) {
+						$sampleTotal += $r['samples']; $sampleCross += $r['samples_cross'];
+						$sampleLists[] = ($g['label'] !== '' ? $g['label'] . ': ' : '') . $r['samples'] . ' samples';
+					}
+					continue;
+				}
 				$out = new straboOutputClass($strabo, $get);
 				$out->captureDir = $g['dir'];
 				$method = self::$formats[$fmt];
@@ -193,6 +223,11 @@ class FieldExportPlugin implements ExportPlugin
 		$readme[] = 'Formats: ' . implode(', ', $outSpec['formats']) . ($outSpec['extras'] ? '; extras: ' . implode(', ', $outSpec['extras']) : '');
 		$readme[] = 'Selection evaluated ' . ($found['used_index'] ? 'through the StraboSearch index (synced ' . $found['index_synced_at'] . ')' : 'directly from the project data');
 		if ($found['polygon']) $readme[] = 'Area filter: spots intersecting the drawn polygon' . ($dropped ? " ($dropped spots outside were left out)" : '');
+		if (in_array('sample_list', $outSpec['formats'], true)) {
+			$readme[] = 'Sample list: ' . $sampleTotal . ' samples linked to the exported spots'
+				. ($sampleCross ? " ($sampleCross also linked in StraboMicro or StraboExperimental; see the linked_systems column)" : '')
+				. (count($sampleLists) > 1 ? ' [' . implode('; ', $sampleLists) . ']' : '');
+		}
 		$crit = isset($recipe['criteria']) && is_array($recipe['criteria']) ? $recipe['criteria'] : array();
 		foreach ($crit as $c) {
 			if (!isset($c['id']) || strtoupper($c['id']) === 'U2') continue;
@@ -282,7 +317,7 @@ class FieldExportPlugin implements ExportPlugin
 			$members = array();
 			foreach ($projects as $sc) {
 				if (!$sc['final_ids']) continue;
-				$members[] = array('owner' => $sc['owner'], 'dsids' => $sc['dataset_ids'], 'spot_ids' => $sc['final_ids']);
+				$members[] = $this->member($sc, $sc['dataset_ids']);
 			}
 			$groups[] = array('dir' => $bundleDir, 'label' => '', 'members' => $members);
 			return $groups;
@@ -291,16 +326,144 @@ class FieldExportPlugin implements ExportPlugin
 			if (!$sc['final_ids']) continue;
 			$pdir = $bundleDir . '/projects/' . $this->safeName($sc['name'], $sc['project_id']);
 			if ($layout === 'split_project') {
-				$groups[] = array('dir' => $pdir, 'label' => $sc['name'],
-					'members' => array(array('owner' => $sc['owner'], 'dsids' => $sc['dataset_ids'], 'spot_ids' => $sc['final_ids'])));
+				$groups[] = array('dir' => $pdir, 'label' => $sc['name'], 'members' => array($this->member($sc, $sc['dataset_ids'])));
 				continue;
 			}
 			foreach ($sc['dataset_ids'] as $d) {
 				$dname = isset($sc['dataset_names'][$d]) ? $sc['dataset_names'][$d] : $d;
 				$groups[] = array('dir' => $pdir . '/datasets/' . $this->safeName($dname, $d), 'label' => $sc['name'] . ' / ' . $dname,
-					'members' => array(array('owner' => $sc['owner'], 'dsids' => array($d), 'spot_ids' => $sc['final_ids'])));
+					'members' => array($this->member($sc, array($d))));
 			}
 		}
 		return $groups;
+	}
+
+	/** One layout-group member: owner + datasets + the project's final spot ids + context for the sample list. */
+	private function member(array $sc, array $dsids)
+	{
+		return array('owner' => $sc['owner'], 'dsids' => $dsids, 'spot_ids' => $sc['final_ids'],
+			'project_id' => $sc['project_id'], 'project_name' => $sc['name'],
+			'dataset_names' => $sc['dataset_names'], 'spot_map' => $sc['spot_map']);
+	}
+
+	/**
+	 * spot id => {ds: dataset id, name} for the project's final ids, anchored
+	 * through the owner's User node (ids are not unique across accounts).
+	 */
+	private function spotMap(array $sc)
+	{
+		$map = array();
+		$chunk = isset($this->cfg['gather_chunk']) ? max(1, (int)$this->cfg['gather_chunk']) : 2000;
+		foreach (array_chunk(array_map('intval', $sc['final_ids']), $chunk) as $ids) {
+			$rows = $this->neodb->query(
+				"MATCH (u:User {userpkey: " . (int)$sc['owner'] . "})-[:HAS_PROJECT]->(p:Project {id: " . (int)$sc['project_id'] . "})
+				 -[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)
+				 WHERE s.id IN [" . implode(',', $ids) . "]
+				 RETURN toString(s.id) AS sid, toString(d.id) AS did, s.name AS name");
+			if (!$rows) continue;
+			foreach ($rows as $r) {
+				$map[(string)$r->value('sid')] = array('ds' => (string)$r->value('did'), 'name' => (string)$r->value('name'));
+			}
+		}
+		return $map;
+	}
+
+	/**
+	 * sample_list format (design §7.3 / §8.1): the group's spot ids -> spine
+	 * links (subsystem = field, anchored on the spot OWNER) -> the linked
+	 * samples per sample owner through SampleTabularService::exportRowsForIds
+	 * -> one samples.xlsx (+ samples.csv) in the group dir.
+	 *
+	 * @return array {produced: string[], warnings: string[], samples: int, samples_cross: int}
+	 */
+	private function writeSampleList(array $g, array $outSpec, $progress)
+	{
+		$produced = array(); $warnings = array();
+		$label = $g['label'] !== '' ? " ({$g['label']})" : '';
+
+		// sample owner => sample id => list of {spot id, spot name, project, dataset}
+		$bySample = array();
+		$chunk = isset($this->cfg['gather_chunk']) ? max(1, (int)$this->cfg['gather_chunk']) : 2000;
+		foreach ($g['members'] as $m) {
+			$want = array_map('strval', $m['dsids']);
+			$ids = array();
+			foreach ($m['spot_ids'] as $sid) {
+				$sid = (string)$sid;
+				// keep the spot when its dataset is one of the member's (split_dataset) or when unmapped
+				if (isset($m['spot_map'][$sid]) && !in_array($m['spot_map'][$sid]['ds'], $want, true)) continue;
+				$ids[] = $sid;
+			}
+			foreach (array_chunk($ids, $chunk) as $part) {
+				$rows = $this->db->get_results_prepared(
+					"SELECT sample_id, sample_userpkey, reference_id
+					   FROM strabosamples.sample_subsystem_links
+					  WHERE subsystem = 'field' AND reference_userpkey = $1 AND reference_id = ANY($2::text[])",
+					array((int)$m['owner'], SampleTabularService::pgTextArray($part)));
+				if (!is_array($rows)) continue;
+				foreach ($rows as $r) {
+					$sid = (string)$r->reference_id;
+					$sm = isset($m['spot_map'][$sid]) ? $m['spot_map'][$sid] : array('ds' => '', 'name' => '');
+					$dsName = $sm['ds'] !== '' && isset($m['dataset_names'][$sm['ds']]) ? $m['dataset_names'][$sm['ds']] : $sm['ds'];
+					$bySample[(int)$r->sample_userpkey][(string)$r->sample_id][] = array(
+						'spot_id' => $sid, 'spot_name' => $sm['name'], 'project' => $m['project_name'], 'dataset' => $dsName);
+				}
+			}
+		}
+
+		$svc = new SampleTabularService($this->db, $this->neodb);
+		$rows = array(); $customKeys = array(); $cross = 0;
+		foreach ($bySample as $owner => $samples) {
+			$svc->setUserpkey($owner);
+			$ex = $svc->exportRowsForIds(array_keys($samples), $owner);
+			foreach ($ex['custom_keys'] as $k) $customKeys[$k] = true;
+			foreach ($ex['rows'] as $row) {
+				$ctx = array('field_project' => array(), 'field_dataset' => array(), 'field_spot_id' => array(), 'field_spot_name' => array());
+				foreach ($samples[(string)$row['strabo_internal_id']] as $l) {
+					$ctx['field_project'][$l['project']] = 1;
+					$ctx['field_dataset'][$l['dataset']] = 1;
+					$ctx['field_spot_id'][$l['spot_id']] = 1;
+					$ctx['field_spot_name'][$l['spot_name']] = 1;
+				}
+				$row['_context'] = array();
+				foreach ($ctx as $k => $vals) $row['_context'][$k] = implode('; ', array_keys($vals));
+				if (preg_match('/\b(micro|experimental)\b/', (string)$row['linked_systems'])) $cross++;
+				$rows[] = $row;
+			}
+		}
+		$customKeys = array_keys($customKeys);
+		sort($customKeys, SORT_NATURAL | SORT_FLAG_CASE);
+		usort($rows, function ($a, $b) {
+			$c = strcasecmp((string)$a['sample_id'], (string)$b['sample_id']);
+			return $c !== 0 ? $c : strcmp((string)$a['strabo_internal_id'], (string)$b['strabo_internal_id']);
+		});
+
+		if (!$rows) {
+			$warnings[] = 'sample_list' . $label . ': none of the exported spots has a linked sample';
+			return array('produced' => $produced, 'warnings' => $warnings, 'samples' => 0, 'samples_cross' => 0);
+		}
+
+		$progress('format:sample_list', 0, 0, 'writing sample list' . $label . ' (' . count($rows) . ' samples)');
+		$wb = $svc->buildWorkbook($rows, $customKeys, false, self::$sampleContextCols);
+		if (!class_exists('PHPExcel_Writer_Excel2007')) {
+			require_once dirname(__DIR__, 2) . '/PHPExcel/Writer/Excel2007.php';
+		}
+		$xlsx = $this->uniquePath($g['dir'], 'samples.xlsx');
+		$writer = new PHPExcel_Writer_Excel2007($wb);
+		$writer->save($xlsx);
+		$wb->disconnectWorksheets();
+		$produced[] = $xlsx;
+		if (!empty($outSpec['sample_list_csv'])) {
+			$csv = $this->uniquePath($g['dir'], 'samples.csv');
+			file_put_contents($csv, $svc->buildCsv($rows, $customKeys, false, self::$sampleContextCols));
+			$produced[] = $csv;
+		}
+		return array('produced' => $produced, 'warnings' => $warnings, 'samples' => count($rows), 'samples_cross' => $cross);
+	}
+
+	private function uniquePath($dir, $name)
+	{
+		$path = rtrim($dir, '/') . '/' . $name; $base = $path; $n = 1;
+		while (file_exists($path)) { $n++; $path = preg_replace('/(\.[^.]*)?$/', "_$n$1", $base, 1); }
+		return $path;
 	}
 }

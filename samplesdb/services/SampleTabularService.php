@@ -112,6 +112,8 @@ class SampleTabularService
     /** Export-only context headers silently dropped on upload. */
     protected static $IGNORED_HEADERS = array(
         'linked_systems', 'modified_at', 'created_at', 'modified', 'last_modified',
+        // Export Builder sample-list context columns (read-only, never re-imported)
+        'field_project', 'field_dataset', 'field_spot_id', 'field_spot_name',
     );
 
     public function __construct($db, $neodb)
@@ -389,6 +391,7 @@ class SampleTabularService
     {
         $files = @glob(sys_get_temp_dir() . '/strabo_tabular_*.json');
         if (!is_array($files)) { return; }
+        clearstatcache();   // mtimes touched earlier in this request must not be served from the stat cache
         $cutoff = time() - self::STATE_TTL_SECONDS;
         foreach ($files as $f) {
             if (@filemtime($f) < $cutoff) { @unlink($f); }
@@ -811,8 +814,6 @@ class SampleTabularService
               ORDER BY lower(name) NULLS LAST, id",
             array($this->userpkey)
         );
-        if (!is_array($rows)) { $rows = array(); }
-
         $linkRows = $this->db->get_results_prepared(
             "SELECT sample_id, subsystem, COUNT(*)::int AS n
                FROM strabosamples.sample_subsystem_links
@@ -820,6 +821,58 @@ class SampleTabularService
               GROUP BY sample_id, subsystem",
             array($this->userpkey)
         );
+        return $this->assembleExportRows($rows, $linkRows);
+    }
+
+    /**
+     * Id-set variant for the Export Builder sample list (design §7.3):
+     * only the given sample ids of ONE owner, same row shape as
+     * exportRows(). Ids are spine ids (text). Unknown ids are ignored;
+     * an empty set returns no rows without touching the database.
+     *
+     * @param  string[] $sampleIds
+     * @param  int      $userpkey  sample owner (spine identity is (id, userpkey))
+     * @return array {rows: [...], custom_keys: [...]}
+     */
+    public function exportRowsForIds(array $sampleIds, $userpkey)
+    {
+        $ids = array();
+        foreach ($sampleIds as $id) { $id = trim((string)$id); if ($id !== '') { $ids[$id] = true; } }
+        if (!$ids) { return array('rows' => array(), 'custom_keys' => array()); }
+        $arr = self::pgTextArray(array_keys($ids));
+        $rows = $this->db->get_results_prepared(
+            "SELECT id, name, igsn, description, notes, latitude, longitude,
+                    display_sample_type, display_sample_purpose,
+                    custom_data::text AS custom_data, modified_at
+               FROM strabosamples.samples
+              WHERE userpkey = $1 AND id = ANY($2::text[])
+              ORDER BY lower(name) NULLS LAST, id",
+            array((int)$userpkey, $arr)
+        );
+        $linkRows = $this->db->get_results_prepared(
+            "SELECT sample_id, subsystem, COUNT(*)::int AS n
+               FROM strabosamples.sample_subsystem_links
+              WHERE sample_userpkey = $1 AND sample_id = ANY($2::text[])
+              GROUP BY sample_id, subsystem",
+            array((int)$userpkey, $arr)
+        );
+        return $this->assembleExportRows($rows, $linkRows);
+    }
+
+    /** PHP string list -> PostgreSQL text[] literal for a $n::text[] parameter. */
+    public static function pgTextArray(array $values)
+    {
+        $parts = array();
+        foreach ($values as $v) {
+            $parts[] = '"' . str_replace(array('\\', '"'), array('\\\\', '\\"'), (string)$v) . '"';
+        }
+        return '{' . implode(',', $parts) . '}';
+    }
+
+    /** Sample rows + per-sample link counts -> export rows + custom key union. */
+    protected function assembleExportRows($rows, $linkRows)
+    {
+        if (!is_array($rows)) { $rows = array(); }
         $links = array();
         if (is_array($linkRows)) {
             foreach ($linkRows as $l) {
@@ -843,7 +896,7 @@ class SampleTabularService
             $linkedBits = array();
             if (isset($links[$r->id])) {
                 foreach ($links[$r->id] as $sub => $cnt) {
-                    $linkedBits[] = ($cnt > 1) ? "$sub×$cnt" : $sub;
+                    $linkedBits[] = ($cnt > 1) ? $sub . '×' . $cnt : $sub;
                 }
             }
 
@@ -876,12 +929,13 @@ class SampleTabularService
     }
 
     /** Header row for a data grid: standard + export context + custom keys. */
-    protected function exportHeaders(array $customKeys, $isTemplate)
+    protected function exportHeaders(array $customKeys, $isTemplate, array $contextCols = array())
     {
         $headers = array_keys(self::$COLUMNS);
         if (!$isTemplate) {
             $headers[] = 'linked_systems';
             $headers[] = 'modified_at';
+            foreach ($contextCols as $c) { $headers[] = $c; }
             foreach ($customKeys as $k) { $headers[] = $k; }
         }
         return $headers;
@@ -890,8 +944,13 @@ class SampleTabularService
     /**
      * Build the XLSX workbook (template or populated export).
      * Returns a PHPExcel object; caller streams it with Writer_Excel2007.
+     *
+     * $contextCols: optional read-only export context headers (Export
+     * Builder sample list: field_project, field_dataset, field_spot_id,
+     * field_spot_name); values come from $row['_context'][$header]. They
+     * sit after modified_at, are locked like it, and are ignored on import.
      */
-    public function buildWorkbook($rows, array $customKeys, $isTemplate)
+    public function buildWorkbook($rows, array $customKeys, $isTemplate, array $contextCols = array())
     {
         $this->requirePhpExcel();
         $wb = new PHPExcel();
@@ -913,7 +972,7 @@ class SampleTabularService
         // ---- Data sheet ----
         $data = $wb->getActiveSheet();
         $data->setTitle('Data');
-        $headers = $this->exportHeaders($customKeys, $isTemplate);
+        $headers = $this->exportHeaders($customKeys, $isTemplate, $contextCols);
         foreach ($headers as $i => $h) {
             $cell = $data->getCellByColumnAndRow($i, 1);
             $cell->setValue($h);
@@ -934,6 +993,10 @@ class SampleTabularService
             if (!$isTemplate) {
                 $data->getCellByColumnAndRow($col++, $rowNum)->setValueExplicit((string)$r['linked_systems'], PHPExcel_Cell_DataType::TYPE_STRING);
                 $data->getCellByColumnAndRow($col++, $rowNum)->setValueExplicit((string)$r['modified_at'], PHPExcel_Cell_DataType::TYPE_STRING);
+                foreach ($contextCols as $c) {
+                    $v = isset($r['_context'][$c]) ? (string)$r['_context'][$c] : '';
+                    $data->getCellByColumnAndRow($col++, $rowNum)->setValueExplicit($v, PHPExcel_Cell_DataType::TYPE_STRING);
+                }
                 foreach ($customKeys as $k) {
                     $v = isset($r['_custom'][$k]) ? (string)$r['_custom'][$k] : '';
                     $data->getCellByColumnAndRow($col++, $rowNum)->setValueExplicit($v, PHPExcel_Cell_DataType::TYPE_STRING);
@@ -957,7 +1020,7 @@ class SampleTabularService
         $lockRanges  = array('A1:' . $lastCol . '1');            // header row
         if ($lastDataRow >= 2) {
             $lockRanges[] = 'A2:A' . $lastDataRow;               // internal ids
-            foreach (array('linked_systems', 'modified_at') as $ctx) {
+            foreach (array_merge(array('linked_systems', 'modified_at'), $contextCols) as $ctx) {
                 $ctxIdx = array_search($ctx, $headers);
                 if ($ctxIdx !== false) {
                     $ctxCol = PHPExcel_Cell::stringFromColumnIndex($ctxIdx);
@@ -1068,9 +1131,9 @@ class SampleTabularService
     }
 
     /** CSV string (UTF-8 with BOM for Excel) for template or export. */
-    public function buildCsv($rows, array $customKeys, $isTemplate)
+    public function buildCsv($rows, array $customKeys, $isTemplate, array $contextCols = array())
     {
-        $headers = $this->exportHeaders($customKeys, $isTemplate);
+        $headers = $this->exportHeaders($customKeys, $isTemplate, $contextCols);
         $fh = fopen('php://temp', 'r+');
         fputcsv($fh, $headers);
         foreach ($rows as $r) {
@@ -1081,6 +1144,9 @@ class SampleTabularService
             if (!$isTemplate) {
                 $line[] = (string)$r['linked_systems'];
                 $line[] = (string)$r['modified_at'];
+                foreach ($contextCols as $c) {
+                    $line[] = isset($r['_context'][$c]) ? (string)$r['_context'][$c] : '';
+                }
                 foreach ($customKeys as $k) {
                     $line[] = isset($r['_custom'][$k]) ? (string)$r['_custom'][$k] : '';
                 }
