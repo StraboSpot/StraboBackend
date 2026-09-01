@@ -115,6 +115,12 @@ include("includes/mheader.php");
 <link rel="stylesheet" href="/assets/js/leaflet/leaflet.css" />
 <link rel="stylesheet" href="<?php echo eb_asset('/strabosearch/css/search.css'); ?>" />
 <style>
+/* search.css is loaded for the criteria builder, but it also locks the
+   page body (overflow: hidden at every breakpoint) because /search is a
+   full-viewport app frame whose panes scroll instead of the page. This
+   page is an ordinary scrolling page with a footer, so undo that lock
+   here (same specificity, later in source order wins). */
+body { overflow: visible; }
 .eb-intro { color: rgba(255,255,255,0.7); max-width: 60em; margin: 0 auto 1.5em auto; text-align: center; }
 .eb-panel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 1.25em 1.5em; margin-bottom: 1.5em; }
 .eb-panel h3 { margin: 0 0 0.25em 0; font-size: 1.15em; }

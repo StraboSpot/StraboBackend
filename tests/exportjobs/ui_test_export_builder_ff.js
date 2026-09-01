@@ -62,6 +62,11 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   check('layout block visible with two datasets in scope', await page.isVisible('#eb-layout-block'));
   check('extras block visible for a whole project', await page.isVisible('#eb-extras-block'));
   await shot('builder_loaded');
+  // search.css locks body overflow for the /search app frame; the builder must still scroll to its footer
+  check('page body scrolls (search.css overflow lock undone)', await page.evaluate(() => getComputedStyle(document.body).overflowY !== 'hidden'));
+  await page.mouse.wheel(0, 20000); await sleep(400);
+  check('footer reachable by scrolling', await page.evaluate(() => { const r = document.querySelector('#footer').getBoundingClientRect(); return window.scrollY > 0 && r.top < window.innerHeight; }), 'scrollY=' + await page.evaluate(() => window.scrollY));
+  await page.mouse.wheel(0, -20000); await sleep(200);
 
   // untick Beta -> partial project, count 3, layout hidden
   await page.click('label[for="eb-d-' + fx.project + '-' + fx.owner + '-' + fx.ds_b + '"]');
