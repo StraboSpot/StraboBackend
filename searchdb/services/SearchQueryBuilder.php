@@ -1172,6 +1172,46 @@ SELECT json_build_object(
         return $out;
     }
 
+    /**
+     * COUNT twin of runItemIdsQuery for the Export Builder's live "N spots
+     * match" readout: same non-spatial predicate, same scope, same ACL, no
+     * row transfer. (U2 skipped for the same reason as runItemIdsQuery, so
+     * the caller labels the number "about N" when an area filter is on.)
+     *
+     * @param array $dsl    validated DSL (validate())
+     * @param array $scope  list of {project_id:string, owner:int, dataset_ids:string[]|null}
+     * @return int
+     */
+    public function runItemCountQuery($dsl, array $scope)
+    {
+        $this->resetParams();
+        $noSpatial = $dsl;
+        $noSpatial['criteria'] = array();
+        foreach ($dsl['criteria'] as $c) {
+            if ($c['id'] !== 'U2') $noSpatial['criteria'][] = $c;
+        }
+        list($where) = $this->itemWhere($noSpatial);
+
+        $scopeParts = array();
+        foreach ($scope as $sc) {
+            $part = "(ih.project_id = " . $this->bind((string)$sc['project_id'])
+                . " AND ih.project_userpkey = " . $this->bind((int)$sc['owner']) . "::int";
+            if (!empty($sc['dataset_ids'])) {
+                $part .= " AND ih.dataset_ids && " . $this->bind(self::pgArrayLiteral($sc['dataset_ids'])) . "::text[]";
+            }
+            $scopeParts[] = $part . ")";
+        }
+        if (!$scopeParts) return 0;
+
+        $sql = "SELECT count(*) AS c
+                  FROM strabosearch.item_hit ih
+                 WHERE ih.item_type = 'spot' AND ih.project_subsystem = 'field'
+                   AND (" . implode(" OR ", $scopeParts) . ")
+                   AND $where";
+        $rows = $this->execPrepared($sql);
+        return $rows ? (int)$rows[0]->c : 0;
+    }
+
     public function validateGeo($geo)
     {
         $out = array(

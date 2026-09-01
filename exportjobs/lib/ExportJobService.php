@@ -306,6 +306,9 @@ class ExportJobService
 		return rtrim($this->cfg['results_root'], '/') . '/' . ltrim($row['result_path'], '/');
 	}
 
+	/** Absolute path of a row's result zip (null when none / malformed). */
+	public function resultPath($row) { return $this->resultAbsPath($row); }
+
 	/** Flip one done row to expired and remove its file. Row survives. */
 	public function expire($row, $why = 'retention')
 	{

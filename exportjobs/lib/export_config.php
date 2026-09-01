@@ -48,6 +48,8 @@ function export_config()
 		'max_attempts'         => 2,              // one automatic retry after a crash
 		'php_binary'           => 'php',
 		'zip_binary'           => 'zip',
+		'site_url'             => 'https://strabospot.org',   // links in notification emails
+		'mail_transport'       => 'smtp',         // smtp (PHPMailer, forgotpassword.php pattern) | file (log_root/mail.log) | none
 	);
 
 	$cfg = $defaults;

@@ -23,12 +23,31 @@ class ExportRunner
 	private $plugins = array();
 	private $log;
 
-	public function __construct(ExportJobService $svc, array $plugins, $logFn = null)
+	/** @var callable|null  function(array $finishedRow) after done/failed (email, design §9.6) */
+	private $notify;
+
+	public function __construct(ExportJobService $svc, array $plugins, $logFn = null, $notifyFn = null)
 	{
 		$this->svc = $svc;
 		$this->cfg = $svc->config();
 		foreach ($plugins as $p) $this->plugins[$p->key()] = $p;
 		$this->log = $logFn ? $logFn : function ($m) {};
+		$this->notify = $notifyFn;
+	}
+
+	/** Notification failures are logged and never change the job outcome. */
+	private function notifyOutcome($pkey)
+	{
+		if (!$this->notify) return;
+		$log = $this->log;
+		try {
+			$row = $this->svc->getByPkey($pkey);
+			if ($row) call_user_func($this->notify, $row);
+		} catch (Exception $e) {
+			$log("notify failed for job $pkey: " . $e->getMessage());
+		} catch (Error $e) {
+			$log("notify failed for job $pkey: " . $e->getMessage());
+		}
 	}
 
 	/**
@@ -92,6 +111,7 @@ class ExportRunner
 			$svc->finish($pkey, $resultRel, $bytes, $sha, $itemCount, $childCount);
 			$log("job $uuid: done ($bytes bytes, $itemCount items)");
 			$this->rmrf($workDir);
+			$this->notifyOutcome($pkey);
 			return true;
 
 		} catch (ExportCancelled $e) {
@@ -102,11 +122,13 @@ class ExportRunner
 			$log("job $uuid: FAILED " . $e->getMessage());
 			$svc->fail($pkey, $e->getMessage());
 			$this->rmrf($workDir);
+			$this->notifyOutcome($pkey);
 			return false;
 		} catch (Error $e) {                       // PHP 7 engine errors
 			$log("job $uuid: FAILED (engine) " . $e->getMessage());
 			$svc->fail($pkey, 'Internal error: ' . $e->getMessage());
 			$this->rmrf($workDir);
+			$this->notifyOutcome($pkey);
 			return false;
 		}
 	}

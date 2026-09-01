@@ -86,6 +86,17 @@ class ExportFinder
 	public function resolveCriteria(array $recipe)
 	{
 		$criteria = isset($recipe['criteria']) && is_array($recipe['criteria']) ? $recipe['criteria'] : array();
+		// Validated rows carry U2 as {geojson: "<json>"} (the validator's
+		// internal form). Recipes store validated rows, so turn that form back
+		// into the GeoJSON object the validator accepts before re-validating.
+		foreach ($criteria as &$c) {
+			if (is_array($c) && isset($c['id']) && strtoupper((string)$c['id']) === 'U2'
+				&& is_array($c['value']) && isset($c['value']['geojson']) && !isset($c['value']['type'])) {
+				$g = is_string($c['value']['geojson']) ? json_decode($c['value']['geojson'], true) : $c['value']['geojson'];
+				if (is_array($g)) $c['value'] = $g;
+			}
+		}
+		unset($c);
 		$qb = new SearchQueryBuilder($this->db, $this->userpkey);
 		try {
 			$dsl = $qb->validate(array('subsystems' => array('field'), 'pathway' => 'projects', 'criteria' => $criteria));
@@ -171,6 +182,33 @@ class ExportFinder
 		$result['index_synced_at'] = $this->db->get_var_prepared(
 			"SELECT last_incremental_sync FROM strabosearch.sync_state WHERE source = 'field'", array());
 		return $result;
+	}
+
+	/**
+	 * Live count for the builder page ("N spots match"): the FIND number
+	 * without transferring ids. Approximate when an area filter is present
+	 * (the polygon is applied only at gather time) and, like find(), before
+	 * nested children are added.
+	 *
+	 * @return array {count:int, approximate:bool, used_index:bool, over_max:bool, max_items:int}
+	 */
+	public function count(array $recipe)
+	{
+		$scope = $this->resolveScope($recipe);
+		$crit  = $this->resolveCriteria($recipe);
+		$n = 0; $used = false;
+		if (!$crit['has_nonspatial']) {
+			foreach ($scope as $sc) {
+				$sc['dataset_ids'] = $this->datasetIds($sc);
+				$n += $this->countSpots($sc);
+			}
+		} else {
+			$qb = new SearchQueryBuilder($this->db, $this->userpkey);
+			$n = $qb->runItemCountQuery($crit['dsl'], $scope);
+			$used = true;
+		}
+		return array('count' => $n, 'approximate' => $crit['polygon'] !== null, 'used_index' => $used,
+			'over_max' => $n > (int)$this->cfg['max_items'], 'max_items' => (int)$this->cfg['max_items']);
 	}
 
 	private function enforceMax($n)

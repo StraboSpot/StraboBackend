@@ -40,6 +40,7 @@ require_once 'neodb.php';
 require_once __DIR__ . '/lib/export_config.php';
 require_once __DIR__ . '/lib/ExportJobService.php';
 require_once __DIR__ . '/lib/ExportRunner.php';
+require_once __DIR__ . '/lib/ExportMailer.php';
 require_once __DIR__ . '/plugins/EchoExportPlugin.php';
 require_once __DIR__ . '/plugins/FieldExportPlugin.php';
 
@@ -63,7 +64,8 @@ $log = function ($m) use ($cfg) {
 	@file_put_contents(rtrim($cfg['log_root'], '/') . '/worker.log', $line, FILE_APPEND);
 };
 $plugins = array(new EchoExportPlugin(), new FieldExportPlugin($db, $neodb, $cfg));
-$runner = new ExportRunner($svc, $plugins, $log);
+$mailer = new ExportMailer($db, $cfg, $log);
+$runner = new ExportRunner($svc, $plugins, $log, function ($row) use ($mailer) { $mailer->notify($row); });
 
 foreach (array($cfg['results_root'], $cfg['work_root'], $cfg['log_root']) as $d) {
 	if (!is_dir($d)) @mkdir($d, 0775, true);
