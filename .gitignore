@@ -54,3 +54,13 @@ microview/*
 straboToolsImages/
 straboToolsImages
 searchthumbs
+# Export Builder job system: worker scratch + finished bundles + logs (design §6.6)
+exportjobs/work/*
+exportjobs/results/*
+exportjobs/log/*
+!exportjobs/work/.htaccess
+!exportjobs/work/.gitkeep
+!exportjobs/results/.htaccess
+!exportjobs/results/.gitkeep
+!exportjobs/log/.htaccess
+!exportjobs/log/.gitkeep

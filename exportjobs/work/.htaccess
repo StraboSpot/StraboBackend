@@ -1,0 +1,2 @@
+# Never served by Apache: results are streamed only by exportjobs/download.php
+Require all denied
