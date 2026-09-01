@@ -144,6 +144,31 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.click('#me-dialog-ok');
   await page.waitForSelector('.me-empty');
   check('confirm clears them -> empty state with the builder link', /Build one/.test(await page.locator('.me-empty').textContent()));
+  // ---- 7. M6 doors: menu, My Field Data toolbar, StraboSearch Export… ---------
+  check('account menu lists Export Builder + My Exports', await page.evaluate(() => !!document.querySelector('#header a[href="/export_builder"]') && !!document.querySelector('#header a[href="/my_exports"]')));
+  await page.goto(BASE + '/my_field_data', { waitUntil: 'load' });
+  check('My Field Data toolbar under the title: + New Project (primary) and Custom export…', await page.evaluate(() => {
+    const tb = document.querySelector('header.major + .mfd-toolbar');
+    return !!tb && tb.querySelector('a[href="/new_project"].primary') !== null && /Custom export/.test(tb.querySelector('a[href="/export_builder"]').textContent) && !/\(Add Project\)/.test(document.body.textContent);
+  }));
+  await page.goto(BASE + '/strabosearch/', { waitUntil: 'load' });
+  await page.waitForSelector('#ssExportBtn');
+  check('search page: Export… rendered disabled before any search', (await page.getAttribute('#ssExportBtn', 'aria-disabled')) === 'true');
+  await page.selectOption('.ss-crit-select', 'U1');
+  await page.fill('.ss-value input[type="text"]', 'Granite');
+  await page.click('#ssSearchBtn');
+  await page.waitForSelector('.ss-card', { timeout: 15000 });
+  check('search page: Export… enabled once results are on screen', (await page.getAttribute('#ssExportBtn', 'aria-disabled')) === 'false');
+  const [door] = await Promise.all([ctx.waitForEvent('page'), page.click('#ssExportBtn')]);
+  await door.waitForLoadState('load');
+  await door.waitForSelector('.eb-proj');
+  check('Export… opens the builder in a new tab with the fixture project ticked and the U1 row loaded', /export_builder/.test(door.url()) && await door.isChecked('#eb-p-' + fx.project + '-' + fx.owner) && (await door.locator('.ss-value input[type="text"]').first().inputValue()) === 'Granite');
+  check('builder banner says 1 project preselected from StraboSearch', /From StraboSearch/.test(await door.locator('#eb-from').textContent()) && /1 of your StraboField project has/.test(await door.locator('#eb-from').textContent()));
+  await door.waitForFunction(() => /^1 spot match/.test(document.getElementById('eb-count').textContent.replace(/\s+/g, ' ')), null, { timeout: 8000 });
+  check('live count on the handed-off builder: 1 spot', true);
+  await door.close();
+  await page.fill('.ss-value input[type="text"]', 'Granite Knob');
+  check('editing the criteria disables Export… again (results invalidated)', (await page.getAttribute('#ssExportBtn', 'aria-disabled')) === 'true');
   check('no page errors overall', errors.length === 0, errors.join(' | '));
 
   await browser.close();

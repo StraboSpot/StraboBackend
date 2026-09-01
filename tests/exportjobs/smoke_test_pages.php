@@ -76,6 +76,17 @@ function http($method, $path, $sid = null, $json = null) {
 	foreach (explode("\r\n", substr($raw, 0, $hsize)) as $l) { if (strpos($l, ':') !== false) { list($k, $v) = explode(':', $l, 2); $headers[strtolower(trim($k))] = trim($v); } }
 	return array($code, $headers, substr($raw, $hsize));
 }
+function httpForm($path, $sid, array $fields) {
+	global $BASE;
+	$ch = curl_init($BASE . $path);
+	curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_HEADER => true, CURLOPT_POST => true, CURLOPT_POSTFIELDS => http_build_query($fields), CURLOPT_TIMEOUT => 60));
+	if ($sid) curl_setopt($ch, CURLOPT_HTTPHEADER, array('Cookie: PHPSESSID=' . $sid));
+	$raw = curl_exec($ch);
+	$code = (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+	$hsize = (int)curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+	curl_close($ch);
+	return array($code, substr($raw, $hsize));
+}
 function api($action, $sid, $json = null, $method = null) {
 	list($code, , $body) = http($method ? $method : ($json !== null ? 'POST' : 'GET'), '/exportjobs/api.php?action=' . $action, $sid, $json);
 	$j = json_decode($body, true);
@@ -177,6 +188,32 @@ check('collaborator sees the shared project as collaborator with the owner name'
 list($c, , $b) = http('GET', '/export_builder?p=' . $P1 . '&owner=' . $OWNER . '&d=' . $DS_B, $own);
 $eb = embedded($b, 'EXPORT_BUILDER');
 check('?p=&owner=&d= door embeds the preselect', $eb && $eb['preselect'] === array('project_id' => (string)$P1, 'owner' => $OWNER, 'dataset_id' => (string)$DS_B), json_encode($eb ? $eb['preselect'] : null));
+// M6 doors: StraboSearch POST handoff + menu + My Field Data toolbar
+$dslAll = array('subsystems' => array('field', 'micro', 'exp'), 'pathway' => 'projects');
+list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U1', 'value' => 'Granite'))))));
+$eb = embedded($b, 'EXPORT_BUILDER'); $sc = $eb ? $eb['initial']['scope']['projects'] : null;
+check('search door: matching keyword preselects the owner project + carries the U1 row + banner', $c === 200 && $sc === array(array('id' => (string)$P1, 'owner' => $OWNER)) && $eb['initial']['criteria'] === array(array('id' => 'U1', 'value' => 'Granite')) && $eb['initial']['formats'] === array('geojson') && strpos($b, 'From StraboSearch.') !== false && strpos($b, '1 of your StraboField project has spots matching') !== false, "$c " . json_encode($sc));
+list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U1', 'value' => 'Nonesuchzzz'))))));
+$eb = embedded($b, 'EXPORT_BUILDER');
+check('search door: no matches -> nothing preselected, "None of your" note', $c === 200 && $eb && $eb['initial']['scope']['projects'] === array() && strpos($b, 'None of your StraboField projects have spots') !== false, "$c");
+list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode(array('subsystems' => array('micro'), 'criteria' => array(array('id' => 'U1', 'value' => 'Granite'))))));
+$eb = embedded($b, 'EXPORT_BUILDER');
+check('search door: Field excluded by U8 -> nothing preselected, note says so', $c === 200 && $eb && $eb['initial']['scope']['projects'] === array() && strpos($b, 'left out StraboField') !== false, "$c");
+list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'M1', 'value' => 'x'), array('id' => 'U4', 'value' => 5))))));
+$eb = embedded($b, 'EXPORT_BUILDER');
+check('search door: only non-Field rows -> rows dropped (noted), every project with spots preselected', $c === 200 && $eb && $eb['initial']['criteria'] === array() && $eb['initial']['scope']['projects'] === array(array('id' => (string)$P1, 'owner' => $OWNER)) && strpos($b, '2 filter rows that cannot apply') !== false, "$c");
+list($c, $b) = httpForm('/export_builder', $col, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U1', 'value' => 'Granite'))))));
+$eb = embedded($b, 'EXPORT_BUILDER');
+check('search door: collaborator gets the shared project preselected under its owner', $c === 200 && $eb && $eb['initial']['scope']['projects'] === array(array('id' => (string)$P1, 'owner' => $OWNER)), "$c");
+list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => 'not json'));
+$eb = embedded($b, 'EXPORT_BUILDER');
+check('search door: garbage payload -> plain builder (no initial, no banner)', $c === 200 && $eb && $eb['initial'] === null && strpos($b, 'From StraboSearch.') === false, "$c");
+list($c, $b) = httpForm('/export_builder', null, array('search_dsl' => '{}'));
+check('search door: anonymous POST -> 302 login', $c === 302, "$c");
+list($c, , $b) = http('GET', '/my_exports', $own);
+check('account menu carries Export Builder + My Exports next to My Samples', preg_match('~my_samples">My Samples</a></li>\s*<li><a href="/export_builder">Export Builder</a></li>\s*<li><a href="/my_exports">My Exports</a></li>~', $b) === 1);
+list($c, , $b) = http('GET', '/my_field_data', $own);
+check('My Field Data toolbar: + New Project and Custom export…, floating (Add Project) gone', $c === 200 && strpos($b, 'class="mfd-toolbar"') !== false && strpos($b, '/new_project" class="button primary small">+ New Project</a>') !== false && strpos($b, '/export_builder" class="button small"') !== false && strpos($b, '(Add Project)') === false, "$c");
 list($c, , $b) = http('GET', '/my_exports?new=' . UUID::v4(), $own);
 $me = embedded($b, 'MY_EXPORTS');
 check('My Exports renders with the shell + notice payload', $c === 200 && strpos($b, '<h2>My Exports</h2>') !== false && strpos($b, 'my_exports.js') !== false && $me && $me['notice']['kind'] === 'new', "$c");

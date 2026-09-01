@@ -150,6 +150,11 @@ include("includes/mheader.php");
 
 </script>
 
+<style>
+.mfd-toolbar { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.75em 1em; margin: -0.5em auto 2em auto; }
+.mfd-toolbar .button { margin: 0; }
+</style>
+
 			<!-- Main -->
 				<div id="main" class="wrapper style1">
 					<div class="container">
@@ -157,6 +162,15 @@ include("includes/mheader.php");
 						<header class="major">
 							<h2>My StraboField Data</h2>
 						</header>
+
+						<!-- Page-level actions (2026-09-01): the two things that are
+						     not about one project or dataset live here, mirroring the
+						     My Samples toolbar. Everything per-project stays in the
+						     project cards below. -->
+						<div class="mfd-toolbar">
+							<a href="/new_project" class="button primary small">+ New Project</a>
+							<a href="/export_builder" class="button small" title="Build a downloadable package from several projects or datasets, with optional filters (Export Builder)">Custom export&hellip;</a>
+						</div>
 
 <?php
 $collabquery = "
@@ -230,7 +244,6 @@ if($clevel == "admin") $showlevel = "Admin";
 	}
 ?>
 
-							<div style="text-align:center;"><a href="/new_project">(Add Project)</a></div>
 
 <?php
 if($collaboration_rows != ""){
@@ -455,7 +468,7 @@ if($collaboration_rows != ""){
 <?php
 if(count($projectrows)==0){
 	?>
-		<div style="text-align:center;margin-bottom:500px;">No Projects found.<br>Click <a href="new_project">here</a> to add project.</div>
+		<div style="text-align:center;margin-bottom:500px;">No projects yet.<br>Use <strong>+ New Project</strong> above to add one.</div>
 	<?php
 }else{
 

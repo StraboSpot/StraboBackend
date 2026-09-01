@@ -59,6 +59,7 @@
 		if (!window.SSBuilder.hasActiveRow() && !browse) return;
 		lastRunDsl = window.SSBuilder.getDsl();
 		window.SSResults.run(lastRunDsl, opts || {});
+		updateExportButton();
 		closeDrawer();   // mobile: reveal the results (no-op on desktop)
 	}
 
@@ -127,6 +128,40 @@
 			lastRunDsl = null;
 			window.history.replaceState(null, '', window.location.pathname);
 		}
+		updateExportButton();
+	}
+
+	/**
+	 * Export… (Export Builder door, 2026-09-01): live only while results
+	 * on screen reflect the criteria above (same invalidation rule as the
+	 * results themselves). Logged-in only (the anchor is not rendered
+	 * otherwise). Click = POST the last-run DSL to the builder in a new
+	 * tab; the builder preselects the caller's StraboField projects that
+	 * have matching spots and loads the Field-applicable criteria rows.
+	 */
+	function updateExportButton() {
+		var btn = document.getElementById('ssExportBtn');
+		if (!btn) return;
+		var ok = !!lastRunDsl;
+		btn.classList.toggle('disabled', !ok);
+		btn.style.opacity = ok ? '' : '0.5';
+		btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+	}
+	function openExportBuilder() {
+		if (!lastRunDsl) return;
+		var form = document.createElement('form');
+		form.method = 'POST';
+		form.action = CFG.exportBuilder || '/export_builder';
+		form.target = '_blank';
+		form.style.display = 'none';
+		var f = document.createElement('input');
+		f.type = 'hidden';
+		f.name = 'search_dsl';
+		f.value = JSON.stringify(lastRunDsl);
+		form.appendChild(f);
+		document.body.appendChild(form);
+		form.submit();
+		form.parentNode.removeChild(form);
 	}
 
 	// ---- boot -------------------------------------------------------------
@@ -153,6 +188,8 @@
 
 		document.getElementById('ssSearchBtn')
 			.addEventListener('click', function () { runSearch(); });
+		var exportBtn = document.getElementById('ssExportBtn');
+		if (exportBtn) exportBtn.addEventListener('click', openExportBuilder);
 
 		// Mobile drawer wiring (M4): pill opens, X / footer link / backdrop /
 		// Escape close. Results-invalidating edits (updateSearchButton's

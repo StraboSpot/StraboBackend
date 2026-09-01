@@ -87,6 +87,7 @@ function ss_asset($path) {
 						<div class="ss-actions-row">
 							<a href="javascript:void(0);" id="ssMySearchesBtn" class="button small fit">My searches &#9662;</a>
 							<a href="javascript:void(0);" id="ssSaveBtn" class="button small fit">Save current</a>
+							<a href="javascript:void(0);" id="ssExportBtn" class="button small fit disabled" aria-disabled="true" title="Open the Export Builder with the StraboField projects from these results preselected and these filters applied">Export&hellip;</a>
 						</div>
 <?php } ?>
 						<!-- Drawer-only (M4): label follows the results state. -->
@@ -159,6 +160,7 @@ function ss_asset($path) {
 				window.STRABO_SEARCH = {
 					loggedIn: <?php echo $searchLoggedIn ? 'true' : 'false'; ?>,
 					api: '/strabosearch/api.php',
+					exportBuilder: '/export_builder',
 					thumb: '/strabosearch/thumb.php',
 					icons: {
 						field: '/strabosearch/images/pickaxe.png',

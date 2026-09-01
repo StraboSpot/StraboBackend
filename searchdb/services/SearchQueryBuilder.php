@@ -1212,6 +1212,46 @@ SELECT json_build_object(
         return $rows ? (int)$rows[0]->c : 0;
     }
 
+    /**
+     * Per-project twin of runItemCountQuery for the StraboSearch -> Export
+     * Builder door: which of the caller's candidate projects have at least
+     * one Field spot matching the (non-spatial) criteria. Same predicate,
+     * same ACL, one GROUP BY instead of N counts. U2 skipped as above.
+     *
+     * @param array $dsl    validated DSL (validate())
+     * @param array $scope  list of {project_id:string, owner:int}
+     * @return array  "project_id|owner" => matching spot count (only projects with >= 1)
+     */
+    public function runItemProjectCountsQuery($dsl, array $scope)
+    {
+        $this->resetParams();
+        $noSpatial = $dsl;
+        $noSpatial['criteria'] = array();
+        foreach ($dsl['criteria'] as $c) {
+            if ($c['id'] !== 'U2') $noSpatial['criteria'][] = $c;
+        }
+        list($where) = $this->itemWhere($noSpatial);
+
+        $scopeParts = array();
+        foreach ($scope as $sc) {
+            $scopeParts[] = "(ih.project_id = " . $this->bind((string)$sc['project_id'])
+                . " AND ih.project_userpkey = " . $this->bind((int)$sc['owner']) . "::int)";
+        }
+        if (!$scopeParts) return array();
+
+        $sql = "SELECT ih.project_id, ih.project_userpkey, count(*) AS c
+                  FROM strabosearch.item_hit ih
+                 WHERE ih.item_type = 'spot' AND ih.project_subsystem = 'field'
+                   AND (" . implode(" OR ", $scopeParts) . ")
+                   AND $where
+                 GROUP BY ih.project_id, ih.project_userpkey";
+        $out = array();
+        foreach ((array)$this->execPrepared($sql) as $r) {
+            $out[(string)$r->project_id . '|' . (int)$r->project_userpkey] = (int)$r->c;
+        }
+        return $out;
+    }
+
     public function validateGeo($geo)
     {
         $out = array(

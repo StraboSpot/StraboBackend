@@ -299,6 +299,11 @@
 			$('eb-notes').value = init.notes || '';
 			if (window.SSBuilder && init.criteria && init.criteria.length) window.SSBuilder.loadDsl({ criteria: init.criteria });
 			if (missing.length) $('eb-msg').textContent = 'Some projects of the earlier export are no longer available to you: ' + missing.join(', ');
+			// Bring the first preselected project into view: a door may tick
+			// projects far down a long picker (StraboSearch handoff).
+			var k0 = Object.keys(sel)[0];
+			var firstSel = k0 ? document.querySelector('.eb-proj[data-key="' + k0 + '"]') : null;
+			if (firstSel) firstSel.scrollIntoView({ block: 'nearest' });
 		} else if (pre) {
 			var key = pre.project_id + '|' + pre.owner;
 			if (byKey[key]) {

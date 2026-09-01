@@ -12,7 +12,10 @@
  *
  *              Doors: ?p=<project id>&owner=<pkey>[&d=<dataset id>] preselects
  *              (My Field Data); ?from=<job uuid> pre-fills everything from an
- *              earlier export's recipe (My Exports "Edit and re-run").
+ *              earlier export's recipe (My Exports "Edit and re-run");
+ *              POST search_dsl=<StraboSearch DSL JSON> (the results page's
+ *              Export… button) preselects the caller's projects with
+ *              matching spots and loads the Field-applicable filter rows.
  *
  *              Page shell per the site convention (mheader at global scope,
  *              wrapper style1 > container > header.major, dark palette,
@@ -81,11 +84,81 @@ if (isset($_GET['p']) && preg_match('/^[0-9]{1,20}$/', (string)$_GET['p'])) {
 	$ebPreselect = array('project_id' => (string)$_GET['p'], 'owner' => isset($_GET['owner']) ? (int)$_GET['owner'] : $userpkey,
 		'dataset_id' => (isset($_GET['d']) && preg_match('/^[0-9]{1,20}$/', (string)$_GET['d'])) ? (string)$_GET['d'] : null);
 }
-$ebInitial = null; $ebFromSummary = null;
+/**
+ * StraboSearch door (M6): the results page POSTs its last-run DSL as
+ * `search_dsl`. Keep the Field-applicable criteria rows (Universal minus
+ * owner/subsystem, plus Field), and preselect every project in the caller's
+ * picker that has at least one spot matching them (one GROUP BY over the
+ * search index, same ACL as the export itself). Public projects of other
+ * users that were in the result set cannot be exported and are not offered.
+ * Returns {initial, note} or null when the payload is unusable.
+ */
+function eb_from_search($db, $userpkey, array $projects, $dsl)
+{
+	if (!is_array($dsl)) return null;
+	require_once __DIR__ . '/searchdb/services/SearchQueryBuilder.php';
+	$note = array();
+	$fieldExcluded = isset($dsl['subsystems']) && is_array($dsl['subsystems']) && $dsl['subsystems'] && !in_array('field', $dsl['subsystems'], true);
+
+	$kept = array(); $dropped = 0;
+	foreach ((isset($dsl['criteria']) && is_array($dsl['criteria'])) ? $dsl['criteria'] : array() as $row) {
+		$id = (is_array($row) && isset($row['id'])) ? strtoupper((string)$row['id']) : '';
+		if (preg_match('/^(U|F)[0-9]+$/', $id) && $id !== 'U4' && $id !== 'U8') $kept[] = $row; else $dropped++;
+	}
+	$validated = null;
+	if ($kept) {
+		try {
+			$qb = new SearchQueryBuilder($db, $userpkey);
+			$validated = $qb->validate(array('subsystems' => array('field'), 'pathway' => 'projects', 'criteria' => $kept));
+		} catch (SearchDslError $e) {
+			$note[] = 'The search filters could not be carried over (' . $e->getMessage() . ').';
+			$kept = array(); $validated = null;
+		}
+	}
+
+	$candidates = array();
+	foreach ($projects as $p) if ($p['spots'] > 0) $candidates[] = array('project_id' => $p['id'], 'owner' => $p['owner']);
+	$matched = array();
+	if ($fieldExcluded) {
+		$note[] = 'Your search left out StraboField, so no projects were preselected.';
+	} elseif ($validated !== null && count(array_filter($validated['criteria'], function ($c) { return $c['id'] !== 'U2'; })) > 0) {
+		$hits = $candidates ? $qb->runItemProjectCountsQuery($validated, $candidates) : array();
+		foreach ($candidates as $c) if (isset($hits[$c['project_id'] . '|' . $c['owner']])) $matched[] = $c;
+	} else {
+		$matched = $candidates;      // no non-spatial filter: every project with spots qualifies (an area filter is applied at build time)
+	}
+	$total = count($matched);
+	if ($total > 50) { $matched = array_slice($matched, 0, 50); $note[] = "Only the first 50 of $total matching projects were preselected (the per-export limit)."; }
+
+	$scope = array('projects' => array(), 'datasets' => array());
+	$names = array(); $byKey = array();
+	foreach ($projects as $p) $byKey[$p['id'] . '|' . $p['owner']] = $p['name'];
+	foreach ($matched as $m) {
+		$scope['projects'][] = array('id' => $m['project_id'], 'owner' => $m['owner']);
+		$names[] = isset($byKey[$m['project_id'] . '|' . $m['owner']]) ? $byKey[$m['project_id'] . '|' . $m['owner']] : $m['project_id'];
+	}
+	if (!$fieldExcluded) {
+		$shown = implode(', ', array_slice($names, 0, 6)) . (count($names) > 6 ? ' and ' . (count($names) - 6) . ' more' : '');
+		$lead = $total === 0
+			? 'None of your StraboField projects have spots matching these filters. Pick projects below or loosen the filters.'
+			: ($total . ' of your StraboField project' . ($total === 1 ? ' has' : 's have') . ' spots matching these filters and ' . ($total === 1 ? 'is' : 'are') . ' preselected: ' . $shown . '.');
+		array_unshift($note, $lead);
+	}
+	if ($dropped) $note[] = $dropped . ' filter row' . ($dropped === 1 ? '' : 's') . ' that cannot apply to StraboField exports (Micro, Experimental, Image, owner or subsystem rows) ' . ($dropped === 1 ? 'was' : 'were') . ' left out.';
+
+	$initial = array('scope' => $scope, 'criteria' => $kept, 'children' => 'matched_parents', 'formats' => array('geojson'),
+		'layout' => 'merged', 'extras' => array(), 'sample_list_csv' => false, 'notes' => '');
+	return array('initial' => $initial, 'note' => implode(' ', $note));
+}
+
+$ebInitial = null; $ebFromSummary = null; $ebFromSearch = null;
 if (isset($_GET['from']) && UUID::is_valid((string)$_GET['from'])) {
 	$ebSvc = new ExportJobService($db, $ebCfg);
 	$src = $ebSvc->get((string)$_GET['from'], $userpkey);      // owner-scoped: someone else's uuid is simply ignored
 	if ($src && is_array($src['recipe'])) { $ebInitial = $src['recipe']; $ebFromSummary = $src['recipe_summary']; }
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['search_dsl'])) {
+	$door = eb_from_search($db, $userpkey, $ebProjects, json_decode((string)$_POST['search_dsl'], true));
+	if ($door) { $ebInitial = $door['initial']; $ebFromSearch = $door['note']; }
 }
 
 $ebFormats = array(
@@ -179,7 +252,9 @@ body { overflow: visible; }
 		</header>
 		<p class="eb-intro">Pick StraboField projects or datasets, narrow them with filters if you like, choose the output formats, and build a downloadable package in the background. You will find it on <a href="/my_exports">My Exports</a> when it is ready.</p>
 
-<?php if ($ebInitial) { ?>
+<?php if ($ebFromSearch !== null) { ?>
+		<div class="eb-from" id="eb-from"><strong>From StraboSearch.</strong> <?php echo htmlspecialchars($ebFromSearch); ?></div>
+<?php } elseif ($ebInitial) { ?>
 		<div class="eb-from" id="eb-from">Editing a copy of an earlier export<?php echo $ebFromSummary ? ': <strong>' . htmlspecialchars($ebFromSummary) . '</strong>' : ''; ?>. Adjust anything below and build again.</div>
 <?php } ?>
 
