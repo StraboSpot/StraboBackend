@@ -116,7 +116,7 @@ include("includes/mheader.php");
 <link rel="stylesheet" href="<?php echo eb_asset('/strabosearch/css/search.css'); ?>" />
 <style>
 .eb-intro { color: rgba(255,255,255,0.7); max-width: 60em; margin: 0 auto 1.5em auto; text-align: center; }
-.eb-panel { background: #2a2a3a; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 1.25em 1.5em; margin-bottom: 1.5em; }
+.eb-panel { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 1.25em 1.5em; margin-bottom: 1.5em; }
 .eb-panel h3 { margin: 0 0 0.25em 0; font-size: 1.15em; }
 .eb-panel h3 .eb-step { display: inline-block; background: #e44c65; color: #fff; border-radius: 50%; width: 1.6em; height: 1.6em; line-height: 1.6em; text-align: center; font-size: 0.85em; margin-right: 0.5em; }
 .eb-panel .eb-sub { color: rgba(255,255,255,0.6); font-size: 0.9em; margin-bottom: 1em; }
@@ -152,7 +152,7 @@ include("includes/mheader.php");
 .eb-block h4 { font-size: 0.85em; text-transform: uppercase; letter-spacing: 0.08em; color: rgba(255,255,255,0.6); margin: 0 0 0.5em 0; }
 .eb-block textarea { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #fff; padding: 0.5em 0.75em; width: 100%; min-height: 4em; font-size: 0.95em; }
 .eb-note { color: rgba(255,255,255,0.55); font-size: 0.85em; margin-top: 0.4em; }
-.eb-bar { position: sticky; bottom: 0; background: #1f1f2c; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.9em 1.25em; display: flex; flex-wrap: wrap; gap: 0.75em 1.5em; align-items: center; justify-content: space-between; box-shadow: 0 -6px 18px rgba(0,0,0,0.35); margin-bottom: 2em; }
+.eb-bar { position: sticky; bottom: 0; background: #272833; border: 1px solid rgba(255,255,255,0.15); border-radius: 6px; padding: 0.9em 1.25em; display: flex; flex-wrap: wrap; gap: 0.75em 1.5em; align-items: center; justify-content: space-between; box-shadow: 0 -6px 18px rgba(0,0,0,0.35); margin-bottom: 2em; }
 .eb-count { font-size: 1.05em; }
 .eb-count strong { color: #fff; }
 .eb-count .eb-approx { color: rgba(255,255,255,0.55); font-size: 0.85em; margin-left: 0.5em; }

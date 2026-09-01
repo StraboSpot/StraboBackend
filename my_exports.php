@@ -47,7 +47,7 @@ include("includes/mheader.php");
 .me-notice { background: rgba(228,76,101,0.12); border: 1px solid rgba(228,76,101,0.4); border-radius: 4px; padding: 0.6em 1em; margin-bottom: 1.25em; font-size: 0.92em; }
 .me-notice.me-notice-ok { background: rgba(80,180,120,0.12); border-color: rgba(80,180,120,0.45); }
 .me-list { display: flex; flex-direction: column; gap: 0.9em; }
-.me-job { background: #2a2a3a; border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 1em 1.25em; }
+.me-job { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; padding: 1em 1.25em; }
 .me-job-head { display: flex; flex-wrap: wrap; gap: 0.5em 1em; align-items: baseline; }
 .me-job-head .me-summary { font-weight: 600; flex: 1 1 20em; }
 .me-pill { display: inline-block; font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.06em; padding: 0.2em 0.6em; border-radius: 3px; border: 1px solid rgba(255,255,255,0.25); color: rgba(255,255,255,0.8); }
@@ -72,11 +72,11 @@ include("includes/mheader.php");
 .me-details { display: none; margin-top: 0.8em; background: rgba(0,0,0,0.25); border-radius: 4px; padding: 0.8em 1em; }
 .me-details pre { white-space: pre-wrap; font-size: 0.8em; color: rgba(255,255,255,0.8); margin: 0; max-height: 24em; overflow: auto; }
 .me-job.me-open .me-details { display: block; }
-.me-empty { text-align: center; color: rgba(255,255,255,0.65); padding: 2.5em 1em; background: #2a2a3a; border-radius: 6px; }
+.me-empty { text-align: center; color: rgba(255,255,255,0.65); padding: 2.5em 1em; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; }
 .me-empty a { color: #f06880; }
 .me-flash { outline: 2px solid #e44c65; }
 .me-dialog-back { position: fixed; inset: 0; background: rgba(0,0,0,0.6); z-index: 10000; display: none; }
-.me-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #2a2a3a; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 1.5em; z-index: 10001; max-width: 26em; width: calc(100% - 2em); display: none; }
+.me-dialog { position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); background: #1f1f2e; border: 1px solid rgba(255,255,255,0.2); border-radius: 6px; padding: 1.5em; z-index: 10001; max-width: 26em; width: calc(100% - 2em); display: none; }
 .me-dialog h3 { margin: 0 0 0.5em 0; font-size: 1.1em; }
 .me-dialog p { color: rgba(255,255,255,0.75); font-size: 0.92em; }
 .me-dialog .me-dialog-actions { display: flex; gap: 0.5em; justify-content: flex-end; }
