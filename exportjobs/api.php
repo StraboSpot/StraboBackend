@@ -60,6 +60,7 @@ require_once __DIR__ . '/lib/ExportFinder.php';
 require_once __DIR__ . '/plugins/FieldExportPlugin.php';   // validateOutput (static); the plugin itself is never constructed here
 
 $cfg = export_config();
+export_ensure_dirs($cfg);
 $svc = new ExportJobService($db, $cfg);
 $action = isset($_GET['action']) ? (string)$_GET['action'] : '';
 

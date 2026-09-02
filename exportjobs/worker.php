@@ -93,6 +93,8 @@ $cfg = export_config();
 $svc = new ExportJobService($db, $cfg);
 // Kicked runs have stdout redirected INTO worker.log (so PHP's own fatal
 // text lands there too); echoing our lines as well doubled every entry.
+export_ensure_dirs($cfg);
+
 // Echo unless stdout IS the log file.
 $EJ_LOGFILE = rtrim($cfg['log_root'], '/') . '/worker.log';
 $EJ_ECHO = true;
@@ -108,10 +110,6 @@ $log = function ($m) use ($EJ_LOGFILE, $EJ_ECHO) {
 $plugins = array(new EchoExportPlugin(), new FieldExportPlugin($db, $neodb, $cfg));
 $mailer = new ExportMailer($db, $cfg, $log);
 $runner = new ExportRunner($svc, $plugins, $log, function ($row) use ($mailer) { $mailer->notify($row); });
-
-foreach (array($cfg['results_root'], $cfg['work_root'], $cfg['log_root']) as $d) {
-	if (!is_dir($d)) @mkdir($d, 0775, true);
-}
 
 function ej_disk_ok(array $cfg)
 {

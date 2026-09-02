@@ -234,7 +234,8 @@ check('user cap expires OLDEST first, keeps newest', $st === array('expired', 'e
 check('cap-expired files removed', !is_file(result_abs($done[0], $cfg)) && !is_file(result_abs($done[1], $cfg)) && is_file(result_abs($done[2], $cfg)));
 
 // ---------------------------------------------------------------- 12. Apache never serves the dirs
-foreach (array("exportjobs/results/$UPK/{$done[2]['uuid']}.zip", 'exportjobs/work/.gitkeep', 'exportjobs/log/worker.log', 'exportjobs/worker.php') as $path) {
+check('data folder carries its own deny-all .htaccess', trim((string)@file_get_contents(rtrim($cfg['data_root'], '/') . '/.htaccess')) !== '' && strpos((string)@file_get_contents(rtrim($cfg['data_root'], '/') . '/.htaccess'), 'Require all denied') !== false);
+foreach (array("exportjobs_data/results/$UPK/{$done[2]['uuid']}.zip", 'exportjobs_data/', 'exportjobs_data/.htaccess', 'exportjobs_data/log/worker.log', 'exportjobs/worker.php') as $path) {
 	$code = (int)trim(shell_exec('curl -s -o /dev/null -w "%{http_code}" ' . escapeshellarg("http://localhost/$path")));
 	check("HTTP 403 for /$path", $code === 403, "got $code");
 }

@@ -28,6 +28,7 @@ require_once __DIR__ . '/lib/export_config.php';
 require_once __DIR__ . '/lib/ExportJobService.php';
 
 $cfg = export_config();
+export_ensure_dirs($cfg);
 $svc = new ExportJobService($db, $cfg);
 
 $uuid = isset($_GET['j']) ? (string)$_GET['j'] : '';
