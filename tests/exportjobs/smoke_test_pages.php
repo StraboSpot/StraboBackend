@@ -258,6 +258,15 @@ $eb = embedded($b, 'EXPORT_BUILDER');
 check('account-menu door: general mode (mode flag, criteria builder, general copy)', $c === 200 && $eb && $eb['mode'] === 'general' && strpos($b, 'id="criteriaBuilder"') !== false && strpos($b, 'Your own projects and the ones you collaborate on') !== false && strpos($b, 'Pick StraboField projects or datasets') !== false, "$c");
 list($c, $b) = httpForm('/export_builder', null, array('search_dsl' => '{}'));
 check('search door: anonymous POST -> 302 login', $c === 302, "$c");
+// Anonymous Export… round trip (2026-09-02): /login.php?uri=<same-site path> stores the return path;
+// anything that is not a plain relative path is ignored (no open redirect, no login loop).
+require_once '/srv/app/www/includes/login_return.php';
+$retOk = login_return_path('/strabosearch/?q=abc-_123') === '/strabosearch/?q=abc-_123' && login_return_path('/my_field_data') === '/my_field_data';
+$retBad = login_return_path('https://evil.example/') === null && login_return_path('//evil.example/x') === null && login_return_path('/\\evil.example') === null
+	&& login_return_path("/ok\r\nSet-Cookie: x=1") === null && login_return_path('/login.php?uri=/x') === null && login_return_path('') === null && login_return_path(array('/x')) === null && login_return_path('relative/path') === null;
+check('login return path: same-site relative paths accepted, absolute/scheme-relative/control-char/login-loop/empty rejected', $retOk && $retBad);
+list($c, , $b) = http('GET', '/login.php?uri=' . rawurlencode('https://evil.example/'), null);
+check('GET /login.php?uri=<absolute url> renders the login form (200), no redirect', $c === 200 && strpos($b, 'submit_login') !== false, "$c");
 // HOLD 0d8555a (Jason 2026-09-02, "hide export system until ready for public testing"): the
 // menu entries and the My Field Data "Custom export…" button are commented out. FULL LAUNCH =
 // revert 0d8555a and flip these two checks back to asserting the links are present.

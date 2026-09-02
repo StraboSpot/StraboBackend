@@ -89,6 +89,12 @@ function ss_asset($path) {
 							<a href="javascript:void(0);" id="ssSaveBtn" class="button small fit">Save current</a>
 							<a href="javascript:void(0);" id="ssExportBtn" class="button small fit disabled" aria-disabled="true" title="Open the Export Builder with the StraboField projects from these results preselected and these filters applied">Export&hellip;</a>
 						</div>
+<?php } else { ?>
+						<!-- Anonymous (Jason 2026-09-02): Export… is shown so visitors learn
+						     exports exist; the click goes to sign-in and back to this search. -->
+						<div class="ss-actions-row">
+							<a href="javascript:void(0);" id="ssExportBtn" class="button small fit disabled" aria-disabled="true" title="Sign in to export the StraboField projects from these results">Export&hellip;</a>
+						</div>
 <?php } ?>
 						<!-- Drawer-only (M4): label follows the results state. -->
 						<a href="javascript:void(0);" id="ssDrawerCloseLink" class="ss-drawer-close-link">Close</a>

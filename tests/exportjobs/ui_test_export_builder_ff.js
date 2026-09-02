@@ -205,6 +205,27 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.waitForSelector('.ss-card', { timeout: 15000 });
   await page.waitForFunction(() => document.getElementById('ssExportBtn').getAttribute('aria-disabled') === 'false', null, { timeout: 15000 });
   check('the same keyword across all subsystems: Export… visible and enabled again', await page.evaluate(() => getComputedStyle(document.getElementById('ssExportBtn')).display !== 'none'));
+
+  // ---- 8. Anonymous Export… (Jason 2026-09-02): visible, sign-in tooltip, click -> login with a return path
+  const anon = await browser.newContext({ viewport: { width: 1280, height: 1800 } });
+  const apage = await anon.newPage();
+  const anonErrors = [];
+  apage.on('pageerror', (e) => anonErrors.push(String(e)));
+  const anonQ = enc({ dsl: { subsystems: ['field', 'micro', 'exp'], criteria: [{ id: 'U1', value: 'Granite' }] }, tab: 'projects', view: 'list' });
+  await apage.goto(BASE + '/strabosearch/?q=' + anonQ, { waitUntil: 'load' });
+  await apage.waitForSelector('#ssExportBtn', { state: 'attached' });
+  check('anonymous: Export… rendered, no Save current / My searches', await apage.evaluate(() => !!document.getElementById('ssExportBtn') && !document.getElementById('ssSaveBtn') && !document.getElementById('ssMySearchesBtn')));
+  await apage.waitForSelector('.ss-card', { timeout: 15000 });
+  await apage.waitForFunction(() => document.getElementById('ssExportBtn').getAttribute('aria-disabled') === 'false', null, { timeout: 15000 });
+  check('anonymous: Export… enabled once Field results land, tooltip says sign in', /^Sign in to export/.test(await apage.getAttribute('#ssExportBtn', 'title')));
+  await Promise.all([apage.waitForURL(/\/login\.php\?uri=/, { timeout: 15000 }), apage.click('#ssExportBtn')]);
+  const backTo = decodeURIComponent((apage.url().match(/[?&]uri=([^&]+)/) || [])[1] || '');
+  const dec = (s) => { try { const b = s.replace(/-/g, '+').replace(/_/g, '/'); return JSON.parse(Buffer.from(b, 'base64').toString('utf8')); } catch (e) { return null; } };
+  const backState = dec((backTo.match(/[?&]q=([^&]+)/) || [])[1] || '');
+  check('anonymous: click goes to /login.php?uri=<this search> (same-site path whose ?q= carries the Granite DSL)', backTo.indexOf('/strabosearch/?q=') === 0 && !!backState && backState.dsl && backState.dsl.criteria[0].value === 'Granite', backTo);
+  check('anonymous: login page renders the form + sign-up link', await apage.evaluate(() => !!document.querySelector('input[name="submit_login"]') && !!document.querySelector('a[href="/register"]')));
+  check('anonymous: no page errors', anonErrors.length === 0, anonErrors.join(' | '));
+  await anon.close();
   check('no page errors overall', errors.length === 0, errors.join(' | '));
 
   await browser.close();
