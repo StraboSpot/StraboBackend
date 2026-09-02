@@ -269,6 +269,7 @@ check('mobile drawer chrome present (M4)', strpos($body, 'ssDrawerBackdrop') !==
 check('globe wrap carries the pinned toggle + count pill (M4)',
 	strpos($body, 'ss-globe-toggle') !== false && strpos($body, 'ssGlobeCountPill') !== false);
 check('anonymous: no Save current button', strpos($body, 'ssSaveBtn') === false);
+check('anonymous: Export… rendered (disabled) with the sign-in tooltip (2026-09-02)', strpos($body, 'id="ssExportBtn"') !== false && strpos($body, 'title="Sign in to export the StraboField projects from these results"') !== false && strpos($body, 'ssMySearchesBtn') === false);
 check('anonymous: loggedIn=false bootstrap', strpos($body, 'loggedIn: false') !== false);
 
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/', $sid);

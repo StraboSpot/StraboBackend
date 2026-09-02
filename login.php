@@ -15,6 +15,15 @@ session_start();
 include_once "./includes/config.inc.php";
 include("db.php");
 include("neodb.php");
+require_once("./includes/login_return.php");
+
+	// A public page may ask for a post-login return trip with ?uri=<same-site
+	// path> (StraboSearch Export… for anonymous visitors, 2026-09-02); gated
+	// pages keep storing their own URI through logincheck.php.
+	if (isset($_GET['uri'])) {
+		$ret = login_return_path($_GET['uri']);
+		if ($ret !== null) $_SESSION['uri'] = $ret;
+	}
 
 	if($_POST['submit_login']!=""){
 		$email = strtolower(trim($_POST['email']));

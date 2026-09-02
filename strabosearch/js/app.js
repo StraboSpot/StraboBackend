@@ -146,13 +146,18 @@
 	 *     there is nothing it could export;
 	 *   - results still loading: disabled until the first page lands
 	 *     (results.js calls back through onStateChange).
-	 * Logged-in only (the anchor is not rendered otherwise). Click = POST
-	 * the last-run DSL to the builder in a new tab; the builder opens in
-	 * its search-door mode: only the projects (own, collaborated, public)
-	 * with matching spots, preselected, and the carried-over filters shown
-	 * read-only.
+	 * Rendered for everyone (Jason 2026-09-02: anonymous visitors must be
+	 * able to see that exports exist). Signed in: click = POST the last-run
+	 * DSL to the builder in a new tab; the builder opens in its search-door
+	 * mode: only the projects (own, collaborated, public) with matching
+	 * spots, preselected, and the carried-over filters shown read-only.
+	 * Anonymous: the same gates, tooltip "Sign in to export…", and the
+	 * click goes to /login.php?uri=<this search's URL> so sign-in (or
+	 * account creation) returns to the same results, where one more click
+	 * exports (the builder opens in a new tab, which needs a user gesture).
 	 */
 	var EXPORT_TITLE_READY = 'Open the Export Builder with the StraboField projects from these results preselected and these filters applied (exports cover StraboField projects for now)';
+	var EXPORT_TITLE_SIGNIN = 'Sign in to export the StraboField projects from these results (exports cover StraboField projects for now)';
 	var EXPORT_TITLE_BROWSE = 'Add at least one search filter and run the search, then export the matching projects';
 	function exportableDsl(dsl) {
 		return !!(dsl && dsl.criteria && dsl.criteria.length > 0);
@@ -169,10 +174,16 @@
 		btn.classList.toggle('disabled', !ok);
 		btn.style.opacity = ok ? '' : '0.5';
 		btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
-		btn.title = (ran && !hasCriteria) ? EXPORT_TITLE_BROWSE : EXPORT_TITLE_READY;
+		btn.title = (ran && !hasCriteria) ? EXPORT_TITLE_BROWSE : (CFG.loggedIn ? EXPORT_TITLE_READY : EXPORT_TITLE_SIGNIN);
 	}
 	function openExportBuilder() {
 		if (!exportableDsl(lastRunDsl) || !(window.SSResults.fieldProjectCount() > 0)) return;
+		if (!CFG.loggedIn) {
+			// The address bar already mirrors this search (?q=), so the login
+			// round trip lands back on these results.
+			window.location.href = '/login.php?uri=' + encodeURIComponent(window.location.pathname + window.location.search);
+			return;
+		}
 		var form = document.createElement('form');
 		form.method = 'POST';
 		form.action = CFG.exportBuilder || '/export_builder';
