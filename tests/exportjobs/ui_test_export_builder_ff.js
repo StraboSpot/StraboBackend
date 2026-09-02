@@ -107,6 +107,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.click('label[for="eb-fmt-sample_list"]');
   check('sample-list CSV option appears when Sample list is ticked', await page.isVisible('#eb-csv-wrap'));
   await page.click('label[for="eb-fmt-sample_list"]');
+  check('field book options are hidden until Field book PDF is ticked', !(await page.isVisible('#eb-fb-wrap')));
+  await page.click('label[for="eb-fmt-fieldbook"]');
+  check('field book options row appears with the four selects at their defaults', await page.isVisible('#eb-fb-wrap') && (await page.inputValue('#eb-fb-map')) === 'outdoors' && (await page.inputValue('#eb-fb-photos')) === 'sheets' && (await page.inputValue('#eb-fb-nets')) === 'on' && (await page.inputValue('#eb-fb-page')) === 'letter');
+  await page.selectOption('#eb-fb-map', 'none');      // keeps the worker off the tile network
+  await page.selectOption('#eb-fb-page', 'a4');
+  await shot('builder_fieldbook_options');
   await page.fill('#eb-notes', 'FF suite notes');
   await sleep(500);
   check('no page errors before submit', errors.length === 0, errors.join(' | '));
@@ -128,10 +134,17 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.waitForSelector('.me-job[data-uuid="' + uuid + '"] .me-details pre:not(:empty)');
   const det = await card.locator('.me-details pre').textContent();
   check('Details shows notes + README', /FF suite notes/.test(det) && /Projects:/.test(det) && /Pages Project/.test(det));
+  check('Details + README carry the field book options (map none, page a4)', /Field book: map none, photos sheets, stereonets on, page a4/.test(det), det.split('\n').filter((l) => /Field book/.test(l)).join(' | '));
   await shot('my_exports_done');
 
   // ---- 6. Re-run + Edit link + clear dialog ----------------------------------
   check('Edit and re-run links to the builder with ?from=', (await card.locator('a[data-act="edit"]').getAttribute('href')) === '/export_builder?from=' + uuid);
+  const editPage = await ctx.newPage();
+  await editPage.goto(BASE + '/export_builder?from=' + uuid, { waitUntil: 'load' });
+  await editPage.waitForSelector('#eb-fb-wrap');
+  await sleep(500);
+  check('Edit reopens the builder with the field book options restored (map none, page a4)', await editPage.isVisible('#eb-fb-wrap') && (await editPage.inputValue('#eb-fb-map')) === 'none' && (await editPage.inputValue('#eb-fb-page')) === 'a4' && await editPage.isChecked('#eb-fmt-fieldbook'));
+  await editPage.close();
   await card.locator('a[data-act="rerun"]').click();
   await page.waitForFunction(() => document.querySelectorAll('.me-job').length === 2, null, { timeout: 15000 });
   check('Re-run adds a second card marked re-run', await page.locator('.me-job').count() === 2 && /re-run/.test(await page.locator('.me-job').first().locator('.me-meta').first().textContent()));

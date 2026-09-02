@@ -164,6 +164,7 @@
 			lines.push('Export: ' + (jb.summary || ''));
 			lines.push('Status: ' + jb.status + (jb.error_text ? ' (' + jb.error_text + ')' : ''));
 			lines.push('Formats: ' + (jb.formats || []).join(', ') + ((jb.extras || []).length ? '; extras: ' + jb.extras.join(', ') : ''));
+			if (jb.fieldbook && (jb.formats || []).indexOf('fieldbook') >= 0) lines.push('Field book: map ' + jb.fieldbook.map + ', photos ' + jb.fieldbook.photos + ', stereonets ' + jb.fieldbook.nets + ', page ' + jb.fieldbook.page);
 			lines.push('Layout: ' + jb.layout + '   Filters: ' + jb.filter_count + '   Projects: ' + jb.project_count);
 			if (jb.notes) lines.push('Notes: ' + jb.notes);
 			if (jb.readme) { lines.push(''); lines.push(jb.readme.trim()); }

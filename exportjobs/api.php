@@ -104,6 +104,7 @@ function ej_normalize_recipe($db, $neodb, $userpkey, $cfg, $in)
 		'layout'   => isset($in['layout']) ? (string)$in['layout'] : 'merged',
 		'extras'   => isset($in['extras']) && is_array($in['extras']) ? array_values($in['extras']) : array(),
 		'sample_list_csv' => !empty($in['sample_list_csv']),
+		'fieldbook' => (isset($in['fieldbook']) && is_array($in['fieldbook'])) ? $in['fieldbook'] : array(),   // map / photos / nets / page, validated below
 		'notes'    => isset($in['notes']) ? mb_substr(trim(strip_tags((string)$in['notes'])), 0, 500) : '',
 	);
 	$finder = new ExportFinder($db, $neodb, $userpkey, $cfg);
@@ -119,7 +120,7 @@ function ej_normalize_recipe($db, $neodb, $userpkey, $cfg, $in)
 	unset($c);
 	$recipe['criteria'] = $rows;
 	$out = FieldExportPlugin::validateOutput($recipe);
-	$recipe['formats'] = $out['formats']; $recipe['extras'] = $out['extras']; $recipe['layout'] = $out['layout'];
+	$recipe['formats'] = $out['formats']; $recipe['extras'] = $out['extras']; $recipe['layout'] = $out['layout']; $recipe['fieldbook'] = $out['fieldbook'];
 	return array('recipe' => $recipe, 'scope' => $resolved, 'criteria' => $crit, 'out' => $out);
 }
 
@@ -185,6 +186,7 @@ function ej_row_public(array $r, $withRecipe = false)
 		'formats'        => isset($recipe['formats']) ? $recipe['formats'] : array(),
 		'extras'         => isset($recipe['extras']) ? $recipe['extras'] : array(),
 		'layout'         => isset($recipe['layout']) ? $recipe['layout'] : 'merged',
+		'fieldbook'      => isset($recipe['fieldbook']) ? $recipe['fieldbook'] : null,
 		'project_count'  => isset($recipe['scope']['projects']) ? count($recipe['scope']['projects']) : 0,
 		'filter_count'   => isset($recipe['criteria']) ? count($recipe['criteria']) : 0,
 		'notes'          => isset($recipe['notes']) ? $recipe['notes'] : '',

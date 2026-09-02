@@ -411,7 +411,7 @@ class FieldbookRenderer
 		$fig = $this->nets->figure($ms, $skipped);
 		$netW = self::NET_W; $gap = 5;
 		$h = $this->netHeight($fig, $netW, '');
-		$pdf->need(min($h, 60));
+		$pdf->need(min($h + 2, $pdf->pageH() - $pdf->tm() - $pdf->bm() - 2));
 		$y0 = $pdf->GetY(); $page = $pdf->PageNo();
 		$this->netFigure($fig, $x0 + $w - $netW, $y0, $netW, '');
 		$pdf->SetXY($x0, $y0);
@@ -492,6 +492,7 @@ class FieldbookRenderer
 	private function netFigure(array $fig, $x, $y, $w, $title)
 	{
 		$pdf = $this->pdf;
+		$pdf->SetAutoPageBreak(false, $pdf->bm());   // figures are placed at absolute positions after need(); a stray Cell must not open a page
 		$top = $y;
 		if ($title !== '') {
 			$pdf->SetXY($x, $y);
@@ -568,6 +569,7 @@ class FieldbookRenderer
 		$yy += 1;
 		$pdf->SetTextColor(0, 0, 0);
 		$pdf->SetXY($x, $yy);
+		$pdf->SetAutoPageBreak(true, $pdf->bm());
 		return $yy - $top;
 	}
 
@@ -820,6 +822,7 @@ class FieldbookRenderer
 			$rowH = $boxH + 1 + 3.4 + $capMax * 3.2 + 3.0 + 2.5;
 			$pdf->need($rowH);
 			$y0 = $pdf->GetY();
+			$pdf->SetAutoPageBreak(false, $pdf->bm());
 			foreach ($cells as $j => $c) {
 				$img = $c['img'];
 				$no = ++$this->photoNo;
@@ -838,6 +841,7 @@ class FieldbookRenderer
 				$pdf->SetTextColor(0, 0, 0);
 				$this->indexPhoto($no, $img, $spot, $y0);
 			}
+			$pdf->SetAutoPageBreak(true, $pdf->bm());
 			$pdf->SetXY($x0, $y0 + $rowH);
 		}
 	}
@@ -857,7 +861,9 @@ class FieldbookRenderer
 		if ($fig && $fh > $avail && $avail >= 70) { $fh = $avail; $fw = $fh * $fig['w'] / $fig['h']; }
 		$pdf->need(min($fh + 14, $pdf->pageH() - $pdf->tm() - $pdf->bm() - 2));
 		$y0 = $pdf->GetY();
+		$pdf->SetAutoPageBreak(false, $pdf->bm());
 		$this->placeImage($fig, $x0, $y0, $fw, $fh, $img['id']);
+		$pdf->SetAutoPageBreak(true, $pdf->bm());
 		$yy = $y0 + $fh + 1;
 		$pdf->SetXY($x0, $yy);
 		$pdf->SetFont($pdf->head, 'B', 8.5);
@@ -928,10 +934,10 @@ class FieldbookRenderer
 	private function families(array $fams, $x0, $w)
 	{
 		$pdf = $this->pdf;
-		$pdf->need(12);
+		$pdf->need(min(12 + $this->kvEstimate($fams[0]['rows']), 36));   // heading + the first family travel together
 		$this->subhead('Other observations', $x0);
 		foreach ($fams as $fam) {
-			$pdf->need(8);
+			$pdf->need(min(6 + $this->kvEstimate($fam['rows']), 30));
 			$pdf->SetX($x0);
 			$pdf->SetFont($pdf->head, 'B', 9);
 			$pdf->Cell($w, 4.5, $fam['label'], 0, 1, 'L');
@@ -945,11 +951,13 @@ class FieldbookRenderer
 	{
 		$pdf = $this->pdf;
 		$labW = min(52, $w * 0.36);
-		foreach ($rows as $r) {
+		// keep a short block (or the first rows of a long one) with its heading: no one-line widows
+		$pdf->need(min($this->kvEstimate($rows), 20));
+		foreach ($rows as $i => $r) {
 			$ind = 3 * (int)$r['d'];
 			$x = $x0 + $ind;
 			if ($r['h']) {
-				$pdf->need(6);
+				$pdf->need(min(3.8 + $this->kvEstimate(array_slice($rows, $i + 1)), 20));
 				$pdf->SetX($x);
 				$pdf->SetFont($pdf->head, 'B', 8);
 				$pdf->SetTextColor(60, 60, 60);
@@ -971,6 +979,14 @@ class FieldbookRenderer
 			$pdf->MultiCell($vw, self::LHS, $r['v'], 0, 'L');
 			$pdf->SetXY($x0, $y + $h);
 		}
+	}
+
+	/** Rough height (mm) of key/value rows up to the next heading row: one line per row. */
+	private function kvEstimate(array $rows)
+	{
+		$est = 0;
+		foreach ($rows as $i => $r) { if ($i > 0 && $r['h']) break; $est += $r['h'] ? 3.8 : self::LHS; }
+		return $est;
 	}
 
 	/** Two-column facts block (cover / title pages). */

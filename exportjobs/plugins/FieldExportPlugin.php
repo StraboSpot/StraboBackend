@@ -232,6 +232,10 @@ class FieldExportPlugin implements ExportPlugin
 		// ---- README lines
 		$readme[] = 'Layout: ' . $outSpec['layout'];
 		$readme[] = 'Formats: ' . implode(', ', $outSpec['formats']) . ($outSpec['extras'] ? '; extras: ' . implode(', ', $outSpec['extras']) : '');
+		if (in_array('fieldbook', $outSpec['formats'], true)) {
+			$fbo = $outSpec['fieldbook'];
+			$readme[] = 'Field book: map ' . $fbo['map'] . ', photos ' . $fbo['photos'] . ', stereonets ' . $fbo['nets'] . ', page ' . $fbo['page'];
+		}
 		$readme[] = 'Selection evaluated ' . ($found['used_index'] ? 'through the StraboSearch index (synced ' . $found['index_synced_at'] . ')' : 'directly from the project data');
 		if ($found['polygon']) $readme[] = 'Area filter: spots intersecting the drawn polygon' . ($dropped ? " ($dropped spots outside were left out)" : '');
 		if (in_array('sample_list', $outSpec['formats'], true)) {
