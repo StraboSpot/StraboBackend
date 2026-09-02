@@ -134,21 +134,33 @@
 	/**
 	 * Export… (Export Builder door, 2026-09-01): live only while results
 	 * on screen reflect the criteria above (same invalidation rule as the
-	 * results themselves). Logged-in only (the anchor is not rendered
-	 * otherwise). Click = POST the last-run DSL to the builder in a new
-	 * tab; the builder preselects the caller's StraboField projects that
-	 * have matching spots and loads the Field-applicable criteria rows.
+	 * results themselves) AND at least one criteria row ran. The globe
+	 * browse run (/globe, "browse everything") has an empty DSL: it shows
+	 * the whole visible corpus, which is not an export scope, and the door
+	 * would preselect every project of yours and no public one (Jason
+	 * 2026-09-02). So browse keeps the button off and its tooltip says why.
+	 * Logged-in only (the anchor is not rendered otherwise). Click = POST
+	 * the last-run DSL to the builder in a new tab; the builder preselects
+	 * the StraboField projects (own, collaborated and public ones from the
+	 * results) that have matching spots and loads the Field-applicable
+	 * criteria rows.
 	 */
+	var EXPORT_TITLE_READY = 'Open the Export Builder with the StraboField projects from these results preselected and these filters applied';
+	var EXPORT_TITLE_BROWSE = 'Add at least one search filter and run the search, then export the matching projects';
+	function exportableDsl(dsl) {
+		return !!(dsl && dsl.criteria && dsl.criteria.length > 0);
+	}
 	function updateExportButton() {
 		var btn = document.getElementById('ssExportBtn');
 		if (!btn) return;
-		var ok = !!lastRunDsl;
+		var ok = exportableDsl(lastRunDsl);
 		btn.classList.toggle('disabled', !ok);
 		btn.style.opacity = ok ? '' : '0.5';
 		btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
+		btn.title = (!ok && lastRunDsl) ? EXPORT_TITLE_BROWSE : EXPORT_TITLE_READY;
 	}
 	function openExportBuilder() {
-		if (!lastRunDsl) return;
+		if (!exportableDsl(lastRunDsl)) return;
 		var form = document.createElement('form');
 		form.method = 'POST';
 		form.action = CFG.exportBuilder || '/export_builder';

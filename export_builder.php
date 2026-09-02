@@ -89,13 +89,21 @@ if (isset($_GET['p']) && preg_match('/^[0-9]{1,20}$/', (string)$_GET['p'])) {
  * `search_dsl`. Keep the Field-applicable criteria rows (Universal minus
  * owner/subsystem, plus Field), and preselect every project in the caller's
  * picker that has at least one spot matching them (one GROUP BY over the
- * search index, same ACL as the export itself). Public projects of other
- * users that were in the result set cannot be exported and are not offered.
- * Returns {initial, note} or null when the payload is unusable.
+ * search index, same ACL as the export itself). Public StraboField projects
+ * of other users in the result set are added to the picker and preselected
+ * too (M6b). A DSL with no criteria rows at all (the globe browse run) is
+ * not an export scope: the page keeps its Export… button off for it, and
+ * if one arrives anyway the door preselects nothing and says so.
+ * Returns {initial, note, extra} or null when the payload is unusable.
  */
 function eb_from_search($db, $neodb, $userpkey, array $projects, $dsl)
 {
 	if (!is_array($dsl)) return null;
+	if (empty($dsl['criteria']) || !is_array($dsl['criteria'])) {
+		return array('initial' => array('scope' => array('projects' => array(), 'datasets' => array()), 'criteria' => array(), 'children' => 'matched_parents',
+			'formats' => array('geojson'), 'layout' => 'merged', 'extras' => array(), 'sample_list_csv' => false, 'notes' => ''),
+			'note' => 'Your search had no filters, so no projects were preselected. Pick projects below.', 'extra' => array());
+	}
 	require_once __DIR__ . '/searchdb/services/SearchQueryBuilder.php';
 	$note = array();
 	$fieldExcluded = isset($dsl['subsystems']) && is_array($dsl['subsystems']) && $dsl['subsystems'] && !in_array('field', $dsl['subsystems'], true);
