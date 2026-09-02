@@ -169,7 +169,7 @@ include("includes/mheader.php");
 						     project cards below. -->
 						<div class="mfd-toolbar">
 							<a href="/new_project" class="button primary small">+ New Project</a>
-							<a href="/export_builder" class="button small" title="Build a downloadable package from several projects or datasets, with optional filters (Export Builder)">Custom export&hellip;</a>
+							<?php /*<a href="/export_builder" class="button small" title="Build a downloadable package from several projects or datasets, with optional filters (Export Builder)">Custom export&hellip;</a>*/?>
 						</div>
 
 <?php

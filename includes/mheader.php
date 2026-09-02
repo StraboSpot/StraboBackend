@@ -192,8 +192,10 @@ if($userpkey == "adsf"){
 									<li><a href="/my_micro_data">My StraboMicro Data</a></li>
 									<li><a href="/my_experimental_data">My StraboExperimental Data</a></li>
 									<li><a href="/my_samples">My Samples</a></li>
-									<li><a href="/export_builder">Export Builder</a></li>
-									<li><a href="/my_exports">My Exports</a></li>
+									<?php //Hide for now until ready for public testing 
+									//<li><a href="/export_builder">Export Builder</a></li>
+									//<li><a href="/my_exports">My Exports</a></li>
+									?>
 <?php
 if($showcollaborationsxxx){
 ?>
