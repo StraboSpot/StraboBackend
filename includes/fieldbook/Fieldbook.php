@@ -17,6 +17,7 @@
 require_once __DIR__ . '/FieldbookModel.php';
 require_once __DIR__ . '/FieldbookRenderer.php';
 require_once __DIR__ . '/FieldbookMaps.php';
+require_once __DIR__ . '/FieldbookPhotos.php';
 
 class Fieldbook
 {
@@ -69,7 +70,7 @@ class Fieldbook
 		}
 		$meta = self::meta($strabo, $owner, $tree, $get);
 		$model = FieldbookModel::build($features, $tags, $notes, $tree, $meta);
-		$renderer = new FieldbookRenderer($model, isset($out->progress) ? $out->progress : null, self::maps($meta['options']));
+		$renderer = new FieldbookRenderer($model, isset($out->progress) ? $out->progress : null, self::maps($meta['options']), self::photos($meta['options']));
 		$pdf = $renderer->render();
 		if ($out->capturing()) { $out->capturePdf($pdf, $model->filename); }
 		else { $pdf->Output($model->filename, 'I'); }
@@ -92,6 +93,24 @@ class Fieldbook
 			return self::maps($options, $override);
 		}
 		return new FieldbookMaps($override + $cfg);
+	}
+
+	/** TEST ONLY: config keys merged over the photo builder config (image dir, cache dir). */
+	public static $photosOverride = array();
+
+	/** Photo figure builder for this book (design §8): dbimages originals, thumbnail cache from export_config, mode from the options. */
+	public static function photos(array $options, array $override = array())
+	{
+		$override = $override + self::$photosOverride;
+		$cfg = array('mode' => isset($options['photos']) ? $options['photos'] : 'sheets');
+		if (function_exists('export_config')) {
+			$ec = export_config();
+			$cfg['cache_dir'] = $ec['thumbcache_root']; $cfg['ttl_days'] = $ec['thumb_ttl_days'];
+		} else {
+			require_once dirname(__DIR__, 2) . '/exportjobs/lib/export_config.php';
+			return self::photos($options, $override);
+		}
+		return new FieldbookPhotos($override + $cfg);
 	}
 
 	/** Export Builder layout-group members => tree (design §5). */

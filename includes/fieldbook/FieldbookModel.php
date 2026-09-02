@@ -189,7 +189,19 @@ class FieldbookModel
 			'samples' => array(), 'units' => array(), 'tags' => array(), 'images' => array(), 'families' => array(),
 			'geometry' => null,   // GeoJSON (assoc) for the maps: top-level located spots only
 			'point' => null,      // [lon, lat] representative point for markers
+			'pixel' => null,      // GeoJSON (assoc) in image pixels for spots drawn on an image basemap (overlays, M4)
 		);
+		if ($b['childOf'] !== '') {
+			// the app keeps the pixel geometry as original_geometry (x from the left, y from the bottom) and
+			// converts it to lon/lat in geometry; older uploads carry the pixels in geometry itself
+			$og = isset($f['original_geometry']) ? $f['original_geometry'] : null;
+			if (is_object($og)) $og = json_decode(json_encode($og), true);
+			if (is_array($og) && isset($og['type']) && isset($og['coordinates'])) $b['pixel'] = $og;
+			elseif ($geom && isset($geom->type)) {
+				$pt = self::representativePoint($geom);
+				if ($pt && (abs($pt[0]) > 180 || abs($pt[1]) > 90)) $b['pixel'] = json_decode(json_encode($geom), true);
+			}
+		}
 		// day + sort key from the creation timestamp buried in the id (legacy rule), else the app date
 		$ut = null;
 		if (preg_match('/^\d{13,}$/', $id)) $ut = (int)substr($id, 0, 10);

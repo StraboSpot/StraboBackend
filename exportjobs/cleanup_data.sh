@@ -103,9 +103,18 @@ while IFS= read -r f; do
 	n_log=$((n_log + 1))
 done < <(find "$DATA_DIR/log" -mindepth 1 -maxdepth 1 -type f -name '*.log' -size +"${LOG_MAX_MB}M" 2>/dev/null)
 
-# 4. Fieldbook basemap tile cache (tilecache/<set>/z/x/y.png, docs/Fieldbook_Design.md §6):
-#    tiles untouched for TILE_DAYS, then the empty directories they leave.
+# 4. Fieldbook basemap tile cache (tilecache/<set>/z/x/y.png, docs/Fieldbook_Design.md §6) and
+#    photo thumbnail cache (thumbcache/<id>_<px>.jpg, §8): files untouched for TILE_DAYS, then
+#    the empty directories they leave.
 n_tiles=0; n_tdirs=0
+if [ -d "$DATA_DIR/thumbcache" ]; then
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		[ "$DRY" = 1 ] && act "remove stale thumbnail $f"
+		[ "$DRY" = 1 ] || rm -f -- "$f"
+		n_tiles=$((n_tiles + 1))
+	done < <(find "$DATA_DIR/thumbcache" -mindepth 1 -maxdepth 1 -type f \( -name '*.jpg' -o -name '*.tmp' \) -mmin +$((TILE_DAYS * 1440)) 2>/dev/null)
+fi
 if [ -d "$DATA_DIR/tilecache" ]; then
 	while IFS= read -r f; do
 		[ -n "$f" ] || continue
@@ -122,6 +131,6 @@ fi
 
 total=$((n_work + n_zip + n_dirs + n_log + n_tiles))
 if [ "$total" -gt 0 ] || [ "$DRY" = 1 ]; then
-	say "done: $n_work workspaces, $n_zip results, $n_dirs empty dirs, $n_log logs rotated, $n_tiles stale tiles + $n_tdirs empty tile dirs ($DATA_DIR)"
+	say "done: $n_work workspaces, $n_zip results, $n_dirs empty dirs, $n_log logs rotated, $n_tiles stale tiles / thumbnails + $n_tdirs empty tile dirs ($DATA_DIR)"
 fi
 exit 0

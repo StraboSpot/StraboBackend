@@ -9,10 +9,11 @@
  *              header, notes, orientation table, samples, units, tags,
  *              photos list, generic "Other observations"), back matter
  *              (units, tags, samples, image index, colophon).
- *              Maps (M2) and stereonets (M3, vector-drawn from FieldbookNets
+ *              Maps (M2), stereonets (M3, vector-drawn from FieldbookNets
  *              geometry: spot net beside the orientation table, dataset nets
- *              first in the Summary) are in; photo sheets (M4) plug into the
- *              hooks marked below.
+ *              first in the Summary) and photos (M4: contact sheets, promoted
+ *              full-width basemaps with the child spots drawn on and
+ *              sketches, numbered photo index with page links) are in.
  *
  * @package    StraboSpot Web Site
  * @copyright  2026 StraboSpot
@@ -23,6 +24,7 @@ require_once __DIR__ . '/FieldbookPdf.php';
 require_once __DIR__ . '/FieldbookModel.php';
 require_once __DIR__ . '/FieldbookMaps.php';
 require_once __DIR__ . '/FieldbookNets.php';
+require_once __DIR__ . '/FieldbookPhotos.php';
 
 class FieldbookRenderer
 {
@@ -41,14 +43,19 @@ class FieldbookRenderer
 	private $multiDataset = false;
 	private $maps = null;          // FieldbookMaps or null (map option "none")
 	public $nets = null;           // FieldbookNets or null (nets option "off"); public for the suites' counters
+	public $photos = null;         // FieldbookPhotos or null (photos option "none")
+	public $photoIndex = array();  // [{no, title, spot, spotId, page, caption, details, link}] in book order
+	private $photoNo = 0;
+	const PHOTO_FULL_H = 120;      // max height (mm) of a promoted image
 	const NET_W = 50;              // spot net box width (mm), beside the orientation table
 	const NET_GRID_W = 55;         // dataset net box width (mm), three per row
 
-	public function __construct(FieldbookModel $m, $progress = null, $maps = null)
+	public function __construct(FieldbookModel $m, $progress = null, $maps = null, $photos = null)
 	{
 		$this->m = $m;
 		$this->progress = is_callable($progress) ? $progress : null;
 		$this->maps = ($maps instanceof FieldbookMaps && $maps->enabled()) ? $maps : null;
+		$this->photos = ($photos instanceof FieldbookPhotos && $photos->enabled()) ? $photos : null;
 		$opts = isset($m->meta['options']) ? $m->meta['options'] : array();
 		if (!isset($opts['nets']) || $opts['nets'] !== 'off') {
 			$this->nets = new FieldbookNets();
@@ -375,8 +382,7 @@ class FieldbookRenderer
 		if ($s['samples']) $this->itemList('Samples', $s['samples'], $x0, $w);
 		if ($s['units']) $this->tagLine('Geologic unit' . (count($s['units']) > 1 ? 's' : ''), $s['units'], $x0, $w);
 		if ($s['tags']) $this->tagLine('Tags', $s['tags'], $x0, $w);
-		if ($s['images']) $this->imageList($s['images'], $x0, $w, $indent);
-		// HOOK M4: contact sheets replace imageList.
+		if ($s['images']) $this->photoBlock($s, $x0, $w, $indent);
 		if ($s['families']) $this->families($s['families'], $x0, $w);
 		$pdf->Ln(3);
 		$this->spotsDone++;
@@ -649,6 +655,7 @@ class FieldbookRenderer
 				$x += $c[1];
 			}
 			$pdf->SetXY($x0, $y + $h);
+			if (!empty($row['link'])) $pdf->Link($x0, $y, $w, $h, $row['link']);
 			if ($moreTxt !== '') {
 				$pdf->SetX($x0 + 4);
 				$pdf->SetFont($pdf->body, '', 7.5);
@@ -699,16 +706,198 @@ class FieldbookRenderer
 	}
 
 	/** M1 photo listing (attributes only; sheets arrive in M4), with child spots nested under their image. */
-	private function imageList(array $images, $x0, $w, $indent)
+	// ------------------------------------------------------------ photos (M4, design §8)
+
+	/** Photos of a spot: contact sheets, promoted full-width figures (basemaps with children, sketches, photos=full), or the text list without figures. */
+	private function photoBlock(array $s, $x0, $w, $indent)
+	{
+		$pdf = $this->pdf;
+		if (!$this->photos) { $this->imageList($s['images'], $x0, $w, $indent, $s); return; }
+		$pdf->need(30);
+		$this->subhead('Photos (' . count($s['images']) . ')', $x0);
+		// the spot's own photos as a sheet first, then the promoted figures (basemaps with their nested child spots, sketches)
+		$sheet = array(); $promoted = array();
+		foreach ($s['images'] as $img) {
+			if ($this->photos->mode === 'full' || !empty($img['children']) || strtolower($img['type']) === 'sketch') $promoted[] = $img; else $sheet[] = $img;
+		}
+		$this->contactSheet($sheet, $s, $x0, $w);
+		foreach ($promoted as $img) $this->promotedFigure($img, $s, $x0, $w, $indent);
+		$pdf->Ln(1);
+	}
+
+	/** Image title for labels and the index. */
+	private function photoTitle(array $img) { return $img['title'] !== '' ? $img['title'] : 'Image ' . $img['id']; }
+
+	/** Short attribute line under a figure; the full details go to the index. */
+	private function photoMeta(array $img)
+	{
+		$bits = array('id ' . $img['id']);
+		if ($img['width'] && $img['height']) $bits[] = $img['width'] . ' x ' . $img['height'];
+		if ($img['type'] !== '' && strtolower($img['type']) !== 'photo') $bits[] = FieldbookProps::humanize($img['type']);
+		if ($img['annotated']) $bits[] = 'annotated';
+		return implode(' · ', $bits);
+	}
+
+	/** Everything stored with the image, for the index. */
+	private function photoDetails(array $img)
+	{
+		$bits = array('id ' . $img['id']);
+		if ($img['width'] && $img['height']) $bits[] = $img['width'] . ' x ' . $img['height'];
+		if ($img['type'] !== '') $bits[] = FieldbookProps::humanize($img['type']);
+		$bits[] = $img['annotated'] ? 'annotated' : 'not annotated';
+		foreach ($img['rows'] as $r) if (!$r['h']) $bits[] = $r['k'] . ($r['v'] !== '' ? ': ' . $r['v'] : '');
+		if (!empty($img['children'])) $bits[] = count($img['children']) . ' spot' . (count($img['children']) === 1 ? '' : 's') . ' drawn on it';
+		return implode(';  ', $bits);
+	}
+
+	private function indexPhoto($no, array $img, array $spot, $y)
+	{
+		$pdf = $this->pdf;
+		$link = $pdf->AddLink();
+		$pdf->SetLink($link, max(0, $y - 4), $pdf->PageNo());
+		$this->photoIndex[] = array('no' => $no, 'title' => $this->photoTitle($img), 'spot' => $spot['name'], 'spotId' => $spot['id'], 'page' => $pdf->PageNo(), 'caption' => $img['caption'], 'details' => $this->photoDetails($img), 'link' => $link);
+	}
+
+	/** Word-wrap $text into at most $max lines of width $w for the CURRENT font; the last line is ellipsised when cut. */
+	private function wrapLines($text, $w, $max)
+	{
+		$pdf = $this->pdf;
+		$text = trim(preg_replace('/\s+/u', ' ', (string)$text));
+		if ($text === '') return array();
+		$words = explode(' ', $text);
+		$lines = array(); $cur = ''; $i = 0;
+		for (; $i < count($words); $i++) {
+			$try = $cur === '' ? $words[$i] : $cur . ' ' . $words[$i];
+			if ($pdf->GetStringWidth($try) <= $w) { $cur = $try; continue; }
+			if ($cur === '') { $cur = $pdf->fit($words[$i], $w); continue; }
+			$lines[] = $cur; $cur = $words[$i];
+			if (count($lines) === $max) break;
+		}
+		if (count($lines) < $max) { if ($cur !== '') $lines[] = $cur; }
+		else { $rest = implode(' ', array_slice($words, $i)); $lines[$max - 1] = $pdf->fit($lines[$max - 1] . ' ' . $rest . ' ', $w - 1); }
+		return $lines;
+	}
+
+	/** Place a thumbnail (['data', 'w', 'h'] or null) fitted inside the box, top-aligned and centred; a placeholder when null. */
+	private function placeImage($t, $x, $y, $boxW, $boxH, $id)
+	{
+		$pdf = $this->pdf;
+		if ($t) {
+			$scale = min($boxW / $t['w'], $boxH / $t['h']);
+			$fw = $t['w'] * $scale; $fh = $t['h'] * $scale;
+			$fx = $x + ($boxW - $fw) / 2;
+			$pdf->MemImage($t['data'], $fx, $y, $fw, $fh);
+			$pdf->SetDrawColor(200, 200, 200); $pdf->SetLineWidth(0.15);
+			$pdf->Rect($fx, $y, $fw, $fh);
+			return $fh;
+		}
+		$pdf->SetFillColor(240, 240, 240); $pdf->SetDrawColor(200, 200, 200); $pdf->SetLineWidth(0.15);
+		$pdf->Rect($x, $y, $boxW, $boxH, 'DF');
+		$pdf->SetFont($pdf->head, 'I', 7); $pdf->SetTextColor(130, 130, 130);
+		$pdf->SetXY($x, $y + $boxH / 2 - 4);
+		$pdf->Cell($boxW, 3.5, 'Image unavailable', 0, 2, 'C');
+		$pdf->Cell($boxW, 3.5, $pdf->fit('id ' . $id, $boxW), 0, 0, 'C');
+		$pdf->SetTextColor(0, 0, 0);
+		return $boxH;
+	}
+
+	/** Contact sheet: rows of three cells (two when the block is narrow), a row never splits across pages. */
+	private function contactSheet(array $images, array $spot, $x0, $w)
+	{
+		if (!$images) return;
+		$pdf = $this->pdf;
+		$cols = $w >= 150 ? 3 : 2; $gap = 4;
+		$cw = ($w - $gap * ($cols - 1)) / $cols; $boxH = $cw * 0.75;
+		for ($i = 0; $i < count($images); $i += $cols) {
+			$row = array_slice($images, $i, $cols);
+			$cells = array(); $capMax = 0;
+			$pdf->SetFont($pdf->body, '', 7);
+			foreach ($row as $img) {
+				$cap = $this->wrapLines($img['caption'], $cw - 1, 2);
+				$capMax = max($capMax, count($cap));
+				$cells[] = array('img' => $img, 'cap' => $cap);
+			}
+			$rowH = $boxH + 1 + 3.4 + $capMax * 3.2 + 3.0 + 2.5;
+			$pdf->need($rowH);
+			$y0 = $pdf->GetY();
+			foreach ($cells as $j => $c) {
+				$img = $c['img'];
+				$no = ++$this->photoNo;
+				$x = $x0 + $j * ($cw + $gap);
+				$this->placeImage($this->photos->thumb($img['id']), $x, $y0, $cw, $boxH, $img['id']);
+				$yy = $y0 + $boxH + 1;
+				$pdf->SetFont($pdf->head, 'B', 7.5);
+				$pdf->SetXY($x, $yy);
+				$pdf->Cell($cw, 3.4, $pdf->fit('[' . $no . ']  ' . $this->photoTitle($img), $cw), 0, 0, 'L');
+				$yy += 3.4;
+				$pdf->SetFont($pdf->body, '', 7);
+				foreach ($c['cap'] as $line) { $pdf->SetXY($x, $yy); $pdf->Cell($cw, 3.2, $line, 0, 0, 'L'); $yy += 3.2; }
+				$pdf->SetFont($pdf->head, '', 6.5); $pdf->SetTextColor(120, 120, 120);
+				$pdf->SetXY($x, $y0 + $boxH + 1 + 3.4 + $capMax * 3.2);
+				$pdf->Cell($cw, 3.0, $pdf->fit($this->photoMeta($img), $cw), 0, 0, 'L');
+				$pdf->SetTextColor(0, 0, 0);
+				$this->indexPhoto($no, $img, $spot, $y0);
+			}
+			$pdf->SetXY($x0, $y0 + $rowH);
+		}
+	}
+
+	/** Full-width figure: image basemap with its child spots drawn on (then the children as nested blocks), a sketch, or any image with photos=full. */
+	private function promotedFigure(array $img, array $spot, $x0, $w, $indent)
+	{
+		$pdf = $this->pdf;
+		$no = ++$this->photoNo;
+		$fig = !empty($img['children']) ? $this->photos->overlay($img['id'], $img['width'], $img['height'], $img['children']) : $this->photos->full($img['id']);
+		if ($fig) {
+			$fw = $w; $fh = $w * $fig['h'] / $fig['w'];
+			if ($fh > self::PHOTO_FULL_H) { $fh = self::PHOTO_FULL_H; $fw = $fh * $fig['w'] / $fig['h']; }
+		} else { $fw = $w; $fh = 26; }
+		// use the rest of the page when a reasonable figure still fits there, else start a new page
+		$avail = $pdf->pageH() - $pdf->bm() - $pdf->GetY() - 16;
+		if ($fig && $fh > $avail && $avail >= 70) { $fh = $avail; $fw = $fh * $fig['w'] / $fig['h']; }
+		$pdf->need(min($fh + 14, $pdf->pageH() - $pdf->tm() - $pdf->bm() - 2));
+		$y0 = $pdf->GetY();
+		$this->placeImage($fig, $x0, $y0, $fw, $fh, $img['id']);
+		$yy = $y0 + $fh + 1;
+		$pdf->SetXY($x0, $yy);
+		$pdf->SetFont($pdf->head, 'B', 8.5);
+		$pdf->MultiCell($w, 4, '[' . $no . ']  ' . $this->photoTitle($img), 0, 'L');
+		if ($img['caption'] !== '') {
+			$pdf->SetX($x0);
+			$pdf->SetFont($pdf->body, '', 8);
+			$pdf->MultiCell($w, self::LHS, $img['caption'], 0, 'L');
+		}
+		$pdf->SetX($x0);
+		$pdf->SetFont($pdf->head, '', 6.5); $pdf->SetTextColor(120, 120, 120);
+		$meta = $this->photoMeta($img);
+		if (!empty($img['children'])) $meta .= ' · ' . count($img['children']) . ' spot' . (count($img['children']) === 1 ? '' : 's') . ' drawn on this image' . ($fig && empty($fig['drawn']) ? ' (positions not available)' : '');
+		$pdf->MultiCell($w, 3.2, $meta, 0, 'L');
+		$pdf->SetTextColor(0, 0, 0);
+		$this->indexPhoto($no, $img, $spot, $y0);
+		$pdf->Ln(1.5);
+		if (!empty($img['children'])) {
+			$pdf->SetX($x0 + 3);
+			$pdf->SetFont($pdf->head, 'I', 8);
+			$pdf->SetTextColor(100, 100, 100);
+			$pdf->Cell($w - 3, 4, 'Spots drawn on image [' . $no . ']:', 0, 1, 'L');
+			$pdf->SetTextColor(0, 0, 0);
+			foreach ($img['children'] as $c) $this->spotBlock($c, $indent + 8);
+		}
+	}
+
+	/** photos=none: the M1 text list (numbered, indexed), children nested as before. */
+	private function imageList(array $images, $x0, $w, $indent, array $spot)
 	{
 		$pdf = $this->pdf;
 		$pdf->need(10);
 		$this->subhead('Photos (' . count($images) . ')', $x0);
 		foreach ($images as $img) {
 			$pdf->need(8);
+			$no = ++$this->photoNo;
 			$pdf->SetX($x0);
+			$y = $pdf->GetY();
 			$pdf->SetFont($pdf->head, 'B', 9);
-			$label = $img['title'] !== '' ? $img['title'] : 'Image ' . $img['id'];
+			$label = '[' . $no . ']  ' . $this->photoTitle($img);
 			$bits = array();
 			if ($img['type'] !== '') $bits[] = FieldbookProps::humanize($img['type']);
 			if ($img['annotated']) $bits[] = 'annotated';
@@ -721,12 +910,13 @@ class FieldbookRenderer
 				$pdf->MultiCell($w - 3, self::LHS, $img['caption'], 0, 'L');
 			}
 			if ($img['rows']) $this->kvRows($img['rows'], $x0 + 3, $w - 3);
+			$this->indexPhoto($no, $img, $spot, $y);
 			if ($img['children']) {
 				$pdf->need(40);
 				$pdf->SetX($x0 + 3);
 				$pdf->SetFont($pdf->head, 'I', 8);
 				$pdf->SetTextColor(100, 100, 100);
-				$pdf->Cell($w - 3, 4, count($img['children']) . ' spot' . (count($img['children']) > 1 ? 's' : '') . ' drawn on this image:', 0, 1, 'L');
+				$pdf->Cell($w - 3, 4, count($img['children']) . ' spot' . (count($img['children']) > 1 ? 's' : '') . ' drawn on image [' . $no . ']:', 0, 1, 'L');
 				$pdf->SetTextColor(0, 0, 0);
 				foreach ($img['children'] as $c) $this->spotBlock($c, $indent + 8);
 			}
@@ -840,7 +1030,16 @@ class FieldbookRenderer
 			foreach ($m->summary['samples'] as $s) $data[] = array('cells' => array($s['title'], $s['spot'], $s['day']));
 			$this->table(array(array('Sample', 60, 'L'), array('Spot', 0, 'L'), array('Day', 48, 'L')), $data, $pdf->lm(), $w);
 		}
-		if ($m->summary['images']) {
+		if ($this->photoIndex) {
+			$this->summaryHead('Photos');
+			$tocPages = $this->tocPageCount();
+			$data = array();
+			foreach ($this->photoIndex as $i) {
+				$page = $i['page'] > $this->coverPages ? $i['page'] + $tocPages : $i['page'];
+				$data[] = array('cells' => array('[' . $i['no'] . ']', $i['title'], $i['spot'], (string)$page, $i['caption']), 'more' => array(array('k' => $i['details'], 'v' => '', 'd' => 0, 'h' => false)), 'link' => $i['link']);
+			}
+			$this->table(array(array('No.', 10, 'R'), array('Photo', 42, 'L'), array('Spot', 40, 'L'), array('Page', 11, 'R'), array('Caption', 0, 'L')), $data, $pdf->lm(), $w);
+		} elseif ($m->summary['images']) {
 			$this->summaryHead('Photos');
 			$data = array();
 			foreach ($m->summary['images'] as $i) $data[] = array('cells' => array($i['title'], $i['spot'], $i['caption']));
@@ -849,13 +1048,14 @@ class FieldbookRenderer
 		$this->summaryHead('About this document');
 		$pdf->SetFont($pdf->body, '', 8.5);
 		$lines = array();
-		$lines[] = 'Generated ' . $m->meta['generated'] . ' by the StraboSpot fieldbook generator (enhanced fieldbook, M3).';
+		$lines[] = 'Generated ' . $m->meta['generated'] . ' by the StraboSpot fieldbook generator (enhanced fieldbook, M4).';
 		$opts = $m->meta['options'];
 		$lines[] = 'Options: page ' . (isset($opts['page']) ? $opts['page'] : 'letter') . ', photos ' . (isset($opts['photos']) ? $opts['photos'] : 'sheets') . ', map ' . (isset($opts['map']) ? $opts['map'] : 'outdoors') . ', stereonets ' . (isset($opts['nets']) ? $opts['nets'] : 'on') . '.';
 		$lines[] = 'Spots are grouped by field day (creation date) and listed in creation order. Every observation stored with a spot is included; families without a designed layout appear under "Other observations".';
 		foreach ($m->notes as $n) $lines[] = $n;
 		if ($this->maps) foreach ($this->maps->notes() as $n) $lines[] = $n; else $lines[] = 'Maps: none (option).';
 		if ($this->nets) foreach ($this->nets->notes() as $n) $lines[] = $n; else $lines[] = 'Stereonets: none (option).';
+		if ($this->photos) foreach ($this->photos->notes() as $n) $lines[] = $n; else $lines[] = 'Photos: listed without figures (option).';
 		$lines[] = $this->citation();
 		$pdf->MultiCell($w, 4, implode("\n", $lines), 0, 'L');
 	}
@@ -880,6 +1080,18 @@ class FieldbookRenderer
 		$this->pdf->SetLink($this->toc[$i]['link'], 0, $page);
 	}
 
+	/** Pages the contents will take (entries per page from the line height), used for every body page number printed before the move. */
+	private function tocPageCount()
+	{
+		$pdf = $this->pdf;
+		$lh = self::TOC_LH;
+		$usable = $pdf->pageH() - $pdf->tm() - $pdf->bm();
+		$capFirst = (int)floor(($usable - 16) / $lh);
+		$capNext = (int)floor($usable / $lh);
+		$n = count($this->toc);
+		return $n <= $capFirst ? 1 : 1 + (int)ceil(($n - $capFirst) / $capNext);
+	}
+
 	private function contents()
 	{
 		$pdf = $this->pdf;
@@ -888,8 +1100,7 @@ class FieldbookRenderer
 		$usable = $pdf->pageH() - $pdf->tm() - $pdf->bm();
 		$capFirst = (int)floor(($usable - 16) / $lh);
 		$capNext = (int)floor($usable / $lh);
-		$n = count($this->toc);
-		$tocPages = $n <= $capFirst ? 1 : 1 + (int)ceil(($n - $capFirst) / $capNext);
+		$tocPages = $this->tocPageCount();
 		$first = $pdf->PageNo() + 1;
 		$pdf->sectionLabel = 'Contents';
 		$pdf->AddPage();

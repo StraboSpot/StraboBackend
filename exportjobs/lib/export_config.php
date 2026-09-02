@@ -47,6 +47,8 @@ function export_config()
 		'tile_base'            => 'https://tiles.strabospot.org/v5/',
 		'tile_budget'          => 300,            // tiles per fieldbook; day locators are skipped once spent
 		'tile_ttl_days'        => 90,
+		'thumbcache_root'      => $data . '/thumbcache',  // fieldbook photo thumbnails (design §8); swept by cleanup_data.sh
+		'thumb_ttl_days'       => 90,
 		'max_concurrent'       => 2,              // running jobs with a fresh heartbeat
 		'min_free_bytes'       => 0,              // free-disk floor to START a build; 0 = disabled (prod results live on a 20 TB volume, Jason 2026-09-02)
 		'disk_wait_seconds'    => 21600,          // 6 h queued-for-disk before the job fails
