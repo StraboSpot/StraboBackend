@@ -26,7 +26,7 @@
 
 		var url = urlFor(choice);
 		if (!url) return;
-		if (choice === 'fieldbook') {
+		if (choice === 'fieldbook' || choice === 'fieldbookdev') {
 			window.open(url, '_blank');
 		} else {
 			window.location = url;
@@ -47,6 +47,8 @@
 				return '/searchdownload?type=stereonet&userpkey=' + up + '&dsids=' + id;
 			case 'fieldbook':
 				return '/searchdownload?type=fieldbook&userpkey=' + up + '&dsids=' + id;
+			case 'fieldbookdev':
+				return '/searchdownload?type=fieldbookdev&userpkey=' + up + '&dsids=' + id;
 			case 'strat_sections':
 				return '/dataset_strat_sections?dataset_id=' + id;
 			case 'download_images':
