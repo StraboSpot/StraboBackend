@@ -186,7 +186,19 @@
 		fetchPage(pathway, 0, false, function (resp) {
 			ingest(pathway, resp);
 			renderAll();
+			onStateChange(getUrlState());   // data landed: the Export… gate reads fieldProjectCount() (2026-09-02)
 		}, renderError);
+	}
+
+	/**
+	 * StraboField projects in the current results (Export… gate,
+	 * 2026-09-02): null while unknown (no run, browse, first page not
+	 * landed yet), else the per-subsystem summary's Field project count.
+	 */
+	function fieldProjectCount() {
+		if (!state || state.browse || !state.data.projects) return null;
+		var sum = state.data.projects.subsystem_summary || {};
+		return (sum.field && sum.field.project) ? Number(sum.field.project) : 0;
 	}
 
 	// ══════════════════════════════════════════════════════════════════
@@ -830,6 +842,7 @@
 		clear: clear,
 		hasResults: function () { return state !== null; },
 		getView: function () { return state ? state.view : null; },
+		fieldProjectCount: fieldProjectCount,
 		abort: abortInflight
 	};
 

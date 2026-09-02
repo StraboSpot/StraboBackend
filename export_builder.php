@@ -94,7 +94,11 @@ if (isset($_GET['p']) && preg_match('/^[0-9]{1,20}$/', (string)$_GET['p'])) {
  * too (M6b). A DSL with no criteria rows at all (the globe browse run) is
  * not an export scope: the page keeps its Export… button off for it, and
  * if one arrives anyway the door preselects nothing and says so.
- * Returns {initial, note, extra} or null when the payload is unusable.
+ * Returns {initial, note, extra, mode} or null when the payload is unusable.
+ * mode = 'search' when at least one Field-applicable filter survived and
+ * >= 1 project matched: the page then lists ONLY the matched projects and
+ * shows the filters read-only (search-door mode, Jason 2026-09-02);
+ * otherwise 'general' (full picker, editable filters, note explains).
  */
 function eb_from_search($db, $neodb, $userpkey, array $projects, $dsl)
 {
@@ -102,7 +106,7 @@ function eb_from_search($db, $neodb, $userpkey, array $projects, $dsl)
 	if (empty($dsl['criteria']) || !is_array($dsl['criteria'])) {
 		return array('initial' => array('scope' => array('projects' => array(), 'datasets' => array()), 'criteria' => array(), 'children' => 'matched_parents',
 			'formats' => array('geojson'), 'layout' => 'merged', 'extras' => array(), 'sample_list_csv' => false, 'notes' => ''),
-			'note' => 'Your search had no filters, so no projects were preselected. Pick projects below.', 'extra' => array());
+			'note' => 'Your search had no filters, so no projects were preselected. Pick projects below.', 'extra' => array(), 'mode' => 'general');
 	}
 	require_once __DIR__ . '/searchdb/services/SearchQueryBuilder.php';
 	$note = array();
@@ -167,11 +171,16 @@ function eb_from_search($db, $neodb, $userpkey, array $projects, $dsl)
 		$hits = $candidates ? $qb->runItemProjectCountsQuery($validated, $candidates) : array();
 		foreach ($candidates as $c) if (isset($hits[$c['project_id'] . '|' . $c['owner']])) $matched[] = $c;
 	} else {
-		$matched = $candidates;      // no Field-applicable filter survived: every project with spots qualifies
+		// No Field-applicable filter survived (only Micro/Exp/Image/owner/
+		// subsystem rows, or validation failed): nothing to preselect. Before
+		// 2026-09-02 this fell through to "every project of yours with spots".
+		$note[] = 'None of the search filters apply to StraboField exports, so no projects were preselected. Pick projects below.';
 	}
 	$total = count($matched);
 	$nPublic = 0;                    // counted BEFORE the cap so the banner describes all $total matches
 	foreach ($matched as $m) foreach ($extra as $x) if ($x['id'] === $m['project_id'] && $x['owner'] === $m['owner']) { $nPublic++; break; }
+	$matchedKeys = array();          // every match, BEFORE the cap: search-door mode lists them all, ticked or not
+	foreach ($matched as $m) $matchedKeys[] = $m['project_id'] . '|' . $m['owner'];
 	if ($total > 50) { $matched = array_slice($matched, 0, 50); $note[] = "Only the first 50 of $total matching projects were preselected (the per-export limit)."; }
 
 	$scope = array('projects' => array(), 'datasets' => array());
@@ -181,7 +190,8 @@ function eb_from_search($db, $neodb, $userpkey, array $projects, $dsl)
 		$scope['projects'][] = array('id' => $m['project_id'], 'owner' => $m['owner']);
 		$names[] = isset($byKey[$m['project_id'] . '|' . $m['owner']]) ? $byKey[$m['project_id'] . '|' . $m['owner']] : $m['project_id'];
 	}
-	if (!$fieldExcluded) {
+	$ran = $validated !== null && $validated['criteria'];
+	if (!$fieldExcluded && $ran) {
 		$shown = implode(', ', array_slice($names, 0, 6)) . (count($names) > 6 ? ' and ' . (count($names) - 6) . ' more' : '');
 		$nMine = $total - $nPublic;
 		$lead = $total === 0
@@ -194,17 +204,28 @@ function eb_from_search($db, $neodb, $userpkey, array $projects, $dsl)
 
 	$initial = array('scope' => $scope, 'criteria' => $kept, 'children' => 'matched_parents', 'formats' => array('geojson'),
 		'layout' => 'merged', 'extras' => array(), 'sample_list_csv' => false, 'notes' => '');
-	return array('initial' => $initial, 'note' => implode(' ', $note), 'extra' => $extra);
+	return array('initial' => $initial, 'note' => implode(' ', $note), 'extra' => $extra, 'matched' => $matchedKeys,
+		'mode' => (!$fieldExcluded && $ran && $total > 0) ? 'search' : 'general');
 }
 
-$ebInitial = null; $ebFromSummary = null; $ebFromSearch = null;
+$ebInitial = null; $ebFromSummary = null; $ebFromSearch = null; $ebMode = 'general';
 if (isset($_GET['from']) && UUID::is_valid((string)$_GET['from'])) {
 	$ebSvc = new ExportJobService($db, $ebCfg);
 	$src = $ebSvc->get((string)$_GET['from'], $userpkey);      // owner-scoped: someone else's uuid is simply ignored
 	if ($src && is_array($src['recipe'])) { $ebInitial = $src['recipe']; $ebFromSummary = $src['recipe_summary']; }
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['search_dsl'])) {
 	$door = eb_from_search($db, $neodb, $userpkey, $ebProjects, json_decode((string)$_POST['search_dsl'], true));
-	if ($door) { $ebInitial = $door['initial']; $ebFromSearch = $door['note']; $ebProjects = array_merge($ebProjects, $door['extra']); }
+	if ($door) {
+		$ebInitial = $door['initial']; $ebFromSearch = $door['note']; $ebMode = $door['mode'];
+		$ebProjects = array_merge($ebProjects, $door['extra']);
+		if ($ebMode === 'search') {
+			// Search-door mode: the picker holds ONLY the projects with matching
+			// spots (own, collaborated and public alike); the first 50 are ticked,
+			// any beyond the per-export cap are listed unticked.
+			$keep = array_fill_keys($door['matched'], true);
+			$ebProjects = array_values(array_filter($ebProjects, function ($p) use ($keep) { return isset($keep[$p['id'] . '|' . $p['owner']]); }));
+		}
+	}
 }
 
 $ebFormats = array(
@@ -286,6 +307,8 @@ body { overflow: visible; }
 .eb-count.eb-err { color: #f06880; }
 .eb-bar .button.primary[disabled], .eb-bar .button.primary.eb-disabled { opacity: 0.45; pointer-events: none; }
 .eb-msg { color: #f06880; margin-top: 0.5em; font-size: 0.9em; }
+.eb-chips { display: flex; flex-wrap: wrap; gap: 0.4em; margin: 0.25em 0 0.5em; }
+.eb-chips .ss-chip { font-size: 0.9em; white-space: normal; }
 .eb-from { background: rgba(228,76,101,0.12); border: 1px solid rgba(228,76,101,0.4); border-radius: 4px; padding: 0.6em 1em; margin-bottom: 1.25em; font-size: 0.92em; }
 .eb-panel .ss-criteria { margin-top: 0.5em; }
 .eb-drift { color: rgba(255,255,255,0.5); font-size: 0.82em; margin-top: 0.6em; }
@@ -297,7 +320,11 @@ body { overflow: visible; }
 		<header class="major">
 			<h2>Export Builder</h2>
 		</header>
+<?php if ($ebMode === 'search') { ?>
+		<p class="eb-intro">Export the StraboField projects your search found. Untick anything you do not want, choose the output formats, and build a downloadable package in the background. You will find it on <a href="/my_exports">My Exports</a> when it is ready.</p>
+<?php } else { ?>
 		<p class="eb-intro">Pick StraboField projects or datasets, narrow them with filters if you like, choose the output formats, and build a downloadable package in the background. You will find it on <a href="/my_exports">My Exports</a> when it is ready.</p>
+<?php } ?>
 
 <?php if ($ebFromSearch !== null) { ?>
 		<div class="eb-from" id="eb-from"><strong>From StraboSearch.</strong> <?php echo htmlspecialchars($ebFromSearch); ?></div>
@@ -308,7 +335,11 @@ body { overflow: visible; }
 		<!-- 1. SELECTION -->
 		<section class="eb-panel" id="eb-selection">
 			<h3><span class="eb-step">1</span>Selection</h3>
+<?php if ($ebMode === 'search') { ?>
+			<div class="eb-sub">Projects with spots matching your search: yours, shared with you, and public. Tick a project for all of its datasets, or expand it and pick datasets.</div>
+<?php } else { ?>
 			<div class="eb-sub">Your own projects and the ones you collaborate on. Tick a project for all of its datasets, or expand it and pick datasets.</div>
+<?php } ?>
 			<div class="eb-tools">
 				<input type="text" id="eb-proj-search" placeholder="Find a project…" autocomplete="off" aria-label="Find a project">
 				<a href="javascript:void(0);" id="eb-select-none">Clear selection</a>
@@ -317,10 +348,16 @@ body { overflow: visible; }
 		</section>
 
 		<!-- 2. FILTERS -->
-		<section class="eb-panel" id="eb-filters">
+		<section class="eb-panel" id="eb-filters" data-mode="<?php echo $ebMode; ?>">
+<?php if ($ebMode === 'search') { ?>
+			<h3><span class="eb-step">2</span>Filters <small style="font-weight:normal;color:rgba(255,255,255,0.55);">(from your search)</small></h3>
+			<div class="eb-sub">These filters came from StraboSearch and are applied to the export exactly as they were to the search. Nested child spots of a matching spot come along. To change them, go back to StraboSearch, adjust the search, and export again.</div>
+			<div id="eb-criteria-summary" class="eb-chips" aria-label="Export filters (read-only)"></div>
+<?php } else { ?>
 			<h3><span class="eb-step">2</span>Filters <small style="font-weight:normal;color:rgba(255,255,255,0.55);">(optional)</small></h3>
 			<div class="eb-sub">Keep only the spots that match. Geographic Location draws an area on a map; spots whose geometry touches it are kept. Nested child spots of a matching spot come along.</div>
 			<div id="criteriaBuilder" class="ss-criteria" aria-label="Export filters"></div>
+<?php } ?>
 			<div class="eb-drift" id="eb-drift"></div>
 		</section>
 
@@ -394,6 +431,7 @@ window.EXPORT_BUILDER = <?php echo json_encode(array(
 	'projects'  => $ebProjects,
 	'preselect' => $ebPreselect,
 	'initial'   => $ebInitial,
+	'mode'      => $ebMode,          // 'general' | 'search' (search-door: matched projects only, filters read-only)
 	'maxItems'  => (int)$ebCfg['max_items'],
 	'formats'   => array_map(function ($f) { return $f['key']; }, $ebFormats),
 ), JSON_UNESCAPED_SLASHES); ?>;

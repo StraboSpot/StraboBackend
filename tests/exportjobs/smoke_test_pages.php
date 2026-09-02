@@ -194,15 +194,26 @@ list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_enco
 $eb = embedded($b, 'EXPORT_BUILDER'); $sc = $eb ? $eb['initial']['scope']['projects'] : null;
 $mine = array('id' => (string)$P1, 'owner' => $OWNER);
 check('search door: matching keyword preselects the owner project + carries the U1 row + banner', $c === 200 && is_array($sc) && in_array($mine, $sc, true) && $eb['initial']['criteria'] === array(array('id' => 'U1', 'value' => 'Granite')) && $eb['initial']['formats'] === array('geojson') && strpos($b, 'From StraboSearch.') !== false && preg_match('/\\d+ StraboField projects? (has|have) spots matching these filters and (is|are) preselected/', $b) === 1, "$c " . json_encode($sc));
+// Search-door mode (Jason 2026-09-02): the picker holds ONLY the matched projects, all preselected;
+// the filters are read-only chips (no criteria builder mounted); copy is per door.
+// Dev holds ~50 public "Granite" projects, so the picker may exceed the 50-tick cap: every ticked
+// project must be listed, and any listed-but-unticked project is only allowed past the cap.
+$listed = array(); foreach ($eb ? $eb['projects'] : array() as $pp) $listed[] = array('id' => $pp['id'], 'owner' => $pp['owner']);
+$allTickedListed = true; foreach ($sc as $m) if (!in_array($m, $listed, true)) $allTickedListed = false;
+$capOk = count($listed) === count($sc) || (count($sc) === 50 && strpos($b, 'Only the first 50 of ' . count($listed) . ' matching projects were preselected') !== false);
+check('search door MODE: mode=search, picker = matched projects only (ticked up to the 50 cap), read-only chips, no criteria builder', $eb && $eb['mode'] === 'search' && $allTickedListed && $capOk && strpos($b, 'id="eb-criteria-summary"') !== false && strpos($b, 'id="criteriaBuilder"') === false && strpos($b, 'data-mode="search"') !== false && strpos($b, 'Projects with spots matching your search') !== false && strpos($b, 'Export the StraboField projects your search found') !== false && strpos($b, '(from your search)') !== false, json_encode(array('mode' => $eb ? $eb['mode'] : null, 'n' => $eb ? count($eb['projects']) : null, 'sc' => $sc)));
 list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U1', 'value' => 'Nonesuchzzz'))))));
 $eb = embedded($b, 'EXPORT_BUILDER');
 check('search door: no matches -> nothing preselected, "None of your" note', $c === 200 && $eb && $eb['initial']['scope']['projects'] === array() && strpos($b, 'No StraboField project you can see has spots') !== false, "$c");
+check('search door MODE: zero matches falls back to general mode (full picker, criteria builder mounted, U1 row carried)', $eb && $eb['mode'] === 'general' && count($eb['projects']) >= 1 && strpos($b, 'id="criteriaBuilder"') !== false && strpos($b, 'id="eb-criteria-summary"') === false && $eb['initial']['criteria'] === array(array('id' => 'U1', 'value' => 'Nonesuchzzz')), json_encode($eb ? $eb['mode'] : null));
 list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode(array('subsystems' => array('micro'), 'criteria' => array(array('id' => 'U1', 'value' => 'Granite'))))));
 $eb = embedded($b, 'EXPORT_BUILDER');
 check('search door: Field excluded by U8 -> nothing preselected, note says so', $c === 200 && $eb && $eb['initial']['scope']['projects'] === array() && strpos($b, 'left out StraboField') !== false, "$c");
 list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'M1', 'value' => 'x'), array('id' => 'U4', 'value' => 5))))));
 $eb = embedded($b, 'EXPORT_BUILDER');
-check('search door: only non-Field rows -> rows dropped (noted), every project with spots preselected', $c === 200 && $eb && $eb['initial']['criteria'] === array() && $eb['initial']['scope']['projects'] === array(array('id' => (string)$P1, 'owner' => $OWNER)) && strpos($b, '2 filter rows that cannot apply') !== false, "$c");
+// Before 2026-09-02 this preselected every project of the caller's; the UI no longer offers Export…
+// for Field-less results, and the server door now preselects nothing rather than "all of mine".
+check('search door: only non-Field rows -> rows dropped (noted), NOTHING preselected, general mode', $c === 200 && $eb && $eb['initial']['criteria'] === array() && $eb['initial']['scope']['projects'] === array() && $eb['mode'] === 'general' && strpos($b, '2 filter rows that cannot apply') !== false && strpos($b, 'None of the search filters apply to StraboField exports') !== false, "$c " . json_encode($eb ? $eb['initial']['scope'] : null));
 list($c, $b) = httpForm('/export_builder', $col, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U1', 'value' => 'Granite'))))));
 $eb = embedded($b, 'EXPORT_BUILDER');
 check('search door: collaborator gets the shared project preselected under its owner', $c === 200 && $eb && in_array($mine, $eb['initial']['scope']['projects'], true), "$c");
@@ -241,7 +252,10 @@ check('search door: garbage payload -> plain builder (no initial, no banner)', $
 // if the POST arrives anyway the door preselects nothing and says so (no "all of mine").
 list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array()))));
 $eb = embedded($b, 'EXPORT_BUILDER');
-check('search door: empty-criteria (browse) DSL -> nothing preselected + "no filters" banner', $c === 200 && $eb && $eb['initial'] && $eb['initial']['scope']['projects'] === array() && $eb['initial']['criteria'] === array() && strpos($b, 'Your search had no filters, so no projects were preselected') !== false, "$c");
+check('search door: empty-criteria (browse) DSL -> nothing preselected + "no filters" banner, general mode', $c === 200 && $eb && $eb['initial'] && $eb['initial']['scope']['projects'] === array() && $eb['initial']['criteria'] === array() && $eb['mode'] === 'general' && strpos($b, 'Your search had no filters, so no projects were preselected') !== false, "$c");
+list($c, , $b) = http('GET', '/export_builder', $own);
+$eb = embedded($b, 'EXPORT_BUILDER');
+check('account-menu door: general mode (mode flag, criteria builder, general copy)', $c === 200 && $eb && $eb['mode'] === 'general' && strpos($b, 'id="criteriaBuilder"') !== false && strpos($b, 'Your own projects and the ones you collaborate on') !== false && strpos($b, 'Pick StraboField projects or datasets') !== false, "$c");
 list($c, $b) = httpForm('/export_builder', null, array('search_dsl' => '{}'));
 check('search door: anonymous POST -> 302 login', $c === 302, "$c");
 // HOLD 0d8555a (Jason 2026-09-02, "hide export system until ready for public testing"): the

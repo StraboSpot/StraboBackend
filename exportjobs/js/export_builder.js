@@ -16,7 +16,11 @@
 (function (window, document) {
 	'use strict';
 	var CFG = window.EXPORT_BUILDER;
-	var BUILD = 'export-builder-m5-r1';
+	// 'search' = StraboSearch door (2026-09-02): the picker holds only the
+	// projects with matching spots and the carried-over filters are shown as
+	// read-only chips; the recipe's criteria are CFG.initial.criteria verbatim.
+	var MODE = CFG.mode === 'search' ? 'search' : 'general';
+	var BUILD = 'export-builder-m5-r2';
 	if (window.console && console.log) console.log('[ExportBuilder] ' + BUILD);
 
 	// ---------------------------------------------------------------- state
@@ -150,7 +154,9 @@
 		return Array.prototype.map.call(document.querySelectorAll('.' + cls + ':checked'), function (c) { return c.value; });
 	}
 	function recipe() {
-		var dsl = window.SSBuilder ? window.SSBuilder.getDsl() : { criteria: [] };
+		var dsl = MODE === 'search'
+			? { criteria: (CFG.initial && CFG.initial.criteria) || [] }
+			: (window.SSBuilder ? window.SSBuilder.getDsl() : { criteria: [] });
 		var layoutEl = document.querySelector('input[name="eb-layout"]:checked');
 		return {
 			scope: scope(),
@@ -266,6 +272,15 @@
 	// ---------------------------------------------------------------- criteria builder (Field-only catalog)
 	function initCriteria() {
 		var C = window.SSCatalog;
+		if (MODE === 'search') {
+			// Read-only chips (search-door mode); no builder is mounted.
+			var box = $('eb-criteria-summary');
+			var rows = (CFG.initial && CFG.initial.criteria) || [];
+			if (!box) return;
+			if (!rows.length) { box.appendChild(el('span', 'ss-chip', '(no filters)')); return; }
+			rows.forEach(function (e) { box.appendChild(el('span', 'ss-chip', C && C.criterionText ? C.criterionText(e) : e.id)); });
+			return;
+		}
 		if (!C || !window.SSBuilder) return;
 		var keep = C.CRITERIA.filter(function (c) {
 			if (c.group === 'Field') return true;
@@ -302,7 +317,7 @@
 			$('eb-sample-csv').checked = !!init.sample_list_csv;
 			$('eb-children').checked = init.children !== 'none';
 			$('eb-notes').value = init.notes || '';
-			if (window.SSBuilder && init.criteria && init.criteria.length) window.SSBuilder.loadDsl({ criteria: init.criteria });
+			if (MODE !== 'search' && window.SSBuilder && init.criteria && init.criteria.length) window.SSBuilder.loadDsl({ criteria: init.criteria });
 			if (missing.length) $('eb-msg').textContent = 'Some projects of the earlier export are no longer available to you: ' + missing.join(', ');
 			// Bring the first preselected project into view: a door may tick
 			// projects far down a long picker (StraboSearch handoff).
