@@ -237,12 +237,20 @@ check('search door: the same project, private again, is invisible to the door', 
 list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => 'not json'));
 $eb = embedded($b, 'EXPORT_BUILDER');
 check('search door: garbage payload -> plain builder (no initial, no banner)', $c === 200 && $eb && $eb['initial'] === null && strpos($b, 'From StraboSearch.') === false, "$c");
+// Globe browse run (empty criteria, Jason 2026-09-02): the page keeps Export… off for it;
+// if the POST arrives anyway the door preselects nothing and says so (no "all of mine").
+list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array()))));
+$eb = embedded($b, 'EXPORT_BUILDER');
+check('search door: empty-criteria (browse) DSL -> nothing preselected + "no filters" banner', $c === 200 && $eb && $eb['initial'] && $eb['initial']['scope']['projects'] === array() && $eb['initial']['criteria'] === array() && strpos($b, 'Your search had no filters, so no projects were preselected') !== false, "$c");
 list($c, $b) = httpForm('/export_builder', null, array('search_dsl' => '{}'));
 check('search door: anonymous POST -> 302 login', $c === 302, "$c");
+// HOLD 0d8555a (Jason 2026-09-02, "hide export system until ready for public testing"): the
+// menu entries and the My Field Data "Custom export…" button are commented out. FULL LAUNCH =
+// revert 0d8555a and flip these two checks back to asserting the links are present.
 list($c, , $b) = http('GET', '/my_exports', $own);
-check('account menu carries Export Builder + My Exports next to My Samples', preg_match('~my_samples">My Samples</a></li>\s*<li><a href="/export_builder">Export Builder</a></li>\s*<li><a href="/my_exports">My Exports</a></li>~', $b) === 1);
+check('HOLD 0d8555a: account menu hides Export Builder + My Exports (flip at full launch)', strpos($b, '<li><a href="/export_builder">') === false && strpos($b, '<li><a href="/my_exports">') === false && strpos($b, 'my_samples">My Samples</a></li>') !== false);
 list($c, , $b) = http('GET', '/my_field_data', $own);
-check('My Field Data toolbar: + New Project and Custom export…, floating (Add Project) gone', $c === 200 && strpos($b, 'class="mfd-toolbar"') !== false && strpos($b, '/new_project" class="button primary small">+ New Project</a>') !== false && strpos($b, '/export_builder" class="button small"') !== false && strpos($b, '(Add Project)') === false, "$c");
+check('HOLD 0d8555a: My Field Data toolbar has + New Project, Custom export… hidden, floating (Add Project) gone', $c === 200 && strpos($b, 'class="mfd-toolbar"') !== false && strpos($b, '/new_project" class="button primary small">+ New Project</a>') !== false && strpos($b, '/export_builder" class="button small"') === false && strpos($b, '(Add Project)') === false, "$c");
 list($c, , $b) = http('GET', '/my_exports?new=' . UUID::v4(), $own);
 $me = embedded($b, 'MY_EXPORTS');
 check('My Exports renders with the shell + notice payload', $c === 200 && strpos($b, '<h2>My Exports</h2>') !== false && strpos($b, 'my_exports.js') !== false && $me && $me['notice']['kind'] === 'new', "$c");

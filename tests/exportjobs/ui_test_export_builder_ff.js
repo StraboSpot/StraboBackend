@@ -145,12 +145,24 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.waitForSelector('.me-empty');
   check('confirm clears them -> empty state with the builder link', /Build one/.test(await page.locator('.me-empty').textContent()));
   // ---- 7. M6 doors: menu, My Field Data toolbar, StraboSearch Export… ---------
-  check('account menu lists Export Builder + My Exports', await page.evaluate(() => !!document.querySelector('#header a[href="/export_builder"]') && !!document.querySelector('#header a[href="/my_exports"]')));
+  // HOLD 0d8555a (Jason 2026-09-02): menu entries + My Field Data button are commented out
+  // until public testing. FULL LAUNCH = revert 0d8555a and flip these two checks back.
+  check('HOLD 0d8555a: account menu hides Export Builder + My Exports (flip at full launch)', await page.evaluate(() => !document.querySelector('#header a[href="/export_builder"]') && !document.querySelector('#header a[href="/my_exports"]') && !!document.querySelector('#header a[href="/my_samples"]')));
   await page.goto(BASE + '/my_field_data', { waitUntil: 'load' });
-  check('My Field Data toolbar under the title: + New Project (primary) and Custom export…', await page.evaluate(() => {
+  check('HOLD 0d8555a: My Field Data toolbar has + New Project (primary), Custom export… hidden', await page.evaluate(() => {
     const tb = document.querySelector('header.major + .mfd-toolbar');
-    return !!tb && tb.querySelector('a[href="/new_project"].primary') !== null && /Custom export/.test(tb.querySelector('a[href="/export_builder"]').textContent) && !/\(Add Project\)/.test(document.body.textContent);
+    return !!tb && tb.querySelector('a[href="/new_project"].primary') !== null && tb.querySelector('a[href="/export_builder"]') === null && !/\(Add Project\)/.test(document.body.textContent);
   }));
+  // Globe browse (Jason 2026-09-02): /globe -> ?view=globe runs an empty-criteria browse;
+  // that is not an export scope, so Export… stays off with a tooltip that says why.
+  await page.goto(BASE + '/strabosearch/?view=globe', { waitUntil: 'load' });
+  await page.waitForSelector('#ssExportBtn');
+  await page.waitForFunction(() => / projects have locations/.test((document.getElementById('ssLocCounter') || {}).textContent || ''), null, { timeout: 30000 });   // browse counter = the empty-criteria run landed
+  check('globe browse: Export… stays disabled with the "add a filter" tooltip', (await page.getAttribute('#ssExportBtn', 'aria-disabled')) === 'true' && /Add at least one search filter/.test(await page.getAttribute('#ssExportBtn', 'title')));
+  const popupsBefore = ctx.pages().length;
+  await page.click('#ssExportBtn', { force: true });   // Playwright skips aria-disabled targets without force
+  await sleep(500);
+  check('globe browse: clicking the disabled Export… opens nothing', ctx.pages().length === popupsBefore);
   await page.goto(BASE + '/strabosearch/', { waitUntil: 'load' });
   await page.waitForSelector('#ssExportBtn');
   check('search page: Export… rendered disabled before any search', (await page.getAttribute('#ssExportBtn', 'aria-disabled')) === 'true');
@@ -158,7 +170,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.fill('.ss-value input[type="text"]', 'Granite');
   await page.click('#ssSearchBtn');
   await page.waitForSelector('.ss-card', { timeout: 15000 });
-  check('search page: Export… enabled once results are on screen', (await page.getAttribute('#ssExportBtn', 'aria-disabled')) === 'false');
+  check('search page: Export… enabled once results are on screen, ready tooltip restored', (await page.getAttribute('#ssExportBtn', 'aria-disabled')) === 'false' && /Open the Export Builder/.test(await page.getAttribute('#ssExportBtn', 'title')));
   const [door] = await Promise.all([ctx.waitForEvent('page'), page.click('#ssExportBtn')]);
   await door.waitForLoadState('load');
   await door.waitForSelector('.eb-proj');
