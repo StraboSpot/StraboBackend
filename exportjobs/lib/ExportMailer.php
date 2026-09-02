@@ -4,9 +4,10 @@
  * Description: "Your export is ready" / "failed" notification (design §9.6,
  *              D9). Sent by the worker after a job reaches done or failed
  *              when the row has email_on_done. PHPMailer over the site's
- *              SMTP account, exactly the forgotpassword.php pattern; the
- *              message links to My Exports (never the file itself, no
- *              attachment). Failures are logged and never fail the job.
+ *              SMTP account through includes/StraboMail.php (branded HTML +
+ *              plain-text alternative, inline logo); the message links to
+ *              My Exports (never the file itself, no attachment). Failures
+ *              are logged and never fail the job.
  *
  *              Transport comes from export_config()['mail_transport']:
  *              smtp (default), file (append to log_root/mail.log; the test
@@ -20,6 +21,7 @@
  */
 
 require_once __DIR__ . '/export_config.php';
+require_once dirname(__DIR__, 2) . '/includes/StraboMail.php';
 
 class ExportMailer
 {
@@ -58,7 +60,7 @@ class ExportMailer
 				$log("mail: filed for {$u->email} (job {$job['uuid']})");
 				return true;
 			}
-			$this->sendSmtp($u->email, $m['subject'], $m['html']);
+			$this->sendSmtp($u->email, $m['subject'], $m);
 			$log("mail: sent to {$u->email} (job {$job['uuid']})");
 			return true;
 		} catch (Exception $e) {
@@ -67,7 +69,7 @@ class ExportMailer
 		}
 	}
 
-	/** @return array {subject, text, html} */
+	/** @return array {subject, text, html} (StraboMail branded template) */
 	public function compose(array $job, $user)
 	{
 		$site = rtrim($this->cfg['site_url'], '/');
@@ -75,74 +77,42 @@ class ExportMailer
 		$name = ($user && !empty($user->firstname)) ? $user->firstname : 'there';
 		if ($job['status'] === 'done') {
 			$subject = 'Your StraboSpot export is ready';
-			$lines = array(
-				"Hi $name,",
-				'',
-				'Your StraboSpot export has finished building.',
-				'',
-				'Export: ' . $summary,
-				'Spots: ' . number_format((int)$job['item_count'])
-					. (!empty($job['child_count']) ? ' (plus ' . number_format((int)$job['child_count']) . ' nested child spots)' : ''),
-				'Size: ' . self::humanBytes($job['result_bytes']),
-				'Available until: ' . self::humanDate($job['expires_at']),
-				'',
-				'Download it from My Exports:',
-				"$site/my_exports",
-				'',
-				'The file is removed after the date above; you can re-run the export from that page at any time.',
+			$m = array(
+				'title'    => 'Your export is ready',
+				'greeting' => "Hi $name,",
+				'intro'    => array('Your StraboSpot export has finished building.'),
+				'facts'    => array(
+					'Export' => $summary,
+					'Spots'  => number_format((int)$job['item_count'])
+						. (!empty($job['child_count']) ? ' (plus ' . number_format((int)$job['child_count']) . ' nested child spots)' : ''),
+					'Size'   => self::humanBytes($job['result_bytes']),
+					'Available until' => self::humanDate($job['expires_at']),
+				),
+				'button'   => array('Download it from My Exports', "$site/my_exports"),
+				'after'    => array('The file is removed after the date above; you can re-run the export from that page at any time.'),
 			);
 		} else {
 			$subject = 'Your StraboSpot export could not be built';
-			$lines = array(
-				"Hi $name,",
-				'',
-				'Your StraboSpot export did not finish.',
-				'',
-				'Export: ' . $summary,
-				'Problem: ' . ($job['error_text'] !== null ? $job['error_text'] : 'unknown error'),
-				'',
-				'You can adjust and re-run it from My Exports:',
-				"$site/my_exports",
+			$m = array(
+				'title'    => 'Your export could not be built',
+				'greeting' => "Hi $name,",
+				'intro'    => array('Your StraboSpot export did not finish.'),
+				'facts'    => array(
+					'Export'  => $summary,
+					'Problem' => ($job['error_text'] !== null ? $job['error_text'] : 'unknown error'),
+				),
+				'button'   => array('Adjust and re-run it from My Exports', "$site/my_exports"),
 			);
 		}
-		$lines[] = '';
-		$lines[] = 'Thanks,';
-		$lines[] = 'The StraboSpot Team';
-		$text = implode("\n", $lines);
-		$html = '<html><body><h2>StraboSpot</h2>' . nl2br(htmlspecialchars($text, ENT_QUOTES, 'UTF-8')) . '</body></html>';
-		$html = preg_replace('#(https?://[^\s<]+)#', '<a href="$1">$1</a>', $html);
-		return array('subject' => $subject, 'text' => $text, 'html' => $html);
+		$m['site_url'] = $site;
+		$m['footer'] = "You asked to be emailed when this export finished. Manage your exports at $site/my_exports.";
+		$r = StraboMail::render($m);
+		return array('subject' => $subject, 'text' => $r['text'], 'html' => $r['html']);
 	}
 
-	private function sendSmtp($to, $subject, $html)
+	private function sendSmtp($to, $subject, array $m)
 	{
-		$root = dirname(__DIR__, 2);
-		if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
-			require_once $root . '/includes/PHPMailer/PHPMailer/src/Exception.php';
-			require_once $root . '/includes/PHPMailer/PHPMailer/src/PHPMailer.php';
-			require_once $root . '/includes/PHPMailer/PHPMailer/src/SMTP.php';
-		}
-		$from = isset($GLOBALS['straboemailaddress']) ? $GLOBALS['straboemailaddress'] : null;
-		$pass = isset($GLOBALS['straboemailpassword']) ? $GLOBALS['straboemailpassword'] : null;
-		if (!$from || !$pass) throw new Exception('site mail account is not configured');
-		$mail = new PHPMailer\PHPMailer\PHPMailer(true);
-		$mail->isSMTP();
-		$mail->SMTPDebug = 0;
-		$mail->Host = 'smtp.gmail.com';
-		$mail->SMTPAuth = true;
-		$mail->SMTPSecure = 'tls';
-		$mail->Port = 587;
-		$mail->Username = $from;
-		$mail->Password = $pass;
-		$mail->From = $from;
-		$mail->FromName = 'StraboSpot';
-		$mail->addAddress($to);
-		$mail->isHTML(true);
-		$mail->CharSet = 'UTF-8';
-		$mail->Encoding = 'base64';
-		$mail->Subject = $subject;
-		$mail->Body = $html;
-		$mail->send();
+		StraboMail::send($to, $subject, $m, array('transport' => 'smtp'));
 	}
 
 	public static function humanBytes($n)

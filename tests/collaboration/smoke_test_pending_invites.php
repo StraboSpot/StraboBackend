@@ -2,8 +2,11 @@
 /**
  * File: tests/collaboration/smoke_test_pending_invites.php
  * Description: Pending collaboration invitations render ONCE per invitation on
- *              My Field Data, and the invite path never creates a duplicate
- *              collaborators row for the same (project, owner, invitee).
+ *              My Field Data, the invite path never creates a duplicate
+ *              collaborators row for the same (project, owner, invitee), and
+ *              invitees are emailed (includes/StraboMail.php branded template;
+ *              fixture addresses under @test.strabospot.org are filed to
+ *              exportjobs_data/log/mail.log instead of sent).
  *
  *   Background (Jason on prod 2026-09-02): the PG project mirror holds one row
  *   per user who has a copy of a project (owner + accepted collaborators) and
@@ -20,6 +23,9 @@ $_SERVER['DOCUMENT_ROOT'] = '/srv/app/www';
 require_once 'includes/config.inc.php';
 require_once 'db.php';
 require_once 'neodb.php';
+require_once 'includes/StraboMail.php';
+require_once 'exportjobs/lib/export_config.php';
+require_once 'exportjobs/lib/ExportMailer.php';
 
 $OWNER = 94581; $INVITEE = 94582; $COPY1 = 94583; $COPY2 = 94584;
 $P1 = 945811001;                 // invited project (owner + 2 collaborator copies + a duplicate owner row in the mirror)
@@ -77,8 +83,8 @@ foreach (array($OWNER => 'pio', $INVITEE => 'pii', $COPY1 => 'pic1', $COPY2 => '
 	$db->prepare_query("INSERT INTO users (pkey, firstname, lastname, email, password, hash, active, deleted) VALUES ($1, $2, 'Fixture', $3, 'x', 'x', false, false)", array($u, ucfirst($fn), $emails[$u]));
 }
 $neodb->query("CREATE (u:User {userpkey: $OWNER, email: '{$emails[$OWNER]}'})");
-$neodb->query("MATCH (u:User {userpkey: $OWNER}) CREATE (p:Project {id: $P1, userpkey: $OWNER, desc_project_name: 'Fanout Project', uploaddate: 1722400000}) CREATE (u)-[:HAS_PROJECT]->(p)");
-$neodb->query("MATCH (u:User {userpkey: $OWNER}) CREATE (p:Project {id: $P2, userpkey: $OWNER, desc_project_name: 'Second Project', uploaddate: 1722400000}) CREATE (u)-[:HAS_PROJECT]->(p)");
+$neodb->query("MATCH (u:User {userpkey: $OWNER}) CREATE (p:Project {id: $P1, userpkey: $OWNER, desc_project_name: 'Fanout Project', json_description: '{\"project_name\":\"Fanout Project\"}', uploaddate: 1722400000}) CREATE (u)-[:HAS_PROJECT]->(p)");
+$neodb->query("MATCH (u:User {userpkey: $OWNER}) CREATE (p:Project {id: $P2, userpkey: $OWNER, desc_project_name: 'Second Project', json_description: '{\"project_name\":\"Second Project\"}', uploaddate: 1722400000}) CREATE (u)-[:HAS_PROJECT]->(p)");
 // Mirror rows: owner (twice, a real prod shape), two collaborator copies with a stale name.
 $db->prepare_query("INSERT INTO project (user_pkey, project_name, strabo_project_id, ispublic, last_modified) VALUES ($1, 'Fanout Project (old name)', $2, FALSE, now() - interval '10 days')", array($OWNER, (string)$P1));
 $db->prepare_query("INSERT INTO project (user_pkey, project_name, strabo_project_id, ispublic, last_modified) VALUES ($1, 'Fanout Project', $2, FALSE, now())", array($OWNER, (string)$P1));
@@ -112,25 +118,81 @@ $c1 = forge($COPY1, $emails[$COPY1]);
 list($code, $body) = http('GET', '/my_field_data.php', $c1);
 check('an accepted collaborator sees no invitation for that project', strpos($body, "accept_collaboration?p=$P1&") === false);
 
-// ------------------------------------------------------------------ invite path: no duplicate rows
+// ------------------------------------------------------------------ invite path: no duplicate rows + invitation email
+$mailLog = StraboMail::logFile();
+$mailLen = function () use ($mailLog) { clearstatcache(true, $mailLog); return is_file($mailLog) ? filesize($mailLog) : 0; };
+$mailSince = function ($from) use ($mailLog) { clearstatcache(true, $mailLog); return is_file($mailLog) ? (string)substr(file_get_contents($mailLog), $from) : ''; };
+
 $own = forge($OWNER, $emails[$OWNER]);
 $db->prepare_query("DELETE FROM collaborators WHERE uuid IN ('pi-inv-1', 'pi-inv-2')");
 $post = array('addresses' => $emails[$INVITEE] . "\n" . $emails[$INVITEE] . "\n " . $emails[$INVITEE] . " \n", 'collaborationlevel' => 'readonly');
+$mark = $mailLen();
 list($code, $body) = http('POST', "/invite_collaborators.php?p=$P1", $own, $post);
 $r = rows($P1);
 check('invite POST redirects back to the collaborate page', $code === 302 || $code === 200, "$code");
 check('same address listed 3 times in one POST -> one row', count($r) === 1 && $r[0]->collaboration_level === 'readonly', json_encode($r));
+$mail = $mailSince($mark);
+check('ONE invitation email filed for the invitee', substr_count($mail, "To: {$emails[$INVITEE]}") === 1, substr($mail, 0, 300));
+check('email: subject names the inviter and the project', strpos($mail, 'Subject: Pio Fixture invited you to collaborate on "Fanout Project" in StraboSpot') !== false, substr($mail, 0, 300));
+check('email: greeting, project, inviter with address, access level, My Field Data link',
+	strpos($mail, 'Hi Pii,') !== false && strpos($mail, 'Project: Fanout Project') !== false
+	&& strpos($mail, "Invited by: Pio Fixture ({$emails[$OWNER]})") !== false && strpos($mail, 'Access: Read Only') !== false
+	&& strpos($mail, 'https://strabospot.org/my_field_data') !== false, substr($mail, 0, 900));
+list($code, $body) = http('GET', "/collaborate.php?p=$P1", $own);
+check('collaborate page shows the one-shot result banner (invited + email sent)', strpos($body, 'Invited:') !== false && strpos($body, $emails[$INVITEE] . ' (invitation email sent)') !== false, substr($body, 0, 200));
+list($code, $body) = http('GET', "/collaborate.php?p=$P1", $own);
+check('banner shows once', strpos($body, 'Invited:') === false);
+
+$mark = $mailLen();
 list($code, $body) = http('POST', "/invite_collaborators.php?p=$P1", $own, array('addresses' => $emails[$INVITEE], 'collaborationlevel' => 'edit'));
 $r = rows($P1);
 check('re-POST (double submit) updates the row instead of inserting', count($r) === 1 && $r[0]->collaboration_level === 'edit', json_encode($r));
+check('re-POST while pending sends NO second email', $mailSince($mark) === '');
+list($code, $body) = http('GET', "/collaborate.php?p=$P1", $own);
+check('banner reports the pending update, no new email', strpos($body, 'Updated:') !== false && strpos($body, 'invitation already pending; level set to Edit, no new email') !== false);
+
 $db->prepare_query("UPDATE collaborators SET disabled = TRUE WHERE strabo_project_id = $1 AND collaborator_user_pkey = $2", array((string)$P1, $INVITEE));
+$mark = $mailLen();
 list($code, $body) = http('POST', "/invite_collaborators.php?p=$P1", $own, array('addresses' => $emails[$INVITEE], 'collaborationlevel' => 'readonly'));
 $r = rows($P1);
 check('re-invite after deny re-enables the same row', count($r) === 1 && $r[0]->disabled === 'f' && $r[0]->collaboration_level === 'readonly', json_encode($r));
-list($code, $body) = http('POST', "/invite_collaborators.php?p=$P1", $own, array('addresses' => $emails[$OWNER], 'collaborationlevel' => 'edit'));
+check('re-invite after deny emails again', substr_count($mailSince($mark), "To: {$emails[$INVITEE]}") === 1);
+
+$db->prepare_query("UPDATE collaborators SET accepted = TRUE WHERE strabo_project_id = $1 AND collaborator_user_pkey = $2", array((string)$P1, $INVITEE));
+$mark = $mailLen();
+list($code, $body) = http('POST', "/invite_collaborators.php?p=$P1", $own, array('addresses' => $emails[$INVITEE], 'collaborationlevel' => 'edit'));
+check('level change for an accepted collaborator: row updated, no email', count(rows($P1)) === 1 && rows($P1)[0]->collaboration_level === 'edit' && $mailSince($mark) === '');
+$db->prepare_query("UPDATE collaborators SET accepted = FALSE, collaboration_level = 'readonly' WHERE strabo_project_id = $1 AND collaborator_user_pkey = $2", array((string)$P1, $INVITEE));
+
+$mark = $mailLen();
+list($code, $body) = http('POST', "/invite_collaborators.php?p=$P1", $own, array('addresses' => $emails[$OWNER] . "\nnobody-" . $OWNER . "@test.strabospot.org", 'collaborationlevel' => 'edit'));
 check('owner cannot invite themself', (int)$db->get_var_prepared("SELECT count(*) FROM collaborators WHERE strabo_project_id = $1 AND collaborator_user_pkey = $2", array((string)$P1, $OWNER)) === 0);
+check('no email for self or unknown addresses', $mailSince($mark) === '');
+list($code, $body) = http('GET', "/collaborate.php?p=$P1", $own);
+check('unknown address reported in the banner', strpos($body, 'Not invited:') !== false && strpos($body, 'no StraboSpot account with this address') !== false);
 list($code, $body) = http('GET', '/my_field_data.php', $inv);
 check('invitee sees the re-invite exactly once', substr_count($body, "accept_collaboration?p=$P1&") === 1);
+
+// ------------------------------------------------------------------ StraboMail template (unit)
+$r = StraboMail::render(array('title' => 'T <b>x</b>', 'greeting' => 'Hi A,', 'intro' => array('See https://strabospot.org/x?a=1&b=2 now'),
+	'facts' => array('Project' => '<script>alert(1)</script>', 'Link' => array('My Exports', 'https://strabospot.org/my_exports')),
+	'button' => array('Go', 'https://strabospot.org/my_field_data'), 'after' => array('After.'), 'footer' => 'F.'));
+check('template: HTML escapes user text', strpos($r['html'], '<script>') === false && strpos($r['html'], '&lt;script&gt;alert(1)&lt;/script&gt;') !== false && strpos($r['html'], 'T &lt;b&gt;x&lt;/b&gt;') !== false);
+check('template: inline logo (cid), accent button, link fact, linkified URL', strpos($r['html'], 'cid:' . StraboMail::LOGO_CID) !== false
+	&& strpos($r['html'], 'href="https://strabospot.org/my_field_data"') !== false && strpos($r['html'], '>Go<') !== false
+	&& strpos($r['html'], '<a href="https://strabospot.org/my_exports"') !== false
+	&& strpos($r['html'], '<a href="https://strabospot.org/x?a=1&amp;b=2"') !== false
+	&& strpos(StraboMail::render(array('title' => 't', 'footer' => 'See https://strabospot.org/my_exports.'))['html'], '<a href="https://strabospot.org/my_exports" style') !== false);
+check('template: plain text alternative carries the same content', strpos($r['text'], 'Project: <script>alert(1)</script>') !== false
+	&& strpos($r['text'], 'Go:' . "\n" . 'https://strabospot.org/my_field_data') !== false && strpos($r['text'], 'Link: My Exports (https://strabospot.org/my_exports)') !== false);
+check('logo asset present (120 px PNG)', is_file(StraboMail::logoPath()) && getimagesize(StraboMail::logoPath())[0] === 120);
+check('fixture domain always files, never sends', StraboMail::transport('x@test.strabospot.org', array('transport' => 'smtp')) === 'file' && StraboMail::transport('x@example.org', array('transport' => 'none')) === 'none');
+$em = new ExportMailer($db, array_merge(export_config(), array('site_url' => 'https://dev.example', 'mail_transport' => 'none')));
+$c = $em->compose(array('status' => 'done', 'recipe_summary' => 'Mail me', 'item_count' => 5, 'child_count' => 0, 'result_bytes' => 2048, 'expires_at' => '2026-09-09 04:00:00+00', 'error_text' => null), (object)array('firstname' => 'Pio'));
+check('export "ready" mail uses the template: branded HTML + the same facts in text', strpos($c['html'], 'cid:' . StraboMail::LOGO_CID) !== false && strpos($c['html'], 'Your export is ready') !== false
+	&& strpos($c['text'], 'Export: Mail me') !== false && strpos($c['text'], 'Spots: 5') !== false && strpos($c['text'], 'Available until: September 9, 2026') !== false && strpos($c['text'], 'https://dev.example/my_exports') !== false);
+$c = $em->compose(array('status' => 'failed', 'recipe_summary' => 'Doomed', 'item_count' => 0, 'child_count' => 0, 'result_bytes' => 0, 'expires_at' => null, 'error_text' => 'No spots matched'), (object)array('firstname' => 'Pio'));
+check('export "failed" mail uses the template', strpos($c['html'], 'could not be built') !== false && strpos($c['text'], 'Problem: No spots matched') !== false);
 
 // ------------------------------------------------------------------ DB guard (sql/collaborators_unique_invite.sql), if applied
 $idx = $db->get_var_prepared("SELECT count(*) FROM pg_indexes WHERE tablename = 'collaborators' AND indexname = 'collaborators_unique_invite_idx'", array());

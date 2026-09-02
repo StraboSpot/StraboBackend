@@ -26,7 +26,50 @@ $project = $strabo->getProject($project_id);
 
 if($project->Error != "") exit($project->Error);
 
-$project_name = $project->description->project_name;
+$project_name = $project->description->project_name ?? '';
+if($project_name === ''){
+	// Older projects may carry no json_description; fall back to the owner's PG mirror row.
+	$project_name = (string)$db->get_var_prepared("SELECT project_name FROM project WHERE strabo_project_id = $1 AND user_pkey = $2 ORDER BY last_modified DESC NULLS LAST LIMIT 1", array($project_id, $userpkey));
+}
+
+/**
+ * Email the invitee (includes/StraboMail.php). Returns a short status suffix for
+ * the results banner; a mail failure never blocks the invitation.
+ */
+function invitationMail($address, $collaborator_pkey, $inviter, $project_name, $level, $levelLabels){
+	global $db;
+	require_once __DIR__ . '/includes/StraboMail.php';
+	$site = 'https://strabospot.org';
+	$invitee = $db->get_row_prepared("SELECT firstname FROM users WHERE pkey = $1", array($collaborator_pkey));
+	$who = $inviter ? trim($inviter->firstname . ' ' . $inviter->lastname) : '';
+	$who = $who !== '' ? $who : 'A StraboSpot user';
+	$whoMail = $inviter ? $inviter->email : '';
+	$label = $levelLabels[$level] ?? $level;
+	$m = StraboMail::render(array(
+		'title'    => 'You are invited to collaborate on a StraboField project',
+		'greeting' => 'Hi ' . (($invitee && $invitee->firstname !== '') ? $invitee->firstname : 'there') . ',',
+		'intro'    => array("$who" . ($whoMail !== '' ? " ($whoMail)" : '') . " has invited you to collaborate on the StraboField project \"$project_name\"."),
+		'facts'    => array(
+			'Project'    => $project_name,
+			'Invited by' => $who . ($whoMail !== '' ? " ($whoMail)" : ''),
+			'Access'     => $label . ($level === 'edit' ? ' (you can add and change data in this project)' : ' (you can view and download this project)'),
+		),
+		'button'   => array('Review the invitation', "$site/my_field_data"),
+		'after'    => array(
+			'Sign in to StraboSpot and accept or decline the invitation from the top of your My StraboField Data page. Nothing changes in your account until you accept.',
+			'Once accepted, the project appears in your StraboField app on the next sync.',
+		),
+		'site_url' => $site,
+		'footer'   => "You received this because $who invited the StraboSpot account $address to a project. If you were not expecting it, you can decline it or simply ignore this message.",
+	));
+	try{
+		$how = StraboMail::send($address, "$who invited you to collaborate on \"$project_name\" in StraboSpot", $m, array('to_name' => $invitee ? $invitee->firstname : ''));
+		return $how === 'none' ? '' : ' (invitation email sent)';
+	}catch(Exception $e){
+		error_log('invite_collaborators: mail to ' . $address . ' failed: ' . $e->getMessage());
+		return ' (invitation saved, but the email could not be sent)';
+	}
+}
 
 if($_POST){
 
@@ -37,6 +80,11 @@ if($_POST){
 
 	$foundaddresses = [];
 	$errors = [];
+	$results = ['invited' => [], 'updated' => [], 'errors' => []];   // shown once on collaborate.php
+
+	// Inviter (for the notification) and the level label.
+	$inviter = $db->get_row_prepared("SELECT firstname, lastname, email FROM users WHERE pkey = $1", array($userpkey));
+	$levelLabels = ['readonly' => 'Read Only', 'edit' => 'Edit', 'admin' => 'Admin'];
 
 	foreach($addresses as $address){
 		$address = trim($address);
@@ -44,7 +92,9 @@ if($_POST){
 			if($address != $email){
 				if(!in_array($address, $foundaddresses)){
 					$collaborator_pkey = $db->get_var_prepared("SELECT pkey FROM users WHERE email=$1", array($address));
-					if($collaborator_pkey != ""){
+					if($collaborator_pkey == ""){
+						$results['errors'][] = "$address: no StraboSpot account with this address (they need to register first)";
+					}else{
 
 						$existcount = $db->get_var_prepared("SELECT count(*) FROM collaborators WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND collaborator_user_pkey = $3", array($project_id, $userpkey, $collaborator_pkey));
 						if($existcount == 0){
@@ -65,11 +115,21 @@ if($_POST){
 										uuid
 									) VALUES ($1, $2, $3, $4, $5)
 								", array($project_id, $userpkey, $collaborator_pkey, $collaborationlevel, $uuid));
+								$results['invited'][] = $address . invitationMail($address, $collaborator_pkey, $inviter, $project_name, $collaborationlevel, $levelLabels);
 							}
 
 						}else{
-							//Exists, just update
+							//Exists, just update. A pending or denied (disabled) invitation is
+							//(re)issued and notified; an accepted collaborator only gets the new level.
+							$existing = $db->get_row_prepared("SELECT accepted, disabled FROM collaborators WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND collaborator_user_pkey = $3 LIMIT 1", array($project_id, $userpkey, $collaborator_pkey));
+							$wasLive = $existing && $existing->accepted === 't' && $existing->disabled === 'f';
+							$wasPending = $existing && $existing->accepted === 'f' && $existing->disabled === 'f';
 							$db->prepare_query("UPDATE collaborators SET disabled = FALSE, collaboration_level = $4 WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND collaborator_user_pkey = $3", array($project_id, $userpkey, $collaborator_pkey, $collaborationlevel));
+							if($wasLive || $wasPending){
+								$results['updated'][] = $address . ($wasLive ? " (already a collaborator; level set to " . ($levelLabels[$collaborationlevel] ?? $collaborationlevel) . ")" : " (invitation already pending; level set to " . ($levelLabels[$collaborationlevel] ?? $collaborationlevel) . ", no new email)");
+							}else{
+								$results['invited'][] = $address . invitationMail($address, $collaborator_pkey, $inviter, $project_name, $collaborationlevel, $levelLabels);
+							}
 						}
 					}
 				}
@@ -79,10 +139,9 @@ if($_POST){
 		$foundaddresses[] = $address;
 	}
 
-	// If there were errors, store them in session and redirect to show them
-	if(!empty($errors)){
-		$_SESSION['invite_errors'] = $errors;
-	}
+	// Results (invited / updated / errors) are shown once on collaborate.php
+	$results['errors'] = array_merge($results['errors'], $errors);
+	$_SESSION['invite_results'] = $results;
 
 	header("Location: /collaborate?p=$project_id");
 

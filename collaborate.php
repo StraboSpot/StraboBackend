@@ -56,6 +56,37 @@ function updateCollaborationLevel(uuid){
 						<header class="major">
 							<h2>Project Collaborators</h2>
 						</header>
+<?php
+// One-shot result of the last "Invite Collaborators" submit (invite_collaborators.php).
+$inviteResults = $_SESSION['invite_results'] ?? null;
+unset($_SESSION['invite_results']);
+if(is_array($inviteResults) && (count($inviteResults['invited']) || count($inviteResults['updated']) || count($inviteResults['errors']))){
+?>
+						<div class="invite-results" style="margin:0 0 1.5em 0;padding:1em 1.25em;border-radius:6px;background:rgba(255,255,255,0.06);border-left:4px solid #e44c65;font-size:.95em;line-height:1.5;">
+<?php if(count($inviteResults['invited'])){ ?>
+							<div><strong>Invited:</strong></div>
+							<ul style="margin:0 0 .5em 1.25em;">
+<?php foreach($inviteResults['invited'] as $line){ ?>
+								<li><?php echo htmlspecialchars($line, ENT_QUOTES, 'UTF-8')?></li>
+<?php } ?>
+							</ul>
+<?php } if(count($inviteResults['updated'])){ ?>
+							<div><strong>Updated:</strong></div>
+							<ul style="margin:0 0 .5em 1.25em;">
+<?php foreach($inviteResults['updated'] as $line){ ?>
+								<li><?php echo htmlspecialchars($line, ENT_QUOTES, 'UTF-8')?></li>
+<?php } ?>
+							</ul>
+<?php } if(count($inviteResults['errors'])){ ?>
+							<div><strong>Not invited:</strong></div>
+							<ul style="margin:0 0 0 1.25em;">
+<?php foreach($inviteResults['errors'] as $line){ ?>
+								<li><?php echo htmlspecialchars($line, ENT_QUOTES, 'UTF-8')?></li>
+<?php } ?>
+							</ul>
+<?php } ?>
+						</div>
+<?php } ?>
 
 <?php
 if(count($rows) > 0){
