@@ -12,14 +12,7 @@
 
 session_start();
 
-// Import PHPMailer classes
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
-use PHPMailer\PHPMailer\Exception;// Load Composer's autoloader
-
-require 'includes/PHPMailer/PHPMailer/src/Exception.php';
-require 'includes/PHPMailer/PHPMailer/src/PHPMailer.php';
-require 'includes/PHPMailer/PHPMailer/src/SMTP.php';
+require_once 'includes/StraboMail.php';
 
 include_once "./includes/config.inc.php";
 include("db.php");
@@ -41,38 +34,20 @@ include("neodb.php");
 
 			$hash = $myrow->hash;
 
-			$message= "<html><body>
-						<h2>StraboSpot</h2>
-						This is a StraboSpot password reset request.<br><br>
-						Please click on the link below to reset your password.<br><br>
-
-						<a href=\"https://www.strabospot.org/passwdreset/$hash\">https://www.strabospot.org/passwdreset/$hash</a><br><br>
-
-						Thanks,<br><br>
-						The StraboSpot Team
-						<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
-						</body></html>";
-
-			$mail = new PHPMailer(true);
-			$mail->isSMTP();
-			$mail->SMTPDebug = 0;
-			$mail->Debugoutput = 'html';
-			$mail->Host = 'smtp.gmail.com';
-			$mail->SMTPAuth = true;
-			$mail->SMTPSecure= 'tls';
-			$mail->Port = 587;
-			$mail->Username = $straboemailaddress;
-			$mail->Password = $straboemailpassword;
-			$mail->From = $straboemailaddress;
-			$mail->FromName = 'StraboSpot';
-			$mail->addAddress($email);
-			$mail->isHTML(true);
-			$mail->CharSet = 'UTF-8';
-			$mail->Encoding = 'base64';
-			$mail->Subject = 'StraboSpot Password Reset Link';
-			$body = $message;
-			$mail->Body = $body;
-			$mail->send();
+			$m = StraboMail::render(array(
+				'title'    => 'Reset your StraboSpot password',
+				'greeting' => 'Hi ' . ($myrow->firstname !== '' ? $myrow->firstname : 'there') . ',',
+				'intro'    => array('We received a request to reset the password for your StraboSpot account.'),
+				'facts'    => array('Account' => $email),
+				'button'   => array('Reset my password', "https://www.strabospot.org/passwdreset/$hash"),
+				'after'    => array('If you did not ask for a password reset, you can ignore this message; your password stays as it is.'),
+				'footer'   => 'You received this because a password reset was requested for this address at StraboSpot (https://strabospot.org).',
+			));
+			try {
+				StraboMail::send($email, 'Reset your StraboSpot password', $m, array('to_name' => trim($myrow->firstname . ' ' . $myrow->lastname)));
+			} catch (Exception $e) {
+				error_log('forgotpassword: reset mail to ' . $email . ' failed: ' . $e->getMessage());
+			}
 
 			$error="Email sent. Please use link sent to reset password.";
 

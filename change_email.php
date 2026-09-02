@@ -14,14 +14,7 @@
  * @link       https://strabospot.org
  */
 
-// Import PHPMailer classes
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
-use PHPMailer\PHPMailer\Exception;
-
-require 'includes/PHPMailer/PHPMailer/src/Exception.php';
-require 'includes/PHPMailer/PHPMailer/src/PHPMailer.php';
-require 'includes/PHPMailer/PHPMailer/src/SMTP.php';
+require_once 'includes/StraboMail.php';
 
 include("logincheck.php");
 
@@ -86,41 +79,20 @@ if($currentemail != ""){
 				array($userpkey, $newemail, $token, $EMAIL_CHANGE_TTL_HOURS)
 			);
 
-			$message= "<html><body>
-						<h2>StraboSpot</h2>
-						This is a StraboSpot email-change confirmation.<br><br>
-						We received a request to change the email address on your StraboSpot account to this address.<br><br>
-						Please click the link below to confirm the change. This link will expire in $EMAIL_CHANGE_TTL_HOURS hours.<br><br>
-
-						<a href=\"https://www.strabospot.org/changeemail/$token\">https://www.strabospot.org/changeemail/$token</a><br><br>
-
-						If you did not request this change, you can safely ignore this email and your account will be unchanged.<br><br>
-
-						Thanks,<br><br>
-						The StraboSpot Team
-						<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
-						</body></html>";
-
-			$mail = new PHPMailer(true);
-			$mail->isSMTP();
-			$mail->SMTPDebug = 0;
-			$mail->Debugoutput = 'html';
-			$mail->Host = 'smtp.gmail.com';
-			$mail->SMTPAuth = true;
-			$mail->SMTPSecure= 'tls';
-			$mail->Port = 587;
-			$mail->Username = $straboemailaddress;
-			$mail->Password = $straboemailpassword;
-			$mail->From = $straboemailaddress;
-			$mail->FromName = 'StraboSpot';
-			$mail->addAddress($newemail);
-			$mail->isHTML(true);
-			$mail->CharSet = 'UTF-8';
-			$mail->Encoding = 'base64';
-			$mail->Subject = 'StraboSpot Email Change Confirmation';
-			$body = $message;
-			$mail->Body = $body;
-			$mail->send();
+			$m = StraboMail::render(array(
+				'title'    => 'Confirm your new StraboSpot email address',
+				'greeting' => 'Hi there,',
+				'intro'    => array('We received a request to change the email address on a StraboSpot account to this address.'),
+				'facts'    => array('New address' => $newemail, 'Link expires' => "in $EMAIL_CHANGE_TTL_HOURS hours"),
+				'button'   => array('Confirm the change', "https://www.strabospot.org/changeemail/$token"),
+				'after'    => array('If you did not request this change, you can safely ignore this email and the account will be unchanged.'),
+				'footer'   => 'You received this because this address was entered as a new sign-in address at StraboSpot (https://strabospot.org).',
+			));
+			try {
+				StraboMail::send($newemail, 'Confirm your new StraboSpot email address', $m);
+			} catch (Exception $e) {
+				error_log('change_email: confirmation mail to ' . $newemail . ' failed: ' . $e->getMessage());
+			}
 
 			include("includes/mheader.php");
 			?>
