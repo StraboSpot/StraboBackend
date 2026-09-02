@@ -221,6 +221,12 @@ try {
 			ej_respond($c);
 
 		case 'status':
+			// Crashed-worker recovery on the polling path too (one cheap query):
+			// a row whose worker died without reporting is re-queued and kicked
+			// here, so My Exports never shows a corpse as RUNNING for longer than
+			// stale_seconds even where the per-minute sweep cron is not installed.
+			$st = $svc->requeueStale($userpkey);        // the caller's rows only
+			foreach ($st['requeued'] as $ru) ej_kick($cfg, $ru);
 			$rows = $svc->listForUser($userpkey);
 			$out = array();
 			foreach ($rows as $r) $out[] = ej_row_public($r);

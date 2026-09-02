@@ -50,6 +50,7 @@ class straboOutputClass
 	// instead. Data paths are untouched: parity is by construction.
 	// =====================================================================
 	public $captureDir = null;
+	public $imagesMissing = 0;     // images skipped by the copiers because no file exists on disk
 	public $captured = array();
 
 	public function capturing(){ return $this->captureDir !== null; }
@@ -1955,7 +1956,10 @@ class straboOutputClass
 						$iname = $this->strabo->getImageFilename($image['id']);
 						$imagefilename = $image['id'].".jpg";
 
-						exec("cp /srv/app/www/dbimages/$iname /srv/app/www/ziptemp/$randnum/StraboImages/$imagefilename");
+						// "" = no file on disk for this image; without the guard cp is
+						// handed the dbimages DIRECTORY (one "omitting directory" line per image)
+						if($iname === "" || $iname === null){ $this->imagesMissing++; $imagenum++; continue; }
+						exec("cp " . escapeshellarg("/srv/app/www/dbimages/$iname") . " " . escapeshellarg("/srv/app/www/ziptemp/$randnum/StraboImages/$imagefilename"));
 
 						$imagenum++;
 					}
@@ -2021,7 +2025,8 @@ class straboOutputClass
 							$imagefilename = "spot_" . $spotname . "-image_" . $image['id'].".jpg";
 						}
 
-						exec("cp /srv/app/www/dbimages/$iname /srv/app/www/ziptemp/$randnum/StraboImages/$imagefilename");
+						if($iname === "" || $iname === null){ $this->imagesMissing++; $imagenum++; continue; }   // no file on disk: skip, never cp the directory
+						exec("cp " . escapeshellarg("/srv/app/www/dbimages/$iname") . " " . escapeshellarg("/srv/app/www/ziptemp/$randnum/StraboImages/$imagefilename"));
 
 						$imagenum++;
 					}
@@ -27387,6 +27392,20 @@ QML;
 		}
 	}
 
+	/** Spreadsheet-safe text for a tag/property value: scalars as-is, lists of
+	 *  scalars comma-joined, anything nested (objects, lists of lists) as JSON. */
+	public function cellText($val){
+		if(is_object($val)) $val = (array)$val;
+		if(is_array($val)){
+			foreach($val as $v){
+				if(is_array($v) || is_object($v)) return json_encode($val, JSON_UNESCAPED_SLASHES);
+			}
+			return implode(", ", array_map('strval', $val));
+		}
+		if(is_bool($val)) return $val ? "true" : "false";
+		return $val;
+	}
+
 	public function geologicUnitsOut($projectid){
 
 		$project = $this->strabo->getProject($projectid);
@@ -27397,10 +27416,15 @@ QML;
 		$foundvars = [];
 		$colvars = [];
 		$varnum = 0;
+		// Linkage keys are not unit attributes: "spots" (spot ids) and "features"
+		// (spot id -> sub-feature ids, an OBJECT; a tag applied to a feature inside
+		// a spot). Handing that object to PHPExcel was a recoverable fatal error
+		// that killed the export worker mid-job (2026-09-01, Jason's dev run).
+		$linkageKeys = ["type","spots","id","features"];
 		foreach($tags as $tag){
 			if($tag->type == "geologic_unit"){
 				foreach($tag as $key=>$value){
-					if(!in_array($key,["type","spots","id"])){
+					if(!in_array($key,$linkageKeys)){
 						if(!in_array($key, $foundvars)){
 							$foundvars[] = $key;
 							$colvars[$key] = $varnum;
@@ -27451,7 +27475,7 @@ QML;
 
 					if(in_array($key, $foundvars)){
 
-						if(is_array($val)) $val = implode(", ", $val);
+						$val = $this->cellText($val);
 
 						$colnum = $colvars[$key];
 

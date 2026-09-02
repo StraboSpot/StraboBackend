@@ -41,6 +41,7 @@ function export_config()
 		'min_free_bytes'       => 10737418240,    // 10 GB: refuse to START a build below this
 		'disk_wait_seconds'    => 21600,          // 6 h queued-for-disk before the job fails
 		'user_cap_bytes'       => 2147483648,     // 2 GB live results per user; oldest expire first
+		'caps_userpkey'        => null,           // TEST ONLY: confine enforceUserCaps to one user (suite override)
 		'retention_days'       => 7,
 		'max_items'            => 250000,         // FIND ceiling per build
 		'max_queued_per_user'  => 5,              // queued + running

@@ -231,12 +231,15 @@ class ExportJobService
 	 * queued (attempt < max_attempts) or to failed.
 	 * @return array {requeued: uuids[], failed: uuids[]}
 	 */
-	public function requeueStale()
+	public function requeueStale($onlyUserpkey = null)
 	{
+		// $onlyUserpkey: the api's polling path recovers just the caller's rows
+		// (never another user's, and never a test fixture's mid-suite).
 		$stale = $this->many(
 			"SELECT * FROM export_jobs
-			  WHERE status = 'running' AND heartbeat_at < now() - ($1 || ' seconds')::interval",
-			array((int)$this->cfg['stale_seconds']));
+			  WHERE status = 'running' AND heartbeat_at < now() - ($1 || ' seconds')::interval
+			    AND ($2::int IS NULL OR userpkey = $2::int)",
+			array((int)$this->cfg['stale_seconds'], $onlyUserpkey === null ? null : (int)$onlyUserpkey));
 		$out = array('requeued' => array(), 'failed' => array());
 		foreach ($stale as $j) {
 			if ($j['attempt'] < (int)$this->cfg['max_attempts']) {
@@ -337,10 +340,15 @@ class ExportJobService
 	public function enforceUserCaps()
 	{
 		$cap = (int)$this->cfg['user_cap_bytes'];
+		// caps_userpkey (test-only config key): confine enforcement to one user so
+		// a suite's tiny cap override cannot expire real users' exports on a
+		// shared dev database (it ate Jason's re-run on 2026-09-01).
+		$only = !empty($this->cfg['caps_userpkey']) ? (int)$this->cfg['caps_userpkey'] : null;
 		$over = $this->db->get_results_prepared(
 			"SELECT userpkey, sum(result_bytes) AS total FROM export_jobs
-			  WHERE status = 'done' GROUP BY userpkey HAVING sum(result_bytes) > $1",
-			array($cap));
+			  WHERE status = 'done' AND ($2::int IS NULL OR userpkey = $2::int)
+			  GROUP BY userpkey HAVING sum(result_bytes) > $1",
+			array($cap, $only));
 		$expired = array();
 		if (!is_array($over)) return $expired;
 		foreach ($over as $u) {

@@ -73,7 +73,8 @@ mkdir($TMP, 0775, true);
 // ------------------------------------------------------------------ fixtures
 $db->prepare_query("INSERT INTO users (pkey, firstname, lastname, email, password, hash, active) VALUES ($1, 'fmt', 'fixture', $2, 'x', 'x', false)", array($OWNER, "fmt-$OWNER@test.strabospot.org"));
 $neodb->query("CREATE (u:User {userpkey: $OWNER, email: 'fmt-$OWNER@test.strabospot.org'})");
-$UNITS = '[{\"id\": 945516001, \"name\": \"Granite of Fixture\", \"type\": \"geologic_unit\", \"unit_label_abbreviation\": \"Kgf\", \"spots\": [' . $S_PT . ']},'
+// "features" = spot id -> sub-feature ids (an OBJECT): the tag shape that crashed geologicUnitsOut on 2026-09-01
+$UNITS = '[{\"id\": 945516001, \"name\": \"Granite of Fixture\", \"type\": \"geologic_unit\", \"unit_label_abbreviation\": \"Kgf\", \"eon\": [\"phanerozoic\"], \"spots\": [' . $S_PT . '], \"features\": {\"' . $S_PT . '\": [945516099]}},'
        . ' {\"id\": 945516002, \"name\": \"Plain tag\", \"type\": \"concept\", \"spots\": [' . $S_LN . ']}]';
 $neodb->query("MATCH (u:User {userpkey: $OWNER}) CREATE (p:Project {id: $P1, userpkey: $OWNER, desc_project_name: 'Fmt Project One', json_tags: '$UNITS'}) CREATE (u)-[:HAS_PROJECT]->(p)");
 $neodb->query("MATCH (u:User {userpkey: $OWNER}) CREATE (p:Project {id: $P2, userpkey: $OWNER, desc_project_name: 'Fmt Project Two'}) CREATE (u)-[:HAS_PROJECT]->(p)");
@@ -222,6 +223,10 @@ check('merged zip: one output set at the root for every format', $has('shapefile
 check('merged zip: README + manifest', $has('README.txt') && $has('manifest.json'));
 check('merged zip: images from both datasets that have them', $has('Fmt-Point') && $has('Fmt-Beta-Point'));
 check('merged zip: extras per project folder', $has('projects/Fmt_Project_One_' . $P1 . '/project.json') && $has('projects/Fmt_Project_One_' . $P1 . '/geologic_units.xlsx') && $has('projects/Fmt_Project_Two_' . $P2 . '/project.json'));
+$guTmp = sys_get_temp_dir() . '/ejt_gu_' . getmypid() . '.xlsx';
+file_put_contents($guTmp, ejt_zip_read($svc, $j, 'projects/Fmt_Project_One_' . $P1 . '/geologic_units.xlsx'));
+$gus = (string)shell_exec('unzip -p ' . escapeshellarg($guTmp) . ' xl/sharedStrings.xml'); @unlink($guTmp);
+check('geologic_units.xlsx: unit with a "features" object writes (crash fixed), list values joined, no Features/Spots columns', strpos($gus, 'Kgf') !== false && strpos($gus, 'phanerozoic') !== false && stripos($gus, 'features') === false && stripos($gus, '>spots<') === false, substr($gus, 0, 300));
 $readme = ejt_zip_read($svc, $j, 'README.txt');
 check('README names both projects and the no-units warning for project two', strpos($readme, 'Fmt Project One') !== false && strpos($readme, 'Fmt Project Two') !== false && strpos($readme, 'has no geologic units') !== false, substr($readme, 0, 300));
 $gjm = null; foreach ($zl as $m) if (substr($m, -5) === '.json' && strpos($m, 'manifest') === false && strpos($m, 'project.json') === false) $gjm = $m;

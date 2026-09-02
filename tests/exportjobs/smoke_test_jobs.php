@@ -170,7 +170,17 @@ $r8 = $svc->get($j8['uuid']); $r9 = $svc->get($j9['uuid']);
 check('sweep exit 0', $rc === 0, "rc=$rc");
 check('stale attempt-1 run re-queued and completed by sweep (attempt=2, done)', $r8['status'] === 'done' && $r8['attempt'] === 2, $r8['status'] . '/' . $r8['attempt']);
 check('stale attempt-2 run failed for good', $r9['status'] === 'failed' && strpos($r9['error_text'], 'stopped responding') !== false, $r9['status']);
+
 check('sweep log names both', strpos($out, "re-queued: {$j8['uuid']}") !== false && strpos($out, "failed for good: {$j9['uuid']}") !== false);
+// ---------------------------------------------------------------- 7b. crash containment (2026-09-01: PHPExcel recoverable fatal left a job RUNNING)
+$jr = $svc->create($UPK, array('plugin' => 'echo', 'echo_recoverable_fatal' => 1), array('summary' => 'recoverable-fatal', 'origin' => 'test'));
+list($rc, $out) = run_worker("--job={$jr['uuid']}");
+$rr = $svc->get($jr['uuid']);
+check('recoverable fatal -> job failed at once with the real message (error handler -> ErrorException -> runner catch)', $rr['status'] === 'failed' && strpos($rr['error_text'], 'stdClass') !== false, $rr['status'] . ' ' . $rr['error_text']);
+$jo = $svc->create($UPK, array('plugin' => 'echo', 'echo_oom' => 1), array('summary' => 'oom', 'origin' => 'test'));
+list($rc, $out) = run_worker("--job={$jo['uuid']}");
+$ro = $svc->get($jo['uuid']);
+check('true fatal (memory) -> shutdown hook fails the claimed job with "Internal error"', $ro['status'] === 'failed' && strpos($ro['error_text'], 'Internal error') !== false && stripos($ro['error_text'], 'memory') !== false, $ro['status'] . ' ' . $ro['error_text']);
 
 // ---------------------------------------------------------------- 8. concurrency cap
 $j10 = $svc->create($UPK, array('plugin' => 'echo'), array('summary' => 'cap-holder', 'origin' => 'test'));
@@ -217,7 +227,7 @@ for ($i = 0; $i < 3; $i++) {
 }
 check('three done results for cap test', count(array_filter($done, function ($r) { return $r['status'] === 'done'; })) === 3);
 $keep = (int)$done[2]['result_bytes'] + 10;          // cap admits exactly the newest
-list($rc, $out) = run_worker('--sweep', array('user_cap_bytes' => $keep));
+list($rc, $out) = run_worker('--sweep', array('user_cap_bytes' => $keep, 'caps_userpkey' => $UPK));   // confined to the fixture user: a global tiny cap expired Jason's real export on dev (09-01)
 clearstatcache();
 $st = array_map(function ($r) use ($svc) { return $svc->get($r['uuid'])['status']; }, $done);
 check('user cap expires OLDEST first, keeps newest', $st === array('expired', 'expired', 'done'), implode(',', $st));

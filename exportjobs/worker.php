@@ -34,6 +34,38 @@ chdir(__DIR__ . '/..');
 if (empty($_SERVER['DOCUMENT_ROOT'])) $_SERVER['DOCUMENT_ROOT'] = getcwd();
 ini_set('memory_limit', '4G');
 ini_set('max_execution_time', 0);
+
+// Crash containment (2026-09-01: a recoverable fatal inside PHPExcel killed
+// the worker mid-job and the row sat in "running" until the stale sweep).
+// 1) Recoverable / user errors become exceptions so ExportRunner's catch
+//    marks the job failed with the real message, instantly.
+// 2) A true fatal (memory, parse, timeout) still ends the process, so the
+//    shutdown hook fails the job this process had claimed.
+$EJ_CURRENT = null;      // {pkey, uuid} of the job claimed by this process
+set_error_handler(function ($no, $str, $file, $line) {
+	if ($no === E_RECOVERABLE_ERROR || $no === E_USER_ERROR) {
+		throw new ErrorException($str, 0, $no, $file, $line);
+	}
+	return false;          // everything else: PHP's normal handling (legacy generators are noisy)
+});
+register_shutdown_function(function () {
+	global $EJ_CURRENT, $svc;
+	$e = error_get_last();
+	if (!$EJ_CURRENT || !$e || !in_array($e['type'], array(E_ERROR, E_PARSE, E_CORE_ERROR, E_COMPILE_ERROR), true)) return;
+	try {
+		$row = $svc->getByPkey($EJ_CURRENT['pkey']);
+		if ($row && $row['status'] === 'running' && (int)$row['worker_pid'] === getmypid()) {
+			$msg = 'Internal error: ' . trim(preg_replace('/\s+/', ' ', $e['message'])) . ' (' . basename($e['file']) . ':' . $e['line'] . ')';
+			$svc->fail($EJ_CURRENT['pkey'], $msg);
+			$cfgS = export_config();
+			@file_put_contents(rtrim($cfgS['log_root'], '/') . '/worker.log',
+				'[' . date('Y-m-d H:i:s') . "] job {$EJ_CURRENT['uuid']}: FAILED (fatal) $msg\n", FILE_APPEND);
+			$wd = rtrim($cfgS['work_root'], '/') . '/' . $EJ_CURRENT['uuid'];
+			if (is_dir($wd) && strlen($EJ_CURRENT['uuid']) === 36) @exec('rm -rf ' . escapeshellarg($wd));
+		}
+	} catch (Exception $x) {
+	}
+});
 require_once 'includes/config.inc.php';
 require_once 'db.php';
 require_once 'neodb.php';
@@ -58,10 +90,19 @@ if ($MODE === null || $MODE === 'help') {
 
 $cfg = export_config();
 $svc = new ExportJobService($db, $cfg);
-$log = function ($m) use ($cfg) {
+// Kicked runs have stdout redirected INTO worker.log (so PHP's own fatal
+// text lands there too); echoing our lines as well doubled every entry.
+// Echo unless stdout IS the log file.
+$EJ_LOGFILE = rtrim($cfg['log_root'], '/') . '/worker.log';
+$EJ_ECHO = true;
+if (defined('STDOUT') && is_file($EJ_LOGFILE)) {
+	$so = @fstat(STDOUT); $lf = @stat($EJ_LOGFILE);
+	if ($so && $lf && $so['dev'] === $lf['dev'] && $so['ino'] === $lf['ino']) $EJ_ECHO = false;
+}
+$log = function ($m) use ($EJ_LOGFILE, $EJ_ECHO) {
 	$line = '[' . date('Y-m-d H:i:s') . '] ' . $m . "\n";
-	echo $line;
-	@file_put_contents(rtrim($cfg['log_root'], '/') . '/worker.log', $line, FILE_APPEND);
+	if ($EJ_ECHO) echo $line;
+	@file_put_contents($EJ_LOGFILE, $line, FILE_APPEND);
 };
 $plugins = array(new EchoExportPlugin(), new FieldExportPlugin($db, $neodb, $cfg));
 $mailer = new ExportMailer($db, $cfg, $log);
@@ -94,7 +135,10 @@ function ej_try_run(ExportJobService $svc, ExportRunner $runner, array $cfg, $uu
 	}
 	$job = $svc->claim($uuid, getmypid());
 	if (!$job) return 'none';
+	global $EJ_CURRENT;
+	$EJ_CURRENT = array('pkey' => $job['pkey'], 'uuid' => $job['uuid']);
 	$runner->run($job);
+	$EJ_CURRENT = null;
 	return 'ran';
 }
 

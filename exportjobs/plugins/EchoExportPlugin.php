@@ -32,6 +32,13 @@ class EchoExportPlugin implements ExportPlugin
 		if (!empty($recipe['echo_fail'])) {
 			throw new ExportJobError((string)$recipe['echo_fail']);
 		}
+		if (!empty($recipe['echo_recoverable_fatal'])) {
+			$o = new stdClass();
+			$s = (string)$o;                                   // E_RECOVERABLE_ERROR (the PHPExcel crash shape)
+		}
+		if (!empty($recipe['echo_oom'])) {
+			$s = str_repeat('x', 8 * 1024 * 1024 * 1024);      // E_ERROR: memory limit (the shutdown-hook path)
+		}
 		file_put_contents($bundleDir . '/recipe.json',
 			json_encode($recipe, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) . "\n");
 
