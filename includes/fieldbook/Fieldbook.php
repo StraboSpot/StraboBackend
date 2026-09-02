@@ -70,7 +70,9 @@ class Fieldbook
 		}
 		$meta = self::meta($strabo, $owner, $tree, $get);
 		$model = FieldbookModel::build($features, $tags, $notes, $tree, $meta);
-		$renderer = new FieldbookRenderer($model, isset($out->progress) ? $out->progress : null, self::maps($meta['options']), self::photos($meta['options']));
+		$photos = self::photos($meta['options']);
+		if ($photos->enabled()) $photos->setFilenames(self::imageFilenames($strabo, $model->imageIds()));
+		$renderer = new FieldbookRenderer($model, isset($out->progress) ? $out->progress : null, self::maps($meta['options']), $photos);
 		$pdf = $renderer->render();
 		if ($out->capturing()) { $out->capturePdf($pdf, $model->filename); }
 		else { $pdf->Output($model->filename, 'I'); }
@@ -111,6 +113,28 @@ class Fieldbook
 			return self::photos($options, $override);
 		}
 		return new FieldbookPhotos($override + $cfg);
+	}
+
+	/**
+	 * Stored filenames of the book's images in one query (the file under dbimages is Image.filename, not the
+	 * id: the legacy generator's getImageFilename, batched). Ids are numeric in practice; non-numeric ids are
+	 * matched as strings. Returns id => filename for the nodes that have one.
+	 */
+	public static function imageFilenames($strabo, array $ids)
+	{
+		$map = array();
+		if (!$ids || !isset($strabo->neodb)) return $map;
+		$nums = array(); $strs = array();
+		foreach ($ids as $id) { $id = (string)$id; if (preg_match('/^\d+$/', $id)) $nums[] = $id; else $strs[] = '"' . addcslashes($id, '"\\') . '"'; }
+		foreach (array_chunk($nums, 500) as $chunk) {
+			$rows = $strabo->neodb->query("MATCH (i:Image) WHERE i.id IN [" . implode(',', $chunk) . "] AND i.filename <> '' RETURN i.id AS id, i.filename AS filename");
+			if ($rows) foreach ($rows as $r) $map[(string)$r->value('id')] = (string)$r->value('filename');
+		}
+		foreach (array_chunk($strs, 500) as $chunk) {
+			$rows = $strabo->neodb->query("MATCH (i:Image) WHERE i.id IN [" . implode(',', $chunk) . "] AND i.filename <> '' RETURN i.id AS id, i.filename AS filename");
+			if ($rows) foreach ($rows as $r) $map[(string)$r->value('id')] = (string)$r->value('filename');
+		}
+		return $map;
 	}
 
 	/** Export Builder layout-group members => tree (design §5). */

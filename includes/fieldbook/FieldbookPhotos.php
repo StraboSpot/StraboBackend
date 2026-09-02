@@ -3,7 +3,10 @@
  * File: includes/fieldbook/FieldbookPhotos.php
  * Description: Photo figures of the enhanced fieldbook
  *              (docs/Fieldbook_Design.md §8, D5). Finds the original file
- *              of a Field image (dbimages/<id>, bare id, JPEG), decodes it
+ *              of a Field image (dbimages/<filename>, the filename stored
+ *              on the Image node and resolved once per book by
+ *              Fieldbook::imageFilenames; bare id / id.jpg as fallbacks
+ *              for tooling), decodes it
  *              through GD with the EXIF orientation applied, scales it to
  *              a contact-sheet or full-width thumbnail (JPEG bytes for the
  *              PDF), caches sheet thumbnails on disk
@@ -35,6 +38,7 @@ class FieldbookPhotos
 	public $overlays = 0;          // basemaps drawn with their child spots
 
 	private $dir;
+	private $filenames = array();   // image id => stored filename (Neo4j Image.filename), resolved by the caller
 	private $cacheDir = '';
 	private $cacheOk = false;
 	private $ttl;
@@ -44,6 +48,7 @@ class FieldbookPhotos
 	{
 		$this->mode = isset($cfg['mode']) ? $cfg['mode'] : 'sheets';
 		$this->dir = rtrim(isset($cfg['image_dir']) ? $cfg['image_dir'] : $_SERVER['DOCUMENT_ROOT'] . '/dbimages', '/');
+		if (isset($cfg['filenames']) && is_array($cfg['filenames'])) foreach ($cfg['filenames'] as $k => $v) $this->filenames[(string)$k] = (string)$v;
 		$this->cacheDir = isset($cfg['cache_dir']) ? rtrim($cfg['cache_dir'], '/') : '';
 		$this->ttl = (isset($cfg['ttl_days']) ? (int)$cfg['ttl_days'] : 90) * 86400;
 		$fontDir = $_SERVER['DOCUMENT_ROOT'] . '/includes/tfpdf/font/unifont/';
@@ -57,14 +62,23 @@ class FieldbookPhotos
 
 	public function enabled() { return $this->mode !== 'none' && function_exists('imagecreatetruecolor'); }
 
-	/** Path of an image's original file, or null when absent (bare id, then id.jpg). */
+	/** Path of an image's original file, or null when absent: the stored filename first, then bare id / id.jpg. */
 	public function path($id)
 	{
 		$id = preg_replace('/[^A-Za-z0-9_.-]/', '', (string)$id);
 		if ($id === '') return null;
-		foreach (array($this->dir . '/' . $id, $this->dir . '/' . $id . '.jpg', $this->dir . '/' . $id . '.jpeg') as $p) if (is_file($p)) return $p;
+		$candidates = array();
+		if (isset($this->filenames[$id]) && $this->filenames[$id] !== '') {
+			$fn = basename($this->filenames[$id]);   // never leave dbimages
+			if ($fn !== '' && $fn !== '.' && $fn !== '..') $candidates[] = $this->dir . '/' . $fn;
+		}
+		$candidates[] = $this->dir . '/' . $id; $candidates[] = $this->dir . '/' . $id . '.jpg'; $candidates[] = $this->dir . '/' . $id . '.jpeg';
+		foreach ($candidates as $p) if (is_file($p)) return $p;
 		return null;
 	}
+
+	/** Register stored filenames after construction (id => filename). */
+	public function setFilenames(array $map) { foreach ($map as $k => $v) $this->filenames[(string)$k] = (string)$v; }
 
 	/**
 	 * Thumbnail with the longest side <= $maxPx: ['data' => jpeg bytes, 'w', 'h'] or null (missing / skipped).
