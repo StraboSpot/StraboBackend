@@ -41,6 +41,9 @@ function section($t){ echo "\n== $t ==\n"; }
 // DB-connection regression that produced "Require $dbuser..." / "Error preparing").
 function clean_body($b){ return stripos($b, "Warning:")===false && stripos($b, "Error preparing")===false && stripos($b, "Require \$dbuser")===false && stripos($b, "Notice:")===false; }
 
+require_once __DIR__ . '/../../includes/StraboMail.php';
+function mail_len(){ $f = StraboMail::logFile(); clearstatcache(true, $f); return is_file($f) ? filesize($f) : 0; }
+function mail_since($from){ $f = StraboMail::logFile(); clearstatcache(true, $f); return is_file($f) ? (string)substr(file_get_contents($f), $from) : ''; }
 function http($url, $opts = array()){
 	$ch = curl_init($url);
 	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
@@ -100,11 +103,11 @@ function forgeSession($pkey, $email){
 // =============================================================================
 echo "StraboSpot self-service email-change E2E  (rand=$rand)\n";
 
-$emailA_old = "$PREFIX-a-old-$rand@example.com";
-$emailA_new = "$PREFIX-a-new-$rand@example.com";
-$emailB_old = "$PREFIX-b-old-$rand@example.com";
-$emailB_new = "$PREFIX-b-new-$rand@example.com";
-$emailDecoy = "$PREFIX-decoy-$rand@example.com";
+$emailA_old = "$PREFIX-a-old-$rand@test.strabospot.org";
+$emailA_new = "$PREFIX-a-new-$rand@test.strabospot.org";
+$emailB_old = "$PREFIX-b-old-$rand@test.strabospot.org";
+$emailB_new = "$PREFIX-b-new-$rand@test.strabospot.org";
+$emailDecoy = "$PREFIX-decoy-$rand@test.strabospot.org";
 
 $pkeyA = seedUser($emailA_old);
 $pkeyB = seedUser($emailB_old);
@@ -151,6 +154,7 @@ section("confirmemailchange.php - happy path commit");
 $apptoken = "e2e-apptok-$rand";
 $db->prepare_query("INSERT INTO apptokens (uuid,email) VALUES ($1,$2)", array($apptoken, $emailA_old));
 
+$mailMark = mail_len();
 $tokGood = bin2hex(random_bytes(32));
 $db->prepare_query(
 	"INSERT INTO email_change_requests (userpkey,new_email,token,expires_at) VALUES ($1,$2,$3, now() + interval '1 hour')",
@@ -171,6 +175,8 @@ ok($neoEmail==$emailA_new, "C4 Neo4j User node email updated");
 
 $used = $db->get_var_prepared("SELECT used_at FROM email_change_requests WHERE token=$1", array($tokGood));
 ok($used!="", "C4 request marked used");
+$mailC4 = mail_since($mailMark);
+ok(strpos($mailC4, "To: $emailA_old")!==false && strpos($mailC4, "Subject: Your StraboSpot email address was changed")!==false && strpos($mailC4, "New address: $emailA_new")!==false, "C4 security notice filed to the OLD address (StraboMail template, fixture domain)");
 
 // C5: the link is single-use
 list($c, $b) = http("$BASE/changeemail/$tokGood");
@@ -192,6 +198,7 @@ function pendingCount($pkey, $newemail){
 }
 
 // F1: wrong current password is rejected, no request created
+$mailMark = mail_len();
 list($c, $b) = http("$BASE/change_email.php", array('sid'=>$sidB, 'post'=>array('submit'=>'Submit','newemail'=>$emailB_new,'currentpassword'=>'wrongpass')));
 ok(strpos($b, "Incorrect current password")!==false, "F1 wrong password -> error shown");
 ok(pendingCount($pkeyB, $emailB_new)==0, "F1 no pending request created on bad password");
@@ -209,6 +216,8 @@ ok(pendingCount($pkeyB, $emailDecoy)==0, "F3 no pending request for duplicate ad
 // F4: valid request creates exactly one pending row (mail send is best-effort)
 list($c, $b) = http("$BASE/change_email.php", array('sid'=>$sidB, 'post'=>array('submit'=>'Submit','newemail'=>$emailB_new,'currentpassword'=>$KNOWN_PASS)));
 ok(pendingCount($pkeyB, $emailB_new)==1, "F4 valid submit -> one pending request created");
+$mailF = mail_since($mailMark);
+ok(strpos($mailF, "To: $emailB_new")!==false && strpos($mailF, "Subject: Confirm your new StraboSpot email address")!==false && preg_match('#https://www\.strabospot\.org/changeemail/[0-9a-f]{64}#', $mailF)===1, "confirmation mail filed to the NEW address with the token link");
 $tokRow = $db->get_row_prepared("SELECT token, expires_at > now() AS future FROM email_change_requests WHERE userpkey=$1 AND new_email=$2 AND used_at IS NULL", array($pkeyB, $emailB_new));
 ok(strlen($tokRow->token)==64 && ctype_xdigit($tokRow->token), "F4 token is 64 hex chars");
 ok($tokRow->future=='t' || $tokRow->future===true, "F4 expiry is in the future");
@@ -233,8 +242,8 @@ foreach($seeded_pkeys as $pk){
 }
 // also catch the apptoken that was re-keyed to the new address
 $db->prepare_query("DELETE FROM apptokens WHERE email=$1 OR uuid=$2", array($emailA_new, "e2e-apptok-$rand"));
-$db->prepare_query("DELETE FROM users WHERE email LIKE $1", array("$PREFIX-%-$rand@example.com"));
-$residUsers = (int)$db->get_var_prepared("SELECT count(*) FROM users WHERE email LIKE $1", array("$PREFIX-%-$rand@example.com"));
+$db->prepare_query("DELETE FROM users WHERE email LIKE $1", array("$PREFIX-%-$rand@test.strabospot.org"));
+$residUsers = (int)$db->get_var_prepared("SELECT count(*) FROM users WHERE email LIKE $1", array("$PREFIX-%-$rand@test.strabospot.org"));
 $residReq   = (int)$db->get_var_prepared("SELECT count(*) FROM email_change_requests WHERE userpkey = ANY($1)", array("{".implode(",", $seeded_pkeys)."}"));
 ok($residUsers==0, "cleanup: no residual users");
 ok($residReq==0, "cleanup: no residual requests");

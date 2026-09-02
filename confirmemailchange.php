@@ -23,14 +23,7 @@
  * @link       https://strabospot.org
  */
 
-// Import PHPMailer classes
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
-use PHPMailer\PHPMailer\Exception;
-
-require 'includes/PHPMailer/PHPMailer/src/Exception.php';
-require 'includes/PHPMailer/PHPMailer/src/PHPMailer.php';
-require 'includes/PHPMailer/PHPMailer/src/SMTP.php';
+require_once 'includes/StraboMail.php';
 
 include_once "./includes/config.inc.php";
 include("db.php");
@@ -99,36 +92,19 @@ function processEmailChangeConfirmation(){
 	$db->prepare_query("UPDATE email_change_requests SET used_at=now() WHERE userpkey=$1 AND used_at IS NULL", array($userpkey));
 
 	// ---- Notify the OLD address (security safety net) -----------------------
-	$notify= "<html><body>
-				<h2>StraboSpot</h2>
-				The email address on your StraboSpot account was just changed to <strong>$newemail</strong>.<br><br>
-				If you made this change, no action is needed.<br><br>
-				If you did <strong>not</strong> request this change, please contact us immediately at strabospot@gmail.com.<br><br>
-				Thanks,<br><br>
-				The StraboSpot Team
-				<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
-				</body></html>";
-
+	$notify = StraboMail::render(array(
+		'title'    => 'Your StraboSpot email address was changed',
+		'greeting' => 'Hi there,',
+		'intro'    => array('The sign-in email address on your StraboSpot account was just changed.'),
+		'facts'    => array('New address' => $newemail, 'Changed' => date('F j, Y \\a\\t g:i a T')),
+		'after'    => array(
+			'If you made this change, no action is needed.',
+			'If you did NOT request this change, please contact us immediately at strabospot@gmail.com so we can secure your account.',
+		),
+		'footer'   => 'This notice was sent to the previous address on the account as a security safety net (https://strabospot.org).',
+	));
 	try {
-		$mail = new PHPMailer(true);
-		$mail->isSMTP();
-		$mail->SMTPDebug = 0;
-		$mail->Debugoutput = 'html';
-		$mail->Host = 'smtp.gmail.com';
-		$mail->SMTPAuth = true;
-		$mail->SMTPSecure= 'tls';
-		$mail->Port = 587;
-		$mail->Username = $straboemailaddress;
-		$mail->Password = $straboemailpassword;
-		$mail->From = $straboemailaddress;
-		$mail->FromName = 'StraboSpot';
-		$mail->addAddress($oldemail);
-		$mail->isHTML(true);
-		$mail->CharSet = 'UTF-8';
-		$mail->Encoding = 'base64';
-		$mail->Subject = 'Your StraboSpot Email Address Was Changed';
-		$mail->Body = $notify;
-		$mail->send();
+		StraboMail::send($oldemail, 'Your StraboSpot email address was changed', $notify);
 	} catch (Exception $e) {
 		// Notification is best-effort; the change itself has already succeeded.
 	}
