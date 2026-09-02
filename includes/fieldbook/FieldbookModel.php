@@ -332,6 +332,24 @@ class FieldbookModel
 		return $row;
 	}
 
+	/** Every orientation row of a dataset (or any spot list), children spots included, in book order. */
+	public static function collectOrientations(array $spots)
+	{
+		$out = array();
+		foreach ($spots as $s) {
+			foreach ($s['orientations'] as $o) $out[] = $o;
+			foreach ($s['images'] as $img) if (!empty($img['children'])) foreach (self::collectOrientations($img['children']) as $o) $out[] = $o;
+		}
+		return $out;
+	}
+
+	public static function datasetOrientations(array $ds)
+	{
+		$out = array();
+		foreach ($ds['days'] as $day) foreach (self::collectOrientations($day['spots']) as $o) $out[] = $o;
+		return $out;
+	}
+
 	/** [lon, lat] for any GeoJSON geometry (point itself; mean of vertices otherwise). */
 	public static function representativePoint($geom)
 	{

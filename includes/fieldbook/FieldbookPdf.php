@@ -148,6 +148,68 @@ class FieldbookPdf extends PDF_MemImage
 		return max(1, $nb);
 	}
 
+	// ------------------------------------------------------------ vector primitives (stereonets, M3)
+
+	/** Point in mm => PDF user-space string. */
+	private function vp($x, $y) { return sprintf('%.3F %.3F', $x * $this->k, ($this->h - $y) * $this->k); }
+
+	/** Stroke a circle (four Bezier arcs). */
+	public function vCircle($cx, $cy, $r, $op = 'S')
+	{
+		$k = 0.5522847498 * $r;
+		$out = $this->vp($cx + $r, $cy) . ' m';
+		$out .= ' ' . $this->vp($cx + $r, $cy - $k) . ' ' . $this->vp($cx + $k, $cy - $r) . ' ' . $this->vp($cx, $cy - $r) . ' c';
+		$out .= ' ' . $this->vp($cx - $k, $cy - $r) . ' ' . $this->vp($cx - $r, $cy - $k) . ' ' . $this->vp($cx - $r, $cy) . ' c';
+		$out .= ' ' . $this->vp($cx - $r, $cy + $k) . ' ' . $this->vp($cx - $k, $cy + $r) . ' ' . $this->vp($cx, $cy + $r) . ' c';
+		$out .= ' ' . $this->vp($cx + $k, $cy + $r) . ' ' . $this->vp($cx + $r, $cy + $k) . ' ' . $this->vp($cx + $r, $cy) . ' c';
+		$this->_out($out . ' ' . $op);
+	}
+
+	/** Stroke an open polyline through [[x, y], ...] mm. */
+	public function vPolyline(array $pts)
+	{
+		if (count($pts) < 2) return;
+		$out = $this->vp($pts[0][0], $pts[0][1]) . ' m';
+		for ($i = 1; $i < count($pts); $i++) $out .= ' ' . $this->vp($pts[$i][0], $pts[$i][1]) . ' l';
+		$this->_out($out . ' S');
+	}
+
+	/** Closed polygon: $op = 'S' stroke, 'f' fill, 'B' fill + stroke. */
+	public function vPolygon(array $pts, $op = 'B')
+	{
+		if (count($pts) < 3) return;
+		$out = $this->vp($pts[0][0], $pts[0][1]) . ' m';
+		for ($i = 1; $i < count($pts); $i++) $out .= ' ' . $this->vp($pts[$i][0], $pts[$i][1]) . ' l';
+		$this->_out($out . ' h ' . $op);
+	}
+
+	/**
+	 * Marker symbol centred on (cx, cy), $size = width mm. Shapes: circle, square, triangle, diamond,
+	 * tridown, pentagon, hexagon, star. Filled symbols use the current fill colour; open ones are white inside.
+	 */
+	public function vSymbol($shape, $cx, $cy, $size, $filled)
+	{
+		$r = $size / 2;
+		if (!$filled) $this->SetFillColor(255, 255, 255);
+		if ($shape === 'circle') { $this->vCircle($cx, $cy, $r, 'B'); return; }
+		$pts = array();
+		switch ($shape) {
+			case 'square': $pts = array(array($cx - $r, $cy - $r), array($cx + $r, $cy - $r), array($cx + $r, $cy + $r), array($cx - $r, $cy + $r)); break;
+			case 'triangle': $pts = array(array($cx, $cy - $r * 1.15), array($cx + $r * 1.1, $cy + $r * 0.75), array($cx - $r * 1.1, $cy + $r * 0.75)); break;
+			case 'tridown': $pts = array(array($cx, $cy + $r * 1.15), array($cx + $r * 1.1, $cy - $r * 0.75), array($cx - $r * 1.1, $cy - $r * 0.75)); break;
+			case 'diamond': $pts = array(array($cx, $cy - $r * 1.25), array($cx + $r * 1.05, $cy), array($cx, $cy + $r * 1.25), array($cx - $r * 1.05, $cy)); break;
+			case 'pentagon': case 'hexagon':
+				$n = $shape === 'pentagon' ? 5 : 6;
+				for ($i = 0; $i < $n; $i++) { $a = -M_PI / 2 + 2 * M_PI * $i / $n; $pts[] = array($cx + $r * 1.1 * cos($a), $cy + $r * 1.1 * sin($a)); }
+				break;
+			case 'star':
+				for ($i = 0; $i < 10; $i++) { $a = -M_PI / 2 + M_PI * $i / 5; $rr = ($i % 2 === 0) ? $r * 1.3 : $r * 0.55; $pts[] = array($cx + $rr * cos($a), $cy + $rr * sin($a)); }
+				break;
+			default: $this->vCircle($cx, $cy, $r, 'B'); return;
+		}
+		$this->vPolygon($pts, 'B');
+	}
+
 	// ------------------------------------------------------------ bookmarks (FPDF outline extension, 1.8 flavour)
 
 	public function Bookmark($txt, $level = 0, $y = -1, $front = false)
