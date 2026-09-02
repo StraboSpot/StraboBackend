@@ -42,6 +42,7 @@ require_once __DIR__ . '/../lib/ExportPlugin.php';
 require_once __DIR__ . '/../lib/export_config.php';
 require_once __DIR__ . '/../lib/ExportFinder.php';
 require_once __DIR__ . '/../lib/ExportGatherer.php';
+require_once __DIR__ . '/../../includes/fieldbook/Fieldbook.php';   // option validation for the fieldbook format
 
 class FieldExportPlugin implements ExportPlugin
 {
@@ -51,7 +52,8 @@ class FieldExportPlugin implements ExportPlugin
 		'kmz'       => 'kmlOut',
 		'xls'       => 'xlsOut',
 		'stereonet' => 'stereonetOut',
-		'fieldbook' => 'fieldbookOut',
+		'fieldbook' => 'fieldbookOut',          // enhanced fieldbook (docs/Fieldbook_Design.md)
+		'fieldbook_legacy' => 'legacyFieldbookOut',   // hidden: not in the builder's format list, exposable later (design D8)
 		'images'    => 'downloadImages',
 		'geojson'   => 'geoJSONOut',
 		'gpkg'      => 'gpkgOut',
@@ -93,8 +95,14 @@ class FieldExportPlugin implements ExportPlugin
 		if (!$formats && !$extras) throw new ExportJobError('Choose at least one output format.');
 		$layout = isset($recipe['layout']) ? (string)$recipe['layout'] : 'merged';
 		if (!in_array($layout, self::$layouts, true)) throw new ExportJobError("Unknown layout '$layout'.");
+		$fb = isset($recipe['fieldbook']) && is_array($recipe['fieldbook']) ? $recipe['fieldbook'] : array();
+		foreach ($fb as $k => $v) {
+			if (!isset(Fieldbook::$optionValues[$k])) throw new ExportJobError("Unknown fieldbook option '$k'.");
+			if (!in_array(strtolower(trim((string)$v)), Fieldbook::$optionValues[$k], true)) throw new ExportJobError("Unknown fieldbook $k '$v'.");
+		}
 		return array('formats' => $formats, 'extras' => $extras, 'layout' => $layout,
-			'sample_list_csv' => !empty($recipe['sample_list_csv']));
+			'sample_list_csv' => !empty($recipe['sample_list_csv']),
+			'fieldbook' => Fieldbook::options(array('fieldbook' => $fb)));
 	}
 
 	public function run(array $job, array $recipe, $bundleDir, $progress)
@@ -157,6 +165,8 @@ class FieldExportPlugin implements ExportPlugin
 				'userpkey'     => $firstOwner,
 				'scope_groups' => $scopeGroups,
 				'attribution'  => 1,
+				'book_tree'    => $g['members'],             // fieldbook: project / dataset sections + spot membership
+				'fieldbook'    => $outSpec['fieldbook'],     // fieldbook options (map, photos, nets, page)
 			);
 			$strabo = $this->strabo($firstOwner);
 			foreach ($outSpec['formats'] as $fmt) {
@@ -175,6 +185,7 @@ class FieldExportPlugin implements ExportPlugin
 				}
 				$out = new straboOutputClass($strabo, $get);
 				$out->captureDir = $g['dir'];
+				$out->progress = $progress;
 				$method = self::$formats[$fmt];
 				try {
 					ob_start();                       // generators echo stray text; keep the worker log clean
@@ -221,6 +232,10 @@ class FieldExportPlugin implements ExportPlugin
 		// ---- README lines
 		$readme[] = 'Layout: ' . $outSpec['layout'];
 		$readme[] = 'Formats: ' . implode(', ', $outSpec['formats']) . ($outSpec['extras'] ? '; extras: ' . implode(', ', $outSpec['extras']) : '');
+		if (in_array('fieldbook', $outSpec['formats'], true)) {
+			$fbo = $outSpec['fieldbook'];
+			$readme[] = 'Field book: map ' . $fbo['map'] . ', photos ' . $fbo['photos'] . ', stereonets ' . $fbo['nets'] . ', page ' . $fbo['page'];
+		}
 		$readme[] = 'Selection evaluated ' . ($found['used_index'] ? 'through the StraboSearch index (synced ' . $found['index_synced_at'] . ')' : 'directly from the project data');
 		if ($found['polygon']) $readme[] = 'Area filter: spots intersecting the drawn polygon' . ($dropped ? " ($dropped spots outside were left out)" : '');
 		if (in_array('sample_list', $outSpec['formats'], true)) {

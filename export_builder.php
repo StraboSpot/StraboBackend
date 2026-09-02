@@ -235,7 +235,7 @@ $ebFormats = array(
 	array('key' => 'kmz',         'label' => 'KMZ',                'hint' => 'Google Earth, icons per spot'),
 	array('key' => 'xls',         'label' => 'Excel workbook',     'hint' => 'one sheet per data type'),
 	array('key' => 'stereonet',   'label' => 'Stereonet file',     'hint' => 'orientation measurements only'),
-	array('key' => 'fieldbook',   'label' => 'Field book PDF',     'hint' => 'slow for large selections'),
+	array('key' => 'fieldbook',   'label' => 'Field book PDF',     'hint' => 'a presentable book: maps, stereonets, photos; slow for large selections'),
 	array('key' => 'images',      'label' => 'Images',             'hint' => 'original photos and sketches (largest)'),
 	array('key' => 'sample_list', 'label' => 'Sample list',        'hint' => 'StraboSamples workbook for the samples on these spots, with Micro / Experimental links'),
 );
@@ -289,6 +289,10 @@ body { overflow: visible; }
 .eb-group { padding: 0.5em 0.75em; font-size: 0.78em; text-transform: uppercase; letter-spacing: 0.06em; color: rgba(255,255,255,0.5); background: rgba(255,255,255,0.04); border-bottom: 1px solid rgba(255,255,255,0.08); }
 .eb-empty { padding: 1.5em; text-align: center; color: rgba(255,255,255,0.6); }
 .eb-hidden { display: none !important; }
+.eb-fbopts { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em 1.2em; margin: 0.3em 0 0.6em 1.5em; font-size: 0.85em; }
+.eb-fbopts-title { color: rgba(255,255,255,0.6); }
+.eb-fbopts label { display: inline-flex; align-items: center; gap: 0.4em; margin: 0; cursor: default; }
+.eb-fbopts select { width: auto; min-width: 7em; height: 2.2em; padding: 0 2.8em 0 0.6em; font-size: 0.95em; }
 .eb-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(17em, 1fr)); gap: 0.25em 1.5em; }
 .eb-opt { display: flex; flex-direction: column; padding: 0.25em 0; }
 .eb-opt label { cursor: pointer; margin: 0; }
@@ -377,6 +381,13 @@ body { overflow: visible; }
 			<div class="eb-opt eb-hidden" id="eb-csv-wrap" style="margin-left:1.5em;">
 				<input type="checkbox" id="eb-sample-csv">
 				<label for="eb-sample-csv">Also write the sample list as CSV</label>
+			</div>
+			<div class="eb-fbopts eb-hidden" id="eb-fb-wrap">
+				<span class="eb-fbopts-title">Field book options</span>
+				<label>Map <select id="eb-fb-map"><option value="outdoors">Outdoors</option><option value="satellite">Satellite</option><option value="geology">Geology (Macrostrat)</option><option value="none">None</option></select></label>
+				<label>Photos <select id="eb-fb-photos"><option value="sheets">Contact sheets</option><option value="full">Full width</option><option value="none">List only</option></select></label>
+				<label>Stereonets <select id="eb-fb-nets"><option value="on">On</option><option value="off">Off</option></select></label>
+				<label>Page <select id="eb-fb-page"><option value="letter">Letter</option><option value="a4">A4</option></select></label>
 			</div>
 
 			<div class="eb-block eb-hidden" id="eb-layout-block">

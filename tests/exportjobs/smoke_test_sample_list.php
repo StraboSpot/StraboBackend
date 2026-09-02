@@ -142,7 +142,7 @@ file_put_contents("$TMP/reimport.csv", $csv);
 $parsed = $tab->parseUpload("$TMP/reimport.csv", 'reimport.csv');
 check('re-import safety: context columns ignored, custom key kept', $parsed['ok'] && $parsed['custom_headers'] === array('lab_code') && count(array_intersect($ctxCols, $parsed['ignored_headers'])) === 4, json_encode(array($parsed['custom_headers'], $parsed['ignored_headers'])));
 
-check('validateOutput accepts sample_list alone + csv flag', FieldExportPlugin::validateOutput(array('formats' => array('sample_list'), 'sample_list_csv' => 1)) === array('formats' => array('sample_list'), 'extras' => array(), 'layout' => 'merged', 'sample_list_csv' => true));
+check('validateOutput accepts sample_list alone + csv flag', FieldExportPlugin::validateOutput(array('formats' => array('sample_list'), 'sample_list_csv' => 1)) === array('formats' => array('sample_list'), 'extras' => array(), 'layout' => 'merged', 'sample_list_csv' => true, 'fieldbook' => array('map' => 'outdoors', 'photos' => 'sheets', 'nets' => 'on', 'page' => 'letter')));   // fieldbook defaults since the enhanced fieldbook (docs/Fieldbook_Design.md)
 try { FieldExportPlugin::validateOutput(array('formats' => array('samples'))); check('validateOutput still rejects unknown formats', false); }
 catch (ExportJobError $e) { check('validateOutput still rejects unknown formats', strpos($e->getMessage(), 'Unknown format') !== false); }
 

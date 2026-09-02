@@ -166,8 +166,12 @@
 			layout: layoutEl ? layoutEl.value : 'merged',
 			extras: $('eb-extras-block').classList.contains('eb-hidden') ? [] : checkedValues('eb-extra'),
 			sample_list_csv: $('eb-sample-csv').checked,
+			fieldbook: fieldbookOptions(),
 			notes: $('eb-notes').value
 		};
+	}
+	function fieldbookOptions() {
+		return { map: $('eb-fb-map').value, photos: $('eb-fb-photos').value, nets: $('eb-fb-nets').value, page: $('eb-fb-page').value };
 	}
 	function summaryHint() {
 		var names = Object.keys(sel).map(function (k) { return byKey[k].name; });
@@ -191,6 +195,7 @@
 		if (!multi) $('eb-layout-merged').checked = true;
 		$('eb-extras-block').classList.toggle('eb-hidden', !anyWhole);
 		$('eb-csv-wrap').classList.toggle('eb-hidden', !$('eb-fmt-sample_list').checked);
+		$('eb-fb-wrap').classList.toggle('eb-hidden', !$('eb-fmt-fieldbook').checked);
 	}
 
 	// ---------------------------------------------------------------- live count
@@ -315,6 +320,10 @@
 			var lay = $('eb-layout-' + ({ merged: 'merged', split_project: 'project', split_dataset: 'dataset' }[init.layout] || 'merged'));
 			if (lay) lay.checked = true;
 			$('eb-sample-csv').checked = !!init.sample_list_csv;
+			Object.keys(init.fieldbook || {}).forEach(function (k) {
+				var sel = $('eb-fb-' + k);
+				if (sel && Array.prototype.some.call(sel.options, function (o) { return o.value === String(init.fieldbook[k]); })) sel.value = String(init.fieldbook[k]);
+			});
 			$('eb-children').checked = init.children !== 'none';
 			$('eb-notes').value = init.notes || '';
 			if (MODE !== 'search' && window.SSBuilder && init.criteria && init.criteria.length) window.SSBuilder.loadDsl({ criteria: init.criteria });
@@ -343,7 +352,7 @@
 	applyInitial();
 	$('eb-proj-search').addEventListener('input', function () { filterProjects(this.value); });
 	$('eb-select-none').addEventListener('click', clearSelection);
-	Array.prototype.forEach.call(document.querySelectorAll('.eb-fmt, .eb-extra, input[name="eb-layout"], #eb-sample-csv, #eb-children'), function (c) {
+	Array.prototype.forEach.call(document.querySelectorAll('.eb-fmt, .eb-extra, input[name="eb-layout"], #eb-sample-csv, #eb-children, #eb-fb-wrap select'), function (c) {
 		c.addEventListener('change', changed);
 	});
 	$('eb-build').addEventListener('click', build);
