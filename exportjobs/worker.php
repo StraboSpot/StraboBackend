@@ -11,7 +11,7 @@
  *   php exportjobs/worker.php --retention-only
  *
  *   Prod host crontab (install by hand, like the search heal):
- *   * * * * * sudo docker exec strabo-php php /srv/app/www/exportjobs/worker.php --sweep >> /var/log/strabo_exportjobs.log 2>&1
+ *   * * * * * sudo docker exec -u www-data strabo-php php /srv/app/www/exportjobs/worker.php --sweep >> /var/log/strabo_exportjobs.log 2>&1
  *
  * Guards before any claim: free disk above min_free_bytes (else the job is
  * marked "waiting for disk space" and left queued), running-with-fresh-
