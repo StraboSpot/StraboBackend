@@ -55,5 +55,6 @@ straboToolsImages/
 straboToolsImages
 searchthumbs
 # Export Builder job data: worker scratch + finished bundles + logs (design §6.6);
-# created by the code on first use, may be a mount point on prod
-exportjobs_data/
+# created by the code on first use; on prod it is a mount point or a symlink to
+# the 20 TB volume, so no trailing slash (a slash pattern ignores only real dirs)
+exportjobs_data
