@@ -173,27 +173,39 @@ include("includes/mheader.php");
 						</div>
 
 <?php
+// One row per invitation. The PG project mirror holds one row per user who has a
+// copy of a project (owner + every accepted collaborator) and Field project ids are
+// not unique across users, so joining project on strabo_project_id alone fanned each
+// invitation out N times (Jason on prod 2026-09-02: Cronese listed 4x, Santa
+// Catalina 2026 2x). The project name is resolved from the OWNER's mirror row.
 $collabquery = "
 select 	c.uuid,
 	c.strabo_project_id,
-	p.project_name,
+	(select p.project_name
+	   from project p
+	  where p.strabo_project_id = c.strabo_project_id
+	    and p.user_pkey = c.project_owner_user_pkey
+	  order by p.last_modified desc nulls last, p.project_pkey desc
+	  limit 1) as project_name,
 	c.collaboration_level,
 	u.firstname,
 	u.lastname,
 	u.email
 from
-	project p,
-	collaborators c,
-	users u
+	collaborators c
+	join users u on u.pkey = c.project_owner_user_pkey
 where
 	c.disabled IS FALSE and
-	p.strabo_project_id = c.strabo_project_id and
-	c.project_owner_user_pkey = u.pkey and
 	c.accepted = false and
-	c.collaborator_user_pkey = $userpkey
+	c.collaborator_user_pkey = $1 and
+	exists (select 1 from project p
+	         where p.strabo_project_id = c.strabo_project_id
+	           and p.user_pkey = c.project_owner_user_pkey)
+order by c.created_date, c.pkey
 ";
 
-$collabrows = $db->get_results($collabquery);
+$collabrows = $db->get_results_prepared($collabquery, array((int)$userpkey));
+if(!is_array($collabrows)) $collabrows = array();
 
 	if(count($collabrows) > 0){
 ?>
