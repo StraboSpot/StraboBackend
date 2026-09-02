@@ -187,6 +187,8 @@ class FieldbookModel
 			'meta' => array(), 'coords' => array(),
 			'orientations' => array(), 'orientationCount' => 0,
 			'samples' => array(), 'units' => array(), 'tags' => array(), 'images' => array(), 'families' => array(),
+			'geometry' => null,   // GeoJSON (assoc) for the maps: top-level located spots only
+			'point' => null,      // [lon, lat] representative point for markers
 		);
 		// day + sort key from the creation timestamp buried in the id (legacy rule), else the app date
 		$ut = null;
@@ -217,10 +219,12 @@ class FieldbookModel
 			$b['coords'][] = array('Location', 'In strat section ' . (string)$p['strat_section_id']);
 		} elseif ($geom && isset($geom->type)) {
 			$pt = self::representativePoint($geom);
-			if ($pt) {
+			if ($pt && abs($pt[0]) <= 180 && abs($pt[1]) <= 90) {
 				$label = strtolower($geom->type) === 'point' ? '' : ' (centroid)';
 				$b['coords'][] = array('Longitude' . $label, sprintf('%.5f', $pt[0]));
 				$b['coords'][] = array('Latitude' . $label, sprintf('%.5f', $pt[1]));
+				$b['point'] = $pt;
+				$b['geometry'] = json_decode(json_encode($geom), true);
 			}
 		}
 		foreach (array('altitude' => 'Altitude', 'gps_accuracy' => 'GPS accuracy', 'altitude_accuracy' => 'Altitude accuracy', 'spot_radius' => 'Spot radius') as $k => $lab) {

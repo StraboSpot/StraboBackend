@@ -19,6 +19,7 @@
 
 require_once __DIR__ . '/FieldbookPdf.php';
 require_once __DIR__ . '/FieldbookModel.php';
+require_once __DIR__ . '/FieldbookMaps.php';
 
 class FieldbookRenderer
 {
@@ -35,11 +36,13 @@ class FieldbookRenderer
 	private $spotsTotal = 0;
 	private $multiProject = false;
 	private $multiDataset = false;
+	private $maps = null;          // FieldbookMaps or null (map option "none")
 
-	public function __construct(FieldbookModel $m, $progress = null)
+	public function __construct(FieldbookModel $m, $progress = null, $maps = null)
 	{
 		$this->m = $m;
 		$this->progress = is_callable($progress) ? $progress : null;
+		$this->maps = ($maps instanceof FieldbookMaps && $maps->enabled()) ? $maps : null;
 	}
 
 	public function render()
@@ -66,10 +69,10 @@ class FieldbookRenderer
 
 		foreach ($m->projects as $p) {
 			$level = 0;
-			if ($this->multiProject) { $this->titlePage('Project', $p['name'], $this->projectFacts($p), 0); $level = 1; }
+			if ($this->multiProject) { $this->titlePage('Project', $p['name'], $this->projectFacts($p), 0, array($p)); $level = 1; }
 			foreach ($p['datasets'] as $ds) {
 				$dlevel = $level;
-				if ($this->multiDataset) { $this->titlePage('Dataset', $ds['name'], $this->datasetFacts($p, $ds), $level); $dlevel = $level + 1; }
+				if ($this->multiDataset) { $this->titlePage('Dataset', $ds['name'], $this->datasetFacts($p, $ds), $level, array(array('datasets' => array($ds)))); $dlevel = $level + 1; }
 				$pdf->sectionLabel = $this->multiDataset ? $ds['name'] : '';
 				foreach ($ds['days'] as $day) $this->daySection($p, $ds, $day, $dlevel);
 			}
@@ -102,7 +105,12 @@ class FieldbookRenderer
 		$pdf->Ln(6);
 		$facts = $this->bookFacts();
 		$this->kvBlock($facts, 46, 10, 5.6);
-		// HOOK M2: overview map goes here (design §6), between the facts and the colophon line.
+		// overview map between the facts and the colophon line (design §6)
+		$top = $pdf->GetY() + 6;
+		$avail = ($pdf->pageH() - 48) - $top;
+		if ($avail >= 45) {
+			$this->mapFigure($this->bookGeometry($m->projects), $pdf->lm(), $top, $pdf->innerW(), min($avail, $pdf->innerW() * 0.62), 768, false);
+		}
 		$pdf->SetY(-46);
 		$pdf->rule(190, 0.2);
 		$pdf->Ln(3);
@@ -163,7 +171,7 @@ class FieldbookRenderer
 
 	// ------------------------------------------------------------ title pages, days
 
-	private function titlePage($kind, $name, array $facts, $level)
+	private function titlePage($kind, $name, array $facts, $level, array $scope = array())
 	{
 		$pdf = $this->pdf;
 		$pdf->sectionLabel = $name;
@@ -181,7 +189,9 @@ class FieldbookRenderer
 		$pdf->rule(120, 0.4);
 		$pdf->Ln(5);
 		$this->kvBlock($facts, 40, 10, 5.6);
-		// HOOK M2: project / dataset overview map (design §4).
+		$top = $pdf->GetY() + 6;
+		$avail = ($pdf->pageH() - $pdf->bm()) - $top;
+		if ($avail >= 45) $this->mapFigure($this->bookGeometry($scope), $pdf->lm(), $top, $pdf->innerW(), min($avail, $pdf->innerW() * 0.62), 768, false);
 	}
 
 	private function daySection(array $p, array $ds, array $day, $level)
@@ -198,8 +208,7 @@ class FieldbookRenderer
 		$pdf->rule(60, 0.5);
 		$pdf->Ln(3);
 
-		// HOOK M2: day locator map (left) beside the numbered spot list (right).
-		$this->spotList($day['spots']);
+		$this->dayLocatorAndList($day['spots']);
 
 		foreach ($day['notes'] as $n) {
 			if (trim($n) === '') continue;
@@ -215,28 +224,96 @@ class FieldbookRenderer
 		}
 	}
 
-	/** Numbered list of the day's spots in two columns. */
-	private function spotList(array $spots)
+	/** Located top-level spots of a scope (projects array): points + shapes for the maps. */
+	private function bookGeometry(array $projects, $numbered = false)
+	{
+		$points = array(); $shapes = array();
+		foreach ($projects as $p) foreach ($p['datasets'] as $ds) foreach ($ds['days'] as $day) $this->collectGeometry($day['spots'], $points, $shapes, $numbered);
+		return array($points, $shapes);
+	}
+
+	private function collectGeometry(array $spots, array &$points, array &$shapes, $numbered)
+	{
+		foreach ($spots as $s) {
+			if (!$s['point']) continue;
+			$points[] = array($s['point'][0], $s['point'][1], $numbered ? (string)$s['n'] : '');
+			if ($s['geometry'] && isset($s['geometry']['type']) && strtolower($s['geometry']['type']) !== 'point') {
+				$shapes[] = array('type' => $s['geometry']['type'], 'coordinates' => $s['geometry']['coordinates']);
+			}
+		}
+	}
+
+	/**
+	 * Draw a map figure at (x, y) sized w x h mm: window pixels = $winW wide, aspect from w/h.
+	 * Returns the figure height used (0 when nothing drawn).
+	 */
+	private function mapFigure(array $geom, $x, $y, $w, $h, $winW, $optional)
+	{
+		if (!$this->maps) return 0;
+		list($points, $shapes) = $geom;
+		if (!$points && !$shapes) return 0;
+		$pdf = $this->pdf;
+		$winH = (int)round($winW * $h / $w);
+		$fig = $this->maps->render($points, $shapes, $winW, $winH, $optional);
+		if (!$fig) return 0;
+		$pdf->GDImage($fig['im'], $x, $y, $w, $h);
+		imagedestroy($fig['im']);
+		$pdf->SetDrawColor(150, 150, 150); $pdf->SetLineWidth(0.25);
+		$pdf->Rect($x, $y, $w, $h);
+		$pdf->SetXY($x, $y + $h + 0.8);
+		$pdf->SetFont($pdf->head, '', 6.5);
+		$pdf->SetTextColor(120, 120, 120);
+		$pdf->Cell($w, 3.2, $pdf->fit(($fig['fallback'] ? 'Basemap unavailable while building. ' : '') . $this->maps->attribution(), $w), 0, 1, 'R');
+		$pdf->SetTextColor(0, 0, 0);
+		return $h + 4;
+	}
+
+	/** Day section opener: locator map (left) with the numbered spot list beside it; list alone when no map. */
+	private function dayLocatorAndList(array $spots)
+	{
+		$pdf = $this->pdf;
+		$points = array(); $shapes = array();
+		$this->collectGeometry($spots, $points, $shapes, true);
+		$mapW = 78; $mapH = 60; $gap = 6;
+		if (!$this->maps || (!$points && !$shapes)) { $this->spotList($spots, 2); return; }
+		$pdf->need($mapH + 8);
+		$y0 = $pdf->GetY();
+		$used = $this->mapFigure(array($points, $shapes), $pdf->lm(), $y0, $mapW, $mapH, 512, true);
+		if ($used === 0) { $this->spotList($spots, 2); return; }
+		$pdf->SetXY($pdf->lm() + $mapW + $gap, $y0);
+		$listEnd = $this->spotList($spots, 1, $pdf->lm() + $mapW + $gap, $pdf->innerW() - $mapW - $gap);
+		$pdf->SetXY($pdf->lm(), max($y0 + $used, $listEnd) + 2);
+	}
+
+	/** Numbered list of the day's spots in $cols columns inside [$x, $x + $w]; returns the y after the list. */
+	private function spotList(array $spots, $cols = 2, $x = null, $w = null)
 	{
 		$pdf = $this->pdf;
 		$pdf->SetFont($pdf->body, '', 8.5);
-		$w = $pdf->innerW();
-		$half = ($w - 6) / 2;
+		if ($x === null) $x = $pdf->lm();
+		if ($w === null) $w = $pdf->innerW();
+		$colW = ($w - 6 * ($cols - 1)) / $cols;
 		$n = count($spots);
-		$rows = (int)ceil($n / 2);
+		$rows = (int)ceil($n / $cols);
 		$y0 = $pdf->GetY();
-		$colH = $rows * self::LHS;
-		if ($y0 + $colH > $pdf->pageH() - $pdf->bm()) { $pdf->AddPage(); $y0 = $pdf->GetY(); }
+		$bottom = $pdf->pageH() - $pdf->bm();
+		if ($cols > 1 && $y0 + $rows * self::LHS > $bottom) { $pdf->AddPage(); $y0 = $pdf->GetY(); }
+		$y = $y0; $maxY = $y0;
 		for ($i = 0; $i < $n; $i++) {
-			$col = $i < $rows ? 0 : 1;
-			$row = $col === 0 ? $i : $i - $rows;
-			$x = $pdf->lm() + $col * ($half + 6);
-			$pdf->SetXY($x, $y0 + $row * self::LHS);
+			$col = (int)floor($i / $rows);
+			$row = $i - $col * $rows;
+			$cy = $y0 + $row * self::LHS;
+			if ($cols === 1 && $cy + self::LHS > $bottom) {   // single column beside a map may overflow the page
+				$pdf->AddPage(); $y0 = $pdf->GetY() - $row * self::LHS; $cy = $pdf->GetY(); $bottom = $pdf->pageH() - $pdf->bm();
+			}
+			$pdf->SetXY($x + $col * ($colW + 6), $cy);
 			$s = $spots[$i];
 			$label = $s['n'] . '.  ' . $s['name'] . ($s['geomType'] !== '' ? ' (' . $s['geomType'] . ')' : '');
-			$pdf->Cell($half, self::LHS, $pdf->fit($label, $half), 0, 0, 'L');
+			$pdf->Cell($colW, self::LHS, $pdf->fit($label, $colW), 0, 0, 'L');
+			$maxY = max($maxY, $cy + self::LHS);
 		}
-		$pdf->SetXY($pdf->lm(), $y0 + $colH + 3);
+		$pdf->SetXY($pdf->lm(), $maxY + 3);
+		return $maxY;
 	}
 
 	// ------------------------------------------------------------ spot block
@@ -568,6 +645,7 @@ class FieldbookRenderer
 		$lines[] = 'Options: page ' . (isset($opts['page']) ? $opts['page'] : 'letter') . ', photos ' . (isset($opts['photos']) ? $opts['photos'] : 'sheets') . ', map ' . (isset($opts['map']) ? $opts['map'] : 'outdoors') . ', stereonets ' . (isset($opts['nets']) ? $opts['nets'] : 'on') . '.';
 		$lines[] = 'Spots are grouped by field day (creation date) and listed in creation order. Every observation stored with a spot is included; families without a designed layout appear under "Other observations".';
 		foreach ($m->notes as $n) $lines[] = $n;
+		if ($this->maps) foreach ($this->maps->notes() as $n) $lines[] = $n; else $lines[] = 'Maps: none (option).';
 		$lines[] = $this->citation();
 		$pdf->MultiCell($w, 4, implode("\n", $lines), 0, 'L');
 	}

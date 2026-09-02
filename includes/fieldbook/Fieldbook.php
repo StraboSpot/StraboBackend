@@ -16,6 +16,7 @@
 
 require_once __DIR__ . '/FieldbookModel.php';
 require_once __DIR__ . '/FieldbookRenderer.php';
+require_once __DIR__ . '/FieldbookMaps.php';
 
 class Fieldbook
 {
@@ -68,10 +69,29 @@ class Fieldbook
 		}
 		$meta = self::meta($strabo, $owner, $tree, $get);
 		$model = FieldbookModel::build($features, $tags, $notes, $tree, $meta);
-		$renderer = new FieldbookRenderer($model, isset($out->progress) ? $out->progress : null);
+		$renderer = new FieldbookRenderer($model, isset($out->progress) ? $out->progress : null, self::maps($meta['options']));
 		$pdf = $renderer->render();
 		if ($out->capturing()) { $out->capturePdf($pdf, $model->filename); }
 		else { $pdf->Output($model->filename, 'I'); }
+	}
+
+	/** TEST ONLY: config keys merged over the map builder config (stub tile server, cache dir, set). */
+	public static $mapsOverride = array();
+
+	/** Map figure builder for this book (design §6): tile proxy + cache + budget from export_config, set from the options. */
+	public static function maps(array $options, array $override = array())
+	{
+		$override = $override + self::$mapsOverride;
+		$cfg = array('set' => isset($options['map']) ? $options['map'] : 'outdoors');
+		if (function_exists('export_config')) {
+			$ec = export_config();
+			$cfg['tile_base'] = $ec['tile_base']; $cfg['cache_dir'] = $ec['tilecache_root'];
+			$cfg['budget'] = $ec['tile_budget']; $cfg['ttl_days'] = $ec['tile_ttl_days'];
+		} else {
+			require_once dirname(__DIR__, 2) . '/exportjobs/lib/export_config.php';
+			return self::maps($options, $override);
+		}
+		return new FieldbookMaps($override + $cfg);
 	}
 
 	/** Export Builder layout-group members => tree (design §5). */

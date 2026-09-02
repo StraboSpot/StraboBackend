@@ -105,6 +105,7 @@ $im = imagecreatetruecolor(64, 48); imagefilledrectangle($im, 0, 0, 63, 47, imag
 $neodb->query("MATCH (s:Spot {id: $S3, userpkey: $OWNER}) CREATE (i:Image {id: $IMG1, userpkey: $OWNER, image_type: 'photo', title: 'Outcrop overview', caption: 'Looking north', width: 64, height: 48, annotated: '1', filename: '$IMG1'}) CREATE (s)-[:HAS_IMAGE]->(i)");
 foreach (array($S1, $S2, $S3, $S4, $S5, $S6, $S7) as $sid) StraboSearchSync::touchSpot($db, $neodb, $sid, $OWNER);
 $strabo = new StraboSpot($neodb, $OWNER, $db); $strabo->setuuid(new UUID());
+Fieldbook::$mapsOverride = array('set' => 'none');   // no network in this suite; maps have their own (smoke_test_maps.php)
 
 function capture_run($strabo, $get, $method, $dir, $progress = null) {
 	rmrf($dir); mkdir($dir, 0775, true);
@@ -187,7 +188,7 @@ function run_job($svc, $recipe, $summary) {
 function fb_zip_list($job) { global $cfg; list(, $l) = ejt_sh('unzip -Z1 ' . escapeshellarg(rtrim($cfg['results_root'], '/') . '/' . $job['result_path'])); return array_filter(explode("\n", $l)); }
 function fb_zip_read($job, $member) { global $cfg; return shell_exec('unzip -p ' . escapeshellarg(rtrim($cfg['results_root'], '/') . '/' . $job['result_path']) . ' ' . escapeshellarg($member)); }
 $scope2 = array('projects' => array(array('id' => (string)$P1, 'owner' => $OWNER), array('id' => (string)$P2, 'owner' => $OWNER)));
-$j = run_job($svc, array('v' => 1, 'plugin' => 'field', 'scope' => $scope2, 'formats' => array('fieldbook', 'fieldbook_legacy'), 'layout' => 'merged', 'fieldbook' => array('page' => 'a4')), 'fieldbook merged');
+$j = run_job($svc, array('v' => 1, 'plugin' => 'field', 'scope' => $scope2, 'formats' => array('fieldbook', 'fieldbook_legacy'), 'layout' => 'merged', 'fieldbook' => array('page' => 'a4', 'map' => 'none')), 'fieldbook merged');
 check('merged job done', $j['status'] === 'done', $j['status'] . ' ' . $j['error_text']);
 $zl = fb_zip_list($j);
 $book = null; $legacy = null;
@@ -195,7 +196,7 @@ foreach ($zl as $mmb) { if (strpos($mmb, 'strabospot_fieldbook_') === 0) $book =
 check('merged zip: one book spanning both projects + the legacy PDF beside it', $book && $legacy, implode(',', $zl));
 $mb = $book ? fb_zip_read($j, $book) : '';
 check('merged book: A4, outline, project + dataset title pages (>= 8 pages)', strpos($mb, '/MediaBox [0 0 595.28 841.89]') !== false && strpos($mb, '/Outlines') !== false && pdf_pages($mb) >= 8, pdf_pages($mb));
-$j2 = run_job($svc, array('v' => 1, 'plugin' => 'field', 'scope' => $scope2, 'formats' => array('fieldbook'), 'layout' => 'split_dataset'), 'fieldbook split');
+$j2 = run_job($svc, array('v' => 1, 'plugin' => 'field', 'scope' => $scope2, 'formats' => array('fieldbook'), 'layout' => 'split_dataset', 'fieldbook' => array('map' => 'none')), 'fieldbook split');
 check('split_dataset job done', $j2['status'] === 'done', $j2['status'] . ' ' . $j2['error_text']);
 $zl2 = fb_zip_list($j2);
 $books = array_values(array_filter($zl2, function ($mmb) { return preg_match('#/datasets/[^/]+/[^/]+_fieldbook_\d{4}-\d{2}-\d{2}\.pdf$#', $mmb); }));

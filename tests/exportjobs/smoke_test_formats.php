@@ -34,6 +34,7 @@ require_once 'searchdb/sync/StraboSearchSync.php';
 require_once 'exportjobs/lib/export_config.php';
 require_once 'exportjobs/lib/ExportJobService.php';
 require_once 'exportjobs/plugins/FieldExportPlugin.php';
+require_once 'includes/fieldbook/Fieldbook.php';
 
 $OWNER = 94551;
 $P1 = 945511001; $P2 = 945511002;
@@ -164,6 +165,7 @@ $lp = legacy_bytes($strabo, $GET, 'legacyFieldbookOut');
 list($cap,) = capture_run($strabo, $GET, 'legacyFieldbookOut', "$TMP/cap_fb");
 check('legacy fieldbook parity: PDF bytes equal with dates stripped', $cap && substr($lp, 0, 4) === '%PDF' && pdf_norm(file_get_contents($cap[0]['path'])) === pdf_norm($lp), strlen($lp) . ' / ' . ($cap ? filesize($cap[0]['path']) : 'none'));
 check('legacy fieldbook can run twice in one process (require_once)', (function () use ($strabo, $GET, $TMP) { list($c,) = capture_run($strabo, $GET, 'legacyFieldbookOut', "$TMP/cap_fb2"); return (bool)$c; })());
+Fieldbook::$mapsOverride = array('set' => 'none');   // keep this suite off the network
 list($cap, $stray) = capture_run($strabo, $GET, 'fieldbookOut', "$TMP/cap_fbnew");
 check('enhanced fieldbook: PDF with outline captured under the dataset name, no stray output', $cap && strpos($cap[0]['name'], 'Alpha_Dataset_fieldbook_') === 0 && strpos(file_get_contents($cap[0]['path']), '/Outlines') !== false && $stray === '', $stray);
 // geojson
