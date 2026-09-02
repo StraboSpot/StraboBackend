@@ -54,3 +54,6 @@ microview/*
 straboToolsImages/
 straboToolsImages
 searchthumbs
+# Export Builder job data: worker scratch + finished bundles + logs (design §6.6);
+# created by the code on first use, may be a mount point on prod
+exportjobs_data/

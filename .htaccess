@@ -1,5 +1,7 @@
 php_value memory_limit 4086M
 RewriteEngine on
+# Export Builder job data (exportjobs_data/, gitignored): never served; exportjobs/download.php streams results
+RewriteRule ^exportjobs_data(/|$) - [F,L]
 RewriteRule ^validate/(.*)$ validateuser.php?hash=$1 [L]
 RewriteRule ^passwdreset/(.*)$ passwordreset.php?hash=$1 [L]
 RewriteRule ^changeemail/(.*)$ confirmemailchange.php?token=$1 [L]

@@ -1113,6 +1113,148 @@ SELECT json_build_object(
      * refetch); kept for future use, e.g. a viewport-limited mode if
      * project volumes ever outgrow the cap.
      */
+    // ═══════════════════════════════════════════════════════════════════
+    // Export Builder FIND stage (docs/ExportBuilder_Design.md §7.1)
+    // ═══════════════════════════════════════════════════════════════════
+
+    /**
+     * Item ids matching the DSL's NON-spatial criteria inside an explicit
+     * project/dataset scope, under the standard ACL. Field spots only.
+     * Spatial (U2) rows are skipped here on purpose: the index holds a
+     * centroid point per spot, so a polygon test on it cannot honor the
+     * export's "intersects" semantics for lines/polygons; the gather stage
+     * tests full geometries with GEOS instead. (The two COUNT twins below
+     * DO apply U2 on the centroid, because their job is to agree with the
+     * search results, not to decide what ships.)
+     *
+     * @param array $dsl    validated DSL (validate())
+     * @param array $scope  list of {project_id:string, owner:int, dataset_ids:string[]|null}
+     * @param int   $limit  hard cap; the caller treats == $limit rows as overflow
+     * @return array rows {item_id, project_id, project_userpkey, dataset_ids}
+     */
+    public function runItemIdsQuery($dsl, array $scope, $limit)
+    {
+        $this->resetParams();
+        $noSpatial = $dsl;
+        $noSpatial['criteria'] = array();
+        foreach ($dsl['criteria'] as $c) {
+            if ($c['id'] !== 'U2') $noSpatial['criteria'][] = $c;
+        }
+        list($where) = $this->itemWhere($noSpatial);
+
+        $scopeParts = array();
+        foreach ($scope as $sc) {
+            $part = "(ih.project_id = " . $this->bind((string)$sc['project_id'])
+                . " AND ih.project_userpkey = " . $this->bind((int)$sc['owner']) . "::int";
+            if (!empty($sc['dataset_ids'])) {
+                $part .= " AND ih.dataset_ids && " . $this->bind(self::pgArrayLiteral($sc['dataset_ids'])) . "::text[]";
+            }
+            $scopeParts[] = $part . ")";
+        }
+        if (!$scopeParts) return array();
+        $lim = $this->bind((int)$limit);
+
+        $sql = "SELECT ih.item_id, ih.project_id, ih.project_userpkey, ih.dataset_ids
+                  FROM strabosearch.item_hit ih
+                 WHERE ih.item_type = 'spot' AND ih.project_subsystem = 'field'
+                   AND (" . implode(" OR ", $scopeParts) . ")
+                   AND $where
+                 ORDER BY ih.project_id, ih.item_id
+                 LIMIT $lim";
+        $rows = $this->execPrepared($sql);
+        $out = array();
+        foreach ($rows as $r) {
+            $out[] = array(
+                'item_id'         => (string)$r->item_id,
+                'project_id'      => (string)$r->project_id,
+                'project_userpkey'=> (int)$r->project_userpkey,
+                'dataset_ids'     => $r->dataset_ids,
+            );
+        }
+        return $out;
+    }
+
+    /**
+     * COUNT twin of runItemIdsQuery for the Export Builder's live "N spots
+     * match" readout: same scope, same ACL, no row transfer. Unlike
+     * runItemIdsQuery this applies the FULL DSL, U2 included, exactly as
+     * the search results do (ST_Within on the indexed spot centroid), so
+     * the readout agrees with the search the user came from. The build
+     * still tests full geometries with GEOS, which is why the caller
+     * labels the number "about N" when an area filter is on (a line or
+     * polygon whose centroid is outside can still intersect the area).
+     * Alignment fix 2026-09-01: the polygon used to be skipped here, so a
+     * polygon-only recipe counted every spot in the scope.
+     *
+     * @param array $dsl    validated DSL (validate())
+     * @param array $scope  list of {project_id:string, owner:int, dataset_ids:string[]|null}
+     * @return int
+     */
+    public function runItemCountQuery($dsl, array $scope)
+    {
+        $this->resetParams();
+        list($where) = $this->itemWhere($dsl);
+
+        $scopeParts = array();
+        foreach ($scope as $sc) {
+            $part = "(ih.project_id = " . $this->bind((string)$sc['project_id'])
+                . " AND ih.project_userpkey = " . $this->bind((int)$sc['owner']) . "::int";
+            if (!empty($sc['dataset_ids'])) {
+                $part .= " AND ih.dataset_ids && " . $this->bind(self::pgArrayLiteral($sc['dataset_ids'])) . "::text[]";
+            }
+            $scopeParts[] = $part . ")";
+        }
+        if (!$scopeParts) return 0;
+
+        $sql = "SELECT count(*) AS c
+                  FROM strabosearch.item_hit ih
+                 WHERE ih.item_type = 'spot' AND ih.project_subsystem = 'field'
+                   AND (" . implode(" OR ", $scopeParts) . ")
+                   AND $where";
+        $rows = $this->execPrepared($sql);
+        return $rows ? (int)$rows[0]->c : 0;
+    }
+
+    /**
+     * Per-project twin of runItemCountQuery for the StraboSearch -> Export
+     * Builder door: which of the caller's candidate projects have at least
+     * one Field spot matching the FULL criteria, U2 included (centroid
+     * test, as the search results list). Same predicate as the search's
+     * c_spot per project, same ACL, one GROUP BY instead of N counts, so
+     * the door preselects exactly the Field projects whose search card
+     * shows "N spots matched". Alignment fix 2026-09-01 (Jason: a Nevada
+     * polygon listed 11 projects in search and 58 in the builder because
+     * the polygon was skipped here).
+     *
+     * @param array $dsl    validated DSL (validate())
+     * @param array $scope  list of {project_id:string, owner:int}
+     * @return array  "project_id|owner" => matching spot count (only projects with >= 1)
+     */
+    public function runItemProjectCountsQuery($dsl, array $scope)
+    {
+        $this->resetParams();
+        list($where) = $this->itemWhere($dsl);
+
+        $scopeParts = array();
+        foreach ($scope as $sc) {
+            $scopeParts[] = "(ih.project_id = " . $this->bind((string)$sc['project_id'])
+                . " AND ih.project_userpkey = " . $this->bind((int)$sc['owner']) . "::int)";
+        }
+        if (!$scopeParts) return array();
+
+        $sql = "SELECT ih.project_id, ih.project_userpkey, count(*) AS c
+                  FROM strabosearch.item_hit ih
+                 WHERE ih.item_type = 'spot' AND ih.project_subsystem = 'field'
+                   AND (" . implode(" OR ", $scopeParts) . ")
+                   AND $where
+                 GROUP BY ih.project_id, ih.project_userpkey";
+        $out = array();
+        foreach ((array)$this->execPrepared($sql) as $r) {
+            $out[(string)$r->project_id . '|' . (int)$r->project_userpkey] = (int)$r->c;
+        }
+        return $out;
+    }
+
     public function validateGeo($geo)
     {
         $out = array(
