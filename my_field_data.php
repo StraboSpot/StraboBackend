@@ -88,7 +88,7 @@ include("includes/mheader.php");
 		}else if(selected=="dev_sample_list"){
 			window.location='/searchdownload?type=dev_sample_list&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="fieldbookdev"){
-			window.location='/searchdownload?type=fieldbookdev&userpkey=<?php echo $userpkey?>&dsids='+id;
+			window.open('/searchdownload?type=fieldbookdev&userpkey=<?php echo $userpkey?>&dsids='+id);
 		}else if(selected=="shapefiledev"){
 			window.location='/chooseshapefile?type=shapefiledev&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="landing_page"){
@@ -406,6 +406,13 @@ if($datasetCreatedBy == $userpkey || $collaboration_level == "admin"){
 															<option value="xls">XLS</option>
 															<option value="stereonet">Stereonet Mobile</option>
 															<option value="fieldbook">Field Book</option>
+<?php
+if($userpkey==3){
+?>
+															<option value="fieldbookdev">Field Book (new, dev)</option>
+<?php
+}
+?>
 															<option value="strat_sections">Strat Section(s)</option>
 															<option value="download_images">Download Photos</option>
 															<option value="landing_page">Landing Page</option>
@@ -583,6 +590,13 @@ if($collabcount > 0){
 															<option value="xls">XLS</option>
 															<option value="stereonet">Stereonet Mobile</option>
 															<option value="fieldbook">Field Book</option>
+<?php
+if($userpkey==3){
+?>
+															<option value="fieldbookdev">Field Book (new, dev)</option>
+<?php
+}
+?>
 															<option value="strat_sections">Strat Section(s)</option>
 															<option value="download_images">Download Photos</option>
 															<option value="landing_page">Landing Page</option>
