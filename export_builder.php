@@ -150,13 +150,20 @@ function eb_from_search($db, $neodb, $userpkey, array $projects, $dsl)
 	$matched = array();
 	if ($fieldExcluded) {
 		$note[] = 'Your search left out StraboField, so no projects were preselected.';
-	} elseif ($validated !== null && count(array_filter($validated['criteria'], function ($c) { return $c['id'] !== 'U2'; })) > 0) {
+	} elseif ($validated !== null && $validated['criteria']) {
+		// Every surviving row, the area filter included: runItemProjectCountsQuery
+		// tests the indexed spot centroid exactly as the search results list
+		// does, so the preselection is the set of Field projects whose search
+		// card says "N spots matched". (Before 2026-09-01 the polygon was left
+		// out here and a polygon-only search preselected EVERY project.)
 		$hits = $candidates ? $qb->runItemProjectCountsQuery($validated, $candidates) : array();
 		foreach ($candidates as $c) if (isset($hits[$c['project_id'] . '|' . $c['owner']])) $matched[] = $c;
 	} else {
-		$matched = $candidates;      // no non-spatial filter: every project with spots qualifies (an area filter is applied at build time)
+		$matched = $candidates;      // no Field-applicable filter survived: every project with spots qualifies
 	}
 	$total = count($matched);
+	$nPublic = 0;                    // counted BEFORE the cap so the banner describes all $total matches
+	foreach ($matched as $m) foreach ($extra as $x) if ($x['id'] === $m['project_id'] && $x['owner'] === $m['owner']) { $nPublic++; break; }
 	if ($total > 50) { $matched = array_slice($matched, 0, 50); $note[] = "Only the first 50 of $total matching projects were preselected (the per-export limit)."; }
 
 	$scope = array('projects' => array(), 'datasets' => array());
@@ -168,8 +175,6 @@ function eb_from_search($db, $neodb, $userpkey, array $projects, $dsl)
 	}
 	if (!$fieldExcluded) {
 		$shown = implode(', ', array_slice($names, 0, 6)) . (count($names) > 6 ? ' and ' . (count($names) - 6) . ' more' : '');
-		$nPublic = 0;
-		foreach ($matched as $m) foreach ($extra as $x) if ($x['id'] === $m['project_id'] && $x['owner'] === $m['owner']) { $nPublic++; break; }
 		$nMine = $total - $nPublic;
 		$lead = $total === 0
 			? 'No StraboField project you can see has spots matching these filters. Pick projects below or loosen the filters.'

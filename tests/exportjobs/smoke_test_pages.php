@@ -211,6 +211,18 @@ $db->prepare_query("UPDATE strabosearch.item_hit SET project_ispublic = TRUE WHE
 list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U1', 'value' => 'Spot'))))));
 $eb = embedded($b, 'EXPORT_BUILDER'); $pub = null; foreach ($eb ? $eb['projects'] : array() as $pp) if ($pp['id'] === (string)$P2) $pub = $pp;
 check('search door: a PUBLIC stranger project in the result set joins the picker as access=public and is preselected', $c === 200 && $pub && $pub['access'] === 'public' && $pub['owner'] === $STRANGER && strpos($pub['owner_name'], 'Pgs') === 0 && count($pub['datasets']) === 1 && $pub['spots'] === 1 && in_array(array('id' => (string)$P2, 'owner' => $STRANGER), $eb['initial']['scope']['projects'], true) && in_array($mine, $eb['initial']['scope']['projects'], true) && preg_match('/\\(1 of yours, \\d+ public\\)/', $b) === 1, "$c " . json_encode($pub));
+$doorPoly = array('type' => 'Polygon', 'coordinates' => array(array(array(-118.30, 34.00), array(-118.20, 34.00), array(-118.20, 34.10), array(-118.30, 34.10), array(-118.30, 34.00))));
+list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U2', 'value' => $doorPoly))))));
+$eb = embedded($b, 'EXPORT_BUILDER'); $sc = $eb ? $eb['initial']['scope']['projects'] : null;
+check('search door (alignment, 09-01): polygon-only search preselects the owner project + the public stranger project (both have a spot inside)', $c === 200 && is_array($sc) && in_array($mine, $sc, true) && in_array(array('id' => (string)$P2, 'owner' => $STRANGER), $sc, true) && preg_match('/\\(1 of yours, 1 public\\)/', $b) === 1, "$c " . json_encode($sc));
+// Open South Pacific: membership-based because dev holds real public projects almost anywhere on land
+$farPoly = array('type' => 'Polygon', 'coordinates' => array(array(array(-140.0, -30.0), array(-139.0, -30.0), array(-139.0, -29.0), array(-140.0, -29.0), array(-140.0, -30.0))));
+list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U2', 'value' => $farPoly))))));
+$eb = embedded($b, 'EXPORT_BUILDER'); $sc = $eb ? $eb['initial']['scope']['projects'] : null; $ids = array_map(function ($pp) { return $pp['id']; }, $eb ? $eb['projects'] : array());
+check('search door (alignment, 09-01): a polygon elsewhere preselects neither the owner project nor the public stranger project (search would list neither)', $c === 200 && is_array($sc) && !in_array($mine, $sc, true) && !in_array((string)$P2, $ids, true), "$c " . json_encode($sc));
+list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U2', 'value' => $doorPoly), array('id' => 'U1', 'value' => 'Granite'))))));
+$eb = embedded($b, 'EXPORT_BUILDER'); $sc = $eb ? $eb['initial']['scope']['projects'] : null;
+check('search door (alignment, 09-01): polygon + keyword preselects only the owner project (the stranger spot is not named Granite)', $c === 200 && $sc === array($mine), "$c " . json_encode($sc));
 list($c, $b) = httpForm('/export_builder', $own, array('search_dsl' => json_encode($dslAll + array('criteria' => array(array('id' => 'U1', 'value' => 'Granite'))))));
 $eb = embedded($b, 'EXPORT_BUILDER'); $ids = array_map(function ($pp) { return $pp['id']; }, $eb ? $eb['projects'] : array());
 check('search door: a public project NOT in the result set is not offered', $c === 200 && !in_array((string)$P2, $ids, true), json_encode($ids));
@@ -250,7 +262,12 @@ list($c, $j) = api('count', $own, array('recipe' => array('scope' => $scopeP1, '
 check('count: keyword filter through the index = 1', $c === 200 && $j['count'] === 1 && $j['used_index'] === true, json_encode($j));
 $poly = array('type' => 'Polygon', 'coordinates' => array(array(array(-118.30, 34.00), array(-118.20, 34.00), array(-118.20, 34.10), array(-118.30, 34.10), array(-118.30, 34.00))));
 list($c, $j) = api('count', $own, array('recipe' => array('scope' => $scopeP1, 'criteria' => array(array('id' => 'U2', 'value' => $poly)))));
-check('count: area filter alone -> approximate (whole-scope number)', $c === 200 && $j['approximate'] === true && $j['count'] === 5, json_encode($j));
+check('count: area filter alone -> approximate, polygon applied to the indexed centroid like the search (3 of 5 inside)', $c === 200 && $j['approximate'] === true && $j['used_index'] === true && $j['count'] === 3, json_encode($j));
+$farPoly = array('type' => 'Polygon', 'coordinates' => array(array(array(-116.0, 36.0), array(-115.0, 36.0), array(-115.0, 37.0), array(-116.0, 37.0), array(-116.0, 36.0))));
+list($c, $j) = api('count', $own, array('recipe' => array('scope' => $scopeP1, 'criteria' => array(array('id' => 'U2', 'value' => $farPoly)))));
+check('count: area filter elsewhere -> 0 (was the whole scope before the 09-01 alignment fix)', $c === 200 && $j['approximate'] === true && $j['count'] === 0, json_encode($j));
+list($c, $j) = api('count', $own, array('recipe' => array('scope' => $scopeP1, 'criteria' => array(array('id' => 'U2', 'value' => $poly), array('id' => 'U1', 'value' => 'Granite')))));
+check('count: area + keyword -> 1 (both applied in one index query)', $c === 200 && $j['approximate'] === true && $j['count'] === 1, json_encode($j));
 list($c, $j) = api('count', $own, array('recipe' => array('scope' => array('projects' => array(array('id' => (string)$P2, 'owner' => $STRANGER))))));
 check('count: stranger project -> 400 access denied', $c === 400 && strpos($j['error'], 'do not have access') !== false, json_encode($j));
 list($c, $j) = api('count', $col, array('recipe' => array('scope' => $scopeP1)));

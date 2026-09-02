@@ -1123,7 +1123,9 @@ SELECT json_build_object(
      * Spatial (U2) rows are skipped here on purpose: the index holds a
      * centroid point per spot, so a polygon test on it cannot honor the
      * export's "intersects" semantics for lines/polygons; the gather stage
-     * tests full geometries with GEOS instead.
+     * tests full geometries with GEOS instead. (The two COUNT twins below
+     * DO apply U2 on the centroid, because their job is to agree with the
+     * search results, not to decide what ships.)
      *
      * @param array $dsl    validated DSL (validate())
      * @param array $scope  list of {project_id:string, owner:int, dataset_ids:string[]|null}
@@ -1174,9 +1176,15 @@ SELECT json_build_object(
 
     /**
      * COUNT twin of runItemIdsQuery for the Export Builder's live "N spots
-     * match" readout: same non-spatial predicate, same scope, same ACL, no
-     * row transfer. (U2 skipped for the same reason as runItemIdsQuery, so
-     * the caller labels the number "about N" when an area filter is on.)
+     * match" readout: same scope, same ACL, no row transfer. Unlike
+     * runItemIdsQuery this applies the FULL DSL, U2 included, exactly as
+     * the search results do (ST_Within on the indexed spot centroid), so
+     * the readout agrees with the search the user came from. The build
+     * still tests full geometries with GEOS, which is why the caller
+     * labels the number "about N" when an area filter is on (a line or
+     * polygon whose centroid is outside can still intersect the area).
+     * Alignment fix 2026-09-01: the polygon used to be skipped here, so a
+     * polygon-only recipe counted every spot in the scope.
      *
      * @param array $dsl    validated DSL (validate())
      * @param array $scope  list of {project_id:string, owner:int, dataset_ids:string[]|null}
@@ -1185,12 +1193,7 @@ SELECT json_build_object(
     public function runItemCountQuery($dsl, array $scope)
     {
         $this->resetParams();
-        $noSpatial = $dsl;
-        $noSpatial['criteria'] = array();
-        foreach ($dsl['criteria'] as $c) {
-            if ($c['id'] !== 'U2') $noSpatial['criteria'][] = $c;
-        }
-        list($where) = $this->itemWhere($noSpatial);
+        list($where) = $this->itemWhere($dsl);
 
         $scopeParts = array();
         foreach ($scope as $sc) {
@@ -1215,8 +1218,13 @@ SELECT json_build_object(
     /**
      * Per-project twin of runItemCountQuery for the StraboSearch -> Export
      * Builder door: which of the caller's candidate projects have at least
-     * one Field spot matching the (non-spatial) criteria. Same predicate,
-     * same ACL, one GROUP BY instead of N counts. U2 skipped as above.
+     * one Field spot matching the FULL criteria, U2 included (centroid
+     * test, as the search results list). Same predicate as the search's
+     * c_spot per project, same ACL, one GROUP BY instead of N counts, so
+     * the door preselects exactly the Field projects whose search card
+     * shows "N spots matched". Alignment fix 2026-09-01 (Jason: a Nevada
+     * polygon listed 11 projects in search and 58 in the builder because
+     * the polygon was skipped here).
      *
      * @param array $dsl    validated DSL (validate())
      * @param array $scope  list of {project_id:string, owner:int}
@@ -1225,12 +1233,7 @@ SELECT json_build_object(
     public function runItemProjectCountsQuery($dsl, array $scope)
     {
         $this->resetParams();
-        $noSpatial = $dsl;
-        $noSpatial['criteria'] = array();
-        foreach ($dsl['criteria'] as $c) {
-            if ($c['id'] !== 'U2') $noSpatial['criteria'][] = $c;
-        }
-        list($where) = $this->itemWhere($noSpatial);
+        list($where) = $this->itemWhere($dsl);
 
         $scopeParts = array();
         foreach ($scope as $sc) {

@@ -186,9 +186,11 @@ class ExportFinder
 
 	/**
 	 * Live count for the builder page ("N spots match"): the FIND number
-	 * without transferring ids. Approximate when an area filter is present
-	 * (the polygon is applied only at gather time) and, like find(), before
-	 * nested children are added.
+	 * without transferring ids. With an area filter the index answers the
+	 * way the search does (polygon against the spot centroid, so the number
+	 * matches the search the user came from) and is labeled approximate,
+	 * because the build tests full geometries with GEOS and adds nested
+	 * children afterwards.
 	 *
 	 * @return array {count:int, approximate:bool, used_index:bool, over_max:bool, max_items:int}
 	 */
@@ -197,7 +199,7 @@ class ExportFinder
 		$scope = $this->resolveScope($recipe);
 		$crit  = $this->resolveCriteria($recipe);
 		$n = 0; $used = false;
-		if (!$crit['has_nonspatial']) {
+		if (!$crit['has_nonspatial'] && $crit['polygon'] === null) {
 			foreach ($scope as $sc) {
 				$sc['dataset_ids'] = $this->datasetIds($sc);
 				$n += $this->countSpots($sc);

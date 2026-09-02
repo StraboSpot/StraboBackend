@@ -179,6 +179,12 @@ check('dropped: outside point + its child', $gr['dropped_spatial'] === 2, $gr['d
 $bbox = $fOwner->find(array('scope' => $scopeP1, 'criteria' => array(array('id' => 'U2', 'value' => array('bbox' => array(-118.30, 34.00, -118.20, 34.10))))));
 $gr2 = $g->gather($bbox['projects'][0], $bbox['polygon']);
 check('bbox value form gives the same result', ids($gr2['features']) === $exp);
+$cnt = $fOwner->count(array('scope' => $scopeP1, 'criteria' => array(array('id' => 'U2', 'value' => $POLY))));
+check('count (alignment, 09-01): polygon-only = 3 centroids inside via the index (S_IN_A, S_IN_B, S_DS2), approximate, not the 10-spot scope', $cnt['count'] === 3 && $cnt['approximate'] === true && $cnt['used_index'] === true, json_encode($cnt));
+$cnt = $fOwner->count(array('scope' => $scopeP1, 'criteria' => array(array('id' => 'U2', 'value' => $POLY), array('id' => 'U9', 'value' => array('orientation')))));
+check('count (alignment, 09-01): polygon + orientation = 2 (S_IN_A, S_DS2)', $cnt['count'] === 2 && $cnt['approximate'] === true, json_encode($cnt));
+$cnt = $fOwner->count(array('scope' => $scopeP1));
+check('count: no criteria stays on the graph fast path (10, exact)', $cnt['count'] === 10 && $cnt['approximate'] === false && $cnt['used_index'] === false, json_encode($cnt));
 
 // ------------------------------------------------------------------ G. polygon + non-spatial
 $r = $fOwner->find(array('scope' => $scopeP1, 'criteria' => array(array('id' => 'U2', 'value' => $POLY), array('id' => 'U9', 'value' => array('orientation')))));
