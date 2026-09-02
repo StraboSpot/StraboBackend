@@ -13,8 +13,9 @@
  *   Prod host crontab (install by hand, like the search heal):
  *   * * * * * sudo docker exec -u www-data strabo-php php /srv/app/www/exportjobs/worker.php --sweep >> /var/log/strabo_exportjobs.log 2>&1
  *
- * Guards before any claim: free disk above min_free_bytes (else the job is
- * marked "waiting for disk space" and left queued), running-with-fresh-
+ * Guards before any claim: free disk above min_free_bytes when that key is
+ * set (else the job is marked "waiting for disk space" and left queued;
+ * disabled by default, prod results live on a 20 TB volume), running-with-fresh-
  * heartbeat count below max_concurrent (else left queued for the sweeper).
  * Exit 0 = ok (including "nothing to do"), 2 = an error outside a job.
  *
@@ -114,6 +115,7 @@ foreach (array($cfg['results_root'], $cfg['work_root'], $cfg['log_root']) as $d)
 
 function ej_disk_ok(array $cfg)
 {
+	if ((int)$cfg['min_free_bytes'] <= 0) return true;      // guard disabled (default)
 	$free = @disk_free_space($cfg['results_root']);
 	return ($free === false) ? true : ($free >= (int)$cfg['min_free_bytes']);
 }

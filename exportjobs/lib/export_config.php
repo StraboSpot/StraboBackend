@@ -38,7 +38,7 @@ function export_config()
 		'work_root'            => $root . '/work',
 		'log_root'             => $root . '/log',
 		'max_concurrent'       => 2,              // running jobs with a fresh heartbeat
-		'min_free_bytes'       => 10737418240,    // 10 GB: refuse to START a build below this
+		'min_free_bytes'       => 0,              // free-disk floor to START a build; 0 = disabled (prod results live on a 20 TB volume, Jason 2026-09-02)
 		'disk_wait_seconds'    => 21600,          // 6 h queued-for-disk before the job fails
 		'user_cap_bytes'       => 2147483648,     // 2 GB live results per user; oldest expire first
 		'caps_userpkey'        => null,           // TEST ONLY: confine enforceUserCaps to one user (suite override)
