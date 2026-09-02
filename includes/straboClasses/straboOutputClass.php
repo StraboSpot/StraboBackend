@@ -12685,8 +12685,9 @@ class straboOutputClass
 
 	/**
 	 * Enhanced fieldbook (docs/Fieldbook_Design.md): one generator behind
-	 * both doors. The legacy download page reaches it as type=fieldbookdev
-	 * until the switch; the Export Builder "fieldbook" format uses it now.
+	 * both doors: the legacy download page as plain type=fieldbook (launched
+	 * 2026-09-02; the old generator stays as type=fieldbooklegacy) and the
+	 * Export Builder "fieldbook" format.
 	 * Data fetch is the legacy one (Fieldbook::run reuses getDatasetSpotsSearch
 	 * with the same $get, scope_groups included), so parity is by construction.
 	 */
