@@ -31,6 +31,7 @@ class FieldbookRenderer
 	const LH = 4.2;      // body line height (mm)
 	const LHS = 3.8;     // small line height
 	const TOC_LH = 5.0;
+	const VERSION = '2.0';   // printed in the colophon (the legacy generator is version 1); bump on layout changes users would notice
 
 	private $m;
 	private $pdf;
@@ -1064,7 +1065,7 @@ class FieldbookRenderer
 		$this->summaryHead('About this document');
 		$pdf->SetFont($pdf->body, '', 8.5);
 		$lines = array();
-		$lines[] = 'Generated ' . $m->meta['generated'] . ' by the StraboSpot fieldbook generator (enhanced fieldbook, M4).';
+		$lines[] = 'Generated ' . $m->meta['generated'] . ' by the StraboSpot fieldbook generator, version ' . self::VERSION . '.';
 		$opts = $m->meta['options'];
 		$lines[] = 'Options: page ' . (isset($opts['page']) ? $opts['page'] : 'letter') . ', photos ' . (isset($opts['photos']) ? $opts['photos'] : 'sheets') . ', map ' . (isset($opts['map']) ? $opts['map'] : 'outdoors') . ', stereonets ' . (isset($opts['nets']) ? $opts['nets'] : 'on') . '.';
 		$lines[] = 'Spots are grouped by field day (creation date) and listed in creation order. Every observation stored with a spot is included; families without a designed layout appear under "Other observations".';
