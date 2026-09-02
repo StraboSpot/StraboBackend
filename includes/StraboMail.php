@@ -35,13 +35,14 @@ class StraboMail
 
 	// Palette = the site theme (massets/css/main.css): dark #272833 / #1c1d26, accent #e44c65.
 	const C_DARK   = '#272833';
+	const C_BAR    = '#1c1d26';   // header bar (site body background)
 	const C_ACCENT = '#e44c65';
 	const C_TEXT   = '#2b2d3a';
 	const C_MUTED  = '#6f7286';
 	const C_PAGE   = '#eef0f4';
 	const C_RULE   = '#e1e3ea';
 
-	/** Absolute path of the inline logo (120 x 139 PNG, resampled from files/strabospot_pub_logo.png). */
+	/** Absolute path of the inline logo (128 x 128 PNG with rounded transparent corners, from includes/mimages/pic01.jpg; shown at 56 px). */
 	public static function logoPath()
 	{
 		return __DIR__ . '/images/email_logo.png';
@@ -77,7 +78,7 @@ class StraboMail
 
 		$e = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
 		$p = function ($s) use ($e) {
-			return '<p style="margin:0 0 14px 0;font-size:15px;line-height:1.55;color:' . self::C_TEXT . ';">' . self::linkify($e($s)) . '</p>';
+			return '<p class="sm-text" style="margin:0 0 14px 0;font-size:15px;line-height:1.55;color:' . self::C_TEXT . ';">' . self::linkify($e($s)) . '</p>';
 		};
 
 		// ---- plain text
@@ -102,32 +103,50 @@ class StraboMail
 
 		// ---- HTML (tables + inline styles: mail clients)
 		$h = array();
+		// The header bar is dark in BOTH schemes. Declaring color-scheme + supported-color-schemes
+		// stops Apple Mail / iOS Mail from auto-inverting the message in dark mode (which turned the
+		// dark bar light grey, Jason 2026-09-02 16:25); the prefers-color-scheme block supplies a real
+		// dark theme (site palette) for clients that honour it, so nothing gets inverted by guesswork.
 		$h[] = '<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">';
-		$h[] = '<title>' . $e($title) . '</title></head>';
-		$h[] = '<body style="margin:0;padding:0;background:' . self::C_PAGE . ';font-family:Helvetica,Arial,sans-serif;">';
-		$h[] = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:' . self::C_PAGE . ';"><tr><td align="center" style="padding:28px 12px;">';
-		$h[] = '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" style="width:600px;max-width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">';
-		// header bar
-		$h[] = '<tr><td style="background:' . self::C_DARK . ';padding:18px 28px;border-top:4px solid ' . self::C_ACCENT . ';">';
+		$h[] = '<meta name="color-scheme" content="light dark"><meta name="supported-color-schemes" content="light dark">';
+		$h[] = '<title>' . $e($title) . '</title>';
+		$h[] = '<style>';
+		$h[] = ':root{color-scheme:light dark;supported-color-schemes:light dark;}';
+		$h[] = '.sm-bar{background:' . self::C_BAR . '!important;} .sm-bar a{color:#ffffff!important;background:transparent!important;}';
+		$h[] = '@media (prefers-color-scheme:dark){';
+		$h[] = ' .sm-page{background:' . self::C_BAR . '!important;}';
+		$h[] = ' .sm-card{background:' . self::C_DARK . '!important;}';
+		$h[] = ' .sm-bar{background:#12131a!important;}';
+		$h[] = ' .sm-text,.sm-text p,.sm-h1,.sm-val{color:#e8e9ef!important;}';
+		$h[] = ' .sm-muted,.sm-lbl,.sm-foot{color:#a8abbd!important;}';
+		$h[] = ' .sm-rule,.sm-lbl,.sm-val{border-color:#3a3c4c!important;}';
+		$h[] = '}';
+		$h[] = '</style></head>';
+		$font = "'Roboto',Helvetica,Arial,sans-serif";
+		$h[] = '<body class="sm-page" style="margin:0;padding:0;background:' . self::C_PAGE . ';font-family:' . $font . ';">';
+		$h[] = '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" class="sm-page" style="background:' . self::C_PAGE . ';"><tr><td align="center" style="padding:28px 12px;">';
+		$h[] = '<table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0" class="sm-card" style="width:600px;max-width:100%;background:#ffffff;border-radius:8px;overflow:hidden;">';
+		// header bar: dark, rounded logo, white wordmark in the site header face (Roboto Light, letter-spaced)
+		$h[] = '<tr><td class="sm-bar" bgcolor="' . self::C_BAR . '" style="background:' . self::C_BAR . ';padding:16px 28px;border-top:4px solid ' . self::C_ACCENT . ';">';
 		$h[] = '<table role="presentation" cellpadding="0" cellspacing="0" border="0"><tr>';
-		$h[] = '<td style="vertical-align:middle;padding-right:14px;"><a href="' . $e($site) . '" style="text-decoration:none;"><img src="cid:' . self::LOGO_CID . '" width="48" height="56" alt="StraboSpot" style="display:block;border:0;width:48px;height:56px;"></a></td>';
-		$h[] = '<td style="vertical-align:middle;"><a href="' . $e($site) . '" style="text-decoration:none;color:#ffffff;font-size:22px;letter-spacing:2px;font-weight:300;">STRABOSPOT</a></td>';
+		$h[] = '<td style="vertical-align:middle;padding-right:16px;"><a href="' . $e($site) . '" style="text-decoration:none;"><img src="cid:' . self::LOGO_CID . '" width="56" height="56" alt="StraboSpot" style="display:block;border:0;width:56px;height:56px;border-radius:10px;"></a></td>';
+		$h[] = '<td style="vertical-align:middle;"><a href="' . $e($site) . '" style="text-decoration:none;color:#ffffff;font-family:' . $font . ';font-size:26px;letter-spacing:3px;font-weight:300;line-height:1;">STRABOSPOT</a></td>';
 		$h[] = '</tr></table></td></tr>';
 		// body
-		$h[] = '<tr><td style="padding:28px 28px 8px 28px;">';
-		$h[] = '<h1 style="margin:0 0 18px 0;font-size:22px;line-height:1.3;font-weight:400;color:' . self::C_DARK . ';">' . $e($title) . '</h1>';
+		$h[] = '<tr><td class="sm-text" style="padding:28px 28px 8px 28px;">';
+		$h[] = '<h1 class="sm-h1" style="margin:0 0 18px 0;font-size:22px;line-height:1.3;font-weight:400;color:' . self::C_DARK . ';">' . $e($title) . '</h1>';
 		if ($greeting !== '') $h[] = $p($greeting);
 		foreach ($intro as $s) $h[] = $p($s);
 		if ($facts) {
-			$h[] = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:6px 0 18px 0;border-top:1px solid ' . self::C_RULE . ';">';
+			$h[] = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="sm-rule" style="margin:6px 0 18px 0;border-top:1px solid ' . self::C_RULE . ';">';
 			foreach ($facts as $k => $v) {
 				if (is_array($v)) {
 					$val = isset($v[1]) && $v[1] !== '' ? '<a href="' . $e($v[1]) . '" style="color:' . self::C_ACCENT . ';">' . $e($v[0]) . '</a>' : $e($v[0]);
 				} else {
 					$val = self::linkify($e($v));
 				}
-				$h[] = '<tr><td style="padding:9px 12px 9px 0;font-size:13px;color:' . self::C_MUTED . ';white-space:nowrap;vertical-align:top;border-bottom:1px solid ' . self::C_RULE . ';">' . $e($k) . '</td>'
-					. '<td style="padding:9px 0;font-size:15px;color:' . self::C_TEXT . ';vertical-align:top;border-bottom:1px solid ' . self::C_RULE . ';">' . $val . '</td></tr>';
+				$h[] = '<tr><td class="sm-lbl" style="padding:9px 12px 9px 0;font-size:13px;color:' . self::C_MUTED . ';white-space:nowrap;vertical-align:top;border-bottom:1px solid ' . self::C_RULE . ';">' . $e($k) . '</td>'
+					. '<td class="sm-val" style="padding:9px 0;font-size:15px;color:' . self::C_TEXT . ';vertical-align:top;border-bottom:1px solid ' . self::C_RULE . ';">' . $val . '</td></tr>';
 			}
 			$h[] = '</table>';
 		}
@@ -135,15 +154,15 @@ class StraboMail
 			$h[] = '<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:4px 0 22px 0;"><tr><td style="background:' . self::C_ACCENT . ';border-radius:5px;">';
 			$h[] = '<a href="' . $e($button[1]) . '" style="display:inline-block;padding:12px 26px;font-size:14px;font-weight:600;letter-spacing:.5px;text-transform:uppercase;color:#ffffff;text-decoration:none;">' . $e($button[0]) . '</a>';
 			$h[] = '</td></tr></table>';
-			$h[] = '<p style="margin:-10px 0 18px 0;font-size:12px;line-height:1.5;color:' . self::C_MUTED . ';">Or open this link: <a href="' . $e($button[1]) . '" style="color:' . self::C_ACCENT . ';word-break:break-all;">' . $e($button[1]) . '</a></p>';
+			$h[] = '<p class="sm-muted" style="margin:-10px 0 18px 0;font-size:12px;line-height:1.5;color:' . self::C_MUTED . ';">Or open this link: <a href="' . $e($button[1]) . '" style="color:' . self::C_ACCENT . ';word-break:break-all;">' . $e($button[1]) . '</a></p>';
 		}
 		foreach ($after as $s) $h[] = $p($s);
 		if ($closing) {
-			$h[] = '<p style="margin:18px 0 0 0;font-size:15px;line-height:1.55;color:' . self::C_TEXT . ';">' . implode('<br>', array_map($e, $closing)) . '</p>';
+			$h[] = '<p class="sm-text" style="margin:18px 0 0 0;font-size:15px;line-height:1.55;color:' . self::C_TEXT . ';">' . implode('<br>', array_map($e, $closing)) . '</p>';
 		}
 		$h[] = '</td></tr>';
 		// footer
-		$h[] = '<tr><td style="padding:18px 28px 22px 28px;"><p style="margin:0;font-size:12px;line-height:1.5;color:' . self::C_MUTED . ';border-top:1px solid ' . self::C_RULE . ';padding-top:14px;">' . self::linkify($e($footer)) . '</p></td></tr>';
+		$h[] = '<tr><td style="padding:18px 28px 22px 28px;"><p class="sm-foot sm-rule" style="margin:0;font-size:12px;line-height:1.5;color:' . self::C_MUTED . ';border-top:1px solid ' . self::C_RULE . ';padding-top:14px;">' . self::linkify($e($footer)) . '</p></td></tr>';
 		$h[] = '</table></td></tr></table></body></html>';
 		$html = implode("\n", $h);
 

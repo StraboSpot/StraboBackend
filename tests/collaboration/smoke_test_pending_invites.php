@@ -185,7 +185,8 @@ check('template: inline logo (cid), accent button, link fact, linkified URL', st
 	&& strpos(StraboMail::render(array('title' => 't', 'footer' => 'See https://strabospot.org/my_exports.'))['html'], '<a href="https://strabospot.org/my_exports" style') !== false);
 check('template: plain text alternative carries the same content', strpos($r['text'], 'Project: <script>alert(1)</script>') !== false
 	&& strpos($r['text'], 'Go:' . "\n" . 'https://strabospot.org/my_field_data') !== false && strpos($r['text'], 'Link: My Exports (https://strabospot.org/my_exports)') !== false);
-check('logo asset present (120 px PNG)', is_file(StraboMail::logoPath()) && getimagesize(StraboMail::logoPath())[0] === 120);
+check('logo asset present (128 px square PNG with alpha corners)', is_file(StraboMail::logoPath()) && getimagesize(StraboMail::logoPath())[0] === 128 && getimagesize(StraboMail::logoPath())[1] === 128 && (imagecolorat(imagecreatefrompng(StraboMail::logoPath()), 0, 0) >> 24) > 100);
+check('template: color-scheme metas + dark theme block keep the header bar dark', strpos($r['html'], 'name="color-scheme" content="light dark"') !== false && strpos($r['html'], 'prefers-color-scheme:dark') !== false && strpos($r['html'], 'class="sm-bar" bgcolor="' . StraboMail::C_BAR . '"') !== false);
 check('fixture domain always files, never sends', StraboMail::transport('x@test.strabospot.org', array('transport' => 'smtp')) === 'file' && StraboMail::transport('x@example.org', array('transport' => 'none')) === 'none');
 $em = new ExportMailer($db, array_merge(export_config(), array('site_url' => 'https://dev.example', 'mail_transport' => 'none')));
 $c = $em->compose(array('status' => 'done', 'recipe_summary' => 'Mail me', 'item_count' => 5, 'child_count' => 0, 'result_bytes' => 2048, 'expires_at' => '2026-09-09 04:00:00+00', 'error_text' => null), (object)array('firstname' => 'Pio'));
