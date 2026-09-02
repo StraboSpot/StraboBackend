@@ -321,29 +321,33 @@
 		return row;
 	}
 
+	/** Human text for one DSL criterion entry, "NOT Keyword=Granite" (shared by
+	 *  summarizeDsl and the Export Builder's read-only filter chips). */
+	function criterionText(e) {
+		var c = byId[e.id];
+		var name = c ? c.label : e.id;
+		var v = e.value, s;
+		if (v === null || v === undefined) s = '';
+		else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') s = String(v);
+		else if (Array.isArray(v)) s = v.join(', ');
+		else if (v.bbox) s = 'bbox ' + v.bbox.map(function (n) { return Number(n).toFixed(1); }).join(',');
+		else if (v.type === 'Polygon' && Array.isArray(v.coordinates) && Array.isArray(v.coordinates[0]))
+			s = 'polygon (' + Math.max(v.coordinates[0].length - 1, 0) + ' vertices)';
+		else if (v.text !== undefined) s = v.text + (v.exact ? ' (exact)' : '');
+		else if (v.min !== undefined || v.max !== undefined)
+			s = (v.min !== undefined ? v.min : '…') + '–' + (v.max !== undefined ? v.max : '…');
+		else if (v.year !== undefined) s = String(v.year);
+		else s = [].concat(v.sample_type || [], v.sample_purpose || []).join(', ');
+		return (e.not ? 'NOT ' : '') + name + '=' + s;
+	}
+
 	/** One-line human summary of a DSL, for the saved-search list (§6.6.1). */
 	function summarizeDsl(dsl) {
 		var parts = [];
 		if (dsl.subsystems && dsl.subsystems.length && dsl.subsystems.length < 4) {
 			parts.push('subsystem=' + dsl.subsystems.join('/'));
 		}
-		(dsl.criteria || []).forEach(function (e) {
-			var c = byId[e.id];
-			var name = c ? c.label : e.id;
-			var v = e.value, s;
-			if (v === null || v === undefined) s = '';
-			else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') s = String(v);
-			else if (Array.isArray(v)) s = v.join(', ');
-			else if (v.bbox) s = 'bbox ' + v.bbox.map(function (n) { return Number(n).toFixed(1); }).join(',');
-			else if (v.type === 'Polygon' && Array.isArray(v.coordinates) && Array.isArray(v.coordinates[0]))
-				s = 'polygon (' + Math.max(v.coordinates[0].length - 1, 0) + ' vertices)';
-			else if (v.text !== undefined) s = v.text + (v.exact ? ' (exact)' : '');
-			else if (v.min !== undefined || v.max !== undefined)
-				s = (v.min !== undefined ? v.min : '…') + '–' + (v.max !== undefined ? v.max : '…');
-			else if (v.year !== undefined) s = String(v.year);
-			else s = [].concat(v.sample_type || [], v.sample_purpose || []).join(', ');
-			parts.push((e.not ? 'NOT ' : '') + name + '=' + s);
-		});
+		(dsl.criteria || []).forEach(function (e) { parts.push(criterionText(e)); });
 		return parts.join('; ') || '(no criteria)';
 	}
 
@@ -357,6 +361,7 @@
 		isActive: isActive,
 		rowToDsl: rowToDsl,
 		dslToRow: dslToRow,
+		criterionText: criterionText,
 		summarizeDsl: summarizeDsl
 	};
 

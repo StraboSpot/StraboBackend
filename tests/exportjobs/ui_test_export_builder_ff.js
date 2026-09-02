@@ -174,13 +174,37 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   const [door] = await Promise.all([ctx.waitForEvent('page'), page.click('#ssExportBtn')]);
   await door.waitForLoadState('load');
   await door.waitForSelector('.eb-proj');
-  check('Export… opens the builder in a new tab with the fixture project ticked and the U1 row loaded', /export_builder/.test(door.url()) && await door.isChecked('#eb-p-' + fx.project + '-' + fx.owner) && (await door.locator('.ss-value input[type="text"]').first().inputValue()) === 'Granite');
+  check('Export… opens the builder in a new tab with the fixture project ticked', /export_builder/.test(door.url()) && await door.isChecked('#eb-p-' + fx.project + '-' + fx.owner));
+  // Search-door mode (Jason 2026-09-02): only matched projects, all ticked; filters as read-only chips.
+  check('search-door mode: every listed project is a match, ticked up to the 50 cap (no "all of mine" library)', await door.evaluate(() => {
+    const rows = Array.from(document.querySelectorAll('.eb-proj .eb-pcb'));
+    const ticked = rows.filter((c) => c.checked).length;
+    return rows.length >= 1 && ticked === Math.min(rows.length, 50) && /Projects with spots matching your search/.test(document.querySelector('#eb-selection .eb-sub').textContent);
+  }), await door.evaluate(() => document.querySelectorAll('.eb-proj .eb-pcb').length + ' listed'));
+  check('search-door mode: filters shown as read-only chips, no criteria builder mounted', await door.evaluate(() => {
+    const chips = Array.from(document.querySelectorAll('#eb-criteria-summary .ss-chip')).map((c) => c.textContent);
+    return !document.getElementById('criteriaBuilder') && chips.length === 1 && chips[0] === 'Keyword=Granite' && /go back to StraboSearch/.test(document.querySelector('#eb-filters .eb-sub').textContent);
+  }), JSON.stringify(await door.evaluate(() => Array.from(document.querySelectorAll('#eb-criteria-summary .ss-chip')).map((c) => c.textContent))));
+  check('search-door mode: the recipe carries the search criteria verbatim', await door.evaluate(() => JSON.stringify(window.ExportBuilderPage.recipe().criteria)) === JSON.stringify([{ id: 'U1', value: 'Granite' }]));
+  if (SHOTS) await door.screenshot({ path: SHOTS + '/builder_search_door_mode.png', fullPage: true });
   check('builder banner reports the StraboSearch handoff with the fixture project named', /From StraboSearch/.test(await door.locator('#eb-from').textContent()) && /preselected/.test(await door.locator('#eb-from').textContent()) && /Pages Project/.test(await door.locator('#eb-from').textContent()));
   await door.waitForFunction(() => /^[\d,]+ spots? match/.test(document.getElementById('eb-count').textContent.replace(/\s+/g, ' ')), null, { timeout: 8000 });
   check('live count runs on the handed-off builder (fixture spot + any public dev matches)', true, (await door.locator('#eb-count').textContent()).trim());
   await door.close();
   await page.fill('.ss-value input[type="text"]', 'Granite Knob');
   check('editing the criteria disables Export… again (results invalidated)', (await page.getAttribute('#ssExportBtn', 'aria-disabled')) === 'true');
+  // Field-less results (Jason 2026-09-02): a shared-URL search restricted to Micro lands with zero
+  // StraboField projects, so Export… is HIDDEN (nothing it could export).
+  const enc = (o) => Buffer.from(JSON.stringify(o)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  await page.goto(BASE + '/strabosearch/?q=' + enc({ dsl: { subsystems: ['micro'], criteria: [{ id: 'U1', value: 'Granite' }] }, tab: 'projects', view: 'list' }), { waitUntil: 'load' });
+  await page.waitForSelector('#ssExportBtn', { state: 'attached' });
+  let hidden = false;
+  try { await page.waitForFunction(() => getComputedStyle(document.getElementById('ssExportBtn')).display === 'none', null, { timeout: 20000 }); hidden = true; } catch (e) { hidden = false; }
+  check('Micro-only search (zero StraboField projects): Export… is hidden once results land', hidden);
+  await page.goto(BASE + '/strabosearch/?q=' + enc({ dsl: { subsystems: ['field', 'micro', 'exp'], criteria: [{ id: 'U1', value: 'Granite' }] }, tab: 'projects', view: 'list' }), { waitUntil: 'load' });
+  await page.waitForSelector('.ss-card', { timeout: 15000 });
+  await page.waitForFunction(() => document.getElementById('ssExportBtn').getAttribute('aria-disabled') === 'false', null, { timeout: 15000 });
+  check('the same keyword across all subsystems: Export… visible and enabled again', await page.evaluate(() => getComputedStyle(document.getElementById('ssExportBtn')).display !== 'none'));
   check('no page errors overall', errors.length === 0, errors.join(' | '));
 
   await browser.close();
