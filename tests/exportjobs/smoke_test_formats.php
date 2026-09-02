@@ -158,11 +158,14 @@ check('xlsx parity: same sheets + bytes (docProps skipped)', $capX && zip_member
 $lt = legacy_bytes($strabo, $GET, 'stereonetOut');
 list($cap,) = capture_run($strabo, $GET, 'stereonetOut', "$TMP/cap_st");
 check('stereonet parity: exact text', $cap && file_get_contents($cap[0]['path']) === $lt && strlen($lt) > 10, strlen($lt));
-// fieldbook pdf
-$lp = legacy_bytes($strabo, $GET, 'fieldbookOut');
-list($cap,) = capture_run($strabo, $GET, 'fieldbookOut', "$TMP/cap_fb");
-check('fieldbook parity: PDF bytes equal with dates stripped', $cap && substr($lp, 0, 4) === '%PDF' && pdf_norm(file_get_contents($cap[0]['path'])) === pdf_norm($lp), strlen($lp) . ' / ' . ($cap ? filesize($cap[0]['path']) : 'none'));
-check('fieldbook can run twice in one process (require_once)', (function () use ($strabo, $GET, $TMP) { list($c,) = capture_run($strabo, $GET, 'fieldbookOut', "$TMP/cap_fb2"); return (bool)$c; })());
+// fieldbook pdf: the builder's "fieldbook" format is the ENHANCED book since 2026-09 (docs/Fieldbook_Design.md D8);
+// the legacy generator stays behind the hidden fieldbook_legacy format and keeps byte parity with its streaming path
+$lp = legacy_bytes($strabo, $GET, 'legacyFieldbookOut');
+list($cap,) = capture_run($strabo, $GET, 'legacyFieldbookOut', "$TMP/cap_fb");
+check('legacy fieldbook parity: PDF bytes equal with dates stripped', $cap && substr($lp, 0, 4) === '%PDF' && pdf_norm(file_get_contents($cap[0]['path'])) === pdf_norm($lp), strlen($lp) . ' / ' . ($cap ? filesize($cap[0]['path']) : 'none'));
+check('legacy fieldbook can run twice in one process (require_once)', (function () use ($strabo, $GET, $TMP) { list($c,) = capture_run($strabo, $GET, 'legacyFieldbookOut', "$TMP/cap_fb2"); return (bool)$c; })());
+list($cap, $stray) = capture_run($strabo, $GET, 'fieldbookOut', "$TMP/cap_fbnew");
+check('enhanced fieldbook: PDF with outline captured under the dataset name, no stray output', $cap && strpos($cap[0]['name'], 'Alpha_Dataset_fieldbook_') === 0 && strpos(file_get_contents($cap[0]['path']), '/Outlines') !== false && $stray === '', $stray);
 // geojson
 $lj = legacy_bytes($strabo, $GET, 'geoJSONOut');
 list($cap,) = capture_run($strabo, $GET, 'geoJSONOut', "$TMP/cap_gj");

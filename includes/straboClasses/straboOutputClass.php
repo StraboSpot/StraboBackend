@@ -52,6 +52,7 @@ class straboOutputClass
 	public $captureDir = null;
 	public $imagesMissing = 0;     // images skipped by the copiers because no file exists on disk
 	public $captured = array();
+	public $progress = null;       // optional callable(stage, done, total, note) set by the export worker (fieldbook page progress)
 
 	public function capturing(){ return $this->captureDir !== null; }
 
@@ -12682,120 +12683,20 @@ class straboOutputClass
 
 		}
 
-	public function devfieldbookOut(){
-
-			if($this->get['dsids']!=""){
-
-				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
-
-				$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
-
-				$dsname = $this->strabo->getDatasetName($dsids);
-
-				$dailynotes = $this->strabo->getDailyNotesFromDatasetID($dsids);
-
-				$spots = $json['features'];
-
-				//unix time 1567364734  10 digits
-				//id 15609769344266     14 digits
-
-				//get day for each spot
-
-				//create date array to loop over
-
-				if(count($spots)>0){
-
-					$spotdates = [];
-					$founddates = [];
-					foreach($spots as $spot){
-
-						if($spot['properties']['image_basemap'] == ""){
-
-							$ut = substr($spot['properties']['id'], 0 ,10);
-
-							$datestring = date("l, F j, Y", $ut);
-
-							if(!in_array($datestring, $founddates)){
-								$founddates[] = $datestring;
-								$showformat = date("l, F j, Y", $ut);
-								$lookformat = date("Y-m-d", $ut);
-								$thisobj = new stdClass();
-								$thisobj->showformat = $showformat;
-								$thisobj->lookformat = $lookformat;
-								$spotdates[] = $thisobj;
-							}
-
-						}
-
-					}
-
-					require_once('includes/PDF_LabBook.php');
-
-					$pdf = new PDF_MemImage('P','mm','Letter');
-
-					$pdf->AddFont('msjh','','msjh.ttf',true);
-
-					$pdf->AddPage();
-
-					if($dsname != ""){
-						$pdf->datasetTitle($dsname);
-					}
-
-					foreach($spotdates as $spotdate){
-
-						$showdate = trim($spotdate->showformat);
-						$pdf->dayTitle($showdate);
-
-						//look for daily notes (format in data is YYYY-MM-DD)
-						$lookdate = $spotdate->lookformat;
-
-						if($dailynotes!=""){
-							foreach($dailynotes as $dn){
-								$dndate = substr($dn->date,0,10);
-
-								if($dndate == $lookdate){
-									$pdf->dailyNotesRow("Daily Setup Notes",$dn->notes,10);
-								}
-							}
-						}
-
-						foreach($spots as $spot){
-
-							$rawspot = $spot;
-
-							$id = $spot['properties']['id'];
-
-							$ut = substr($id, 0 ,10);
-
-							$thisspotdate = date("l, F j, Y", $ut);
-
-							if($thisspotdate == $showdate && $spot['image_basemap'] == ""){
-
-								$this->devaddSpotToPDF($pdf, $spot, $spots, 5);
-
-							}else{ //end if date matches
-							}
-
-						}//end foreach spots
-
-					}// end foreach spotdates
-
-					$filedate = date("m_d_Y");
-					$pdfname="StraboSpot_Field_Book_$filedate.pdf";
-					$pdf->Output($pdfname,"I");
-
-				}else{
-
-					echo "No spots found for this search.";
-
-				}
-
-			} //end if dsids
-
-		}
-
+	/**
+	 * Enhanced fieldbook (docs/Fieldbook_Design.md): one generator behind
+	 * both doors. The legacy download page reaches it as type=fieldbookdev
+	 * until the switch; the Export Builder "fieldbook" format uses it now.
+	 * Data fetch is the legacy one (Fieldbook::run reuses getDatasetSpotsSearch
+	 * with the same $get, scope_groups included), so parity is by construction.
+	 */
 	public function fieldbookOut(){
+		require_once('includes/fieldbook/Fieldbook.php');
+		Fieldbook::run($this);
+	}
+
+	/** The pre-2026-09 fieldbook, kept permanently (design D8): type=fieldbooklegacy / builder format fieldbook_legacy. */
+	public function legacyFieldbookOut(){
 
 			if($this->get['dsids']!=""){
 
