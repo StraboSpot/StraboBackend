@@ -355,6 +355,25 @@ class FieldbookModel
 		return $out;
 	}
 
+	/** Every image id of a spot list, children spots included. */
+	public static function collectImageIds(array $spots)
+	{
+		$out = array();
+		foreach ($spots as $s) foreach ($s['images'] as $img) {
+			if ($img['id'] !== '') $out[] = (string)$img['id'];
+			if (!empty($img['children'])) foreach (self::collectImageIds($img['children']) as $id) $out[] = $id;
+		}
+		return $out;
+	}
+
+	/** Every image id of the book. */
+	public function imageIds()
+	{
+		$out = array();
+		foreach ($this->projects as $p) foreach ($p['datasets'] as $ds) foreach ($ds['days'] as $day) foreach (self::collectImageIds($day['spots']) as $id) $out[] = $id;
+		return array_values(array_unique($out));
+	}
+
 	public static function datasetOrientations(array $ds)
 	{
 		$out = array();

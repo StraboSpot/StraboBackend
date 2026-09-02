@@ -54,6 +54,11 @@ echo "Enhanced fieldbook M4 photos smoke suite\n";
 $ph = new FieldbookPhotos(array('mode' => 'sheets', 'image_dir' => "$TMP/img", 'cache_dir' => "$TMP/cache", 'ttl_days' => 90));
 check('enabled with GD and mode sheets', $ph->enabled());
 check('path: bare id, .jpg fallback, missing => null, unsafe id sanitised', $ph->path('1001') === "$TMP/img/1001" && $ph->path('1003') === "$TMP/img/1003.jpg" && $ph->path('9999') === null && $ph->path('../etc/passwd') === null);
+jpeg("$TMP/img/stored_name_abc.jpg", 400, 300);
+$phN = new FieldbookPhotos(array('mode' => 'sheets', 'image_dir' => "$TMP/img", 'filenames' => array('7001' => 'stored_name_abc.jpg', '1001' => 'not_there.jpg', '7002' => '../../etc/passwd')));
+check('path: the stored Image.filename wins (prod layout), a wrong stored name falls back to the bare id, traversal is stripped', $phN->path('7001') === "$TMP/img/stored_name_abc.jpg" && $phN->path('1001') === "$TMP/img/1001" && $phN->path('7002') === null);
+$phN->setFilenames(array('7003' => 'stored_name_abc.jpg'));
+check('setFilenames registers after construction', $phN->path('7003') === "$TMP/img/stored_name_abc.jpg" && $phN->thumb('7003') !== null);
 $t = $ph->thumb('1001');
 check('thumb: landscape 1600x1200 => longest side 640, aspect kept, jpeg bytes', $t && $t['w'] === 640 && $t['h'] === 480 && substr($t['data'], 0, 2) === "\xFF\xD8", $t ? "{$t['w']}x{$t['h']}" : 'null');
 $t2 = $ph->thumb('1002');
@@ -134,6 +139,8 @@ $b2 = FieldbookModel::spotBlock($f2, array());
 check('model: older child with pixels in geometry => pixel from geometry, image position line', $b2['pixel'] && $b2['pixel']['coordinates'][0] == 1500 && $b2['coords'][1][0] === 'Image position');
 $f3 = array('type' => 'Feature', 'geometry' => (object)array('type' => 'Point', 'coordinates' => array(-118.2, 34.1)), 'properties' => array('id' => '1721030400203', 'name' => 'top'));
 check('model: top-level spot has no pixel geometry', FieldbookModel::spotBlock($f3, array())['pixel'] === null);
+$fi = array('type' => 'Feature', 'geometry' => (object)array('type' => 'Point', 'coordinates' => array(-118.2, 34.1)), 'properties' => array('id' => '1721030400204', 'name' => 'imgs', 'images' => array(array('id' => 501, 'title' => 'a'), array('id' => 502, 'title' => 'b'))));
+check('model: collectImageIds walks the images', FieldbookModel::collectImageIds(array(FieldbookModel::spotBlock($fi, array()))) === array('501', '502'));
 
 // ------------------------------------------------------------------ 5. renderer integration (synthetic model)
 function feature($id, $name, array $extra = array()) {
