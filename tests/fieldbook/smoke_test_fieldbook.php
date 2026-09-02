@@ -168,7 +168,8 @@ check('new fieldbook renders twice in one process', (bool)$cap);
 try { capture_run($strabo, array('dsids' => (string)$DS_C, 'userpkey' => $OWNER, 'spot_ids' => array()), 'fieldbookOut', "$TMP/cap_empty"); check('empty selection in capture mode throws ExportNoDataException', false); }
 catch (ExportNoDataException $e) { ob_end_clean(); check('empty selection in capture mode throws ExportNoDataException', strpos($e->getMessage(), 'No spots') === 0, $e->getMessage()); }
 $route = file_get_contents('searchdownload.php');
-check('searchdownload routes: fieldbook -> legacy, fieldbookdev -> new, fieldbooklegacy -> legacy', preg_match('/"fieldbook"\)\{\s*\$straboOut->legacyFieldbookOut\(\)/', $route) && preg_match('/"fieldbookdev"\)\{\s*\$straboOut->fieldbookOut\(\)/', $route) && preg_match('/"fieldbooklegacy"\)\{\s*\$straboOut->legacyFieldbookOut\(\)/', $route));
+check('searchdownload routes (launched): fieldbook -> new, fieldbooklegacy -> legacy, no fieldbookdev case', preg_match('/"fieldbook"\)\{\s*\$straboOut->fieldbookOut\(\)/', $route) && preg_match('/"fieldbooklegacy"\)\{\s*\$straboOut->legacyFieldbookOut\(\)/', $route) && strpos($route, 'fieldbookdev') === false);
+check('no fieldbookdev UI gates remain (My Field Data, My Data, dataset detail)', strpos(file_get_contents('my_field_data.php'), 'fieldbookdev') === false && strpos(file_get_contents('my_data.php'), 'fieldbookdev') === false && strpos(file_get_contents('StraboFieldDatasetDetail/index.php'), 'fieldbookdev') === false && strpos(file_get_contents('StraboFieldDatasetDetail/js/downloads.js'), 'fieldbookdev') === false);
 check('devfieldbookOut removed', strpos(file_get_contents('includes/straboClasses/straboOutputClass.php'), 'function devfieldbookOut') === false);
 
 // ------------------------------------------------------------------ 3. options + builder

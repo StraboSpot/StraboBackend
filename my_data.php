@@ -216,8 +216,6 @@ input:checked + .slider:before {
 			window.location='/image_basemaps?dataset_id='+id;
 		}else if(selected=="sample_list"){
 			window.location='/searchdownload?type=sample_list&userpkey=<?php echo $userpkey?>&dsids='+id;
-		}else if(selected=="fieldbookdev"){
-			window.location='/searchdownload?type=fieldbookdev&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="shapefiledev"){
 			window.location='/chooseshapefile?type=shapefiledev&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="landing_page"){
@@ -773,7 +771,6 @@ if(count($projectrows)==0){
 						<?php
 						if($userpkey==3 || $userpkey == 9 || $userpkey == 3){
 						?>
-						<option value="fieldbookdev">Field Book Dev</option>
 						<option value="shapefiledev">Shapefile Dev</option>
 						<option value="xlsdev">XLS Dev</option>
 						<option value="image_basemaps">Image Basemaps</option>

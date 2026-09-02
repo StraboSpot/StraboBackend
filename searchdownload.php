@@ -34,9 +34,7 @@ if($type=="shapefile"){
 }elseif($type=="stereonet"){
 	$straboOut->stereonetOut();
 }elseif($type=="fieldbook"){
-	$straboOut->legacyFieldbookOut();   // switches to fieldbookOut() at the enhanced-fieldbook launch (docs/Fieldbook_Design.md §11)
-}elseif($type=="fieldbookdev"){
-	$straboOut->fieldbookOut();         // enhanced fieldbook, userpkey 3 door until launch
+	$straboOut->fieldbookOut();         // enhanced fieldbook (launched 2026-09-02, docs/Fieldbook_Design.md §11 step 5)
 }elseif($type=="fieldbooklegacy"){
 	$straboOut->legacyFieldbookOut();   // permanent, unlinked (design D8)
 }elseif($type=="shapefiledev"){

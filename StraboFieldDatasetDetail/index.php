@@ -123,9 +123,6 @@ endif;
 				<option value="xls">XLS</option>
 				<option value="stereonet">Stereonet Mobile</option>
 				<option value="fieldbook">Field Book</option>
-				<?php if ((int)$_SESSION['userpkey'] === 3): ?>
-				<option value="fieldbookdev">Field Book (new, dev)</option>
-				<?php endif; ?>
 				<option value="strat_sections">Strat Section(s)</option>
 				<option value="download_images">Download Photos</option>
 				<option value="sample_list">Sample List</option>
