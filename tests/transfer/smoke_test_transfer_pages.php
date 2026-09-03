@@ -131,7 +131,7 @@ $svc = new ProjectTransfer($db, $neodb);
 section('1. dropdown gate');
 list($code, $body) = http('GET', '/my_field_data.php', $own);
 check('owner page renders, clean', $code === 200 && clean($body) && strpos($body, 'Pages Fixture Project') !== false, "$code");
-check('transfer entry hidden for a normal owner (soft launch, userpkey 3 only)', strpos($body, 'Transfer to Other Account') === false);
+check('transfer entry shown to a normal owner (full launch 2026-09-03) + the JS case', strpos($body, '<option value="transfer">Transfer to Other Account</option>') !== false && strpos($body, "case \"transfer\":") !== false);
 check('no transfer blocks when nothing is pending', strpos($body, 'transfers-incoming') === false && strpos($body, 'transfers-outgoing') === false);
 $adminEmail = $db->get_var_prepared("SELECT email FROM users WHERE pkey = 3", array());
 if ($adminEmail) {
@@ -139,9 +139,7 @@ if ($adminEmail) {
 	list($code, $body) = http('GET', '/my_field_data.php', $adm);
 	check('userpkey 3 sees the "Transfer to Other Account" entry + the JS case', $code === 200 && strpos($body, '<option value="transfer">Transfer to Other Account</option>') !== false && strpos($body, "case \"transfer\":") !== false, "$code");
 }
-$pilot = forge($OWNER, ProjectTransfer::PILOT_EMAILS[0]);
-list($code, $body) = http('GET', '/my_field_data.php', $pilot);
-check('a pilot-list email (session username) sees the entry too', $code === 200 && strpos($body, '<option value="transfer">Transfer to Other Account</option>') !== false, "$code");
+check('canInitiate() is unconditionally true', ProjectTransfer::canInitiate(99999, 'nobody@example.org') === true);
 
 // ---------------------------------------------------------------- 2. owner form
 section('2. owner form');
