@@ -328,6 +328,23 @@ class CollaborationAuth {
      * @return array ['allowed' => bool, 'reason' => string|null]
      */
     public function canUploadProjectAsOwner(string $projectId, int $userpkey): array {
+        // Project transfer tombstone (docs/ProjectTransfer_Design.md D4): the
+        // old owner's devices still hold a full copy of a transferred project
+        // and would recreate it under the old account on the next sync,
+        // leaving two accounts with the same project id. Refuse with the
+        // transfer date so the user knows to delete the local copy.
+        require_once(__DIR__ . '/../../includes/transfer/ProjectTransfer.php');
+        $gone = ProjectTransfer::transferredAway($this->db, $projectId, $userpkey);
+        if ($gone) {
+            $when = $gone->completed_date ?: $gone->created_date;
+            $when = $when ? date('F j, Y', strtotime($when)) : 'an earlier date';
+            return [
+                'allowed' => false,
+                'reason' => "This project was transferred to another StraboSpot account on $when. "
+                          . "Delete it from this device; it now belongs to the receiving account."
+            ];
+        }
+
         // Check if user has EVER been a collaborator on this project ID
         // This includes: active, halted, disabled, accepted, or not accepted
         $wasCollaborator = $this->db->get_var_prepared(

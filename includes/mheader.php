@@ -238,6 +238,7 @@ if($_SESSION['userpkey']=="3"){
 ?>
 									<li><a href="/microErrorReports">Micro Error Reports</a></li>
 									<li><a href="/admin_merge_prefs">Project Merge Prefs</a></li>
+									<li><a href="/admin_transfers">Project Transfers</a></li>
 <?php
 }
 ?>
