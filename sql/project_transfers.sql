@@ -11,8 +11,11 @@
 --
 --              A reversal performed from admin_transfers.php inserts a NEW row
 --              with kind = 'reversal' and the parties swapped, and stamps
---              reversed_date on the original, so the tombstone then protects
---              the reversed direction.
+--              reversed_date + tombstone_cleared_date on the original, so the
+--              tombstone then protects the reversed direction. Any completed
+--              transfer clears older tombstones whose from_user_pkey is the
+--              new owner (they hold the project again, so their devices are
+--              current).
 --
 -- Apply (dev or prod), idempotent / safe to re-run:
 --   cat sql/project_transfers.sql | docker exec -i strabo-postgres \
@@ -42,8 +45,9 @@ CREATE TABLE IF NOT EXISTS project_transfers (
     expires_date         TIMESTAMPTZ NOT NULL,
     decided_date         TIMESTAMPTZ,                            -- accept / decline / cancel / expire
     completed_date       TIMESTAMPTZ,                            -- every step done
-    reversed_date        TIMESTAMPTZ,
+    reversed_date        TIMESTAMPTZ,                            -- an admin reversal was applied to this row
     reversed_by_pkey     INTEGER,
+    tombstone_cleared_date TIMESTAMPTZ,                          -- the old owner holds the project again (reversal or a later transfer back)
     requested_by_pkey    INTEGER,                                -- initiator (owner, or admin for reversals)
     decided_by_pkey      INTEGER,                                -- who accepted / declined / cancelled
     summary              JSONB                                   -- before/after counts, step log, error, reason
@@ -57,10 +61,16 @@ CREATE UNIQUE INDEX IF NOT EXISTS project_transfers_one_pending
 -- Tombstone lookup on the upload path.
 CREATE INDEX IF NOT EXISTS project_transfers_tombstone
     ON project_transfers (strabo_project_id, from_user_pkey)
-    WHERE applied AND reversed_date IS NULL;
+    WHERE applied AND tombstone_cleared_date IS NULL;
 
 -- My Field Data listings.
 CREATE INDEX IF NOT EXISTS project_transfers_to_user
     ON project_transfers (to_user_pkey, status);
 CREATE INDEX IF NOT EXISTS project_transfers_from_user
     ON project_transfers (from_user_pkey, status);
+
+-- The web app connects as strabodbuser; the DDL runs as postgres.
+-- (GRANT is idempotent, so this is safe to re-run.)
+GRANT ALL PRIVILEGES ON TABLE project_transfers TO strabodbuser;
+GRANT USAGE, SELECT, UPDATE ON SEQUENCE project_transfers_pkey_seq TO strabodbuser;
+GRANT SELECT ON TABLE project_transfers TO readonly;
