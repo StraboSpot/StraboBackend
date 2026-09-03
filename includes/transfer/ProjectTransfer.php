@@ -65,17 +65,15 @@ class ProjectTransfer
 	const CHANGE_TYPE = 'ownership_transfer';
 
 	/**
-	 * D6 soft launch: who sees "Transfer to Other Account" on My Field Data.
-	 * userpkey 3 always; these signed-in emails too (Jason's test accounts,
-	 * so a project can go back and forth). Full launch = make
-	 * canInitiate() return true and drop the list.
+	 * Who sees "Transfer to Other Account" on My Field Data. FULL LAUNCH
+	 * 2026-09-03 (Jason, after the prod round trip): every owner. The D6
+	 * soft-launch gate (userpkey 3 + a pilot email list) lived here; the
+	 * single call site in my_field_data.php is kept so a gate can return
+	 * without touching the page.
 	 */
-	const PILOT_EMAILS = array('jasonash1@gmail.com');
-
 	public static function canInitiate($userpkey, $sessionEmail)
 	{
-		if ((int)$userpkey === 3) return true;
-		return in_array(strtolower(trim((string)$sessionEmail)), self::PILOT_EMAILS, true);
+		return true;
 	}
 
 	private $db;
