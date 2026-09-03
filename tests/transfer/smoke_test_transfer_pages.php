@@ -139,6 +139,9 @@ if ($adminEmail) {
 	list($code, $body) = http('GET', '/my_field_data.php', $adm);
 	check('userpkey 3 sees the "Transfer to Other Account" entry + the JS case', $code === 200 && strpos($body, '<option value="transfer">Transfer to Other Account</option>') !== false && strpos($body, "case \"transfer\":") !== false, "$code");
 }
+$pilot = forge($OWNER, ProjectTransfer::PILOT_EMAILS[0]);
+list($code, $body) = http('GET', '/my_field_data.php', $pilot);
+check('a pilot-list email (session username) sees the entry too', $code === 200 && strpos($body, '<option value="transfer">Transfer to Other Account</option>') !== false, "$code");
 
 // ---------------------------------------------------------------- 2. owner form
 section('2. owner form');
@@ -202,6 +205,15 @@ list($code, $body) = http('GET', "/transfer_respond?t={$pending->uuid}", $rec);
 check('recipient sees facts: owner, project, counts, keep note, expiry, Accept + Decline', $code === 200 && clean($body) && strpos($body, 'tp-details') !== false
 	&& strpos($body, '<strong>Olga Pages</strong> (' . $emails[$OWNER] . ')') !== false && preg_match('/<strong>Spots<\/strong> 2</', $body) && preg_match('/<strong>Photos<\/strong> 1</', $body)
 	&& strpos($body, 'Olga stays on the project as an admin collaborator') !== false && strpos($body, 'id="tp-accept"') !== false && strpos($body, 'id="tp-decline"') !== false, substr($body, 0, 200));
+check('recipient page carries the hidden progress card (5 steps) + the accept handler + status polling URL', strpos($body, 'id="tp-progress"') !== false && substr_count($body, '<li data-step="') === 5
+	&& strpos($body, 'onsubmit="return tpAccept()"') !== false && strpos($body, "/transfer_status?t=") !== false && strpos($body, 'Checking the project') !== false);
+list($code, $body, $loc) = http('GET', "/transfer_status?t={$pending->uuid}", null);
+check('status endpoint: anonymous redirected to login', $code === 302 && strpos($loc, '/login.php') !== false, "$code $loc");
+list($code, $body) = http('GET', "/transfer_status?t={$pending->uuid}", $thd);
+check('status endpoint: third party gets found:false', $code === 200 && json_decode($body, true) === array('found' => false), $body);
+list($code, $body) = http('GET', "/transfer_status?t={$pending->uuid}", $rec);
+$st = json_decode($body, true);
+check('status endpoint: recipient gets pending, step 0 of 5, five labels, no failed step', $code === 200 && is_array($st) && $st['found'] === true && $st['status'] === 'pending' && $st['step'] === 0 && $st['steps'] === 5 && count($st['labels']) === 5 && $st['failed_step'] === null && $st['applied'] === false, $body);
 $mark = $mailLen();
 list($code, $body) = http('POST', '/transfer_respond', $thd, array('t' => $pending->uuid, 'action' => 'decline'));
 check('third party cannot decline', strpos($body, 'tp-notfound') !== false && $svc->getByUuid($pending->uuid)->status === 'pending' && $mailSince($mark) === '');
@@ -249,6 +261,13 @@ $done = $svc->getByUuid($pending3->uuid);
 check("recipient accepts: outcome page ({$dt}s), row accepted", strpos($body, 'tp-outcome') !== false && strpos($body, 'The project is now yours') !== false && $done->status === 'accepted' && clean($body), substr($body, 0, 300));
 $v = $svc->verify($done);
 check('verify(): clean after the page-driven transfer', $v['clean'] === true, json_encode($v));
+$sum = $svc->summaryOf($done);
+check('summary carries per-step timings (7) + the anchored edge rewrite count', isset($sum['timings']) && count(array_intersect_key($sum['timings'], array_flip(array('eligibility', 'preflight', 'neo4j', 'postgres', 'mirror', 'search', 'recount')))) === 7 && isset($sum['edges_rewritten']), json_encode($sum));
+list($code, $body) = http('GET', "/transfer_status?t={$pending3->uuid}", $rec);
+$st = json_decode($body, true);
+check('status endpoint after the accept: accepted, step 5, applied', is_array($st) && $st['status'] === 'accepted' && $st['step'] === 5 && $st['applied'] === true, $body);
+list($code, $body) = http('GET', "/transfer_status?t={$pending3->uuid}", $own);
+check('status endpoint: the old owner may read it too', is_array(json_decode($body, true)) && json_decode($body, true)['found'] === true, $body);
 $mail = $mailSince($mark);
 check('accepted mails: one to each party', substr_count($mail, "To: {$emails[$RECIP]}") === 1 && substr_count($mail, "To: {$emails[$OWNER]}") === 1, substr($mail, 0, 300));
 check('recipient mail: subject + device instruction + collaborator note', strpos($mail, 'Subject: Transfer complete: you now own "Pages Fixture Project"') !== false && strpos($mail, 'download the project from the server') !== false && strpos($mail, 'Olga stays on as an admin collaborator') !== false, substr($mail, 0, 1500));

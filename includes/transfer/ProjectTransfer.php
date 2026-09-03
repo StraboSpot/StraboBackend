@@ -53,7 +53,30 @@ class ProjectTransfer
 	const STEP_SEARCH    = 5;
 	const STEP_DONE      = 5;
 
+	/** What each step is doing, for the progress list the pages poll (transfer_status.php). */
+	const STEP_LABELS = array(
+		self::STEP_PREFLIGHT => 'Checking the project',
+		self::STEP_NEO       => 'Moving datasets, spots and photos',
+		self::STEP_PG        => 'Moving collaborators, versions and samples',
+		self::STEP_MIRROR    => 'Refreshing project keywords',
+		self::STEP_SEARCH    => 'Updating the search index',
+	);
+
 	const CHANGE_TYPE = 'ownership_transfer';
+
+	/**
+	 * D6 soft launch: who sees "Transfer to Other Account" on My Field Data.
+	 * userpkey 3 always; these signed-in emails too (Jason's test accounts,
+	 * so a project can go back and forth). Full launch = make
+	 * canInitiate() return true and drop the list.
+	 */
+	const PILOT_EMAILS = array('jasonash1@gmail.com');
+
+	public static function canInitiate($userpkey, $sessionEmail)
+	{
+		if ((int)$userpkey === 3) return true;
+		return in_array(strtolower(trim((string)$sessionEmail)), self::PILOT_EMAILS, true);
+	}
 
 	private $db;
 	private $neodb;
@@ -496,6 +519,14 @@ class ProjectTransfer
 		$summary = $this->summaryOf($row);
 		$step = (int)$row->step;
 		unset($summary['error'], $summary['failed_step']);
+		// Wall-clock per step (ms), shown on the admin detail panel.
+		if (!isset($summary['timings']) || !is_array($summary['timings'])) $summary['timings'] = array();
+		$t0 = microtime(true);
+		$lap = function ($name) use (&$summary, &$t0) {
+			$now = microtime(true);
+			$summary['timings'][$name] = (int)round(($now - $t0) * 1000);
+			$t0 = $now;
+		};
 
 		try {
 			$this->lockKey("project:$pid:$from");
@@ -506,7 +537,9 @@ class ProjectTransfer
 				// acceptance lands here too): the world may have changed.
 				$elig = $this->checkEligibility($pid, $from, $to, array('skip_pending' => true));
 				if (!$elig['ok']) throw new \RuntimeException($elig['reason']);
+				$lap('eligibility');
 				$this->stepPreflight($row, $pid, $from, $to, $summary);
+				$lap('preflight');
 				$step = self::STEP_PREFLIGHT;
 				$this->saveProgress($row->pkey, $step, $summary);
 			}
@@ -516,24 +549,29 @@ class ProjectTransfer
 				// From here the old owner's copy is no longer clean: tombstone on.
 				$this->pq("UPDATE project_transfers SET applied = TRUE WHERE pkey = $1", array((int)$row->pkey));
 				$this->stepNeo($pid, $from, $to, $nids, $summary);
+				$lap('neo4j');
 				$step = self::STEP_NEO;
 				$this->saveProgress($row->pkey, $step, $summary);
 			}
 			if ($step < self::STEP_PG) {
 				$this->stepPg($row, $pid, $from, $to, $keep, $nids, (int)$actorPkey, $summary);
+				$lap('postgres');
 				$step = self::STEP_PG;
 				// saved inside the transaction
 			}
 			if ($step < self::STEP_MIRROR) {
 				$this->stepMirror($pid, $to, $summary);
+				$lap('mirror');
 				$step = self::STEP_MIRROR;
 				$this->saveProgress($row->pkey, $step, $summary);
 			}
 			if ($step < self::STEP_SEARCH) {
 				$this->stepSearch($pid, $from, $to, $summary);
+				$lap('search');
 				$step = self::STEP_SEARCH;
 			}
 			$summary['after'] = $this->verifyCounts($pid, $from, $to, $nids, isset($summary['sample_ids']) ? $summary['sample_ids'] : array());
+			$lap('recount');
 			$this->pq("UPDATE project_transfers SET status = 'accepted', step = $2, completed_date = now(), summary = $3::jsonb WHERE pkey = $1",
 				array((int)$row->pkey, self::STEP_DONE, json_encode($summary)));
 			// The new owner holds the project again: any tombstone that was
@@ -615,8 +653,11 @@ class ProjectTransfer
 			SET p.userpkey = $to
 		");
 		// Edge properties carry the owner too (deleteProject matches on them).
-		$this->neo("MATCH ()-[r:IS_TAGGED {projectid: $lit, userpkey: $from}]->() SET r.userpkey = $to");
-		$this->neo("MATCH ()-[r:IS_RELATED_TO {projectid: $lit, userpkey: $from}]->() SET r.userpkey = $to");
+		// Anchored on the subtree: Neo4j 3 has no relationship-property
+		// index, and an unanchored `()-[r:IS_TAGGED {..}]->()` walks every
+		// tag edge in the graph (~1.5 s per query on a prod-sized store).
+		$rec = $this->neoRecord(self::projectEdgeMatch($list, $lit, $from) . " SET r.userpkey = $to RETURN count(r) AS n");
+		$summary['edges_rewritten'] = $rec ? (int)$rec->value('n') : 0;
 		// Ownership edge: drop every HAS_PROJECT into these nodes that is not
 		// from the new owner, then make sure the new owner's exists.
 		$this->neo("MATCH (u:User)-[r:HAS_PROJECT]->(p:Project) WHERE id(p) IN [$list] AND u.userpkey <> $to DELETE r");
@@ -915,10 +956,8 @@ class ProjectTransfer
 			}
 			$lit = self::idLit($pid);
 			$stores['neo4j_edge_props'] = array(
-				'from' => (int)$this->neodb->get_var("MATCH ()-[r:IS_TAGGED {projectid: $lit, userpkey: $from}]->() RETURN count(r)")
-				        + (int)$this->neodb->get_var("MATCH ()-[r:IS_RELATED_TO {projectid: $lit, userpkey: $from}]->() RETURN count(r)"),
-				'to'   => (int)$this->neodb->get_var("MATCH ()-[r:IS_TAGGED {projectid: $lit, userpkey: $to}]->() RETURN count(r)")
-				        + (int)$this->neodb->get_var("MATCH ()-[r:IS_RELATED_TO {projectid: $lit, userpkey: $to}]->() RETURN count(r)"),
+				'from' => (int)$this->neodb->get_var(self::projectEdgeMatch($list, $lit, $from) . " RETURN count(r)"),
+				'to'   => (int)$this->neodb->get_var(self::projectEdgeMatch($list, $lit, $to) . " RETURN count(r)"),
 			);
 		}
 		$cnt = function ($sql, $params) { return (int)$this->db->get_var_prepared($sql, $params); };
@@ -1009,6 +1048,24 @@ class ProjectTransfer
 		$this->pq("UPDATE project_transfers SET step = $2, summary = $3::jsonb WHERE pkey = $1", array((int)$pkey, (int)$step, json_encode($summary)));
 	}
 
+	/**
+	 * Progress of a row for the polling pages: status, last completed step,
+	 * the failed step if any, and the step labels in order.
+	 */
+	public function progressOf($row)
+	{
+		$summary = $this->summaryOf($row);
+		return array(
+			'found'       => true,
+			'status'      => (string)$row->status,
+			'step'        => (int)$row->step,
+			'steps'       => self::STEP_DONE,
+			'failed_step' => isset($summary['failed_step']) ? (int)$summary['failed_step'] : null,
+			'applied'     => ($row->applied === 't' || $row->applied === true),
+			'labels'      => array_values(self::STEP_LABELS),
+		);
+	}
+
 	public function summaryOf($row)
 	{
 		$s = isset($row->summary) && $row->summary !== null && $row->summary !== '' ? json_decode($row->summary, true) : array();
@@ -1068,6 +1125,32 @@ class ProjectTransfer
 	}
 
 	/** Numeric Strabo ids are LONGs in Neo4j: never quote them (see neoIdLiteral in searchdb). */
+	/**
+	 * Cypher prefix binding `r` = every DISTINCT IS_TAGGED / IS_RELATED_TO
+	 * edge of this project stamped with $upk, reached from the project
+	 * nodes rather than by a graph-wide edge scan. IS_TAGGED edges always
+	 * end at a Tag node and every Tag hangs off its Project; IS_RELATED_TO
+	 * joins spots, tags, orientations and samples, all of which are the
+	 * project's direct children or a spot's direct children. Append
+	 * `SET ...` / `RETURN count(r)`.
+	 */
+	private static function projectEdgeMatch($list, $lit, $upk)
+	{
+		return "
+			MATCH (p:Project) WHERE id(p) IN [$list]
+			OPTIONAL MATCH (p)-->(k) WHERE NOT k:Dataset AND NOT k:User AND NOT k:Project
+			WITH collect(DISTINCT k) AS ks
+			MATCH (p2:Project) WHERE id(p2) IN [$list]
+			OPTIONAL MATCH (p2)-[:HAS_DATASET]->(:Dataset)-[:HAS_SPOT]->(s:Spot)
+			OPTIONAL MATCH (s)-[*0..1]->(c) WHERE NOT c:Dataset AND NOT c:Project AND NOT c:User
+			WITH ks + collect(DISTINCT c) AS ns
+			UNWIND ns AS a
+			MATCH (a)-[r:IS_TAGGED|IS_RELATED_TO]-()
+			WHERE r.projectid = $lit AND r.userpkey = " . (int)$upk . "
+			WITH DISTINCT r
+		";
+	}
+
 	public static function idLit($id)
 	{
 		if (ctype_digit((string)$id)) return (string)$id;

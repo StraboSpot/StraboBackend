@@ -186,6 +186,12 @@ list($code, $body) = http('GET', "/admin_transfers?sel={$failed->pkey}", $adm);
 check('detail: error text, "failed at step 2", Retry from step 2, Verify link, no Reverse', hasId($body, 'at-error') && strpos($body, 'injected failure before the Neo4j rewrite') !== false
 	&& strpos($body, '1 of 5 completed (data rewrite started), failed at step 2') !== false && hasId($body, 'at-retry') && strpos($body, 'Retry from step 2') !== false && hasId($body, 'at-verify') && !hasId($body, 'at-reverse'), substr($body, 0, 200));
 check('detail: tombstone flagged, keep no, moved counts from the summary', strpos($body, 'tombstone active for the old owner') !== false && strpos($body, '<td>Keep old owner as admin</td><td>no</td>') !== false && strpos($body, '1 project node') !== false && strpos($body, 'collaborator row') === false);
+check('detail: Retry form wired to the progress card + status polling by pkey', hasId($body, 'at-progress') && strpos($body, "atWork(") !== false && strpos($body, "/transfer_status?pkey={$failed->pkey}") !== false && substr_count($body, '<li data-step="') === 5);
+list($code, $body) = http('GET', "/transfer_status?pkey={$failed->pkey}", $adm);
+$st = json_decode($body, true);
+check('status endpoint by pkey (admin): failed at step 2, step 1 done, applied', is_array($st) && $st['found'] === true && $st['status'] === 'failed' && $st['step'] === 1 && $st['failed_step'] === 2 && $st['applied'] === true, $body);
+list($code, $body) = http('GET', "/transfer_status?pkey={$failed->pkey}", $thd);
+check('status endpoint by pkey: non-admin gets found:false', json_decode($body, true) === array('found' => false), $body);
 list($code, $body) = http('GET', "/admin_transfers?sel={$failed->pkey}&verify=1", $adm);
 check('Verify on the failed row: recount table, NOT CLEAN verdict, Neo4j + PG rows red (old owner still holds everything)', hasId($body, 'at-verify-result') && hasId($body, 'at-verify-verdict') && strpos($body, 'NOT CLEAN') !== false
 	&& preg_match('/<tr class="at-bad"><td>neo4j_nodes<\/td><td>5<\/td><td>0<\/td>/', $body) === 1 && preg_match('/<tr class="at-bad"><td>pg_project<\/td><td>1<\/td><td>0<\/td>/', $body) === 1
@@ -204,6 +210,7 @@ $done = $svc->getByPkey($failed->pkey);
 check("admin Retry ({$dt}s): redirect to the row with the success message, row accepted at step 5", $code === 302 && strpos($loc, "sel={$failed->pkey}") !== false && strpos(urldecode($loc), "Transfer #{$failed->pkey} retried and completed") !== false && $done->status === 'accepted' && (int)$done->step === 5, "$code $loc " . json_encode($done));
 list($code, $body) = follow($loc, $adm);
 check('landing page shows the flash + detail with Reverse now, Retry gone, no error line', hasId($body, 'at-flash') && hasId($body, 'at-reverse') && !hasId($body, 'at-retry') && !hasId($body, 'at-error') && clean($body));
+check('detail: step timings row with a total + the edge rewrite count in Moved, Reverse wired to reverse_of polling', hasId($body, 'at-timings') && preg_match('/neo4j \d+ ms/', $body) === 1 && strpos($body, '(total ') !== false && strpos($body, 'tag / relationship edge') !== false && strpos($body, "/transfer_status?reverse_of={$failed->pkey}") !== false, substr($body, 0, 100));
 $mail = $mailSince($mark);
 check('retry success mails "accepted" to each party once', substr_count($mail, "To: {$emails[$RECIP]}") === 1 && substr_count($mail, "To: {$emails[$OWNER]}") === 1 && strpos($mail, 'Subject: Transfer complete: you now own "Admin Fixture Project"') !== false, substr($mail, 0, 300));
 list($code, $body) = http('GET', "/admin_transfers?sel={$failed->pkey}&verify=1", $adm);
@@ -229,6 +236,9 @@ check('original row stamped: reversed_date + reversed_by 3 + tombstone cleared',
 $mail = $mailSince($mark);
 check('reversed mails to both parties', substr_count($mail, "To: {$emails[$OWNER]}") === 1 && substr_count($mail, "To: {$emails[$RECIP]}") === 1 && strpos($mail, 'Subject: Transfer reversed: "Admin Fixture Project" is back in your account') !== false && strpos($mail, 'Subject: Transfer reversed: "Admin Fixture Project" has been returned') !== false, substr($mail, 0, 400));
 check('project back with the owner', $svc->projectNodeIds($P, $OWNER) && !$svc->projectNodeIds($P, $RECIP));
+list($code, $body) = http('GET', "/transfer_status?reverse_of={$failed->pkey}", $adm);
+$st = json_decode($body, true);
+check('status endpoint by reverse_of: the reversal row, accepted at step 5', is_array($st) && $st['found'] === true && $st['status'] === 'accepted' && $st['step'] === 5, $body);
 list($code, $body) = follow($loc, $adm);
 check('reversal detail: "reversal" badge, Reverses link to the original, Verify offered', hasId($body, 'at-detail') && strpos($body, 'at-kind-reversal') !== false && strpos($body, "sel={$failed->pkey}\">transfer #{$failed->pkey}</a>") !== false && hasId($body, 'at-verify') && clean($body));
 list($code, $body) = http('GET', "/admin_transfers?sel={$rev->pkey}&verify=1", $adm);
