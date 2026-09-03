@@ -636,7 +636,7 @@ if(in_array($userpkey, $acollaboration_testing_pkeys)){
 													<option value="json">Download Project in Strabo JSON Format</option>
 													<option value="geologic_units">Download Geologic Units</option>
 <?php
-if($userpkey == 3){ // Project transfer soft launch (docs/ProjectTransfer_Design.md D6): drop this gate for the full launch
+if(ProjectTransfer::canInitiate($userpkey, $_SESSION['username'] ?? '')){ // Project transfer soft launch (docs/ProjectTransfer_Design.md D6): drop this gate for the full launch
 ?>
 													<option value="transfer">Transfer to Other Account</option>
 <?php

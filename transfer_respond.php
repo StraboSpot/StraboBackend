@@ -41,6 +41,11 @@ if ($row && $row->status === 'pending') {
 
 if ($row && $_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
 	if ($_POST['action'] === 'accept' && $row->status === 'pending') {
+		// The rewrite runs here, in this request. No PHP time limit (a big
+		// project's search re-extract is slow), and the session lock goes
+		// first or the page's transfer_status polls queue behind us.
+		set_time_limit(0);
+		session_write_close();
 		$res = $svc->accept($token, $userpkey);
 		$row = $res['row'] ?: $svc->getByUuid($token);
 		if ($res['ok']) {
@@ -97,6 +102,16 @@ include("includes/mheader.php");
 .tp-facts strong { display: inline-block; min-width: 9em; color: rgba(255,255,255,0.75); }
 .tp-muted { color: rgba(255,255,255,0.65); font-size: 0.92em; }
 .tp-actions form { display: inline; }
+.tp-progress { border-left-color: #6fbf73; }
+.tp-spinner { display: inline-block; width: 1em; height: 1em; margin-right: 0.5em; vertical-align: -0.15em; border: 2px solid rgba(255,255,255,0.25); border-top-color: #fff; border-radius: 50%; animation: tp-spin 0.8s linear infinite; }
+@keyframes tp-spin { to { transform: rotate(360deg); } }
+.tp-steps { margin: 0.6em 0 0.8em 1.5em; padding: 0; }
+.tp-steps li { padding: 0.15em 0; color: rgba(255,255,255,0.45); }
+.tp-steps li.active { color: #fff; }
+.tp-steps li.done { color: #6fbf73; }
+.tp-steps li.done::after { content: " \2713"; }
+.tp-steps li.failed { color: #e44c65; }
+.tp-steps li.failed::after { content: " \2717"; }
 </style>
 
 			<!-- Main -->
@@ -147,13 +162,13 @@ include("includes/mheader.php");
 							<p class="tp-muted">If you already collaborate on this project, your collaborator role is replaced by ownership. Afterwards, open StraboField on your devices and download the project from the server.</p>
 						</div>
 
-						<div class="tp-actions">
+						<div class="tp-actions" id="tp-actions">
 							<ul class="actions">
 								<li>
-									<form method="post" action="/transfer_respond">
+									<form method="post" action="/transfer_respond" id="tp-accept-form" onsubmit="return tpAccept()">
 										<input type="hidden" name="t" value="<?php echo $h($row->uuid); ?>">
 										<input type="hidden" name="action" value="accept">
-										<input type="submit" value="Accept Transfer" class="primary" id="tp-accept" onclick="return confirm('Accept the transfer of <?php echo $h(str_replace("'", '', $liveName !== '' ? $liveName : $row->project_name)); ?>? This cannot be undone.')">
+										<input type="submit" value="Accept Transfer" class="primary" id="tp-accept">
 									</form>
 								</li>
 								<li>
@@ -166,6 +181,61 @@ include("includes/mheader.php");
 								<li><a href="/my_field_data" class="button">Decide later</a></li>
 							</ul>
 						</div>
+
+						<div class="tp-card tp-progress" id="tp-progress" style="display:none">
+							<p><span class="tp-spinner"></span><strong>Transferring the project to your account&hellip;</strong></p>
+							<ol class="tp-steps" id="tp-steps">
+<?php foreach (ProjectTransfer::STEP_LABELS as $n => $label) { ?>
+								<li data-step="<?php echo (int)$n; ?>"><?php echo $h($label); ?></li>
+<?php } ?>
+							</ol>
+							<p class="tp-muted">A large project can take a few minutes. Please keep this page open; this page will change when the transfer is done, and both of you will be emailed a summary.</p>
+						</div>
+
+						<script>
+						// Accept: confirm, then swap the buttons for the progress card and poll
+						// the row's step while the form's own POST does the work (no JS = the
+						// plain POST still works, it just shows nothing until the result page).
+						var tpConfirmText = <?php echo json_encode('Accept the transfer of ' . ($liveName !== '' ? $liveName : $row->project_name) . '? This cannot be undone.'); ?>;
+						var tpStatusUrl = '/transfer_status?t=' + encodeURIComponent(<?php echo json_encode((string)$row->uuid); ?>);
+						function tpAccept() {
+							if (!confirm(tpConfirmText)) return false;
+							document.getElementById('tp-accept').disabled = true;
+							document.getElementById('tp-decline').disabled = true;
+							document.getElementById('tp-actions').style.display = 'none';
+							document.getElementById('tp-progress').style.display = '';
+							tpRender(0, 'pending', null);
+							tpPoll();
+							return true;
+						}
+						function tpRender(step, status, failedStep) {
+							var items = document.querySelectorAll('#tp-steps li');
+							for (var i = 0; i < items.length; i++) {
+								var n = i + 1, cls = '';
+								if (status === 'accepted' || n <= step) cls = 'done';
+								else if (status === 'failed' && failedStep === n) cls = 'failed';
+								else if (n === step + 1 && status === 'pending') cls = 'active';
+								items[i].className = cls;
+							}
+						}
+						function tpPoll() {
+							setTimeout(function () {
+								var xhr = new XMLHttpRequest();
+								xhr.open('GET', tpStatusUrl + '&_=' + Date.now(), true);
+								xhr.onload = function () {
+									var d = null;
+									try { d = JSON.parse(xhr.responseText); } catch (e) {}
+									if (d && d.found) {
+										tpRender(d.step, d.status, d.failed_step);
+										if (d.status !== 'pending') return;
+									}
+									tpPoll();
+								};
+								xhr.onerror = function () { tpPoll(); };
+								xhr.send();
+							}, 1000);
+						}
+						</script>
 <?php } ?>
 
 						<div class="bottomSpacer"></div>

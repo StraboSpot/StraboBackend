@@ -59,6 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$pkey = (int)($_POST['pkey'] ?? 0);
 	$row = $pkey > 0 ? $svc->getByPkey($pkey) : null;
 	if (!$row) $back(0, '', 'No such transfer row.');
+	// The rewrite runs in this request: no PHP time limit, and release the
+	// session lock so the page's transfer_status polls are answered meanwhile.
+	set_time_limit(0);
+	session_write_close();
 
 	if ($action === 'retry') {
 		if ($row->status !== 'failed') $back($pkey, '', "Transfer #$pkey is {$row->status}; only a failed row can be retried.");
@@ -224,6 +228,16 @@ include("includes/mheader.php");
 pre.at-json { background: rgba(0, 0, 0, 0.3); border-radius: 4px; padding: 0.6em 0.8em; font-size: 0.8em;
 	max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-word; }
 details.at-raw summary { cursor: pointer; color: rgba(255, 255, 255, 0.7); }
+.at-progress { margin: 1em 0; padding: 0.8em 1em; border-radius: 6px; background: rgba(255,255,255,0.06); border-left: 4px solid #6fbf73; }
+.at-spinner { display: inline-block; width: 1em; height: 1em; margin-right: 0.5em; vertical-align: -0.15em; border: 2px solid rgba(255,255,255,0.25); border-top-color: #fff; border-radius: 50%; animation: at-spin 0.8s linear infinite; }
+@keyframes at-spin { to { transform: rotate(360deg); } }
+.at-steps { margin: 0.5em 0 0.6em 1.5em; padding: 0; }
+.at-steps li { padding: 0.1em 0; color: rgba(255,255,255,0.45); }
+.at-steps li.active { color: #fff; }
+.at-steps li.done { color: #6fbf73; }
+.at-steps li.done::after { content: " \2713"; }
+.at-steps li.failed { color: #e44c65; }
+.at-steps li.failed::after { content: " \2717"; }
 </style>
 
 <div id="main" class="wrapper style1">
@@ -271,6 +285,9 @@ details.at-raw summary { cursor: pointer; color: rgba(255, 255, 255, 0.7); }
 			<tr><td>Decided</td><td><?php echo $selRow->decided_date !== null ? $h($when($selRow->decided_date)) . ($selRow->decided_by_pkey !== null ? ' by user ' . (int)$selRow->decided_by_pkey : '') : '(not yet)'; ?></td></tr>
 			<tr><td>Completed</td><td><?php echo $selRow->completed_date !== null ? $h($when($selRow->completed_date)) : '(not completed)'; ?></td></tr>
 			<tr><td>Rewrite step</td><td><?php echo (int)$selRow->step; ?> of <?php echo ProjectTransfer::STEP_DONE; ?> completed<?php echo $selRow->applied === 't' ? ' (data rewrite started)' : ' (nothing rewritten)'; ?><?php if (isset($selSum['failed_step'])) echo ', failed at step ' . (int)$selSum['failed_step']; ?></td></tr>
+<?php if (!empty($selSum['timings']) && is_array($selSum['timings'])) { $tparts = array(); $ttotal = 0; foreach (array('eligibility', 'preflight', 'neo4j', 'postgres', 'mirror', 'search', 'recount') as $k) { if (isset($selSum['timings'][$k])) { $tparts[] = $k . ' ' . (int)$selSum['timings'][$k] . ' ms'; $ttotal += (int)$selSum['timings'][$k]; } } ?>
+			<tr><td>Step timings</td><td id="at-timings"><?php echo $h(implode(', ', $tparts)); ?> <span class="at-dim">(total <?php echo $ttotal >= 1000 ? round($ttotal / 1000, 1) . ' s' : $ttotal . ' ms'; ?>)</span></td></tr>
+<?php } ?>
 <?php if ($selRow->reversed_date !== null) { ?>
 			<tr><td>Reversed</td><td><?php echo $h($when($selRow->reversed_date)); ?> by user <?php echo (int)$selRow->reversed_by_pkey; ?></td></tr>
 <?php } ?>
@@ -295,6 +312,7 @@ details.at-raw summary { cursor: pointer; color: rgba(255, 255, 255, 0.7); }
 				if (!empty($selSum['nids'])) $bits[] = count((array)$selSum['nids']) . ' project node' . (count((array)$selSum['nids']) === 1 ? '' : 's');
 				if (isset($selSum['sample_ids'])) $bits[] = count((array)$selSum['sample_ids']) . ' spine sample' . (count((array)$selSum['sample_ids']) === 1 ? '' : 's');
 				if (isset($selSum['removed_collaborator_rows'])) $bits[] = count((array)$selSum['removed_collaborator_rows']) . ' recipient collaborator row' . (count((array)$selSum['removed_collaborator_rows']) === 1 ? '' : 's') . ' removed';
+				if (isset($selSum['edges_rewritten'])) $bits[] = (int)$selSum['edges_rewritten'] . ' tag / relationship edge' . ((int)$selSum['edges_rewritten'] === 1 ? '' : 's');
 				echo $h(implode(', ', $bits));
 			?></td></tr>
 <?php } ?>
@@ -302,14 +320,14 @@ details.at-raw summary { cursor: pointer; color: rgba(255, 255, 255, 0.7); }
 
 		<div class="at-actions">
 <?php if ($canRetry) { ?>
-			<form method="post" action="/admin_transfers" onsubmit="return confirm('Retry transfer #<?php echo (int)$selRow->pkey; ?> from step <?php echo (int)$selRow->step + 1; ?>? <?php echo $h(str_replace("'", '', $pname)); ?> moves from <?php echo $h(str_replace("'", '', $fromName)); ?> to <?php echo $h(str_replace("'", '', $toName)); ?>.');">
+			<form method="post" action="/admin_transfers" onsubmit="return atWork(<?php echo $h(json_encode('Retry transfer #' . (int)$selRow->pkey . ' from step ' . ((int)$selRow->step + 1) . '? ' . $pname . ' moves from ' . $fromName . ' to ' . $toName . '.')); ?>, <?php echo $h(json_encode('Retrying transfer #' . (int)$selRow->pkey . ' from step ' . ((int)$selRow->step + 1))); ?>, <?php echo $h(json_encode('/transfer_status?pkey=' . (int)$selRow->pkey)); ?>, <?php echo (int)$selRow->step; ?>)">
 				<input type="hidden" name="action" value="retry">
 				<input type="hidden" name="pkey" value="<?php echo (int)$selRow->pkey; ?>">
 				<button type="submit" class="at-btn" id="at-retry">Retry from step <?php echo (int)$selRow->step + 1; ?></button>
 			</form>
 <?php } ?>
 <?php if ($canReverse) { ?>
-			<form method="post" action="/admin_transfers" onsubmit="return confirm('Reverse transfer #<?php echo (int)$selRow->pkey; ?>? <?php echo $h(str_replace("'", '', $pname)); ?> goes BACK from <?php echo $h(str_replace("'", '', $toName)); ?> to <?php echo $h(str_replace("'", '', $fromName)); ?>. Both accounts will be emailed.');">
+			<form method="post" action="/admin_transfers" onsubmit="return atWork(<?php echo $h(json_encode('Reverse transfer #' . (int)$selRow->pkey . '? ' . $pname . ' goes BACK from ' . $toName . ' to ' . $fromName . '. Both accounts will be emailed.')); ?>, <?php echo $h(json_encode('Reversing transfer #' . (int)$selRow->pkey . ' (a new row with the parties swapped)')); ?>, <?php echo $h(json_encode('/transfer_status?reverse_of=' . (int)$selRow->pkey)); ?>, 0)">
 				<input type="hidden" name="action" value="reverse">
 				<input type="hidden" name="pkey" value="<?php echo (int)$selRow->pkey; ?>">
 				<button type="submit" class="at-btn" id="at-reverse">Reverse this transfer</button>
@@ -320,6 +338,58 @@ details.at-raw summary { cursor: pointer; color: rgba(255, 255, 255, 0.7); }
 <?php } ?>
 			<a class="at-btn-quiet" href="/admin_transfers">Close</a>
 		</div>
+<?php if ($canRetry || $canReverse) { ?>
+		<div class="at-progress" id="at-progress" style="display:none">
+			<p><span class="at-spinner"></span><strong id="at-progress-title">Working&hellip;</strong></p>
+			<ol class="at-steps" id="at-steps">
+<?php foreach (ProjectTransfer::STEP_LABELS as $n => $label) { ?>
+				<li data-step="<?php echo (int)$n; ?>"><?php echo $h($label); ?></li>
+<?php } ?>
+			</ol>
+			<p class="at-dim">Runs in this request; keep the page open. It redirects to the row when done.</p>
+		</div>
+		<script>
+		// Retry / Reverse: confirm, hide the buttons, show the progress list and
+		// poll transfer_status while the form's own POST does the rewrite.
+		function atWork(confirmText, title, statusUrl, startStep) {
+			if (!confirm(confirmText)) return false;
+			var btns = document.querySelectorAll('.at-actions button, .at-actions a');
+			for (var i = 0; i < btns.length; i++) { btns[i].disabled = true; btns[i].style.pointerEvents = 'none'; btns[i].style.opacity = '0.4'; }
+			document.getElementById('at-progress-title').textContent = title + '\u2026';
+			document.getElementById('at-progress').style.display = '';
+			atRender(startStep, 'pending', null);
+			atPoll(statusUrl);
+			return true;
+		}
+		function atRender(step, status, failedStep) {
+			var items = document.querySelectorAll('#at-steps li');
+			for (var i = 0; i < items.length; i++) {
+				var n = i + 1, cls = '';
+				if (status === 'accepted' || n <= step) cls = 'done';
+				else if (status === 'failed' && failedStep === n) cls = 'failed';
+				else if (n === step + 1 && status === 'pending') cls = 'active';
+				items[i].className = cls;
+			}
+		}
+		function atPoll(statusUrl) {
+			setTimeout(function () {
+				var xhr = new XMLHttpRequest();
+				xhr.open('GET', statusUrl + '&_=' + Date.now(), true);
+				xhr.onload = function () {
+					var d = null;
+					try { d = JSON.parse(xhr.responseText); } catch (e) {}
+					if (d && d.found) {
+						atRender(d.step, d.status, d.failed_step);
+						if (d.status !== 'pending' && d.status !== 'failed') return;
+					}
+					atPoll(statusUrl);
+				};
+				xhr.onerror = function () { atPoll(statusUrl); };
+				xhr.send();
+			}, 1000);
+		}
+		</script>
+<?php } ?>
 
 <?php if ($verifyRes !== null) { ?>
 		<h4 style="margin-top:1em;">Verify: live recount (<?php echo $h($when($verifyRes['checked'])); ?>)</h4>
