@@ -852,10 +852,19 @@ class ProjectTransfer
 			array($uuid, $pid, $newFrom, $newTo, $orig->project_name, (int)$adminPkey, json_encode($summary)));
 		$rev = $this->getByUuid($uuid);
 		$res = $this->execute($rev, (int)$adminPkey);
-		if ($res['ok']) {
-			$this->pq("UPDATE project_transfers SET reversed_date = now(), reversed_by_pkey = $2, tombstone_cleared_date = coalesce(tombstone_cleared_date, now()) WHERE pkey = $1", array((int)$orig->pkey, (int)$adminPkey));
-		}
+		if ($res['ok']) $this->markReversed((int)$orig->pkey, (int)$adminPkey);
 		return array('ok' => $res['ok'], 'row' => $res['row'], 'reason' => $res['error'], 'error' => $res['error']);
+	}
+
+	/**
+	 * Stamp the original row once its reversal has completed. Called by
+	 * reverse() on success and by the admin Retry of a failed reversal row
+	 * (so a resumed reversal still marks what it reverses). Idempotent.
+	 */
+	public function markReversed($origPkey, $adminPkey)
+	{
+		$this->pq("UPDATE project_transfers SET reversed_date = coalesce(reversed_date, now()), reversed_by_pkey = coalesce(reversed_by_pkey, $2),
+		            tombstone_cleared_date = coalesce(tombstone_cleared_date, now()) WHERE pkey = $1", array((int)$origPkey, (int)$adminPkey));
 	}
 
 	// =======================================================================
