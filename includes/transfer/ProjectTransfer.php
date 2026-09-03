@@ -387,13 +387,16 @@ class ProjectTransfer
 		return $this->db->get_row_prepared("SELECT * FROM project_transfers WHERE pkey = $1", array((int)$pkey));
 	}
 
-	/** Lazy expiry (no cron): call before any listing. Returns rows expired now. */
+	/** Lazy expiry (no cron): call before any listing. Returns the rows expired by THIS call (so the caller can mail once). */
 	public function expireStale()
 	{
-		return (int)$this->pq(
-			"UPDATE project_transfers SET status = 'expired', decided_date = now()
-			  WHERE status = 'pending' AND expires_date < now()"
-		);
+		$rows = (array)$this->db->get_results_prepared(
+			"SELECT * FROM project_transfers WHERE status = 'pending' AND expires_date < now() ORDER BY pkey");
+		if ($rows) {
+			$this->pq("UPDATE project_transfers SET status = 'expired', decided_date = now()
+			            WHERE status = 'pending' AND expires_date < now()");
+		}
+		return $rows;
 	}
 
 	/** Owner (or the admin) withdraws a pending request. */

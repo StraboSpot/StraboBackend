@@ -27,6 +27,25 @@ $tokencreds = base64_encode($username."*****".$apptoken);
 
 $collaboration_rows = $strabo->getCollaborationProjects();
 
+// Project transfers (docs/ProjectTransfer_Design.md §4): pending requests in
+// both directions, lazy expiry (mails the owner once per expired request),
+// and the one-shot notice left by cancel_transfer.php.
+require_once("includes/transfer/ProjectTransfer.php");
+require_once("includes/transfer/ProjectTransferMail.php");
+$transfers_out = array(); $transfers_in = array();
+if(ProjectTransfer::tableExists($db)){
+	$transferSvc = new ProjectTransfer($db, $neodb);
+	$expiredRows = $transferSvc->expireStale();
+	if($expiredRows){
+		$transferMailer = new ProjectTransferMail($db, $neodb);
+		foreach($expiredRows as $xr){ $transferMailer->expired($xr); }
+	}
+	$transfers_out = $transferSvc->listOutgoing($userpkey);
+	$transfers_in  = $transferSvc->listIncoming($userpkey);
+}
+$transfer_notice = $_SESSION['transfer_notice'] ?? null;
+unset($_SESSION['transfer_notice']);
+
 include("includes/mheader.php");
 
 ?>
@@ -125,6 +144,9 @@ include("includes/mheader.php");
 				break;
 			case "collaborate":
 				window.location='/collaborate?p='+pid;
+				break;
+			case "transfer":
+				window.location='/transfer_project?p='+pid;
 				break;
 			case "delete":
 				if (confirm("Are you sure you want to delete project "+projectname+"?") == true) {
@@ -254,6 +276,90 @@ if($clevel == "admin") $showlevel = "Admin";
 	}
 ?>
 
+
+<?php
+// ---------------------------------------------------------------- project transfers
+$hx = function ($v) { return htmlspecialchars((string)$v, ENT_QUOTES, 'UTF-8'); };
+if(is_array($transfer_notice) && !empty($transfer_notice['text'])){
+?>
+<div class="transfer-notice transfer-notice-<?php echo $hx($transfer_notice['kind'] ?? 'ok'); ?>" style="margin:0 0 1.5em 0;padding:1em 1.25em;border-radius:6px;background:rgba(255,255,255,0.06);border-left:4px solid <?php echo (($transfer_notice['kind'] ?? 'ok') === 'ok') ? '#6fbf73' : '#f0ad4e'; ?>;font-size:.95em;line-height:1.5;">
+	<?php echo $hx($transfer_notice['text']); ?>
+</div>
+<?php
+}
+if(count($transfers_in) > 0){
+?>
+
+<div>The following StraboField Projects have been offered to your account:</div>
+
+<div class="table-wrapper">
+	<table class="myDataTable" id="transfers-incoming">
+		<thead>
+			<tr>
+				<th>Project</th>
+				<th class="hideSmall">From</th>
+				<th class="hideSmall">Expires</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+<?php
+foreach($transfers_in as $t){
+?>
+			<tr>
+				<td><?php echo $hx($t->project_name); ?></td>
+				<td class="hideSmall"><?php echo $hx(trim($t->from_firstname . ' ' . $t->from_lastname)); ?> (<?php echo $hx($t->from_email); ?>)</td>
+				<td class="hideSmall"><?php echo $hx(date('F j, Y', strtotime($t->expires_date))); ?></td>
+				<td><a href="transfer_respond?t=<?php echo $hx($t->uuid); ?>" class="button primary fit small">Review</a></td>
+			</tr>
+<?php
+}
+?>
+		</tbody>
+	</table>
+</div>
+
+<div style="padding-bottom:60px;"></div>
+
+<?php
+}
+if(count($transfers_out) > 0){
+?>
+
+<div>You have offered the following StraboField Projects to another account (nothing changes until they accept):</div>
+
+<div class="table-wrapper">
+	<table class="myDataTable" id="transfers-outgoing">
+		<thead>
+			<tr>
+				<th>Project</th>
+				<th class="hideSmall">Offered to</th>
+				<th class="hideSmall">Expires</th>
+				<th></th>
+			</tr>
+		</thead>
+		<tbody>
+<?php
+foreach($transfers_out as $t){
+?>
+			<tr>
+				<td><?php echo $hx($t->project_name); ?></td>
+				<td class="hideSmall"><?php echo $hx($t->to_email); ?></td>
+				<td class="hideSmall"><?php echo $hx(date('F j, Y', strtotime($t->expires_date))); ?></td>
+				<td><a href="cancel_transfer?t=<?php echo $hx($t->uuid); ?>" class="button primary fit small" onclick="return confirm('Withdraw the transfer request for <?php echo $hx(str_replace("'", '', $t->project_name)); ?>?')">Cancel</a></td>
+			</tr>
+<?php
+}
+?>
+		</tbody>
+	</table>
+</div>
+
+<div style="padding-bottom:60px;"></div>
+
+<?php
+}
+?>
 
 <?php
 if($collaboration_rows != ""){
@@ -529,6 +635,13 @@ if(in_array($userpkey, $acollaboration_testing_pkeys)){
 ?>													
 													<option value="json">Download Project in Strabo JSON Format</option>
 													<option value="geologic_units">Download Geologic Units</option>
+<?php
+if($userpkey == 3){ // Project transfer soft launch (docs/ProjectTransfer_Design.md D6): drop this gate for the full launch
+?>
+													<option value="transfer">Transfer to Other Account</option>
+<?php
+}
+?>
 													<option value="delete">Delete Project</option>
 												</select>
 											</li>
