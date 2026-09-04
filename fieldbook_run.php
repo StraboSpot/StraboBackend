@@ -8,7 +8,7 @@
  *              (another tab, a double click) is not started twice: the state
  *              file is flock'd for the duration. Keeps running if the browser
  *              leaves (the finished book is served to the next visit within
- *              ten minutes). Releases the session lock first so the page's
+ *              two minutes). Releases the session lock first so the page's
  *              polls are not queued behind it.
  *
  * @package    StraboSpot Web Site

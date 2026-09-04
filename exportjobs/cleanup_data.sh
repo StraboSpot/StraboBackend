@@ -131,7 +131,7 @@ if [ -d "$DATA_DIR/tilecache" ]; then
 fi
 
 # 5. Interactive Field Book builds (fieldbook/<key>.json, .pdf, .lock, .tmp/): a finished book is only
-#    reused for ten minutes and the page rebuilds on demand, so anything older than FIELDBOOK_HOURS goes.
+#    reused for two minutes and the page rebuilds on demand, so anything older than FIELDBOOK_HOURS goes.
 n_fb=0
 if [ -d "$DATA_DIR/fieldbook" ]; then
 	while IFS= read -r f; do

@@ -8,7 +8,7 @@
  *              real progress from fieldbook_status.php (stage, day, spot,
  *              photo, elapsed) once a second, and sends the browser to
  *              fieldbook_fetch.php when the book is written. A book finished
- *              in the last ten minutes for the same datasets and options is
+ *              in the last two minutes for the same datasets and options is
  *              served straight away; a build already running for them is
  *              attached to rather than started twice. Without JavaScript the
  *              page offers the direct download (searchdownload?type=fieldbook).
