@@ -150,14 +150,15 @@ $vals = array(); FieldbookModel::blockScalars($s1, $vals);
 check('model: blockScalars carries notes, sample, unit, custom field values', in_array('notes for FB Station 1', $vals, true) && in_array('A. Tester', $vals, true) && in_array('Kgf', $vals, true));
 
 // ------------------------------------------------------------------ 2. legacy door (capture run = the download page minus the browser)
-$calls = 0;
-list($cap, $stray) = capture_run($strabo, $GET, 'fieldbookOut', "$TMP/cap_new", function ($stage, $d, $t, $n) use (&$calls) { $calls++; });
+$calls = 0; $stages = array();
+list($cap, $stray) = capture_run($strabo, $GET, 'fieldbookOut', "$TMP/cap_new", function ($stage, $d, $t, $n) use (&$calls, &$stages) { if ($stage === 'format:fieldbook') $calls++; if (!in_array($stage, $stages, true)) $stages[] = $stage; });
 $pdf = $cap ? file_get_contents($cap[0]['path']) : '';
 check('new fieldbook captured, no stray output', $cap && substr($pdf, 0, 4) === '%PDF' && $stray === '', $stray);
 check('new fieldbook filename', $cap && $cap[0]['name'] === 'Alpha_Dataset_fieldbook_' . date('Y-m-d') . '.pdf', $cap ? $cap[0]['name'] : 'none');
 check('new fieldbook has an outline (bookmarks) and Letter pages', strpos($pdf, '/Outlines') !== false && strpos($pdf, '/MediaBox [0 0 612.00 792.00]') !== false);
 check('new fieldbook: cover + contents + body + summary >= 4 pages', pdf_pages($pdf) >= 4, pdf_pages($pdf));
 check('progress callback fired once per spot (5)', $calls === 5, $calls);
+check('progress stages reported in order: gather, build (per spot), summary, write (M6 page)', $stages === array('gather', 'format:fieldbook', 'build', 'summary', 'write') || $stages === array('gather', 'build', 'format:fieldbook', 'summary', 'write'), $stages);
 list($cap,) = capture_run($strabo, $GET + array('fb_page' => 'a4', 'fb_photos' => 'none', 'fb_map' => 'bogus'), 'fieldbookOut', "$TMP/cap_a4");
 $pdfA4 = $cap ? file_get_contents($cap[0]['path']) : '';
 check('fb_page=a4 switches the page size; bogus option falls back silently', strpos($pdfA4, '/MediaBox [0 0 595.28 841.89]') !== false);

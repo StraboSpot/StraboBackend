@@ -55,7 +55,9 @@ class Fieldbook
 			foreach ($get['scope_groups'] as $sg) foreach ((array)$sg['dsids'] as $d) if (!in_array((int)$d, $dsList, true)) $dsList[] = (int)$d;
 		}
 		$owner = isset($get['userpkey']) ? (int)$get['userpkey'] : 0;
+		$progress = (isset($out->progress) && is_callable($out->progress)) ? $out->progress : null;
 
+		if ($progress) call_user_func($progress, 'gather', 0, 0, 'Gathering spots');
 		$json = $strabo->getDatasetSpotsSearch(null, $get);
 		$features = ($json && !empty($json['features'])) ? $json['features'] : array();
 		if (!$features) { $out->noData('No spots found for this search.'); return; }
@@ -70,12 +72,22 @@ class Fieldbook
 		}
 		$meta = self::meta($strabo, $owner, $tree, $get);
 		$model = FieldbookModel::build($features, $tags, $notes, $tree, $meta);
+		if ($progress) call_user_func($progress, 'gather', 0, 0, count($features) . ' spots, ' . count($model->imageIds()) . ' photos, ' . self::dayCount($model) . ' field days');
 		$photos = self::photos($meta['options']);
 		if ($photos->enabled()) $photos->setFilenames(self::imageFilenames($strabo, $model->imageIds()));
 		$renderer = new FieldbookRenderer($model, isset($out->progress) ? $out->progress : null, self::maps($meta['options']), $photos);
 		$pdf = $renderer->render();
+		if ($progress) call_user_func($progress, 'write', 1, 1, 'Writing the PDF (' . $pdf->PageNo() . ' pages)');
 		if ($out->capturing()) { $out->capturePdf($pdf, $model->filename); }
 		else { $pdf->outputInline($model->filename); }   // inline + Content-Length (FieldbookPdf)
+	}
+
+	/** Field days across the book (progress note). */
+	public static function dayCount($model)
+	{
+		$n = 0;
+		foreach ($model->projects as $p) foreach ($p['datasets'] as $ds) $n += count($ds['days']);
+		return $n;
 	}
 
 	/** TEST ONLY: config keys merged over the map builder config (stub tile server, cache dir, set). */
