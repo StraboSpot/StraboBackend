@@ -13,6 +13,7 @@
 ini_set('max_execution_time', 1800);
 include("logincheck.php");
 include("prepare_connections.php");
+session_write_close();   // a build can run for minutes: release the session lock so a second click, or any other page of the site, is not queued behind it (2026-09-04)
 
 include("includes/straboClasses/straboOutputClass.php");
 

@@ -24,7 +24,8 @@
 
 class FieldbookPhotos
 {
-	const SHEET_PX = 640;          // longest side of a contact-sheet thumbnail
+	const SHEET_PX = 400;          // longest side of a contact-sheet thumbnail (640 until 2026-09-04: ~124 KB a photo made 700-photo books 90 MB; 400 px q78 ~44 KB, still ~180 dpi in a 55 mm cell)
+	const SHEET_Q = 78;            // JPEG quality of thumbnails (82 until 2026-09-04)
 	const FULL_PX = 1400;          // longest side of a promoted (full-width) image
 	const MAX_PIXELS = 60000000;   // originals above this many pixels are not decoded (memory)
 
@@ -96,7 +97,7 @@ class FieldbookPhotos
 		$im = $this->load($id);
 		if (!$im) return null;
 		$im = self::scaleTo($im, $maxPx);
-		ob_start(); imagejpeg($im, null, 82); $data = ob_get_clean();
+		ob_start(); imagejpeg($im, null, self::SHEET_Q); $data = ob_get_clean();
 		$out = array('data' => $data, 'w' => imagesx($im), 'h' => imagesy($im));
 		imagedestroy($im);
 		$this->generated++; $this->images++;

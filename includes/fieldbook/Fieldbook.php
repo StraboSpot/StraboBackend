@@ -75,7 +75,7 @@ class Fieldbook
 		$renderer = new FieldbookRenderer($model, isset($out->progress) ? $out->progress : null, self::maps($meta['options']), $photos);
 		$pdf = $renderer->render();
 		if ($out->capturing()) { $out->capturePdf($pdf, $model->filename); }
-		else { $pdf->Output($model->filename, 'I'); }
+		else { $pdf->outputInline($model->filename); }   // inline + Content-Length (FieldbookPdf)
 	}
 
 	/** TEST ONLY: config keys merged over the map builder config (stub tile server, cache dir, set). */
