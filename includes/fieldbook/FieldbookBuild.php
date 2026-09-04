@@ -27,7 +27,7 @@ if (!function_exists('export_config')) require_once dirname(__DIR__, 2) . '/expo
 class FieldbookBuild
 {
 	const STALE_SECONDS = 180;     // running with no state write for this long = the request died; the next visitor rebuilds
-	const REUSE_SECONDS = 600;     // a book finished this recently is served again instead of rebuilt
+	const REUSE_SECONDS = 120;     // a book finished this recently is served again instead of rebuilt (600 until 2026-09-04 17:20, Jason: two minutes)
 	const WRITE_INTERVAL = 0.3;    // seconds between progress writes (a stage change always writes)
 
 	/** Stage keys in order, with the labels the page lists. */
