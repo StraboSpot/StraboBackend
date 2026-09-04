@@ -36,6 +36,8 @@ class FieldbookRenderer
 	private $m;
 	private $pdf;
 	private $progress;
+	private $daysTotal = 0; private $daysDone = 0; private $dayNote = '';   // progress notes (page + worker)
+	private $photosTotal = 0; private $photosDone = 0;
 	private $toc = array();       // [{level, label, page, link, note}]
 	private $coverPages = 1;
 	private $spotsDone = 0;
@@ -84,6 +86,9 @@ class FieldbookRenderer
 		$this->multiProject = count($m->projects) > 1;
 		$this->multiDataset = $nd > 1;
 		$this->spotsTotal = $m->counts['spots'] + $m->counts['children'];
+		foreach ($m->projects as $p) foreach ($p['datasets'] as $ds) $this->daysTotal += count($ds['days']);
+		$this->photosTotal = count($m->imageIds());
+		$this->report('build', 'Cover page');
 
 		$this->cover();
 		$this->coverPages = $pdf->PageNo();
@@ -98,9 +103,24 @@ class FieldbookRenderer
 				foreach ($ds['days'] as $day) $this->daySection($p, $ds, $day, $dlevel);
 			}
 		}
+		$this->report('summary', 'Stereonets and summary tables');
 		$this->backMatter();
+		$this->report('write', 'Contents and page numbering');
 		$this->contents();
 		return $pdf;
+	}
+
+	/** One more photo about to be decoded: the note the page shows while thumbnails are made. */
+	private function photoTick($id)
+	{
+		$this->photosDone++;
+		$this->report('build', ($this->dayNote !== '' ? $this->dayNote . ', ' : '') . 'photo ' . $this->photosDone . ' of ' . $this->photosTotal);
+	}
+
+	/** Progress to the page / worker callback: stage + a human note; done/total = spots for the bar. */
+	private function report($stage, $note)
+	{
+		if ($this->progress) call_user_func($this->progress, $stage, $this->spotsDone, $this->spotsTotal, $note);
 	}
 
 	// ------------------------------------------------------------ cover
@@ -219,6 +239,9 @@ class FieldbookRenderer
 	{
 		$pdf = $this->pdf;
 		$pdf->sectionLabel = ($this->multiDataset ? $ds['name'] . ' · ' : '') . $day['label'];
+		$this->daysDone++;
+		$this->dayNote = 'Day ' . $this->daysDone . ' of ' . $this->daysTotal . ': ' . $day['label'];
+		$this->report('build', $this->dayNote . ' (' . count($day['spots']) . ' ' . (count($day['spots']) === 1 ? 'spot' : 'spots') . ')');
 		$pdf->need(70);
 		if ($pdf->GetY() > $pdf->tm() + 1) { $pdf->Ln(4); }
 		$y = $pdf->GetY();
@@ -388,7 +411,7 @@ class FieldbookRenderer
 		$pdf->Ln(3);
 		$this->spotsDone++;
 		if ($this->progress) {
-			call_user_func($this->progress, 'format:fieldbook', $this->spotsDone, $this->spotsTotal, 'rendering spot ' . $this->spotsDone . ' of ' . $this->spotsTotal);
+			call_user_func($this->progress, 'format:fieldbook', $this->spotsDone, $this->spotsTotal, ($this->dayNote !== '' ? $this->dayNote . ', ' : '') . 'spot ' . $this->spotsDone . ' of ' . $this->spotsTotal . (isset($s['name']) && (string)$s['name'] !== '' ? ' (' . $s['name'] . ')' : ''));
 		}
 	}
 
@@ -828,6 +851,7 @@ class FieldbookRenderer
 				$img = $c['img'];
 				$no = ++$this->photoNo;
 				$x = $x0 + $j * ($cw + $gap);
+				$this->photoTick($img['id']);
 				$this->placeImage($this->photos->thumb($img['id']), $x, $y0, $cw, $boxH, $img['id']);
 				$yy = $y0 + $boxH + 1;
 				$pdf->SetFont($pdf->head, 'B', 7.5);
@@ -852,6 +876,7 @@ class FieldbookRenderer
 	{
 		$pdf = $this->pdf;
 		$no = ++$this->photoNo;
+		$this->photoTick($img['id']);
 		$fig = !empty($img['children']) ? $this->photos->overlay($img['id'], $img['width'], $img['height'], $img['children']) : $this->photos->full($img['id']);
 		if ($fig) {
 			$fw = $w; $fh = $w * $fig['h'] / $fig['w'];

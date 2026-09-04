@@ -40,6 +40,7 @@ set -euo pipefail
 WORK_DAYS="${WORK_DAYS:-1}"
 RESULT_DAYS="${RESULT_DAYS:-8}"
 TILE_DAYS="${TILE_DAYS:-90}"
+FIELDBOOK_HOURS="${FIELDBOOK_HOURS:-24}"   # interactive Field Book builds (fieldbook/<key>.json + .pdf, docs/Fieldbook_Design.md §14 M6)
 LOG_MAX_MB="${LOG_MAX_MB:-50}"
 
 DRY=0
@@ -129,8 +130,20 @@ if [ -d "$DATA_DIR/tilecache" ]; then
 	done < <(find "$DATA_DIR/tilecache" -mindepth 1 -mindepth 1 -type d -empty 2>/dev/null | sort -r)
 fi
 
-total=$((n_work + n_zip + n_dirs + n_log + n_tiles))
+# 5. Interactive Field Book builds (fieldbook/<key>.json, .pdf, .lock, .tmp/): a finished book is only
+#    reused for ten minutes and the page rebuilds on demand, so anything older than FIELDBOOK_HOURS goes.
+n_fb=0
+if [ -d "$DATA_DIR/fieldbook" ]; then
+	while IFS= read -r f; do
+		[ -n "$f" ] || continue
+		[ "$DRY" = 1 ] && act "remove old field book build $f"
+		[ "$DRY" = 1 ] || rm -rf -- "$f"
+		n_fb=$((n_fb + 1))
+	done < <(find "$DATA_DIR/fieldbook" -mindepth 1 -maxdepth 1 -mmin +$((FIELDBOOK_HOURS * 60)) 2>/dev/null)
+fi
+
+total=$((n_work + n_zip + n_dirs + n_log + n_tiles + n_fb))
 if [ "$total" -gt 0 ] || [ "$DRY" = 1 ]; then
-	say "done: $n_work workspaces, $n_zip results, $n_dirs empty dirs, $n_log logs rotated, $n_tiles stale tiles / thumbnails + $n_tdirs empty tile dirs ($DATA_DIR)"
+	say "done: $n_work workspaces, $n_zip results, $n_dirs empty dirs, $n_log logs rotated, $n_tiles stale tiles / thumbnails + $n_tdirs empty tile dirs, $n_fb field book builds ($DATA_DIR)"
 fi
 exit 0

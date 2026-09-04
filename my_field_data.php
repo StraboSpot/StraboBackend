@@ -97,7 +97,7 @@ include("includes/mheader.php");
 		}else if(selected=="stereonet"){
 			window.location='/searchdownload?type=stereonet&userpkey=<?php echo $userpkey?>&dsids='+id;
 		}else if(selected=="fieldbook"){
-			window.open('/searchdownload?type=fieldbook&userpkey=<?php echo $userpkey?>&dsids='+id);
+			window.open('/fieldbook_build?userpkey=<?php echo $userpkey?>&dsids='+id);   // progress page, then the PDF (fieldbook_build.php)
 		}else if(selected=="strat_sections"){
 			window.location='/dataset_strat_sections?dataset_id='+id;
 		}else if(selected=="image_basemaps"){
