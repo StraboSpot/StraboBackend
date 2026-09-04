@@ -326,4 +326,25 @@ class FieldbookPdf extends PDF_MemImage
 		}
 		$this->reorderPages($order);
 	}
+	// ------------------------------------------------------------ delivery
+
+	/**
+	 * Stream the finished book inline WITH a Content-Length. tFPDF's Output('I') sends none, so the response goes
+	 * out chunked and a browser's PDF viewer shows an indeterminate loading bar for the whole download (a 700-photo
+	 * book was 90 MB; Jason's boss read that as a hang, 2026-09-04). Mirrors the 'I' branch otherwise, including
+	 * the check that nothing but whitespace was output before the document.
+	 */
+	public function outputInline($name)
+	{
+		if ($this->state < 3) $this->Close();
+		$this->_checkoutput();
+		if (PHP_SAPI != 'cli') {
+			header('Content-Type: application/pdf');
+			header('Content-Disposition: inline; ' . $this->_httpencode('filename', $name, false));
+			header('Cache-Control: private, max-age=0, must-revalidate');
+			header('Pragma: public');
+			header('Content-Length: ' . strlen($this->buffer));
+		}
+		echo $this->buffer;
+	}
 }
