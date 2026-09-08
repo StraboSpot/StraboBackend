@@ -11,9 +11,12 @@
  *              (units, tags, samples, image index, colophon).
  *              Maps (M2), stereonets (M3, vector-drawn from FieldbookNets
  *              geometry: spot net beside the orientation table, dataset nets
- *              first in the Summary) and photos (M4: contact sheets, promoted
+ *              first in the Summary), photos (M4: contact sheets, promoted
  *              full-width basemaps with the child spots drawn on and
  *              sketches, numbered photo index with page links) are in.
+ *              M7: per-project Tags and Memos sections after the day
+ *              sections (every project tag; memos the reader may see, with
+ *              spot links, images and comments).
  *
  * @package    StraboSpot Web Site
  * @copyright  2026 StraboSpot
@@ -49,6 +52,7 @@ class FieldbookRenderer
 	public $photos = null;         // FieldbookPhotos or null (photos option "none")
 	public $photoIndex = array();  // [{no, title, spot, spotId, page, caption, details, link}] in book order
 	private $photoNo = 0;
+	private $spotLinks = array();  // spot id => PDF link to its block (memos cite spots, M7)
 	const PHOTO_FULL_H = 120;      // max height (mm) of a promoted image
 	const NET_W = 50;              // spot net box width (mm), beside the orientation table
 	const NET_GRID_W = 55;         // dataset net box width (mm), three per row
@@ -102,6 +106,7 @@ class FieldbookRenderer
 				$pdf->sectionLabel = $this->multiDataset ? $ds['name'] : '';
 				foreach ($ds['days'] as $day) $this->daySection($p, $ds, $day, $dlevel);
 			}
+			$this->projectSections($p, $level);   // Tags + Memos (M7), after the project's days
 		}
 		$this->report('summary', 'Stereonets and summary tables');
 		$this->backMatter();
@@ -176,6 +181,8 @@ class FieldbookRenderer
 		$rows[] = array('Orientation measurements', (string)$m->counts['orientations']);
 		$rows[] = array('Samples', (string)$m->counts['samples']);
 		$rows[] = array('Photos', (string)$m->counts['images']);
+		if ($m->counts['tags']) $rows[] = array('Tags', (string)$m->counts['tags']);
+		if ($m->counts['memos']) $rows[] = array('Memos', (string)$m->counts['memos']);
 		if ($m->meta['doi'] !== '') $rows[] = array('DOI', $m->meta['doi']);
 		return $rows;
 	}
@@ -184,7 +191,10 @@ class FieldbookRenderer
 	{
 		$spots = 0; $days = 0;
 		foreach ($p['datasets'] as $d) { $spots += $d['spotCount']; $days += count($d['days']); }
-		return array(array('Datasets', (string)count($p['datasets'])), array('Field days', (string)$days), array('Spots', (string)$spots));
+		$rows = array(array('Datasets', (string)count($p['datasets'])), array('Field days', (string)$days), array('Spots', (string)$spots));
+		if (!empty($p['tags'])) $rows[] = array('Tags', (string)count($p['tags']));
+		if (!empty($p['memos'])) $rows[] = array('Memos', (string)count($p['memos']));
+		return $rows;
 	}
 
 	private function datasetFacts(array $p, array $ds)
@@ -378,6 +388,7 @@ class FieldbookRenderer
 		$pdf->need(32);
 		$pdf->SetX($x0);
 		$y = $pdf->GetY();
+		if ($s['id'] !== '') { $lk = $pdf->AddLink(); $pdf->SetLink($lk, max(0, $y - 4), $pdf->PageNo()); $this->spotLinks[$s['id']] = $lk; }
 		if ($indent > 0) { $pdf->SetDrawColor(200, 200, 200); $pdf->SetLineWidth(0.6); $pdf->Line($x0 - 3, $y, $x0 - 3, $y + 8); }
 		$pdf->SetFont($pdf->head, 'B', 12);
 		$title = ($s['n'] ? $s['n'] . '.  ' : '') . $s['name'];
@@ -726,9 +737,187 @@ class FieldbookRenderer
 			$label = $it['name'];
 			if ($it['type'] !== '' && $it['type'] !== 'geologic_unit') $label .= '  (' . FieldbookProps::humanize($it['type']) . ')';
 			$pdf->MultiCell($w, 4.5, $label, 0, 'L');
+			if (!empty($it['on'])) {
+				$pdf->SetX($x0 + 3);
+				$pdf->SetFont($pdf->head, 'I', 8);
+				$pdf->SetTextColor(90, 90, 90);
+				$pdf->MultiCell($w - 3, self::LHS, 'On: ' . implode('; ', $it['on']), 0, 'L');
+				$pdf->SetTextColor(0, 0, 0);
+			}
 			if ($it['rows']) $this->kvRows($it['rows'], $x0 + 3, $w - 3);
 		}
 		$pdf->Ln(1.5);
+	}
+
+	// ------------------------------------------------------------ project-level sections (M7): Tags, Memos
+
+	/** After a project's day sections: every tag of the project, then the memos the reader may see. */
+	private function projectSections(array $p, $level)
+	{
+		if (!empty($p['tags'])) $this->tagsSection($p, $level);
+		if (!empty($p['memos'])) $this->memosSection($p, $level);
+	}
+
+	private function sectionHead($title, $level, $note)
+	{
+		$pdf = $this->pdf;
+		$pdf->sectionLabel = $title;
+		$pdf->need(60);   // like a day: continues on the page when there is room, else a new page
+		if ($pdf->GetY() > $pdf->tm() + 1) $pdf->Ln(4);
+		$y = $pdf->GetY();
+		$pdf->SetFont($pdf->head, 'B', 15);
+		$pdf->Cell(0, 8, $title, 0, 1, 'L');
+		$pdf->Bookmark($title, $level, $y);
+		$this->tocAdd($level, $title, $pdf->PageNo(), $note);
+		$pdf->rule(60, 0.5);
+		$pdf->Ln(3);
+	}
+
+	/** Every tag of the project: name (type), its fields, the spots it is on (linked when in the book) and how many lie outside. */
+	private function tagsSection(array $p, $level)
+	{
+		$pdf = $this->pdf;
+		$n = count($p['tags']);
+		$this->report('build', 'Tags (' . $n . ')');
+		$this->sectionHead('Tags', $level, $n . ' ' . ($n === 1 ? 'tag' : 'tags'));
+		$pdf->SetFont($pdf->body, '', 8.5);
+		$pdf->SetTextColor(90, 90, 90);
+		$pdf->MultiCell(0, self::LHS, 'Tags belong to the project' . ($this->multiProject ? ' "' . $p['name'] . '"' : '') . '. Every tag is listed, including tags on spots outside this book and tags not yet attached to a spot.', 0, 'L');
+		$pdf->SetTextColor(0, 0, 0);
+		$pdf->Ln(2);
+		$x0 = $pdf->lm(); $w = $pdf->innerW();
+		$lastType = null;
+		foreach ($p['tags'] as $t) {
+			$group = $t['type'] === 'geologic_unit' ? 'Geologic units' : 'Tags';
+			if ($group !== $lastType) { $pdf->need(14); $this->subhead($group, $x0); $lastType = $group; }
+			$pdf->need(min(10 + $this->kvEstimate($t['rows']), 30));
+			$pdf->SetX($x0);
+			$pdf->SetFont($pdf->head, 'B', 9.5);
+			$label = $t['name'];
+			if ($t['type'] !== '' && $t['type'] !== 'geologic_unit') $label .= '  (' . FieldbookProps::humanize($t['type']) . ')';
+			$pdf->MultiCell($w, 4.8, $label, 0, 'L');
+			if ($t['rows']) $this->kvRows($t['rows'], $x0 + 3, $w - 3);
+			$bits = array();
+			$nIn = count($t['inBook']);
+			if ($nIn) $bits[] = $nIn . ($nIn === 1 ? ' spot' : ' spots') . ' in this book';
+			if ($t['outside']) $bits[] = $t['outside'] . ($t['outside'] === 1 ? ' spot' : ' spots') . ' outside this book';
+			if ($t['features']) $bits[] = $t['features'] . ' on individual observations';
+			if (!$bits) $bits[] = 'Not attached to any spot';
+			$pdf->SetX($x0 + 3);
+			$pdf->SetFont($pdf->head, 'I', 8);
+			$pdf->SetTextColor(90, 90, 90);
+			$pdf->MultiCell($w - 3, self::LHS, implode(' · ', $bits), 0, 'L');
+			$pdf->SetTextColor(0, 0, 0);
+			if ($t['inBook']) $this->linkedNames('Spots', $t['inBook'], $x0 + 3, $w - 3);
+			$pdf->Ln(2);
+		}
+	}
+
+	/** Memos (the app's reports) of the project the reader may see, in creation order. */
+	private function memosSection(array $p, $level)
+	{
+		$pdf = $this->pdf;
+		$n = count($p['memos']);
+		$this->report('build', 'Memos (' . $n . ')');
+		$this->sectionHead('Memos', $level, $n . ' ' . ($n === 1 ? 'memo' : 'memos'));
+		$pdf->SetFont($pdf->body, '', 8.5);
+		$pdf->SetTextColor(90, 90, 90);
+		$pdf->MultiCell(0, self::LHS, 'Memos (reports in the data) belong to the project' . ($this->multiProject ? ' "' . $p['name'] . '"' : '') . ': summaries, hypotheses, questions and contemplations written about the work, with the spots and tags they cite.' . ($p['hiddenMemos'] ? ' ' . $p['hiddenMemos'] . ($p['hiddenMemos'] === 1 ? ' memo is' : ' memos are') . ' not shown (addressed to a narrower audience than this reader).' : ''), 0, 'L');
+		$pdf->SetTextColor(0, 0, 0);
+		$pdf->Ln(2);
+		$i = 0;
+		foreach ($p['memos'] as $memo) { $i++; $this->memoBlock($memo, $i, $level + 1); }
+	}
+
+	private function memoBlock(array $memo, $no, $level)
+	{
+		$pdf = $this->pdf;
+		$x0 = $pdf->lm(); $w = $pdf->innerW();
+		$pdf->need(36);
+		$pdf->SetX($x0);
+		$y = $pdf->GetY();
+		$pdf->SetDrawColor(160, 160, 160); $pdf->SetLineWidth(0.3);
+		$pdf->Line($x0, $y, $x0 + $w, $y);
+		$pdf->Ln(2);
+		$pdf->SetFont($pdf->head, 'B', 12);
+		$pdf->MultiCell($w, 6, $no . '.  ' . $memo['subject'], 0, 'L');
+		$pdf->Bookmark($memo['subject'], $level, $y);
+		$pdf->SetX($x0);
+		$pdf->SetFont($pdf->head, '', 8);
+		$pdf->SetTextColor(100, 100, 100);
+		$bits = array();
+		if ($memo['type'] !== '') $bits[] = $memo['type'];
+		if ($memo['author'] !== '') $bits[] = 'By ' . $memo['author'];
+		if ($memo['created'] !== '') $bits[] = 'Written ' . $memo['created'];
+		if ($memo['updated'] !== '') $bits[] = 'Updated ' . $memo['updated'];
+		if ($memo['audience'] !== '') $bits[] = 'Audience: ' . $memo['audience'];
+		$pdf->MultiCell($w, 4, implode('   ·   ', $bits), 0, 'L');
+		$pdf->SetTextColor(0, 0, 0);
+		$pdf->Ln(1.5);
+		if ($memo['notes'] !== '') {
+			$pdf->SetX($x0);
+			$pdf->SetFont($pdf->body, '', 9.5);
+			$pdf->MultiCell($w, self::LH, $memo['notes'], 0, 'L');
+			$pdf->Ln(1.5);
+		}
+		if ($memo['spots']) $this->linkedNames('Spots', $memo['spots'], $x0, $w);
+		if ($memo['tags']) {
+			$pdf->need(8);
+			$pdf->SetX($x0);
+			$pdf->SetFont($pdf->head, 'B', 8.5);
+			$pdf->Cell(14, self::LHS, 'Tags', 0, 0, 'L');
+			$pdf->SetFont($pdf->body, '', 8.5);
+			$pdf->MultiCell($w - 14, self::LHS, implode(', ', $memo['tags']), 0, 'L');
+		}
+		if ($memo['rows']) $this->kvRows($memo['rows'], $x0, $w);
+		if ($memo['images']) $this->photoBlock(array('id' => 'memo-' . $memo['id'], 'name' => 'Memo: ' . $memo['subject'], 'images' => $memo['images']), $x0, $w, 0);
+		if ($memo['comments']) {
+			$pdf->need(14);
+			$this->subhead('Comments (' . count($memo['comments']) . ')', $x0);
+			foreach ($memo['comments'] as $c) {
+				$pdf->need(9);
+				$pdf->SetX($x0 + 3);
+				$pdf->SetFont($pdf->head, 'B', 8.5);
+				$head = $c['name'] !== '' ? $c['name'] : 'Comment';
+				if ($c['date'] !== '') $head .= '   ' . $c['date'];
+				$pdf->MultiCell($w - 3, 4.2, $head, 0, 'L');
+				if ($c['text'] !== '') {
+					$pdf->SetX($x0 + 3);
+					$pdf->SetFont($pdf->body, '', 9);
+					$pdf->MultiCell($w - 3, self::LHS, $c['text'], 0, 'L');
+				}
+				$pdf->Ln(1);
+			}
+		}
+		$pdf->Ln(4);
+	}
+
+	/** "Label  name, name, name" with each name linked to its spot block when the spot is in the book; wraps by word. */
+	private function linkedNames($label, array $items, $x0, $w)
+	{
+		$pdf = $this->pdf;
+		$pdf->need(8);
+		$lh = self::LHS;
+		$pdf->SetX($x0);
+		$pdf->SetFont($pdf->head, 'B', 8.5);
+		$labW = 14;
+		$pdf->Cell($labW, $lh, $label, 0, 0, 'L');
+		$x = $x0 + $labW; $right = $x0 + $w;
+		$n = count($items);
+		foreach ($items as $i => $it) {
+			$text = $it['name'] . ($i < $n - 1 ? ',' : '');
+			$linked = !empty($it['inBook']) && isset($this->spotLinks[$it['id']]);
+			$pdf->SetFont($pdf->body, $linked ? 'U' : '', 8.5);
+			$tw = $pdf->GetStringWidth($text) + 1.5;
+			if ($x + $tw > $right && $x > $x0 + $labW) { $pdf->Ln($lh); $x = $x0 + $labW; if ($pdf->GetY() + $lh > $pdf->pageH() - $pdf->bm()) $pdf->AddPage(); }
+			$pdf->SetXY($x, $pdf->GetY());
+			if ($linked) $pdf->SetTextColor(20, 60, 140);
+			$pdf->Cell($tw, $lh, $pdf->fit($text, $w - $labW), 0, 0, 'L', false, $linked ? $this->spotLinks[$it['id']] : '');
+			$pdf->SetTextColor(0, 0, 0);
+			$x += $tw;
+		}
+		$pdf->Ln($lh);
+		$pdf->SetX($x0);
 	}
 
 	/** M1 photo listing (attributes only; sheets arrive in M4), with child spots nested under their image. */
@@ -1094,6 +1283,7 @@ class FieldbookRenderer
 		$opts = $m->meta['options'];
 		$lines[] = 'Options: page ' . (isset($opts['page']) ? $opts['page'] : 'letter') . ', photos ' . (isset($opts['photos']) ? $opts['photos'] : 'sheets') . ', map ' . (isset($opts['map']) ? $opts['map'] : 'outdoors') . ', stereonets ' . (isset($opts['nets']) ? $opts['nets'] : 'on') . '.';
 		$lines[] = 'Spots are grouped by field day (creation date) and listed in creation order. Every observation stored with a spot is included; families without a designed layout appear under "Other observations".';
+		$lines[] = 'Project tags and memos follow the day sections of their project; a memo is shown when its audience includes the reader who made this book' . ($m->counts['memos'] || $m->counts['hiddenMemos'] ? ' (' . $m->counts['memos'] . ' shown, ' . $m->counts['hiddenMemos'] . ' not shown)' : '') . '.';
 		foreach ($m->notes as $n) $lines[] = $n;
 		if ($this->maps) foreach ($this->maps->notes() as $n) $lines[] = $n; else $lines[] = 'Maps: none (option).';
 		if ($this->nets) foreach ($this->nets->notes() as $n) $lines[] = $n; else $lines[] = 'Stereonets: none (option).';
