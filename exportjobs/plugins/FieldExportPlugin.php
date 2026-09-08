@@ -186,6 +186,7 @@ class FieldExportPlugin implements ExportPlugin
 				$out = new straboOutputClass($strabo, $get);
 				$out->captureDir = $g['dir'];
 				$out->progress = $progress;
+				$out->readerUserpkey = (int)$job['userpkey'];   // fieldbook memo audience: the job's user, not the group's owner ($strabo)
 				$method = self::$formats[$fmt];
 				try {
 					ob_start();                       // generators echo stray text; keep the worker log clean

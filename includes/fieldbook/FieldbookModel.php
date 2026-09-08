@@ -5,6 +5,7 @@
  *              (docs/Fieldbook_Design.md §4, §5). Pure data: builds the
  *              Book > Project > Dataset > Day > Spot tree plus the summary
  *              tables from the legacy feature collection, the project tags
+ *              (every tag, M7) and memos (reports the reader may see, M7),
  *              and the daily notes. No PDF calls; FieldbookRenderer lays it
  *              out.
  *
@@ -19,7 +20,7 @@ class FieldbookModel
 {
 	public $meta;        // title, subtitle, owner, generated, doi, options
 	public $projects = array();
-	public $counts = array('spots' => 0, 'children' => 0, 'images' => 0, 'samples' => 0, 'orientations' => 0, 'days' => 0);
+	public $counts = array('spots' => 0, 'children' => 0, 'images' => 0, 'samples' => 0, 'orientations' => 0, 'days' => 0, 'memos' => 0, 'hiddenMemos' => 0, 'tags' => 0);
 	public $dateRange = array(null, null);   // [first day key, last day key]
 	public $summary = array('units' => array(), 'tags' => array(), 'samples' => array(), 'images' => array());
 	public $notes = array();  // build notes for the colophon
@@ -31,8 +32,9 @@ class FieldbookModel
 	 * @param array $notesByDs  dataset id => array of {date, notes}
 	 * @param array $tree       [{owner, project_id, project_name, dsids[], dataset_names[id=>name], spot_map[id=>{ds,name}]}]
 	 * @param array $meta       title/subtitle/owner/generated/doi/options
+	 * @param array $projectData Fieldbook::projectData() result: "owner|project_id" => {tags, reports, hidden, authors, spot_names} (M7)
 	 */
-	public static function build(array $features, $tags, array $notesByDs, array $tree, array $meta)
+	public static function build(array $features, $tags, array $notesByDs, array $tree, array $meta, array $projectData = array())
 	{
 		$m = new FieldbookModel();
 		$m->meta = $meta + array('title' => 'Field book', 'subtitle' => '', 'owner' => '', 'generated' => date('F j, Y'), 'doi' => '', 'options' => array());
@@ -45,7 +47,7 @@ class FieldbookModel
 			$pi = null;
 			foreach ($m->projects as $i => $p) if ($p['id'] === $pid && $p['owner'] == $member['owner']) { $pi = $i; break; }
 			if ($pi === null) {
-				$m->projects[] = array('id' => $pid, 'owner' => $member['owner'], 'name' => (string)$member['project_name'], 'datasets' => array());
+				$m->projects[] = array('id' => $pid, 'owner' => $member['owner'], 'name' => (string)$member['project_name'], 'datasets' => array(), 'tags' => array(), 'memos' => array(), 'hiddenMemos' => 0);
 				$pi = count($m->projects) - 1;
 			}
 			foreach ($member['dsids'] as $d) {
@@ -57,7 +59,7 @@ class FieldbookModel
 			}
 		}
 		if (!$m->projects) {
-			$m->projects[] = array('id' => '', 'owner' => 0, 'name' => $m->meta['title'], 'datasets' => array(array('id' => '', 'name' => $m->meta['title'], 'days' => array(), 'spotCount' => 0, 'notes' => array())));
+			$m->projects[] = array('id' => '', 'owner' => 0, 'name' => $m->meta['title'], 'datasets' => array(array('id' => '', 'name' => $m->meta['title'], 'days' => array(), 'spotCount' => 0, 'notes' => array())), 'tags' => array(), 'memos' => array(), 'hiddenMemos' => 0);
 			$dsIndex[''] = array(0, 0);
 		}
 		$spotToDs = array();
@@ -140,9 +142,188 @@ class FieldbookModel
 				$m->projects[$pi]['datasets'][$di] = $ds;
 			}
 		}
+		// ---- project-level data (M7): every project tag + the memos the reader may see
+		$names = array();   // spot id => name for every spot in the book (children included)
+		foreach ($blocks as $b) $names[$b['id']] = $b['name'];
+		foreach ($tree as $member) foreach ((array)$member['spot_map'] as $sid => $info) { $info = (array)$info; if (!isset($names[(string)$sid]) && isset($info['name']) && (string)$info['name'] !== '') $names[(string)$sid] = (string)$info['name']; }
+		foreach ($m->projects as $pi => $p) {
+			$key = $p['owner'] . '|' . $p['id'];
+			if (!isset($projectData[$key])) continue;
+			$pd = $projectData[$key];
+			$m->projects[$pi]['tags'] = self::projectTags((array)$pd['tags'], $byId, $blocks);
+			$m->projects[$pi]['memos'] = self::memos($pd, $byId, $names, $m->projects[$pi]['tags']);
+			$m->projects[$pi]['hiddenMemos'] = isset($pd['hidden']) ? (int)$pd['hidden'] : 0;
+			$m->counts['tags'] += count($m->projects[$pi]['tags']);
+			$m->counts['memos'] += count($m->projects[$pi]['memos']);
+			$m->counts['hiddenMemos'] += $m->projects[$pi]['hiddenMemos'];
+			foreach ($m->projects[$pi]['tags'] as $t) {
+				$table = $t['type'] === 'geologic_unit' ? 'units' : 'tags';
+				if (isset($m->summary[$table][$t['name']])) continue;   // tallied from the spots already
+				$m->summary[$table][$t['name']] = array('name' => $t['name'], 'type' => $t['type'], 'rows' => $t['rows'], 'count' => count($t['inBook']));
+			}
+			foreach ($m->projects[$pi]['memos'] as $memo) {
+				$m->counts['images'] += count($memo['images']);
+				foreach ($memo['images'] as $img) $m->summary['images'][] = array('title' => $img['title'] !== '' ? $img['title'] : ('Image ' . $img['id']), 'caption' => $img['caption'], 'spot' => 'Memo: ' . $memo['subject'], 'spotId' => '');
+			}
+		}
+		if ($m->counts['hiddenMemos']) $m->notes[] = 'Memos: ' . $m->counts['hiddenMemos'] . ($m->counts['hiddenMemos'] === 1 ? ' memo is' : ' memos are') . ' not shown (addressed to a narrower audience than this reader).';
 		ksort($m->summary['units']); ksort($m->summary['tags']);
 		$m->filename = self::filenameFor($m);
 		return $m;
+	}
+
+	/**
+	 * Every tag of a project (M7): name, type, the tag's own fields, which of its spots are in this book
+	 * (spot tags + sub-feature tags), how many are outside it. Order: geologic units first, then by name.
+	 */
+	public static function projectTags(array $tags, array $byId, array $blocks)
+	{
+		$out = array();
+		foreach ($tags as $t) {
+			$t = (array)$t;
+			$rows = array();
+			foreach ($t as $k => $v) {
+				if (in_array($k, array('date', 'spots', 'features', 'id', 'name', 'type'), true)) continue;
+				if ($v === null || $v === '' || $v === array()) continue;
+				FieldbookProps::walk($v, $rows, 0, $k);
+			}
+			$sids = array();
+			foreach ((array)(isset($t['spots']) ? $t['spots'] : array()) as $sid) $sids[(string)$sid] = true;
+			$features = 0;
+			if (!empty($t['features']) && (is_array($t['features']) || is_object($t['features']))) foreach ((array)$t['features'] as $sid => $fids) { $sids[(string)$sid] = true; $features += count((array)$fids); }
+			$inBook = array(); $outside = 0;
+			foreach (array_keys($sids) as $sid) { if (isset($byId[$sid])) $inBook[] = array('id' => $sid, 'name' => $blocks[$byId[$sid]]['name']); else $outside++; }
+			$out[] = array(
+				'id' => isset($t['id']) ? (string)$t['id'] : '',
+				'name' => isset($t['name']) && (string)$t['name'] !== '' ? (string)$t['name'] : 'tag',
+				'type' => isset($t['type']) ? (string)$t['type'] : '',
+				'rows' => $rows, 'inBook' => $inBook, 'outside' => $outside, 'features' => $features,
+			);
+		}
+		usort($out, function ($a, $b) {
+			$ua = $a['type'] === 'geologic_unit' ? 0 : 1; $ub = $b['type'] === 'geologic_unit' ? 0 : 1;
+			if ($ua !== $ub) return $ua - $ub;
+			return strcasecmp($a['name'], $b['name']);
+		});
+		return $out;
+	}
+
+	/**
+	 * Memos (reports) of a project the reader may see (M7), in creation order: subject, type, audience, author,
+	 * dates, notes, the spots they cite (linked when in the book), tags by name, images (rendered like a spot's
+	 * photos), comments, and any other field the app stored ("rows").
+	 */
+	public static function memos(array $pd, array $byId, array $names, array $projectTags)
+	{
+		$tagNames = array();
+		foreach ($projectTags as $t) if ($t['id'] !== '') $tagNames[$t['id']] = $t['name'];
+		$authors = isset($pd['authors']) ? (array)$pd['authors'] : array();
+		$spotNames = isset($pd['spot_names']) ? (array)$pd['spot_names'] : array();
+		$known = array('id', 'subject', 'report_type', 'report_privacy', 'privacy', 'notes', 'created_timestamp', 'updated_timestamp', 'modified_timestamp', 'images', 'spots', 'tags', 'comments', 'straboUserId', '_author', '_audience');
+		$aud = array('anyone' => 'Anyone', 'collaborators' => 'Collaborators', 'only_me' => 'Only me');
+		$out = array();
+		foreach ((array)$pd['reports'] as $rep) {
+			$rep = (array)$rep;
+			$rows = array();
+			foreach ($rep as $k => $v) {
+				if (in_array($k, $known, true)) continue;
+				if ($v === null || $v === '' || $v === array()) continue;
+				FieldbookProps::walk($v, $rows, 0, $k);
+			}
+			$spots = array();
+			foreach ((array)(isset($rep['spots']) ? $rep['spots'] : array()) as $sid) {
+				$sid = (string)$sid;
+				$name = isset($names[$sid]) ? $names[$sid] : (isset($spotNames[$sid]) ? (string)$spotNames[$sid] : '');
+				$spots[] = array('id' => $sid, 'name' => $name !== '' ? $name : ('Spot ' . $sid), 'inBook' => isset($byId[$sid]));
+			}
+			$tags = array();
+			foreach ((array)(isset($rep['tags']) ? $rep['tags'] : array()) as $tid) { $tid = (string)$tid; $tags[] = isset($tagNames[$tid]) ? $tagNames[$tid] : ('Tag ' . $tid); }
+			$comments = array();
+			foreach ((array)(isset($rep['comments']) ? $rep['comments'] : array()) as $c) {
+				$c = (array)$c;
+				$comments[] = array(
+					'name' => isset($c['name']) ? (string)$c['name'] : '',
+					'text' => isset($c['text']) ? (string)$c['text'] : '',
+					'date' => isset($c['created_timestamp']) ? self::epochDate($c['created_timestamp']) : '',
+				);
+			}
+			$author = isset($rep['_author']) ? (int)$rep['_author'] : 0;
+			$created = isset($rep['created_timestamp']) ? self::epochDate($rep['created_timestamp']) : '';
+			$updated = isset($rep['updated_timestamp']) ? self::epochDate($rep['updated_timestamp']) : '';
+			$out[] = array(
+				'id' => isset($rep['id']) ? (string)$rep['id'] : '',
+				'subject' => isset($rep['subject']) && trim((string)$rep['subject']) !== '' ? trim((string)$rep['subject']) : 'Untitled memo',
+				'type' => isset($rep['report_type']) ? FieldbookProps::humanize($rep['report_type']) : '',
+				'audience' => isset($rep['_audience']) && isset($aud[$rep['_audience']]) ? $aud[$rep['_audience']] : '',
+				'author' => $author && isset($authors[$author]) && $authors[$author] !== '' ? (string)$authors[$author] : '',
+				'created' => $created, 'updated' => $updated !== $created ? $updated : '',
+				'sortKey' => (isset($rep['created_timestamp']) ? sprintf('%020d', (int)substr(preg_replace('/\D/', '', (string)$rep['created_timestamp']), 0, 13)) : sprintf('%020d', 0)) . '-' . (isset($rep['id']) ? (string)$rep['id'] : ''),
+				'notes' => isset($rep['notes']) ? trim((string)$rep['notes']) : '',
+				'spots' => $spots, 'tags' => $tags, 'images' => self::imageBlocks(isset($rep['images']) ? $rep['images'] : array()),
+				'comments' => $comments, 'rows' => $rows,
+			);
+		}
+		usort($out, function ($a, $b) { return strcmp($a['sortKey'], $b['sortKey']); });
+		return $out;
+	}
+
+	/** Epoch seconds or milliseconds => "Month d, Y H:i UTC" ('' when not a timestamp). */
+	public static function epochDate($v)
+	{
+		$v = (string)$v;
+		if (!preg_match('/^\d{10}(\d{3})?$/', $v)) return FieldbookProps::humanize($v);
+		return gmdate('F j, Y H:i', (int)substr($v, 0, 10)) . ' UTC';
+	}
+
+	/** Image attribute blocks from an app images array (spot images and memo images share the shape). */
+	public static function imageBlocks($images)
+	{
+		$out = array();
+		foreach ((array)$images as $img) {
+			$img = (array)$img;
+			$rows = array();
+			foreach ($img as $k => $v) {
+				if (in_array($k, array('id', 'self', 'annotated', 'title', 'width', 'height', 'image_type', 'caption'), true)) continue;
+				if ($v === null || $v === '' || $v === array()) continue;
+				FieldbookProps::walk($v, $rows, 0, $k);
+			}
+			$out[] = array(
+				'id' => isset($img['id']) ? (string)$img['id'] : '',
+				'title' => isset($img['title']) ? (string)$img['title'] : '',
+				'caption' => isset($img['caption']) ? (string)$img['caption'] : '',
+				'type' => isset($img['image_type']) ? (string)$img['image_type'] : '',
+				'annotated' => !empty($img['annotated']),
+				'width' => isset($img['width']) ? (int)$img['width'] : 0, 'height' => isset($img['height']) ? (int)$img['height'] : 0,
+				'rows' => $rows, 'children' => array(),
+			);
+		}
+		return $out;
+	}
+
+	/**
+	 * Label of a sub-feature of a spot by id (a tag attached to an orientation, a sample, an image...):
+	 * "Bedding (orientation)"; the bare id when nothing in the properties carries it.
+	 */
+	public static function featureLabel(array $props, $fid, $parentKey = '')
+	{
+		$fid = (string)$fid;
+		foreach ($props as $k => $v) {
+			if (is_object($v)) $v = (array)$v;
+			if (!is_array($v)) continue;
+			if (isset($v['id']) && is_scalar($v['id']) && (string)$v['id'] === $fid) {
+				$ctx = is_int($k) ? $parentKey : (string)$k;
+				$ctx = preg_replace('/^json_/', '', $ctx);
+				$ctx = preg_replace('/(_data|s)$/', '', $ctx);
+				$title = 'Feature ' . $fid;
+				foreach (array('label', 'name', 'sample_id_name', 'feature_type', 'title', 'type') as $tk) {   // feature_type before type: "Bedding", not "Planar orientation"
+					if (isset($v[$tk]) && is_scalar($v[$tk]) && (string)$v[$tk] !== '') { $title = FieldbookProps::humanize($v[$tk]); break; }
+				}
+				return $title . ($ctx !== '' ? ' (' . strtolower(FieldbookProps::label($ctx)) . ')' : '');
+			}
+			$found = self::featureLabel($v, $fid, is_int($k) ? $parentKey : (string)$k);
+			if ($found !== '') return $found;
+		}
+		return $parentKey === '' ? 'Feature ' . $fid : '';
 	}
 
 	/** Counts + summary tables, recursing into children. */
@@ -272,46 +453,31 @@ class FieldbookModel
 		}
 		// tags + geologic units (project tags listing this spot). getTagsFromDatasetIds is not
 		// user-anchored, so a collaborated project contributes one copy per collaborator: dedupe.
+		// A tag lists the spots it is on (spots) and, for a tag on a sub-feature, features = {spot id: [feature ids]} (M7).
 		$seenTag = array();
 		foreach ($tags as $t) {
 			$t = (array)$t;
-			if (empty($t['spots'])) continue;
 			$hit = false;
-			foreach ((array)$t['spots'] as $sid) if ((string)$sid === $id) { $hit = true; break; }
-			if (!$hit) continue;
+			if (!empty($t['spots'])) foreach ((array)$t['spots'] as $sid) if ((string)$sid === $id) { $hit = true; break; }
+			$on = array();
+			if (!empty($t['features']) && (is_array($t['features']) || is_object($t['features']))) {
+				foreach ((array)$t['features'] as $sid => $fids) if ((string)$sid === $id) foreach ((array)$fids as $fid) $on[] = self::featureLabel($p, $fid);
+			}
+			if (!$hit && !$on) continue;
 			$rows = array();
 			foreach ($t as $k => $v) {
 				if (in_array($k, array('date', 'spots', 'features', 'id', 'name', 'type'), true)) continue;
 				if ($v === null || $v === '' || $v === array()) continue;
 				FieldbookProps::walk($v, $rows, 0, $k);
 			}
-			$item = array('name' => isset($t['name']) ? (string)$t['name'] : 'tag', 'type' => isset($t['type']) ? (string)$t['type'] : '', 'rows' => $rows);
-			$sig = $item['type'] . '|' . $item['name'] . '|' . json_encode($rows);
+			$item = array('name' => isset($t['name']) ? (string)$t['name'] : 'tag', 'type' => isset($t['type']) ? (string)$t['type'] : '', 'rows' => $rows, 'on' => $on);
+			$sig = $item['type'] . '|' . $item['name'] . '|' . json_encode($rows) . '|' . json_encode($on);
 			if (isset($seenTag[$sig])) continue;
 			$seenTag[$sig] = true;
 			if ($item['type'] === 'geologic_unit') $b['units'][] = $item; else $b['tags'][] = $item;
 		}
 		// images (photos rendered in M4; the attributes are listed now so nothing is lost)
-		if (!empty($p['images'])) {
-			foreach ((array)$p['images'] as $img) {
-				$img = (array)$img;
-				$rows = array();
-				foreach ($img as $k => $v) {
-					if (in_array($k, array('id', 'self', 'annotated', 'title', 'width', 'height', 'image_type', 'caption'), true)) continue;
-					if ($v === null || $v === '' || $v === array()) continue;
-					FieldbookProps::walk($v, $rows, 0, $k);
-				}
-				$b['images'][] = array(
-					'id' => isset($img['id']) ? (string)$img['id'] : '',
-					'title' => isset($img['title']) ? (string)$img['title'] : '',
-					'caption' => isset($img['caption']) ? (string)$img['caption'] : '',
-					'type' => isset($img['image_type']) ? (string)$img['image_type'] : '',
-					'annotated' => !empty($img['annotated']),
-					'width' => isset($img['width']) ? (int)$img['width'] : 0, 'height' => isset($img['height']) ? (int)$img['height'] : 0,
-					'rows' => $rows, 'children' => array(),
-				);
-			}
-		}
+		if (!empty($p['images'])) $b['images'] = self::imageBlocks($p['images']);
 		$b['families'] = FieldbookProps::families($p);
 		return $b;
 	}
@@ -370,7 +536,10 @@ class FieldbookModel
 	public function imageIds()
 	{
 		$out = array();
-		foreach ($this->projects as $p) foreach ($p['datasets'] as $ds) foreach ($ds['days'] as $day) foreach (self::collectImageIds($day['spots']) as $id) $out[] = $id;
+		foreach ($this->projects as $p) {
+			foreach ($p['datasets'] as $ds) foreach ($ds['days'] as $day) foreach (self::collectImageIds($day['spots']) as $id) $out[] = $id;
+			if (!empty($p['memos'])) foreach ($p['memos'] as $memo) foreach ($memo['images'] as $img) $out[] = $img['id'];
+		}
 		return array_values(array_unique($out));
 	}
 
@@ -420,7 +589,7 @@ class FieldbookModel
 		if ($b['notes'] !== '') $out[] = $b['notes'];
 		foreach ($b['orientations'] as $o) self::orientationScalars($o, $out);
 		foreach ($b['samples'] as $s) { $out[] = $s['title']; foreach ($s['rows'] as $r) { $out[] = $r['k']; if ($r['v'] !== '') $out[] = $r['v']; } }
-		foreach (array_merge($b['units'], $b['tags']) as $t) { $out[] = $t['name']; foreach ($t['rows'] as $r) { $out[] = $r['k']; if ($r['v'] !== '') $out[] = $r['v']; } }
+		foreach (array_merge($b['units'], $b['tags']) as $t) { $out[] = $t['name']; foreach ($t['rows'] as $r) { $out[] = $r['k']; if ($r['v'] !== '') $out[] = $r['v']; } if (!empty($t['on'])) foreach ($t['on'] as $o) $out[] = $o; }
 		foreach ($b['images'] as $img) {
 			$out[] = $img['title']; $out[] = $img['caption']; $out[] = $img['type']; $out[] = $img['id'];
 			foreach ($img['rows'] as $r) { $out[] = $r['k']; if ($r['v'] !== '') $out[] = $r['v']; }

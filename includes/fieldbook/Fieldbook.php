@@ -7,7 +7,9 @@
  *              and the Export Builder worker (captureDir set). Fetches
  *              exactly what the legacy generator fetched (same data path,
  *              same scope_groups handling), adds the book tree (project /
- *              dataset names + spot membership), builds the model, renders.
+ *              dataset names + spot membership) and the project-level data
+ *              (every project tag + the memos the reader may see, M7),
+ *              builds the model, renders.
  *
  * @package    StraboSpot Web Site
  * @copyright  2026 StraboSpot
@@ -71,8 +73,13 @@ class Fieldbook
 			$notes[(string)$d] = is_array($dn) ? $dn : array();
 		}
 		$meta = self::meta($strabo, $owner, $tree, $get);
-		$model = FieldbookModel::build($features, $tags, $notes, $tree, $meta);
-		if ($progress) call_user_func($progress, 'gather', 0, 0, count($features) . ' spots, ' . count($model->imageIds()) . ' photos, ' . self::dayCount($model) . ' field days');
+		// project-level data (design §14 M7): every tag of each project + the memos (reports) the READER may see.
+		// The reader is the signed-in user on the two web doors ($strabo is built from the session) and the
+		// job's user in the Export Builder worker (readerUserpkey, set by the plugin; $strabo is the owner there).
+		$reader = isset($out->readerUserpkey) ? (int)$out->readerUserpkey : (int)$strabo->userpkey;
+		$projectData = self::projectData($strabo, $tree, $reader);
+		$model = FieldbookModel::build($features, $tags, $notes, $tree, $meta, $projectData);
+		if ($progress) call_user_func($progress, 'gather', 0, 0, count($features) . ' spots, ' . count($model->imageIds()) . ' photos, ' . self::dayCount($model) . ' field days' . ($model->counts['memos'] ? ', ' . $model->counts['memos'] . ' memos' : ''));
 		$photos = self::photos($meta['options']);
 		if ($photos->enabled()) $photos->setFilenames(self::imageFilenames($strabo, $model->imageIds()));
 		$renderer = new FieldbookRenderer($model, isset($out->progress) ? $out->progress : null, self::maps($meta['options']), $photos);
@@ -147,6 +154,86 @@ class Fieldbook
 			if ($rows) foreach ($rows as $r) $map[(string)$r->value('id')] = (string)$r->value('filename');
 		}
 		return $map;
+	}
+
+	/**
+	 * Project-level data for the book (design §14 M7): for every (owner, project) in the tree, the project's
+	 * complete tag list (json_tags, including tags attached to no spot or to spots outside the book) and its
+	 * reports ("Memos" in the app, json_reports) filtered by audience for $reader:
+	 *   anyone         every reader of the book
+	 *   collaborators  the owner, an accepted collaborator of the project, or the memo's author
+	 *   only_me        the memo's author only (straboUserId; a memo with no author belongs to the owner)
+	 * A memo with no audience recorded (older app versions) is treated as "collaborators". Reports the reader
+	 * may not see are counted (hidden) so the colophon can say so without revealing them.
+	 * Returns [ "owner|project_id" => {tags: [assoc], reports: [assoc], hidden: n, authors: [pkey => name]} ].
+	 */
+	public static function projectData($strabo, array $tree, $reader)
+	{
+		$out = array();
+		if (!isset($strabo->neodb)) return $out;
+		$reader = (int)$reader;
+		foreach ($tree as $t) {
+			$owner = (int)$t['owner']; $pid = (string)$t['project_id'];
+			if ($pid === '' || !preg_match('/^\d+$/', $pid)) continue;
+			$key = $owner . '|' . $pid;
+			if (isset($out[$key])) continue;
+			$rows = $strabo->neodb->query("MATCH (u:User {userpkey: $owner})-[:HAS_PROJECT]->(p:Project {id: $pid}) RETURN p.json_tags AS tags, p.json_reports AS reports LIMIT 1");
+			$entry = array('tags' => array(), 'reports' => array(), 'hidden' => 0, 'authors' => array());
+			if ($rows) foreach ($rows as $r) {
+				$tj = (string)$r->value('tags'); $rj = (string)$r->value('reports');
+				$tags = $tj !== '' ? json_decode($tj, true) : null;
+				$reports = $rj !== '' ? json_decode($rj, true) : null;
+				if (is_array($tags)) foreach ($tags as $tag) if (is_array($tag)) $entry['tags'][] = $tag;
+				if (is_array($reports)) {
+					$collab = null;   // resolved lazily: one PG lookup per project at most
+					foreach ($reports as $rep) {
+						if (!is_array($rep)) continue;
+						$author = isset($rep['straboUserId']) && (int)$rep['straboUserId'] ? (int)$rep['straboUserId'] : $owner;
+						$aud = isset($rep['report_privacy']) ? (string)$rep['report_privacy'] : (isset($rep['privacy']) ? (string)$rep['privacy'] : '');
+						if (!in_array($aud, array('anyone', 'collaborators', 'only_me'), true)) $aud = 'collaborators';
+						$visible = ($aud === 'anyone') || ($reader === $author);
+						if (!$visible && $aud === 'collaborators') {
+							if ($collab === null) $collab = ($reader === $owner) || self::isCollaborator($strabo, $pid, $owner, $reader);
+							$visible = $collab;
+						}
+						if (!$visible) { $entry['hidden']++; continue; }
+						$rep['_author'] = $author; $rep['_audience'] = $aud;
+						$entry['reports'][] = $rep;
+						$entry['authors'][$author] = '';
+					}
+				}
+			}
+			foreach ($entry['authors'] as $pk => $name) $entry['authors'][$pk] = self::userName($strabo, $pk);
+			// names of the spots the visible memos cite (a memo may cite a spot in a dataset outside the book)
+			$sids = array();
+			foreach ($entry['reports'] as $rep) foreach ((array)(isset($rep['spots']) ? $rep['spots'] : array()) as $sid) if (preg_match('/^\d+$/', (string)$sid)) $sids[(string)$sid] = true;
+			$entry['spot_names'] = array();
+			foreach (array_chunk(array_keys($sids), 500) as $chunk) {
+				$nr = $strabo->neodb->query("MATCH (u:User {userpkey: $owner})-[:HAS_PROJECT]->(p:Project {id: $pid})-[:HAS_DATASET]->(:Dataset)-[:HAS_SPOT]->(s:Spot) WHERE s.id IN [" . implode(',', $chunk) . "] RETURN s.id AS id, s.name AS name");
+				if ($nr) foreach ($nr as $r) $entry['spot_names'][(string)$r->value('id')] = (string)$r->value('name');
+			}
+			$out[$key] = $entry;
+		}
+		return $out;
+	}
+
+	/** Accepted, not disabled collaborator row of (project, owner) for $userpkey. */
+	public static function isCollaborator($strabo, $projectId, $owner, $userpkey)
+	{
+		if (!isset($strabo->db) || !(int)$userpkey) return false;
+		$n = $strabo->db->get_var_prepared(
+			'SELECT count(*) FROM collaborators WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND collaborator_user_pkey = $3 AND accepted = true AND disabled = false',
+			array((string)$projectId, (int)$owner, (int)$userpkey));
+		return (int)$n > 0;
+	}
+
+	/** "First Last" for a users row, '' when unknown. */
+	public static function userName($strabo, $userpkey)
+	{
+		if (!isset($strabo->db) || !(int)$userpkey) return '';
+		$row = $strabo->db->get_row_prepared('SELECT firstname, lastname FROM users WHERE pkey = $1', array((int)$userpkey));
+		if (!$row) return '';
+		return trim((isset($row->firstname) ? $row->firstname : '') . ' ' . (isset($row->lastname) ? $row->lastname : ''));
 	}
 
 	/** Export Builder layout-group members => tree (design §5). */
