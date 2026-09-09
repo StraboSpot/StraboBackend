@@ -141,7 +141,7 @@ check('sub-feature tag: counted on its spot, 1 feature', count($byName['Bedding 
 $rowsOf = function ($t) { $o = array(); foreach ($t['rows'] as $r) $o[$r['k']] = $r['v']; return $o; };
 $fr = $rowsOf($byName['Field checked']);
 check('tag fields kept (documentation type, notes, color); spots/id/name/type not repeated', $fr['Documentation type'] === 'Observation timing' && $fr['Notes'] === 'Checked in the field' && $fr['Color'] === '#FF0000' && !isset($fr['Spots']) && !isset($fr['Id']), json_encode($fr));
-check('counts: 4 tags, 5 memos, 1 hidden', $m->counts['tags'] === 4 && $m->counts['memos'] === 5 && $m->counts['hiddenMemos'] === 1, json_encode($m->counts));
+check('counts: 1 geologic unit + 3 tags (counted apart, colleague 2026-09-09), 5 memos, 1 hidden', $m->counts['units'] === 1 && $m->counts['tags'] === 3 && $m->counts['memos'] === 5 && $m->counts['hiddenMemos'] === 1, json_encode($m->counts));
 check('summary Tags table lists every project tag with its in-book count (0 allowed)', isset($m->summary['tags']['Elsewhere only']) && $m->summary['tags']['Elsewhere only']['count'] === 0 && $m->summary['tags']['Field checked']['count'] === 1 && $m->summary['tags']['Bedding of note']['count'] === 1, json_encode(array_map(function ($t) { return $t['count']; }, $m->summary['tags'])));
 check('summary Geologic units table lists the unattached unit with 0', isset($m->summary['units']['Basalt of Nowhere']) && $m->summary['units']['Basalt of Nowhere']['count'] === 0);
 $s1 = null; foreach ($p['datasets'][0]['days'][0]['spots'] as $s) if ($s['id'] === (string)$S1) $s1 = $s;
@@ -189,11 +189,11 @@ $stages = array();
 list($cap, $stray) = capture_run($strabo, $GET, "$TMP/owner", null, function ($stage, $done, $total, $note) use (&$stages) { $stages[] = array($stage, $note); });
 check('web door (reader = $strabo user = owner): one PDF, no stray output', count($cap) === 1 && $stray === '', $stray);
 $pdf = file_get_contents($cap[0]['path']);
-check('PDF has Tags + Memos bookmarks and the visible memo subjects', strpos($pdf, u16('Tags')) !== false && strpos($pdf, u16('Memos')) !== false && strpos($pdf, u16('Anyone memo')) !== false && strpos($pdf, u16('Owner private memo')) !== false && strpos($pdf, u16('Collaborators memo')) !== false);
+check('PDF has Tags + Memos bookmarks and the visible memo subjects', strpos($pdf, u16('Tags and geologic units')) !== false && strpos($pdf, 'Geologic units') !== false && strpos($pdf, u16('Memos')) !== false && strpos($pdf, u16('Anyone memo')) !== false && strpos($pdf, u16('Owner private memo')) !== false && strpos($pdf, u16('Collaborators memo')) !== false);
 check('PDF omits the hidden memo (collaborator only_me)', strpos($pdf, u16('Collaborator private memo')) === false);
 check('PDF pages >= 4', pdf_pages($pdf) >= 4, pdf_pages($pdf));
 $notesSeen = array_map(function ($s) { return $s[1]; }, $stages);
-check('progress: gather note counts memos; build notes for Tags (4) and Memos (5)', in_array('Tags (4)', $notesSeen, true) && in_array('Memos (5)', $notesSeen, true) && count(array_filter($notesSeen, function ($n) { return strpos($n, '5 memos') !== false; })) === 1, json_encode($notesSeen));
+check('progress: gather note counts memos; build notes for Tags and geologic units (4) and Memos (5)', in_array('Tags and geologic units (4)', $notesSeen, true) && in_array('Memos (5)', $notesSeen, true) && count(array_filter($notesSeen, function ($n) { return strpos($n, '5 memos') !== false; })) === 1, json_encode($notesSeen));
 
 // ------------------------------------------------------------------ 5. worker reader identity (readerUserpkey overrides the $strabo user)
 list($cap2) = capture_run($strabo, $GET + array('book_tree' => array(array('owner' => $OWNER, 'project_id' => (string)$P1, 'project_name' => 'Memo Fixture Project', 'dsids' => array((string)$DS_A), 'dataset_names' => array((string)$DS_A => 'Book Dataset'), 'spot_map' => array((string)$S1 => array('ds' => (string)$DS_A, 'name' => 'M7 Station 1'), (string)$S2 => array('ds' => (string)$DS_A, 'name' => 'M7 Station 2'))))), "$TMP/stranger", $STRANGER);

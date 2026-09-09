@@ -20,7 +20,7 @@ class FieldbookModel
 {
 	public $meta;        // title, subtitle, owner, generated, doi, options
 	public $projects = array();
-	public $counts = array('spots' => 0, 'children' => 0, 'images' => 0, 'samples' => 0, 'orientations' => 0, 'days' => 0, 'memos' => 0, 'hiddenMemos' => 0, 'tags' => 0);
+	public $counts = array('spots' => 0, 'children' => 0, 'images' => 0, 'samples' => 0, 'orientations' => 0, 'days' => 0, 'memos' => 0, 'hiddenMemos' => 0, 'tags' => 0, 'units' => 0);   // tags = tags that are not geologic units; units counted apart (users treat them as different things)
 	public $dateRange = array(null, null);   // [first day key, last day key]
 	public $summary = array('units' => array(), 'tags' => array(), 'samples' => array(), 'images' => array());
 	public $notes = array();  // build notes for the colophon
@@ -153,11 +153,11 @@ class FieldbookModel
 			$m->projects[$pi]['tags'] = self::projectTags((array)$pd['tags'], $byId, $blocks);
 			$m->projects[$pi]['memos'] = self::memos($pd, $byId, $names, $m->projects[$pi]['tags']);
 			$m->projects[$pi]['hiddenMemos'] = isset($pd['hidden']) ? (int)$pd['hidden'] : 0;
-			$m->counts['tags'] += count($m->projects[$pi]['tags']);
 			$m->counts['memos'] += count($m->projects[$pi]['memos']);
 			$m->counts['hiddenMemos'] += $m->projects[$pi]['hiddenMemos'];
 			foreach ($m->projects[$pi]['tags'] as $t) {
 				$table = $t['type'] === 'geologic_unit' ? 'units' : 'tags';
+				$m->counts[$table]++;
 				if (isset($m->summary[$table][$t['name']])) continue;   // tallied from the spots already
 				$m->summary[$table][$t['name']] = array('name' => $t['name'], 'type' => $t['type'], 'rows' => $t['rows'], 'count' => count($t['inBook']));
 			}
