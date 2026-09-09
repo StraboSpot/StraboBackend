@@ -181,6 +181,7 @@ class FieldbookRenderer
 		$rows[] = array('Orientation measurements', (string)$m->counts['orientations']);
 		$rows[] = array('Samples', (string)$m->counts['samples']);
 		$rows[] = array('Photos', (string)$m->counts['images']);
+		if ($m->counts['units']) $rows[] = array('Geologic units', (string)$m->counts['units']);
 		if ($m->counts['tags']) $rows[] = array('Tags', (string)$m->counts['tags']);
 		if ($m->counts['memos']) $rows[] = array('Memos', (string)$m->counts['memos']);
 		if ($m->meta['doi'] !== '') $rows[] = array('DOI', $m->meta['doi']);
@@ -192,7 +193,9 @@ class FieldbookRenderer
 		$spots = 0; $days = 0;
 		foreach ($p['datasets'] as $d) { $spots += $d['spotCount']; $days += count($d['days']); }
 		$rows = array(array('Datasets', (string)count($p['datasets'])), array('Field days', (string)$days), array('Spots', (string)$spots));
-		if (!empty($p['tags'])) $rows[] = array('Tags', (string)count($p['tags']));
+		list($nUnits, $nTags) = self::unitTagCounts($p['tags']);
+		if ($nUnits) $rows[] = array('Geologic units', (string)$nUnits);
+		if ($nTags) $rows[] = array('Tags', (string)$nTags);
 		if (!empty($p['memos'])) $rows[] = array('Memos', (string)count($p['memos']));
 		return $rows;
 	}
@@ -773,16 +776,27 @@ class FieldbookRenderer
 		$pdf->Ln(3);
 	}
 
+	/** Geologic units and tags of a project list: units first (they share the tag mechanism but users treat them as different things). */
+	private static function unitTagCounts(array $tags)
+	{
+		$u = 0; $t = 0;
+		foreach ($tags as $tag) { if ($tag['type'] === 'geologic_unit') $u++; else $t++; }
+		return array($u, $t);
+	}
+
 	/** Every tag of the project: name (type), its fields, the spots it is on (linked when in the book) and how many lie outside. */
 	private function tagsSection(array $p, $level)
 	{
 		$pdf = $this->pdf;
-		$n = count($p['tags']);
-		$this->report('build', 'Tags (' . $n . ')');
-		$this->sectionHead('Tags', $level, $n . ' ' . ($n === 1 ? 'tag' : 'tags'));
+		list($nUnits, $nTags) = self::unitTagCounts($p['tags']);
+		$this->report('build', 'Tags and geologic units (' . ($nUnits + $nTags) . ')');
+		$bits = array();
+		if ($nUnits) $bits[] = $nUnits . ($nUnits === 1 ? ' geologic unit' : ' geologic units');
+		if ($nTags) $bits[] = $nTags . ($nTags === 1 ? ' tag' : ' tags');
+		$this->sectionHead('Tags and geologic units', $level, implode(', ', $bits));
 		$pdf->SetFont($pdf->body, '', 8.5);
 		$pdf->SetTextColor(90, 90, 90);
-		$pdf->MultiCell(0, self::LHS, 'Tags belong to the project' . ($this->multiProject ? ' "' . $p['name'] . '"' : '') . '. Every tag is listed, including tags on spots outside this book and tags not yet attached to a spot.', 0, 'L');
+		$pdf->MultiCell(0, self::LHS, 'Tags and geologic units belong to the project' . ($this->multiProject ? ' "' . $p['name'] . '"' : '') . '. Every one is listed, including those on spots outside this book and those not yet attached to a spot.', 0, 'L');
 		$pdf->SetTextColor(0, 0, 0);
 		$pdf->Ln(2);
 		$x0 = $pdf->lm(); $w = $pdf->innerW();
@@ -1283,7 +1297,7 @@ class FieldbookRenderer
 		$opts = $m->meta['options'];
 		$lines[] = 'Options: page ' . (isset($opts['page']) ? $opts['page'] : 'letter') . ', photos ' . (isset($opts['photos']) ? $opts['photos'] : 'sheets') . ', map ' . (isset($opts['map']) ? $opts['map'] : 'outdoors') . ', stereonets ' . (isset($opts['nets']) ? $opts['nets'] : 'on') . '.';
 		$lines[] = 'Spots are grouped by field day (creation date) and listed in creation order. Every observation stored with a spot is included; families without a designed layout appear under "Other observations".';
-		$lines[] = 'Project tags and memos follow the day sections of their project; a memo is shown when its audience includes the reader who made this book' . ($m->counts['memos'] || $m->counts['hiddenMemos'] ? ' (' . $m->counts['memos'] . ' shown, ' . $m->counts['hiddenMemos'] . ' not shown)' : '') . '.';
+		$lines[] = 'Project tags, geologic units and memos follow the day sections of their project; a memo is shown when its audience includes the reader who made this book' . ($m->counts['memos'] || $m->counts['hiddenMemos'] ? ' (' . $m->counts['memos'] . ' shown, ' . $m->counts['hiddenMemos'] . ' not shown)' : '') . '.';
 		foreach ($m->notes as $n) $lines[] = $n;
 		if ($this->maps) foreach ($this->maps->notes() as $n) $lines[] = $n; else $lines[] = 'Maps: none (option).';
 		if ($this->nets) foreach ($this->nets->notes() as $n) $lines[] = $n; else $lines[] = 'Stereonets: none (option).';
