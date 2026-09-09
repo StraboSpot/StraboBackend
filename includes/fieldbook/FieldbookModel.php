@@ -192,7 +192,7 @@ class FieldbookModel
 			$features = 0;
 			if (!empty($t['features']) && (is_array($t['features']) || is_object($t['features']))) foreach ((array)$t['features'] as $sid => $fids) { $sids[(string)$sid] = true; $features += count((array)$fids); }
 			$inBook = array(); $outside = 0;
-			foreach (array_keys($sids) as $sid) { if (isset($byId[$sid])) $inBook[] = array('id' => $sid, 'name' => $blocks[$byId[$sid]]['name']); else $outside++; }
+			foreach (array_keys($sids) as $sid) { if (isset($byId[$sid])) $inBook[] = array('id' => $sid, 'name' => $blocks[$byId[$sid]]['name'], 'inBook' => true); else $outside++; }
 			$out[] = array(
 				'id' => isset($t['id']) ? (string)$t['id'] : '',
 				'name' => isset($t['name']) && (string)$t['name'] !== '' ? (string)$t['name'] : 'tag',

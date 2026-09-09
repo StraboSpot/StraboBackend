@@ -134,7 +134,7 @@ $m = FieldbookModel::build($json['features'], $tags, $notes, $tree, $meta, $pdOw
 $p = $m->projects[0];
 $byName = array(); foreach ($p['tags'] as $t) $byName[$t['name']] = $t;
 check('project tags: all four listed, geologic unit first then by name', array_keys($byName) === array('Basalt of Nowhere', 'Bedding of note', 'Elsewhere only', 'Field checked'), json_encode(array_keys($byName)));
-check('tag on a spot in the book: 1 in book, 0 outside', count($byName['Field checked']['inBook']) === 1 && $byName['Field checked']['inBook'][0]['name'] === 'M7 Station 1' && $byName['Field checked']['outside'] === 0);
+check('tag on a spot in the book: 1 in book (flagged inBook so the renderer links it), 0 outside', count($byName['Field checked']['inBook']) === 1 && $byName['Field checked']['inBook'][0]['name'] === 'M7 Station 1' && $byName['Field checked']['inBook'][0]['inBook'] === true && $byName['Field checked']['outside'] === 0);
 check('tag on no spot: nothing in book, nothing outside', $byName['Basalt of Nowhere']['inBook'] === array() && $byName['Basalt of Nowhere']['outside'] === 0);
 check('tag on a spot outside the book: 0 in book, 1 outside', $byName['Elsewhere only']['inBook'] === array() && $byName['Elsewhere only']['outside'] === 1);
 check('sub-feature tag: counted on its spot, 1 feature', count($byName['Bedding of note']['inBook']) === 1 && $byName['Bedding of note']['features'] === 1);
