@@ -720,6 +720,25 @@
 		row.notBtn.setAttribute('aria-pressed', row.not ? 'true' : 'false');
 	}
 
+	/**
+	 * The row a fresh builder opens on (first load, Start over, last row
+	 * removed): a Keyword row with the cursor in its box, so the page
+	 * offers an obvious "type here" and saves the dropdown click for the
+	 * common case (Claire 2026-09-14; replaces the neutral "Choose
+	 * Criteria" opener of 08-02). Added rows still open on the neutral
+	 * picker: the second row is where the user chooses something else.
+	 */
+	function addDefaultRow(focus) {
+		var row = addRow({ crit: 'U1' });
+		if (focus) {
+			var input = row.valueBox.querySelector('input');
+			if (input) {
+				try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+			}
+		}
+		return row;
+	}
+
 	function addRow(state) {
 		var row = {
 			crit: (state && state.crit) || null,
@@ -757,7 +776,7 @@
 			var i = rows.indexOf(row);
 			if (i !== -1) rows.splice(i, 1);
 			wrap.remove();
-			if (rows.length === 0) addRow();   // §6.3.4: never zero rows
+			if (rows.length === 0) addDefaultRow(true);   // §6.3.4: never zero rows
 			notifyChange();
 		}
 		removeBtn.addEventListener('click', remove);
@@ -810,13 +829,16 @@
 			if (resetBtn.classList.contains('ss-disabled')) return;
 			rows.slice().forEach(function (r) { r.el.remove(); });
 			rows = [];
-			addRow();
+			addDefaultRow(true);
 			notifyChange();
 		});
 		addBar.appendChild(resetBtn);
 		container.appendChild(addBar);
 
-		addRow();   // open on an empty "— pick criterion —" row (Jason 08-02)
+		// Open on a Keyword row with the cursor in it (Claire 09-14). The
+		// focus is skipped on phones: the criteria drawer manages its own
+		// focus when it opens, and focusing an off-canvas input scrolls.
+		addDefaultRow(!(window.matchMedia && window.matchMedia('(max-width: 1023px)').matches));
 		notifyChange();
 	}
 
@@ -856,7 +878,7 @@
 			var state = C.dslToRow(entry);
 			if (state) addRow(state);
 		});
-		if (rows.length === 0) addRow();
+		if (rows.length === 0) addDefaultRow(false);
 		notifyChange();
 	}
 

@@ -260,7 +260,11 @@ check('tiles config exposes satellite + macrostrat (M3)',
 	strpos($body, 'mapbox.satellite') !== false && strpos($body, '/v5/macrostrat/') !== false);
 check('Layers panel markup present (M3)', strpos($body, 'ssLayersPanel') !== false
 	&& strpos($body, 'ssMacrostratChk') !== false && strpos($body, 'ssMacrostratOpacity') !== false);
-check('quiet prompt carries the browse door (M3)', strpos($body, 'ssBrowseGlobe') !== false);
+check('page opens on the catalog: no browse door, loading text (2026-09-14)',
+	strpos($body, 'ssBrowseGlobe') === false && strpos($body, 'Loading projects') !== false);
+check('globe zoom stack markup present (2026-09-14)', strpos($body, 'ssZoomIn') !== false
+	&& strpos($body, 'ssZoomOut') !== false && strpos($body, 'ssZoomFit') !== false);
+check('opacity slider readout present (2026-09-14)', strpos($body, 'ssMacrostratOpacityVal') !== false);
 check('Macrostrat click config + hint present (M5)', strpos($body, 'map_query_v2') !== false
 	&& strpos($body, 'macrostrat.org/map/loc/') !== false && strpos($body, 'ssMacrostratHint') !== false);
 check('mobile drawer chrome present (M4)', strpos($body, 'ssDrawerBackdrop') !== false
@@ -310,7 +314,7 @@ check('results.js: offset pager removed', strpos($body, 'renderPager') === false
 // Globe View M3: layers panel + browse-mode wiring in the served assets.
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/globe.js', null);
 check('globe.js asset 200', $st === 200, "got $st");
-check('globe.js: M5 build tag', strpos($body, 'm5-geo-click') !== false);
+check('globe.js: build tag', strpos($body, 'm6-claire-r1') !== false);
 check('globe.js: geology click wired (M5)', strpos($body, 'CFG.macrostrat.query') !== false
 	&& strpos($body, 'function geologyClick') !== false && strpos($body, 'ss-gpop-geo') !== false
 	&& strpos($body, 'pickEllipsoid') !== false && strpos($body, "'ss-geopin'") !== false);
@@ -318,15 +322,22 @@ check('globe.js: phone popup sheet mode (M4)', strpos($body, 'ss-gpop-sheet') !=
 check('globe.js: satellite + macrostrat layers wired', strpos($body, 'CFG.tiles.satellite') !== false
 	&& strpos($body, 'CFG.tiles.macrostrat') !== false
 	&& strpos($body, 'raiseToTop') !== false);
-check('globe.js: browse popups drop the list link', strpos($body, 'isBrowse()') !== false);
+check('globe.js: browse popups keep the list link; zoom stack wired (2026-09-14)',
+	strpos($body, 'isBrowse()') === false && strpos($body, 'function wireZoomControls') !== false
+	&& strpos($body, 'function fitResults') !== false && strpos($body, 'syncOpacityReadout') !== false);
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/results.js', null);
-check('results.js: browse mode gates the list', strpos($body, 'state.browse') !== false
-	&& strpos($body, 'ss-browse-link') !== false);
+check('results.js: browse mode loads list pages, no list gate (2026-09-14)',
+	strpos($body, 'state.browse') !== false && strpos($body, 'ss-browse-link') === false
+	&& strpos($body, "v === 'list' && state.browse") === false);
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/app.js', null);
-check('app.js: /globe door + browse entry', strpos($body, 'view=globe') !== false
-	&& strpos($body, 'browse: true') !== false);
+check('app.js: /globe door + catalog on load (2026-09-14)', strpos($body, 'view=globe') !== false
+	&& strpos($body, 'browse: true') !== false && strpos($body, 'function runCatalog') !== false
+	&& strpos($body, 'hasActiveRow() && !browse') === false);
 check('app.js: mobile drawer wiring (M4)', strpos($body, 'ss-drawer-open') !== false
 	&& strpos($body, 'activeRowCount') !== false && strpos($body, "'Escape'") !== false);
+list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/builder.js', null);
+check('builder.js: Keyword default first row (2026-09-14)', strpos($body, 'function addDefaultRow') !== false
+	&& strpos($body, "addRow({ crit: 'U1' })") !== false);
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/css/search.css', null);
 check('search.css asset 200', $st === 200, "got $st");
 check('search.css: mobile drawer + full-bleed globe rules (M4)',
@@ -334,6 +345,11 @@ check('search.css: mobile drawer + full-bleed globe rules (M4)',
 	&& strpos($body, '.ss-view-toggle.ss-globe-toggle') !== false
 	&& strpos($body, '.ss-globe-popup.ss-gpop-sheet') !== false
 	&& strpos($body, 'max-width: 950px') !== false);
+check('search.css: one control size + slider track + zoom stack (2026-09-14)',
+	strpos($body, '.ss-rail .button.small') !== false
+	&& strpos($body, '::-moz-range-track') !== false && strpos($body, '::-webkit-slider-thumb') !== false
+	&& strpos($body, '.ss-opacity-val') !== false && strpos($body, '.ss-globe-zoom') !== false
+	&& strpos($body, '.ss-zoom-btn') !== false);
 check('search.css: geology card + affordance rules (M5)',
 	strpos($body, '.ss-globe-wrap.ss-geo-on') !== false
 	&& strpos($body, '.ss-gpop-desc') !== false

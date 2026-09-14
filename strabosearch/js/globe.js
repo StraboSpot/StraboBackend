@@ -34,7 +34,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'm5-cluster-label-r1';
+	var BUILD = 'm6-claire-r1';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -93,13 +93,6 @@
 	function saveLayerPrefs() {
 		try { window.localStorage.setItem(LAYER_PREFS_KEY, JSON.stringify(layerPrefs)); }
 		catch (e) { /* ignore */ }
-	}
-
-	/** Browse mode (M3): an empty-criteria DSL is the /globe front-door
-	 *  contract; the list view stays gated, so popups drop their
-	 *  "View results in list" links. */
-	function isBrowse() {
-		return !!(baseDsl && (!baseDsl.criteria || baseDsl.criteria.length === 0));
 	}
 
 	// ══════════════════════════════════════════════════════════════════
@@ -332,6 +325,7 @@
 			op.value = String(Math.round(layerPrefs.opacity * 100));
 			op.disabled = !layerPrefs.macrostrat;
 		}
+		syncOpacityReadout();
 		// M5 affordances: the "click the map" hint shows only while the
 		// overlay is on, and the canvas cursor turns crosshair (CSS).
 		var hint = document.getElementById('ssMacrostratHint');
@@ -386,6 +380,7 @@
 			var v = Math.max(10, Math.min(100, parseInt(op.value, 10) || 60)) / 100;
 			layerPrefs.opacity = v;
 			saveLayerPrefs();
+			syncOpacityReadout();
 			if (layerMacrostrat) {
 				layerMacrostrat.alpha = v;
 				viewer.scene.requestRender();
@@ -393,6 +388,62 @@
 		});
 
 		syncLayersUI();
+	}
+
+	/** "60%" beside the opacity slider (Claire 2026-09-14): the slider's
+	 *  state reads at rest, not only while dragging. */
+	function syncOpacityReadout() {
+		var out = document.getElementById('ssMacrostratOpacityVal');
+		if (out) out.textContent = Math.round(layerPrefs.opacity * 100) + '%';
+	}
+
+	// ══════════════════════════════════════════════════════════════════
+	// zoom stack (Claire 2026-09-14)
+	// ══════════════════════════════════════════════════════════════════
+	// Cesium ships no zoom buttons and the viewer's home button is off, so
+	// the only visible way to zoom was clicking a cluster (wheel, pinch and
+	// right-drag work but are undiscoverable). + / − halve or double the
+	// camera height straight down from where it is, inside the same
+	// envelope the cluster zoom uses (2.5 km floor, 30,000 km ceiling);
+	// fit reframes the current results the way a fresh search does, or
+	// returns to the browse home view when the results wrap the planet.
+
+	var ZOOM_FLOOR_M = 2500;
+	var ZOOM_CEILING_M = 30000000;
+	var HOME_VIEW = { lon: -40.0, lat: 25.0, height: 22000000 };
+	var lastFeatures = [];
+
+	function wireZoomControls() {
+		var zi = document.getElementById('ssZoomIn');
+		var zo = document.getElementById('ssZoomOut');
+		var zf = document.getElementById('ssZoomFit');
+		if (zi) zi.addEventListener('click', function () { zoomBy(0.5); });
+		if (zo) zo.addEventListener('click', function () { zoomBy(2); });
+		if (zf) zf.addEventListener('click', fitResults);
+	}
+
+	function zoomBy(factor) {
+		if (!viewer) return;
+		hidePopup();
+		var carto = viewer.camera.positionCartographic;
+		var h = Math.min(ZOOM_CEILING_M, Math.max(ZOOM_FLOOR_M, carto.height * factor));
+		viewer.camera.flyTo({
+			destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, h),
+			duration: 0.6
+		});
+	}
+
+	function flyHome() {
+		viewer.camera.flyTo({
+			destination: Cesium.Cartesian3.fromDegrees(HOME_VIEW.lon, HOME_VIEW.lat, HOME_VIEW.height),
+			duration: 1.2
+		});
+	}
+
+	function fitResults() {
+		if (!viewer) return;
+		hidePopup();
+		if (!flyToFeatures(lastFeatures)) flyHome();
 	}
 
 	function setStatus(msg) {
@@ -457,6 +508,7 @@
 	 */
 	function renderFeatures(resp) {
 		hidePopup();
+		lastFeatures = (resp.features || []).slice();   // for the fit button
 		rebuildDataSource();
 		var ents = dataSource.entities;
 		var scal = horizonScalar();
@@ -508,7 +560,7 @@
 	 * the flight, so it never fights active interaction.
 	 */
 	function flyToFeatures(features) {
-		if (!features.length) return;
+		if (!features.length) return false;
 
 		// Spherical mean: the dominant direction of the marker mass. A
 		// short mean vector means the results wrap the whole planet and
@@ -525,7 +577,7 @@
 			if (f.lat > latMax) latMax = f.lat;
 		});
 		var norm = Math.sqrt(sx * sx + sy * sy + sz * sz) / features.length;
-		if (norm < 0.3) return;
+		if (norm < 0.3) return false;
 
 		// Smallest longitude window containing every marker: the largest
 		// gap between sorted longitudes (wraparound included) is the
@@ -549,7 +601,7 @@
 				destination: Cesium.Cartesian3.fromDegrees(cLon, cLat, 22000000),
 				duration: 1.5
 			});
-			return;
+			return true;
 		}
 
 		// Pad 15% per side (minimum 2°) and keep a sane floor so a
@@ -569,6 +621,7 @@
 			destination: Cesium.Rectangle.fromDegrees(west, south, east, north),
 			duration: 1.5
 		});
+		return true;
 	}
 
 	// Cluster point + label carry NO disableDepthTestDistance either (see
@@ -771,15 +824,15 @@
 		open.href = projectHref(hit);
 		open.target = '_blank';
 		links.appendChild(open);
-		if (!isBrowse()) {
-			var toList = el('a', null, 'View results in list');
-			toList.href = 'javascript:void(0);';
-			toList.addEventListener('click', function () {
-				hidePopup();
-				if (callbacks.onOpenList) callbacks.onOpenList();
-			});
-			links.appendChild(toList);
-		}
+		// Browse (no criteria) has a list view too since 2026-09-14, so the
+		// list link is unconditional.
+		var toList = el('a', null, 'View results in list');
+		toList.href = 'javascript:void(0);';
+		toList.addEventListener('click', function () {
+			hidePopup();
+			if (callbacks.onOpenList) callbacks.onOpenList();
+		});
+		links.appendChild(toList);
 		popupEl.appendChild(links);
 
 		placePopup(screenPos);
@@ -849,21 +902,19 @@
 		});
 		if (hits.length > MAX) {
 			list.appendChild(el('div', 'ss-gpop-meta',
-				'+ ' + (hits.length - MAX) + (isBrowse() ? ' more' : ' more in the list view')));
+				'+ ' + (hits.length - MAX) + ' more in the list view'));
 		}
 		popupEl.appendChild(list);
 
-		if (!isBrowse()) {
-			var links = el('div', 'ss-gpop-links');
-			var toList = el('a', null, 'View results in list');
-			toList.href = 'javascript:void(0);';
-			toList.addEventListener('click', function () {
-				hidePopup();
-				if (callbacks.onOpenList) callbacks.onOpenList();
-			});
-			links.appendChild(toList);
-			popupEl.appendChild(links);
-		}
+		var links = el('div', 'ss-gpop-links');
+		var toList = el('a', null, 'View results in list');
+		toList.href = 'javascript:void(0);';
+		toList.addEventListener('click', function () {
+			hidePopup();
+			if (callbacks.onOpenList) callbacks.onOpenList();
+		});
+		links.appendChild(toList);
+		popupEl.appendChild(links);
 
 		placePopup(screenPos);
 	}
@@ -1151,6 +1202,7 @@
 			statusEl = document.getElementById('ssGlobeStatus');
 			popupEl = document.getElementById('ssGlobePopup');
 			wireLayersPanel();
+			wireZoomControls();
 		},
 
 		/** New search DSL (criteria + subsystems). Fetches now if visible,
