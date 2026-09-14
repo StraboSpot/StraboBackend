@@ -809,7 +809,7 @@
 		searchCb = (opts && opts.onSearch) || function () {};
 
 		var addBar = el('div', 'ss-add-row');
-		var addBtn = el('a', 'button small', '+ AND row');
+		var addBtn = el('a', 'button small', '+ And Row');
 		addBtn.href = 'javascript:void(0);';
 		addBtn.addEventListener('click', function () {
 			if (addBtn.classList.contains('ss-disabled')) return;
@@ -823,7 +823,7 @@
 		// nearby for queries worth keeping. Stale results + the ?q= share
 		// URL are cleared by app.js's effective-query invalidation, which
 		// fires off the notifyChange below.
-		var resetBtn = el('a', 'button small ss-start-over', 'Start over');
+		var resetBtn = el('a', 'button small ss-start-over', 'Start Over');
 		resetBtn.href = 'javascript:void(0);';
 		resetBtn.addEventListener('click', function () {
 			if (resetBtn.classList.contains('ss-disabled')) return;

@@ -285,7 +285,7 @@ check('logged-in: My searches present', strpos($body, 'ssMySearchesBtn') !== fal
 // can't appear in served HTML — assert its wiring in the served JS asset.
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/builder.js', null);
 check('builder.js asset 200', $st === 200, "got $st");
-check('builder.js: Start over button wired', strpos($body, "'Start over'") !== false
+check('builder.js: Start over button wired', strpos($body, "'Start Over'") !== false
 	&& strpos($body, 'ss-start-over') !== false);
 check('builder.js: Start over pristine gating', strpos($body, "'Nothing to clear'") !== false);
 // Polygon map modal (08-12): drawn polygon replaced the W/S/E/N envelope.

@@ -335,12 +335,22 @@
 .ss-ta-list li.ss-ta-depth-2 { padding-left: 2.75em; }
 .ss-ta-list li.ss-ta-depth-3 { padding-left: 3.75em; }
 
+/* The two builder buttons share the rail width side by side (Jason
+   2026-09-14, 36" monitor: at the theme's 15pt breakpoint the inline
+   pair overflowed the 340px rail and the second wrapped, indented by
+   its margin). Flex + gap wraps cleanly if it ever must. */
 .ss-add-row {
 	margin-top: 0.6em;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5em;
 }
 
-.ss-add-row a + a {
-	margin-left: 0.5em;
+.ss-add-row a {
+	flex: 1 1 0;
+	min-width: 0;
+	text-align: center;
+	white-space: nowrap;
 }
 
 .ss-add-row a.ss-disabled {
