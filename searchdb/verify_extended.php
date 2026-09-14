@@ -231,7 +231,7 @@ function neoRows($neodb, $cypher, &$failed) {
 function epochFromNeoMt($v) {
 	if ($v === null || $v === '' || $v === false) return null;
 	if (is_numeric($v)) {
-		$n = (float)$v;
+		$n = normalizeEpochMs($v);   // x10 swap decode, same as the extractor
 		if ($n > 1000000000000) return $n / 1000.0;
 		if ($n > 1000000000)    return $n;
 		return null;
