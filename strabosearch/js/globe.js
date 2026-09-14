@@ -34,7 +34,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'm5-geo-click-r1';
+	var BUILD = 'm5-cluster-label-r1';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -44,6 +44,7 @@
 		samples: '#e0b040'
 	};
 	var CLUSTER_COLOR = '#e44c65';
+	var clusterLabelEyeOffset = null;   // Cesium.Cartesian3, made once Cesium is loaded
 
 	var wrap = null;          // #ssGlobeWrap
 	var statusEl = null;      // #ssGlobeStatus
@@ -594,8 +595,14 @@
 		cluster.billboard.show = false;
 		cluster.point.show = true;
 		cluster.point.pixelSize = 16 + Math.min(18, entities.length);
-		cluster.point.color = Cesium.Color.fromCssColorString(color).withAlpha(0.85);
-		cluster.point.outlineColor = Cesium.Color.WHITE.withAlpha(0.9);
+		// OPAQUE disc (fill AND outline alpha = 1). Cesium files a point
+		// in the translucent pass when either alpha is below 1, where it
+		// shared an undefined draw order with the count label at the same
+		// depth: the disc painted over the white digits and they read as
+		// muddy pink (Jason, 2026-09-14). An opaque disc draws in the
+		// opaque pass, before every label.
+		cluster.point.color = Cesium.Color.fromCssColorString(color);
+		cluster.point.outlineColor = Cesium.Color.WHITE;
 		cluster.point.outlineWidth = 2;
 		cluster.point.scaleByDistance = scal;
 		cluster.label.show = true;
@@ -605,6 +612,12 @@
 		cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
 		cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
 		cluster.label.scaleByDistance = scal;
+		// And the digits sit a few metres nearer the camera than the disc
+		// so the depth test can never tie in the disc's favour. eyeOffset.z
+		// moves ALONG the view ray (czm_eyeOffset), so the label's screen
+		// position is unchanged.
+		if (!clusterLabelEyeOffset) clusterLabelEyeOffset = new Cesium.Cartesian3(0, 0, -10);
+		cluster.label.eyeOffset = clusterLabelEyeOffset;
 	}
 
 	// ══════════════════════════════════════════════════════════════════
