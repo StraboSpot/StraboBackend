@@ -314,7 +314,7 @@ check('results.js: offset pager removed', strpos($body, 'renderPager') === false
 // Globe View M3: layers panel + browse-mode wiring in the served assets.
 list($st, $h, $body) = http_raw('GET', $BASE . '/strabosearch/js/globe.js', null);
 check('globe.js asset 200', $st === 200, "got $st");
-check('globe.js: build tag', strpos($body, 'm6-claire-r1') !== false);
+check('globe.js: build tag', strpos($body, 'm6-claire-r2') !== false);
 check('globe.js: geology click wired (M5)', strpos($body, 'CFG.macrostrat.query') !== false
 	&& strpos($body, 'function geologyClick') !== false && strpos($body, 'ss-gpop-geo') !== false
 	&& strpos($body, 'pickEllipsoid') !== false && strpos($body, "'ss-geopin'") !== false);

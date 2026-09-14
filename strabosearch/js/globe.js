@@ -34,7 +34,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'm6-claire-r1';
+	var BUILD = 'm6-claire-r2';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -258,6 +258,30 @@
 			if (vals[i].point) vals[i].point.scaleByDistance = s;
 		}
 		ents.resumeEvents();
+		// Cluster badges get THEIR scalar only inside styleCluster, which
+		// EntityCluster runs on its own schedule (camera.changed, a 50%
+		// move). A zoom or fit flight reclusters somewhere mid-flight and
+		// then stops, so the badges keep a horizon distance for that
+		// height: after zoom-in x3 then Fit (Jason 2026-09-14) 15 badges
+		// sat 26,400 km from the camera with a 17,400 km far distance and
+		// every one faded to nothing while the singles (re-stamped above)
+		// survived. Mark the clustering dirty whenever this band moves so
+		// the badges are restyled at the current height. pixelRange is the
+		// public dirty switch: any change flags a recluster on the next
+		// update, and the value is put straight back.
+		var cl = dataSource.clustering;
+		var pr = cl.pixelRange;
+		cl.pixelRange = pr + 1;
+		cl.pixelRange = pr;
+	}
+
+	/** After a scripted flight: restamp the horizon scalars at the final
+	 *  height (the ±8% band above can leave the last mid-flight stamp in
+	 *  place) and ask for the frame that shows it (requestRenderMode). */
+	function flightDone() {
+		if (!viewer) return;
+		updateHorizonScaling(true);
+		viewer.scene.requestRender();
 	}
 
 	// ══════════════════════════════════════════════════════════════════
@@ -429,14 +453,16 @@
 		var h = Math.min(ZOOM_CEILING_M, Math.max(ZOOM_FLOOR_M, carto.height * factor));
 		viewer.camera.flyTo({
 			destination: Cesium.Cartesian3.fromRadians(carto.longitude, carto.latitude, h),
-			duration: 0.6
+			duration: 0.6,
+			complete: flightDone
 		});
 	}
 
 	function flyHome() {
 		viewer.camera.flyTo({
 			destination: Cesium.Cartesian3.fromDegrees(HOME_VIEW.lon, HOME_VIEW.lat, HOME_VIEW.height),
-			duration: 1.2
+			duration: 1.2,
+			complete: flightDone
 		});
 	}
 
@@ -599,7 +625,8 @@
 			var cLat = Math.atan2(sz, Math.sqrt(sx * sx + sy * sy)) * 180 / Math.PI;
 			viewer.camera.flyTo({
 				destination: Cesium.Cartesian3.fromDegrees(cLon, cLat, 22000000),
-				duration: 1.5
+				duration: 1.5,
+				complete: flightDone
 			});
 			return true;
 		}
@@ -619,7 +646,8 @@
 
 		viewer.camera.flyTo({
 			destination: Cesium.Rectangle.fromDegrees(west, south, east, north),
-			duration: 1.5
+			duration: 1.5,
+			complete: flightDone
 		});
 		return true;
 	}
@@ -737,7 +765,8 @@
 		viewer.camera.flyTo({
 			destination: Cesium.Cartesian3.fromRadians(
 				carto.longitude, carto.latitude, Math.max(h, 2500)),
-			duration: 0.9
+			duration: 0.9,
+			complete: flightDone
 		});
 	}
 
