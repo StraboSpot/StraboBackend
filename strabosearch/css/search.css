@@ -41,6 +41,21 @@
 	font-size: 0.8em;
 }
 
+/* One control size page-wide (Claire 2026-09-14): the rail already runs
+   at 0.8em, and the theme's .button.small scaled its buttons down AGAIN
+   (0.64 of base) while the results toolbar (tabs 0.9, List|Globe 0.85)
+   sat unscaled. Every interactive control now lands at 0.8em of base:
+   rail buttons + dropdowns + inputs here, tabs / sort / view toggle /
+   Layers / mobile pills below. Card text and hints are content and keep
+   their own sizes. */
+.ss-rail .button,
+.ss-rail .button.small,
+.ss-rail input,
+.ss-rail select,
+.ss-sort select {
+	font-size: 1em;   /* the theme sizes input/select in pt (13pt): rejoin the scale */
+}
+
 .ss-rail-head {
 	padding: 1em 1.4em 0.2em;
 	display: flex;
@@ -320,12 +335,22 @@
 .ss-ta-list li.ss-ta-depth-2 { padding-left: 2.75em; }
 .ss-ta-list li.ss-ta-depth-3 { padding-left: 3.75em; }
 
+/* The two builder buttons share the rail width side by side (Jason
+   2026-09-14, 36" monitor: at the theme's 15pt breakpoint the inline
+   pair overflowed the 340px rail and the second wrapped, indented by
+   its margin). Flex + gap wraps cleanly if it ever must. */
 .ss-add-row {
 	margin-top: 0.6em;
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.5em;
 }
 
-.ss-add-row a + a {
-	margin-left: 0.5em;
+.ss-add-row a {
+	flex: 1 1 0;
+	min-width: 0;
+	text-align: center;
+	white-space: nowrap;
 }
 
 .ss-add-row a.ss-disabled {
@@ -371,7 +396,7 @@
 	border: 1px solid rgba(144, 144, 144, 0.5);
 	border-bottom-width: 3px;
 	cursor: pointer;
-	font-size: 0.9em;
+	font-size: 0.8em;   /* control size, see .ss-rail .button */
 	background: transparent;
 	color: inherit;
 }
@@ -390,7 +415,7 @@
 	display: flex;
 	align-items: center;
 	gap: 0.5em;
-	font-size: 0.85em;
+	font-size: 0.8em;   /* control size */
 }
 
 .ss-sort select {
@@ -715,7 +740,7 @@
 
 .ss-view-btn {
 	padding: 0.35em 1.1em;
-	font-size: 0.85em;
+	font-size: 0.8em;   /* control size */
 	background: transparent;
 	color: inherit;
 	border: 0;
@@ -894,6 +919,49 @@
 	font-size: 10px;
 }
 
+/* ---- Zoom stack (Claire 2026-09-14) ------------------------------------ */
+/* Cesium ships no zoom buttons and its home button is off, so the globe
+   had no visible zoom control at all (wheel / pinch / right-drag work but
+   are undiscoverable). Same convention as the site's Leaflet maps:
+   + / − / fit stacked top-left. */
+.ss-globe-zoom {
+	position: absolute;
+	z-index: 25;
+	top: 0.6em;
+	left: 0.6em;
+	display: flex;
+	flex-direction: column;
+	border: 1px solid rgba(255, 255, 255, 0.25);
+	border-radius: 4px;
+	overflow: hidden;
+	background: rgba(28, 29, 38, 0.85);
+}
+
+.ss-zoom-btn {
+	width: 30px;
+	height: 30px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: rgba(255, 255, 255, 0.85);
+	font-size: 1.15em;
+	line-height: 1;
+	cursor: pointer;
+}
+
+.ss-zoom-btn + .ss-zoom-btn {
+	border-top: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.ss-zoom-btn:hover {
+	background: rgba(40, 42, 56, 0.95);
+	color: #ffffff;
+}
+
+.ss-zoom-btn.ss-zoom-fit {
+	font-size: 1em;
+}
+
 /* ---- Layers panel (M3) -------------------------------------------------- */
 
 .ss-globe-layers {
@@ -965,6 +1033,70 @@
 .ss-layers-opacity input[type="range"] {
 	flex: 1 1 auto;
 	min-width: 0;
+}
+
+/* The native range track is near-invisible on the dark panel (Claire
+   2026-09-14: "the slider line does not have contrast"), so draw it: a
+   light track, the site's toggle blue for the filled part + thumb.
+   Firefox and WebKit each need their own pseudo-elements. */
+.ss-layers-opacity input[type="range"] {
+	-webkit-appearance: none;
+	appearance: none;
+	height: 18px;
+	margin: 0;
+	background: transparent;
+	cursor: pointer;
+}
+
+.ss-layers-opacity input[type="range"]:disabled {
+	cursor: default;
+	opacity: 0.4;
+}
+
+.ss-layers-opacity input[type="range"]::-webkit-slider-runnable-track {
+	height: 4px;
+	border-radius: 2px;
+	background: rgba(255, 255, 255, 0.45);
+}
+
+.ss-layers-opacity input[type="range"]::-moz-range-track {
+	height: 4px;
+	border-radius: 2px;
+	background: rgba(255, 255, 255, 0.45);
+}
+
+.ss-layers-opacity input[type="range"]::-moz-range-progress {
+	height: 4px;
+	border-radius: 2px;
+	background: #57729e;
+}
+
+.ss-layers-opacity input[type="range"]::-webkit-slider-thumb {
+	-webkit-appearance: none;
+	width: 14px;
+	height: 14px;
+	margin-top: -5px;
+	border-radius: 50%;
+	background: #57729e;
+	border: 2px solid #ffffff;
+}
+
+.ss-layers-opacity input[type="range"]::-moz-range-thumb {
+	width: 14px;
+	height: 14px;
+	border-radius: 50%;
+	background: #57729e;
+	border: 2px solid #ffffff;
+}
+
+/* Current value beside the slider ("60%"), so its state reads at rest. */
+.ss-layers-opacity .ss-opacity-val {
+	flex: 0 0 auto;
+	min-width: 2.8em;
+	text-align: right;
+	font-size: 0.85em;
+	font-variant-numeric: tabular-nums;
+	opacity: 0.85;
 }
 
 /* M5: "click the map" hint under the overlay controls. */
@@ -1198,7 +1330,7 @@
 		color: rgba(255, 255, 255, 0.9);
 		border: 1px solid rgba(255, 255, 255, 0.3);
 		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
-		font-size: 0.9em;
+		font-size: 0.8em;   /* control size */
 		white-space: nowrap;
 	}
 
@@ -1223,7 +1355,6 @@
 
 	.ss-count-pill {
 		right: 16px;
-		font-size: 0.85em;
 	}
 
 	.ss-count-pill a {
@@ -1262,7 +1393,6 @@
 	.ss-globe-toggle .ss-view-btn {
 		min-height: 44px;
 		padding: 0 1.3em;
-		font-size: 0.9em;
 	}
 
 	.ss-globe-status {
@@ -1271,6 +1401,16 @@
 
 	.ss-globe-layers {
 		top: 12px;
+	}
+
+	.ss-globe-zoom {
+		top: 12px;
+		left: 12px;
+	}
+
+	.ss-zoom-btn {
+		width: 44px;
+		height: 44px;
 	}
 
 	.ss-layers-btn {

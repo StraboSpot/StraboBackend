@@ -107,7 +107,10 @@ function ss_asset($path) {
 					     badge carries the active-criteria count. -->
 					<button type="button" id="ssFiltersBtn" class="ss-filters-pill" aria-controls="ssRail" aria-expanded="false">Filters<span id="ssFiltersBadge" class="ss-filters-badge" style="display:none;">0</span></button>
 					<div id="ssResults" class="ss-results">
-						<div class="ss-quiet-prompt">Compose a search to see results.<br /><a href="javascript:void(0);" id="ssBrowseGlobe" class="ss-browse-link">or browse everything on the globe</a></div>
+						<!-- Replaced by results.js as soon as the first catalog page
+						     lands (the page opens on every project the visitor can see,
+						     newest first; Claire 2026-09-14). -->
+						<div class="ss-quiet-prompt">Loading projects&hellip;</div>
 					</div>
 					<!-- Globe view (M2) — OUTSIDE #ssResults so results.js
 					     re-renders never destroy the Cesium canvas. -->
@@ -120,6 +123,14 @@ function ss_asset($path) {
 							<button type="button" class="ss-view-btn" data-view="globe">Globe</button>
 						</div>
 						<div id="ssGlobeStatus" class="ss-globe-status" role="status"></div>
+						<!-- Zoom stack (Claire 2026-09-14): Cesium has no zoom buttons
+						     of its own; + / − step the camera height, fit reframes the
+						     current results (globe.js wireZoomControls). -->
+						<div class="ss-globe-zoom" role="group" aria-label="Globe zoom">
+							<button type="button" id="ssZoomIn" class="ss-zoom-btn" aria-label="Zoom in" title="Zoom in">+</button>
+							<button type="button" id="ssZoomOut" class="ss-zoom-btn" aria-label="Zoom out" title="Zoom out">&minus;</button>
+							<button type="button" id="ssZoomFit" class="ss-zoom-btn ss-zoom-fit" aria-label="Fit all results" title="Fit all results">&#8982;</button>
+						</div>
 						<!-- Result-count pill (M4, mobile): located count + list flip. -->
 						<div id="ssGlobeCountPill" class="ss-count-pill" style="display:none;"></div>
 						<!-- Layers panel (M3): basemap radio + Macrostrat overlay.
@@ -149,6 +160,7 @@ function ss_asset($path) {
 									<div class="ss-layers-opacity">
 										<label for="ssMacrostratOpacity">Opacity</label>
 										<input type="range" id="ssMacrostratOpacity" min="10" max="100" value="60" disabled>
+										<span id="ssMacrostratOpacityVal" class="ss-opacity-val" aria-live="off">60%</span>
 									</div>
 									<!-- M5: shown only while the overlay is on (globe.js). -->
 									<div id="ssMacrostratHint" class="ss-layers-hint" style="display:none;">Click or tap the map for the unit name, age and lithology.</div>

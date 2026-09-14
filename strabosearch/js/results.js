@@ -38,7 +38,6 @@
 	//   loadingMore, observer, sentinel, status
 	// }
 	var onStateChange = function () {};   // app.js mirrors URL
-	var onBrowse = function () {};        // app.js runs the empty-criteria globe browse (M3)
 	// Survives clear(): a globe user who edits criteria (which resets
 	// results) gets the globe back on the next Search, not the list.
 	var lastView = 'list';
@@ -209,9 +208,12 @@
 	function run(baseDsl, opts) {
 		abortInflight();
 		disconnectObserver();
-		// Browse mode (M3): an empty-criteria DSL is legal on the GLOBE
-		// only; the match-all LIST query stays gated until benchmarked, so
-		// browse never fetches a list page and pins the view to the globe.
+		// Browse mode: an empty-criteria DSL is the whole visible catalog.
+		// Globe-only from M3 until 2026-09-14 (Claire): the match-all list
+		// query costs the same as a filtered one (~0.4 s on dev for 485
+		// public projects / 27.9k images), so list + images now load like
+		// any search and the page opens on this catalog. The flag survives
+		// for wording ("projects have locations") and the Export gate.
 		var browse = !baseDsl.criteria || baseDsl.criteria.length === 0;
 		// The chosen view survives re-searches (a globe user refining
 		// criteria stays on the globe, Globe View M2).
@@ -221,8 +223,7 @@
 			browse: browse,
 			sort: (opts && opts.sort) || null,
 			tab: (opts && opts.tab) || 'projects',
-			view: browse ? 'globe'
-				: ((opts && opts.view) === 'globe' ? 'globe' : ((opts && opts.view) === 'list' ? 'list' : prevView)),
+			view: (opts && opts.view) === 'globe' ? 'globe' : ((opts && opts.view) === 'list' ? 'list' : prevView),
 			data: { projects: null, images: null },
 			seen: {},
 			inflight: null,
@@ -236,7 +237,7 @@
 		renderShell();
 		window.SSGlobe.setQuery(baseDsl);
 		applyView();
-		if (!browse) loadFirstPage(state.tab);
+		loadFirstPage(state.tab);
 		onStateChange(getUrlState());
 	}
 
@@ -320,7 +321,6 @@
 
 	function setView(v) {
 		if (!state || state.view === v) return;
-		if (v === 'list' && state.browse) return;   // browse: list stays gated (M3)
 		state.view = v;
 		lastView = v;
 		if (v === 'globe' && state.tab === 'images') {
@@ -354,14 +354,6 @@
 					t.dataset.pathway === state.tab ? 'true' : 'false');
 			}
 		});
-		// Browse mode: the List toggle dims and goes inert (M3), the same
-		// treatment the D6 rule gives the Images tab in globe view.
-		Array.prototype.forEach.call(document.querySelectorAll('.ss-view-btn'), function (b) {
-			if (b.dataset.view === 'list') {
-				b.classList.toggle('ss-globe-disabled', !!(state && state.browse));
-				b.setAttribute('aria-disabled', state && state.browse ? 'true' : 'false');
-			}
-		});
 		updateLocCounter();
 		if (globeOn) window.SSGlobe.show(); else window.SSGlobe.hide();
 	}
@@ -376,8 +368,7 @@
 					+ (state.browse ? ' projects have locations' : ' matching projects have locations')
 				: '';
 		}
-		// Mobile result-count pill (M4): same numbers, plus the list flip
-		// (browse keeps the list gated, so the flip is absent there).
+		// Mobile result-count pill (M4): same numbers, plus the list flip.
 		var pill = document.getElementById('ssGlobeCountPill');
 		if (!pill) return;
 		pill.innerHTML = '';
@@ -385,13 +376,11 @@
 		pill.appendChild(el('span', null, state.browse
 			? fmtInt(counter.located) + ' located projects'
 			: fmtInt(counter.located) + ' of ' + fmtInt(counter.total) + ' located'));
-		if (!state.browse) {
-			pill.appendChild(el('span', 'ss-count-sep', '·'));
-			var flip = el('a', null, 'view list');
-			flip.href = 'javascript:void(0);';
-			flip.addEventListener('click', function () { setView('list'); });
-			pill.appendChild(flip);
-		}
+		pill.appendChild(el('span', 'ss-count-sep', '·'));
+		var flip = el('a', null, 'view list');
+		flip.href = 'javascript:void(0);';
+		flip.addEventListener('click', function () { setView('list'); });
+		pill.appendChild(flip);
 		pill.style.display = '';
 	}
 
@@ -804,8 +793,10 @@
 		};
 	}
 
-	/** Reset to the pre-search quiet prompt (criteria emptied — Jason 08-02:
-	 *  stale results with no criteria left are misleading). */
+	/** Drop stale results after the criteria changed (Jason 08-02: shown
+	 *  results must always reflect the criteria above). Since 2026-09-14
+	 *  emptied criteria re-run the catalog instead (app.js), so this
+	 *  prompt only ever means "you edited, press Search". */
 	function clear() {
 		abortInflight();
 		disconnectObserver();
@@ -813,20 +804,14 @@
 		if (region.parentElement) region.parentElement.classList.remove('ss-globe-active');
 		state = null;
 		region.innerHTML = '';
-		var prompt = el('div', 'ss-quiet-prompt', 'Compose a search to see results.');
-		prompt.appendChild(document.createElement('br'));
-		var browseLink = el('a', 'ss-browse-link', 'or browse everything on the globe');
-		browseLink.href = 'javascript:void(0);';
-		browseLink.addEventListener('click', function () { onBrowse(); });
-		prompt.appendChild(browseLink);
-		region.appendChild(prompt);
+		region.appendChild(el('div', 'ss-quiet-prompt',
+			'Criteria changed. Press Search to update the results.'));
 	}
 
 	window.SSResults = {
 		init: function (elRegion, opts) {
 			region = elRegion;
 			onStateChange = (opts && opts.onStateChange) || function () {};
-			onBrowse = (opts && opts.onBrowse) || function () {};
 			window.SSGlobe.init({
 				onCounter: updateLocCounter,
 				onOpenList: function () { setView('list'); }

@@ -40,6 +40,14 @@
 	function mirrorUrl(urlState) {
 		updateExportButton();   // results state changed (first page landed, view flip): re-evaluate the Export… gate
 		if (!lastRunDsl) return;
+		// The default catalog (no criteria, list, Projects, default sort)
+		// is what a bare URL already shows: keep that URL clean. Anything
+		// else (a globe browse, a sorted or Images catalog, any search)
+		// mirrors so the state can be shared.
+		if (isCatalogDefault(lastRunDsl, urlState)) {
+			window.history.replaceState(null, '', window.location.pathname);
+			return;
+		}
 		var payload = {
 			dsl: lastRunDsl,
 			tab: urlState ? urlState.tab : 'projects',
@@ -50,18 +58,36 @@
 		window.history.replaceState(null, '', window.location.pathname + qs);
 	}
 
+	function isCatalogDefault(dsl, urlState) {
+		return !!dsl && (!dsl.criteria || dsl.criteria.length === 0)
+			&& (!urlState || ((urlState.view || 'list') === 'list'
+				&& (urlState.tab || 'projects') === 'projects' && !urlState.sort));
+	}
+
 	// ---- search execution -------------------------------------------------
 
+	/**
+	 * Run the builder's current DSL. Empty criteria are a browse of the
+	 * whole visible catalog (globe-only from M3; list + images too since
+	 * 2026-09-14, Claire), so there is no active-row gate any more: the
+	 * Search button always does something. opts.browse is kept for the
+	 * callers that name the intent (the /globe door, shared browse links).
+	 */
 	function runSearch(opts) {
-		// Browse mode (M3): the empty-criteria globe run skips the
-		// active-row gate; with active rows a browse request is just a
-		// normal search opened in globe view.
-		var browse = !!(opts && opts.browse);
-		if (!window.SSBuilder.hasActiveRow() && !browse) return;
 		lastRunDsl = window.SSBuilder.getDsl();
 		window.SSResults.run(lastRunDsl, opts || {});
 		updateExportButton();
-		closeDrawer();   // mobile: reveal the results (no-op on desktop)
+		// mobile: reveal the results (no-op on desktop). Not for the
+		// automatic catalog re-runs: a user emptying a keyword inside the
+		// drawer must not have the drawer close under their thumb.
+		if (!(opts && opts.auto)) closeDrawer();
+	}
+
+	/** The page's resting state: every project the visitor can see, newest
+	 *  first, in the list view (Claire 2026-09-14, Jason: "default to list
+	 *  view with the first page of results showing"). */
+	function runCatalog(opts) {
+		runSearch(Object.assign({ view: 'list', browse: true }, opts || {}));
 	}
 
 	// ---- mobile criteria drawer (Globe View M4) ---------------------------
@@ -111,23 +137,32 @@
 	}
 
 	function updateSearchButton() {
-		var btn = document.getElementById('ssSearchBtn');
-		var ok = window.SSBuilder.hasActiveRow();
-		btn.classList.toggle('disabled', !ok);
-		btn.style.opacity = ok ? '' : '0.5';
-		btn.setAttribute('aria-disabled', ok ? 'false' : 'true');
 		updateFiltersBadge();
 
 		// Displayed results must always reflect the criteria above (Jason
 		// 08-02): any change to the EFFECTIVE query — value edited, chip or
-		// row removed, NOT toggled — invalidates them. Reset to the quiet
-		// prompt + clean URL until Search runs again. Changes that don't
+		// row removed, NOT toggled — invalidates them. Changes that don't
 		// alter the effective query (e.g. adding an empty row) keep them.
-		if (window.SSResults.hasResults() && lastRunDsl &&
-			JSON.stringify(window.SSBuilder.getDsl()) !== JSON.stringify(lastRunDsl)) {
-			window.SSResults.clear();
-			lastRunDsl = null;
-			window.history.replaceState(null, '', window.location.pathname);
+		// Since 2026-09-14 the page rests on the full catalog, so criteria
+		// emptied back out re-run that catalog (in whatever view is up);
+		// any other change drops to the "press Search" prompt + clean URL.
+		var now = window.SSBuilder.getDsl();
+		var empty = !now.criteria || now.criteria.length === 0;
+		if (!booted) {
+			// Module init fires onChange before the boot code decides what
+			// to run first (shared URL, /globe door, or the catalog).
+		} else if (window.SSResults.hasResults() && lastRunDsl &&
+			JSON.stringify(now) !== JSON.stringify(lastRunDsl)) {
+			if (empty) {
+				runSearch({ browse: true, auto: true });
+			} else {
+				window.SSResults.clear();
+				lastRunDsl = null;
+				window.history.replaceState(null, '', window.location.pathname);
+			}
+		} else if (!window.SSResults.hasResults() && empty && !lastRunDsl) {
+			// Prompt showing, criteria now empty: back to the catalog.
+			runCatalog({ auto: true });
 		}
 		updateExportButton();
 	}
@@ -201,11 +236,12 @@
 
 	// ---- boot -------------------------------------------------------------
 
+	var booted = false;   // updateSearchButton's automatic runs wait for boot
+
 	document.addEventListener('DOMContentLoaded', function () {
 
 		window.SSResults.init(document.getElementById('ssResults'), {
-			onStateChange: mirrorUrl,
-			onBrowse: function () { runSearch({ view: 'globe', browse: true }); }
+			onStateChange: mirrorUrl
 		});
 
 		window.SSBuilder.init(document.getElementById('criteriaBuilder'), {
@@ -239,13 +275,6 @@
 			if (ev.key === 'Escape' && drawerOpen()) { ev.preventDefault(); closeDrawer(); }
 		});
 
-		// Quiet-prompt browse door (M3): the static link on first load
-		// (results.js clear() rebuilds its own copy via onBrowse).
-		var browseLink = document.getElementById('ssBrowseGlobe');
-		if (browseLink) browseLink.addEventListener('click', function () {
-			runSearch({ view: 'globe', browse: true });
-		});
-
 		var mine = document.getElementById('ssMySearchesBtn');
 		if (mine) mine.addEventListener('click', window.SSSaved.openMySearches);
 
@@ -272,31 +301,31 @@
 		}
 
 		// Shared-URL load (§6.4): repopulate + auto-run. An empty-criteria
-		// dsl with view=globe is a shared BROWSE link (M3): re-enter browse.
+		// dsl is a shared BROWSE link (globe, or a sorted / Images catalog).
 		var m = window.location.search.match(/[?&]q=([^&]+)/);
+		var ran = false;
 		if (m) {
 			var st = decodeState(m[1]);
 			if (st && st.dsl) {
 				window.SSBuilder.loadDsl(st.dsl);
-				updateSearchButton();
-				if (window.SSBuilder.hasActiveRow()) {
-					runSearch({ tab: st.tab || 'projects', sort: st.sort || null,
-						view: st.view || 'list' });
-				} else if (st.view === 'globe') {
-					runSearch({ view: 'globe', browse: true });
-				}
+				runSearch({ tab: st.tab || 'projects', sort: st.sort || null,
+					view: st.view || 'list', browse: !window.SSBuilder.hasActiveRow() });
+				ran = true;
 			}
 		} else if (/[?&]view=globe(&|$)/.test(window.location.search)) {
 			// /globe front door (M3): the redirect lands here with no ?q=.
 			// Empty criteria in globe view = browse everything visible.
 			runSearch({ view: 'globe', browse: true });
+			ran = true;
 		}
 
-		// Mobile first load with nothing to show (M4): open the drawer so
-		// the criteria builder is the first thing on screen, not a quiet
-		// prompt behind a pill. Shared links / the browse door land on
-		// their results instead.
-		if (!window.SSResults.hasResults()) openDrawer();
+		// Plain load (Claire 2026-09-14, option B): open on the catalog,
+		// every project the visitor can see newest first, so the page is
+		// never empty and the Projects / Images tabs + List | Globe toggle
+		// are live from the start. On phones the results pane is what
+		// shows; the Filters pill opens the criteria drawer (M4).
+		booted = true;
+		if (!ran) runCatalog();
 	});
 
 })(window, document);
