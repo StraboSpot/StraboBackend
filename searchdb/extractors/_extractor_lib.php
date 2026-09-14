@@ -240,13 +240,34 @@ function pgNumeric($v) {
 	return (string)(float)$v;
 }
 
+/**
+ * Field's numeric modified_timestamp is a ms epoch (13 digits through
+ * year 2286). A 2025 StraboField build wrote some spots with the id and
+ * timestamp number schemes swapped: a 13-digit id and a 14-digit
+ * modified_timestamp that is the real ms clock times ten (2,940 spots /
+ * 27 projects on the prod-sized dev graph, real dates May-Nov 2025).
+ * Read literally they land in year 2424-2528 and pin their projects to
+ * the top of every newest-first list (Jason, prod catalog 2026-09-14).
+ * A value >= 1e13 cannot be a real ms timestamp, so the decode is
+ * unambiguous: divide by ten until it is back in range. The source
+ * values stay as written (app-side; not ours to rewrite).
+ */
+define('SEARCH_MS_EPOCH_CEILING', 10000000000000);   // 1e13 = 2286-11-20 in ms
+
+function normalizeEpochMs($n) {
+	$n = (float)$n;
+	while ($n >= SEARCH_MS_EPOCH_CEILING) $n = $n / 10.0;
+	return $n;
+}
+
 function pgTimestamp($v) {
 	if ($v === null || $v === '' || $v === false) return 'NULL';
 	if (is_numeric($v)) {
 		// Treat as ms-epoch (Field's convention) — fall back to s-epoch if
 		// the value looks too small to be ms (anything before year 2001
-		// in ms = before 1970 in s).
-		$n = (int)$v;
+		// in ms = before 1970 in s). Over-long values are the x10 swap
+		// (see normalizeEpochMs).
+		$n = normalizeEpochMs($v);
 		if ($n > 1000000000000) return "to_timestamp(" . ($n / 1000.0) . ")";
 		if ($n > 1000000000)    return "to_timestamp($n)";
 	}

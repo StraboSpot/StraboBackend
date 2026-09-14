@@ -715,6 +715,20 @@ $db->query("DELETE FROM strabosearch.vocab_tag_type WHERE raw_value = 'spsx_cust
 echo '  cleared fixture nodes + slice + staging + pg fixtures' . PHP_EOL;
 
 // ===========================================================================
+section('modified_timestamp x10 swap decode (2026-09-14)');
+require_once '/srv/app/www/searchdb/extractors/_extractor_lib.php';
+// A 2025 StraboField build wrote 14-digit modified_timestamps (real ms
+// clock x10); read literally they land in year 2424-2528 and pin their
+// projects to the top of newest-first lists. Both decoders must agree.
+check('normalizeEpochMs: x10 value halves back to ms', normalizeEpochMs('17534703576750') == 1753470357675.0);
+check('normalizeEpochMs: x100 value too', normalizeEpochMs('1753470357675000') == 1753470357675.0);
+check('normalizeEpochMs: real ms untouched', normalizeEpochMs('1780675590714') == 1780675590714.0);
+check('normalizeEpochMs: s-epoch untouched', normalizeEpochMs('1700000000') == 1700000000.0);
+check('pgTimestamp: x10 value decodes to 2025', pgTimestamp('17534703576750') === 'to_timestamp(1753470357.675)');
+check('pgTimestamp: real ms unchanged', pgTimestamp('1780675590714') === 'to_timestamp(1780675590.714)');
+check('pgTimestamp: ISO string passes through', pgTimestamp('2025-07-25T19:05:57.000Z') === "'2025-07-25T19:05:57.000Z'::timestamptz");
+
+// ===========================================================================
 echo PHP_EOL;
 if ($failures) {
 	echo count($failures) . ' FAIL(s):' . PHP_EOL;
