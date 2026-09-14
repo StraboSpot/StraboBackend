@@ -34,7 +34,7 @@
 	// Bumped on every globe change; logged on load so a stale-tab build is
 	// diagnosable in seconds (searches don't reload the page, so an open
 	// tab keeps running whatever JS it booted with).
-	var BUILD = 'm6-claire-r2';
+	var BUILD = 'm6-claire-r3';
 	try { console.log('[SSGlobe] build ' + BUILD); } catch (e) { /* ignore */ }
 
 	var SUB_COLORS = {
@@ -44,7 +44,11 @@
 		samples: '#e0b040'
 	};
 	var CLUSTER_COLOR = '#e44c65';
-	var clusterLabelEyeOffset = null;   // Cesium.Cartesian3, made once Cesium is loaded
+	// Cluster count labels sit nearer the camera than their disc by this
+	// FRACTION of the camera distance (see styleCluster): a fixed 10 m was
+	// below one depth-buffer step at planetary range.
+	var CLUSTER_LABEL_EYE_FRACTION = 0.002;
+	var CLUSTER_LABEL_EYE_MIN_M = 10;
 
 	var wrap = null;          // #ssGlobeWrap
 	var statusEl = null;      // #ssGlobeStatus
@@ -693,12 +697,20 @@
 		cluster.label.horizontalOrigin = Cesium.HorizontalOrigin.CENTER;
 		cluster.label.verticalOrigin = Cesium.VerticalOrigin.CENTER;
 		cluster.label.scaleByDistance = scal;
-		// And the digits sit a few metres nearer the camera than the disc
-		// so the depth test can never tie in the disc's favour. eyeOffset.z
-		// moves ALONG the view ray (czm_eyeOffset), so the label's screen
-		// position is unchanged.
-		if (!clusterLabelEyeOffset) clusterLabelEyeOffset = new Cesium.Cartesian3(0, 0, -10);
-		cluster.label.eyeOffset = clusterLabelEyeOffset;
+		// And the digits sit nearer the camera than the disc so the depth
+		// test can never tie in the disc's favour. eyeOffset.z moves ALONG
+		// the view ray (czm_eyeOffset normalises positionEC), so the label's
+		// screen position is unchanged. The offset must SCALE with the
+		// camera distance: Cesium's logarithmic depth buffer resolves about
+		// 1.1e-6 of the distance per step (~24 m at 22,000 km), so a fixed
+		// 10 m left every badge on a coin flip and prod's 198-project US
+		// cluster lost it (blank disc, digits hidden; Jason's prod check
+		// 2026-09-14). 0.2% of the distance is hundreds of steps at any
+		// height and never crosses the camera; styleCluster re-runs on
+		// every recluster (forced whenever the horizon band moves 8%), so
+		// the offset tracks the camera closely enough.
+		var camDist = Cesium.Cartesian3.distance(viewer.camera.position, cluster.label.position);
+		cluster.label.eyeOffset = new Cesium.Cartesian3(0, 0, -Math.max(CLUSTER_LABEL_EYE_MIN_M, camDist * CLUSTER_LABEL_EYE_FRACTION));
 	}
 
 	// ══════════════════════════════════════════════════════════════════
