@@ -20,6 +20,10 @@
  *                9. Stranger isolation: foreign spot id, foreign dataset
  *                   export, foreign ajax datasets
  *               10. Cancel kills the review token
+ *               11. Designer-shaped template -> blank XLSX -> rows typed with
+ *                   PHPExcel -> upload -> Neo4j + spine asserts -> export == noop
+ *               12. Exported XLSX edited (cell edits + new row) -> updates + create
+ *               13. How-to example workbook imports as its page documents
  *
  *              Hermetic: sentinel project 96669002, template prefix
  *              e2ewiz-<stamp>; cleanup in finally; residue checks.
@@ -414,13 +418,221 @@ try {
     $r = httpGet('/TemplateWizard/ajax.php?action=templates', $sidOwner);
     check('deleted template gone from list', strpos($r['body'], $tplName) === false);
 
+    // ------------------------------------------------------------------
+    echo "\n=== 11. designer template -> blank workbook -> fill in Excel -> upload -> verify -> export == noop ===\n";
+    // ------------------------------------------------------------------
+    // The researcher flow end to end at the file level: a template shaped
+    // the way the column builder saves it (custom column, orientation_role,
+    // samples), its blank workbook downloaded, rows typed into the real
+    // Data sheet with PHPExcel (what Excel/Sheets would write), uploaded.
+    if (!class_exists('PHPExcel')) { require_once '/srv/app/www/PHPExcel.php'; }
+    $FILL_SPEC = array('spec_version' => 1, 'layout' => 'long', 'columns' => array(
+        array('kind' => 'system', 'key' => 'strabo_internal_id'),
+        array('kind' => 'field', 'group' => 'spot', 'name' => 'name'),
+        array('kind' => 'field', 'group' => 'spot', 'name' => 'latitude'),
+        array('kind' => 'field', 'group' => 'spot', 'name' => 'longitude'),
+        array('kind' => 'field', 'group' => 'spot', 'name' => 'date'),
+        array('kind' => 'field', 'group' => 'spot', 'name' => 'notes'),
+        array('kind' => 'system', 'key' => 'orientation_type'),
+        array('kind' => 'system', 'key' => 'orientation_role'),
+        array('kind' => 'field', 'group' => 'orientation', 'name' => 'feature_type'),
+        array('kind' => 'field', 'group' => 'orientation', 'name' => 'strike'),
+        array('kind' => 'field', 'group' => 'orientation', 'name' => 'dip'),
+        array('kind' => 'field', 'group' => 'orientation', 'name' => 'trend'),
+        array('kind' => 'field', 'group' => 'orientation', 'name' => 'plunge'),
+        array('kind' => 'field', 'group' => 'sample', 'name' => 'sample_id_name'),
+        array('kind' => 'field', 'group' => 'sample', 'name' => 'sample_type'),
+        array('kind' => 'custom', 'header' => 'Field Book Page'),
+    ));
+    $r = httpPostForm('/TemplateWizard/ajax.php', $sidOwner, array(
+        'action' => 'save_template', 'name' => "$tplName-fill", 'spec_json' => json_encode($FILL_SPEC)));
+    $res = json_decode($r['body'], true);
+    check('designer-shaped template (custom column + role + samples) saves', !empty($res['ok']) && (int)$res['pkey'] > 0);
+    $TPL2 = (int)$res['pkey'];
+
+    $r = httpGet("/TemplateWizard/export.php?what=template&template_id=$TPL2&format=xlsx", $sidOwner);
+    check('blank workbook downloads', $r['status'] === 200 && substr($r['body'], 0, 4) === "PK\x03\x04");
+    $blankPath = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
+    $tmpFiles[] = $blankPath;
+    file_put_contents($blankPath, $r['body']);
+
+    $wb = PHPExcel_IOFactory::load($blankPath);
+    $sheet = $wb->getSheetByName('Data');
+    $hdrCol = array();   // header => 0-based column
+    for ($c = 0; $c < 60; $c++) {
+        $h = (string)$sheet->getCellByColumnAndRow($c, 2)->getValue();
+        if ($h === '') { break; }
+        $hdrCol[$h] = $c;
+    }
+    check('blank workbook headers include the custom column and orientation_role',
+        isset($hdrCol['Field Book Page'], $hdrCol['orientation_role'], $hdrCol['sample_id_name'], $hdrCol['strike']));
+    $fillRows = array(
+        array('name' => 'WZ-FILL-1', 'latitude' => 34.21, 'longitude' => -118.21, 'date' => '2026-09-18', 'notes' => 'typed in Excel',
+              'orientation_type' => 'planar', 'orientation_role' => 'primary', 'feature_type' => 'bedding', 'strike' => 100, 'dip' => 20,
+              'sample_id_name' => "FS-FILL-$stamp", 'sample_type' => 'core', 'Field Book Page' => 'p. 12'),
+        array('name' => 'WZ-FILL-1', 'orientation_type' => 'linear', 'orientation_role' => 'associated', 'feature_type' => 'stretching',
+              'trend' => 150, 'plunge' => 30),
+        array('name' => 'WZ-FILL-2', 'latitude' => 34.22, 'longitude' => -118.22, 'date' => '2026-09-18', 'notes' => 'second station'),
+    );
+    $rowN = 3;
+    foreach ($fillRows as $vals) {
+        foreach ($vals as $h => $v) {
+            if (isset($hdrCol[$h])) { $sheet->setCellValueByColumnAndRow($hdrCol[$h], $rowN, $v); }
+        }
+        $rowN++;
+    }
+    $filledPath = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
+    $tmpFiles[] = $filledPath;
+    $writer = new PHPExcel_Writer_Excel2007($wb);
+    $writer->save($filledPath);
+
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'),
+                      'tabfile', $filledPath, 'filled_template.xlsx');
+    $fillToken = extractToken($r['body']);
+    check('filled workbook uploads: embedded template recognized, 3 data rows',
+        $fillToken !== null && strpos($r['body'], 'embedded template recognized') !== false && strpos($r['body'], '3 data rows') !== false);
+    $fillTargetNew = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'new', 'dataset_name' => "e2ewiz FILL $stamp");
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $fillToken), $fillTargetNew));
+    check('filled workbook plans clean: 2 new spots (template custom column needs no decision)',
+        strpos($r['body'], '2 new spots') !== false && strpos($r['body'], 'Confirm &amp; Import') !== false
+        && strpos($r['body'], 'Unknown columns') === false);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'confirm', 'token' => $fillToken), $fillTargetNew));
+    check('filled workbook imports', strpos($r['body'], 'Import complete') !== false);
+    preg_match('/New dataset created \(id (\d+)\)/', $r['body'], $m);
+    $DS2 = isset($m[1]) ? (int)$m[1] : 0;
+    $datasetIds[] = $DS2;
+    $recs = $neodb->get_results("MATCH (d:Dataset {id: $DS2, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN s.id AS id, s.name AS name");
+    $fillByName = array();
+    foreach ((array)$recs as $rec) { $fillByName[$rec->value('name')] = (int)$rec->value('id'); $spotIds[] = (int)$rec->value('id'); }
+    check('2 spots landed from the filled workbook', count($fillByName) === 2 && isset($fillByName['WZ-FILL-1'], $fillByName['WZ-FILL-2']));
+    $F1 = isset($fillByName['WZ-FILL-1']) ? $fillByName['WZ-FILL-1'] : 0;
+    $p1 = $F1 ? spotProps($neodb, $F1, $ownerPkey) : null;
+    $od1 = $p1 ? json_decode($p1['json_orientation_data'], true) : null;
+    check('WZ-FILL-1: one primary bedding 100/20 with the associated stretching lineation 150/30 riding it',
+        is_array($od1) && count($od1) === 1 && $od1[0]['strike'] === 100 && $od1[0]['dip'] === 20
+        && $od1[0]['feature_type'] === 'bedding'
+        && isset($od1[0]['associated_orientation'][0]) && $od1[0]['associated_orientation'][0]['trend'] === 150
+        && $od1[0]['associated_orientation'][0]['plunge'] === 30);
+    $sm1 = $p1 ? json_decode($p1['json_samples'], true) : null;
+    check('WZ-FILL-1: sample element landed with type core', is_array($sm1) && $sm1[0]['sample_id_name'] === "FS-FILL-$stamp" && $sm1[0]['sample_type'] === 'core');
+    $cf1 = $p1 ? json_decode($p1['custom_fields'], true) : null;
+    check('WZ-FILL-1: custom column value stored as a custom field', is_array($cf1) && $cf1['Field Book Page'] === 'p. 12');
+    check('WZ-FILL-1: notes and date typed in Excel landed', $p1 && $p1['notes'] === 'typed in Excel' && (string)$p1['date'] !== '');
+    $spine = $db->get_row_prepared("SELECT id FROM strabosamples.samples WHERE userpkey = $1 AND name = $2", array($ownerPkey, "FS-FILL-$stamp"));
+    check('sample mirrored into the strabosamples spine over the HTTP path', $spine !== null && $spine !== false);
+
+    // export the new dataset through the same template: re-import must be all-noop
+    $r = httpGet("/TemplateWizard/export.php?what=export&dataset_id=$DS2&template_id=$TPL2&format=xlsx", $sidOwner);
+    check('filled dataset exports through its template', $r['status'] === 200 && substr($r['body'], 0, 4) === "PK\x03\x04");
+    $ex2Path = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
+    $tmpFiles[] = $ex2Path;
+    file_put_contents($ex2Path, $r['body']);
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', $ex2Path, 'fill_export.xlsx');
+    $ex2Token = extractToken($r['body']);
+    $fillTarget = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'existing', 'dataset_id' => $DS2);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $ex2Token), $fillTarget));
+    check('export of the filled dataset re-imports as all-unchanged (custom field + sample + associated survive the round trip)',
+        strpos($r['body'], '0 new spots') !== false && strpos($r['body'], '0 updated') !== false && strpos($r['body'], '2 unchanged') !== false);
+    httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $ex2Token));
+
+    // ------------------------------------------------------------------
+    echo "\n=== 12. edit the exported workbook in Excel -> updates + a new spot over HTTP ===\n";
+    // ------------------------------------------------------------------
+    $wb = PHPExcel_IOFactory::load($ex2Path);
+    $sheet = $wb->getSheetByName('Data');
+    $hdrCol = array();
+    for ($c = 0; $c < 60; $c++) {
+        $h = (string)$sheet->getCellByColumnAndRow($c, 2)->getValue();
+        if ($h === '') { break; }
+        $hdrCol[$h] = $c;
+    }
+    $lastRow = 2; $editedNotes = false; $editedStrike = false;
+    for ($rw = 3; $rw < 60; $rw++) {
+        $nm = (string)$sheet->getCellByColumnAndRow($hdrCol['name'], $rw)->getValue();
+        if ($nm === '') { break; }
+        $lastRow = $rw;
+        if ($nm === 'WZ-FILL-2' && !$editedNotes) { $sheet->setCellValueByColumnAndRow($hdrCol['notes'], $rw, 'edited in Excel'); $editedNotes = true; }
+        if ($nm === 'WZ-FILL-1' && (string)$sheet->getCellByColumnAndRow($hdrCol['strike'], $rw)->getValue() === '100') {
+            $sheet->setCellValueByColumnAndRow($hdrCol['strike'], $rw, 110); $editedStrike = true;
+        }
+    }
+    check('export rows located for editing (ids present, notes + strike cells found)',
+        $editedNotes && $editedStrike && (string)$sheet->getCellByColumnAndRow($hdrCol['strabo_internal_id'], 3)->getValue() !== '');
+    $newRow = $lastRow + 1;
+    foreach (array('name' => 'WZ-FILL-3', 'latitude' => 34.23, 'longitude' => -118.23, 'notes' => 'added in Excel') as $h => $v) {
+        $sheet->setCellValueByColumnAndRow($hdrCol[$h], $newRow, $v);
+    }
+    $editPath = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
+    $tmpFiles[] = $editPath;
+    $writer = new PHPExcel_Writer_Excel2007($wb);
+    $writer->save($editPath);
+
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', $editPath, 'fill_export_edited.xlsx');
+    $edToken = extractToken($r['body']);
+    check('edited export uploads with its embedded template', $edToken !== null && strpos($r['body'], 'embedded template recognized') !== false);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $edToken), $fillTarget));
+    check('plan: 1 new spot, 2 updated, 0 unchanged',
+        strpos($r['body'], '1 new spot<') !== false && strpos($r['body'], '2 updated') !== false && strpos($r['body'], '0 unchanged') !== false);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'confirm', 'token' => $edToken), $fillTarget));
+    check('edited export imports', strpos($r['body'], 'Import complete') !== false);
+    $recs = $neodb->get_results("MATCH (d:Dataset {id: $DS2, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN s.id AS id, s.name AS name");
+    $fillByName = array();
+    foreach ((array)$recs as $rec) { $fillByName[$rec->value('name')] = (int)$rec->value('id'); $spotIds[] = (int)$rec->value('id'); }
+    check('WZ-FILL-3 created in the existing dataset', isset($fillByName['WZ-FILL-3']) && count($fillByName) === 3);
+    $p2 = isset($fillByName['WZ-FILL-2']) ? spotProps($neodb, $fillByName['WZ-FILL-2'], $ownerPkey) : null;
+    check('WZ-FILL-2 notes updated from the edited cell', $p2 && $p2['notes'] === 'edited in Excel');
+    $p1 = $F1 ? spotProps($neodb, $F1, $ownerPkey) : null;
+    $od1 = $p1 ? json_decode($p1['json_orientation_data'], true) : null;
+    check('WZ-FILL-1 strike 100 -> 110 with the associated lineation, sample and custom field preserved',
+        is_array($od1) && count($od1) === 1 && $od1[0]['strike'] === 110
+        && isset($od1[0]['associated_orientation'][0]) && $od1[0]['associated_orientation'][0]['trend'] === 150
+        && json_decode($p1['json_samples'], true)[0]['sample_id_name'] === "FS-FILL-$stamp"
+        && json_decode($p1['custom_fields'], true)['Field Book Page'] === 'p. 12');
+
+    // ------------------------------------------------------------------
+    echo "\n=== 13. the how-to example file imports as documented (5 spots, 6 orientations, 2 samples) ===\n";
+    // ------------------------------------------------------------------
+    $r = httpGet('/TemplateWizard/howto.php?demo=xlsx', $sidOwner);
+    check('how-to example workbook downloads', $r['status'] === 200 && substr($r['body'], 0, 4) === "PK\x03\x04");
+    $demoPath = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
+    $tmpFiles[] = $demoPath;
+    file_put_contents($demoPath, $r['body']);
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', $demoPath, 'StraboSpot_HowTo_Example.xlsx');
+    $demoToken = extractToken($r['body']);
+    check('example uploads: embedded template recognized, 9 data rows',
+        $demoToken !== null && strpos($r['body'], 'embedded template recognized') !== false && strpos($r['body'], '9 data rows') !== false);
+    $demoTargetNew = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'new', 'dataset_name' => "e2ewiz HOWTO $stamp");
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $demoToken), $demoTargetNew));
+    check('example plans clean with no vocabulary decisions: 5 new spots',
+        strpos($r['body'], '5 new spots') !== false && strpos($r['body'], 'Confirm &amp; Import') !== false
+        && strpos($r['body'], 'Unrecognized vocabulary') === false);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'confirm', 'token' => $demoToken), $demoTargetNew));
+    check('example imports', strpos($r['body'], 'Import complete') !== false);
+    preg_match('/New dataset created \(id (\d+)\)/', $r['body'], $m);
+    $DS3 = isset($m[1]) ? (int)$m[1] : 0;
+    $datasetIds[] = $DS3;
+    $recs = $neodb->get_results("MATCH (d:Dataset {id: $DS3, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN s.id AS id, s.name AS name, s.json_orientation_data AS od, s.json_samples AS sm");
+    $nSpots = 0; $nOrient = 0; $nAssoc = 0; $nSamples = 0;
+    foreach ((array)$recs as $rec) {
+        $nSpots++; $spotIds[] = (int)$rec->value('id');
+        $od = json_decode((string)$rec->value('od'), true);
+        if (is_array($od)) {
+            $nOrient += count($od);
+            foreach ($od as $o) { if (!empty($o['associated_orientation'])) { $nAssoc += count($o['associated_orientation']); } }
+        }
+        $sm = json_decode((string)$rec->value('sm'), true);
+        if (is_array($sm)) { $nSamples += count($sm); }
+    }
+    check("example landed as documented: 5 spots / 6 orientations / 1 associated / 2 samples (got $nSpots / $nOrient / $nAssoc / $nSamples)",
+        $nSpots === 5 && $nOrient === 6 && $nAssoc === 1 && $nSamples === 2);
+
 } finally {
     echo "\n=== cleanup ===\n";
     foreach (array_unique($spotIds) as $sid2) {
         try { $strabo->deleteSingleSpot((int)$sid2); } catch (Exception $e) {}
     }
     // catch strays by name
-    $recs = $neodb->get_results("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL'] RETURN s.id AS id");
+    $recs = $neodb->get_results("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3'] RETURN s.id AS id");
     foreach ((array)$recs as $rec) {
         try { $strabo->deleteSingleSpot((int)$rec->value('id')); } catch (Exception $e) {}
     }
@@ -433,13 +645,17 @@ try {
     $db->query("DELETE FROM project WHERE strabo_project_id = '$PROJECT_ID' AND user_pkey = $ownerPkey");
     $db->query("DELETE FROM field_templates WHERE userpkey = $ownerPkey AND name ILIKE 'e2ewiz%'");
     $db->query("DELETE FROM field_tabular_runs WHERE project_id = '$PROJECT_ID'");
+    foreach (array("FS-FILL-$stamp", 'KU-26-001', 'KU-26-002') as $sn) {
+        $db->get_var_prepared("DELETE FROM strabosamples.samples WHERE userpkey = $1 AND name = $2 RETURNING id", array($ownerPkey, $sn));
+    }
     foreach ($sessionFiles as $f) { @unlink($f); }
     foreach ($tmpFiles as $f) { @unlink($f); }
 
-    $r1 = (int)$neodb->get_var("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL'] RETURN count(s)");
+    $r1 = (int)$neodb->get_var("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3'] RETURN count(s)");
     $r2 = (int)$neodb->get_var("MATCH (d:Dataset {userpkey: $ownerPkey}) WHERE d.name =~ 'e2ewiz.*' RETURN count(d)");
     $r3 = (int)$db->get_var_prepared("SELECT count(*) FROM field_templates WHERE userpkey = $1 AND name ILIKE 'e2ewiz%'", array($ownerPkey));
-    echo "residue: spots=$r1 datasets=$r2 templates=$r3\n";
+    $r4 = (int)$db->get_var_prepared("SELECT count(*) FROM strabosamples.samples WHERE userpkey = $1 AND name IN ($2, 'KU-26-001', 'KU-26-002')", array($ownerPkey, "FS-FILL-$stamp"));
+    echo "residue: spots=$r1 datasets=$r2 templates=$r3 samples=$r4\n";
 }
 
 echo "\n==============================\n";
