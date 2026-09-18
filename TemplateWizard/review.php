@@ -262,7 +262,8 @@ include("includes/mheader.php");
 
 								<h3>Where should this data go?</h3>
 								<div class="row gtr-uniform gtr-25">
-									<div class="col-4 col-12-small">
+									<div class="col-6 col-12-small">
+										<label for="tw-project">Project</label>
 										<select name="project_id" id="tw-project">
 											<option value="">-- Project --</option>
 											<?php foreach ($myProjects as $p): ?>
@@ -270,14 +271,17 @@ include("includes/mheader.php");
 											<?php endforeach; ?>
 										</select>
 									</div>
-									<div class="col-4 col-12-small">
+									<div class="col-12">
+										<label>Dataset</label>
+									</div>
+									<div class="col-6 col-12-small">
 										<input type="radio" name="dataset_choice" id="dc-existing" value="existing" <?php echo $target['dataset_choice'] === 'existing' ? 'checked' : ''; ?>>
 										<label for="dc-existing">Existing dataset</label>
 										<select name="dataset_id" id="tw-dataset" data-selected="<?php echo htmlspecialchars($target['dataset_id']); ?>">
 											<option value="">-- pick a project first --</option>
 										</select>
 									</div>
-									<div class="col-4 col-12-small">
+									<div class="col-6 col-12-small">
 										<input type="radio" name="dataset_choice" id="dc-new" value="new" <?php echo $target['dataset_choice'] === 'new' ? 'checked' : ''; ?>>
 										<label for="dc-new">New dataset named:</label>
 										<input type="text" name="dataset_name" placeholder="e.g. Legacy stations 2019" value="<?php echo htmlspecialchars($target['dataset_name']); ?>">
