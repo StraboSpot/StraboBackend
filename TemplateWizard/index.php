@@ -142,7 +142,7 @@ if ($twFlash !== ''): ?>
 										<div class="box tw-door">
 											<h3>Design a template</h3>
 											<p>Choose the columns your spreadsheets carry. Start from the sections you need, then add, remove or reorder columns.</p>
-											<a href="#tw-new-panel" id="tw-new-toggle" class="button" aria-expanded="false" aria-controls="tw-new-panel">New template&hellip;</a>
+											<a href="#tw-new-panel" id="tw-new-toggle" class="button primary" aria-expanded="false" aria-controls="tw-new-panel">New template&hellip;</a>
 										</div>
 									</div>
 								</div>
