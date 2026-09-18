@@ -9,8 +9,7 @@ The Template Wizard allows users to either select from existing templates or cre
 ## Files
 
 - **index.php** - Landing page: Export / Import / Design cards + My Templates list (js/landing.js)
-- **design_template.php** - HandsonTable-based template designer
-- **save_template.php** - Data processing and debug output page
+- **design_template.php** - Column list builder (js/design_template.js, css/template_designer.css); no grid, no data entry
 
 ## Usage
 
@@ -26,18 +25,19 @@ POSTs `template_method=new` + `selected_sections[]` to design_template.php).
 **My Templates** below lists saved designs with Download blank / Edit / Delete;
 Edit is the "use an existing template" path (GET `template_id`).
 
-### Page 2: Template Design
+### Page 2: Template Design (column list builder, 2026-09-18)
 
-Features:
-- Interactive HandsonTable with dark theme
-- Drag-and-drop column reordering
-- Paste data from Excel, CSV, or Google Sheets
-- Auto-save detection (shows save button when changes detected)
-- Template naming for new templates
+Ordered column list (drag handle or arrows, remove, custom headers) beside the
+StraboField catalog grouped by section with a filter, and a read-only preview
+of the sheet's band + header rows with an example spot. Rules: the id column
+is locked first; orientation_type is placed before the first orientation
+field automatically (never user-managed). Actions: Save template (ajax.php
+save_template, then back to the landing page), Download blank (saves, then
+export.php?what=template), Cancel (unsaved-changes prompt). Data entry and
+the old paste-to-import path are gone: importing is the Import page's job.
+### Page 3: Import (review.php)
 
-### Page 3: Debug Output
-
-Displays all submitted data for testing and debugging purposes.
+Upload, target, review, commit. See the PRD; the prototype debug page is gone (2026-09-18).
 
 ## Column Mappings
 
@@ -57,7 +57,6 @@ The following sections can be included in templates:
 
 ## Dependencies
 
-- **HandsonTable** v12.4.0 (loaded via CDN)
 - StraboSpot standard header/footer includes
 - Database connection (`db.php`) for future integration
 

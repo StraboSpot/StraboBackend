@@ -2,7 +2,7 @@
 /**
  * File: review.php
  * Description: Template Wizard - Review & Commit (Page 3)
- *              Receives data from the designer grid (action=stage) or a
+ *              Receives a
  *              direct file upload (action=upload), stashes the parsed rows
  *              in a server-side state token, then:
  *                action=plan    -> validate + diff against the chosen
@@ -102,34 +102,6 @@ if ($action === 'cancel') {
     }
     header('Location: /TemplateWizard/');
     exit;
-}
-
-if ($action === 'stage') {
-    // From the designer grid.
-    $grid = json_decode(isset($_POST['grid_json']) ? $_POST['grid_json'] : '', true);
-    $spec = json_decode(isset($_POST['spec_json']) ? $_POST['spec_json'] : '', true);
-    $templateName = isset($_POST['template_name']) ? $_POST['template_name'] : '';
-    if (!is_array($grid) || count($grid) < 2) {
-        $pageError = 'No data rows received from the designer.';
-    } else {
-        $parsed = $twsvc->parseGrid($grid, is_array($spec) ? $spec : null);
-        if (empty($parsed['ok'])) {
-            $pageError = $parsed['message'];
-        } else {
-            $token = $twsvc->saveState(array(
-                'parsed' => $parsed,
-                'source' => 'designer grid' . ($templateName !== '' ? " (template: $templateName)" : ''),
-            ));
-            if ($token === null) {
-                $pageError = 'Could not stash the upload for review — try again.';
-            } else {
-                $view = 'target';
-                $sourceLabel = 'designer grid' . ($templateName !== '' ? " (template: $templateName)" : '');
-                $rowCount = count($parsed['rows']);
-                $target['project_id'] = isset($_POST['project_id']) ? trim($_POST['project_id']) : '';
-            }
-        }
-    }
 }
 
 if ($action === 'upload') {

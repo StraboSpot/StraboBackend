@@ -13,7 +13,8 @@
  *                   -> confirm -> spots/dataset/journal asserted in DB
  *                5. Dirty-plan confirm refused (nothing committed)
  *                6. Vocab __other__ resolution over HTTP
- *                7. Grid-paste path (action=stage) -> update commit
+ *                7. Designer page config (GET saved / POST new sections),
+ *                   stranger isolation, stage door removed
  *                8. Export -> re-upload -> "embedded template recognized"
  *                   -> all-unchanged plan (round trip over HTTP)
  *                9. Stranger isolation: foreign spot id, foreign dataset
@@ -291,27 +292,32 @@ try {
     }
 
     // ------------------------------------------------------------------
-    echo "\n=== 7. grid-paste path (action=stage) -> update ===\n";
+    echo "
+=== 7. designer page (column list builder) + stage door gone ===
+";
     // ------------------------------------------------------------------
-    $grid = array(
-        array('strabo_internal_id', 'spot_name', 'notes'),
-        array((string)$A, 'WZ-A', 'edited from the grid'),
-    );
+    $r = httpGet("/TemplateWizard/design_template.php?template_id=$TPL", $sidOwner);
+    check('designer GET template_id: 200 + name + spec columns in page config',
+        $r['status'] === 200 && strpos($r['body'], 'window.twDesigner') !== false
+        && strpos($r['body'], json_encode($tplName)) !== false
+        && strpos($r['body'], '"header":"strabo_internal_id"') !== false
+        && strpos($r['body'], '{"kind":"field","group":"spot","name":"name"') !== false);
+    check('designer page has no grid library', strpos($r['body'], 'handsontable') === false && strpos($r['body'], 'xlsx.full') === false);
+    $r = httpPostForm('/TemplateWizard/design_template.php', $sidOwner, array(
+        'template_method' => 'new', 'selected_sections' => array('spot', 'sample')));
+    // the page config also embeds the whole catalog, so judge the columns segment only
+    $colsSeg = preg_match('/"columns":(\[.*?\]),"catalog"/s', $r['body'], $m) ? $m[1] : '';
+    check('designer POST new + sections: sample columns seeded, no orientation',
+        $r['status'] === 200 && strpos($colsSeg, '"header":"sample_type"') !== false
+        && strpos($colsSeg, '"header":"strike"') === false && strpos($colsSeg, '"header":"orientation_type"') === false);
+    $r = httpGet("/TemplateWizard/design_template.php?template_id=$TPL", $sidStranger);
+    check("stranger opening owner's template gets a fresh new template, not its columns",
+        $r['status'] === 200 && strpos($r['body'], json_encode($tplName)) === false);
     $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array(
-        'action' => 'stage', 'grid_json' => json_encode($grid), 'spec_json' => json_encode($SPEC),
-        'template_name' => $tplName, 'project_id' => $PROJECT_ID));
-    $gridToken = extractToken($r['body']);
-    check('grid stage renders target + token', $gridToken !== null && strpos($r['body'], 'designer grid') !== false);
-    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner,
-        array_merge(array('action' => 'plan', 'token' => $gridToken), $target));
-    check('grid plan: 1 updated', strpos($r['body'], '1 updated') !== false);
-    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner,
-        array_merge(array('action' => 'confirm', 'token' => $gridToken), $target));
-    check('grid confirm imports', strpos($r['body'], 'Import complete') !== false);
-    $pa = spotProps($neodb, $A, $ownerPkey);
-    check('WZ-A notes updated via grid path', $pa['notes'] === 'edited from the grid');
-    $od = json_decode($pa['json_orientation_data'], true);
-    check('orientations untouched (template subset)', is_array($od) && count($od) === 2);
+        'action' => 'stage', 'grid_json' => json_encode(array(array('strabo_internal_id', 'spot_name'), array((string)$A, 'WZ-A'))),
+        'spec_json' => json_encode($SPEC), 'template_name' => $tplName, 'project_id' => $PROJECT_ID));
+    check('review.php action=stage no longer stages anything',
+        extractToken($r['body']) === null && strpos($r['body'], 'designer grid') === false);
 
     // ------------------------------------------------------------------
     echo "\n=== 8. export -> re-upload round trip over HTTP ===\n";

@@ -515,16 +515,6 @@ class FieldTabularService
         return $parsed;
     }
 
-    /** Parse grid data POSTed from the designer (array of arrays, row 0 = headers). */
-    public function parseGrid($gridRows, $spec)
-    {
-        if (!is_array($gridRows)) {
-            return array('ok' => false, 'error' => 'bad_grid', 'message' => 'Malformed grid payload.');
-        }
-        $v = $this->validateSpec($spec);
-        return $this->gridToParsed($gridRows, !empty($v['ok']) ? $v['spec'] : null);
-    }
-
     /**
      * Shared grid interpreter. Maps headers to columns, extracts rows.
      * Row record: {n, id, key_name, values: {"group.name": raw}, otype, orole,
