@@ -2,7 +2,7 @@
 /**
  * File: review.php
  * Description: Template Wizard - Review & Commit (Page 3)
- *              Receives data from the designer grid (action=stage) or a
+ *              Receives a
  *              direct file upload (action=upload), stashes the parsed rows
  *              in a server-side state token, then:
  *                action=plan    -> validate + diff against the chosen
@@ -104,34 +104,6 @@ if ($action === 'cancel') {
     exit;
 }
 
-if ($action === 'stage') {
-    // From the designer grid.
-    $grid = json_decode(isset($_POST['grid_json']) ? $_POST['grid_json'] : '', true);
-    $spec = json_decode(isset($_POST['spec_json']) ? $_POST['spec_json'] : '', true);
-    $templateName = isset($_POST['template_name']) ? $_POST['template_name'] : '';
-    if (!is_array($grid) || count($grid) < 2) {
-        $pageError = 'No data rows received from the designer.';
-    } else {
-        $parsed = $twsvc->parseGrid($grid, is_array($spec) ? $spec : null);
-        if (empty($parsed['ok'])) {
-            $pageError = $parsed['message'];
-        } else {
-            $token = $twsvc->saveState(array(
-                'parsed' => $parsed,
-                'source' => 'designer grid' . ($templateName !== '' ? " (template: $templateName)" : ''),
-            ));
-            if ($token === null) {
-                $pageError = 'Could not stash the upload for review — try again.';
-            } else {
-                $view = 'target';
-                $sourceLabel = 'designer grid' . ($templateName !== '' ? " (template: $templateName)" : '');
-                $rowCount = count($parsed['rows']);
-                $target['project_id'] = isset($_POST['project_id']) ? trim($_POST['project_id']) : '';
-            }
-        }
-    }
-}
-
 if ($action === 'upload') {
     if (!isset($_FILES['tabfile']) || !is_uploaded_file($_FILES['tabfile']['tmp_name'])) {
         $pageError = 'No file received — choose a .xlsx or .csv file first.';
@@ -140,7 +112,8 @@ if ($action === 'upload') {
     } else {
         $spec = null;
         if (isset($_POST['template_pkey']) && $_POST['template_pkey'] !== '') {
-            $tpl = $twsvc->getTemplate((int)$_POST['template_pkey']);
+            // a saved template pkey, or "basic" for the built-in layout
+            $tpl = $twsvc->resolveTemplate($_POST['template_pkey']);
             if ($tpl !== null) { $spec = $tpl['spec']; }
         }
         $parsed = $twsvc->parseUpload($_FILES['tabfile']['tmp_name'], $_FILES['tabfile']['name'], $spec);
@@ -223,11 +196,11 @@ include("includes/mheader.php");
 							<div style="background-color: #3b4252; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
 								<strong>Upload a spreadsheet of spots (.xlsx or .csv).</strong>
 								<div style="margin: 10px 0 0 0; padding-left: 20px;">
-									Files downloaded from the Template Wizard or a dataset export carry their template inside — they are recognized
-									automatically. For anything else, columns are matched by header name; unknown columns become custom fields
-									(you confirm them during review). Every change is shown for review before anything is saved, and imports are
-									all-or-nothing. Need a starting point? <a href="index.php">Design a template</a> first &mdash; and if your
-									spots carry multiple measurements, see the <a href="howto.php">how-to guide</a> for the row format.
+									Files exported by StraboSpot carry their template inside and are recognized automatically; other files are
+									matched by column header. Unknown columns become custom fields, which you confirm during review. Every change
+									is shown for review before anything is saved, and an import is all or nothing. Spots with several measurements
+									take one row each: see the <a href="howto.php">how-to guide</a>, or <a href="index.php">design a template</a>
+									for a custom layout.
 								</div>
 							</div>
 							<form method="post" enctype="multipart/form-data">
@@ -245,15 +218,20 @@ include("includes/mheader.php");
 									<div class="col-6 col-12-small">
 										<select name="template_pkey">
 											<option value="">Template: auto-detect (embedded or by header)</option>
-											<?php foreach ($templates as $t): ?>
-											<option value="<?php echo (int)$t->pkey; ?>"><?php echo htmlspecialchars($t->name); ?></option>
-											<?php endforeach; ?>
+											<option value="<?php echo FieldTabularService::BASIC_TEMPLATE_ID; ?>">Basic layout (built-in)</option>
+											<?php if (count($templates)): ?>
+											<optgroup label="My templates">
+												<?php foreach ($templates as $t): ?>
+												<option value="<?php echo (int)$t->pkey; ?>"><?php echo htmlspecialchars($t->name); ?></option>
+												<?php endforeach; ?>
+											</optgroup>
+											<?php endif; ?>
 										</select>
 									</div>
 									<div class="col-12">
 										<ul class="actions">
 											<li><input type="submit" class="primary" value="Upload &amp; Review" id="tw-upload-btn" disabled></li>
-											<li><a href="index.php" class="button">Back to Wizard</a></li>
+											<li><a href="index.php" class="button">Back to Template Wizard</a></li>
 										</ul>
 									</div>
 								</div>
@@ -284,7 +262,8 @@ include("includes/mheader.php");
 
 								<h3>Where should this data go?</h3>
 								<div class="row gtr-uniform gtr-25">
-									<div class="col-4 col-12-small">
+									<div class="col-6 col-12-small">
+										<label for="tw-project">Project</label>
 										<select name="project_id" id="tw-project">
 											<option value="">-- Project --</option>
 											<?php foreach ($myProjects as $p): ?>
@@ -292,14 +271,17 @@ include("includes/mheader.php");
 											<?php endforeach; ?>
 										</select>
 									</div>
-									<div class="col-4 col-12-small">
+									<div class="col-12">
+										<label>Dataset</label>
+									</div>
+									<div class="col-6 col-12-small">
 										<input type="radio" name="dataset_choice" id="dc-existing" value="existing" <?php echo $target['dataset_choice'] === 'existing' ? 'checked' : ''; ?>>
 										<label for="dc-existing">Existing dataset</label>
 										<select name="dataset_id" id="tw-dataset" data-selected="<?php echo htmlspecialchars($target['dataset_id']); ?>">
 											<option value="">-- pick a project first --</option>
 										</select>
 									</div>
-									<div class="col-4 col-12-small">
+									<div class="col-6 col-12-small">
 										<input type="radio" name="dataset_choice" id="dc-new" value="new" <?php echo $target['dataset_choice'] === 'new' ? 'checked' : ''; ?>>
 										<label for="dc-new">New dataset named:</label>
 										<input type="text" name="dataset_name" placeholder="e.g. Legacy stations 2019" value="<?php echo htmlspecialchars($target['dataset_name']); ?>">
@@ -390,7 +372,7 @@ include("includes/mheader.php");
 								<h4 style="color:#ebcb8b;">Heads up</h4>
 								<ul>
 									<?php foreach (array_slice($plan['warnings'], 0, 50) as $w): ?>
-									<li>Row <?php echo (int)$w['row']; ?>: <?php echo htmlspecialchars($w['message']); ?></li>
+									<li<?php echo ((int)$w['row'] === 0) ? ' style="list-style:none;margin-left:-1.25em;font-weight:bold;"' : ''; ?>><?php echo ((int)$w['row'] > 0) ? 'Row ' . (int)$w['row'] . ': ' : ''; ?><?php echo htmlspecialchars($w['message']); ?></li>
 									<?php endforeach; ?>
 								</ul>
 								<?php endif; ?>
@@ -422,8 +404,14 @@ include("includes/mheader.php");
 								</ul>
 								<p style="font-size: 0.85em;">Import run #<?php echo (int)$commitInfo['run_id']; ?> — journaled for traceability.</p>
 							</div>
+							<?php if ((int)$commitInfo['created'] > 0): ?>
+							<p>Your spreadsheet is now out of date: the new spot<?php echo $commitInfo['created'] === 1 ? ' has an id' : 's have ids'; ?> on the server
+								that your file does not carry. Uploading the same file again would create <?php echo $commitInfo['created'] === 1 ? 'it' : 'them'; ?> a second time.
+								Download the dataset to get a copy with ids; that copy re-imports as unchanged.</p>
+							<?php endif; ?>
 							<ul class="actions">
-								<li><a href="/my_field_data.php" class="button primary">My Field Data</a></li>
+								<li><a href="export.php?what=export&amp;run_id=<?php echo (int)$commitInfo['run_id']; ?>&amp;format=xlsx" class="button primary" id="tw-download-ids">&#8681; Download this dataset with ids</a></li>
+								<li><a href="/my_field_data.php" class="button">My Field Data</a></li>
 								<li><a href="index.php" class="button">Template Wizard</a></li>
 								<li><a href="review.php" class="button">Import another file</a></li>
 							</ul>

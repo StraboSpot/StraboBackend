@@ -1,12 +1,18 @@
 <?php
 /**
  * File: design_template.php
- * Description: Template Wizard - Template Designer with HandsonTable (Page 2)
- *              Columns come from the saved template (method=existing) or the
- *              schema-derived catalog defaults for the chosen sections
- *              (method=new). Data can be pasted straight into the grid or
- *              loaded from a file; Save persists the template (field_templates)
- *              and, when the grid holds data, continues to the review screen.
+ * Description: Template Wizard - Template Designer (column list builder,
+ *              2026-09-18 rewrite; replaces the Handsontable grid).
+ *              A template is an ordered list of columns. The page shows
+ *              the list (reorder, remove, custom headers), the StraboField
+ *              catalog to add from, and a read-only preview of the sheet.
+ *              Columns come from the saved template (GET template_id) or
+ *              the catalog defaults for the sections chosen on the landing
+ *              page (POST template_method=new + selected_sections[]).
+ *              Save persists the template (ajax.php save_template) and
+ *              returns to the landing page; Download blank saves first,
+ *              then streams the fillable workbook. Nothing here imports
+ *              data: that is the Import page's job.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -23,12 +29,11 @@ require_once __DIR__ . "/services/FieldTabularService.php";
 $twsvc = new FieldTabularService($db, $neodb, $strabo);
 $twsvc->setUserpkey($userpkey);
 
-// ---- Get POST data from Page 1 ----
+// ---- Which template, or which starting sections ----
 $template_method   = isset($_POST['template_method']) ? $_POST['template_method'] : (isset($_GET['template_id']) ? 'existing' : 'new');
 $template_id       = isset($_POST['template_id']) ? $_POST['template_id'] : (isset($_GET['template_id']) ? $_GET['template_id'] : '');
 $selected_sections = isset($_POST['selected_sections']) ? $_POST['selected_sections'] : array('spot', 'orientation');
 
-// ---- Resolve the working template spec ----
 $template_name = '';
 $template_pkey = '';
 $spec = null;
@@ -80,76 +85,83 @@ if ($spec === null) {
     $spec = $v['spec'];
 }
 
-// Ordered headers + parallel descriptors for the grid.
-$colDefs = $twsvc->columnDefs($spec);
-$columns = array();
-$specColumns = array();
-foreach ($colDefs as $d) {
-    $columns[] = $d['header'];
-    if ($d['kind'] === 'system') {
-        $specColumns[] = array('kind' => 'system', 'key' => $d['key'], 'header' => $d['header']);
-    } elseif ($d['kind'] === 'field') {
-        $specColumns[] = array('kind' => 'field', 'group' => $d['group'], 'name' => $d['name'], 'header' => $d['header']);
-    } else {
-        $specColumns[] = array('kind' => 'custom', 'header' => $d['header']);
-    }
-}
-
-// Every known display header => descriptor (for mapping grid headers back to
-// catalog fields when the user adds columns or edits a file offline).
-$headerMap = array(
-    'strabo_internal_id' => array('kind' => 'system', 'key' => 'strabo_internal_id'),
-    'geometry_type'      => array('kind' => 'system', 'key' => 'geometry_type'),
-    'orientation_type'   => array('kind' => 'system', 'key' => 'orientation_type'),
-    'orientation_role'   => array('kind' => 'system', 'key' => 'orientation_role'),
-);
-$catalogGroups = array();   // group => {label, fields: [{name, header, label}]}
-// Per-column grid behavior: dropdown vocab (strict for structural columns,
-// tolerant for catalog vocab — off-list values flag red and resolve at
-// review) and numeric constraints (red-flagged). Jason 2026-07-03.
-$columnVocab = array(
-    'orientation_type' => array('strict' => true, 'values' => array('planar', 'linear', 'tabular_zone')),
-    'orientation_role' => array('strict' => true, 'values' => array('primary', 'associated')),
-);
-$catalogAll = FieldTabularService::catalog();
-foreach ($catalogAll['groups'] as $gkey => $g) {
-    $entry = array('label' => $g['label'], 'fields' => array());
-    foreach ($g['fields'] as $f) {
-        $h = FieldTabularService::displayHeader($gkey, $f['name']);
-        $headerMap[$h] = array('kind' => 'field', 'group' => $gkey, 'name' => $f['name']);
-        $entry['fields'][] = array('name' => $f['name'], 'header' => $h, 'label' => $f['label']);
-
-        $cv = array();
-        if (isset($f['vocab']) && count($f['vocab'])) {
-            $cv['strict'] = false;
-            $labels = array();
-            foreach ($f['vocab'] as $vv) { $labels[] = $vv['label']; }
-            $cv['values'] = $labels;
-            if (isset($f['vocab_by_type'])) {
-                foreach ($f['vocab_by_type'] as $otype => $tv) {
-                    $tl = array();
-                    foreach ($tv as $vv) { $tl[] = $vv['label']; }
-                    $cv['by_type'][$otype] = $tl;
-                }
+// ---- Hints shown beside each field: type, range, dropdown size, applicability ----
+function tw_field_hint($f)
+{
+    $bits = array();
+    if (!empty($f['vocab'])) {
+        $bits[] = 'dropdown, ' . count($f['vocab']) . ' values';
+    } elseif (isset($f['type'])) {
+        $t = $f['type'];
+        if ($t === 'integer' || $t === 'decimal') {
+            $range = '';
+            if (isset($f['constraint']['min']) && isset($f['constraint']['max'])) {
+                $range = ' ' . $f['constraint']['min'] . ' to ' . $f['constraint']['max'];
             }
-        } elseif (in_array($f['type'], array('integer', 'decimal'))) {
-            $cv['numeric'] = $f['type'];
-            if (isset($f['constraint']['min'])) { $cv['min'] = $f['constraint']['min']; }
-            if (isset($f['constraint']['max'])) { $cv['max'] = $f['constraint']['max']; }
+            $bits[] = 'number' . $range;
+        } elseif ($t === 'date') {
+            $bits[] = 'date';
+        } elseif ($t === 'boolean') {
+            $bits[] = 'yes / no';
+        } else {
+            $bits[] = 'text';
         }
-        if (!empty($cv)) { $columnVocab[$h] = $cv; }
     }
-    $catalogGroups[$gkey] = $entry;
+    if (!empty($f['applies_to']) && is_array($f['applies_to']) && count($f['applies_to']) < 3) {
+        $bits[] = implode(' / ', $f['applies_to']) . ' only';
+    }
+    return implode('; ', $bits);
 }
 
-// Real projects for the "upload data to" picker.
-$myProjects = $twsvc->myProjects();
+$systemMeta = array(
+    'strabo_internal_id' => array('label' => 'StraboSpot id',     'hint' => 'locked; filled by StraboSpot on export, blank for new spots'),
+    'orientation_type'   => array('label' => 'Orientation type',  'hint' => 'planar / linear / tabular zone; required with orientation columns'),
+    'orientation_role'   => array('label' => 'Orientation role',  'hint' => 'primary / associated; lets a row attach to the measurement above it'),
+    'geometry_type'      => array('label' => 'Geometry type',     'hint' => 'export context for line / polygon spots; filled by StraboSpot'),
+);
+
+// Current columns, in order, as the page shows them.
+$current = array();
+foreach ($twsvc->columnDefs($spec) as $d) {
+    if ($d['kind'] === 'system') {
+        $current[] = array('kind' => 'system', 'key' => $d['key'], 'header' => $d['header'],
+                           'label' => $systemMeta[$d['key']]['label'], 'section' => 'system',
+                           'hint' => $systemMeta[$d['key']]['hint']);
+    } elseif ($d['kind'] === 'field') {
+        $current[] = array('kind' => 'field', 'group' => $d['group'], 'name' => $d['name'], 'header' => $d['header'],
+                           'label' => isset($d['def']['label']) ? $d['def']['label'] : $d['name'], 'section' => $d['group'],
+                           'hint' => is_array($d['def']) ? tw_field_hint($d['def']) : '');
+    } else {
+        $current[] = array('kind' => 'custom', 'header' => $d['header'], 'label' => $d['header'],
+                           'section' => 'custom', 'hint' => 'custom field on the spot');
+    }
+}
+
+// The catalog to add from, grouped by section.
+$catalogAll = FieldTabularService::catalog();
+$catalogGroups = array();
+foreach ($catalogAll['groups'] as $gkey => $g) {
+    $fields = array();
+    foreach ($g['fields'] as $f) {
+        $fields[] = array(
+            'name'   => $f['name'],
+            'header' => FieldTabularService::displayHeader($gkey, $f['name']),
+            'label'  => isset($f['label']) ? $f['label'] : $f['name'],
+            'hint'   => tw_field_hint($f),
+        );
+    }
+    $catalogGroups[] = array('key' => $gkey, 'label' => $g['label'], 'fields' => $fields);
+}
+$systemExtras = array(
+    array('key' => 'orientation_role', 'header' => 'orientation_role', 'label' => $systemMeta['orientation_role']['label'], 'hint' => $systemMeta['orientation_role']['hint']),
+    array('key' => 'geometry_type',    'header' => 'geometry_type',    'label' => $systemMeta['geometry_type']['label'],    'hint' => $systemMeta['geometry_type']['hint']),
+);
+$sectionLabels = array();
+foreach (FieldTabularService::sectionMeta() as $k => $m) { $sectionLabels[$k] = $m['label']; }
 
 include("includes/mheader.php");
 ?>
 
-<!-- HandsonTable CSS (local 6.2.2 — last MIT-licensed release) -->
-<link rel="stylesheet" href="assets/handsontable.full.min.css">
 <link rel="stylesheet" href="css/template_designer.css?v=<?php echo filemtime(__DIR__ . '/css/template_designer.css'); ?>">
 
 			<!-- Main -->
@@ -158,107 +170,64 @@ include("includes/mheader.php");
 
 						<header class="major">
 							<h2>Template Design</h2>
+							<p>Choose the columns your spreadsheets carry.</p>
 						</header>
 
 						<!-- Content -->
 							<section id="content">
 
-								<!-- Hidden file input -->
-								<input type="file" id="fileInput" accept=".csv,.xlsx,.xls,.tsv" style="display: none;" />
-
-								<!-- Instructions -->
-								<div style="background-color: #3b4252; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
-									<strong>Instructions:</strong>
-									<ul style="margin: 10px 0 0 0; padding-left: 20px;">
-										<li><strong>Reorder columns if desired:</strong> Click a column header once to select it, then drag to move it.</li>
-										<li><strong>Add columns:</strong> Pick a StraboField column below, or right-click a header to insert a blank column &mdash; type its header to make it a "custom" column.</li>
-										<li><strong>Remove columns:</strong> Right-click a column header and choose "Remove column".</li>
-										<li><strong>One row per measurement:</strong> a spot with several orientations takes several rows &mdash; repeat the spot name on each of its rows.</li>
-										<li><strong>Get your data in:</strong> paste from Excel/Sheets, <a href="#" id="uploadFileLink">load a file into the grid</a>, or <a href="#" id="downloadTemplateLink">download this template</a> to fill in offline (offline files upload on the <a href="review.php">Import page</a>).</li>
-										<li><strong>Save:</strong> stores the template design. With data in the grid, Save continues to a review of every change before anything is written.</li>
-									</ul>
+								<div class="tw-intro">
+									<p>
+										A template is an ordered list of columns. Add StraboField fields from the catalog on the right, drag
+										or use the arrows to reorder, and remove what you do not need. The preview shows the spreadsheet you
+										will get; spots with several measurements take one row each (<a href="howto.php">how-to</a>).
+									</p>
 								</div>
 
-								<!-- Template Name and Save Button -->
-								<div class="row" style="margin-bottom: 20px;">
-									<div class="col-2 col-12-small gtr-25">
-										<div>Template Name <span class="highlighted">*</span></div>
+								<!-- Name + actions -->
+								<div class="row gtr-uniform gtr-25 tw-toolbar">
+									<div class="col-6 col-12-medium">
+										<label for="template_name" class="tw-label">Template name</label>
+										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" maxlength="120" value="<?php echo htmlspecialchars($template_name); ?>" />
 									</div>
-									<div class="col-7 col-12-small gtr-25">
-										<input type="text" id="template_name" name="template_name" placeholder="Enter template name" value="<?php echo htmlspecialchars($template_name); ?>" />
-									</div>
-									<div class="col-3 col-12-small gtr-25" id="saveSection" style="display: none;">
-										<ul class="actions fit" style="margin-bottom: 0px;">
-											<li><a id="saveBtn" class="button primary fit"><?php echo ($template_method === 'existing') ? 'Save Changes' : 'Save'; ?></a></li>
+									<div class="col-6 col-12-medium tw-toolbar-actions">
+										<ul class="actions">
+											<li><a href="#" id="tw-save" class="button primary" aria-disabled="true"><?php echo ($template_method === 'existing') ? 'Save changes' : 'Save template'; ?></a></li>
+											<li><a href="#" id="tw-download" class="button" aria-disabled="true" title="Save, then download a blank, fillable spreadsheet">Download blank</a></li>
+											<li><a href="index.php" id="tw-cancel" class="button">Cancel</a></li>
 										</ul>
 									</div>
 								</div>
+								<div id="tw-status" class="tw-status" role="status" aria-live="polite"></div>
 
-								<!-- Add catalog column -->
-								<div class="row" style="margin-bottom: 20px;">
-									<div class="col-2 col-12-small gtr-25">
-										<div>Add Column</div>
+								<!-- Builder -->
+								<div class="row gtr-25 tw-builder">
+									<div class="col-7 col-12-medium">
+										<h3 class="tw-pane-title">Columns in this template <span id="tw-count" class="tw-count"></span></h3>
+										<ol id="tw-columns" class="tw-columns" aria-label="Template columns"></ol>
+										<p class="tw-hint">Drag the handle or use the arrows to reorder. The StraboSpot id column stays first; the orientation type column is placed before the first orientation field automatically.</p>
 									</div>
-									<div class="col-7 col-12-small gtr-25">
-										<select id="add_column_select">
-											<option value="">-- StraboField columns --</option>
-											<optgroup label="Wizard columns">
-												<option value="orientation_type">Orientation Type (orientation_type)</option>
-												<option value="orientation_role">Orientation Role — for associated orientations (orientation_role)</option>
-												<option value="geometry_type">Geometry Type — export context, filled by StraboSpot (geometry_type)</option>
-											</optgroup>
-											<?php foreach ($catalogGroups as $gkey => $g): ?>
-											<optgroup label="<?php echo htmlspecialchars($g['label']); ?>">
-												<?php foreach ($g['fields'] as $f): ?>
-												<option value="<?php echo htmlspecialchars($f['header']); ?>"><?php echo htmlspecialchars($f['label']); ?> (<?php echo htmlspecialchars($f['header']); ?>)</option>
-												<?php endforeach; ?>
-											</optgroup>
-											<?php endforeach; ?>
-										</select>
-									</div>
-									<div class="col-3 col-12-small gtr-25">
-										<ul class="actions fit" style="margin-bottom: 0px;">
-											<li><a id="addColumnBtn" class="button fit">Add</a></li>
-										</ul>
+									<div class="col-5 col-12-medium">
+										<h3 class="tw-pane-title">Add columns</h3>
+										<input type="text" id="tw-filter" placeholder="Filter fields&hellip;" aria-label="Filter fields" />
+										<div id="tw-catalog" class="tw-catalog"></div>
+										<div class="tw-custom">
+											<label for="tw-custom-header" class="tw-label">Custom column</label>
+											<div class="tw-custom-row">
+												<input type="text" id="tw-custom-header" placeholder="Column header, e.g. weathering_grade" maxlength="80" />
+												<a href="#" id="tw-custom-add" class="button small">Add</a>
+											</div>
+											<p class="tw-hint">Custom columns import as custom fields on the spot.</p>
+										</div>
 									</div>
 								</div>
 
-								<!-- Project to Save -->
-								<div id="project_info" class="row" style="margin-bottom: 20px;display: none;">
-									<div class="col-2 col-12-small gtr-25">
-										<div>Strabo Project <span class="highlighted">*</span></div>
-									</div>
-									<div class="col-7 col-12-small gtr-25">
-										<select name="project_id" id="project_id">
-											<option value="">Please Select Project to Save Data...</option>
-											<?php foreach ($myProjects as $p): ?>
-											<option value="<?php echo htmlspecialchars($p['id']); ?>"><?php echo htmlspecialchars($p['name']); ?></option>
-											<?php endforeach; ?>
-										</select>
-									</div>
+								<!-- Preview -->
+								<h3 class="tw-pane-title">Spreadsheet preview</h3>
+								<p class="tw-hint">Header rows as they will appear, with an example spot carrying two measurements.</p>
+								<div class="table-wrapper tw-preview-wrap">
+									<table id="tw-preview" class="tw-preview"></table>
 								</div>
-
-								<!-- Error Modal -->
-								<div id="errorModal" style="display: none; position: fixed; z-index: 9999; left: 0; top: 0; width: 100%; height: 100%; background-color: rgba(0,0,0,0.6); align-items: center; justify-content: center;">
-									<div style="background-color: #2e3440; padding: 30px; border-radius: 5px; width: 90%; max-width: 400px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); position: relative;">
-										<h3 id="modalTitle" style="margin-top: 0; color: #bf616a;">Error</h3>
-										<p id="errorMessage" style="margin-bottom: 20px; color: #eceff4;">Template name is required</p>
-										<button id="closeModal" class="button primary" style="width: 100%;">OK</button>
-									</div>
-								</div>
-
-								<!-- HandsonTable Container -->
-								<div id="hot-container"></div>
-
-								<!-- Hidden form for POST submission to the review screen -->
-								<form id="submitForm" method="POST" action="review.php" style="display:none;">
-									<input type="hidden" name="action" value="stage">
-									<input type="hidden" name="template_pkey" id="hidden_template_pkey">
-									<input type="hidden" name="template_name" id="hidden_template_name">
-									<input type="hidden" name="project_id" id="hidden_project_id">
-									<input type="hidden" name="spec_json" id="hidden_spec_json">
-									<input type="hidden" name="grid_json" id="hidden_grid_json">
-								</form>
 
 							</section>
 					<div class="bottomSpacer"></div>
@@ -266,26 +235,17 @@ include("includes/mheader.php");
 					</div>
 				</div>
 
-<!-- HandsonTable JS (local 6.2.2 — last MIT-licensed release) -->
-<script src="assets/handsontable.full.min.js"></script>
-
-<!-- SheetJS for Excel/CSV parsing (load-into-grid) -->
-<!-- SheetJS CE 0.20.1 (Apache-2.0), vendored — the wizard has no external asset dependencies -->
-<script src="assets/xlsx.full.min.js"></script>
-
 <script>
-// Pass PHP data to JavaScript
-window.templateMethod  = '<?php echo $template_method; ?>';
-window.templateColumns = <?php echo json_encode($columns); ?>;
-window.templateSpecCols = <?php echo json_encode($specColumns); ?>;
-window.templatePkey    = '<?php echo htmlspecialchars($template_pkey); ?>';
-window.headerMap       = <?php echo json_encode($headerMap); ?>;
-window.columnVocab     = <?php echo json_encode($columnVocab); ?>;
-window.sectionMeta     = <?php
-    $sm = array();
-    foreach (FieldTabularService::sectionMeta() as $k => $m) { $sm[$k] = array('label' => $m['label']); }
-    echo json_encode($sm);
-?>;
+window.twDesigner = <?php echo json_encode(array(
+    'method'   => $template_method,
+    'pkey'     => (string)$template_pkey,
+    'name'     => $template_name,
+    'columns'  => $current,
+    'catalog'  => $catalogGroups,
+    'system'   => $systemExtras,
+    'sections' => $sectionLabels,
+    'systemMeta' => $systemMeta,
+)); ?>;
 </script>
 <script src="js/design_template.js?v=<?php echo filemtime(__DIR__ . '/js/design_template.js'); ?>"></script>
 

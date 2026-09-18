@@ -36,11 +36,18 @@ CREATE TABLE IF NOT EXISTS field_tabular_runs (
       -- started | committed | rolled_back | rollback_failed
     error        text,
     started_at   timestamptz NOT NULL DEFAULT now(),
-    finished_at  timestamptz
+    finished_at  timestamptz,
+    -- sha256 of the uploaded file + its client name (2026-09-18): lets the
+    -- review step say "this exact file was already imported" with certainty
+    file_sha256  char(64),
+    file_name    varchar(255)
 );
 
 CREATE INDEX IF NOT EXISTS field_tabular_runs_user_idx
     ON field_tabular_runs (userpkey, started_at DESC);
+
+CREATE INDEX IF NOT EXISTS field_tabular_runs_file_idx
+    ON field_tabular_runs (userpkey, file_sha256);
 
 GRANT SELECT, INSERT, UPDATE, DELETE ON field_templates, field_tabular_runs TO strabodbuser;
 GRANT USAGE, SELECT ON SEQUENCE field_templates_pkey_seq, field_tabular_runs_pkey_seq TO strabodbuser;

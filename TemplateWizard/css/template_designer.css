@@ -1,131 +1,145 @@
 /**
- * Template Wizard - Designer Styles
- * Styles for the HandsonTable template designer interface
+ * Template Wizard - Designer styles (column list builder, 2026-09-18).
+ * Section colours match FieldTabularService::sectionMeta() (the fills the
+ * generated workbooks use for their band row).
  */
 
-/* Dark theme for HandsonTable */
-.htCore {
-	background-color: #2e3440;
-	color: #eceff4;
-}
+.tw-intro { margin-bottom: 1.5em; }
+.tw-intro p { margin-bottom: 0.5em; }
+.tw-label { display: block; font-size: 0.85em; margin-bottom: 0.4em; color: rgba(255, 255, 255, 0.7); }
+.tw-hint { font-size: 0.85em; color: rgba(255, 255, 255, 0.55); margin-bottom: 1em; }
 
-.handsontable th {
-	background-color: #3b4252;
-	color: #eceff4;
-	font-weight: bold;
-	cursor: move;
-	cursor: grab;
-}
+/* toolbar */
+.tw-toolbar { align-items: flex-end; margin-bottom: 0.5em; }
+.tw-toolbar-actions .actions { margin-bottom: 0; justify-content: flex-end; }
+.tw-toolbar-actions .actions li { padding-left: 0.75em; }
+.tw-toolbar-actions .actions li:first-child { padding-left: 0; }
+.tw-status { min-height: 1.6em; font-size: 0.9em; margin: 0.25em 0 1.25em 0; }
+.tw-status-error { color: #e08a8a; }
+.tw-status-info  { color: #a3be8c; }
 
-.handsontable th:active {
-	cursor: grabbing;
-}
+/* panes */
+.tw-builder { margin-bottom: 2em; }
+.tw-pane-title { font-size: 1.05em; margin-bottom: 0.6em; }
+.tw-count { font-weight: normal; color: rgba(255, 255, 255, 0.55); }
 
-.handsontable th:hover {
-	background-color: #434c5e;
+/* column list */
+.tw-columns { list-style: none; padding: 0; margin: 0 0 0.75em 0; }
+.tw-col {
+	display: flex;
+	align-items: center;
+	gap: 0.6em;
+	padding: 0.45em 0.6em;
+	margin-bottom: 0.35em;
+	border: solid 1px rgba(255, 255, 255, 0.2);
+	border-left-width: 5px;
+	border-radius: 4px;
+	background-color: rgba(255, 255, 255, 0.04);
+	font-size: 0.9em;
+	line-height: 1.35;
 }
-
-.handsontable th.ht__highlight {
-	background-color: #2e3440;
+.tw-col-pinned { background-color: rgba(255, 255, 255, 0.015); border-style: dashed; border-left-style: solid; }
+.tw-col-handle { width: 1.1em; color: rgba(255, 255, 255, 0.4); cursor: grab; user-select: none; text-align: center; }
+.tw-col[draggable="true"]:active .tw-col-handle { cursor: grabbing; }
+.tw-col-pos { width: 1.8em; text-align: right; color: rgba(255, 255, 255, 0.45); font-size: 0.85em; }
+.tw-col-body { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; }
+.tw-col-body strong { color: #ffffff; font-weight: 600; }
+.tw-col-body code, .tw-field-body code {
+	font-size: 0.8em; background: none; padding: 0; border: 0; color: rgba(255, 255, 255, 0.6);
 }
+.tw-col-body small, .tw-field-body small { font-size: 0.78em; color: rgba(255, 255, 255, 0.45); }
+.tw-col-controls { display: flex; gap: 0.25em; align-items: center; }
+.tw-col-note { font-size: 0.75em; color: rgba(255, 255, 255, 0.45); padding: 0 0.4em; }
+.tw-dragging { opacity: 0.4; }
+.tw-drop-before { box-shadow: 0 -3px 0 0 #e8546a; }
+.tw-drop-after  { box-shadow: 0 3px 0 0 #e8546a; }
 
-.handsontable thead th.ht__highlight,
-.handsontable tbody th.ht__highlight {
-	background-color: #2e3440;
+/* small buttons (theme .button is too tall for list rows) */
+.tw-btn {
+	appearance: none;
+	-webkit-appearance: none;
+	background: rgba(255, 255, 255, 0.08);
+	border: solid 1px rgba(255, 255, 255, 0.25);
+	border-radius: 3px;
+	color: #ffffff;
+	cursor: pointer;
+	font-size: 0.95em;
+	line-height: 1;
+	padding: 0.35em 0.5em;
+	min-width: 2em;
 }
+.tw-btn:hover { background: rgba(255, 255, 255, 0.16); }
+.tw-btn:disabled { cursor: default; opacity: 0.5; }
+.tw-btn-remove:hover { background: rgba(232, 84, 106, 0.4); border-color: #e8546a; }
+.tw-btn-add { font-weight: bold; }
 
-.handsontable td {
-	background-color: #2e3440;
-	color: #eceff4;
-	border-color: #4c566a;
-	overflow: hidden;
+/* chips + section colours */
+.tw-chip {
+	display: inline-block;
+	font-size: 0.72em;
+	padding: 0.15em 0.55em;
+	border-radius: 999px;
 	white-space: nowrap;
+	font-weight: 600;
 }
+.tw-chip-system         { background: #cfcfcf; color: #3b3b3b; }
+.tw-chip-spot           { background: #bdd7ee; color: #1f3864; }
+.tw-chip-orientation    { background: #f7c7c0; color: #7b241c; }
+.tw-chip-geologic_unit  { background: #c6e0b4; color: #375623; }
+.tw-chip-trace          { background: #ffe0a3; color: #7f6000; }
+.tw-chip-other_features { background: #d9c2e9; color: #4a235a; }
+.tw-chip-sample         { background: #b7deda; color: #145a54; }
+.tw-chip-custom         { background: #ededed; color: #555555; }
+.tw-col.tw-sec-system         { border-left-color: #cfcfcf; }
+.tw-col.tw-sec-spot           { border-left-color: #bdd7ee; }
+.tw-col.tw-sec-orientation    { border-left-color: #f7c7c0; }
+.tw-col.tw-sec-geologic_unit  { border-left-color: #c6e0b4; }
+.tw-col.tw-sec-trace          { border-left-color: #ffe0a3; }
+.tw-col.tw-sec-other_features { border-left-color: #d9c2e9; }
+.tw-col.tw-sec-sample         { border-left-color: #b7deda; }
+.tw-col.tw-sec-custom         { border-left-color: #ededed; }
 
-/* Show full content when cell is being edited */
-.handsontable td.htEditor {
-	overflow: visible;
-	white-space: normal;
+/* catalog */
+#tw-filter { margin-bottom: 0.6em; }
+.tw-catalog { max-height: 34em; overflow-y: auto; border: solid 1px rgba(255, 255, 255, 0.15); border-radius: 4px; padding: 0.4em 0.6em; margin-bottom: 1em; }
+.tw-group { margin: 0; padding: 0.15em 0; border-bottom: solid 1px rgba(255, 255, 255, 0.1); }
+.tw-group:last-child { border-bottom: 0; }
+.tw-group summary { cursor: pointer; display: flex; align-items: center; gap: 0.6em; padding: 0.4em 0; font-size: 0.9em; list-style: none; }
+.tw-group summary::-webkit-details-marker { display: none; }
+.tw-group summary::before { content: '\25B8'; color: rgba(255, 255, 255, 0.5); font-size: 0.8em; width: 1em; }
+.tw-group[open] summary::before { content: '\25BE'; }
+.tw-group-count { margin-left: auto; font-size: 0.78em; color: rgba(255, 255, 255, 0.45); white-space: nowrap; }
+.tw-fields { list-style: none; padding: 0 0 0.4em 1.2em; margin: 0; }
+.tw-field { display: flex; align-items: flex-start; gap: 0.6em; padding: 0.3em 0; font-size: 0.85em; line-height: 1.3; }
+.tw-field-body { display: flex; flex-direction: column; min-width: 0; }
+.tw-field-body strong { font-weight: 600; color: #ffffff; }
+.tw-field-added .tw-field-body strong { color: rgba(255, 255, 255, 0.5); }
+.tw-custom-row { display: flex; gap: 0.6em; align-items: center; }
+.tw-custom-row input { flex: 1 1 auto; }
+.tw-custom-row .button.small { height: 2.75em; line-height: 2.75em; padding: 0 1.25em; }
+
+/* preview */
+.tw-preview-wrap { margin-bottom: 1em; }
+.tw-preview { font-size: 0.78em; width: auto; min-width: 100%; margin: 0; }
+.tw-preview th, .tw-preview td { white-space: nowrap; padding: 0.35em 0.7em; border: solid 1px rgba(255, 255, 255, 0.15); text-align: left; }
+.tw-preview thead tr.tw-band th { text-align: center; font-weight: 700; font-size: 0.85em; }
+.tw-preview thead tr.tw-head th { background-color: rgba(255, 255, 255, 0.08); font-family: "Courier New", monospace; font-weight: 600; }
+.tw-preview tbody td { color: rgba(255, 255, 255, 0.7); }
+.tw-preview .tw-sec-system         { background: #cfcfcf; color: #3b3b3b; }
+.tw-preview .tw-sec-spot           { background: #bdd7ee; color: #1f3864; }
+.tw-preview .tw-sec-orientation    { background: #f7c7c0; color: #7b241c; }
+.tw-preview .tw-sec-geologic_unit  { background: #c6e0b4; color: #375623; }
+.tw-preview .tw-sec-trace          { background: #ffe0a3; color: #7f6000; }
+.tw-preview .tw-sec-other_features { background: #d9c2e9; color: #4a235a; }
+.tw-preview .tw-sec-sample         { background: #b7deda; color: #145a54; }
+.tw-preview .tw-sec-custom         { background: #ededed; color: #555555; }
+
+/* phones: arrows do the reordering, catalog scrolls with the page */
+@media screen and (max-width: 736px) {
+	.tw-toolbar-actions .actions { justify-content: flex-start; margin-top: 0.75em; }
+	.tw-col-handle, .tw-col-pos { display: none; }
+	.tw-col { flex-wrap: wrap; }
+	.tw-col .tw-chip { order: 3; }
+	.tw-col-controls { order: 4; margin-left: auto; }
+	.tw-catalog { max-height: none; }
 }
-
-.handsontable td.area {
-	background-color: #434c5e;
-}
-
-.ht_master .wtHolder {
-	background-color: #2e3440;
-}
-
-.handsontable .htDimmed {
-	color: #d8dee9;
-	background-color: #5e2e2e !important;
-}
-
-.handsontable th.htDimmed {
-	background-color: #5e2e2e !important;
-}
-
-#hot-container {
-	margin: 20px 0;
-	height: 500px;
-	overflow: hidden;
-}
-
-#saveSection {
-	display: none;
-}
-
-/* Off-vocabulary / out-of-range values: kept but flagged (resolved on the
-   review screen) — must out-specify the dark-theme td background */
-.handsontable td.htInvalid {
-	background-color: #7a2b2b !important;
-	color: #eceff4 !important;
-}
-
-/* Section band (row 0): merged color-coded group labels above the headers.
-   Keys mirror FieldTabularService::sectionMeta(); hues echo the XLSX band. */
-.handsontable td.tw-band {
-	font-weight: bold;
-	text-align: center;
-	letter-spacing: 0.04em;
-	cursor: default;
-	/* no vertical borders: runs of same-colored cells read as one merged
-	   band (real merges fight manualColumnMove's coordinate mapping) */
-	border-left-color: transparent !important;
-	border-right-color: transparent !important;
-}
-.handsontable td.tw-band.tw-band-system         { background-color: #4c566a !important; color: #eceff4 !important; }
-.handsontable td.tw-band.tw-band-spot           { background-color: #3f5876 !important; color: #d8e6f5 !important; }
-.handsontable td.tw-band.tw-band-orientation    { background-color: #6d3b3b !important; color: #f5d9d5 !important; }
-.handsontable td.tw-band.tw-band-geologic_unit  { background-color: #3f5c3a !important; color: #ddeed7 !important; }
-.handsontable td.tw-band.tw-band-trace          { background-color: #7a5c28 !important; color: #f5e6c4 !important; }
-.handsontable td.tw-band.tw-band-other_features { background-color: #58406b !important; color: #e6d8f2 !important; }
-.handsontable td.tw-band.tw-band-sample         { background-color: #2e5a55 !important; color: #cdeae6 !important; }
-.handsontable td.tw-band.tw-band-custom         { background-color: #55565e !important; color: #e5e7eb !important; }
-
-/* Context menu styling */
-.htContextMenu {
-	background-color: #3b4252 !important;
-	border: 1px solid #4c566a !important;
-}
-
-.htContextMenu table tbody tr td {
-	background-color: #3b4252 !important;
-	color: #eceff4 !important;
-	border-color: #4c566a !important;
-}
-
-.htContextMenu table tbody tr td.htDisabled {
-	color: #6b7280 !important;
-}
-
-.htContextMenu table tbody tr td:hover {
-	background-color: #434c5e !important;
-	color: #eceff4 !important;
-}
-
-.htContextMenu table tbody tr td.htSeparator {
-	border-top: 1px solid #4c566a !important;
-}
-
-

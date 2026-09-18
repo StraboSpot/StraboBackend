@@ -231,7 +231,32 @@ class FieldTabularService
     // Template specs
     // ========================================================================
 
-    /** The seeded "Basic" starter template spec. */
+    /** Dropdown value for the built-in Basic layout (no field_templates row). */
+    const BASIC_TEMPLATE_ID = 'basic';
+
+    /**
+     * Resolve a template choice from a form or URL: the built-in Basic
+     * layout (BASIC_TEMPLATE_ID, or blank) or one of the user's saved
+     * templates by pkey. Basic needs no database row, so a user with no
+     * saved templates can still export and re-import (the spec travels
+     * inside the file). Jason 2026-09-18.
+     * @return array {pkey, name, spec, builtin} | null
+     */
+    public function resolveTemplate($choice)
+    {
+        $choice = trim((string)$choice);
+        if ($choice === '' || $choice === self::BASIC_TEMPLATE_ID) {
+            $v = $this->validateSpec(self::defaultSpec());
+            return array('pkey' => 0, 'name' => 'Basic', 'spec' => $v['spec'], 'builtin' => true);
+        }
+        if (!ctype_digit($choice)) { return null; }
+        $tpl = $this->getTemplate((int)$choice);
+        if ($tpl === null) { return null; }
+        $tpl['builtin'] = false;
+        return $tpl;
+    }
+
+    /** The built-in "Basic" starter template spec. */
     public static function defaultSpec()
     {
         $cols = array(
@@ -486,18 +511,11 @@ class FieldTabularService
         $parsed = $this->gridToParsed($grid['grid'], $useSpec);
         if (!empty($parsed['ok'])) {
             $parsed['embedded_spec'] = ($embedded !== null && $useSpec !== null) ? $useSpec : null;
+            // fingerprint for the exact-file duplicate guard (journaled on commit)
+            $parsed['file_sha256'] = hash_file('sha256', $path);
+            $parsed['file_name']   = (string)$clientFilename;
         }
         return $parsed;
-    }
-
-    /** Parse grid data POSTed from the designer (array of arrays, row 0 = headers). */
-    public function parseGrid($gridRows, $spec)
-    {
-        if (!is_array($gridRows)) {
-            return array('ok' => false, 'error' => 'bad_grid', 'message' => 'Malformed grid payload.');
-        }
-        $v = $this->validateSpec($spec);
-        return $this->gridToParsed($gridRows, !empty($v['ok']) ? $v['spec'] : null);
     }
 
     /**
@@ -843,6 +861,65 @@ class FieldTabularService
         return ((int)$v) > 0;
     }
 
+    /** name => count of spots in the dataset carrying it (anchored on the Dataset node). */
+    protected function spotNamesInDataset($datasetId, array $names)
+    {
+        if (empty($names)) { return array(); }
+        $lit = array();
+        foreach ($names as $n) { $lit[] = '"' . str_replace(array('\\', '"'), array('\\\\', '\\"'), (string)$n) . '"'; }
+        $rows = $this->neodb->get_results(
+            "MATCH (d:Dataset {id: " . (int)$datasetId . ", userpkey: {$this->userpkey}})-[:HAS_SPOT]->(s:Spot)
+              WHERE toString(s.name) IN [" . implode(',', $lit) . "]
+             RETURN toString(s.name) AS name, count(s) AS n");
+        // toString: spots created before the 2026-09-18 fix may carry an integer name
+        $out = array();
+        foreach ((array)$rows as $r) { $out[(string)$r->value('name')] = (int)$r->value('n'); }
+        return $out;
+    }
+
+    /**
+     * The dataset + template spec of one of this user's committed import
+     * runs, so the success page can hand back the dataset WITH ids through
+     * the very template the file used (embedded, Basic or saved alike).
+     * @return array {dataset_id, spec} | null
+     */
+    public function runExportContext($runId)
+    {
+        $row = $this->db->get_row_prepared(
+            "SELECT dataset_id, template::text AS template FROM field_tabular_runs
+              WHERE pkey = $1 AND userpkey = $2 AND status = 'committed'",
+            array((int)$runId, $this->userpkey));
+        if (!$row || $row->dataset_id === '' || $row->dataset_id === null) { return null; }
+        $spec = json_decode($row->template, true);
+        if (!is_array($spec)) { $spec = self::defaultSpec(); }
+        return array('dataset_id' => (int)$row->dataset_id, 'spec' => $spec);
+    }
+
+    /** Committed runs by this user of a file with this sha256: same dataset first, else same project. */
+    protected function priorRunsOfFile($sha, $projectId, $datasetId)
+    {
+        $rows = $this->db->get_results_prepared(
+            "SELECT pkey, dataset_id, plan_counts::text AS plan_counts, started_at
+               FROM field_tabular_runs
+              WHERE userpkey = $1 AND file_sha256 = $2 AND status = 'committed' AND project_id = $3
+              ORDER BY (dataset_id = $4) DESC, started_at DESC",
+            array($this->userpkey, $sha, (string)$projectId, $datasetId !== null ? (string)$datasetId : ''));
+        if (!is_array($rows)) { return array(); }
+        if ($datasetId !== null) {
+            // an exact dataset hit outranks the project-wide ones; keep only that kind when present
+            $same = array();
+            foreach ($rows as $r) { if ((string)$r->dataset_id === (string)$datasetId) { $same[] = $r; } }
+            if (!empty($same)) { return $same; }
+        }
+        return $rows;
+    }
+
+    protected function datasetName($datasetId)
+    {
+        $n = $this->neodb->get_var("MATCH (d:Dataset {id: " . (int)$datasetId . ", userpkey: {$this->userpkey}}) RETURN d.name");
+        return ($n === null || $n === '') ? ('#' . (int)$datasetId) : (string)$n;
+    }
+
     public function ownsDataset($datasetId)
     {
         $datasetId = (int)$datasetId;
@@ -1055,11 +1132,63 @@ class FieldTabularService
             }
         }
 
+        // ---- creates whose name already exists in the target dataset ----
+        // A file without ids uploaded twice creates every spot twice (Jason,
+        // 2026-09-18). Names are not identity (students name spots "01"
+        // every day), so this is a Heads up, never a block.
+        if ($datasetId !== null && $counts['create'] > 0) {
+            $createNames = array();
+            foreach ($planRows as $pr) {
+                if ($pr['action'] === 'create' && $pr['name'] !== null && $pr['name'] !== '') { $createNames[(string)$pr['name']] = true; }
+            }
+            $existing = $this->spotNamesInDataset($datasetId, array_keys($createNames));
+            if (!empty($existing)) {
+                $hit = 0;
+                foreach ($planRows as $pr) {
+                    if ($pr['action'] !== 'create' || !isset($existing[(string)$pr['name']])) { continue; }
+                    $hit++;
+                    $warnings[] = array('row' => $pr['n'], 'column' => 'spot_name', 'code' => 'name_exists',
+                                        'message' => 'A spot named "' . $pr['name'] . '" already exists in this dataset'
+                                                   . ($existing[(string)$pr['name']] > 1 ? ' (' . $existing[(string)$pr['name']] . ' of them)' : '')
+                                                   . '. This row will create another one.');
+                }
+                array_unshift($warnings, array('row' => 0, 'column' => 'spot_name', 'code' => 'name_exists_summary',
+                    'message' => $hit . ' new spot' . ($hit === 1 ? '' : 's') . ' in this file share a name with '
+                               . ($hit === 1 ? 'a spot' : 'spots') . ' already in this dataset. If you uploaded this file '
+                               . 'before, those spots already exist: Cancel, then export the dataset to get a spreadsheet '
+                               . 'that carries their ids. Confirm only if they really are new spots that happen to share a name.'));
+            }
+        }
+
+        // ---- this exact file already imported? (sha256 in the journal) ----
+        // Certain, never a false positive: identical bytes, same user, into
+        // the same dataset (or, for a new-dataset target, anywhere in the
+        // same project). Jason 2026-09-18: "keep things certain".
+        if (!empty($parsed['file_sha256']) && $counts['create'] > 0) {
+            $prior = $this->priorRunsOfFile($parsed['file_sha256'], $projectId, $datasetId);
+            if (!empty($prior)) {
+                $pr = $prior[0];
+                $when = date('M j, Y g:i A', strtotime($pr->started_at));
+                $pc = json_decode($pr->plan_counts, true);
+                $made = is_array($pc) ? (int)$pc['create'] : 0;
+                $where = ($datasetId !== null && (string)$pr->dataset_id === (string)$datasetId)
+                    ? 'this dataset'
+                    : 'dataset "' . $this->datasetName((int)$pr->dataset_id) . '" of this project';
+                array_unshift($warnings, array('row' => 0, 'column' => 'file', 'code' => 'same_file_imported',
+                    'message' => 'This exact file was already imported into ' . $where . ' on ' . $when
+                               . ' (run #' . (int)$pr->pkey . ', ' . $made . ' spot' . ($made === 1 ? '' : 's') . ' created'
+                               . (count($prior) > 1 ? ', and ' . (count($prior) - 1) . ' more time' . (count($prior) > 2 ? 's' : '') : '') . '). '
+                               . 'The rows without an id would be created again. Cancel unless you mean to add them a second time.'));
+            }
+        }
+
         $clean = empty($hardErrors) && empty($softVocab) && empty($softCustom);
 
         return array(
             'ok'             => true,
             'clean'          => $clean,
+            'file_sha256'    => isset($parsed['file_sha256']) ? $parsed['file_sha256'] : null,
+            'file_name'      => isset($parsed['file_name']) ? $parsed['file_name'] : null,
             'counts'         => $counts,
             'rows'           => $planRows,
             'hard_errors'    => $hardErrors,
@@ -1090,13 +1219,17 @@ class FieldTabularService
         foreach ($fieldsPresent as $gf => $_) {
             list($grp, $name) = explode('.', $gf, 2);
             if (!in_array($grp, $spotLevelGroups)) { continue; }
+            // Keyed by value for the distinct count, but the VALUE is what
+            // goes forward: PHP turns an integer-looking array key ("2") into
+            // the integer 2, which then landed in Neo4j as a number and broke
+            // name matching (Jason's "02" -> 2 duplicates, 2026-09-18).
             $distinct = array();
             $firstRow = null;
             foreach ($g['rows'] as $rec) {
                 $v = isset($rec['values'][$gf]) ? $rec['values'][$gf] : null;
                 if ($v !== null) {
                     if ($firstRow === null) { $firstRow = $rec['n']; }
-                    $distinct[$v] = true;
+                    $distinct[(string)$v] = (string)$v;
                 }
             }
             if (count($distinct) > 1) {
@@ -1105,7 +1238,7 @@ class FieldTabularService
                 $bad = true;
                 continue;
             }
-            $spotVals[$gf] = count($distinct) ? key($distinct) : null;
+            $spotVals[$gf] = count($distinct) ? reset($distinct) : null;
         }
 
         // ---- typed + vocab-resolved spot-level values ----
@@ -1918,14 +2051,16 @@ class FieldTabularService
         }
         $inserted = $this->db->get_var_prepared(
             "INSERT INTO field_tabular_runs
-                    (userpkey, project_id, dataset_id, dataset_new, template, plan_counts, rows, status)
-             VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, 'started')",
+                    (userpkey, project_id, dataset_id, dataset_new, template, plan_counts, rows, status, file_sha256, file_name)
+             VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, 'started', $8, $9)",
             array($this->userpkey, (string)$projectId,
                   $datasetId !== null ? (string)$datasetId : '',
                   $newDataset ? 't' : 'f',
                   json_encode(isset($plan['spec']) ? $plan['spec'] : null),
                   json_encode($plan['counts']),
-                  json_encode($journalRows))
+                  json_encode($journalRows),
+                  !empty($plan['file_sha256']) ? $plan['file_sha256'] : null,
+                  !empty($plan['file_name']) ? mb_substr($plan['file_name'], 0, 255) : null)
         );
         // RETURNING rows are discarded for INSERTs by the prepared layer —
         // currval on the same connection is the reliable read-back.

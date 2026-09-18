@@ -152,6 +152,19 @@ try {
     $r3 = $svc->saveTemplate("smokewiz-tpl-renamed-$stamp", $SPEC, $tplPkey);
     check('rename works', !empty($r3['ok']));
     check('stranger cannot see template', $svcStranger->getTemplate($tplPkey) === null);
+    // built-in Basic layout resolves for anyone with no row; saved by pkey; junk = null
+    $basic = $svcStranger->resolveTemplate('basic');
+    $basicHeaders = array();
+    foreach ($svcStranger->columnDefs($basic['spec']) as $d) { $basicHeaders[] = $d['header']; }
+    check('resolveTemplate(basic): builtin, pkey 0, Basic name',
+        $basic !== null && $basic['builtin'] === true && $basic['pkey'] === 0 && $basic['name'] === 'Basic');
+    check('resolveTemplate(basic): validated spec with id + strike + orientation_type columns',
+        in_array('strabo_internal_id', $basicHeaders) && in_array('strike', $basicHeaders) && in_array('orientation_type', $basicHeaders));
+    check('resolveTemplate(blank) = basic', $svc->resolveTemplate('')['builtin'] === true);
+    $own = $svc->resolveTemplate((string)$tplPkey);
+    check('resolveTemplate(pkey): saved template, not builtin', $own !== null && $own['builtin'] === false && $own['pkey'] === $tplPkey);
+    check('resolveTemplate(foreign pkey) = null', $svcStranger->resolveTemplate((string)$tplPkey) === null);
+    check('resolveTemplate(junk) = null', $svc->resolveTemplate('12abc') === null && $svc->resolveTemplate('-1') === null);
     $list = $svc->listTemplates();
     $found = false;
     foreach ($list as $t) { if ((int)$t->pkey === $tplPkey) { $found = true; } }
@@ -291,6 +304,68 @@ try {
     } else {
         check('spine link carries project+dataset context', false);
     }
+
+    // the same id-less file planned again into the dataset it just filled:
+    // both creates collide by name -> Heads up warnings, plan still clean
+    $again = $svc->plan($parsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS1, 'dataset_name' => ''),
+                        array('custom_columns' => array('Field Book Page' => 'import')));
+    $nameHits = array();
+    foreach ($again['warnings'] as $w) { if ($w['code'] === 'name_exists') { $nameHits[] = $w; } }
+    check('re-planning the id-less file into its dataset warns per colliding create (SP-A, SP-B)',
+        count($nameHits) === 2 && $nameHits[0]['row'] === 2 && strpos($nameHits[0]['message'], '"SP-A"') !== false);
+    $summaryW = null; foreach ($again['warnings'] as $w) { if ($w['code'] === 'name_exists_summary') { $summaryW = $w; } }
+    check('collision summary warning present (after the exact-file line) and the plan stays clean (warning, not a block)',
+        $summaryW !== null && strpos($summaryW['message'], '2 new spots') !== false
+        && !empty($again['clean']) && $again['counts']['create'] === 2);
+    // exact-file guard: the committed run journaled the sha256; the same bytes
+    // planned again (same dataset, or a new dataset in the project) are named
+    $runRow = $db->get_row_prepared("SELECT file_sha256, file_name FROM field_tabular_runs WHERE pkey = $1", array($commit['run_id']));
+    check('journal row carries the file sha256 + client name',
+        $runRow && $runRow->file_sha256 === $parsed['file_sha256'] && strlen($runRow->file_sha256) === 64 && $runRow->file_name === 'import.csv');
+    $sameFile = array(); foreach ($again['warnings'] as $w) { if ($w['code'] === 'same_file_imported') { $sameFile[] = $w; } }
+    check('same file into the same dataset: "This exact file was already imported into this dataset" leads the warnings',
+        count($sameFile) === 1 && $again['warnings'][0]['code'] === 'same_file_imported'
+        && strpos($sameFile[0]['message'], 'into this dataset on') !== false && strpos($sameFile[0]['message'], 'run #' . $commit['run_id']) !== false
+        && strpos($sameFile[0]['message'], '2 spots created') !== false);
+    $fresh = $svc->plan($parsed, array('project_id' => $PROJECT_ID, 'dataset_id' => null, 'dataset_name' => "smokewiz-fresh-$stamp"),
+                        array('custom_columns' => array('Field Book Page' => 'import')));
+    $freshHits = 0;
+    foreach ($fresh['warnings'] as $w) { if (strpos($w['code'], 'name_exists') === 0) { $freshHits++; } }
+    check('no collision warnings when the target is a new dataset', $freshHits === 0);
+    $freshFile = null; foreach ($fresh['warnings'] as $w) { if ($w['code'] === 'same_file_imported') { $freshFile = $w; } }
+    check('same file into a NEW dataset of the same project still names the earlier dataset',
+        $freshFile !== null && strpos($freshFile['message'], 'of this project') !== false);
+    $otherBytes = $svc->parseUpload(csvFile($csv . ",SP-C,34.3,-118.6,,,,,,,,,,,,,,\n"), 'import2.csv');
+    $otherPlan = $svc->plan($otherBytes, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS1, 'dataset_name' => ''),
+                            array('custom_columns' => array('Field Book Page' => 'import')));
+    $otherFile = 0; foreach ($otherPlan['warnings'] as $w) { if ($w['code'] === 'same_file_imported') { $otherFile++; } }
+    check('a file with different bytes (one row added) is not called a repeat, only the name collisions are', $otherFile === 0);
+    check('runExportContext: committed run resolves to its dataset + spec; foreign / unknown run = null',
+        ($rc = $svc->runExportContext($commit['run_id'])) !== null && $rc['dataset_id'] === $DS1 && isset($rc['spec']['columns'])
+        && $svcStranger->runExportContext($commit['run_id']) === null && $svc->runExportContext(0) === null);
+
+    // integer-looking text values must stay strings end to end (PHP array
+    // keys turned "2" into int 2 before 2026-09-18; "02" was never affected)
+    $numCsv = "strabo_internal_id,spot_name,latitude,longitude,notes\n,2,34.21,-118.51,42\n,02,34.22,-118.52,seven\n";
+    $numParsed = $svc->parseUpload(csvFile($numCsv), 'num.csv');
+    $numPlan = $svc->plan($numParsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS1, 'dataset_name' => ''));
+    $numNames = array(); foreach ($numPlan['rows'] as $pr) { $numNames[] = $pr['name']; }
+    check('plan keeps integer-looking names and notes as strings ("2", "02", notes "42")',
+        $numNames === array('2', '02') && $numPlan['rows'][0]['set']['notes'] === '42' && is_string($numPlan['rows'][0]['name']));
+    $numCommit = $svc->commit($numPlan);
+    check('numeric-name commit ok', !empty($numCommit['ok']) && $numCommit['created'] === 2);
+    foreach ($numCommit['minted'] as $mid) { $spotIds[] = (int)$mid; }
+    $numRows = $neodb->get_results("MATCH (d:Dataset {id: $DS1, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) WHERE s.id IN [" . implode(',', $numCommit['minted']) . "] RETURN s.name AS name, s.notes AS notes ORDER BY s.id");
+    $storedOk = true;
+    foreach ((array)$numRows as $r) { if (!is_string($r->value('name'))) { $storedOk = false; } }
+    check('Neo4j stores the names as strings, not integers', $storedOk && count((array)$numRows) === 2
+        && in_array('2', array_map(function ($r) { return $r->value('name'); }, (array)$numRows), true));
+    $numAgain = $svc->plan($numParsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS1, 'dataset_name' => ''));
+    $numHits = 0; foreach ($numAgain['warnings'] as $w) { if ($w['code'] === 'name_exists') { $numHits++; } }
+    check('re-planning the numeric-name file warns for both "2" and "02"', $numHits === 2);
+    // leave DS1 as section 5 expects it (SP-A + SP-B only)
+    foreach ($numCommit['minted'] as $mid) { try { $strabo->deleteSingleSpot((int)$mid); } catch (Exception $e) {} }
+    check('numeric-name probe spots removed', (int)$neodb->get_var("MATCH (d:Dataset {id: $DS1, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) RETURN count(s)") === 2);
 
     // ------------------------------------------------------------------
     echo "\n=== 5. export -> re-import round trip == all-noop ===\n";

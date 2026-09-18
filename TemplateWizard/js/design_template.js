@@ -1,643 +1,436 @@
 /**
- * Template Wizard - Design Template (Page 2)
- * Handles HandsonTable initialization, template save (ajax.php), and
- * submission of pasted data to the review screen.
+ * Template Wizard - Template Designer (column list builder, 2026-09-18).
  *
- * Expects global variables to be set:
- * - window.templateMethod:   'existing' or 'new'
- * - window.templateColumns:  array of column headers (row 0 of the grid)
- * - window.templateSpecCols: array of column descriptors parallel to headers
- * - window.templatePkey:     saved template pkey ('' when new)
- * - window.headerMap:        display header -> column descriptor for every
- *                            known StraboField catalog column
+ * State is one ordered array of column descriptors (window.twDesigner.columns
+ * on load). The page renders three views of it: the editable list, the
+ * catalog (marking what is already in), and the read-only sheet preview.
+ * Rules kept in normalize(): strabo_internal_id is always first and locked;
+ * orientation_type exists exactly when an orientation field does and sits
+ * just before the first one. Save posts the spec to ajax.php; Download
+ * blank saves first, then streams the workbook from export.php.
  */
 
 document.addEventListener('DOMContentLoaded', function() {
-	const templateMethod = window.templateMethod;
-	const columns = window.templateColumns;
-	let templatePkey = window.templatePkey || '';
+	const cfg = window.twDesigner;
+	const el = {
+		name:       document.getElementById('template_name'),
+		save:       document.getElementById('tw-save'),
+		download:   document.getElementById('tw-download'),
+		cancel:     document.getElementById('tw-cancel'),
+		status:     document.getElementById('tw-status'),
+		columns:    document.getElementById('tw-columns'),
+		count:      document.getElementById('tw-count'),
+		filter:     document.getElementById('tw-filter'),
+		catalog:    document.getElementById('tw-catalog'),
+		customIn:   document.getElementById('tw-custom-header'),
+		customAdd:  document.getElementById('tw-custom-add'),
+		preview:    document.getElementById('tw-preview'),
+	};
 
-	// Grid layout: row 0 = color-coded section band (computed, read-only),
-	// row 1 = headers, data from row 2. HDR names the header row so the
-	// offset reads at every use site.
-	const HDR = 1;
+	let columns = cfg.columns.slice();
+	let pkey = cfg.pkey || '';
+	let saving = false;
+	const savedSnapshot = { spec: '', name: '' };
 
-	// Create initial data: band placeholder + header row
-	const initialData = [new Array(columns.length).fill(''), columns.slice()];
+	// Known headers (catalog + system) so a custom header cannot shadow one.
+	const knownHeaders = {};
+	cfg.catalog.forEach(function(g) {
+		g.fields.forEach(function(f) { knownHeaders[f.header.toLowerCase()] = { group: g.key, name: f.name, label: f.label }; });
+	});
+	['strabo_internal_id', 'orientation_type', 'orientation_role', 'geometry_type'].forEach(function(k) {
+		knownHeaders[k] = { system: k };
+	});
 
-	// Add empty rows for data entry
-	for (let i = 0; i < 50; i++) {
-		initialData.push(new Array(columns.length).fill(''));
+	// ------------------------------------------------------------ helpers
+	function isLocked(c)  { return c.kind === 'system' && c.key === 'strabo_internal_id'; }
+	function isAuto(c)    { return c.kind === 'system' && c.key === 'orientation_type'; }
+	function isPinned(c)  { return isLocked(c) || isAuto(c); }
+	function sig(c) {
+		if (c.kind === 'system') { return 'system:' + c.key; }
+		if (c.kind === 'field')  { return 'field:' + c.group + '.' + c.name; }
+		return 'custom:' + c.header.toLowerCase();
 	}
+	function has(s) { return columns.some(function(c) { return sig(c) === s; }); }
 
-	const container = document.getElementById('hot-container');
-	const saveSection = document.getElementById('saveSection');
-	const templateNameInput = document.getElementById('template_name');
-	const saveBtn = document.getElementById('saveBtn');
-	const errorModal = document.getElementById('errorModal');
-	const modalTitle = document.getElementById('modalTitle');
-	const closeModal = document.getElementById('closeModal');
-	const projectInfo = document.getElementById('project_info');
-	const projectSelect = document.getElementById('project_id');
-	const downloadTemplateLink = document.getElementById('downloadTemplateLink');
-	const uploadFileLink = document.getElementById('uploadFileLink');
-	const fileInput = document.getElementById('fileInput');
-	const errorMessage = document.getElementById('errorMessage');
-	const addColumnSelect = document.getElementById('add_column_select');
-	const addColumnBtn = document.getElementById('addColumnBtn');
-
-	// Headers that map to real StraboField columns (or system columns) are
-	// read-only in the grid; everything else is a custom column.
-	function isKnownHeader(h) {
-		return h !== null && h !== '' && Object.prototype.hasOwnProperty.call(window.headerMap, h);
-	}
-
-	// Section key for a header — drives the band row's label + color.
-	// orientation_type/role band with the orientation section they discriminate.
-	function sectionForHeader(h) {
-		if (!isKnownHeader(h)) { return 'custom'; }
-		const d = window.headerMap[h];
-		if (d.kind === 'system') {
-			return (d.key === 'orientation_type' || d.key === 'orientation_role') ? 'orientation' : 'system';
+	function normalize() {
+		// id first, once
+		const id = columns.filter(isLocked)[0] || { kind: 'system', key: 'strabo_internal_id', header: 'strabo_internal_id',
+			label: cfg.systemMeta.strabo_internal_id.label, section: 'system', hint: cfg.systemMeta.strabo_internal_id.hint };
+		columns = columns.filter(function(c) { return !isLocked(c) && !isAuto(c); });
+		columns.unshift(id);
+		// orientation_type before the first orientation field, only when one exists
+		let firstOrient = -1;
+		for (let i = 0; i < columns.length; i++) {
+			if (columns[i].kind === 'field' && columns[i].group === 'orientation') { firstOrient = i; break; }
 		}
-		return d.group;
+		if (firstOrient >= 0) {
+			columns.splice(firstOrient, 0, { kind: 'system', key: 'orientation_type', header: 'orientation_type',
+				label: cfg.systemMeta.orientation_type.label, section: 'system', hint: cfg.systemMeta.orientation_type.hint });
+		}
 	}
 
-	// The orientation_type value on a given row (short form), for per-row
-	// feature_type vocab. Tolerates label-ish variants.
-	function rowOtype(instance, row) {
-		const headers = instance.getDataAtRow(HDR);
-		for (let c = 0; c < headers.length; c++) {
-			if (headers[c] === 'orientation_type') {
-				const raw = instance.getDataAtCell(row, c);
-				if (raw === null || raw === '') { return null; }
-				const t = String(raw).toLowerCase().trim().replace(/[\s\-]+/g, '_');
-				if (t === 'planar' || t === 'linear' || t === 'tabular_zone') { return t; }
-				if (t === 'tabular') { return 'tabular_zone'; }
-				return null;
+	function buildSpec() {
+		return {
+			spec_version: 1,
+			layout: 'long',
+			columns: columns.map(function(c) {
+				if (c.kind === 'system') { return { kind: 'system', key: c.key }; }
+				if (c.kind === 'field')  { return { kind: 'field', group: c.group, name: c.name }; }
+				return { kind: 'custom', header: c.header };
+			})
+		};
+	}
+
+	function isDirty() {
+		return JSON.stringify(buildSpec()) !== savedSnapshot.spec || el.name.value.trim() !== savedSnapshot.name;
+	}
+	function markClean() {
+		savedSnapshot.spec = JSON.stringify(buildSpec());
+		savedSnapshot.name = el.name.value.trim();
+	}
+
+	function setStatus(text, kind) {
+		el.status.textContent = text || '';
+		el.status.className = 'tw-status' + (text ? ' tw-status-' + (kind || 'info') : '');
+	}
+
+	function setEnabled(a, on) {
+		a.setAttribute('aria-disabled', on ? 'false' : 'true');
+		a.classList.toggle('disabled', !on);
+	}
+
+	function refreshActions() {
+		const named = el.name.value.trim() !== '';
+		setEnabled(el.save, named && columns.length > 0 && !saving);
+		setEnabled(el.download, named && columns.length > 0 && !saving);
+	}
+
+	function escapeHtml(s) {
+		return String(s).replace(/[&<>"']/g, function(ch) {
+			return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch];
+		});
+	}
+
+	function sectionLabel(key) { return cfg.sections[key] || key; }
+
+	// ------------------------------------------------------------ list view
+	function renderColumns() {
+		let html = '';
+		columns.forEach(function(c, i) {
+			const pinned = isPinned(c);
+			html += '<li class="tw-col tw-sec-' + escapeHtml(c.section) + (pinned ? ' tw-col-pinned' : '') + '" data-index="' + i + '"'
+				+ (pinned ? '' : ' draggable="true"') + '>';
+			html += '<span class="tw-col-handle" aria-hidden="true">' + (pinned ? '' : '&#8942;&#8942;') + '</span>';
+			html += '<span class="tw-col-pos">' + (i + 1) + '</span>';
+			html += '<span class="tw-col-body"><strong>' + escapeHtml(c.label) + '</strong>'
+				+ '<code>' + escapeHtml(c.header) + '</code>'
+				+ (c.hint ? '<small>' + escapeHtml(c.hint) + '</small>' : '') + '</span>';
+			html += '<span class="tw-chip tw-chip-' + escapeHtml(c.section) + '">' + escapeHtml(sectionLabel(c.section)) + '</span>';
+			html += '<span class="tw-col-controls">';
+			if (isLocked(c)) {
+				html += '<span class="tw-col-note">locked</span>';
+			} else if (isAuto(c)) {
+				html += '<span class="tw-col-note">automatic</span>';
+			} else {
+				html += '<button type="button" class="tw-btn" data-act="up" data-index="' + i + '" title="Move up" aria-label="Move ' + escapeHtml(c.label) + ' up">&#8593;</button>'
+					+ '<button type="button" class="tw-btn" data-act="down" data-index="' + i + '" title="Move down" aria-label="Move ' + escapeHtml(c.label) + ' down">&#8595;</button>'
+					+ '<button type="button" class="tw-btn tw-btn-remove" data-act="remove" data-index="' + i + '" title="Remove" aria-label="Remove ' + escapeHtml(c.label) + '">&#10005;</button>';
 			}
-		}
-		return null;
+			html += '</span></li>';
+		});
+		el.columns.innerHTML = html;
+		el.count.textContent = '(' + columns.length + ')';
 	}
 
-	function showError(msg) {
-		modalTitle.textContent = 'Error';
-		modalTitle.style.color = '#bf616a';
-		errorMessage.textContent = msg;
-		errorModal.style.display = 'flex';
+	function moveBy(i, dir) {
+		let j = i + dir;
+		while (j > 0 && j < columns.length && isPinned(columns[j])) { j += dir; }
+		if (j < 1 || j >= columns.length) { return; }
+		const c = columns.splice(i, 1)[0];
+		columns.splice(j, 0, c);
+		afterChange();
 	}
 
-	function showInfo(title, msg) {
-		modalTitle.textContent = title;
-		modalTitle.style.color = '#a3be8c';
-		errorMessage.textContent = msg;
-		errorModal.style.display = 'flex';
+	function removeAt(i) {
+		if (isPinned(columns[i])) { return; }
+		columns.splice(i, 1);
+		afterChange();
 	}
 
-	templateNameInput.addEventListener('input', updateSaveButtonVisibility);
-	projectSelect.addEventListener('change', updateSaveButtonVisibility);
-
-	closeModal.addEventListener('click', function() {
-		errorModal.style.display = 'none';
+	el.columns.addEventListener('click', function(e) {
+		const btn = e.target.closest('button[data-act]');
+		if (!btn) { return; }
+		const i = parseInt(btn.getAttribute('data-index'), 10);
+		if (btn.getAttribute('data-act') === 'up')     { moveBy(i, -1); }
+		if (btn.getAttribute('data-act') === 'down')   { moveBy(i, 1); }
+		if (btn.getAttribute('data-act') === 'remove') { removeAt(i); }
 	});
-	errorModal.addEventListener('click', function(e) {
-		if (e.target === errorModal) {
-			errorModal.style.display = 'none';
-		}
-	});
 
-	// ---- Download template: server-generated workbook (locked id column,
-	// vocabulary dropdowns, embedded template spec). Saves first so the
-	// download always matches what is on screen.
-	downloadTemplateLink.addEventListener('click', function(e) {
+	// Drag and drop (mouse); the arrows cover keyboard and phones.
+	let dragIndex = null;
+	el.columns.addEventListener('dragstart', function(e) {
+		const li = e.target.closest('li.tw-col');
+		if (!li || li.classList.contains('tw-col-pinned')) { e.preventDefault(); return; }
+		dragIndex = parseInt(li.getAttribute('data-index'), 10);
+		li.classList.add('tw-dragging');
+		e.dataTransfer.effectAllowed = 'move';
+		try { e.dataTransfer.setData('text/plain', String(dragIndex)); } catch (err) { /* Firefox requires setData; ignore failures */ }
+	});
+	el.columns.addEventListener('dragover', function(e) {
+		if (dragIndex === null) { return; }
+		const li = e.target.closest('li.tw-col');
+		if (!li) { return; }
 		e.preventDefault();
-		saveTemplate(function(ok) {
-			if (ok) {
-				window.location = 'export.php?what=template&template_id=' + encodeURIComponent(templatePkey) + '&format=xlsx';
-			}
+		e.dataTransfer.dropEffect = 'move';
+		const rect = li.getBoundingClientRect();
+		const after = (e.clientY - rect.top) > rect.height / 2;
+		el.columns.querySelectorAll('.tw-drop-before, .tw-drop-after').forEach(function(x) { x.classList.remove('tw-drop-before', 'tw-drop-after'); });
+		li.classList.add(after ? 'tw-drop-after' : 'tw-drop-before');
+	});
+	el.columns.addEventListener('dragleave', function(e) {
+		const li = e.target.closest('li.tw-col');
+		if (li) { li.classList.remove('tw-drop-before', 'tw-drop-after'); }
+	});
+	el.columns.addEventListener('drop', function(e) {
+		if (dragIndex === null) { return; }
+		const li = e.target.closest('li.tw-col');
+		if (!li) { return; }
+		e.preventDefault();
+		const rect = li.getBoundingClientRect();
+		const after = (e.clientY - rect.top) > rect.height / 2;
+		let target = parseInt(li.getAttribute('data-index'), 10) + (after ? 1 : 0);
+		const c = columns.splice(dragIndex, 1)[0];
+		if (target > dragIndex) { target -= 1; }
+		if (target < 1) { target = 1; }
+		columns.splice(target, 0, c);
+		dragIndex = null;
+		afterChange();
+	});
+	el.columns.addEventListener('dragend', function() {
+		dragIndex = null;
+		el.columns.querySelectorAll('.tw-dragging, .tw-drop-before, .tw-drop-after').forEach(function(x) {
+			x.classList.remove('tw-dragging', 'tw-drop-before', 'tw-drop-after');
 		});
 	});
 
-	// ---- Load a file INTO the grid (client-side parse; headers must match) ----
-	uploadFileLink.addEventListener('click', function(e) {
-		e.preventDefault();
-		fileInput.click();
+	// ------------------------------------------------------------ catalog
+	const openGroups = {};
+	function renderCatalog() {
+		const q = el.filter.value.trim().toLowerCase();
+		let html = '';
+		const groups = cfg.catalog.map(function(g) {
+			return { key: g.key, label: g.label, fields: g.fields.map(function(f) {
+				return { s: 'field:' + g.key + '.' + f.name, group: g.key, name: f.name, header: f.header, label: f.label, hint: f.hint };
+			}) };
+		});
+		groups.push({ key: 'system', label: 'StraboSpot columns', fields: cfg.system.map(function(f) {
+			return { s: 'system:' + f.key, system: f.key, header: f.header, label: f.label, hint: f.hint };
+		}) });
+		groups.forEach(function(g) {
+			const fields = g.fields.filter(function(f) {
+				return q === '' || f.label.toLowerCase().indexOf(q) >= 0 || f.header.toLowerCase().indexOf(q) >= 0;
+			});
+			if (q !== '' && fields.length === 0) { return; }
+			const added = g.fields.filter(function(f) { return has(f.s); }).length;
+			const open = q !== '' || openGroups[g.key];
+			html += '<details class="tw-group tw-sec-' + escapeHtml(g.key) + '" data-group="' + escapeHtml(g.key) + '"' + (open ? ' open' : '') + '>';
+			html += '<summary><span class="tw-chip tw-chip-' + escapeHtml(g.key) + '">' + escapeHtml(g.label) + '</span>'
+				+ '<span class="tw-group-count">' + added + ' of ' + g.fields.length + ' added</span></summary>';
+			html += '<ul class="tw-fields">';
+			fields.forEach(function(f) {
+				const inTpl = has(f.s);
+				html += '<li class="tw-field' + (inTpl ? ' tw-field-added' : '') + '">';
+				html += '<button type="button" class="tw-btn tw-btn-add" data-sig="' + escapeHtml(f.s) + '"' + (inTpl ? ' disabled' : '')
+					+ ' aria-label="Add ' + escapeHtml(f.label) + '">' + (inTpl ? '&#10003;' : '+') + '</button>';
+				html += '<span class="tw-field-body"><strong>' + escapeHtml(f.label) + '</strong><code>' + escapeHtml(f.header) + '</code>'
+					+ (f.hint ? '<small>' + escapeHtml(f.hint) + '</small>' : '') + '</span>';
+				html += '</li>';
+			});
+			html += '</ul></details>';
+		});
+		if (html === '') { html = '<p class="tw-hint">No fields match.</p>'; }
+		el.catalog.innerHTML = html;
+	}
+
+	el.catalog.addEventListener('toggle', function(e) {
+		const d = e.target;
+		if (d && d.matches && d.matches('details.tw-group') && el.filter.value.trim() === '') {
+			openGroups[d.getAttribute('data-group')] = d.open;
+		}
+	}, true);
+
+	el.catalog.addEventListener('click', function(e) {
+		const btn = e.target.closest('button.tw-btn-add');
+		if (!btn || btn.disabled) { return; }
+		addBySig(btn.getAttribute('data-sig'));
 	});
 
-	fileInput.addEventListener('change', function(e) {
-		const file = e.target.files[0];
-		if (!file) return;
+	function addBySig(s) {
+		if (has(s)) { return; }
+		if (s.indexOf('field:') === 0) {
+			const gn = s.substring(6).split('.');
+			let found = null;
+			cfg.catalog.forEach(function(g) {
+				if (g.key !== gn[0]) { return; }
+				g.fields.forEach(function(f) { if (f.name === gn[1]) { found = { g: g, f: f }; } });
+			});
+			if (!found) { return; }
+			columns.push({ kind: 'field', group: found.g.key, name: found.f.name, header: found.f.header,
+				label: found.f.label, section: found.g.key, hint: found.f.hint });
+		} else if (s.indexOf('system:') === 0) {
+			const k = s.substring(7);
+			const f = cfg.system.filter(function(x) { return x.key === k; })[0];
+			if (!f) { return; }
+			columns.push({ kind: 'system', key: k, header: k, label: f.label, section: 'system', hint: f.hint });
+		}
+		afterChange();
+		setStatus('', '');
+	}
 
-		const maxSize = 5 * 1024 * 1024; // 5MB
-		if (file.size > maxSize) {
-			showError('Error! File size exceeds 5MB limit. Larger files can be uploaded directly on the Import page.');
-			fileInput.value = '';
+	el.filter.addEventListener('input', renderCatalog);
+
+	// ------------------------------------------------------------ custom columns
+	function addCustom() {
+		const h = el.customIn.value.trim();
+		if (h === '') { setStatus('Type a header for the custom column first.', 'error'); return; }
+		const low = h.toLowerCase();
+		if (knownHeaders[low]) {
+			const k = knownHeaders[low];
+			setStatus('"' + h + '" is a StraboField column. Add it from the catalog' + (k.label ? ' (' + k.label + ')' : '') + '.', 'error');
 			return;
 		}
+		if (has('custom:' + low)) { setStatus('That custom column is already in the template.', 'error'); return; }
+		columns.push({ kind: 'custom', header: h, label: h, section: 'custom', hint: 'custom field on the spot' });
+		el.customIn.value = '';
+		afterChange();
+		setStatus('', '');
+	}
+	el.customAdd.addEventListener('click', function(e) { e.preventDefault(); addCustom(); });
+	el.customIn.addEventListener('keydown', function(e) { if (e.key === 'Enter') { e.preventDefault(); addCustom(); } });
 
-		const reader = new FileReader();
-		reader.onload = function(evt) {
-			try {
-				const data = new Uint8Array(evt.target.result);
-				const workbook = XLSX.read(data, { type: 'array' });
-
-				// Prefer the template's Data sheet when present
-				const sheetName = workbook.SheetNames.indexOf('Data') !== -1 ? 'Data' : workbook.SheetNames[0];
-				const worksheet = workbook.Sheets[sheetName];
-				const fileData = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
-
-				if (fileData.length === 0) {
-					showError('Error! File is empty or could not be read.');
-					fileInput.value = '';
-					return;
-				}
-
-				const currentHeaders = orderedGrid()[0];
-
-				// Generated files carry a section-band row above the headers —
-				// locate the header row as the first row matching the current
-				// headers exactly, so both banded and band-less files load.
-				let headerIdx = -1;
-				const scanMax = Math.min(fileData.length, 5);
-				for (let r = 0; r < scanMax; r++) {
-					const rowVals = fileData[r].map(function (h) { return (h === null) ? '' : String(h); });
-					if (rowVals.length === currentHeaders.length) {
-						let allMatch = true;
-						for (let i = 0; i < currentHeaders.length; i++) {
-							if (String(currentHeaders[i]) !== rowVals[i]) { allMatch = false; break; }
-						}
-						if (allMatch) { headerIdx = r; break; }
-					}
-				}
-				if (headerIdx === -1) {
-					// Keep the original, specific mismatch messages (vs row 0).
-					const fileHeaders = fileData[0].map(function (h) { return (h === null) ? '' : String(h); });
-					if (currentHeaders.length !== fileHeaders.length) {
-						showError('Error! Column count mismatch. File has ' + fileHeaders.length +
-							' columns, template has ' + currentHeaders.length + ' columns. ' +
-							'To import a file with different columns, use the Import page instead.');
-					} else {
-						let msg = 'Error! Column headers do not match.';
-						for (let i = 0; i < currentHeaders.length; i++) {
-							if (String(currentHeaders[i]) !== fileHeaders[i]) {
-								msg = 'Error! Column headers do not match. Expected "' +
-									currentHeaders[i] + '" at position ' + (i + 1) + ', but found "' + fileHeaders[i] + '".';
-								break;
-							}
-						}
-						showError(msg);
-					}
-					fileInput.value = '';
-					return;
-				}
-
-				const bandRow = new Array(currentHeaders.length).fill('');
-				hot.loadData([bandRow].concat(fileData.slice(headerIdx)));
-				refreshBand();
-				checkTableData();
-				updateSaveButtonVisibility();
-				fileInput.value = '';
-
-			} catch (error) {
-				showError('Error! Could not parse file. Please ensure it is a valid CSV or Excel file.');
-				fileInput.value = '';
-			}
-		};
-		reader.readAsArrayBuffer(file);
-	});
-
-	// ---- Add a catalog column ----
-	addColumnBtn.addEventListener('click', function(e) {
-		e.preventDefault();
-		const header = addColumnSelect.value;
-		if (header === '') { return; }
-		const headers = orderedGrid()[0];
-		if (headers.indexOf(header) !== -1) {
-			showError('That column is already in the template.');
-			return;
+	// ------------------------------------------------------------ preview
+	function exampleCell(c, row) {
+		if (c.kind === 'system') {
+			if (c.key === 'strabo_internal_id') { return ''; }
+			if (c.key === 'orientation_type')   { return row === 0 ? 'planar' : 'linear'; }
+			if (c.key === 'orientation_role')   { return 'primary'; }
+			if (c.key === 'geometry_type')      { return 'Point'; }
 		}
-		const visualCol = hot.countCols();
-		hot.alter('insert_col', visualCol, 1);
-		hot.setDataAtCell(HDR, visualCol, header);
-		refreshBand();
-		addColumnSelect.value = '';
-		updateSaveButtonVisibility();
-	});
-
-	// Initialize Handsontable (6.2.2 — last MIT release)
-	const hot = new Handsontable(container, {
-		data: initialData,
-		colHeaders: true,
-		rowHeaders: true,
-		width: '100%',
-		height: 500,
-		colWidths: 150,
-		licenseKey: 'non-commercial-and-evaluation',
-		manualColumnMove: true,
-		manualColumnResize: true,
-		copyPaste: true,
-		fillHandle: true,
-		contextMenu: ['col_left', 'col_right', 'remove_col', '---------', 'row_above', 'row_below', 'remove_row', '---------', 'undo', 'redo'],
-		minSpareRows: 5,
-		autoWrapRow: false,
-		autoWrapCol: false,
-		cells: function(row, col) {
-			// NOTE: cells() receives PHYSICAL indices while getDataAtCell()
-			// expects VISUAL ones — after a column drag they diverge, so all
-			// header lookups here go through getSourceDataAtCell (physical).
-			// Keying off physical data also means colors/locks/dropdowns
-			// travel with a dragged column automatically.
-			const cellProperties = {};
-			const instance = this.instance;
-			if (row === 0) {
-				// section band — computed, never hand-edited
-				cellProperties.readOnly = true;
-				cellProperties.className = 'tw-band tw-band-' + sectionForHeader(instance.getSourceDataAtCell(HDR, col));
-				return cellProperties;
-			}
-			if (row === HDR) {
-				const cellValue = instance.getSourceDataAtCell(row, col);
-				if (isKnownHeader(cellValue)) {
-					// StraboField catalog / system header — read-only
-					cellProperties.readOnly = true;
-					cellProperties.className = 'htCenter htMiddle htDimmed';
-				} else {
-					// Custom column header — editable
-					cellProperties.readOnly = false;
-					cellProperties.className = 'htCenter htMiddle';
-				}
-				return cellProperties;
-			}
-
-			// ---- data rows: per-column behavior from the header ----
-			const header = instance.getSourceDataAtCell(HDR, col);
-			if (header === 'strabo_internal_id' || header === 'geometry_type') {
-				// managed by StraboSpot — never hand-entered (updates flow
-				// through export -> edit -> Import page)
-				cellProperties.readOnly = true;
-				cellProperties.className = 'htDimmed';
-				return cellProperties;
-			}
-			const v = (header !== null && header !== '') ? window.columnVocab[header] : undefined;
-			if (v && v.values) {
-				cellProperties.type = 'dropdown';
-				let src = v.values;
-				if (v.by_type) {
-					// feature_type vocab depends on the row's orientation_type
-					const ot = rowOtype(instance, row);
-					if (ot && v.by_type[ot]) { src = v.by_type[ot]; }
-				}
-				cellProperties.source = src;
-				if (v.strict) {
-					cellProperties.strict = true;
-					cellProperties.allowInvalid = false;   // hard reject
-				} else {
-					cellProperties.strict = false;
-					cellProperties.allowInvalid = true;    // keep + flag red; resolved at review
-				}
-			} else if (v && v.numeric) {
-				cellProperties.allowInvalid = true;        // keep + flag red
-				cellProperties.validator = function(value, cb) {
-					if (value === null || value === '' || value === undefined) { cb(true); return; }
-					const n = parseFloat(String(value).replace(',', '.'));
-					if (isNaN(n)) { cb(false); return; }
-					if (v.min !== undefined && n < v.min) { cb(false); return; }
-					if (v.max !== undefined && n > v.max) { cb(false); return; }
-					cb(true);
-				};
-			}
-			return cellProperties;
-		},
-		beforePaste: function(data, coords) {
-			// The id / geometry columns silently swallowing pasted values
-			// would turn intended updates into duplicate creates — strip the
-			// values AND tell the user where updates actually go.
-			const managed = [];
-			const headers = this.getDataAtRow(HDR);
-			for (let c = 0; c < headers.length; c++) {
-				if (headers[c] === 'strabo_internal_id' || headers[c] === 'geometry_type') {
-					managed.push(c);
-				}
-			}
-			if (!managed.length) { return; }
-			let stripped = false;
-			for (let k = 0; k < coords.length; k++) {
-				for (let r = 0; r < data.length; r++) {
-					if (coords[k].startRow + r <= HDR) { continue; }   // band + header rows handled by readOnly
-					for (let j = 0; j < data[r].length; j++) {
-						const target = coords[k].startCol + j;
-						if (managed.indexOf(target) !== -1 && data[r][j] !== '' && data[r][j] !== null) {
-							data[r][j] = '';
-							stripped = true;
-						}
-					}
-				}
-			}
-			if (stripped) {
-				showError('Internal id / geometry values in your paste were ignored — those columns are managed by StraboSpot. ' +
-					'To UPDATE existing spots, upload the exported file on the Import page instead (that path keeps the ids and avoids duplicates).');
-			}
-		},
-		beforeChange: function(changes, source) {
-			// Handle custom header prefix for editable header cells
-			if (changes && source !== 'loadData' && source !== 'band') {
-				for (let i = 0; i < changes.length; i++) {
-					const [row, prop, oldValue, newValue] = changes[i];
-					if (row === HDR && newValue !== null && newValue !== '') {
-						if (!isKnownHeader(oldValue) && !isKnownHeader(newValue)) {
-							let cleanValue = newValue.toString();
-							if (cleanValue.startsWith('Custom_')) {
-								cleanValue = cleanValue.substring(7);
-							}
-							if (cleanValue !== '' && !cleanValue.startsWith('Custom_')) {
-								changes[i][3] = 'Custom_' + cleanValue;
-							} else if (cleanValue !== '') {
-								changes[i][3] = cleanValue;
-							}
-						}
-					}
-				}
-			}
-		},
-		afterBeginEditing: function(row, column) {
-			if (row === HDR) {
-				const cellValue = this.getDataAtCell(row, column);
-				if (cellValue && typeof cellValue === 'string') {
-					if (cellValue.startsWith('Custom_') && !isKnownHeader(cellValue)) {
-						const editor = this.getActiveEditor();
-						if (editor && editor.TEXTAREA) {
-							editor.TEXTAREA.value = cellValue.substring(7);
-							editor.TEXTAREA.setSelectionRange(editor.TEXTAREA.value.length, editor.TEXTAREA.value.length);
-						}
-					}
-				}
-			}
-		},
-		afterChange: function(changes, source) {
-			if (source === 'band') { return; }   // band rewrites must not recurse
-			if (source !== 'loadData' && changes) {
-				// header edits move columns between sections
-				for (let i = 0; i < changes.length; i++) {
-					if (changes[i][0] === HDR) { refreshBand(); break; }
-				}
-				checkTableData();
-				updateSaveButtonVisibility();
-			}
-		},
-		afterColumnMove: function(movedColumns, finalIndex) {
-			refreshBand();
-			updateSaveButtonVisibility();
-		},
-		afterRemoveCol: function() {
-			refreshBand();
-			updateSaveButtonVisibility();
-		},
-		afterCreateCol: function() {
-			refreshBand();
-			updateSaveButtonVisibility();
-		},
-		beforeCreateRow: function(index, amount, source) {
-			// nothing may land above the header row
-			if (index <= HDR && source !== 'auto') { return false; }
-		},
-		beforeRemoveRow: function(index, amount, physicalRows) {
-			const rows = physicalRows || [index];
-			for (let i = 0; i < rows.length; i++) {
-				if (rows[i] <= HDR) {
-					showError('The section band and header rows cannot be removed.');
-					return false;
-				}
-			}
-		},
-		afterRenderer: function(TD, row, col, prop, value, cellProperties) {
-			if (value && value.toString().trim() !== '') {
-				TD.setAttribute('title', value);
-			}
+		if (c.kind === 'field' && c.group === 'orientation') {
+			const planar = { strike: '045', dip: '30', dip_direction: '135', feature_type: 'bedding', quality: 'good' };
+			const linear = { trend: '120', plunge: '15', feature_type: 'lineation', quality: 'good' };
+			const v = row === 0 ? planar[c.name] : linear[c.name];
+			return v !== undefined ? v : '';
 		}
-	});
-
-	/**
-	 * Grid contents in VISUAL column order (drag/drop-aware), WITHOUT the
-	 * band row — row 0 of the result is always the header row, so every
-	 * consumer (spec build, review submit, file compare) keeps its original
-	 * row semantics. getData() returns source order, so map each visual
-	 * column to its physical one.
-	 */
-	function orderedGrid() {
-		const rows = hot.countRows();
-		const cols = hot.countCols();
-		const source = hot.getData();
-		const out = [];
-		for (let r = HDR; r < rows; r++) {
-			const row = [];
-			for (let c = 0; c < cols; c++) {
-				const phys = hot.toPhysicalColumn(c);
-				const v = source[r][phys];
-				row.push(v === null || v === undefined ? '' : v);
-			}
-			out.push(row);
+		if (row === 1) { return ''; }   // spot-level columns: first row only
+		if (c.kind === 'field' && c.group === 'spot') {
+			const spot = { name: 'Station 1', latitude: '38.9717', longitude: '-95.2353', altitude: '260', date: '2026-09-18', notes: 'Bedding and a lineation' };
+			return spot[c.name] !== undefined ? spot[c.name] : '…';
 		}
-		return out;
+		return '…';
 	}
 
-	/**
-	 * Recompute the section band labels: one label at the first cell of each
-	 * contiguous run of same-section columns (visual order); the run's other
-	 * cells stay empty but keep the section color (colors come from cells(),
-	 * keyed off PHYSICAL data, so they follow dragged columns for free).
-	 * NO MergeCells — the plugin's merge ranges and manualColumnMove live in
-	 * different coordinate spaces and fall apart on drag (Jason 2026-07-04).
-	 * Writes with source 'band' so afterChange does not recurse.
-	 */
-	let bandRefreshing = false;
-	function refreshBand() {
-		if (bandRefreshing) { return; }
-		bandRefreshing = true;
-		try {
-			const headers = orderedGrid()[0];
-			const sections = [];
-			for (let c = 0; c < headers.length; c++) {
-				sections.push(sectionForHeader(headers[c] === '' ? null : headers[c]));
-			}
-			const writes = [];
-			for (let c = 0; c < sections.length; c++) {
-				const isStart = (c === 0) || (sections[c] !== sections[c - 1]);
-				const label = isStart && window.sectionMeta[sections[c]] ? window.sectionMeta[sections[c]].label : '';
-				writes.push([0, c, label]);
-			}
-			if (writes.length) { hot.setDataAtCell(writes, 'band'); }
-		} finally {
-			bandRefreshing = false;
+	function renderPreview() {
+		let band = '<tr class="tw-band">';
+		let i = 0;
+		while (i < columns.length) {
+			const sec = columns[i].section;
+			let span = 1;
+			while (i + span < columns.length && columns[i + span].section === sec) { span++; }
+			band += '<th class="tw-sec-' + escapeHtml(sec) + '" colspan="' + span + '">' + escapeHtml(sectionLabel(sec)) + '</th>';
+			i += span;
 		}
+		band += '</tr>';
+		let head = '<tr class="tw-head">';
+		columns.forEach(function(c) { head += '<th>' + escapeHtml(c.header) + '</th>'; });
+		head += '</tr>';
+		let rows = '';
+		for (let r = 0; r < 2; r++) {
+			rows += '<tr>';
+			columns.forEach(function(c) {
+				const v = exampleCell(c, r);
+				// the spot name repeats on every row of the spot
+				const isName = c.kind === 'field' && c.group === 'spot' && c.name === 'name';
+				rows += '<td>' + escapeHtml(isName ? 'Station 1' : v) + '</td>';
+			});
+			rows += '</tr>';
+		}
+		el.preview.innerHTML = '<thead>' + band + head + '</thead><tbody>' + rows + '</tbody>';
 	}
 
-	/** Template spec built from the CURRENT grid headers (visual order). */
-	function buildSpecFromGrid() {
-		const headers = orderedGrid()[0];
-		const cols = [];
-		for (let i = 0; i < headers.length; i++) {
-			const h = String(headers[i] === null ? '' : headers[i]).trim();
-			if (h === '') { continue; }
-			if (Object.prototype.hasOwnProperty.call(window.headerMap, h)) {
-				const d = window.headerMap[h];
-				if (d.kind === 'system') {
-					cols.push({ kind: 'system', key: d.key });
-				} else {
-					cols.push({ kind: 'field', group: d.group, name: d.name });
-				}
-			} else {
-				cols.push({ kind: 'custom', header: h });
-			}
-		}
-		return { spec_version: 1, layout: 'long', columns: cols };
-	}
-
-	function hasTableData() {
-		const tableData = hot.getData();
-		for (let i = HDR + 1; i < tableData.length; i++) {
-			for (let j = 0; j < tableData[i].length; j++) {
-				if (tableData[i][j] !== null && tableData[i][j] !== '') {
-					return true;
-				}
-			}
-		}
-		return false;
-	}
-
-	function updateSaveButtonVisibility() {
-		const templateName = templateNameInput.value.trim();
-		const hasData = hasTableData();
-		const projectId = projectSelect ? projectSelect.value : '';
-
-		if (templateName === '') {
-			saveSection.style.display = 'none';
-			return;
-		}
-		if (!hasData && templateName !== '') {
-			saveSection.style.display = 'block';
-			return;
-		}
-		if (hasData && templateName !== '' && projectId !== '') {
-			saveSection.style.display = 'block';
-		} else {
-			saveSection.style.display = 'none';
-		}
-	}
-
-	function checkTableData() {
-		const hasData = hasTableData();
-		if (hasData) {
-			projectInfo.style.display = 'flex';
-		} else {
-			projectInfo.style.display = 'none';
-			if (projectSelect) {
-				projectSelect.selectedIndex = 0;
-			}
-		}
-	}
-
-	/** Persist the template via ajax.php; cb(ok). */
+	// ------------------------------------------------------------ save / download
 	function saveTemplate(cb) {
-		const templateName = templateNameInput.value.trim();
-		if (templateName === '') {
-			showError('Template name is required');
-			cb(false);
-			return;
-		}
-		const spec = buildSpecFromGrid();
-		if (spec.columns.length === 0) {
-			showError('The template has no columns.');
-			cb(false);
-			return;
-		}
+		const name = el.name.value.trim();
+		if (name === '') { setStatus('Give the template a name first.', 'error'); el.name.focus(); cb(false); return; }
+		if (columns.length === 0) { setStatus('The template has no columns.', 'error'); cb(false); return; }
+		saving = true; refreshActions();
+		setStatus('Saving…', 'info');
 		const body = new URLSearchParams();
 		body.append('action', 'save_template');
-		body.append('name', templateName);
-		body.append('spec_json', JSON.stringify(spec));
-		if (templatePkey !== '') { body.append('pkey', templatePkey); }
-
+		body.append('name', name);
+		body.append('spec_json', JSON.stringify(buildSpec()));
+		if (pkey !== '') { body.append('pkey', pkey); }
 		fetch('ajax.php', { method: 'POST', body: body, credentials: 'same-origin' })
 			.then(function(r) { return r.json(); })
 			.then(function(res) {
+				saving = false; refreshActions();
 				if (res && res.ok) {
-					templatePkey = String(res.pkey);
+					pkey = String(res.pkey);
+					markClean();
+					el.save.textContent = 'Save changes';
 					cb(true);
 				} else {
-					showError((res && res.message) ? res.message : 'Could not save the template.');
+					setStatus((res && res.message) ? res.message : 'Could not save the template.', 'error');
 					cb(false);
 				}
 			})
 			.catch(function() {
-				showError('Could not reach the server to save the template.');
+				saving = false; refreshActions();
+				setStatus('Could not reach the server to save the template.', 'error');
 				cb(false);
 			});
 	}
 
-	// Handle Save Button Click: save template; with data present, continue
-	// to the review screen (nothing is imported without review).
-	saveBtn.addEventListener('click', function() {
-		const templateName = templateNameInput.value.trim();
-		if (templateName === '') {
-			showError('Template name is required');
-			return;
-		}
-
-		const grid = orderedGrid();
-		const headerRow = grid[0];
-
-		// Data in headerless columns?
-		const columnsWithoutHeaders = [];
-		for (let col = 0; col < headerRow.length; col++) {
-			if (headerRow[col] === null || headerRow[col] === '') {
-				let colHasData = false;
-				for (let row = 1; row < grid.length; row++) {
-					if (grid[row][col] !== null && grid[row][col] !== '') {
-						colHasData = true;
-						break;
-					}
-				}
-				if (colHasData) {
-					columnsWithoutHeaders.push(String.fromCharCode(65 + col));
-				}
-			}
-		}
-		if (columnsWithoutHeaders.length > 0) {
-			showError('Error! Column' + (columnsWithoutHeaders.length > 1 ? 's' : '') + ' ' +
-				columnsWithoutHeaders.join(', ') + ' ' +
-				(columnsWithoutHeaders.length > 1 ? 'have' : 'has') + ' no header' +
-				(columnsWithoutHeaders.length > 1 ? 's' : '') + '. Please fix.');
-			return;
-		}
-
-		const dataPresent = hasTableData();
-		const projectId = projectSelect ? projectSelect.value : '';
-		if (dataPresent && projectId === '') {
-			showError('Choose the Strabo project the data should upload into.');
-			return;
-		}
-
+	el.save.addEventListener('click', function(e) {
+		e.preventDefault();
+		if (el.save.getAttribute('aria-disabled') === 'true') { return; }
 		saveTemplate(function(ok) {
-			if (!ok) { return; }
-			if (!dataPresent) {
-				// design-only save: land on the wizard hub (My Templates)
-				// with a confirmation banner rather than staying here
-				window.location = 'index.php?saved=' + encodeURIComponent(templateName);
-				return;
-			}
-			// Filter empty rows (keep header row) and continue to review.
-			const filteredData = grid.filter(function(row, index) {
-				if (index === 0) { return true; }
-				return row.some(function(cell) { return cell !== null && cell !== ''; });
-			});
-			document.getElementById('hidden_template_pkey').value = templatePkey;
-			document.getElementById('hidden_template_name').value = templateName;
-			document.getElementById('hidden_project_id').value = projectId;
-			document.getElementById('hidden_spec_json').value = JSON.stringify(buildSpecFromGrid());
-			document.getElementById('hidden_grid_json').value = JSON.stringify(filteredData);
-			document.getElementById('submitForm').submit();
+			if (ok) { window.location = 'index.php?saved=' + encodeURIComponent(el.name.value.trim()); }
 		});
 	});
 
-	// initial band render (after all declarations above are live)
-	refreshBand();
+	el.download.addEventListener('click', function(e) {
+		e.preventDefault();
+		if (el.download.getAttribute('aria-disabled') === 'true') { return; }
+		saveTemplate(function(ok) {
+			if (!ok) { return; }
+			setStatus('Template saved. Your blank spreadsheet is downloading.', 'info');
+			window.location = 'export.php?what=template&template_id=' + encodeURIComponent(pkey) + '&format=xlsx';
+		});
+	});
+
+	el.cancel.addEventListener('click', function(e) {
+		if (isDirty() && !window.confirm('Leave without saving? Your column changes will be lost.')) { e.preventDefault(); }
+	});
+	window.addEventListener('beforeunload', function(e) {
+		if (isDirty() && !saving) { e.preventDefault(); e.returnValue = ''; }
+	});
+
+	el.name.addEventListener('input', refreshActions);
+
+	// ------------------------------------------------------------ boot
+	function afterChange() {
+		normalize();
+		renderColumns();
+		renderCatalog();
+		renderPreview();
+		refreshActions();
+	}
+	normalize();
+	markClean();
+	renderColumns();
+	renderCatalog();
+	renderPreview();
+	refreshActions();
+	if (cfg.method === 'new' && el.name.value.trim() === '') { el.name.focus(); }
 });
