@@ -572,6 +572,38 @@ try {
         strpos($r['body'], '0 new spots') !== false && strpos($r['body'], '0 updated') !== false && strpos($r['body'], '2 unchanged') !== false);
     httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $ex2Token));
 
+    // Excel turns a typed "02" into the NUMBER 2. The name must still land as
+    // the string "2" and the second upload must still warn (Jason, 2026-09-18).
+    $wbN = PHPExcel_IOFactory::load($blankPath);
+    $shN = $wbN->getSheetByName('Data');
+    foreach (array('name' => 7, 'latitude' => 34.3, 'longitude' => -118.3, 'notes' => 42) as $h => $v) {
+        $shN->setCellValueByColumnAndRow($hdrCol[$h], 3, $v);   // numeric cells, not strings
+    }
+    $numPath = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
+    $tmpFiles[] = $numPath;
+    $writerN = new PHPExcel_Writer_Excel2007($wbN);
+    $writerN->save($numPath);
+    $numTargetNew = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'new', 'dataset_name' => "e2ewiz NUM $stamp");
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', $numPath, 'numeric_cells.xlsx');
+    $numToken = extractToken($r['body']);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'confirm', 'token' => $numToken), $numTargetNew));
+    check('numeric-cell workbook imports', strpos($r['body'], 'Import complete') !== false);
+    preg_match('/New dataset created \(id (\d+)\)/', $r['body'], $m);
+    $DSN = isset($m[1]) ? (int)$m[1] : 0;
+    $datasetIds[] = $DSN;
+    $numRec = $neodb->get_results("MATCH (d:Dataset {id: $DSN, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN s.id AS id, s.name AS name, s.notes AS notes");
+    $numRec = (array)$numRec;
+    if (count($numRec)) { $spotIds[] = (int)$numRec[0]->value('id'); }
+    check('spot typed as the number 7 in Excel is stored with the STRING name "7" and notes "42"',
+        count($numRec) === 1 && $numRec[0]->value('name') === '7' && $numRec[0]->value('notes') === '42');
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', $numPath, 'numeric_cells_again.xlsx');
+    $numToken2 = extractToken($r['body']);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $numToken2),
+        array('project_id' => $PROJECT_ID, 'dataset_choice' => 'existing', 'dataset_id' => $DSN)));
+    check('uploading the numeric-name file again warns: a spot named "7" already exists',
+        strpos($r['body'], 'A spot named &quot;7&quot; already exists') !== false);
+    httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $numToken2));
+
     // ------------------------------------------------------------------
     echo "\n=== 12. edit the exported workbook in Excel -> updates + a new spot over HTTP ===\n";
     // ------------------------------------------------------------------

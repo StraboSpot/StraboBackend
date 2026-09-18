@@ -325,6 +325,29 @@ try {
         ($rc = $svc->runExportContext($commit['run_id'])) !== null && $rc['dataset_id'] === $DS1 && isset($rc['spec']['columns'])
         && $svcStranger->runExportContext($commit['run_id']) === null && $svc->runExportContext(0) === null);
 
+    // integer-looking text values must stay strings end to end (PHP array
+    // keys turned "2" into int 2 before 2026-09-18; "02" was never affected)
+    $numCsv = "strabo_internal_id,spot_name,latitude,longitude,notes\n,2,34.21,-118.51,42\n,02,34.22,-118.52,seven\n";
+    $numParsed = $svc->parseUpload(csvFile($numCsv), 'num.csv');
+    $numPlan = $svc->plan($numParsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS1, 'dataset_name' => ''));
+    $numNames = array(); foreach ($numPlan['rows'] as $pr) { $numNames[] = $pr['name']; }
+    check('plan keeps integer-looking names and notes as strings ("2", "02", notes "42")',
+        $numNames === array('2', '02') && $numPlan['rows'][0]['set']['notes'] === '42' && is_string($numPlan['rows'][0]['name']));
+    $numCommit = $svc->commit($numPlan);
+    check('numeric-name commit ok', !empty($numCommit['ok']) && $numCommit['created'] === 2);
+    foreach ($numCommit['minted'] as $mid) { $spotIds[] = (int)$mid; }
+    $numRows = $neodb->get_results("MATCH (d:Dataset {id: $DS1, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) WHERE s.id IN [" . implode(',', $numCommit['minted']) . "] RETURN s.name AS name, s.notes AS notes ORDER BY s.id");
+    $storedOk = true;
+    foreach ((array)$numRows as $r) { if (!is_string($r->value('name'))) { $storedOk = false; } }
+    check('Neo4j stores the names as strings, not integers', $storedOk && count((array)$numRows) === 2
+        && in_array('2', array_map(function ($r) { return $r->value('name'); }, (array)$numRows), true));
+    $numAgain = $svc->plan($numParsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS1, 'dataset_name' => ''));
+    $numHits = 0; foreach ($numAgain['warnings'] as $w) { if ($w['code'] === 'name_exists') { $numHits++; } }
+    check('re-planning the numeric-name file warns for both "2" and "02"', $numHits === 2);
+    // leave DS1 as section 5 expects it (SP-A + SP-B only)
+    foreach ($numCommit['minted'] as $mid) { try { $strabo->deleteSingleSpot((int)$mid); } catch (Exception $e) {} }
+    check('numeric-name probe spots removed', (int)$neodb->get_var("MATCH (d:Dataset {id: $DS1, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) RETURN count(s)") === 2);
+
     // ------------------------------------------------------------------
     echo "\n=== 5. export -> re-import round trip == all-noop ===\n";
     // ------------------------------------------------------------------

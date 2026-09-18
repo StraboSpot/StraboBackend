@@ -866,8 +866,9 @@ class FieldTabularService
         foreach ($names as $n) { $lit[] = '"' . str_replace(array('\\', '"'), array('\\\\', '\\"'), (string)$n) . '"'; }
         $rows = $this->neodb->get_results(
             "MATCH (d:Dataset {id: " . (int)$datasetId . ", userpkey: {$this->userpkey}})-[:HAS_SPOT]->(s:Spot)
-              WHERE s.name IN [" . implode(',', $lit) . "]
-             RETURN s.name AS name, count(s) AS n");
+              WHERE toString(s.name) IN [" . implode(',', $lit) . "]
+             RETURN toString(s.name) AS name, count(s) AS n");
+        // toString: spots created before the 2026-09-18 fix may carry an integer name
         $out = array();
         foreach ((array)$rows as $r) { $out[(string)$r->value('name')] = (int)$r->value('n'); }
         return $out;
@@ -1166,13 +1167,17 @@ class FieldTabularService
         foreach ($fieldsPresent as $gf => $_) {
             list($grp, $name) = explode('.', $gf, 2);
             if (!in_array($grp, $spotLevelGroups)) { continue; }
+            // Keyed by value for the distinct count, but the VALUE is what
+            // goes forward: PHP turns an integer-looking array key ("2") into
+            // the integer 2, which then landed in Neo4j as a number and broke
+            // name matching (Jason's "02" -> 2 duplicates, 2026-09-18).
             $distinct = array();
             $firstRow = null;
             foreach ($g['rows'] as $rec) {
                 $v = isset($rec['values'][$gf]) ? $rec['values'][$gf] : null;
                 if ($v !== null) {
                     if ($firstRow === null) { $firstRow = $rec['n']; }
-                    $distinct[$v] = true;
+                    $distinct[(string)$v] = (string)$v;
                 }
             }
             if (count($distinct) > 1) {
@@ -1181,7 +1186,7 @@ class FieldTabularService
                 $bad = true;
                 continue;
             }
-            $spotVals[$gf] = count($distinct) ? key($distinct) : null;
+            $spotVals[$gf] = count($distinct) ? reset($distinct) : null;
         }
 
         // ---- typed + vocab-resolved spot-level values ----
