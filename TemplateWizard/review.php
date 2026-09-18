@@ -224,11 +224,11 @@ include("includes/mheader.php");
 							<div style="background-color: #3b4252; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
 								<strong>Upload a spreadsheet of spots (.xlsx or .csv).</strong>
 								<div style="margin: 10px 0 0 0; padding-left: 20px;">
-									Files downloaded from the Template Wizard or a dataset export carry their template inside — they are recognized
-									automatically. For anything else, columns are matched by header name; unknown columns become custom fields
-									(you confirm them during review). Every change is shown for review before anything is saved, and imports are
-									all-or-nothing. Need a starting point? <a href="index.php">Design a template</a> first &mdash; and if your
-									spots carry multiple measurements, see the <a href="howto.php">how-to guide</a> for the row format.
+									Files exported by StraboSpot carry their template inside and are recognized automatically; other files are
+									matched by column header. Unknown columns become custom fields, which you confirm during review. Every change
+									is shown for review before anything is saved, and an import is all or nothing. Spots with several measurements
+									take one row each: see the <a href="howto.php">how-to guide</a>, or <a href="index.php">design a template</a>
+									for a custom layout.
 								</div>
 							</div>
 							<form method="post" enctype="multipart/form-data">
