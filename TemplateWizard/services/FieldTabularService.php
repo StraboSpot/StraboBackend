@@ -858,6 +858,39 @@ class FieldTabularService
         return ((int)$v) > 0;
     }
 
+    /** name => count of spots in the dataset carrying it (anchored on the Dataset node). */
+    protected function spotNamesInDataset($datasetId, array $names)
+    {
+        if (empty($names)) { return array(); }
+        $lit = array();
+        foreach ($names as $n) { $lit[] = '"' . str_replace(array('\\', '"'), array('\\\\', '\\"'), (string)$n) . '"'; }
+        $rows = $this->neodb->get_results(
+            "MATCH (d:Dataset {id: " . (int)$datasetId . ", userpkey: {$this->userpkey}})-[:HAS_SPOT]->(s:Spot)
+              WHERE s.name IN [" . implode(',', $lit) . "]
+             RETURN s.name AS name, count(s) AS n");
+        $out = array();
+        foreach ((array)$rows as $r) { $out[(string)$r->value('name')] = (int)$r->value('n'); }
+        return $out;
+    }
+
+    /**
+     * The dataset + template spec of one of this user's committed import
+     * runs, so the success page can hand back the dataset WITH ids through
+     * the very template the file used (embedded, Basic or saved alike).
+     * @return array {dataset_id, spec} | null
+     */
+    public function runExportContext($runId)
+    {
+        $row = $this->db->get_row_prepared(
+            "SELECT dataset_id, template::text AS template FROM field_tabular_runs
+              WHERE pkey = $1 AND userpkey = $2 AND status = 'committed'",
+            array((int)$runId, $this->userpkey));
+        if (!$row || $row->dataset_id === '' || $row->dataset_id === null) { return null; }
+        $spec = json_decode($row->template, true);
+        if (!is_array($spec)) { $spec = self::defaultSpec(); }
+        return array('dataset_id' => (int)$row->dataset_id, 'spec' => $spec);
+    }
+
     public function ownsDataset($datasetId)
     {
         $datasetId = (int)$datasetId;
@@ -1067,6 +1100,34 @@ class FieldTabularService
                     $diff['overlay']
                 );
                 $counts['update']++;
+            }
+        }
+
+        // ---- creates whose name already exists in the target dataset ----
+        // A file without ids uploaded twice creates every spot twice (Jason,
+        // 2026-09-18). Names are not identity (students name spots "01"
+        // every day), so this is a Heads up, never a block.
+        if ($datasetId !== null && $counts['create'] > 0) {
+            $createNames = array();
+            foreach ($planRows as $pr) {
+                if ($pr['action'] === 'create' && $pr['name'] !== null && $pr['name'] !== '') { $createNames[(string)$pr['name']] = true; }
+            }
+            $existing = $this->spotNamesInDataset($datasetId, array_keys($createNames));
+            if (!empty($existing)) {
+                $hit = 0;
+                foreach ($planRows as $pr) {
+                    if ($pr['action'] !== 'create' || !isset($existing[(string)$pr['name']])) { continue; }
+                    $hit++;
+                    $warnings[] = array('row' => $pr['n'], 'column' => 'spot_name', 'code' => 'name_exists',
+                                        'message' => 'A spot named "' . $pr['name'] . '" already exists in this dataset'
+                                                   . ($existing[(string)$pr['name']] > 1 ? ' (' . $existing[(string)$pr['name']] . ' of them)' : '')
+                                                   . '. This row will create another one.');
+                }
+                array_unshift($warnings, array('row' => 0, 'column' => 'spot_name', 'code' => 'name_exists_summary',
+                    'message' => $hit . ' new spot' . ($hit === 1 ? '' : 's') . ' in this file share a name with '
+                               . ($hit === 1 ? 'a spot' : 'spots') . ' already in this dataset. If you uploaded this file '
+                               . 'before, those spots already exist: Cancel, then export the dataset to get a spreadsheet '
+                               . 'that carries their ids. Confirm only if they really are new spots that happen to share a name.'));
             }
         }
 

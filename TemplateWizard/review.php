@@ -372,7 +372,7 @@ include("includes/mheader.php");
 								<h4 style="color:#ebcb8b;">Heads up</h4>
 								<ul>
 									<?php foreach (array_slice($plan['warnings'], 0, 50) as $w): ?>
-									<li>Row <?php echo (int)$w['row']; ?>: <?php echo htmlspecialchars($w['message']); ?></li>
+									<li<?php echo ((int)$w['row'] === 0) ? ' style="list-style:none;margin-left:-1.25em;font-weight:bold;"' : ''; ?>><?php echo ((int)$w['row'] > 0) ? 'Row ' . (int)$w['row'] . ': ' : ''; ?><?php echo htmlspecialchars($w['message']); ?></li>
 									<?php endforeach; ?>
 								</ul>
 								<?php endif; ?>
@@ -404,8 +404,14 @@ include("includes/mheader.php");
 								</ul>
 								<p style="font-size: 0.85em;">Import run #<?php echo (int)$commitInfo['run_id']; ?> — journaled for traceability.</p>
 							</div>
+							<?php if ((int)$commitInfo['created'] > 0): ?>
+							<p>Your spreadsheet is now out of date: the new spot<?php echo $commitInfo['created'] === 1 ? ' has an id' : 's have ids'; ?> on the server
+								that your file does not carry. Uploading the same file again would create <?php echo $commitInfo['created'] === 1 ? 'it' : 'them'; ?> a second time.
+								Download the dataset to get a copy with ids; that copy re-imports as unchanged.</p>
+							<?php endif; ?>
 							<ul class="actions">
-								<li><a href="/my_field_data.php" class="button primary">My Field Data</a></li>
+								<li><a href="export.php?what=export&amp;run_id=<?php echo (int)$commitInfo['run_id']; ?>&amp;format=xlsx" class="button primary" id="tw-download-ids">&#8681; Download this dataset with ids</a></li>
+								<li><a href="/my_field_data.php" class="button">My Field Data</a></li>
 								<li><a href="index.php" class="button">Template Wizard</a></li>
 								<li><a href="review.php" class="button">Import another file</a></li>
 							</ul>

@@ -305,6 +305,26 @@ try {
         check('spine link carries project+dataset context', false);
     }
 
+    // the same id-less file planned again into the dataset it just filled:
+    // both creates collide by name -> Heads up warnings, plan still clean
+    $again = $svc->plan($parsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS1, 'dataset_name' => ''),
+                        array('custom_columns' => array('Field Book Page' => 'import')));
+    $nameHits = array();
+    foreach ($again['warnings'] as $w) { if ($w['code'] === 'name_exists') { $nameHits[] = $w; } }
+    check('re-planning the id-less file into its dataset warns per colliding create (SP-A, SP-B)',
+        count($nameHits) === 2 && $nameHits[0]['row'] === 2 && strpos($nameHits[0]['message'], '"SP-A"') !== false);
+    check('collision summary warning leads the list and the plan stays clean (warning, not a block)',
+        $again['warnings'][0]['code'] === 'name_exists_summary' && strpos($again['warnings'][0]['message'], '2 new spots') !== false
+        && !empty($again['clean']) && $again['counts']['create'] === 2);
+    $fresh = $svc->plan($parsed, array('project_id' => $PROJECT_ID, 'dataset_id' => null, 'dataset_name' => "smokewiz-fresh-$stamp"),
+                        array('custom_columns' => array('Field Book Page' => 'import')));
+    $freshHits = 0;
+    foreach ($fresh['warnings'] as $w) { if (strpos($w['code'], 'name_exists') === 0) { $freshHits++; } }
+    check('no collision warnings when the target is a new dataset', $freshHits === 0);
+    check('runExportContext: committed run resolves to its dataset + spec; foreign / unknown run = null',
+        ($rc = $svc->runExportContext($commit['run_id'])) !== null && $rc['dataset_id'] === $DS1 && isset($rc['spec']['columns'])
+        && $svcStranger->runExportContext($commit['run_id']) === null && $svc->runExportContext(0) === null);
+
     // ------------------------------------------------------------------
     echo "\n=== 5. export -> re-import round trip == all-noop ===\n";
     // ------------------------------------------------------------------

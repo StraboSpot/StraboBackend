@@ -66,9 +66,22 @@ $downloadError = null;
 if ($what === 'template' || $what === 'export') {
     $format = (isset($_GET['format']) && $_GET['format'] === 'csv') ? 'csv' : 'xlsx';
     $tplId  = isset($_GET['template_id']) ? $_GET['template_id'] : FieldTabularService::BASIC_TEMPLATE_ID;
-    $tpl = $twsvc->resolveTemplate($tplId);
+    $runId  = isset($_GET['run_id']) ? (int)$_GET['run_id'] : 0;
+    $tpl = null;
+    if ($what === 'export' && $runId > 0) {
+        // "Download this dataset with ids" from the import success page: the
+        // dataset + spec journaled for that run (owner-checked), so the file
+        // comes back through the same columns the upload used.
+        $ctx = $twsvc->runExportContext($runId);
+        if ($ctx !== null) {
+            $tpl = array('pkey' => 0, 'name' => 'import run ' . $runId, 'spec' => $ctx['spec'], 'builtin' => false);
+            $_GET['dataset_id'] = (string)$ctx['dataset_id'];
+        }
+    } else {
+        $tpl = $twsvc->resolveTemplate($tplId);
+    }
     if ($tpl === null) {
-        $downloadError = 'Template not found.';
+        $downloadError = ($what === 'export' && $runId > 0) ? 'Import run not found.' : 'Template not found.';
     } else {
         if ($what === 'template') {
             $headers = array();
@@ -84,7 +97,7 @@ if ($what === 'template' || $what === 'export') {
                 $downloadError = $export['message'];
             } else {
                 $base = 'StraboSpot_' . tw_safe_name($export['dataset_name'] !== '' ? $export['dataset_name'] : ('dataset_' . $datasetId))
-                      . '_' . tw_safe_name($tpl['name']);
+                      . '_' . ($runId > 0 ? 'with_ids' : tw_safe_name($tpl['name']));
                 if ($format === 'csv') { tw_stream_csv($twsvc, $export, $base); }
                 tw_stream_workbook($twsvc, $export, false, $tpl['name'], $base);
             }

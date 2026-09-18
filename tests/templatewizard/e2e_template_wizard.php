@@ -24,6 +24,8 @@
  *                   PHPExcel -> upload -> Neo4j + spine asserts -> export == noop
  *               12. Exported XLSX edited (cell edits + new row) -> updates + create
  *               13. How-to example workbook imports as its page documents
+ *               (11 also: same id-less file twice -> name-collision Heads up;
+ *                success page's download-with-ids re-imports as unchanged)
  *
  *              Hermetic: sentinel project 96669002, template prefix
  *              e2ewiz-<stamp>; cleanup in finally; residue checks.
@@ -520,6 +522,41 @@ try {
     check('WZ-FILL-1: notes and date typed in Excel landed', $p1 && $p1['notes'] === 'typed in Excel' && (string)$p1['date'] !== '');
     $spine = $db->get_row_prepared("SELECT id FROM strabosamples.samples WHERE userpkey = $1 AND name = $2", array($ownerPkey, "FS-FILL-$stamp"));
     check('sample mirrored into the strabosamples spine over the HTTP path', $spine !== null && $spine !== false);
+
+    // Jason's mistake (2026-09-18): the same id-less file uploaded a second
+    // time. The plan must warn by name, and the success page must have
+    // offered the dataset back WITH ids through the run that just committed.
+    $successBody = $r['body'];
+    preg_match('/Import run #(\d+)/', $successBody, $m);
+    $RUN2 = isset($m[1]) ? (int)$m[1] : 0;
+    check('success page offers "Download this dataset with ids" for the run',
+        $RUN2 > 0 && strpos($successBody, 'id="tw-download-ids"') !== false
+        && strpos($successBody, "run_id=$RUN2") !== false && strpos($successBody, 'out of date') !== false);
+    $r = httpGet("/TemplateWizard/export.php?what=export&run_id=$RUN2&format=xlsx", $sidOwner);
+    check('download with ids: xlsx through the run\'s dataset + spec', $r['status'] === 200 && substr($r['body'], 0, 4) === "PK\x03\x04");
+    $idsPath = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
+    $tmpFiles[] = $idsPath;
+    file_put_contents($idsPath, $r['body']);
+    $r = httpGet("/TemplateWizard/export.php?what=export&run_id=$RUN2&format=xlsx", $sidStranger);
+    check("stranger cannot download the owner's run", strpos($r['body'], 'Import run not found') !== false || substr($r['body'], 0, 2) !== 'PK');
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', $idsPath, 'with_ids.xlsx');
+    $idsToken = extractToken($r['body']);
+    $fillTarget = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'existing', 'dataset_id' => $DS2);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $idsToken), $fillTarget));
+    check('the with-ids copy re-imports as all-unchanged (no Heads up)',
+        strpos($r['body'], '0 new spots') !== false && strpos($r['body'], '2 unchanged') !== false && strpos($r['body'], 'Heads up') === false);
+    httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $idsToken));
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', $filledPath, 'filled_template_again.xlsx');
+    $dupToken = extractToken($r['body']);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $dupToken), $fillTarget));
+    check('the id-less file uploaded again: plan says 2 new spots but warns they already exist by name',
+        strpos($r['body'], '2 new spots') !== false && strpos($r['body'], 'Heads up') !== false
+        && strpos($r['body'], '2 new spots in this file share a name') !== false
+        && strpos($r['body'], 'A spot named &quot;WZ-FILL-1&quot; already exists') !== false
+        && strpos($r['body'], 'Confirm &amp; Import') !== false);
+    httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $dupToken));
+    check('cancelled duplicate upload created nothing',
+        (int)$neodb->get_var("MATCH (d:Dataset {id: $DS2, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN count(s)") === 2);
 
     // export the new dataset through the same template: re-import must be all-noop
     $r = httpGet("/TemplateWizard/export.php?what=export&dataset_id=$DS2&template_id=$TPL2&format=xlsx", $sidOwner);
