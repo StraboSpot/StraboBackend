@@ -231,7 +231,32 @@ class FieldTabularService
     // Template specs
     // ========================================================================
 
-    /** The seeded "Basic" starter template spec. */
+    /** Dropdown value for the built-in Basic layout (no field_templates row). */
+    const BASIC_TEMPLATE_ID = 'basic';
+
+    /**
+     * Resolve a template choice from a form or URL: the built-in Basic
+     * layout (BASIC_TEMPLATE_ID, or blank) or one of the user's saved
+     * templates by pkey. Basic needs no database row, so a user with no
+     * saved templates can still export and re-import (the spec travels
+     * inside the file). Jason 2026-09-18.
+     * @return array {pkey, name, spec, builtin} | null
+     */
+    public function resolveTemplate($choice)
+    {
+        $choice = trim((string)$choice);
+        if ($choice === '' || $choice === self::BASIC_TEMPLATE_ID) {
+            $v = $this->validateSpec(self::defaultSpec());
+            return array('pkey' => 0, 'name' => 'Basic', 'spec' => $v['spec'], 'builtin' => true);
+        }
+        if (!ctype_digit($choice)) { return null; }
+        $tpl = $this->getTemplate((int)$choice);
+        if ($tpl === null) { return null; }
+        $tpl['builtin'] = false;
+        return $tpl;
+    }
+
+    /** The built-in "Basic" starter template spec. */
     public static function defaultSpec()
     {
         $cols = array(

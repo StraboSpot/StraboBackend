@@ -271,7 +271,7 @@ include("includes/mheader.php");
 								<hr />
 
 								<ul class="actions">
-									<li><a href="index.php" class="button">Back to Wizard</a></li>
+									<li><a href="index.php" class="button">Back to Template Wizard</a></li>
 									<li><a href="review.php" class="button">&#8682; Import a Spreadsheet</a></li>
 								</ul>
 

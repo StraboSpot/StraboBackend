@@ -2,6 +2,9 @@
 /**
  * File: export.php
  * Description: Template Wizard - Export & Template Download
+ *              template_id = a saved template pkey or "basic" (built-in
+ *              layout, no row; the default). Blank-template downloads
+ *              live on the landing page + designer, not here (2026-09-18).
  *              GET (no args)      -> picker form (dataset + template + format)
  *              ?what=template     -> blank template workbook/CSV for a saved
  *                                    template (locked system columns, vocab
@@ -62,8 +65,8 @@ $downloadError = null;
 
 if ($what === 'template' || $what === 'export') {
     $format = (isset($_GET['format']) && $_GET['format'] === 'csv') ? 'csv' : 'xlsx';
-    $tplId  = isset($_GET['template_id']) ? (int)$_GET['template_id'] : 0;
-    $tpl = $twsvc->getTemplate($tplId);
+    $tplId  = isset($_GET['template_id']) ? $_GET['template_id'] : FieldTabularService::BASIC_TEMPLATE_ID;
+    $tpl = $twsvc->resolveTemplate($tplId);
     if ($tpl === null) {
         $downloadError = 'Template not found.';
     } else {
@@ -121,18 +124,15 @@ include("includes/mheader.php");
 							<?php endif; ?>
 
 							<div style="background-color: #3b4252; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #5e81ac;">
-								<strong>Export a dataset through one of your templates.</strong>
+								<strong>Export a dataset as a spreadsheet.</strong>
 								<div style="margin: 10px 0 0 0; padding-left: 20px;">
-									The file uses the long format (one row per measurement) and carries its template inside, so you can edit it
-									locally and bring it back through the <a href="review.php">Import page</a> — unchanged rows import as
-									"unchanged", edited ones as updates. Every spot exports; line/polygon spots show their centroid and keep
-									their geometry.
+									The built-in Basic layout covers spot basics and orientations; your own templates choose other columns.
+									The file uses one row per measurement and carries its template inside, so you can edit it locally and bring
+									it back through the <a href="review.php">Import page</a>: unchanged rows import as "unchanged", edited ones
+									as updates. Every spot exports; line/polygon spots show their centroid and keep their geometry.
 								</div>
 							</div>
 
-							<?php if (empty($templates)): ?>
-							<p>You have no saved templates yet — <a href="index.php">design one first</a>.</p>
-							<?php else: ?>
 							<form method="get" id="exportForm">
 								<input type="hidden" name="what" value="export">
 								<div class="row gtr-uniform gtr-25">
@@ -151,9 +151,14 @@ include("includes/mheader.php");
 									</div>
 									<div class="col-3 col-12-small">
 										<select name="template_id">
-											<?php foreach ($templates as $t): ?>
-											<option value="<?php echo (int)$t->pkey; ?>"><?php echo htmlspecialchars($t->name); ?></option>
-											<?php endforeach; ?>
+											<option value="<?php echo FieldTabularService::BASIC_TEMPLATE_ID; ?>">Basic layout (built-in)</option>
+											<?php if (count($templates)): ?>
+											<optgroup label="My templates">
+												<?php foreach ($templates as $t): ?>
+												<option value="<?php echo (int)$t->pkey; ?>"><?php echo htmlspecialchars($t->name); ?></option>
+												<?php endforeach; ?>
+											</optgroup>
+											<?php endif; ?>
 										</select>
 									</div>
 									<div class="col-3 col-12-small">
@@ -165,30 +170,12 @@ include("includes/mheader.php");
 									<div class="col-12">
 										<ul class="actions">
 											<li><input type="submit" class="primary" value="Download Export"></li>
-											<li><a href="index.php" class="button">Back to Wizard</a></li>
+											<li><a href="index.php" class="button">Back to Template Wizard</a></li>
 										</ul>
 									</div>
 								</div>
 							</form>
 
-							<hr>
-							<h3>Blank template downloads</h3>
-							<p>A fillable spreadsheet for a template (no data): pick the template, then
-								<a href="#" onclick="twTpl('xlsx'); return false;">Excel</a> or
-								<a href="#" onclick="twTpl('csv'); return false;">CSV</a>.
-							</p>
-							<select id="tw-tpl-only">
-								<?php foreach ($templates as $t): ?>
-								<option value="<?php echo (int)$t->pkey; ?>"><?php echo htmlspecialchars($t->name); ?></option>
-								<?php endforeach; ?>
-							</select>
-							<script>
-								function twTpl(fmt) {
-									var id = document.getElementById('tw-tpl-only').value;
-									window.location = 'export.php?what=template&template_id=' + encodeURIComponent(id) + '&format=' + fmt;
-								}
-							</script>
-							<?php endif; ?>
 
 							</section>
 

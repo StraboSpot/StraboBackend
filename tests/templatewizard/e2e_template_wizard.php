@@ -193,6 +193,14 @@ try {
     check('template csv: BOM + headers',
         $r['status'] === 200 && substr($r['body'], 0, 3) === "\xEF\xBB\xBF"
         && strpos($r['body'], 'strabo_internal_id') !== false && strpos($r['body'], 'strike') !== false);
+    // built-in Basic layout: no field_templates row, any user, blank + export
+    $r = httpGet("/TemplateWizard/export.php?what=template&template_id=basic&format=csv", $sidStranger);
+    check('basic blank csv: headers, no template row needed',
+        $r['status'] === 200 && strpos($r['body'], 'strabo_internal_id') !== false
+        && strpos($r['body'], 'strike') !== false && strpos($r['body'], 'orientation_type') !== false);
+    $r = httpGet("/TemplateWizard/export.php?what=template&template_id=abc&format=csv", $sidOwner);
+    check('non-numeric template id other than basic: Template not found',
+        strpos($r['body'], 'Template not found') !== false);
     $r = httpGet("/TemplateWizard/export.php?what=template&template_id=$TPL&format=xlsx", $sidStranger);
     check("stranger cannot download owner's template",
         strpos($r['body'], 'Template not found') !== false || $r['status'] !== 200 || substr($r['body'], 0, 2) !== 'PK');
@@ -325,6 +333,30 @@ try {
         strpos($r['body'], '0 new spots') !== false && strpos($r['body'], '0 updated') !== false
         && strpos($r['body'], '3 unchanged') !== false);
     httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $rtToken));
+
+    // same round trip through the built-in Basic layout (the export page default)
+    $r = httpGet("/TemplateWizard/export.php?what=export&dataset_id=$DS&template_id=basic&format=xlsx", $sidOwner);
+    check('basic export xlsx: 200 + zip magic', $r['status'] === 200 && substr($r['body'], 0, 4) === "PK\x03\x04");
+    $bxPath = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
+    $tmpFiles[] = $bxPath;
+    file_put_contents($bxPath, $r['body']);
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'),
+                      'tabfile', $bxPath, 'basic_roundtrip.xlsx');
+    $bxToken = extractToken($r['body']);
+    check('basic re-upload recognizes embedded template',
+        $bxToken !== null && strpos($r['body'], 'embedded template recognized') !== false);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner,
+        array_merge(array('action' => 'plan', 'token' => $bxToken), $target));
+    check('basic round trip plans clean over HTTP',
+        strpos($r['body'], '0 new spots') !== false && strpos($r['body'], '0 updated') !== false
+        && strpos($r['body'], '3 unchanged') !== false);
+    httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $bxToken));
+    // explicit Basic choice on upload (matched by header, no embedded spec)
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload', 'template_pkey' => 'basic'),
+                      'tabfile', csvFile("strabo_internal_id,spot_name\n$A,WZ-A\n"), 'basic_choice.csv');
+    $bcToken = extractToken($r['body']);
+    check('upload with template_pkey=basic reaches the target step', $bcToken !== null);
+    httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $bcToken));
 
     // ------------------------------------------------------------------
     echo "\n=== 9. stranger isolation ===\n";

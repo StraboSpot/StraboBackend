@@ -152,6 +152,19 @@ try {
     $r3 = $svc->saveTemplate("smokewiz-tpl-renamed-$stamp", $SPEC, $tplPkey);
     check('rename works', !empty($r3['ok']));
     check('stranger cannot see template', $svcStranger->getTemplate($tplPkey) === null);
+    // built-in Basic layout resolves for anyone with no row; saved by pkey; junk = null
+    $basic = $svcStranger->resolveTemplate('basic');
+    $basicHeaders = array();
+    foreach ($svcStranger->columnDefs($basic['spec']) as $d) { $basicHeaders[] = $d['header']; }
+    check('resolveTemplate(basic): builtin, pkey 0, Basic name',
+        $basic !== null && $basic['builtin'] === true && $basic['pkey'] === 0 && $basic['name'] === 'Basic');
+    check('resolveTemplate(basic): validated spec with id + strike + orientation_type columns',
+        in_array('strabo_internal_id', $basicHeaders) && in_array('strike', $basicHeaders) && in_array('orientation_type', $basicHeaders));
+    check('resolveTemplate(blank) = basic', $svc->resolveTemplate('')['builtin'] === true);
+    $own = $svc->resolveTemplate((string)$tplPkey);
+    check('resolveTemplate(pkey): saved template, not builtin', $own !== null && $own['builtin'] === false && $own['pkey'] === $tplPkey);
+    check('resolveTemplate(foreign pkey) = null', $svcStranger->resolveTemplate((string)$tplPkey) === null);
+    check('resolveTemplate(junk) = null', $svc->resolveTemplate('12abc') === null && $svc->resolveTemplate('-1') === null);
     $list = $svc->listTemplates();
     $found = false;
     foreach ($list as $t) { if ((int)$t->pkey === $tplPkey) { $found = true; } }

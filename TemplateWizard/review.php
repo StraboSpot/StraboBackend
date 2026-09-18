@@ -140,7 +140,8 @@ if ($action === 'upload') {
     } else {
         $spec = null;
         if (isset($_POST['template_pkey']) && $_POST['template_pkey'] !== '') {
-            $tpl = $twsvc->getTemplate((int)$_POST['template_pkey']);
+            // a saved template pkey, or "basic" for the built-in layout
+            $tpl = $twsvc->resolveTemplate($_POST['template_pkey']);
             if ($tpl !== null) { $spec = $tpl['spec']; }
         }
         $parsed = $twsvc->parseUpload($_FILES['tabfile']['tmp_name'], $_FILES['tabfile']['name'], $spec);
@@ -245,15 +246,20 @@ include("includes/mheader.php");
 									<div class="col-6 col-12-small">
 										<select name="template_pkey">
 											<option value="">Template: auto-detect (embedded or by header)</option>
-											<?php foreach ($templates as $t): ?>
-											<option value="<?php echo (int)$t->pkey; ?>"><?php echo htmlspecialchars($t->name); ?></option>
-											<?php endforeach; ?>
+											<option value="<?php echo FieldTabularService::BASIC_TEMPLATE_ID; ?>">Basic layout (built-in)</option>
+											<?php if (count($templates)): ?>
+											<optgroup label="My templates">
+												<?php foreach ($templates as $t): ?>
+												<option value="<?php echo (int)$t->pkey; ?>"><?php echo htmlspecialchars($t->name); ?></option>
+												<?php endforeach; ?>
+											</optgroup>
+											<?php endif; ?>
 										</select>
 									</div>
 									<div class="col-12">
 										<ul class="actions">
 											<li><input type="submit" class="primary" value="Upload &amp; Review" id="tw-upload-btn" disabled></li>
-											<li><a href="index.php" class="button">Back to Wizard</a></li>
+											<li><a href="index.php" class="button">Back to Template Wizard</a></li>
 										</ul>
 									</div>
 								</div>
