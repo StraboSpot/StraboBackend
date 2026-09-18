@@ -511,6 +511,9 @@ class FieldTabularService
         $parsed = $this->gridToParsed($grid['grid'], $useSpec);
         if (!empty($parsed['ok'])) {
             $parsed['embedded_spec'] = ($embedded !== null && $useSpec !== null) ? $useSpec : null;
+            // fingerprint for the exact-file duplicate guard (journaled on commit)
+            $parsed['file_sha256'] = hash_file('sha256', $path);
+            $parsed['file_name']   = (string)$clientFilename;
         }
         return $parsed;
     }
@@ -892,6 +895,31 @@ class FieldTabularService
         return array('dataset_id' => (int)$row->dataset_id, 'spec' => $spec);
     }
 
+    /** Committed runs by this user of a file with this sha256: same dataset first, else same project. */
+    protected function priorRunsOfFile($sha, $projectId, $datasetId)
+    {
+        $rows = $this->db->get_results_prepared(
+            "SELECT pkey, dataset_id, plan_counts::text AS plan_counts, started_at
+               FROM field_tabular_runs
+              WHERE userpkey = $1 AND file_sha256 = $2 AND status = 'committed' AND project_id = $3
+              ORDER BY (dataset_id = $4) DESC, started_at DESC",
+            array($this->userpkey, $sha, (string)$projectId, $datasetId !== null ? (string)$datasetId : ''));
+        if (!is_array($rows)) { return array(); }
+        if ($datasetId !== null) {
+            // an exact dataset hit outranks the project-wide ones; keep only that kind when present
+            $same = array();
+            foreach ($rows as $r) { if ((string)$r->dataset_id === (string)$datasetId) { $same[] = $r; } }
+            if (!empty($same)) { return $same; }
+        }
+        return $rows;
+    }
+
+    protected function datasetName($datasetId)
+    {
+        $n = $this->neodb->get_var("MATCH (d:Dataset {id: " . (int)$datasetId . ", userpkey: {$this->userpkey}}) RETURN d.name");
+        return ($n === null || $n === '') ? ('#' . (int)$datasetId) : (string)$n;
+    }
+
     public function ownsDataset($datasetId)
     {
         $datasetId = (int)$datasetId;
@@ -1132,11 +1160,35 @@ class FieldTabularService
             }
         }
 
+        // ---- this exact file already imported? (sha256 in the journal) ----
+        // Certain, never a false positive: identical bytes, same user, into
+        // the same dataset (or, for a new-dataset target, anywhere in the
+        // same project). Jason 2026-09-18: "keep things certain".
+        if (!empty($parsed['file_sha256']) && $counts['create'] > 0) {
+            $prior = $this->priorRunsOfFile($parsed['file_sha256'], $projectId, $datasetId);
+            if (!empty($prior)) {
+                $pr = $prior[0];
+                $when = date('M j, Y g:i A', strtotime($pr->started_at));
+                $pc = json_decode($pr->plan_counts, true);
+                $made = is_array($pc) ? (int)$pc['create'] : 0;
+                $where = ($datasetId !== null && (string)$pr->dataset_id === (string)$datasetId)
+                    ? 'this dataset'
+                    : 'dataset "' . $this->datasetName((int)$pr->dataset_id) . '" of this project';
+                array_unshift($warnings, array('row' => 0, 'column' => 'file', 'code' => 'same_file_imported',
+                    'message' => 'This exact file was already imported into ' . $where . ' on ' . $when
+                               . ' (run #' . (int)$pr->pkey . ', ' . $made . ' spot' . ($made === 1 ? '' : 's') . ' created'
+                               . (count($prior) > 1 ? ', and ' . (count($prior) - 1) . ' more time' . (count($prior) > 2 ? 's' : '') : '') . '). '
+                               . 'The rows without an id would be created again. Cancel unless you mean to add them a second time.'));
+            }
+        }
+
         $clean = empty($hardErrors) && empty($softVocab) && empty($softCustom);
 
         return array(
             'ok'             => true,
             'clean'          => $clean,
+            'file_sha256'    => isset($parsed['file_sha256']) ? $parsed['file_sha256'] : null,
+            'file_name'      => isset($parsed['file_name']) ? $parsed['file_name'] : null,
             'counts'         => $counts,
             'rows'           => $planRows,
             'hard_errors'    => $hardErrors,
@@ -1999,14 +2051,16 @@ class FieldTabularService
         }
         $inserted = $this->db->get_var_prepared(
             "INSERT INTO field_tabular_runs
-                    (userpkey, project_id, dataset_id, dataset_new, template, plan_counts, rows, status)
-             VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, 'started')",
+                    (userpkey, project_id, dataset_id, dataset_new, template, plan_counts, rows, status, file_sha256, file_name)
+             VALUES ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7::jsonb, 'started', $8, $9)",
             array($this->userpkey, (string)$projectId,
                   $datasetId !== null ? (string)$datasetId : '',
                   $newDataset ? 't' : 'f',
                   json_encode(isset($plan['spec']) ? $plan['spec'] : null),
                   json_encode($plan['counts']),
-                  json_encode($journalRows))
+                  json_encode($journalRows),
+                  !empty($plan['file_sha256']) ? $plan['file_sha256'] : null,
+                  !empty($plan['file_name']) ? mb_substr($plan['file_name'], 0, 255) : null)
         );
         // RETURNING rows are discarded for INSERTs by the prepared layer —
         // currval on the same connection is the reliable read-back.

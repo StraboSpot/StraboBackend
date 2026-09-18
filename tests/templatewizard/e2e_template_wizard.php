@@ -543,6 +543,7 @@ try {
     $idsToken = extractToken($r['body']);
     $fillTarget = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'existing', 'dataset_id' => $DS2);
     $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $idsToken), $fillTarget));
+    check('the with-ids copy is a different file: no exact-file message', strpos($r['body'], 'This exact file') === false);
     check('the with-ids copy re-imports as all-unchanged (no Heads up)',
         strpos($r['body'], '0 new spots') !== false && strpos($r['body'], '2 unchanged') !== false && strpos($r['body'], 'Heads up') === false);
     httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $idsToken));
@@ -554,6 +555,9 @@ try {
         && strpos($r['body'], '2 new spots in this file share a name') !== false
         && strpos($r['body'], 'A spot named &quot;WZ-FILL-1&quot; already exists') !== false
         && strpos($r['body'], 'Confirm &amp; Import') !== false);
+    check('the id-less file uploaded again: "This exact file was already imported into this dataset" with the run number',
+        strpos($r['body'], 'This exact file was already imported into this dataset on') !== false
+        && strpos($r['body'], "run #$RUN2") !== false && strpos($r['body'], '2 spots created') !== false);
     httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $dupToken));
     check('cancelled duplicate upload created nothing',
         (int)$neodb->get_var("MATCH (d:Dataset {id: $DS2, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN count(s)") === 2);

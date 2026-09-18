@@ -313,14 +313,33 @@ try {
     foreach ($again['warnings'] as $w) { if ($w['code'] === 'name_exists') { $nameHits[] = $w; } }
     check('re-planning the id-less file into its dataset warns per colliding create (SP-A, SP-B)',
         count($nameHits) === 2 && $nameHits[0]['row'] === 2 && strpos($nameHits[0]['message'], '"SP-A"') !== false);
-    check('collision summary warning leads the list and the plan stays clean (warning, not a block)',
-        $again['warnings'][0]['code'] === 'name_exists_summary' && strpos($again['warnings'][0]['message'], '2 new spots') !== false
+    $summaryW = null; foreach ($again['warnings'] as $w) { if ($w['code'] === 'name_exists_summary') { $summaryW = $w; } }
+    check('collision summary warning present (after the exact-file line) and the plan stays clean (warning, not a block)',
+        $summaryW !== null && strpos($summaryW['message'], '2 new spots') !== false
         && !empty($again['clean']) && $again['counts']['create'] === 2);
+    // exact-file guard: the committed run journaled the sha256; the same bytes
+    // planned again (same dataset, or a new dataset in the project) are named
+    $runRow = $db->get_row_prepared("SELECT file_sha256, file_name FROM field_tabular_runs WHERE pkey = $1", array($commit['run_id']));
+    check('journal row carries the file sha256 + client name',
+        $runRow && $runRow->file_sha256 === $parsed['file_sha256'] && strlen($runRow->file_sha256) === 64 && $runRow->file_name === 'import.csv');
+    $sameFile = array(); foreach ($again['warnings'] as $w) { if ($w['code'] === 'same_file_imported') { $sameFile[] = $w; } }
+    check('same file into the same dataset: "This exact file was already imported into this dataset" leads the warnings',
+        count($sameFile) === 1 && $again['warnings'][0]['code'] === 'same_file_imported'
+        && strpos($sameFile[0]['message'], 'into this dataset on') !== false && strpos($sameFile[0]['message'], 'run #' . $commit['run_id']) !== false
+        && strpos($sameFile[0]['message'], '2 spots created') !== false);
     $fresh = $svc->plan($parsed, array('project_id' => $PROJECT_ID, 'dataset_id' => null, 'dataset_name' => "smokewiz-fresh-$stamp"),
                         array('custom_columns' => array('Field Book Page' => 'import')));
     $freshHits = 0;
     foreach ($fresh['warnings'] as $w) { if (strpos($w['code'], 'name_exists') === 0) { $freshHits++; } }
     check('no collision warnings when the target is a new dataset', $freshHits === 0);
+    $freshFile = null; foreach ($fresh['warnings'] as $w) { if ($w['code'] === 'same_file_imported') { $freshFile = $w; } }
+    check('same file into a NEW dataset of the same project still names the earlier dataset',
+        $freshFile !== null && strpos($freshFile['message'], 'of this project') !== false);
+    $otherBytes = $svc->parseUpload(csvFile($csv . ",SP-C,34.3,-118.6,,,,,,,,,,,,,,\n"), 'import2.csv');
+    $otherPlan = $svc->plan($otherBytes, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS1, 'dataset_name' => ''),
+                            array('custom_columns' => array('Field Book Page' => 'import')));
+    $otherFile = 0; foreach ($otherPlan['warnings'] as $w) { if ($w['code'] === 'same_file_imported') { $otherFile++; } }
+    check('a file with different bytes (one row added) is not called a repeat, only the name collisions are', $otherFile === 0);
     check('runExportContext: committed run resolves to its dataset + spec; foreign / unknown run = null',
         ($rc = $svc->runExportContext($commit['run_id'])) !== null && $rc['dataset_id'] === $DS1 && isset($rc['spec']['columns'])
         && $svcStranger->runExportContext($commit['run_id']) === null && $svc->runExportContext(0) === null);
