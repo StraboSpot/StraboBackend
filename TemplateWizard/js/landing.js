@@ -1,5 +1,5 @@
 /**
- * Template Wizard - landing page (index_new.php)
+ * Template Wizard - landing page (index.php)
  * Opens the new-template sections picker under its card, keeps Spot data
  * checked, and deletes saved templates.
  */

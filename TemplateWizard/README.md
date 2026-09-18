@@ -8,7 +8,7 @@ The Template Wizard allows users to either select from existing templates or cre
 
 ## Files
 
-- **choose_template.php** - Template selection/creation initiation page
+- **index.php** - Landing page: Export / Import / Design cards + My Templates list (js/landing.js)
 - **design_template.php** - HandsonTable-based template designer
 - **save_template.php** - Data processing and debug output page
 
@@ -16,13 +16,15 @@ The Template Wizard allows users to either select from existing templates or cre
 
 ### Starting the Wizard
 
-Navigate to: `/TemplateWizard/choose_template.php`
+Navigate to: `/TemplateWizard/`
 
-### Page 1: Choose or Build Template
+### Page 1: Landing (task first, 2026-09-18)
 
-Users can:
-- **Choose Existing Template**: Select from a dropdown of their saved templates
-- **Create New Template**: Select spot sections to include (Spot Data, Orientation Data, Rock Units, Sample Data)
+Three cards lead: **Export a dataset** (export.php), **Import a spreadsheet**
+(review.php) and **Design a template** (unfolds the sections picker inline and
+POSTs `template_method=new` + `selected_sections[]` to design_template.php).
+**My Templates** below lists saved designs with Download blank / Edit / Delete;
+Edit is the "use an existing template" path (GET `template_id`).
 
 ### Page 2: Template Design
 
