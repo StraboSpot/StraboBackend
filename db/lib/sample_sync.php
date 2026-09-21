@@ -29,6 +29,15 @@
  *             parent kept a FULL legacy copy of a promoted sample).
  *             SKIPPED on upload to avoid duplicating the rich row.
  *
+ * Linking id (2026-09-21): a sample object may carry an optional
+ * strabosamples_id naming the StraboSamples sample it IS. Identity is then
+ * that id instead of the local id (samplesdb/lib/field_identity.php holds
+ * the rule, including the "must already exist for this owner" check). The
+ * local id, the spot id and the parent stub never change, so stub detection
+ * below keeps probing with the LOCAL id. When a spot's identities change
+ * (link, unlink, re-link, inline sample deleted in the app) the Field links
+ * it used to hold are retired by _field_sample_sync_prune_spot_links.
+ *
  * Sample-id format: ids are TEXT end-to-end. Legacy Field ids are numeric
  * timestamp strings; ids minted by the samples system are UUIDs. Nothing
  * in this file may assume numeric — the 2026-08-03 string-id hardening
@@ -58,6 +67,7 @@
  */
 
 require_once __DIR__ . '/../../samplesdb/services/StraboSamplesService.php';
+require_once __DIR__ . '/../../samplesdb/lib/field_identity.php';
 
 if (!function_exists('field_sample_sync_spot')) {
 
@@ -81,7 +91,8 @@ if (!function_exists('field_sample_sync_spot')) {
 function _field_sample_sync_is_stub_entry($neodb, $entry, $sampleId, $userpkey) {
     $hasData = false;
     foreach ((array)$entry as $k => $v) {
-        if ($k === 'id') continue;
+        // A stub that also carries the linking id is still a stub.
+        if ($k === 'id' || $k === FIELD_SAMPLE_LINKING_KEY) continue;
         if (is_array($v) || is_object($v)) {
             if (count((array)$v) > 0) { $hasData = true; break; }
             continue;
@@ -134,14 +145,17 @@ function field_sample_sync_spot($db, $neodb, $properties, $spotId, $userpkey, $p
     if (!is_object($properties)) {
         return array();
     }
+    $spotId   = (int)$spotId;
+    $userpkey = (int)$userpkey;
     $samples = isset($properties->samples) ? $properties->samples : null;
     if (empty($samples) || !is_array($samples)) {
+        // The app removed the spot's last sample: retire whatever Field
+        // links this spot still holds.
+        _field_sample_sync_prune_spot_links($db, $neodb, $spotId, $userpkey, array(), array());
         return array();
     }
 
     $isRichSpot = _field_sample_sync_is_rich_props($properties);
-    $spotId   = (int)$spotId;
-    $userpkey = (int)$userpkey;
 
     // Resolve project/dataset context via Cypher when caller didn't supply
     // it (single-spot edit paths). For NEW spots without any dataset
@@ -164,7 +178,8 @@ function field_sample_sync_spot($db, $neodb, $properties, $spotId, $userpkey, $p
         if ($obj === null) {
             return array();
         }
-        $sampleId = isset(((object)$obj)->id) ? (string)((object)$obj)->id : '';
+        $localId  = field_sample_local_id($obj);
+        $sampleId = field_sample_identity($obj, $db, $userpkey);
         if ($sampleId === '') {
             return array();
         }
@@ -188,23 +203,29 @@ function field_sample_sync_spot($db, $neodb, $properties, $spotId, $userpkey, $p
                 AND reference_id <> $3",
             array($sampleId, $userpkey, (string)$spotId)
         );
+        _field_sample_sync_prune_spot_links($db, $neodb, $spotId, $userpkey, $mirrored,
+            array($localId => $sampleId));
         return $mirrored;
     }
 
     // LEGACY path: walk every entry, skip stubs that resolve to a rich
     // sample-spot in Neo4j.
+    $adopt = array();
     foreach ($samples as $entry) {
         $obj = is_array($entry) || is_object($entry) ? (object)$entry : null;
         if ($obj === null) continue;
-        $sampleId = isset($obj->id) ? (string)$obj->id : '';
-        if ($sampleId === '') continue;
+        $localId = field_sample_local_id($obj);
+        if ($localId === '') continue;
 
-        // Stub check (shape + graph probe, any id format) — skip parent-stubs
+        // Stub check (shape + graph probe, any id format): skip parent-stubs
         // and stale full copies of promoted samples; the rich row is (or will
-        // be) the authoritative one.
-        if (_field_sample_sync_is_stub_entry($neodb, $obj, $sampleId, $userpkey)) {
+        // be) the authoritative one. Probes with the LOCAL id, which is what
+        // the rich sample-spot is keyed on.
+        if (_field_sample_sync_is_stub_entry($neodb, $obj, $localId, $userpkey)) {
             continue;
         }
+        $sampleId = field_sample_identity($obj, $db, $userpkey);
+        $adopt[$localId] = $sampleId;
 
         _field_sample_sync_emit_one(
             $db, $neodb,
@@ -214,7 +235,50 @@ function field_sample_sync_spot($db, $neodb, $properties, $spotId, $userpkey, $p
         );
         $mirrored[] = $sampleId;
     }
+    _field_sample_sync_prune_spot_links($db, $neodb, $spotId, $userpkey, $mirrored, $adopt);
     return $mirrored;
+}
+
+/**
+ * @internal Retire the Field links this spot holds for samples the upload no
+ * longer mirrors. That happens when a sample gains, loses or changes its
+ * linking id (the old identity's link is stale) and when the app deletes an
+ * inline sample. Each stale link goes through removeSubsystemSampleReference,
+ * so the old row is deleted only when no other subsystem has data or links on
+ * it; otherwise it just loses its Field side.
+ *
+ * $adopt maps local id => identity for the entries just mirrored. When a
+ * stale row IS the local identity of a sample that now lives under a linking
+ * id (the "link" event), its spine-only attachments move across first so
+ * linking never silently drops shares or lineage.
+ */
+function _field_sample_sync_prune_spot_links($db, $neodb, $spotId, $userpkey, array $mirrored, array $adopt) {
+    $rows = $db->get_results_prepared(
+        "SELECT sample_id FROM strabosamples.sample_subsystem_links
+          WHERE subsystem = 'field'
+            AND reference_id = $1 AND reference_userpkey = $2
+            AND sample_userpkey = $2",
+        array((string)$spotId, (int)$userpkey)
+    );
+    if (empty($rows)) return 0;
+
+    $keep = array_flip(array_map('strval', $mirrored));
+    $svc  = null;
+    $n    = 0;
+    foreach ($rows as $r) {
+        $staleId = (string)$r->sample_id;
+        if (isset($keep[$staleId])) continue;
+        if ($svc === null) {
+            $svc = new StraboSamplesService($db, $neodb);
+            $svc->setUserpkey((int)$userpkey);
+        }
+        if (isset($adopt[$staleId]) && (string)$adopt[$staleId] !== $staleId) {
+            $svc->adoptFieldSample($staleId, (string)$adopt[$staleId], (int)$userpkey);
+        }
+        $svc->removeSubsystemSampleReference('field', $staleId, (int)$userpkey, (string)$spotId, (int)$userpkey);
+        $n++;
+    }
+    return $n;
 }
 
 /**
@@ -263,11 +327,13 @@ function field_sample_sync_remove_spot($db, $neodb, $spotId, $userpkey) {
     if ($isRich) {
         // Rich sample-spot: the canonical sample is samples[0].id (== spot.id).
         $obj = isset($samples[0]) ? (array)$samples[0] : null;
-        $sampleId = ($obj && isset($obj['id'])) ? (string)$obj['id'] : (string)$spotId;
+        $sampleId = $obj ? field_sample_identity($obj, $db, $userpkey) : '';
+        if ($sampleId === '') $sampleId = (string)$spotId;
         if ($sampleId !== '') {
             $svc->removeSubsystemSample('field', $sampleId, $userpkey);
             $n++;
         }
+        field_sample_spine_exists($db, '', 0, true);
         return $n;
     }
 
@@ -275,15 +341,19 @@ function field_sample_sync_remove_spot($db, $neodb, $spotId, $userpkey) {
     // spot still alive in Neo4j).
     foreach ($samples as $entry) {
         $entry = (array)$entry;
-        $sampleId = isset($entry['id']) ? (string)$entry['id'] : '';
-        if ($sampleId === '') continue;
+        $localId = field_sample_local_id($entry);
+        if ($localId === '') continue;
         // Same stub semantics as the upload mirror: a stub-shaped entry (or
         // one whose rich sample-spot is still alive) must not tear down the
         // rich sample's spine row when the parent spot is deleted.
-        if (_field_sample_sync_is_stub_entry($neodb, $entry, $sampleId, $userpkey)) continue;
+        if (_field_sample_sync_is_stub_entry($neodb, $entry, $localId, $userpkey)) continue;
+        $sampleId = field_sample_identity($entry, $db, $userpkey);
         $svc->removeSubsystemSample('field', $sampleId, $userpkey);
         $n++;
     }
+    // Rows may be gone now; a delete-then-reinsert (version restore) in this
+    // same request must re-check linking ids against the real spine.
+    field_sample_spine_exists($db, '', 0, true);
     return $n;
 }
 

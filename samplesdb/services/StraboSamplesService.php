@@ -2037,6 +2037,91 @@ class StraboSamplesService
         return $result;
     }
 
+    /**
+     * Carry a Field sample's spine-only attachments from its LOCAL identity
+     * row to the row it was just linked to (strabosamples_id, see
+     * lib/field_identity.php). Called by the Field upload mirror right
+     * before the old row loses its Field link, and only acts when that row
+     * is about to disappear (no Micro/Exp data, no other links): a row that
+     * survives keeps what it has.
+     *
+     * Moves: child samples (re-pointed unless that would form a cycle) and
+     * active collaborators (the target's existing grant wins). The old
+     * row's changelog goes with it; the target gets one 'field_link_adopted'
+     * entry naming the old id.
+     */
+    public function adoptFieldSample($fromId, $toId, $ownerPkey)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        $fromId = (string)$fromId;
+        $toId   = (string)$toId;
+        if ($fromId === '' || $toId === '' || $fromId === $toId) return array('ok' => true, 'adopted' => false);
+
+        $from = $this->db->get_row_prepared(
+            "SELECT micro_data, experimental_data FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+            array($fromId, $ownerPkey)
+        );
+        $toExists = $this->db->get_var_prepared(
+            "SELECT 1 FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+            array($toId, $ownerPkey)
+        );
+        if ($from === null || empty($toExists)) return array('ok' => true, 'adopted' => false);
+        if ($from->micro_data !== null || $from->experimental_data !== null) {
+            return array('ok' => true, 'adopted' => false);
+        }
+        $otherLinks = (int)$this->db->get_var_prepared(
+            "SELECT count(*) FROM strabosamples.sample_subsystem_links
+              WHERE sample_id=$1 AND sample_userpkey=$2",
+            array($fromId, $ownerPkey)
+        );
+        if ($otherLinks > 1) return array('ok' => true, 'adopted' => false);
+
+        // Children.
+        $children = $this->db->get_results_prepared(
+            "SELECT id, userpkey FROM strabosamples.samples
+              WHERE parent_sample_id=$1 AND parent_userpkey=$2",
+            array($fromId, $ownerPkey)
+        );
+        $moved = 0;
+        foreach ((array)$children as $c) {
+            if ((string)$c->id === $toId && (int)$c->userpkey === $ownerPkey) continue;
+            if ($this->detectCycle((string)$c->id, (int)$c->userpkey, $toId, $ownerPkey)) continue;
+            $this->db->prepare_query(
+                "UPDATE strabosamples.samples SET parent_sample_id=$1, modified_at=now()
+                  WHERE id=$2 AND userpkey=$3",
+                array($toId, (string)$c->id, (int)$c->userpkey)
+            );
+            $moved++;
+        }
+
+        // Collaborators: active rows the target does not already hold.
+        $collabs = $this->db->get_results_prepared(
+            "SELECT pkey FROM strabosamples.sample_collaborators f
+              WHERE f.sample_id=$1 AND f.sample_userpkey=$2 AND f.removed_at IS NULL
+                AND NOT EXISTS (
+                    SELECT 1 FROM strabosamples.sample_collaborators t
+                     WHERE t.sample_id=$3 AND t.sample_userpkey=$2
+                       AND t.collaborator_pkey=f.collaborator_pkey AND t.removed_at IS NULL)",
+            array($fromId, $ownerPkey, $toId)
+        );
+        $shared = 0;
+        foreach ((array)$collabs as $c) {
+            $this->db->prepare_query(
+                "UPDATE strabosamples.sample_collaborators SET sample_id=$1 WHERE pkey=$2",
+                array($toId, (int)$c->pkey)
+            );
+            $shared++;
+        }
+
+        $this->logChange($toId, $ownerPkey, 'field_link_adopted', array(
+            'from_sample_id'       => $fromId,
+            'children_moved'       => $moved,
+            'collaborators_moved'  => $shared,
+        ), 'field');
+
+        return array('ok' => true, 'adopted' => true, 'children_moved' => $moved, 'collaborators_moved' => $shared);
+    }
+
     // ---- upsertSample internals ----
 
     protected function upsertSample_insertNew($source, $sampleId, $ownerPkey, $actorPkey, array $spineFields, $subsystemData, $jsonbCol)
@@ -2298,9 +2383,11 @@ class StraboSamplesService
         if ($isRich) {
             $targetIdx = 0;
         } else {
+            // Identity, not the raw id: an entry linked through
+            // strabosamples_id answers to that id (lib/field_identity.php).
+            require_once __DIR__ . '/../lib/field_identity.php';
             foreach ($samples as $i => $entry) {
-                $entry = (array)$entry;
-                if (isset($entry['id']) && (string)$entry['id'] === (string)$sampleId) {
+                if (field_sample_identity($entry, $this->db, $referenceUserpkey) === (string)$sampleId) {
                     $targetIdx = $i;
                     break;
                 }
