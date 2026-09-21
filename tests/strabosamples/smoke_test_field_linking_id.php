@@ -21,6 +21,7 @@
  *                7. remove mirror on a linked rich spot
  *                8. migration extractor resolves the same identity
  *                9. drift audit is clean for every sample touched
+ *               10. Template Wizard mergeSamples keeps the key on import
  *
  *              Hermetic: seeds Neo4j Project/Dataset/Spots + spine rows,
  *              tears down in finally{}.
@@ -302,6 +303,22 @@ try {
     $row = _migration_field_build_row($objBogus, array('id' => $spotBogus, 'userpkey' => $owner, 'wkt' => 'POINT (-95.2 38.9)'), $dataset, $owner, true);
     check("unknown key -> local id", is_array($row) && $row['sample_id'] === (string)$spotBogus);
     _migration_field_identity_db(false);
+
+    // -------------------------------------------------------------------
+    echo "\n=== 10. Template Wizard import keeps the key ===\n";
+    require_once '/srv/app/www/TemplateWizard/services/FieldTabularService.php';
+    $rc  = new ReflectionClass('FieldTabularService');
+    $fts = $rc->newInstanceWithoutConstructor();
+    $mm  = $rc->getMethod('mergeSamples');
+    $mm->setAccessible(true);
+    $merged = $mm->invoke($fts,
+        array(array('sample_id_name' => 'Field NEW', 'sample_description' => 'edited in a spreadsheet')),
+        array($objNew),
+        array('sample_id_name', 'sample_description'));
+    check("wizard merge keeps local id + strabosamples_id", isset($merged[0]['id'], $merged[0]['strabosamples_id'])
+        && (string)$merged[0]['id'] === (string)$spotNew && $merged[0]['strabosamples_id'] === $B_new);
+    check("wizard merge applied the edited column", isset($merged[0]['sample_description'])
+        && $merged[0]['sample_description'] === 'edited in a spreadsheet');
 
     // -------------------------------------------------------------------
     echo "\n=== 9. drift audit is clean for every sample touched ===\n";
