@@ -26,7 +26,10 @@ function dsd_asset($path) {
 }
 
 $dataset_id = isset($_GET['dataset_id']) ? (int)$_GET['dataset_id'] : 0;
-$sample_id  = isset($_GET['sample_id'])  ? (int)$_GET['sample_id']  : 0;
+// Sample ids are strings (numeric timestamps or UUIDs); the charset gate is
+// what makes the value safe to hand to the lookups below.
+$sample_id  = isset($_GET['sample_id']) ? trim((string)$_GET['sample_id']) : '';
+if(!preg_match('/^[A-Za-z0-9][A-Za-z0-9_.\-]{0,63}$/', $sample_id)) $sample_id = '';
 
 $error_message = null;
 $owner_pkey = null;
@@ -40,13 +43,40 @@ $highlight_spot_id = null;
 // sample's internal id to its containing dataset + spot, then load the page
 // exactly as if that dataset_id had been requested, with the spot highlighted.
 // An explicit ?dataset_id= wins if both are given.
-if(!$dataset_id && $sample_id){
-	$sample_rows = $neodb->get_results("
-		MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_SAMPLE]->(smp:Sample)
-		WHERE smp.id = $sample_id
-		RETURN d.id AS dataset_id, s.id AS spot_id
-		LIMIT 1
-	");
+if(!$dataset_id && $sample_id !== ''){
+	$sample_rows = null;
+
+	// 1. Through StraboSamples: the id other apps hold is the sample's
+	//    StraboSamples id, which for a linked Field sample (strabosamples_id)
+	//    is NOT the id on the Field :Sample node. The field link row names
+	//    the spot that holds it.
+	$link = $db->get_row_prepared(
+		"SELECT reference_id, reference_userpkey
+		   FROM strabosamples.sample_subsystem_links
+		  WHERE sample_id = $1 AND subsystem = 'field' AND reference_id ~ '^[0-9]+$'
+		  ORDER BY modified_at DESC NULLS LAST
+		  LIMIT 1",
+		array($sample_id)
+	);
+	if($link){
+		$link_spot = (int)$link->reference_id;
+		$link_upk  = (int)$link->reference_userpkey;
+		$sample_rows = $neodb->get_results("
+			MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot {id:$link_spot, userpkey:$link_upk})
+			RETURN d.id AS dataset_id, s.id AS spot_id
+			LIMIT 1
+		");
+	}
+
+	// 2. Legacy: the Field :Sample node (numeric local ids only).
+	if((!$sample_rows || count($sample_rows) === 0) && ctype_digit($sample_id)){
+		$sample_rows = $neodb->get_results("
+			MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_SAMPLE]->(smp:Sample)
+			WHERE smp.id = $sample_id
+			RETURN d.id AS dataset_id, s.id AS spot_id
+			LIMIT 1
+		");
+	}
 	if(!$sample_rows || count($sample_rows) === 0){
 		$error_message = 'Sample not found.';
 	}else{

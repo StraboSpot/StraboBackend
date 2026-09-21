@@ -16,6 +16,8 @@
 
 if (!function_exists('migration_extract_field')) {
 
+require_once __DIR__ . '/../lib/field_identity.php';
+
 /**
  * Stream Field sample source-rows.
  *
@@ -26,6 +28,12 @@ if (!function_exists('migration_extract_field')) {
  *
  * @param  object $neodb  StraboDbNeo4j handle
  * @param  array  $opts   { 'limit_spots' => int|null }  optional cap for testing
+ *                        { 'db' => StraboDbPostgreSQL }  when given, a sample's
+ *                        strabosamples_id linking id is honored only if that
+ *                        sample exists for the owner (the live-sync rule, see
+ *                        lib/field_identity.php); without it the claim is
+ *                        trusted, which is right for a from-scratch migration
+ *                        where Field runs before the spine has any rows
  * @param  callable|null $emit  called once per row; if null, rows are collected
  *                              and returned as an array
  * @return array  list of source rows (empty if $emit was supplied)
@@ -34,6 +42,7 @@ function migration_extract_field($neodb, $opts = array(), $emit = null) {
 
     $rows = array();
     $emitRow = $emit ?: function($r) use (&$rows) { $rows[] = $r; };
+    _migration_field_identity_db(isset($opts['db']) ? $opts['db'] : false);
 
     // Two-stage fetch so memory stays bounded per dataset rather than
     // loading 38k+ spots-with-samples (with full `json_samples` strings)
@@ -176,15 +185,27 @@ function _migration_field_decode_samples($props) {
 }
 
 /**
+ * @internal PG handle for the linking-id existence check (false = clear).
+ */
+function _migration_field_identity_db($set = null) {
+    static $db = null;
+    if ($set === false) { $db = null; }
+    elseif ($set !== null) { $db = $set; }
+    return $db;
+}
+
+/**
  * @internal — Build the unified source-row from one sample object.
  */
 function _migration_field_build_row($sampleObj, $spotProps, $dsId, $dsOwner, $isRich) {
     $sampleObj = (array)$sampleObj;
-    $sampleId = isset($sampleObj['id']) ? (string)$sampleObj['id'] : '';
+    $userpkey = (int)$spotProps['userpkey'];
+    // Identity = linking id when honored, else the local id. Stub dedup in
+    // the caller stays on the LOCAL id (that is what rich spots are keyed on).
+    $sampleId = field_sample_identity($sampleObj, _migration_field_identity_db(), $userpkey);
     if ($sampleId === '') {
         return null;
     }
-    $userpkey = (int)$spotProps['userpkey'];
 
     // spine columns — Field key-name mapping (design §9.1 writeback table)
     $name        = isset($sampleObj['sample_id_name'])     ? (string)$sampleObj['sample_id_name']     : null;
