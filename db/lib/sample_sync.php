@@ -275,10 +275,29 @@ function _field_sample_sync_prune_spot_links($db, $neodb, $spotId, $userpkey, ar
         if (isset($adopt[$staleId]) && (string)$adopt[$staleId] !== $staleId) {
             $svc->adoptFieldSample($staleId, (string)$adopt[$staleId], (int)$userpkey);
         }
-        $svc->removeSubsystemSampleReference('field', $staleId, (int)$userpkey, (string)$spotId, (int)$userpkey);
+        if (_field_sample_sync_was_linked($db, $staleId, (int)$userpkey)) {
+            // Reached through a linking id: the sample predates the link and
+            // must outlive it (it may be a web-made sample nothing else holds).
+            $svc->detachLinkedFieldSample($staleId, (int)$userpkey, (string)$spotId, (int)$userpkey);
+        } else {
+            $svc->removeSubsystemSampleReference('field', $staleId, (int)$userpkey, (string)$spotId, (int)$userpkey);
+        }
         $n++;
     }
     return $n;
+}
+
+/**
+ * @internal Did Field reach this spine row through a linking id? The mirrored
+ * field_data is the sample object verbatim, so it says so itself.
+ */
+function _field_sample_sync_was_linked($db, $sampleId, $userpkey) {
+    $hit = $db->get_var_prepared(
+        "SELECT 1 FROM strabosamples.samples
+          WHERE id=$1 AND userpkey=$2 AND field_data->>'" . FIELD_SAMPLE_LINKING_KEY . "' = $1",
+        array((string)$sampleId, (int)$userpkey)
+    );
+    return !empty($hit);
 }
 
 /**
@@ -330,7 +349,11 @@ function field_sample_sync_remove_spot($db, $neodb, $spotId, $userpkey) {
         $sampleId = $obj ? field_sample_identity($obj, $db, $userpkey) : '';
         if ($sampleId === '') $sampleId = (string)$spotId;
         if ($sampleId !== '') {
-            $svc->removeSubsystemSample('field', $sampleId, $userpkey);
+            if ($obj && $sampleId !== field_sample_local_id($obj)) {
+                $svc->detachLinkedFieldSample($sampleId, $userpkey, (string)$spotId, $userpkey);
+            } else {
+                $svc->removeSubsystemSample('field', $sampleId, $userpkey);
+            }
             $n++;
         }
         field_sample_spine_exists($db, '', 0, true);
@@ -348,7 +371,11 @@ function field_sample_sync_remove_spot($db, $neodb, $spotId, $userpkey) {
         // rich sample's spine row when the parent spot is deleted.
         if (_field_sample_sync_is_stub_entry($neodb, $entry, $localId, $userpkey)) continue;
         $sampleId = field_sample_identity($entry, $db, $userpkey);
-        $svc->removeSubsystemSample('field', $sampleId, $userpkey);
+        if ($sampleId !== $localId) {
+            $svc->detachLinkedFieldSample($sampleId, $userpkey, (string)$spotId, $userpkey);
+        } else {
+            $svc->removeSubsystemSample('field', $sampleId, $userpkey);
+        }
         $n++;
     }
     // Rows may be gone now; a delete-then-reinsert (version restore) in this

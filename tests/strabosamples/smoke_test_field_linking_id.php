@@ -357,6 +357,23 @@ try {
     check("linked row survives the spot delete through Micro", $b !== null && $b->md !== null);
     check("its Field side is gone", $b !== null && $b->fd === null && field_links($db, $B_new, $owner) === array());
 
+    echo "\n--- delete then re-insert (version restore shape) keeps the link ---\n";
+    $m = sync($db, $neodb, $spotNew, $owner, array($objNew), true, $project, $dataset);
+    check("re-inserted spot lands on the linking id again", $m === array($B_new)
+        && field_links($db, $B_new, $owner) === array((string)$spotNew) && spine($db, $spotNew, $owner) === null);
+
+    echo "\n--- a linked sample nothing else holds (made on the web) outlives the spot ---\n";
+    $B_web = $uuidGen->v4();
+    $svc->createSample(array('id' => $B_web, 'name' => 'made on the web'));
+    $objWeb = sample_obj($spotBogus, 'Bogus', $B_web);
+    sync($db, $neodb, $spotBogus, $owner, array($objWeb), true, $project, $dataset);
+    check("web-made sample linked", field_links($db, $B_web, $owner) === array((string)$spotBogus));
+    restamp_spot($neodb, $spotBogus, $owner, array($objWeb));
+    field_sample_sync_remove_spot($db, $neodb, $spotBogus, $owner);
+    $w = spine($db, $B_web, $owner);
+    check("web-made sample survives the spot delete", $w !== null && $w->fd === null && field_links($db, $B_web, $owner) === array());
+    $db->prepare_query("DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($B_web, $owner));
+
 } finally {
     echo "\n--- teardown ---\n";
     $ids = array($B_new, $B_est, $B_mic, $B_leg, $B_bogus, $childId, (string)$spotNew, (string)$spotEst,

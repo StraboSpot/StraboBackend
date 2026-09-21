@@ -2038,6 +2038,54 @@ class StraboSamplesService
     }
 
     /**
+     * Field lets go of a sample it reached through a linking id
+     * (strabosamples_id). Such a sample existed BEFORE Field linked to it
+     * (the key is only honored for an existing row), so Field never owns
+     * its existence: drop the link, clear field_data once no Field link is
+     * left, and keep the row even when nothing else references it. A sample
+     * made on the web and linked from the app must survive an unlink or the
+     * deletion of the spot. Field-BORN samples keep the normal
+     * removeSubsystemSample* semantics.
+     *
+     * $referenceId null = every Field link of the sample (spot deleted path).
+     */
+    public function detachLinkedFieldSample($sampleId, $ownerPkey, $referenceId = null, $referenceUserpkey = null)
+    {
+        $ownerPkey = (int)$ownerPkey;
+        $sampleId  = (string)$sampleId;
+        if ($referenceId === null) {
+            $this->db->prepare_query(
+                "DELETE FROM strabosamples.sample_subsystem_links
+                  WHERE sample_id=$1 AND sample_userpkey=$2 AND subsystem='field'",
+                array($sampleId, $ownerPkey)
+            );
+        } else {
+            $this->db->prepare_query(
+                "DELETE FROM strabosamples.sample_subsystem_links
+                  WHERE sample_id=$1 AND sample_userpkey=$2 AND subsystem='field'
+                    AND reference_id=$3 AND reference_userpkey=$4",
+                array($sampleId, $ownerPkey, (string)$referenceId, (int)$referenceUserpkey)
+            );
+        }
+        $remains = (bool)$this->db->get_var_prepared(
+            "SELECT 1 FROM strabosamples.sample_subsystem_links
+              WHERE sample_id=$1 AND sample_userpkey=$2 AND subsystem='field' LIMIT 1",
+            array($sampleId, $ownerPkey)
+        );
+        if (!$remains) {
+            $this->db->prepare_query(
+                "UPDATE strabosamples.samples SET field_data = NULL, modified_at = now()
+                  WHERE id=$1 AND userpkey=$2 AND field_data IS NOT NULL",
+                array($sampleId, $ownerPkey)
+            );
+            $this->logChange($sampleId, $ownerPkey, 'field_link_removed', null, 'field');
+        }
+        require_once __DIR__ . '/../../searchdb/sync/StraboSearchSync.php';
+        StraboSearchSync::touchSample($this->db, $sampleId, $ownerPkey);
+        return array('ok' => true, 'removed' => false, 'last_reference' => !$remains);
+    }
+
+    /**
      * Carry a Field sample's spine-only attachments from its LOCAL identity
      * row to the row it was just linked to (strabosamples_id, see
      * lib/field_identity.php). Called by the Field upload mirror right
