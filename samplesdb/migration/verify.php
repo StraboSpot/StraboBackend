@@ -84,7 +84,7 @@ echo "[1/5] Row-count parity ...\n";
 
 $srcCounts = array();
 if ($only === null || $only === 'field') {
-    $rows = migration_extract_field($neodb);
+    $rows = migration_extract_field($neodb, array('db' => $db));
     $srcCounts['field'] = migration_distinct_pairs($rows);
 }
 if ($only === null || $only === 'micro') {

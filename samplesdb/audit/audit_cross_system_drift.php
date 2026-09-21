@@ -80,6 +80,7 @@ require_once($webroot . '/includes/config.inc.php');
 require_once($webroot . '/db.php');
 require_once($webroot . '/neodb.php');
 require_once($webroot . '/samplesdb/lib/field_geom.php');
+require_once($webroot . '/samplesdb/lib/field_identity.php');
 
 // ---------------------------------------------------------------------------
 // Options
@@ -883,7 +884,7 @@ if (is_array($links)) {
         } else {
             foreach ($samples as $e) {
                 $e = (array)$e;
-                if (isset($e['id']) && (string)$e['id'] === $sampleId) { $entry = $e; break; }
+                if (field_sample_identity($e, $db, $upk) === $sampleId) { $entry = $e; break; }
             }
         }
         if ($entry === null) {
@@ -933,7 +934,7 @@ if (is_array($links)) {
                 } else {
                     foreach ($arr as $cand) {
                         $cand = (array)$cand;
-                        if (isset($cand['id']) && (string)$cand['id'] === $sampleId) { $e = $cand; break; }
+                        if (field_sample_identity($cand, $db, $oUpk) === $sampleId) { $e = $cand; break; }
                     }
                 }
                 if ($e !== null) $holders[] = array('spot' => $oSpot, 'entry' => $e, 'props' => $p);
@@ -1039,18 +1040,17 @@ if ($opt['since'] > 0) {
 
             // Expected mirrors from this spot: rich → samples[0] only;
             // legacy → every entry that is not a promoted-then-stub.
+            // Keyed by IDENTITY (linking id when honored, lib/field_identity.php);
+            // the value keeps the LOCAL id, which is what the stub probe needs.
             $expected = array();
-            if ($isRich) {
-                $e = (array)$samples[0];
-                if (isset($e['id']) && (string)$e['id'] !== '') $expected[] = (string)$e['id'];
-            } else {
-                foreach ($samples as $e) {
-                    $e = (array)$e;
-                    if (isset($e['id']) && (string)$e['id'] !== '') $expected[] = (string)$e['id'];
-                }
+            foreach (($isRich ? array($samples[0]) : $samples) as $e) {
+                $e = (array)$e;
+                $ident = field_sample_identity($e, $db, $upk);
+                if ($ident !== '') $expected[$ident] = field_sample_local_id($e);
             }
 
-            foreach ($expected as $sampleId) {
+            foreach ($expected as $sampleId => $localId) {
+                $sampleId = (string)$sampleId;
                 $checked++;
                 $row = $db->get_row_prepared(
                     "SELECT s.id,
@@ -1067,9 +1067,9 @@ if ($opt['since'] > 0) {
                 // Not mirrored (or unlinked). For legacy holder entries this
                 // may be a stub pointing at a rich sample-spot — the rich
                 // spot owns the mirror, so probe before flagging.
-                if (!$isRich && ctype_digit($sampleId)) {
+                if (!$isRich && ctype_digit($localId)) {
                     $stub = $neodb->get_var(
-                        "MATCH (r:Spot {id:" . (int)$sampleId . ", userpkey:$upk, isSample:1}) RETURN r.id LIMIT 1"
+                        "MATCH (r:Spot {id:" . (int)$localId . ", userpkey:$upk, isSample:1}) RETURN r.id LIMIT 1"
                     );
                     if (!empty($stub) && (int)$stub !== (int)$spotId) {
                         continue;   // stub entry; mirror belongs to the rich spot
