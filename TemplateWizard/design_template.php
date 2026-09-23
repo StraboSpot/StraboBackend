@@ -118,6 +118,7 @@ $systemMeta = array(
     'orientation_type'   => array('label' => 'Orientation type',  'hint' => 'planar / linear / tabular zone; required with orientation columns'),
     'orientation_role'   => array('label' => 'Orientation role',  'hint' => 'primary / associated; lets a row attach to the measurement above it'),
     'geometry_type'      => array('label' => 'Geometry type',     'hint' => 'export context for line / polygon spots; filled by StraboSpot'),
+    'geometry_wkt'       => array('label' => 'Geometry (WKT)',    'hint' => 'full line / polygon shape as WKT; filled on export, used when a spot is created (ignored on updates)'),
 );
 
 // Current columns, in order, as the page shows them.
@@ -155,6 +156,7 @@ foreach ($catalogAll['groups'] as $gkey => $g) {
 $systemExtras = array(
     array('key' => 'orientation_role', 'header' => 'orientation_role', 'label' => $systemMeta['orientation_role']['label'], 'hint' => $systemMeta['orientation_role']['hint']),
     array('key' => 'geometry_type',    'header' => 'geometry_type',    'label' => $systemMeta['geometry_type']['label'],    'hint' => $systemMeta['geometry_type']['hint']),
+    array('key' => 'geometry_wkt',     'header' => 'geometry_wkt',     'label' => $systemMeta['geometry_wkt']['label'],     'hint' => $systemMeta['geometry_wkt']['hint']),
 );
 $sectionLabels = array();
 foreach (FieldTabularService::sectionMeta() as $k => $m) { $sectionLabels[$k] = $m['label']; }

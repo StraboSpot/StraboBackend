@@ -605,8 +605,28 @@ try {
         !in_array($A, array_map('intval', $anCommit['minted'])) && !in_array($B, array_map('intval', $anCommit['minted'])));
     $inDs2 = (int)$neodb->get_var("MATCH (d:Dataset {id: $DS2, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) WHERE s.name IN ['SP-A','SP-B'] RETURN count(s)");
     check('flag on: copies live in DS2', $inDs2 === 2);
-    $pa2 = spotProps($neodb, (int)$anCommit['minted'][0], $owner);
-    check('flag on: copy carries the orientations', strpos((string)$pa2['json_orientation_data'], 'slickenlines') !== false);
+    $pa2 = null;
+    foreach ($anCommit['minted'] as $mid) {
+        $pp = spotProps($neodb, (int)$mid, $owner);
+        if ($pp !== null && $pp['name'] === 'SP-A') { $pa2 = $pp; }
+    }
+    check('flag on: copy carries the orientations', $pa2 !== null && strpos((string)$pa2['json_orientation_data'], 'slickenlines') !== false);
+
+    // Minted ids are unique within a run (time().rand has 8,889 values per
+    // second; a class-sized import collided ~40% of the time and the later
+    // create overwrote the earlier one through insertSpot's upsert).
+    $bulk = "strabo_internal_id,spot_name,latitude,longitude\n";
+    for ($bi = 1; $bi <= 150; $bi++) { $bulk .= ",BULK-$bi,34." . (1000 + $bi) . ",-118." . (1000 + $bi) . "\n"; }
+    $bulkPlan = $svc->plan($svc->parseUpload(csvFile($bulk), 'bulk.csv'),
+                           array('project_id' => $PROJECT_ID, 'dataset_id' => null, 'dataset_name' => "smokewiz BULK $stamp"));
+    $bulkCommit = $svc->commit($bulkPlan);
+    check('bulk create of 150 id-less rows commits', !empty($bulkCommit['ok']) && $bulkCommit['created'] === 150);
+    $DSB = (int)$bulkCommit['dataset_id'];
+    $datasetIds[] = $DSB;
+    foreach ($bulkCommit['minted'] as $mid) { $spotIds[] = (int)$mid; }
+    check('150 minted ids are all distinct', count(array_unique($bulkCommit['minted'])) === 150);
+    check('150 distinct spots exist in the new dataset (no create overwrote another)',
+        (int)$neodb->get_var("MATCH (d:Dataset {id: $DSB, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) RETURN count(DISTINCT s.id)") === 150);
     check('originals in DS1 untouched (A keeps its notes, DS1 still 2 + line spots only)',
         spotProps($neodb, $A, $owner)['notes'] === $notesA0
         && (int)$neodb->get_var("MATCH (d:Dataset {id: $DS1, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) RETURN count(s)") === 2);
@@ -723,6 +743,91 @@ try {
     $optExport = $svc->exportLong($DS2, $optSpec['spec']);
     check('opt-in template keeps geometry_type on all-point export',
         !empty($optExport['ok']) && in_array('geometry_type', $optExport['headers']));
+
+    // ---- geometry_wkt (Jason 2026-09-23: a copied polygon came back as a point) ----
+    check('non-point export materializes geometry_wkt right after geometry_type',
+        in_array('geometry_wkt', $export2['headers'])
+        && array_search('geometry_wkt', $export2['headers']) === array_search('geometry_type', $export2['headers']) + 1);
+    check('line spot exports its full LINESTRING', $lineRow !== null && stripos((string)$lineRow['geometry_wkt'], 'LINESTRING') === 0
+        && strpos($lineRow['geometry_wkt'], '-118.4 34.3') !== false);
+    $aRows = array();
+    foreach ($export2['rows'] as $r0) { if ($r0['strabo_internal_id'] === (string)$A) { $aRows[] = $r0; } }
+    check('point spots export a POINT wkt on the first row only',
+        count($aRows) >= 2 && stripos((string)$aRows[0]['geometry_wkt'], 'POINT') === 0 && $aRows[1]['geometry_wkt'] === '');
+    $wkWb = $svc->buildWorkbook($export2, false, "smokewiz-wkt-$stamp");
+    $wkPath = tempnam(sys_get_temp_dir(), 'wizsmoke_') . '.xlsx';
+    $tmpFiles[] = $wkPath;
+    $wkWriter = new PHPExcel_Writer_Excel2007($wkWb);
+    $wkWriter->save($wkPath);
+    $wkParsed = $svc->parseUpload($wkPath, 'wkt_export.xlsx');
+    $wkPlan = $svc->plan($wkParsed, $rtTarget);
+    $wkWarnCodes = array();
+    foreach ($wkPlan['warnings'] as $w) { $wkWarnCodes[] = $w['code']; }
+    check('round trip of a wkt-bearing export = clean all-noop with no geometry warning',
+        !empty($wkPlan['clean']) && $wkPlan['counts']['noop'] === 3 && $wkPlan['counts']['update'] === 0
+        && !in_array('wkt_ignored_on_update', $wkWarnCodes));
+    $wkNew = $svc->plan($wkParsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS2, 'dataset_name' => '', 'as_new' => true));
+    check('as-new copy of a wkt-bearing export plans 3 creates', !empty($wkNew['clean']) && $wkNew['counts']['create'] === 3);
+    $wkLineRow = null;
+    foreach ($wkNew['rows'] as $pr) { if ($pr['name'] === 'SP-LINE') { $wkLineRow = $pr; } }
+    check('as-new line row carries the wkt + centroid-derived coords',
+        $wkLineRow !== null && stripos((string)$wkLineRow['wkt'], 'LINESTRING') === 0 && abs((float)$wkLineRow['lat'] - 34.25) < 0.001);
+    $wkCommit = $svc->commit($wkNew);
+    check('as-new copy commits', !empty($wkCommit['ok']) && $wkCommit['created'] === 3);
+    foreach ($wkCommit['minted'] as $mid) { $spotIds[] = (int)$mid; }
+    $copyLine = null;
+    foreach ($wkCommit['minted'] as $mid) {
+        $pp = spotProps($neodb, (int)$mid, $owner);
+        if ($pp !== null && $pp['name'] === 'SP-LINE') { $copyLine = $pp; }
+    }
+    check('copied line spot is a LineString in Neo4j (geometrytype + wkt + origwkt)',
+        $copyLine !== null && $copyLine['geometrytype'] === 'LineString'
+        && stripos((string)$copyLine['wkt'], 'LINESTRING') === 0 && (string)$copyLine['origwkt'] === (string)$copyLine['wkt']);
+    // edited wkt on an id row: reported + ignored, otherwise a noop
+    $edWkt = "strabo_internal_id,spot_name,geometry_wkt\n$LINE_ID,SP-LINE,\"LINESTRING (-118.5 34.2, -118.3 34.4)\"\n";
+    $edPlan = $svc->plan($svc->parseUpload(csvFile($edWkt), 'edwkt.csv'), $rtTarget);
+    $edCodes = array();
+    foreach ($edPlan['warnings'] as $w) { $edCodes[] = $w['code']; }
+    check('changed wkt on an existing spot = warning wkt_ignored_on_update + noop',
+        !empty($edPlan['clean']) && $edPlan['counts']['noop'] === 1 && in_array('wkt_ignored_on_update', $edCodes)
+        && (string)spotProps($neodb, $LINE_ID, $owner)['wkt'] === (string)$lineRow['geometry_wkt']);
+    // hand-typed polygon, no lat/lng: created as a Polygon, coords derived
+    $polyCsv = "strabo_internal_id,spot_name,geometry_wkt,notes\n,SP-POLY,\"POLYGON ((-118.6 34.1, -118.5 34.1, -118.5 34.2, -118.6 34.2, -118.6 34.1))\",hand-typed\n";
+    $polyPlan = $svc->plan($svc->parseUpload(csvFile($polyCsv), 'poly.csv'), $rtTarget);
+    check('hand-typed POLYGON without lat/lng plans a clean create with derived coords',
+        !empty($polyPlan['clean']) && $polyPlan['counts']['create'] === 1
+        && abs((float)$polyPlan['rows'][0]['lat'] - 34.15) < 0.001 && abs((float)$polyPlan['rows'][0]['lng'] + 118.55) < 0.001);
+    $polyCommit = $svc->commit($polyPlan);
+    foreach ($polyCommit['minted'] as $mid) { $spotIds[] = (int)$mid; }
+    $polyProps = spotProps($neodb, (int)$polyCommit['minted'][0], $owner);
+    check('hand-typed polygon lands as a Polygon in Neo4j', !empty($polyCommit['ok']) && $polyProps['geometrytype'] === 'Polygon'
+        && stripos((string)$polyProps['wkt'], 'POLYGON') === 0);
+    // geometry_type says Polygon but no wkt: Heads up, created as a Point
+    $cenCsv = "strabo_internal_id,geometry_type,spot_name,latitude,longitude\n,Polygon,SP-CEN,34.1,-118.1\n";
+    $cenPlan = $svc->plan($svc->parseUpload(csvFile($cenCsv), 'cen.csv'), $rtTarget);
+    $cenCodes = array();
+    foreach ($cenPlan['warnings'] as $w) { $cenCodes[] = $w['code']; }
+    check('non-Point geometry_type without wkt = centroid_only Heads up, still a clean create',
+        !empty($cenPlan['clean']) && $cenPlan['counts']['create'] === 1 && in_array('centroid_only', $cenCodes));
+    $wc = function ($csv) use ($svc, $rtTarget) {
+        $pl = $svc->plan($svc->parseUpload(csvFile($csv), 'w.csv'), $rtTarget);
+        $out = array();
+        foreach ($pl['hard_errors'] as $e) { $out[] = $e['code']; }
+        return $out;
+    };
+    check('garbage wkt = bad_wkt', in_array('bad_wkt', $wc("strabo_internal_id,spot_name,geometry_wkt\n,SP-W1,not a shape\n")));
+    check('wkt over the Excel cell ceiling = wkt_too_long',
+        in_array('wkt_too_long', $wc("strabo_internal_id,spot_name,geometry_wkt\n,SP-W2,\"LINESTRING (" . str_repeat('1 1, ', 8000) . "1 1)\"\n")));
+    check('two different wkt cells for one spot = contradiction',
+        in_array('contradiction', $wc("strabo_internal_id,spot_name,geometry_wkt\n,SP-W3,POINT (1 1)\n,SP-W3,POINT (2 2)\n")));
+    $wkSpec = $svc->validateSpec(array('spec_version' => 1, 'layout' => 'long', 'columns' => array(
+        array('kind' => 'system', 'key' => 'geometry_wkt'),
+        array('kind' => 'field', 'group' => 'spot', 'name' => 'name'),
+    )));
+    check('explicit geometry_wkt opt-in survives validateSpec', !empty($wkSpec['ok']));
+    $wkOptExport = $svc->exportLong($DS2, $wkSpec['spec']);
+    check('opt-in template keeps geometry_wkt on an all-point export',
+        !empty($wkOptExport['ok']) && in_array('geometry_wkt', $wkOptExport['headers']));
 
     $gCsv = "strabo_internal_id,spot_name,latitude,longitude\n$LINE_ID,SP-LINE,35.0,-118.45\n";
     check('lat/lng edit on line spot hard-errors',

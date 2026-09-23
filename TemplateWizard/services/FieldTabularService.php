@@ -48,6 +48,7 @@ class FieldTabularService
 {
     const MAX_ROWS          = 10000;
     const MAX_CELL_CHARS    = 10000;
+    const WKT_MAX_CHARS     = 32000;   // Excel's per-cell ceiling is 32,767
     const MAX_CUSTOM_KEYS   = 50;
     const STATE_TTL_SECONDS = 86400;
     const FLOAT_EPSILON     = 1e-7;
@@ -134,7 +135,7 @@ class FieldTabularService
     {
         $byHeader = array();
         foreach ($defs as $d) { $byHeader[$d['header']] = $d; }
-        $systemHeaders = array('strabo_internal_id' => true, 'geometry_type' => true,
+        $systemHeaders = array('strabo_internal_id' => true, 'geometry_type' => true, 'geometry_wkt' => true,
                                'orientation_type' => true, 'orientation_role' => true);
         $sections = array();
         foreach ($headers as $h) {
@@ -299,7 +300,7 @@ class FieldTabularService
                 return array('ok' => false, 'message' => 'Malformed column entry.');
             }
             if ($col['kind'] === 'system') {
-                if (!in_array($col['key'], array('strabo_internal_id', 'geometry_type', 'orientation_type', 'orientation_role'))) {
+                if (!in_array($col['key'], array('strabo_internal_id', 'geometry_type', 'geometry_wkt', 'orientation_type', 'orientation_role'))) {
                     return array('ok' => false, 'message' => "Unknown system column '{$col['key']}'.");
                 }
                 $sig = 'system:' . $col['key'];
@@ -544,6 +545,7 @@ class FieldTabularService
             'strabo_internal_id' => 'id',
             'internal_id'        => 'id',
             'geometry_type'      => 'geometry_type',
+            'geometry_wkt'       => 'wkt',
             'orientation_type'   => 'otype',
             'orientation_role'   => 'orole',
         );
@@ -575,7 +577,7 @@ class FieldTabularService
             return array('ok' => false, 'error' => 'empty_file', 'message' => 'The file contains no data.');
         }
 
-        $colMap = array();          // col idx => {type:'id'|'geom'|'otype'|'orole'|'field'|'custom', group?, name?, header}
+        $colMap = array();          // col idx => {type:'id'|'geom'|'wkt'|'otype'|'orole'|'field'|'custom', group?, name?, header}
         $customHeaders = array();
         $seen = array();
         foreach ($grid[$headerRowIdx] as $col => $rawHeader) {
@@ -583,7 +585,7 @@ class FieldTabularService
             if ($header === '') { continue; }
             $canon = $this->canonicalizeHeader($header);
             $desc = null;
-            $systemDescTypes = array('strabo_internal_id' => 'id', 'geometry_type' => 'geom',
+            $systemDescTypes = array('strabo_internal_id' => 'id', 'geometry_type' => 'geom', 'geometry_wkt' => 'wkt',
                                      'orientation_type' => 'otype', 'orientation_role' => 'orole');
             if (isset($specHeaderMap[$canon])) {
                 $cd = $specHeaderMap[$canon];
@@ -632,13 +634,14 @@ class FieldTabularService
         $n = count($grid);
         for ($i = $headerRowIdx + 1; $i < $n; $i++) {
             if ($this->rowIsEmpty($grid[$i])) { continue; }
-            $rec = array('n' => $i + 1, 'id' => null, 'otype' => null, 'orole' => null,
+            $rec = array('n' => $i + 1, 'id' => null, 'geom' => null, 'wkt' => null, 'otype' => null, 'orole' => null,
                          'values' => array(), 'custom' => array());
             foreach ($colMap as $col => $d) {
                 $val = $this->cellToString(isset($grid[$i][$col]) ? $grid[$i][$col] : null);
                 switch ($d['type']) {
                     case 'id':     $rec['id'] = $val; break;
-                    case 'geom':   break;   // export context, ignored on upload
+                    case 'geom':   $rec['geom'] = $val; break;   // export context: only read for the centroid Heads up
+                    case 'wkt':    $rec['wkt'] = $val; break;    // full geometry; used when CREATING a spot
                     case 'otype':  $rec['otype'] = $val; break;
                     case 'orole':  $rec['orole'] = $val; break;
                     case 'field':  $rec['values'][$d['group'] . '.' . $d['name']] = $val; break;
@@ -1090,6 +1093,20 @@ class FieldTabularService
                                         $vocabRes, $softVocab, $hardErrors, $warnings);
             if ($res === null) { continue; }   // hard errors already recorded
 
+            // ---- geometry_wkt (Jason 2026-09-23: a copied polygon came back
+            // as a point). Creates take the WKT as the spot's geometry and
+            // derive lat/lng from its centroid; updates never edit geometry
+            // from a sheet (a changed cell is reported, then ignored).
+            $geo = $this->resolveGroupGeometry($g, $isUpdate, $cur, $hardErrors, $warnings);
+            if ($geo === null) { continue; }
+            if (!$isUpdate && $geo['wkt'] !== null) {
+                $res['wkt'] = $geo['wkt'];
+                $res['lat'] = $geo['lat'];
+                $res['lng'] = $geo['lng'];
+            } else {
+                $res['wkt'] = null;
+            }
+
             $counts['orientations']   += count($res['orientations']);
             $counts['samples']        += count($res['samples']);
             $counts['other_features'] += count($res['other_features']);
@@ -1111,7 +1128,7 @@ class FieldTabularService
                     'set' => $res['spot_set'], 'geo_unit' => $res['geo_unit'], 'trace' => $res['trace'],
                     'orientations' => $res['orientations'], 'samples' => $res['samples'],
                     'other_features' => $res['other_features'], 'custom' => $res['custom'],
-                    'lat' => $res['lat'], 'lng' => $res['lng'],
+                    'lat' => $res['lat'], 'lng' => $res['lng'], 'wkt' => $res['wkt'],
                 );
                 $counts['create']++;
                 continue;
@@ -1959,6 +1976,75 @@ class FieldTabularService
     }
 
     /** Centroid coords of any WKT geometry (a Point is its own centroid). */
+    /**
+     * The group's geometry_wkt cell (first-row rule + agreement check, like
+     * every spot-level value). Returns {wkt|null, lat, lng}; null after a
+     * hard error. Creates: the WKT (normalized through geoPHP) becomes the
+     * spot's geometry, lat/lng its centroid; a create whose geometry_type
+     * says non-Point but has no WKT gets a Heads up (it lands as a Point at
+     * the centroid). Updates: a WKT that differs from the stored geometry is
+     * reported as ignored (geometry is not editable from a sheet).
+     */
+    protected function resolveGroupGeometry($g, $isUpdate, $cur, &$hardErrors, &$warnings)
+    {
+        $label = ($g['name'] !== null) ? $g['name'] : $g['id'];
+        $n0 = $g['rows'][0]['n'];
+        $distinct = array(); $firstRow = null; $geomType = null;
+        foreach ($g['rows'] as $rec) {
+            if ($rec['wkt'] !== null) {
+                if ($firstRow === null) { $firstRow = $rec['n']; }
+                $distinct[$rec['wkt']] = true;
+            }
+            if ($geomType === null && $rec['geom'] !== null) { $geomType = $rec['geom']; }
+        }
+        if (count($distinct) > 1) {
+            $hardErrors[] = array('row' => $firstRow, 'column' => 'geometry_wkt', 'code' => 'contradiction',
+                                  'message' => "Rows of spot '$label' give different values for geometry_wkt.");
+            return null;
+        }
+        $raw = count($distinct) ? key($distinct) : null;
+        if ($raw === null) {
+            if (!$isUpdate && $geomType !== null && strcasecmp($geomType, 'Point') !== 0) {
+                $warnings[] = array('row' => $n0, 'column' => 'geometry_wkt', 'code' => 'centroid_only',
+                                    'message' => "Spot '$label' was a $geomType but this row has no geometry_wkt cell, so it will be created as a Point at the centroid. Export with a geometry_wkt column to carry the full shape.");
+            }
+            return array('wkt' => null, 'lat' => null, 'lng' => null);
+        }
+        if (mb_strlen($raw) > self::WKT_MAX_CHARS) {
+            $hardErrors[] = array('row' => $firstRow, 'column' => 'geometry_wkt', 'code' => 'wkt_too_long',
+                                  'message' => "geometry_wkt for spot '$label' exceeds " . self::WKT_MAX_CHARS . ' characters. Blank the cell to create the spot as a Point at its latitude/longitude.');
+            return null;
+        }
+        $norm = null; $lat = null; $lng = null;
+        try {
+            $geom = geoPHP::load($raw, 'wkt');
+            if ($geom && !$geom->isEmpty()) {
+                $c = $geom->centroid();
+                if ($c) { $lng = (float)$c->x(); $lat = (float)$c->y(); $norm = $geom->out('wkt'); }
+            }
+        } catch (Exception $e) { $norm = null; }
+        if ($norm === null || $lat === null) {
+            $hardErrors[] = array('row' => $firstRow, 'column' => 'geometry_wkt', 'code' => 'bad_wkt',
+                                  'message' => "geometry_wkt for spot '$label' is not valid WKT (expected e.g. POLYGON ((lng lat, lng lat, ...))). Fix the cell or blank it to create the spot as a Point.");
+            return null;
+        }
+        if ($isUpdate) {
+            $curNorm = null;
+            try {
+                if ($cur !== null && $cur['wkt'] !== null && $cur['wkt'] !== '') {
+                    $cg = geoPHP::load((string)$cur['wkt'], 'wkt');
+                    if ($cg) { $curNorm = $cg->out('wkt'); }
+                }
+            } catch (Exception $e) { $curNorm = null; }
+            if ($curNorm !== $norm) {
+                $warnings[] = array('row' => $firstRow, 'column' => 'geometry_wkt', 'code' => 'wkt_ignored_on_update',
+                                    'message' => "Spot '$label' already exists: its geometry cannot be edited from a spreadsheet, so the changed geometry_wkt cell is ignored (attributes still update).");
+            }
+            return array('wkt' => null, 'lat' => null, 'lng' => null);
+        }
+        return array('wkt' => $norm, 'lat' => $lat, 'lng' => $lng);
+    }
+
     protected function centroidOfWkt($wkt)
     {
         if ($wkt === null || $wkt === '') { return null; }
@@ -1981,11 +2067,31 @@ class FieldTabularService
         return (int)(round(microtime(true) * 1000) + (++$this->elementIdCounter));
     }
 
+    protected $mintedSpotIds = array();   // ids handed out this run
     protected function mintSpotId()
     {
-        // time().rand convention shared with load_shapefile.php getid()
-        usleep(1000);
-        return (int)(time() . rand(1111, 9999));
+        // time().rand convention shared with load_shapefile.php getid():
+        // only 8,889 values per second, so a class-sized import collided
+        // about 40% of the time (2026-09-23 smoke flake) and the later
+        // create silently OVERWROTE the earlier one through insertSpot's
+        // upsert. Unique within the run here; commit() also re-mints any id
+        // the user's graph already holds (existingSpotIds).
+        do { $id = (int)(time() . rand(1111, 9999)); } while (isset($this->mintedSpotIds[$id]));
+        $this->mintedSpotIds[$id] = true;
+        return $id;
+    }
+
+    /** Which of $ids already exist as this user's spots (anchored walk). */
+    protected function existingSpotIds(array $ids)
+    {
+        $out = array();
+        if (empty($ids)) { return $out; }
+        $list = implode(',', array_map('intval', $ids));
+        $recs = $this->neodb->get_results(
+            "MATCH (u:User {userpkey: {$this->userpkey}})-[:HAS_PROJECT]->(:Project)-[:HAS_DATASET]->(:Dataset)-[:HAS_SPOT]->(s:Spot)
+             WHERE s.id IN [$list] RETURN DISTINCT s.id AS id");
+        foreach ((array)$recs as $r) { $out[(int)$r->value('id')] = true; }
+        return $out;
     }
 
     // ========================================================================
@@ -2027,6 +2133,7 @@ class FieldTabularService
                     'action'  => 'create',
                     'spot_id' => $spotId,
                     'feature' => $this->buildCreateFeature($row, $spotId, $nowMs),
+                    'row'     => $row,   // kept for a re-mint in Phase A2
                 );
             } else {
                 $spotId = (int)$row['id'];
@@ -2043,6 +2150,22 @@ class FieldTabularService
                     'feature' => $new,
                     'prior'   => $prior,
                 );
+            }
+        }
+
+        // ---- Phase A2: no minted id may already be one of the user's spots ----
+        // (insertSpot upserts by id: a collision would overwrite that spot)
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $fresh = array();
+            foreach ($writes as $w) { if ($w['action'] === 'create') { $fresh[] = $w['spot_id']; } }
+            $taken = $this->existingSpotIds($fresh);
+            if (empty($taken)) { break; }
+            foreach ($writes as $i => $w) {
+                if ($w['action'] === 'create' && isset($taken[$w['spot_id']])) {
+                    $spotId = $this->mintSpotId();
+                    $writes[$i]['spot_id'] = $spotId;
+                    $writes[$i]['feature'] = $this->buildCreateFeature($w['row'], $spotId, $nowMs);
+                }
             }
         }
 
@@ -2418,13 +2541,26 @@ class FieldTabularService
         }
         if (!empty($custom)) { $p['custom_fields'] = $custom; }
 
-        $wkt = 'POINT(' . $row['lng'] . ' ' . $row['lat'] . ')';
+        $geometry = null;
+        if (!empty($row['wkt'])) {
+            // geometry_wkt cell (validated at plan time): the full shape.
+            // insertSpot derives geometrytype from the Feature geometry.
+            try {
+                $g = geoPHP::load($row['wkt'], 'wkt');
+                $geometry = json_decode($g->out('json'), true);
+                $wkt = $row['wkt'];
+            } catch (Exception $e) { $geometry = null; }
+        }
+        if ($geometry === null) {
+            $wkt = 'POINT(' . $row['lng'] . ' ' . $row['lat'] . ')';
+            $geometry = array('type' => 'Point', 'coordinates' => array($row['lng'], $row['lat']));
+        }
         $p['wkt'] = $wkt;
         $p['origwkt'] = $wkt;
 
         return array(
             'type' => 'Feature',
-            'geometry' => array('type' => 'Point', 'coordinates' => array($row['lng'], $row['lat'])),
+            'geometry' => $geometry,
             'properties' => $p,
         );
     }
@@ -2499,6 +2635,30 @@ class FieldTabularService
             }
         }
 
+        // geometry_wkt materializes with geometry_type (same trigger: any
+        // non-point spot), right after it: the full shape, so a copy of the
+        // dataset ("Import as new spots") keeps its lines and polygons
+        // (Jason 2026-09-23). Exported for every spot once present; the
+        // server only reads it when CREATING a spot.
+        $hasWktCol = false; $geomIdx = null; $idIdx2 = null;
+        foreach ($defs as $i => $d) {
+            if ($d['kind'] === 'system' && $d['key'] === 'geometry_wkt') { $hasWktCol = true; }
+            if ($d['kind'] === 'system' && $d['key'] === 'geometry_type') { $geomIdx = $i; }
+            if ($d['kind'] === 'system' && $d['key'] === 'strabo_internal_id') { $idIdx2 = $i; }
+        }
+        if (!$hasWktCol) {
+            $hasNonPoint2 = false;
+            foreach ($features as $f) {
+                if (isset($f['geometry']['type']) && $f['geometry']['type'] !== 'Point') { $hasNonPoint2 = true; break; }
+            }
+            if ($hasNonPoint2) {
+                $at = ($geomIdx !== null) ? $geomIdx + 1 : (($idIdx2 !== null) ? $idIdx2 + 1 : 0);
+                array_splice($defs, $at, 0, array(
+                    array('kind' => 'system', 'key' => 'geometry_wkt', 'header' => 'geometry_wkt'),
+                ));
+            }
+        }
+
         // orientation_role only materializes when the data needs it: inject
         // the column (after orientation_type) when the dataset carries any
         // associated orientations and the template didn't opt in explicitly.
@@ -2555,6 +2715,17 @@ class FieldTabularService
                     if ($d['key'] === 'strabo_internal_id') { $spotCells[$d['header']] = $spotId; }
                     elseif ($d['key'] === 'geometry_type') {
                         $spotCells[$d['header']] = is_array($geom) && isset($geom['type']) ? $geom['type'] : '';
+                    } elseif ($d['key'] === 'geometry_wkt') {
+                        $w = '';
+                        if (is_array($geom) && isset($geom['type'])) {
+                            try {
+                                $gg = geoPHP::load(json_encode($geom), 'json');
+                                if ($gg) { $w = $gg->out('wkt'); }
+                            } catch (Exception $e) { $w = ''; }
+                        }
+                        // over the Excel cell ceiling: blank, the row then
+                        // imports as a Point with the centroid Heads up
+                        $spotCells[$d['header']] = (mb_strlen($w) > self::WKT_MAX_CHARS) ? '' : $w;
                     }
                     continue;
                 }
@@ -2601,7 +2772,7 @@ class FieldTabularService
                     $h = $d['header'];
                     if ($d['kind'] === 'system') {
                         if ($d['key'] === 'strabo_internal_id') { $row[$h] = $spotId; continue; }
-                        if ($d['key'] === 'geometry_type') { $row[$h] = ($i === 0) ? $spotCells[$h] : ''; continue; }
+                        if ($d['key'] === 'geometry_type' || $d['key'] === 'geometry_wkt') { $row[$h] = ($i === 0) ? $spotCells[$h] : ''; continue; }
                         // orientation_type / orientation_role below
                         $row[$h] = '';
                         continue;
