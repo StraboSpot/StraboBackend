@@ -16,8 +16,9 @@
  *                    a Field sample can link to. Unknown value = 400.
  *                include_subsystem_flags=1
  *                    Add has_field_data / has_micro_data /
- *                    experimental_link_count per row so a picker can
- *                    warn "already linked to a Field spot".
+ *                    has_experimental_data (+ experimental_link_count
+ *                    for the Exp dialog) per row so a picker can warn
+ *                    "already linked to a Field spot".
  *
  *              Pagination and the type/purpose/search/sort filters are
  *              still deferred per design §16 item 3. The shape is

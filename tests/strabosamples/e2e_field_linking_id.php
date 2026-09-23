@@ -156,6 +156,10 @@ $by = pickerById($r);
 check("200 with the omit echo", $r['status'] === 200 && isset($r['json']['omit']) && $r['json']['omit'] === array('field'));
 check("field-only row hidden", !isset($by[(string)$spotRich]));
 check("lab sample listed, has_field_data false", isset($by[$linkId]) && $by[$linkId]['has_field_data'] === false);
+check("row carries has_field_data / has_micro_data / has_experimental_data / experimental_link_count",
+    isset($by[$linkId]) && array_key_exists('has_micro_data', $by[$linkId])
+    && array_key_exists('has_experimental_data', $by[$linkId]) && $by[$linkId]['has_experimental_data'] === false
+    && array_key_exists('experimental_link_count', $by[$linkId]));
 check("count matches the rows", (int)$r['json']['count'] === count($by));
 $r = http('GET', '/samplesdb/mysamples', null);
 check("plain list still shows the field-only row", isset(pickerById($r)[(string)$spotRich]));

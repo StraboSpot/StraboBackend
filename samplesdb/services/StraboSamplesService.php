@@ -91,7 +91,8 @@ class StraboSamplesService
      *
      * @param array $filters Supported keys:
      *   - include_subsystem_flags (bool): add has_field_data / has_micro_data
-     *     / experimental_link_count to every row (Exp + Field pickers).
+     *     / has_experimental_data (slice present) + experimental_link_count
+     *     (a sample can link to many experiments) to every row.
      *   - omit (array of 'field'|'micro'|'experimental'): drop samples whose
      *     EVERY origin is in the list. Origin = the subsystems holding a
      *     data slice on the row. A sample made on the website (no slice)
@@ -113,6 +114,7 @@ class StraboSamplesService
             ? ",
                     (s.field_data IS NOT NULL) AS has_field_data,
                     (s.micro_data IS NOT NULL) AS has_micro_data,
+                    (s.experimental_data IS NOT NULL) AS has_experimental_data,
                     (SELECT count(*)
                        FROM strabosamples.sample_subsystem_links l
                       WHERE l.sample_id = s.id
@@ -149,6 +151,7 @@ class StraboSamplesService
                 if ($withFlags) {
                     $item['has_field_data'] = ($r->has_field_data === true || $r->has_field_data === 't');
                     $item['has_micro_data'] = ($r->has_micro_data === true || $r->has_micro_data === 't');
+                    $item['has_experimental_data'] = ($r->has_experimental_data === true || $r->has_experimental_data === 't');
                     $item['experimental_link_count'] = (int)$r->experimental_link_count;
                 }
                 $out[] = $item;

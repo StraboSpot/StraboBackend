@@ -259,6 +259,11 @@ try {
         isset($byId[$B_mic]) && $byId[$B_mic]['has_field_data'] === true && $byId[$B_mic]['has_micro_data'] === true);
     check("omit=field keeps the Micro-only leftover row, unflagged",
         isset($byId[(string)$spotEstMic]) && $byId[(string)$spotEstMic]['has_field_data'] === false);
+    $flagKeys = array('has_field_data', 'has_micro_data', 'has_experimental_data', 'experimental_link_count');
+    $flagsOk = isset($byId[$B_mic]);
+    foreach ($flagKeys as $k) $flagsOk = $flagsOk && array_key_exists($k, $byId[$B_mic]);
+    check("all four subsystem flags present; Micro sample has no experimental slice or links",
+        $flagsOk && $byId[$B_mic]['has_experimental_data'] === false && $byId[$B_mic]['experimental_link_count'] === 0);
     $leak = 0;
     foreach ($pick as $r) {
         $fo = $db->get_var_prepared(
