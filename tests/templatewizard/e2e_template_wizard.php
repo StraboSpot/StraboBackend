@@ -20,6 +20,9 @@
  *               8b. Exported workbook carries lat/lng on every row; "Import
  *                   as new spots" checkbox copies an export into a new
  *                   dataset (3 creates, originals untouched); off = refused
+ *               8c. Polygon spot: export materializes geometry_type +
+ *                   geometry_wkt, round trip all-unchanged, as-new copy
+ *                   lands as a Polygon under a new id
  *                9. Stranger isolation: foreign spot id, foreign dataset
  *                   export, foreign ajax datasets
  *               10. Cancel kills the review token
@@ -447,6 +450,84 @@ try {
     httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $offToken));
 
     // ------------------------------------------------------------------
+    echo "\n=== 8c. polygon spot survives export -> Import as new spots over HTTP (geometry_wkt) ===\n";
+    // ------------------------------------------------------------------
+    // Jason 2026-09-23: a polygon exported by the wizard and re-imported as
+    // new spots came back as a Point. The export now carries geometry_wkt.
+    $POLY_ID = 96669778;
+    $spotIds[] = $POLY_ID;
+    $polyFeature = json_encode(array(
+        'type' => 'Feature',
+        'geometry' => array('type' => 'Polygon', 'coordinates' => array(array(
+            array(-118.6, 34.1), array(-118.5, 34.1), array(-118.5, 34.2), array(-118.6, 34.2), array(-118.6, 34.1)))),
+        'properties' => array('id' => $POLY_ID, 'name' => 'WZ-POLY', 'modified_timestamp' => (int)round(microtime(true) * 1000)),
+    ));
+    $strabo->insertSpot($polyFeature);
+    $strabo->addSpotToDataset($DS, $POLY_ID);
+    check('polygon fixture spot stored as Polygon', spotProps($neodb, $POLY_ID, $ownerPkey)['geometrytype'] === 'Polygon');
+
+    $r = httpGet("/TemplateWizard/export.php?what=export&dataset_id=$DS&template_id=basic&format=xlsx", $sidOwner);
+    $pxPath = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
+    $tmpFiles[] = $pxPath;
+    file_put_contents($pxPath, $r['body']);
+    $wbP = PHPExcel_IOFactory::load($pxPath);
+    $shP = $wbP->getSheetByName('Data');
+    $hdrP = array();
+    for ($c = 0; $c < 60; $c++) {
+        $h = (string)$shP->getCellByColumnAndRow($c, 2)->getValue();
+        if ($h === '') { break; }
+        $hdrP[$h] = $c;
+    }
+    $polyCell = null; $pointCell = null;
+    for ($rw = 3; $rw < 60; $rw++) {
+        $nm = (string)$shP->getCellByColumnAndRow($hdrP['name'], $rw)->getValue();
+        if ($nm === '') { break; }
+        if ($nm === 'WZ-POLY') { $polyCell = (string)$shP->getCellByColumnAndRow($hdrP['geometry_wkt'], $rw)->getValue(); }
+        if ($nm === 'WZ-B')    { $pointCell = (string)$shP->getCellByColumnAndRow($hdrP['geometry_wkt'], $rw)->getValue(); }
+    }
+    check('export workbook materializes geometry_type + geometry_wkt after the id',
+        isset($hdrP['geometry_type'], $hdrP['geometry_wkt'])
+        && $hdrP['geometry_type'] === $hdrP['strabo_internal_id'] + 1 && $hdrP['geometry_wkt'] === $hdrP['geometry_type'] + 1);
+    check('polygon row carries its POLYGON wkt, point row a POINT wkt',
+        $polyCell !== null && stripos($polyCell, 'POLYGON') === 0 && strpos($polyCell, '-118.6 34.1') !== false
+        && $pointCell !== null && stripos($pointCell, 'POINT') === 0);
+
+    // round trip into the source dataset: all unchanged, no geometry warning
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'),
+                      'tabfile', $pxPath, 'poly_roundtrip.xlsx');
+    $prtToken = extractToken($r['body']);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $prtToken), $target));
+    check('wkt-bearing export round-trips as all unchanged with no geometry warning',
+        strpos($r['body'], '0 new spots') !== false && strpos($r['body'], '4 unchanged') !== false
+        && strpos($r['body'], 'geometry cannot be edited') === false);
+    httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $prtToken));
+
+    // Import as new spots into a fresh dataset: the polygon stays a polygon
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'),
+                      'tabfile', $pxPath, 'poly_copy.xlsx');
+    $pcToken = extractToken($r['body']);
+    $pcTarget = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'new', 'dataset_name' => "e2ewiz POLYCOPY $stamp", 'as_new' => '1');
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $pcToken), $pcTarget));
+    check('as-new plan of the wkt-bearing export: 4 new spots, no centroid Heads up',
+        strpos($r['body'], '4 new spots') !== false && strpos($r['body'], 'created as a Point at the centroid') === false);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'confirm', 'token' => $pcToken), $pcTarget));
+    check('as-new confirm of the wkt-bearing export: Import complete', strpos($r['body'], 'Import complete') !== false);
+    preg_match('/New dataset created \(id (\d+)\)/', $r['body'], $m);
+    $DSP = isset($m[1]) ? (int)$m[1] : 0;
+    $datasetIds[] = $DSP;
+    $recsP = $neodb->get_results("MATCH (d:Dataset {id: $DSP, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN s.id AS id, s.name AS name, s.geometrytype AS gt, s.wkt AS wkt");
+    $copyPoly = null; $copyPointGt = null;
+    foreach ((array)$recsP as $rec) {
+        $spotIds[] = (int)$rec->value('id');
+        if ($rec->value('name') === 'WZ-POLY') { $copyPoly = array('gt' => $rec->value('gt'), 'wkt' => (string)$rec->value('wkt'), 'id' => (int)$rec->value('id')); }
+        if ($rec->value('name') === 'WZ-B')    { $copyPointGt = $rec->value('gt'); }
+    }
+    check('copied polygon is a Polygon with the same ring, under a new id',
+        $copyPoly !== null && $copyPoly['gt'] === 'Polygon' && stripos($copyPoly['wkt'], 'POLYGON') === 0
+        && strpos($copyPoly['wkt'], '-118.5 34.2') !== false && $copyPoly['id'] !== $POLY_ID);
+    check('copied point spot is still a Point', $copyPointGt === 'Point');
+
+    // ------------------------------------------------------------------
     echo "\n=== 9. stranger isolation ===\n";
     // ------------------------------------------------------------------
     $csv = "strabo_internal_id,spot_name\n$A,WZ-A\n";
@@ -781,7 +862,7 @@ try {
         try { $strabo->deleteSingleSpot((int)$sid2); } catch (Exception $e) {}
     }
     // catch strays by name
-    $recs = $neodb->get_results("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3'] RETURN s.id AS id");
+    $recs = $neodb->get_results("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3','WZ-POLY'] RETURN s.id AS id");
     foreach ((array)$recs as $rec) {
         try { $strabo->deleteSingleSpot((int)$rec->value('id')); } catch (Exception $e) {}
     }
@@ -800,7 +881,7 @@ try {
     foreach ($sessionFiles as $f) { @unlink($f); }
     foreach ($tmpFiles as $f) { @unlink($f); }
 
-    $r1 = (int)$neodb->get_var("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3'] RETURN count(s)");
+    $r1 = (int)$neodb->get_var("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3','WZ-POLY'] RETURN count(s)");
     $r2 = (int)$neodb->get_var("MATCH (d:Dataset {userpkey: $ownerPkey}) WHERE d.name =~ 'e2ewiz.*' RETURN count(d)");
     $r3 = (int)$db->get_var_prepared("SELECT count(*) FROM field_templates WHERE userpkey = $1 AND name ILIKE 'e2ewiz%'", array($ownerPkey));
     $r4 = (int)$db->get_var_prepared("SELECT count(*) FROM strabosamples.samples WHERE userpkey = $1 AND name IN ($2, 'KU-26-001', 'KU-26-002')", array($ownerPkey, "FS-FILL-$stamp"));
