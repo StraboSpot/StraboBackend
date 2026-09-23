@@ -17,6 +17,9 @@
  *                   stranger isolation, stage door removed
  *                8. Export -> re-upload -> "embedded template recognized"
  *                   -> all-unchanged plan (round trip over HTTP)
+ *               8b. Exported workbook carries lat/lng on every row; "Import
+ *                   as new spots" checkbox copies an export into a new
+ *                   dataset (3 creates, originals untouched); off = refused
  *                9. Stranger isolation: foreign spot id, foreign dataset
  *                   export, foreign ajax datasets
  *               10. Cancel kills the review token
@@ -369,6 +372,79 @@ try {
     $bcToken = extractToken($r['body']);
     check('upload with template_pkey=basic reaches the target step', $bcToken !== null);
     httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $bcToken));
+
+    // ------------------------------------------------------------------
+    echo "\n=== 8b. coordinates on every export row + Import as new spots over HTTP ===\n";
+    // ------------------------------------------------------------------
+    // The Basic export of DS (4 rows: WZ-A x2, WZ-B, WZ-DIRTY from section 6): latitude/longitude
+    // filled on every data row, not just a spot's first (Joe, JCU 2026-09-23).
+    if (!class_exists('PHPExcel')) { require_once '/srv/app/www/PHPExcel.php'; }
+    $wbX = PHPExcel_IOFactory::load($bxPath);
+    $shX = $wbX->getSheetByName('Data');
+    $hdrX = array();
+    for ($c = 0; $c < 60; $c++) {
+        $h = (string)$shX->getCellByColumnAndRow($c, 2)->getValue();
+        if ($h === '') { break; }
+        $hdrX[$h] = $c;
+    }
+    $xRows = 0; $xCoordRows = 0;
+    for ($rw = 3; $rw < 60; $rw++) {
+        $nm = (string)$shX->getCellByColumnAndRow($hdrX['name'], $rw)->getValue();
+        if ($nm === '') { break; }
+        $xRows++;
+        $la = (string)$shX->getCellByColumnAndRow($hdrX['latitude'], $rw)->getValue();
+        $lo = (string)$shX->getCellByColumnAndRow($hdrX['longitude'], $rw)->getValue();
+        $expAll = array('WZ-A' => array(34.11, -118.11), 'WZ-B' => array(34.12, -118.12), 'WZ-DIRTY' => array(34.5, -118.5));
+        $exp = isset($expAll[$nm]) ? $expAll[$nm] : array(0, 0);
+        if ($la !== '' && $lo !== '' && abs((float)$la - $exp[0]) < 0.0001 && abs((float)$lo - $exp[1]) < 0.0001) { $xCoordRows++; }
+    }
+    check('exported workbook carries the coordinates on every data row (4/4)', $xRows === 4 && $xCoordRows === 4);
+
+    // Same export, ids and all, pointed at a NEW dataset with the checkbox:
+    // 3 fresh spots there, the originals untouched.
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'),
+                      'tabfile', $bxPath, 'student_export.xlsx');
+    $anToken = extractToken($r['body']);
+    check('target screen offers the Import as new spots checkbox',
+        $anToken !== null && strpos($r['body'], 'name="as_new"') !== false && strpos($r['body'], 'Import as new spots') !== false);
+    $anTarget = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'new', 'dataset_name' => "e2ewiz MASTER $stamp", 'as_new' => '1');
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $anToken), $anTarget));
+    check('as-new plan: 3 new spots, 0 updated, note shown, checkbox stays ticked',
+        strpos($r['body'], '3 new spots') !== false && strpos($r['body'], '0 updated') !== false
+        && strpos($r['body'], 'is on: every spot in this file will be created') !== false
+        && preg_match('/name="as_new"[^>]*checked/', $r['body']) === 1
+        && strpos($r['body'], 'Confirm &amp; Import') !== false);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'confirm', 'token' => $anToken), $anTarget));
+    check('as-new confirm: Import complete, 3 created', strpos($r['body'], 'Import complete') !== false
+        && preg_match('/<strong>3<\/strong> spots created/', $r['body']) === 1);
+    preg_match('/New dataset created \(id (\d+)\)/', $r['body'], $m);
+    $DSM = isset($m[1]) ? (int)$m[1] : 0;
+    check('as-new: master dataset created', $DSM > 0);
+    $datasetIds[] = $DSM;
+    $recsM = $neodb->get_results("MATCH (d:Dataset {id: $DSM, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN s.id AS id, s.name AS name, s.json_orientation_data AS od");
+    $mNames = array(); $mIds = array(); $mOrient = 0;
+    foreach ((array)$recsM as $rec) {
+        $mNames[] = $rec->value('name'); $mIds[] = (int)$rec->value('id'); $spotIds[] = (int)$rec->value('id');
+        $od = json_decode((string)$rec->value('od'), true);
+        if (is_array($od)) { $mOrient += count($od); }
+    }
+    sort($mNames);
+    check('as-new: copies WZ-A + WZ-B + WZ-DIRTY live in the master dataset with new ids and their 3 orientations',
+        $mNames === array('WZ-A', 'WZ-B', 'WZ-DIRTY') && !in_array($A, $mIds) && $mOrient === 3);
+    check('as-new: source dataset still holds exactly its own spots',
+        (int)$neodb->get_var("MATCH (d:Dataset {id: $DS, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN count(s)") === 3);
+    // Checkbox off: the same file into the master dataset is refused per spot,
+    // and the error points at the checkbox.
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'),
+                      'tabfile', $bxPath, 'student_export.xlsx');
+    $offToken = extractToken($r['body']);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'plan', 'token' => $offToken,
+        'project_id' => $PROJECT_ID, 'dataset_choice' => 'existing', 'dataset_id' => $DSM));
+    check('checkbox off: ids from another dataset are refused and the error names the option',
+        strpos($r['body'], 'is not in the target dataset') !== false
+        && strpos($r['body'], 'Import as new spots') !== false
+        && strpos($r['body'], 'Confirm &amp; Import') === false);
+    httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $offToken));
 
     // ------------------------------------------------------------------
     echo "\n=== 9. stranger isolation ===\n";

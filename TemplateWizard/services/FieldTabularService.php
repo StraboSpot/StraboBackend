@@ -952,6 +952,10 @@ class FieldTabularService
         $projectId = isset($target['project_id']) ? (int)$target['project_id'] : 0;
         $datasetId = !empty($target['dataset_id']) ? (int)$target['dataset_id'] : null;
         $newDatasetName = isset($target['dataset_name']) ? trim((string)$target['dataset_name']) : '';
+        // "Import as new spots" (Joe, JCU, 2026-09-23): a file exported from
+        // another dataset, or another account (a student's), lands as fresh
+        // spots. The ids then only group a spot's rows; nothing is matched.
+        $asNew = !empty($target['as_new']);
         if ($projectId <= 0 || !$this->ownsProject($projectId)) {
             $hardErrors[] = array('row' => 0, 'column' => '', 'code' => 'bad_project',
                                   'message' => 'Target project not found (projects you own only).');
@@ -1046,8 +1050,8 @@ class FieldTabularService
         foreach ($groups as $g) {
             if ($g['id'] !== null) { $ids[] = (int)$g['id']; }
         }
-        $current = $this->fetchSpotNodes($ids);
-        $inDataset = ($datasetId !== null) ? $this->spotIdsInDataset($datasetId, $ids) : array();
+        $current = (!$asNew && !empty($ids)) ? $this->fetchSpotNodes($ids) : array();
+        $inDataset = (!$asNew && $datasetId !== null) ? $this->spotIdsInDataset($datasetId, $ids) : array();
 
         $fieldsPresent = array();
         foreach ($parsed['fields_present'] as $f) { $fieldsPresent[$f] = true; }
@@ -1059,19 +1063,19 @@ class FieldTabularService
         foreach ($order as $key) {
             $g = $groups[$key];
             $n0 = $g['rows'][0]['n'];
-            $isUpdate = ($g['id'] !== null);
+            $isUpdate = ($g['id'] !== null) && !$asNew;
             $cur = null;
 
             if ($isUpdate) {
                 if (!isset($current[(int)$g['id']])) {
                     $hardErrors[] = array('row' => $n0, 'column' => 'strabo_internal_id', 'code' => 'unknown_id',
-                                          'message' => "Internal id '{$g['id']}' does not match any of your spots. Leave the id blank to create a new spot.");
+                                          'message' => "Internal id '{$g['id']}' does not match any of your spots. To add this file's spots as new spots (a file from another account, say), tick \"Import as new spots\" above; or leave the id blank on the rows to create.");
                     continue;
                 }
                 $cur = $current[(int)$g['id']];
                 if ($datasetId !== null && !isset($inDataset[(int)$g['id']])) {
                     $hardErrors[] = array('row' => $n0, 'column' => 'strabo_internal_id', 'code' => 'wrong_dataset',
-                                          'message' => "Spot '{$g['id']}' is not in the target dataset. Pick the dataset the export came from.");
+                                          'message' => "Spot '{$g['id']}' is not in the target dataset. Pick the dataset the export came from, or tick \"Import as new spots\" above to copy this file's spots into the target as new spots.");
                     continue;
                 }
                 if ($datasetId === null) {
@@ -1198,7 +1202,7 @@ class FieldTabularService
             'custom_headers' => $parsed['custom_headers'],
             'spec'           => isset($parsed['spec']) ? $parsed['spec'] : null,
             'target'         => array('project_id' => $projectId, 'dataset_id' => $datasetId,
-                                      'dataset_name' => $newDatasetName),
+                                      'dataset_name' => $newDatasetName, 'as_new' => $asNew),
         );
     }
 
@@ -2544,7 +2548,7 @@ class FieldTabularService
                 }
             }
 
-            // spot-level cells (first row only, except id + name)
+            // spot-level cells (first row only, except id + name + lat/lng)
             $spotCells = array();
             foreach ($defs as $d) {
                 if ($d['kind'] === 'system') {
@@ -2604,6 +2608,14 @@ class FieldTabularService
                     }
                     if ($d['kind'] === 'field' && $d['group'] === 'spot' && $d['name'] === 'name') {
                         $row[$h] = $name;   // repeated every row: the fallback grouping key
+                        continue;
+                    }
+                    if ($d['kind'] === 'field' && $d['group'] === 'spot'
+                        && ($d['name'] === 'latitude' || $d['name'] === 'longitude')) {
+                        // Repeated every row (Joe, JCU, 2026-09-23): each measurement
+                        // row is then plottable on its own. Upload accepts identical
+                        // repeats; only differing values for one spot are an error.
+                        $row[$h] = $spotCells[$h];
                         continue;
                     }
                     if ($d['kind'] === 'custom'
