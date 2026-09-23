@@ -89,14 +89,22 @@ class StraboSamplesService
      * non-removed collaborator grants. Lightweight (spine columns only).
      * §16 item 3 (pagination defaults) is deferred to a later sub-branch.
      *
-     * @param array $filters Reserved for type/purpose/subsystem/search/sort
-     *                       filters per design §8.1. Ignored in api-core
-     *                       baseline; the unfiltered list is enough to
-     *                       wire up and demo.
+     * @param array $filters Supported keys:
+     *   - include_subsystem_flags (bool): add has_field_data / has_micro_data
+     *     / experimental_link_count to every row (Exp + Field pickers).
+     *   - omit (array of 'field'|'micro'|'experimental'): drop samples whose
+     *     EVERY origin is in the list. Origin = the subsystems holding a
+     *     data slice on the row. A sample made on the website (no slice)
+     *     is never dropped; a Micro sample already linked to a Field spot
+     *     survives omit=['field'] because Micro is an origin outside the
+     *     list (the picker warns on has_field_data instead). Use
+     *     normalizeOmit() to validate caller input first.
+     *   Type/purpose/search/sort per design §8.1 are still deferred.
      * @return array of associative arrays, one per sample
      */
     public function listMySamples($filters = array())
     {
+        $omitSql = $this->omitPredicate(isset($filters['omit']) ? $filters['omit'] : array());
         // Optional picker support (Exp linking, Exp_StraboSamples_Linking.md
         // §5.4): subsystem-slice presence + experimental link count computed
         // in the list query instead of one round-trip per row.
@@ -119,7 +127,7 @@ class StraboSamplesService
                     s.parent_sample_id, s.parent_userpkey,
                     s.created_at, s.created_by, s.modified_at, s.modified_by{$flagCols}
                FROM strabosamples.samples s
-              WHERE s.userpkey = $1
+              WHERE (s.userpkey = $1
                  OR EXISTS (
                       SELECT 1 FROM strabosamples.sample_collaborators c
                        WHERE c.sample_id = s.id
@@ -128,6 +136,8 @@ class StraboSamplesService
                          AND c.accepted = TRUE
                          AND c.removed_at IS NULL
                     )
+                )
+                {$omitSql}
               ORDER BY s.modified_at DESC",
             array($this->userpkey)
         );
@@ -208,6 +218,59 @@ class StraboSamplesService
         $sample['children']         = $this->fetchChildren($id, $ownerPkey);
 
         return $sample;
+    }
+
+    /** Subsystems a caller may name in the mysamples omit filter. */
+    public static $OMIT_SUBSYSTEMS = array('field', 'micro', 'experimental');
+
+    /**
+     * Turn caller input for the omit filter (a comma list or an array) into
+     * a clean array of subsystem names. Returns null when any value is not
+     * a known subsystem, so the controller can answer 400 instead of
+     * silently returning the full list.
+     */
+    public static function normalizeOmit($raw)
+    {
+        if ($raw === null || $raw === '' || $raw === array()) {
+            return array();
+        }
+        $parts = is_array($raw) ? $raw : explode(',', (string)$raw);
+        $out = array();
+        foreach ($parts as $p) {
+            $p = strtolower(trim((string)$p));
+            if ($p === '') {
+                continue;
+            }
+            if (!in_array($p, self::$OMIT_SUBSYSTEMS, true)) {
+                return null;
+            }
+            $out[$p] = true;
+        }
+        return array_keys($out);
+    }
+
+    /**
+     * SQL for the omit rule (see listMySamples). Built only from the
+     * whitelisted subsystem names, never from raw caller text. A row is
+     * dropped when it has at least one slice AND every slice it has belongs
+     * to an omitted subsystem.
+     */
+    protected function omitPredicate($omit)
+    {
+        $omit = self::normalizeOmit($omit);
+        if (!$omit) {
+            return '';
+        }
+        $cols = array('field' => 's.field_data', 'micro' => 's.micro_data', 'experimental' => 's.experimental_data');
+        $everySliceOmitted = array();
+        foreach ($cols as $sub => $col) {
+            if (!in_array($sub, $omit, true)) {
+                $everySliceOmitted[] = "$col IS NULL";
+            }
+        }
+        $hasAnySlice = "(" . implode(" OR ", array_map(function ($c) { return "$c IS NOT NULL"; }, $cols)) . ")";
+        $onlyOmitted = $everySliceOmitted ? "(" . implode(" AND ", $everySliceOmitted) . ")" : "TRUE";
+        return "AND NOT ({$hasAnySlice} AND {$onlyOmitted})";
     }
 
     // ---- internal helpers ----

@@ -73,6 +73,8 @@ $B_leg   = $uuidGen->v4();
 $B_bogus = $uuidGen->v4();
 $B_cross = $uuidGen->v4();
 $childId = $uuidGen->v4();
+$B_web0  = $uuidGen->v4();               // made on the web, no subsystem slice (picker keeps it)
+$spotOnly = (int)($stamp * 100 + 29);    // rich, never linked: a field-only row the picker must hide
 
 $svc = new StraboSamplesService($db, $neodb);
 $svc->setUserpkey($owner);
@@ -238,6 +240,43 @@ try {
     check("linked row holds the Field link", field_links($db, $B_mic, $owner) === array((string)$spotEstMic));
 
     // -------------------------------------------------------------------
+    echo "\n=== 2b. picker list: omit=field (Field app's /samplesdb/mysamples) ===\n";
+    $objOnly = sample_obj($spotOnly, 'Field ONLY');
+    seed_spot($neodb, $spotOnly, $owner, $dataset, array($objOnly), true);
+    sync($db, $neodb, $spotOnly, $owner, array($objOnly), true, $project, $dataset);
+    $svc->setUserpkey($owner);
+    $svc->createSample(array('id' => $B_web0, 'name' => 'made on the web, unlinked'));
+    $idsOf = function ($rows) { return array_map(function ($r) { return (string)$r['id']; }, $rows); };
+    $all  = $svc->listMySamples();
+    $pick = $svc->listMySamples(array('omit' => 'field', 'include_subsystem_flags' => true));
+    $byId = array();
+    foreach ($pick as $r) $byId[(string)$r['id']] = $r;
+    check("full list holds the field-only row", in_array((string)$spotOnly, $idsOf($all), true));
+    check("omit=field drops the field-only row", !isset($byId[(string)$spotOnly]));
+    check("omit=field keeps the web-made sample, unflagged",
+        isset($byId[$B_web0]) && $byId[$B_web0]['has_field_data'] === false && $byId[$B_web0]['has_micro_data'] === false);
+    check("omit=field keeps the Micro sample a spot already links, flagged has_field_data",
+        isset($byId[$B_mic]) && $byId[$B_mic]['has_field_data'] === true && $byId[$B_mic]['has_micro_data'] === true);
+    check("omit=field keeps the Micro-only leftover row, unflagged",
+        isset($byId[(string)$spotEstMic]) && $byId[(string)$spotEstMic]['has_field_data'] === false);
+    $leak = 0;
+    foreach ($pick as $r) {
+        $fo = $db->get_var_prepared(
+            "SELECT 1 FROM strabosamples.samples WHERE id=$1 AND userpkey=$2
+               AND field_data IS NOT NULL AND micro_data IS NULL AND experimental_data IS NULL",
+            array((string)$r['id'], (int)$r['userpkey']));
+        if ($fo) $leak++;
+    }
+    check("no field-only row leaks through omit=field (" . count($pick) . " rows)", $leak === 0);
+    $pick2 = $idsOf($svc->listMySamples(array('omit' => array('field', 'micro'))));
+    check("omit=field,micro also drops the Micro rows but keeps the web-made one",
+        !in_array($B_mic, $pick2, true) && !in_array((string)$spotEstMic, $pick2, true) && in_array($B_web0, $pick2, true));
+    check("normalizeOmit: case/space tolerant, unknown value = null",
+        StraboSamplesService::normalizeOmit(' Field,MICRO, ') === array('field', 'micro')
+        && StraboSamplesService::normalizeOmit('field,bogus') === null
+        && StraboSamplesService::normalizeOmit('') === array());
+
+    // -------------------------------------------------------------------
     echo "\n=== 3. key removed (unlink) ===\n";
     restamp_spot($neodb, $spotEst, $owner, array($objEst));
     $m = sync($db, $neodb, $spotEst, $owner, array($objEst), true, $project, $dataset);
@@ -376,13 +415,13 @@ try {
 
 } finally {
     echo "\n--- teardown ---\n";
-    $ids = array($B_new, $B_est, $B_mic, $B_leg, $B_bogus, $childId, (string)$spotNew, (string)$spotEst,
-        (string)$spotEstMic, (string)$spotBogus, (string)$spotCross, $legacyA, $legacyB);
+    $ids = array($B_new, $B_est, $B_mic, $B_leg, $B_bogus, $childId, $B_web0, (string)$spotNew, (string)$spotEst,
+        (string)$spotEstMic, (string)$spotBogus, (string)$spotCross, (string)$spotOnly, $legacyA, $legacyB);
     foreach ($ids as $id) {
         $db->prepare_query("DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($id, $owner));
     }
     $db->prepare_query("DELETE FROM strabosamples.samples WHERE id=$1 AND userpkey=$2", array($B_cross, $other));
-    foreach (array($spotNew, $spotParent, $spotEst, $spotEstMic, $spotLegacy, $spotBogus, $spotCross, $stamp * 100 + 28) as $sid) {
+    foreach (array($spotNew, $spotParent, $spotEst, $spotEstMic, $spotLegacy, $spotBogus, $spotCross, $spotOnly, $stamp * 100 + 28) as $sid) {
         $neodb->query("MATCH (s:Spot {id:$sid, userpkey:$owner}) DETACH DELETE s");
     }
     $neodb->query("MATCH (d:Dataset {id:$dataset, userpkey:$owner}) DETACH DELETE d");

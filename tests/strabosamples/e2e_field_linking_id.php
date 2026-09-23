@@ -98,6 +98,11 @@ function fieldLinkRefs($detail) {
     foreach ($flat as $l) if ($l['subsystem'] === 'field') $out[] = (string)$l['reference_id'];
     return $out;
 }
+function pickerById($r) {
+    $out = array();
+    foreach ((isset($r['json']['samples']) ? $r['json']['samples'] : array()) as $s) $out[(string)$s['id']] = $s;
+    return $out;
+}
 function downloadedFeature($datasetId, $spotId) {
     $r = http('GET', "/db/datasetspots/$datasetId", null);
     $feats = isset($r['json']['features']) ? $r['json']['features'] : array();
@@ -145,6 +150,18 @@ check("upload 2xx", $r['status'] >= 200 && $r['status'] < 300);
 $r = http('GET', "/samplesdb/sample/$spotRich", null);
 check("row exists under the local id", $r['status'] === 200 && fieldLinkRefs($r['json']) === array((string)$spotRich));
 
+echo "\n=== B2: picker omit=field hides the field-only row, keeps the lab sample ===\n";
+$r = http('GET', '/samplesdb/mysamples?omit=field&include_subsystem_flags=1', null);
+$by = pickerById($r);
+check("200 with the omit echo", $r['status'] === 200 && isset($r['json']['omit']) && $r['json']['omit'] === array('field'));
+check("field-only row hidden", !isset($by[(string)$spotRich]));
+check("lab sample listed, has_field_data false", isset($by[$linkId]) && $by[$linkId]['has_field_data'] === false);
+check("count matches the rows", (int)$r['json']['count'] === count($by));
+$r = http('GET', '/samplesdb/mysamples', null);
+check("plain list still shows the field-only row", isset(pickerById($r)[(string)$spotRich]));
+$r = http('GET', '/samplesdb/mysamples?omit=bogus', null);
+check("unknown omit value = 400", $r['status'] === 400 && isset($r['json']['Error']));
+
 echo "\n=== C: same spot re-uploads WITH strabosamples_id ===\n";
 $ts2 = $ts + 1000;
 $r = http('POST', "/db/datasetspots/$datasetId", bulkBody(array(
@@ -157,6 +174,18 @@ check("linked sample now shows the field link to the spot",
 check("Field's name won the shared field", isset($r['json']['name']) && $r['json']['name'] === 'Field FS-1');
 $r = http('GET', "/samplesdb/sample/$spotRich", null);
 check("local-id row is gone (404)", $r['status'] === 404);
+
+echo "\n=== C2: a web-made sample linked to a spot now counts as a Field sample ===\n";
+// It holds only a Field slice now (no Micro/Exp origin), so omit=field hides it
+// until it is unlinked (checked again in F). A Micro/Exp sample in the same
+// position stays listed with has_field_data true (smoke 2b).
+$r = http('GET', '/samplesdb/mysamples?omit=field&include_subsystem_flags=1', null);
+$by = pickerById($r);
+check("omit=field hides the linked web-made sample (Field is its only origin now)", !isset($by[$linkId]));
+check("folded local-id row is not listed", !isset($by[(string)$spotRich]));
+$r = http('GET', '/samplesdb/mysamples?include_subsystem_flags=1', null);
+$by = pickerById($r);
+check("plain list shows it with has_field_data true", isset($by[$linkId]) && $by[$linkId]['has_field_data'] === true);
 
 echo "\n=== D: download round-trips both ids ===\n";
 $f = downloadedFeature($datasetId, $spotRich);
@@ -189,6 +218,10 @@ $r = http('GET', "/samplesdb/sample/$spotRich", null);
 check("local-id row is back with the field link", $r['status'] === 200 && fieldLinkRefs($r['json']) === array((string)$spotRich));
 $r = http('GET', "/samplesdb/sample/$linkId", null);
 check("the other sample survives, without a field link", $r['status'] === 200 && fieldLinkRefs($r['json']) === array());
+$r = http('GET', '/samplesdb/mysamples?omit=field&include_subsystem_flags=1', null);
+$by = pickerById($r);
+check("unlinked web-made sample is back in the omit=field picker, unflagged",
+    isset($by[$linkId]) && $by[$linkId]['has_field_data'] === false && !isset($by[(string)$spotRich]));
 
 echo "\n=== H: deleting the spot of a linked web-made sample keeps the sample ===\n";
 $ts4 = $ts3 + 5000;
