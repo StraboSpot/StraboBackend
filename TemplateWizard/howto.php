@@ -86,9 +86,10 @@ function tw_howto_blocks()
         array(
             'title'   => '3. Several measurements &mdash; one row per measurement',
             'explain' => 'This is the heart of the format: <strong>repeat the spot name on every row</strong> and put each '
-                       . 'measurement on its own row. Spot-level cells (coordinates, date, notes&hellip;) go on the first row; '
+                       . 'measurement on its own row. Spot-level cells (date, notes&hellip;) go on the first row; '
                        . 'on the other rows either leave them blank (recommended) or repeat them <em>exactly</em> &mdash; two '
-                       . 'different values for the same spot is an error. Rows are grouped by the name/id, never by adjacency, '
+                       . 'different values for the same spot is an error. Exported files repeat latitude and longitude on every '
+                       . 'row so each measurement can be plotted on its own. Rows are grouped by the name/id, never by adjacency, '
                        . 'so sorting the sheet in Excel cannot break a spot apart. Vocabulary cells accept the dropdown label '
                        . '(&ldquo;joint&rdquo;) or the stored value &mdash; either works.',
             'show'    => array(1, 2, 3, 6, 8, 9, 10, 11, 12, 13),
@@ -255,9 +256,10 @@ include("includes/mheader.php");
 								<h3>The rules, in one place</h3>
 								<ul>
 									<li><strong>One row per measurement.</strong> Repeat the spot&rsquo;s name (or its <code>strabo_internal_id</code>) on every row of the spot.</li>
-									<li><strong>Spot-level columns must agree.</strong> Name, coordinates, date, notes and other once-per-spot values: fill them on one row and leave the rest blank, or repeat them identically. Two different values for the same spot is an error the review screen will point at.</li>
+									<li><strong>Spot-level columns must agree.</strong> Name, coordinates, date, notes and other once-per-spot values: fill them on one row and leave the rest blank, or repeat them identically. Two different values for the same spot is an error the review screen will point at. (Exported files repeat the coordinates on every row so each measurement row plots on its own; to move a spot, change them on every row.)</li>
 									<li><strong>Row order doesn&rsquo;t matter</strong> &mdash; grouping is by name/id, so Excel sorting is safe. The single exception: an <code>associated</code> orientation attaches to the nearest <code>primary</code> row above it within the same spot, so keep those pairs together.</li>
 									<li><strong>New spots</strong> need a name, latitude and longitude, and a blank id. <strong>Updates</strong> (files you exported, then edited) carry the spot&rsquo;s id on every row &mdash; leave that column alone and the wizard matches rows to existing spots.</li>
+									<li><strong>Copying spots into another project or dataset</strong> (a file exported from a different dataset, or from another account, say a student&rsquo;s): tick <em>Import as new spots</em> on the import screen. Every spot in the file is then created in the target as a new spot and the ids only group a spot&rsquo;s rows, so several students&rsquo; exports can even be pasted into one file. Leave it off and a file only imports back into the dataset it came from.</li>
 									<li><strong>Vocabulary cells</strong> accept the dropdown label or the stored value, case-insensitive. Anything unrecognized isn&rsquo;t rejected outright &mdash; the review screen lets you map it, keep it as free text, or fix it in the file.</li>
 									<li><strong>The id column is locked</strong> in Excel and LibreOffice. Some spreadsheet apps (Apple Numbers among them) ignore protection entirely &mdash; don&rsquo;t type in <code>strabo_internal_id</code> there. The wizard re-validates every id at review regardless, so a stray edit is caught before anything imports.</li>
 									<li><strong>Nothing imports until the file is clean.</strong> Upload &rarr; review &rarr; confirm; errors block the whole file, so a half-imported dataset can&rsquo;t happen.</li>

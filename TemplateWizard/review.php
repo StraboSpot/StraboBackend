@@ -42,7 +42,7 @@ $sourceLabel  = null;
 $rowCount     = 0;
 $plan         = null;
 $resolutions  = array();
-$target       = array('project_id' => '', 'dataset_choice' => 'existing', 'dataset_id' => '', 'dataset_name' => '');
+$target       = array('project_id' => '', 'dataset_choice' => 'existing', 'dataset_id' => '', 'dataset_name' => '', 'as_new' => false);
 $commitInfo   = null;
 $templateName = '';
 
@@ -59,6 +59,7 @@ function tw_read_target() {
         'dataset_choice' => (isset($_POST['dataset_choice']) && $_POST['dataset_choice'] === 'new') ? 'new' : 'existing',
         'dataset_id'     => isset($_POST['dataset_id']) ? trim($_POST['dataset_id']) : '',
         'dataset_name'   => isset($_POST['dataset_name']) ? trim($_POST['dataset_name']) : '',
+        'as_new'         => !empty($_POST['as_new']),
     );
 }
 
@@ -93,6 +94,7 @@ function tw_service_target($t) {
         'project_id'   => (int)$t['project_id'],
         'dataset_id'   => ($t['dataset_choice'] === 'existing' && $t['dataset_id'] !== '') ? (int)$t['dataset_id'] : null,
         'dataset_name' => ($t['dataset_choice'] === 'new') ? $t['dataset_name'] : '',
+        'as_new'       => !empty($t['as_new']),
     );
 }
 
@@ -287,6 +289,13 @@ include("includes/mheader.php");
 										<input type="text" name="dataset_name" placeholder="e.g. Legacy stations 2019" value="<?php echo htmlspecialchars($target['dataset_name']); ?>">
 									</div>
 									<div class="col-12">
+										<input type="checkbox" name="as_new" id="tw-as-new" value="1" <?php echo !empty($target['as_new']) ? 'checked' : ''; ?>>
+										<label for="tw-as-new">Import as new spots (ignore the ids in the file)</label>
+										<p class="tw-hint" style="margin-top: 0.4em;">For a file exported from a different dataset or a different account, such as a student&rsquo;s.
+											Every spot in the file is created here as a new spot; the <code>strabo_internal_id</code> column only groups a spot&rsquo;s rows together.
+											Leave this off to update the spots a file was exported from.</p>
+									</div>
+									<div class="col-12">
 										<ul class="actions">
 											<li><input type="submit" class="primary" value="<?php echo $view === 'target' ? 'Analyze' : 'Re-analyze'; ?>"></li>
 										</ul>
@@ -304,6 +313,9 @@ include("includes/mheader.php");
 									<span class="tw-chip"><?php echo (int)$plan['counts']['orientations']; ?> orientation<?php echo $plan['counts']['orientations'] === 1 ? '' : 's'; ?></span>
 									<span class="tw-chip"><?php echo (int)$plan['counts']['samples']; ?> sample<?php echo $plan['counts']['samples'] === 1 ? '' : 's'; ?></span>
 								</p>
+								<?php if (!empty($plan['target']['as_new'])): ?>
+								<p class="tw-hint"><strong>Import as new spots</strong> is on: every spot in this file will be created in the target dataset, and the ids in the file are used only to group rows. Nothing existing is updated.</p>
+								<?php endif; ?>
 
 								<?php if (!empty($plan['hard_errors'])): ?>
 								<h4 style="color:#bf616a;">Errors — fix these in the file and re-upload (nothing can import until they're gone)</h4>

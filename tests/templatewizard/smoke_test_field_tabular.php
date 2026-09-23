@@ -374,6 +374,18 @@ try {
     check('export ok', !empty($export['ok']));
     check('export emits 5 long rows (3 orient + sample on A rows, 1 B row)', count($export['rows']) === 5);
     check('all-point export omits geometry_type', !in_array('geometry_type', $export['headers']));
+    // Coordinates on EVERY row, not just a spot's first (Joe, JCU 2026-09-23):
+    // each measurement row is plottable on its own; the round trip below
+    // proves the upload side takes identical repeats as one value.
+    $coordRows = 0;
+    foreach ($export['rows'] as $r0) {
+        $exp = ($r0['name'] === 'SP-A') ? array(34.2001, -118.5010) : array(34.2010, -118.5032);
+        if ($r0['latitude'] !== '' && $r0['longitude'] !== ''
+            && abs((float)$r0['latitude'] - $exp[0]) < 0.00001 && abs((float)$r0['longitude'] - $exp[1]) < 0.00001) {
+            $coordRows++;
+        }
+    }
+    check('export repeats the spot latitude/longitude on every row (5/5)', $coordRows === 5);
 
     // Role column materializes (dataset has an associated orientation) and
     // primary rows say "primary" explicitly, never blank (Jason 2026-08-21:
@@ -554,6 +566,87 @@ try {
         in_array('unknown_id', (function () use ($svcStranger, $A, $PROJECT_ID) {
             $p = $svcStranger->parseUpload(csvFile("strabo_internal_id,spot_name\n$A,SP-A\n"), 'x.csv');
             $pl = $svcStranger->plan($p, array('project_id' => $PROJECT_ID, 'dataset_id' => null, 'dataset_name' => 'x'));
+            $out = array();
+            foreach ($pl['hard_errors'] as $e) { $out[] = $e['code']; }
+            return $out;
+        })()));
+
+    // ------------------------------------------------------------------
+    echo "\n=== 9b. import as new spots (ids only group rows) ===\n";
+    // ------------------------------------------------------------------
+    // The DS1 export (ids of A + B, embedded spec) copied into DS2: without
+    // the flag every spot is a wrong_dataset error; with it, two creates
+    // carrying all instances, and the created spots are new ids in DS2.
+    $anParsed = $svc->parseUpload($exPath, 'student_export.xlsx');
+    $anOff = $svc->plan($anParsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS2, 'dataset_name' => ''));
+    $anOffCodes = array();
+    foreach ($anOff['hard_errors'] as $e) { $anOffCodes[] = $e['code']; }
+    check('flag off: export of DS1 into DS2 = wrong_dataset per spot',
+        array_count_values($anOffCodes) === array('wrong_dataset' => 2));
+    check('wrong_dataset message points at the option',
+        strpos($anOff['hard_errors'][0]['message'], 'Import as new spots') !== false);
+    $anOn = $svc->plan($anParsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS2, 'dataset_name' => '', 'as_new' => true));
+    check('flag on: clean plan, 2 creates, 0 updates/noops',
+        !empty($anOn['clean']) && $anOn['counts']['create'] === 2
+        && $anOn['counts']['update'] === 0 && $anOn['counts']['noop'] === 0);
+    check('flag on: instances carried (3 orientations, 1 sample)',
+        $anOn['counts']['orientations'] === 3 && $anOn['counts']['samples'] === 1);
+    check('flag on: plan echoes as_new in its target', !empty($anOn['target']['as_new']));
+    $notesA0 = spotProps($neodb, $A, $owner)['notes'];
+    $anCommit = $svc->commit($anOn);
+    check('flag on: commit creates 2 spots', !empty($anCommit['ok']) && $anCommit['created'] === 2);
+    foreach ($anCommit['minted'] as $mid) { $spotIds[] = (int)$mid; }
+    check('flag on: created ids are new (not A / B)',
+        !in_array($A, array_map('intval', $anCommit['minted'])) && !in_array($B, array_map('intval', $anCommit['minted'])));
+    $inDs2 = (int)$neodb->get_var("MATCH (d:Dataset {id: $DS2, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) WHERE s.name IN ['SP-A','SP-B'] RETURN count(s)");
+    check('flag on: copies live in DS2', $inDs2 === 2);
+    $pa2 = spotProps($neodb, (int)$anCommit['minted'][0], $owner);
+    check('flag on: copy carries the orientations', strpos((string)$pa2['json_orientation_data'], 'slickenlines') !== false);
+    check('originals in DS1 untouched (A keeps its notes, DS1 still 2 + line spots only)',
+        spotProps($neodb, $A, $owner)['notes'] === $notesA0
+        && (int)$neodb->get_var("MATCH (d:Dataset {id: $DS1, userpkey: $owner})-[:HAS_SPOT]->(s:Spot) RETURN count(s)") === 2);
+
+    // Ids the account has never seen (a student's file): create, never unknown_id.
+    $stuCsv = $H . "88880000000001,01,34.71,-118.71,planar,,bedding,100,20,,\n"
+                  . "88880000000001,01,,,linear,,intersection,,,40,10\n";
+    $stuOff = $codes($stuCsv, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS2, 'dataset_name' => ''));
+    check('flag off: foreign id = unknown_id', in_array('unknown_id', $stuOff));
+    $stuOn = $svc->plan($svc->parseUpload(csvFile($stuCsv), 'student.csv'),
+                        array('project_id' => $PROJECT_ID, 'dataset_id' => $DS2, 'dataset_name' => '', 'as_new' => true));
+    check('flag on: foreign id groups 2 rows into 1 create with 2 orientations',
+        !empty($stuOn['clean']) && $stuOn['counts']['create'] === 1 && $stuOn['counts']['orientations'] === 2);
+
+    // Twenty students paste into one file: same spot NAME, different ids ->
+    // separate spots (grouping stays on the id), not one merged spot.
+    $mergedCsv = $H . "88880000000001,01,34.71,-118.71,planar,,bedding,100,20,,\n"
+                     . "88880000000002,01,34.72,-118.72,planar,,bedding,110,25,,\n";
+    $mgOn = $svc->plan($svc->parseUpload(csvFile($mergedCsv), 'merged.csv'),
+                       array('project_id' => $PROJECT_ID, 'dataset_id' => null, 'dataset_name' => 'new one', 'as_new' => true));
+    check('flag on: same name + different ids = 2 creates (no contradiction), new-dataset target ok',
+        !empty($mgOn['clean']) && $mgOn['counts']['create'] === 2);
+    // Flag on but no ids at all: unchanged behavior (name grouping, creates).
+    $noIdOn = $svc->plan($svc->parseUpload(csvFile($H . ",SP-N,34.1,-118.1,,,,,,,\n"), 'noid.csv'),
+                         array('project_id' => $PROJECT_ID, 'dataset_id' => $DS2, 'dataset_name' => '', 'as_new' => true));
+    check('flag on: id-less rows still create', !empty($noIdOn['clean']) && $noIdOn['counts']['create'] === 1);
+    // Flag on into the dataset the file came from: creates + the name Heads up.
+    $selfOn = $svc->plan($anParsed, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS1, 'dataset_name' => '', 'as_new' => true));
+    $selfCodes = array();
+    foreach ($selfOn['warnings'] as $w) { $selfCodes[] = $w['code']; }
+    check('flag on into the source dataset: 2 creates + name_exists Heads up',
+        $selfOn['counts']['create'] === 2 && in_array('name_exists_summary', $selfCodes));
+    // Flag on cannot smuggle a bad id past validation, and owner checks still hold.
+    check('flag on: malformed id still bad_id',
+        in_array('bad_id', (function () use ($svc, $H, $PROJECT_ID, $DS2) {
+            $p = $svc->parseUpload(csvFile($H . "abc,SP-Z,34.1,-118.1,,,,,,,\n"), 'bad.csv');
+            $pl = $svc->plan($p, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS2, 'dataset_name' => '', 'as_new' => true));
+            $out = array();
+            foreach ($pl['hard_errors'] as $e) { $out[] = $e['code']; }
+            return $out;
+        })()));
+    check("flag on: stranger still cannot target the owner's project",
+        in_array('bad_project', (function () use ($svcStranger, $A, $PROJECT_ID, $DS2) {
+            $p = $svcStranger->parseUpload(csvFile("strabo_internal_id,spot_name,latitude,longitude\n$A,SP-A,34.1,-118.1\n"), 'x.csv');
+            $pl = $svcStranger->plan($p, array('project_id' => $PROJECT_ID, 'dataset_id' => $DS2, 'dataset_name' => '', 'as_new' => true));
             $out = array();
             foreach ($pl['hard_errors'] as $e) { $out[] = $e['code']; }
             return $out;
