@@ -467,6 +467,12 @@ try {
     // plant uncovered data on A: trace + a scalar the template doesn't carry
     $neodb->query("MATCH (s:Spot {id: $A, userpkey: $owner})
                    SET s.json_trace = '{\"trace_type\":\"contact\"}', s.gps_accuracy = 4.5");
+    // ... and an image node (Jason 2026-09-23: updates must keep images;
+    // as-new copies cannot carry them, pinned in 9b)
+    $IMG_ID = 96669901;
+    $neodb->query("MATCH (s:Spot {id: $A, userpkey: $owner})
+                   CREATE (s)-[:HAS_IMAGE]->(i:Image {id: $IMG_ID, userpkey: $owner, image_type: 'photo', caption: 'keep me', width: 640, height: 480})");
+    check('image planted on SP-A', (int)$neodb->get_var("MATCH (s:Spot {id: $A, userpkey: $owner})-[:HAS_IMAGE]->(i:Image) RETURN count(i)") === 1);
 
     $upCsv = "strabo_internal_id,spot_name,latitude,longitude,altitude,date,notes,orientation_type,orientation_role,feature_type,strike,dip,trend,plunge,quality,sample_id_name,sample_type,Field Book Page\n"
            . "$A,SP-A,34.2001,-118.5010,,2024-06-01,dark shale,planar,,bedding,247,32,,,5,,,\n"
@@ -493,6 +499,9 @@ try {
 
     $pa = spotProps($neodb, $A, $owner);
     check('notes updated', $pa['notes'] === 'dark shale');
+    $imgAfter = $neodb->get_results("MATCH (s:Spot {id: $A, userpkey: $owner})-[:HAS_IMAGE]->(i:Image) RETURN i.id AS id, i.caption AS caption");
+    check('update keeps the spot image (node + edge + caption survive the read-merge-write)',
+        count((array)$imgAfter) === 1 && (int)$imgAfter[0]->value('id') === $IMG_ID && $imgAfter[0]->value('caption') === 'keep me');
     check('altitude cleared (blank cell in present column)', !isset($pa['altitude']) || $pa['altitude'] === null || $pa['altitude'] === '');
     $od = json_decode($pa['json_orientation_data'], true);
     check('orientation list replaced: strike 247', $od[0]['strike'] === 247);
@@ -611,6 +620,9 @@ try {
         if ($pp !== null && $pp['name'] === 'SP-A') { $pa2 = $pp; }
     }
     check('flag on: copy carries the orientations', $pa2 !== null && strpos((string)$pa2['json_orientation_data'], 'slickenlines') !== false);
+    check('flag on: copy has NO images (a spreadsheet cannot carry them; documented limitation)',
+        $pa2 !== null && (int)$neodb->get_var("MATCH (s:Spot {id: {$pa2['id']}, userpkey: $owner})-[:HAS_IMAGE]->(i:Image) RETURN count(i)") === 0
+        && (int)$neodb->get_var("MATCH (s:Spot {id: $A, userpkey: $owner})-[:HAS_IMAGE]->(i:Image) RETURN count(i)") === 1);
 
     // Minted ids are unique within a run (time().rand has 8,889 values per
     // second; a class-sized import collided ~40% of the time and the later
@@ -915,6 +927,7 @@ try {
     $db->get_var_prepared("DELETE FROM strabosamples.samples WHERE userpkey = $1 AND name = $2 RETURNING id",
         array($owner, "FS-001-$stamp"));
     foreach ($tmpFiles as $f) { @unlink($f); }
+    try { $neodb->query("MATCH (i:Image {id: 96669901, userpkey: $owner}) DETACH DELETE i"); } catch (Exception $e) {}
 
     // residue checks
     $r1 = (int)$neodb->get_var("MATCH (s:Spot {userpkey: $owner}) WHERE s.name IN ['SP-A','SP-B','SP-C','SP-LINE','SP-D2'] RETURN count(s)");

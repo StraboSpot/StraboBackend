@@ -293,7 +293,8 @@ include("includes/mheader.php");
 										<label for="tw-as-new">Import as new spots (ignore the ids in the file)</label>
 										<p class="tw-hint" style="margin-top: 0.4em;">For a file exported from a different dataset or a different account, such as a student&rsquo;s.
 											Every spot in the file is created here as a new spot; the <code>strabo_internal_id</code> column only groups a spot&rsquo;s rows together.
-											Leave this off to update the spots a file was exported from.</p>
+											The copies hold only what the spreadsheet holds: images, tags and any field not in the file do not come along.
+											Leave this off to update the spots a file was exported from (an update keeps everything the file does not mention).</p>
 									</div>
 									<div class="col-12">
 										<ul class="actions">
@@ -314,7 +315,7 @@ include("includes/mheader.php");
 									<span class="tw-chip"><?php echo (int)$plan['counts']['samples']; ?> sample<?php echo $plan['counts']['samples'] === 1 ? '' : 's'; ?></span>
 								</p>
 								<?php if (!empty($plan['target']['as_new'])): ?>
-								<p class="tw-hint"><strong>Import as new spots</strong> is on: every spot in this file will be created in the target dataset, and the ids in the file are used only to group rows. Nothing existing is updated.</p>
+								<p class="tw-hint"><strong>Import as new spots</strong> is on: every spot in this file will be created in the target dataset, and the ids in the file are used only to group rows. Nothing existing is updated. The new spots contain only the columns in this file: images, tags and any field the file does not carry are not copied.</p>
 								<?php endif; ?>
 
 								<?php if (!empty($plan['hard_errors'])): ?>
