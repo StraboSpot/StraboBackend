@@ -432,6 +432,7 @@ include("includes/mheader.php");
 							</section>
 
 						<style>
+							.tw-hint { font-size: 0.9em; color: rgba(255, 255, 255, 0.6); }
 							.tw-chip { display: inline-block; padding: 2px 12px; border-radius: 12px; background: #3b4252; margin-right: 6px; }
 							.tw-chip-create { background: #2e4034; }
 							.tw-chip-update { background: #33415e; }
