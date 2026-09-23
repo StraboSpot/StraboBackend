@@ -19,6 +19,11 @@
  *                9.  Hard errors: unknown id, wrong dataset, contradiction,
  *                    bad otype, inapplicable field, constraint, orphan
  *                    associated, blank name, missing coords, id/name ambiguity
+ *                9b. Import as new spots: export of DS1 into DS2 (off =
+ *                    wrong_dataset, on = 2 creates with instances, new ids),
+ *                    foreign ids create, same-name/different-id rows stay
+ *                    separate, id-less rows, source-dataset Heads up,
+ *                    bad_id + stranger checks still hold
  *                10. Vocab: soft -> map resolution, __other__ companion,
  *                    __freetext__
  *                11. Geometry: LineString centroid export, lat/lng edit guard,
