@@ -37,7 +37,7 @@ document.addEventListener('DOMContentLoaded', function() {
 	cfg.catalog.forEach(function(g) {
 		g.fields.forEach(function(f) { knownHeaders[f.header.toLowerCase()] = { group: g.key, name: f.name, label: f.label }; });
 	});
-	['strabo_internal_id', 'orientation_type', 'orientation_role', 'geometry_type'].forEach(function(k) {
+	['strabo_internal_id', 'orientation_type', 'orientation_role', 'geometry_type', 'geometry_wkt'].forEach(function(k) {
 		knownHeaders[k] = { system: k };
 	});
 
@@ -315,6 +315,7 @@ document.addEventListener('DOMContentLoaded', function() {
 			if (c.key === 'orientation_type')   { return row === 0 ? 'planar' : 'linear'; }
 			if (c.key === 'orientation_role')   { return 'primary'; }
 			if (c.key === 'geometry_type')      { return 'Point'; }
+			if (c.key === 'geometry_wkt')       { return 'POINT (-95.2478 38.9581)'; }
 		}
 		if (c.kind === 'field' && c.group === 'orientation') {
 			const planar = { strike: '045', dip: '30', dip_direction: '135', feature_type: 'bedding', quality: 'good' };
