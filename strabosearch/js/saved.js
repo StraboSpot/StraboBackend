@@ -108,6 +108,11 @@
 			api('saved_list'),
 			api('legacy_list').catch(function () { return { legacy: [] }; })
 		]).then(function (both) {
+			// summaries print form labels: fetch the ones these searches use first
+			var dsls = (both[0].saved || []).map(function (s) { return s.dsl || {}; })
+				.concat((both[1].legacy || []).map(function (s) { return legacyToDsl(s.search_json); }));
+			return Promise.all(dsls.map(C.ensureLabels)).then(function () { return both; });
+		}).then(function (both) {
 			var saved = both[0].saved || [];
 			var legacy = both[1].legacy || [];
 			card.querySelector('.ss-quiet-prompt').remove();
@@ -212,7 +217,9 @@
 			return;
 		}
 		var card = openModal('Save current search');
-		card.appendChild(el('div', 'ss-saved-summary', C.summarizeDsl(dsl)));
+		var summary = el('div', 'ss-saved-summary', C.summarizeDsl(dsl));
+		card.appendChild(summary);
+		C.ensureLabels(dsl).then(function () { summary.textContent = C.summarizeDsl(dsl); });
 
 		var input = el('input');
 		input.type = 'text';

@@ -127,22 +127,42 @@
 	CRITERIA.forEach(function (c) { byId[c.id] = c; });
 
 	// ---- vocab loading (cached per facet) --------------------------------
-	// Normalized entry: {value, label, count?, depth?}
+	// Normalized entry: {value, label, count?, depth?}. value is the stored
+	// name (it goes into the DSL, URLs and saved searches); label is what the
+	// user reads (the app's form label, from the feed's `labels` map).
 	var vocabCache = {};
 
-	function normalizeVocab(facet, values) {
+	// facet -> {value: display label} for chips and summaries. Filled by
+	// loadVocab and, for values outside the public feed (saved searches,
+	// URLs), by ensureLabels via ?action=vocab_labels.
+	var labelCache = {};
+	var LABELED_FACETS = ['feature_type', 'rock_type', 'met_facies', 'trace_type',
+		'image_type', 'sample_type', 'sample_purpose'];
+
+	function rememberLabels(facet, labels) {
+		if (!labelCache[facet]) labelCache[facet] = {};
+		Object.keys(labels || {}).forEach(function (k) { labelCache[facet][k] = labels[k]; });
+	}
+
+	function normalizeVocab(facet, values, labels) {
+		labels = labels || {};
+		rememberLabels(facet, labels);
 		return (values || []).map(function (v) {
-			if (typeof v === 'string') return { value: v, label: v };
+			if (typeof v === 'string')
+				return { value: v, label: labels[v] !== undefined ? labels[v] : v };
 			if (v.path !== undefined)
-				return { value: v.path, label: v.path.split(':').pop(),
+				return { value: v.path,
+					label: v.label !== undefined ? v.label : v.path.split(':').pop(),
 					depth: v.depth || 0 };
 			if (v.gid !== undefined)
 				return { value: v.gid, label: v.name };
 			if (v.pkey !== undefined)
 				return { value: v.pkey, label: v.name };
-			if (v.label !== undefined)
-				return { value: v.value, label: v.label };
-			return { value: v.value, label: v.value, count: v.count };
+			var e = { value: v.value,
+				label: v.label !== undefined ? v.label
+					: (labels[v.value] !== undefined ? labels[v.value] : v.value) };
+			if (v.count !== undefined) e.count = v.count;
+			return e;
 		});
 	}
 
@@ -153,12 +173,59 @@
 				if (!r.ok) throw new Error('vocab ' + facet + ' failed');
 				return r.json();
 			})
-			.then(function (j) { return normalizeVocab(facet, j.values); })
+			.then(function (j) { return normalizeVocab(facet, j.values, j.labels); })
 			.catch(function (e) {
 				delete vocabCache[facet];   // allow retry
 				throw e;
 			});
 		return vocabCache[facet];
+	}
+
+	/** Display text of one stored vocab value (the value itself if unknown). */
+	function displayValue(facet, value) {
+		var m = labelCache[facet];
+		return (m && m[value] !== undefined) ? m[value] : String(value);
+	}
+
+	/** Fetch labels for values not seen yet; resolves when the cache has them. */
+	function ensureValues(facet, values) {
+		if (LABELED_FACETS.indexOf(facet) === -1) return Promise.resolve();
+		var m = labelCache[facet] || {};
+		var missing = (values || []).filter(function (v) {
+			return (typeof v === 'string' || typeof v === 'number') && m[v] === undefined;
+		});
+		if (!missing.length) return Promise.resolve();
+		return fetch(window.STRABO_SEARCH.api + '?action=vocab_labels&facet=' + encodeURIComponent(facet) +
+				'&values=' + encodeURIComponent(JSON.stringify(missing)))
+			.then(function (r) { return r.ok ? r.json() : { labels: {} }; })
+			.then(function (j) {
+				var got = {};
+				missing.forEach(function (v) { got[v] = String(v); });   // unlabeled: shown as stored
+				Object.keys(j.labels || {}).forEach(function (k) { got[k] = j.labels[k]; });
+				rememberLabels(facet, got);
+			})
+			.catch(function () {});
+	}
+
+	/** vocab facet(s) behind one DSL criterion entry: [[facet, values], ...]. */
+	function entryVocabs(e) {
+		var c = byId[e.id];
+		var v = e.value;
+		if (!c || v === null || v === undefined) return [];
+		if (c.widget === 'samplevocab')
+			return [['sample_type', v.sample_type || []], ['sample_purpose', v.sample_purpose || []]];
+		if (c.vocab && LABELED_FACETS.indexOf(c.vocab) !== -1)
+			return [[c.vocab, Array.isArray(v) ? v : [v]]];
+		return [];
+	}
+
+	/** Load the labels a DSL's criteria need (call before criterionText/summarizeDsl). */
+	function ensureLabels(dsl) {
+		var jobs = [];
+		((dsl && dsl.criteria) || []).forEach(function (e) {
+			entryVocabs(e).forEach(function (fv) { jobs.push(ensureValues(fv[0], fv[1])); });
+		});
+		return Promise.all(jobs);
 	}
 
 	// ---- row state → DSL --------------------------------------------------
@@ -328,8 +395,11 @@
 		var name = c ? c.label : e.id;
 		var v = e.value, s;
 		if (v === null || v === undefined) s = '';
-		else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean') s = String(v);
-		else if (Array.isArray(v)) s = v.join(', ');
+		else if (typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean')
+			s = (c && c.vocab) ? displayValue(c.vocab, v) : String(v);
+		else if (Array.isArray(v)) s = (c && c.vocab)
+			? v.map(function (x) { return displayValue(c.vocab, x); }).join(', ')
+			: v.join(', ');
 		else if (v.bbox) s = 'bbox ' + v.bbox.map(function (n) { return Number(n).toFixed(1); }).join(',');
 		else if (v.type === 'Polygon' && Array.isArray(v.coordinates) && Array.isArray(v.coordinates[0]))
 			s = 'polygon (' + Math.max(v.coordinates[0].length - 1, 0) + ' vertices)';
@@ -337,7 +407,9 @@
 		else if (v.min !== undefined || v.max !== undefined)
 			s = (v.min !== undefined ? v.min : '…') + '–' + (v.max !== undefined ? v.max : '…');
 		else if (v.year !== undefined) s = String(v.year);
-		else s = [].concat(v.sample_type || [], v.sample_purpose || []).join(', ');
+		else s = [].concat(
+			(v.sample_type || []).map(function (x) { return displayValue('sample_type', x); }),
+			(v.sample_purpose || []).map(function (x) { return displayValue('sample_purpose', x); })).join(', ');
 		return (e.not ? 'NOT ' : '') + name + '=' + s;
 	}
 
@@ -358,6 +430,9 @@
 		SUBSYSTEMS: SUBSYSTEMS,
 		byId: byId,
 		loadVocab: loadVocab,
+		displayValue: displayValue,
+		ensureValues: ensureValues,
+		ensureLabels: ensureLabels,
 		isActive: isActive,
 		rowToDsl: rowToDsl,
 		dslToRow: dslToRow,
