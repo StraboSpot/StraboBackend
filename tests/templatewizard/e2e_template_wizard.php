@@ -30,6 +30,8 @@
  *                   PHPExcel -> upload -> Neo4j + spine asserts -> export == noop
  *               12. Exported XLSX edited (cell edits + new row) -> updates + create
  *               13. How-to example workbook imports as its page documents
+ *               (11 also: a form label typed in Excel ("joint") lands as the
+ *                app name option_13 and exports back as "joint")
  *               (11 also: same id-less file twice -> name-collision Heads up;
  *                success page's download-with-ids re-imports as unchanged)
  *
@@ -631,7 +633,8 @@ try {
               'sample_id_name' => "FS-FILL-$stamp", 'sample_type' => 'core', 'Field Book Page' => 'p. 12'),
         array('name' => 'WZ-FILL-1', 'orientation_type' => 'linear', 'orientation_role' => 'associated', 'feature_type' => 'stretching',
               'trend' => 150, 'plunge' => 30),
-        array('name' => 'WZ-FILL-2', 'latitude' => 34.22, 'longitude' => -118.22, 'date' => '2026-09-18', 'notes' => 'second station'),
+        array('name' => 'WZ-FILL-2', 'latitude' => 34.22, 'longitude' => -118.22, 'date' => '2026-09-18', 'notes' => 'second station',
+              'orientation_type' => 'planar', 'orientation_role' => 'primary', 'feature_type' => 'joint', 'strike' => 30, 'dip' => 60),
     );
     $rowN = 3;
     foreach ($fillRows as $vals) {
@@ -672,6 +675,10 @@ try {
         && $od1[0]['feature_type'] === 'bedding'
         && isset($od1[0]['associated_orientation'][0]) && $od1[0]['associated_orientation'][0]['trend'] === 150
         && $od1[0]['associated_orientation'][0]['plunge'] === 30);
+    $p2 = isset($fillByName['WZ-FILL-2']) ? spotProps($neodb, $fillByName['WZ-FILL-2'], $ownerPkey) : null;
+    $od2 = $p2 ? json_decode($p2['json_orientation_data'], true) : null;
+    check('WZ-FILL-2: the form label "joint" typed in Excel is stored as the app name option_13',
+        is_array($od2) && count($od2) === 1 && $od2[0]['feature_type'] === 'option_13');
     $sm1 = $p1 ? json_decode($p1['json_samples'], true) : null;
     check('WZ-FILL-1: sample element landed with type core', is_array($sm1) && $sm1[0]['sample_id_name'] === "FS-FILL-$stamp" && $sm1[0]['sample_type'] === 'core');
     $cf1 = $p1 ? json_decode($p1['custom_fields'], true) : null;
@@ -725,6 +732,13 @@ try {
     $ex2Path = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.xlsx';
     $tmpFiles[] = $ex2Path;
     file_put_contents($ex2Path, $r['body']);
+    $ex2Sheet = PHPExcel_IOFactory::load($ex2Path)->getSheetByName('Data');
+    $ex2Labels = array();
+    for ($rr = 3; $rr <= 8; $rr++) {
+        $ex2Labels[] = (string)$ex2Sheet->getCellByColumnAndRow($hdrCol['feature_type'], $rr)->getValue();
+    }
+    check('export over HTTP writes the form label "joint", never the stored name option_13',
+        in_array('joint', $ex2Labels, true) && !in_array('option_13', $ex2Labels, true));
     $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', $ex2Path, 'fill_export.xlsx');
     $ex2Token = extractToken($r['body']);
     $fillTarget = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'existing', 'dataset_id' => $DS2);

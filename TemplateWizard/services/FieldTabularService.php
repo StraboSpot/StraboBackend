@@ -30,6 +30,10 @@
  *                - Vocab: storage values + display labels case-insensitively;
  *                  unknown values resolve at review (map / keep via other_*
  *                  companion / free text). Numeric constraints hard-error.
+ *                  Choice lists come from the synced app form map (FieldVocab,
+ *                  overlayVocab()): exports write form labels, imports read
+ *                  names, labels and former labels (Field choice translation
+ *                  Phase 6, 2026-09-24).
  *                - Atomicity: plan-clean gate + compensating rollback. Neo4j
  *                  writes can't share a PG transaction, so every run journals
  *                  minted ids + prior JSON of updated spots (field_tabular_runs)
@@ -93,12 +97,206 @@ class FieldTabularService
     {
         if (self::$catalog === null) {
             $raw = file_get_contents(__DIR__ . '/../schema/catalog.json');
-            self::$catalog = json_decode($raw, true);
-            if (!is_array(self::$catalog)) {
+            $cat = json_decode($raw, true);
+            if (!is_array($cat)) {
                 throw new Exception('TemplateWizard catalog.json missing or unparseable — run schema/build_catalog.php');
             }
+            self::$catalog = self::overlayVocab($cat);
         }
         return self::$catalog;
+    }
+
+    /** Drop the cached catalog + header index (tests that swap the FieldVocab map). */
+    public static function resetCatalog()
+    {
+        self::$catalog = null;
+        self::$headerIndex = null;
+    }
+
+    /**
+     * App form (FieldVocab registry key) behind each catalog group, for the
+     * vocab overlay. Orientation is per type (quality labels differ).
+     */
+    protected static $VOCAB_FORMS = array(
+        'orientation'   => array(
+            'planar'       => 'measurement.planar_orientation',
+            'linear'       => 'measurement.linear_orientation',
+            'tabular_zone' => 'measurement.tabular_orientation',
+        ),
+        'geologic_unit' => 'project.geologic_unit',
+        'trace'         => 'general.trace',
+        'sample'        => 'general.samples',
+    );
+
+    /**
+     * Field choice translation Phase 6 (docs/edine_bug/TRANSLATION_SURFACE_AUDIT.md
+     * §6): the field list, types, constraints and hints stay as built from
+     * catalog.json; the choice lists come from the synced app form map
+     * (FieldVocab), keyed by (form, field), so a nightly sync reaches the
+     * wizard without a catalog rebuild. A field the map does not know keeps
+     * its catalog.json list. Each vocab entry: {value, label, [aliases],
+     * [retired]}; aliases = the name's former labels and, for orientation,
+     * its labels in the other orientation types. Each vocab field also gets
+     * labels_safe (per type for orientation): false when a label equals
+     * another choice's label or name, and then the field exports names.
+     */
+    protected static function overlayVocab(array $cat)
+    {
+        require_once __DIR__ . '/../../includes/fieldvocab/FieldVocab.php';
+        foreach ($cat['groups'] as $g => &$group) {
+            if (!isset(self::$VOCAB_FORMS[$g])) { continue; }
+            $forms = self::$VOCAB_FORMS[$g];
+            foreach ($group['fields'] as &$f) {
+                if (!isset($f['vocab'])) { continue; }
+                if (!is_array($forms)) {
+                    $list = self::mapVocab($forms, $f['name']);
+                    $f['vocab'] = ($list !== null) ? $list : self::trimVocab($f['vocab']);
+                    $f['labels_safe'] = self::labelsSafe($f['vocab']);
+                    continue;
+                }
+                // orientation: one list per type, then cross-type aliases
+                $byType = array();
+                foreach ($forms as $ot => $fk) {
+                    $list = self::mapVocab($fk, $f['name']);
+                    if ($list === null && isset($f['vocab_by_type'][$ot])) { $list = self::trimVocab($f['vocab_by_type'][$ot]); }
+                    if ($list !== null) { $byType[$ot] = $list; }
+                }
+                if (!$byType) { continue; }
+                $f['labels_safe_by_type'] = array();
+                foreach ($byType as $ot => $list) {
+                    foreach ($byType as $other => $olist) {
+                        if ($other === $ot) { continue; }
+                        $list = self::addAliases($list, $olist);
+                    }
+                    $byType[$ot] = self::pruneAliases($list);
+                    $f['labels_safe_by_type'][$ot] = self::labelsSafe($byType[$ot]);
+                }
+                $f['vocab_by_type'] = $byType;
+                // union (planar first) for rows without a type + the dropdown
+                $union = array(); $seen = array(); $dropdown = array(); $seenLabel = array();
+                foreach ($byType as $list) {
+                    foreach ($list as $e) {
+                        if (!isset($seen[$e['value']])) { $seen[$e['value']] = true; $union[] = $e; }
+                        if (empty($e['retired']) && !isset($seenLabel[$e['label']])) {
+                            $seenLabel[$e['label']] = true;
+                            $dropdown[] = $e['label'];
+                        }
+                    }
+                }
+                $f['vocab'] = self::pruneAliases($union);
+                $f['labels_safe'] = self::labelsSafe($f['vocab']);
+                $f['dropdown'] = $dropdown;
+            }
+            unset($f);
+        }
+        unset($group);
+        return $cat;
+    }
+
+    /** Vocab entries for (form, field) from the FieldVocab map, or null when it has none. */
+    protected static function mapVocab($formKey, $field)
+    {
+        $m = FieldVocab::map();
+        if (!isset($m['forms'][$formKey]['fields'][$field])) { return null; }
+        $mf = $m['forms'][$formKey]['fields'][$field];
+        $former = isset($mf['former_labels']) ? $mf['former_labels'] : array();
+        $out = array();
+        // PHP int-coerces numeric keys ("5" -> 5): cast every name back.
+        foreach ($mf['choices'] as $name => $label) {
+            $name = (string)$name;
+            $e = array('value' => $name, 'label' => (string)$label);
+            if (!empty($former[$name])) { $e['aliases'] = array_values(array_map('strval', $former[$name])); }
+            $out[] = $e;
+        }
+        // listed twice with two labels, or unlabeled: known name, no label
+        foreach (isset($mf['ambiguous']) ? $mf['ambiguous'] : array() as $name => $labels) {
+            $out[] = array('value' => (string)$name, 'label' => (string)$name);
+        }
+        foreach (isset($mf['unlabeled']) ? $mf['unlabeled'] : array() as $name) {
+            $out[] = array('value' => (string)$name, 'label' => (string)$name);
+        }
+        // retired: still translates on export + resolves on import, never offered
+        foreach (isset($mf['retired_choices']) ? $mf['retired_choices'] : array() as $name => $r) {
+            $name = (string)$name;
+            $e = array('value' => $name, 'label' => isset($r['label']) ? (string)$r['label'] : $name, 'retired' => true);
+            if (!empty($former[$name])) { $e['aliases'] = array_values(array_map('strval', $former[$name])); }
+            $out[] = $e;
+        }
+        return $out;
+    }
+
+    /** catalog.json list with trimmed labels (the app forms pad a few). */
+    protected static function trimVocab(array $vocab)
+    {
+        foreach ($vocab as &$e) {
+            $e['value'] = (string)$e['value'];
+            $e['label'] = trim((string)$e['label']);
+        }
+        unset($e);
+        return $vocab;
+    }
+
+    /** Add $other's labels as aliases of the same names in $list. */
+    protected static function addAliases(array $list, array $other)
+    {
+        $labelOf = array();
+        foreach ($other as $e) { $labelOf[$e['value']] = $e['label']; }
+        foreach ($list as &$e) {
+            if (isset($labelOf[$e['value']]) && $labelOf[$e['value']] !== $e['label']) {
+                $e['aliases'][] = $labelOf[$e['value']];
+            }
+        }
+        unset($e);
+        return $list;
+    }
+
+    /**
+     * Keep only aliases that point at one name and match no name or label
+     * in the list (case-insensitive), so an alias never steals a token.
+     */
+    protected static function pruneAliases(array $list)
+    {
+        $taken = array();   // lowercased name/label => true
+        foreach ($list as $e) {
+            $taken[mb_strtolower($e['value'])] = true;
+            $taken[mb_strtolower($e['label'])] = true;
+        }
+        $owners = array();  // lowercased alias => [value => true]
+        foreach ($list as $e) {
+            foreach (isset($e['aliases']) ? $e['aliases'] : array() as $a) {
+                $owners[mb_strtolower(trim($a))][$e['value']] = true;
+            }
+        }
+        foreach ($list as &$e) {
+            if (!isset($e['aliases'])) { continue; }
+            $keep = array();
+            foreach ($e['aliases'] as $a) {
+                $a = trim($a);
+                $k = mb_strtolower($a);
+                if ($a === '' || isset($taken[$k]) || count($owners[$k]) > 1 || in_array($a, $keep, true)) { continue; }
+                $keep[] = $a;
+            }
+            if ($keep) { $e['aliases'] = $keep; } else { unset($e['aliases']); }
+        }
+        unset($e);
+        return $list;
+    }
+
+    /**
+     * Can this list export labels and read them back unchanged? No label may
+     * equal (case-insensitive) another entry's label or name.
+     */
+    protected static function labelsSafe(array $list)
+    {
+        $byKey = array();   // lowercased name or label => [value => true]
+        foreach ($list as $e) {
+            $byKey[mb_strtolower($e['value'])][$e['value']] = true;
+            $byKey[mb_strtolower($e['label'])][$e['value']] = true;
+        }
+        foreach ($list as $e) {
+            if (count($byKey[mb_strtolower($e['label'])]) > 1) { return false; }
+        }
+        return true;
     }
 
     /**
@@ -1488,7 +1686,7 @@ class FieldTabularService
             if (empty($vocab)) { return $raw; }
 
             if ($type === 'select_multiple') {
-                $tokens = preg_split('/[;,]/', $raw);
+                $tokens = $this->splitMultiple($raw, $vocab);
                 $outTokens = array();
                 foreach ($tokens as $tok) {
                     $tok = trim($tok);
@@ -1519,6 +1717,60 @@ class FieldTabularService
         return isset($def['vocab']) ? $def['vocab'] : array();
     }
 
+    /** Does the def's list (for this orientation type) export labels? See overlayVocab(). */
+    protected function labelsSafeFor($def, $otShort)
+    {
+        if ($otShort !== null && isset($def['labels_safe_by_type'][$otShort])) {
+            return $def['labels_safe_by_type'][$otShort];
+        }
+        return !empty($def['labels_safe']);
+    }
+
+    /**
+     * Split a select_multiple cell. Exports join with '; ', so ';' splits
+     * first; a piece that is not itself a known name/label/alias is then
+     * split on ',' too (hand-typed "a, b"), which keeps a label that holds
+     * a comma in one piece.
+     */
+    protected function splitMultiple($raw, array $vocab)
+    {
+        $out = array();
+        foreach (explode(';', $raw) as $piece) {
+            if (strpos($piece, ',') === false || $this->matchVocab(trim($piece), $vocab) !== null) {
+                $out[] = $piece;
+                continue;
+            }
+            foreach (explode(',', $piece) as $p) { $out[] = $p; }
+        }
+        return $out;
+    }
+
+    /**
+     * Storage value for a token, case-insensitive: a name first (older files,
+     * hand-typed names), then a label, then an alias (former label, another
+     * orientation type's label). A label or alias shared by two names stays
+     * unresolved (review) rather than picking one. Null = no match.
+     */
+    protected function matchVocab($raw, array $vocab)
+    {
+        $lower = mb_strtolower($raw);
+        foreach ($vocab as $v) {
+            if (mb_strtolower($v['value']) === $lower) { return $v['value']; }
+        }
+        foreach (array('label', 'aliases') as $key) {
+            $hits = array();
+            foreach ($vocab as $v) {
+                $cands = ($key === 'label') ? array($v['label']) : (isset($v['aliases']) ? $v['aliases'] : array());
+                foreach ($cands as $c) {
+                    if (mb_strtolower(trim($c)) === $lower && !in_array($v['value'], $hits, true)) { $hits[] = $v['value']; }
+                }
+            }
+            if (count($hits) === 1) { return $hits[0]; }
+            if (count($hits) > 1) { return null; }
+        }
+        return null;
+    }
+
     /**
      * Resolve one vocab token. Returns the storage value, the raw string
      * (free-text/'other' pathways), or null when pending review.
@@ -1526,12 +1778,8 @@ class FieldTabularService
     protected function resolveVocabToken($raw, $vocab, $group, $name, $isUpdate, $cur,
                                          $vocabRes, &$softVocab, $rowN)
     {
-        $lower = mb_strtolower($raw);
-        foreach ($vocab as $v) {
-            if (mb_strtolower($v['value']) === $lower || mb_strtolower($v['label']) === $lower) {
-                return $v['value'];
-            }
-        }
+        $hit = $this->matchVocab($raw, $vocab);
+        if ($hit !== null) { return $hit; }
         // Round-trip pass-through: value already stored verbatim on this spot.
         if ($isUpdate && $cur !== null && $this->currentContainsVerbatim($cur, $group, $name, $raw)) {
             return $raw;
@@ -1642,6 +1890,7 @@ class FieldTabularService
         $best = null; $bestDist = 4;
         $rawLower = mb_strtolower($raw);
         foreach ($vocab as $v) {
+            if (!empty($v['retired'])) { continue; }
             foreach (array($v['label'], $v['value']) as $cand) {
                 $d = levenshtein($rawLower, mb_strtolower($cand));
                 if ($d < $bestDist) { $bestDist = $d; $best = $v['label']; }
@@ -1806,8 +2055,8 @@ class FieldTabularService
 
         if (!empty($sampleFields)) {
             $curList = is_array($cur['groups']['samples']) ? $cur['groups']['samples'] : array();
-            $fileProj = $this->projectElements($res['samples'], $sampleFields);
-            $curProj  = $this->projectElements($curList, $sampleFields);
+            $fileProj = $this->projectElements($res['samples'], $sampleFields, 'sample');
+            $curProj  = $this->projectElements($curList, $sampleFields, 'sample');
             if ($fileProj !== $curProj) {
                 if (empty($res['samples']) && !empty($curList)) {
                     $warnings[] = array('row' => $n0, 'column' => 'sample',
@@ -1821,8 +2070,8 @@ class FieldTabularService
 
         if (!empty($otherFields)) {
             $curList = is_array($cur['groups']['other_features']) ? $cur['groups']['other_features'] : array();
-            $fileProj = $this->projectElements($res['other_features'], $otherFields);
-            $curProj  = $this->projectElements($curList, $otherFields);
+            $fileProj = $this->projectElements($res['other_features'], $otherFields, 'other_features');
+            $curProj  = $this->projectElements($curList, $otherFields, 'other_features');
             if ($fileProj !== $curProj) {
                 $overlay['groups']['other_features'] = $res['other_features'];
                 $changed = true;
@@ -1887,6 +2136,8 @@ class FieldTabularService
         if ($curNull) { return true; }
         if (is_array($new)) {
             $curArr = is_array($curVal) ? $curVal : (is_string($curVal) ? json_decode($curVal, true) : null);
+            // a select_multiple stored as one plain string is a one-item list
+            if (!is_array($curArr) && is_string($curVal)) { $curArr = array($curVal); }
             if (!is_array($curArr)) { return true; }
             return array_map('strval', $new) !== array_map('strval', $curArr);
         }
@@ -1902,13 +2153,13 @@ class FieldTabularService
         $out = array();
         foreach ((array)$list as $el) {
             $el = (array)$el;
-            $proj = $this->projectOne($el, $fields);
+            $proj = $this->projectOne($el, $fields, 'orientation');
             $proj['_type'] = isset($el['type']) ? (string)$el['type'] : '';
             $proj['_assoc'] = array();
             if (isset($el['associated_orientation']) && is_array($el['associated_orientation'])) {
                 foreach ($el['associated_orientation'] as $child) {
                     $child = (array)$child;
-                    $cp = $this->projectOne($child, $fields);
+                    $cp = $this->projectOne($child, $fields, 'orientation');
                     $cp['_type'] = isset($child['type']) ? (string)$child['type'] : '';
                     $proj['_assoc'][] = $cp;
                 }
@@ -1918,23 +2169,24 @@ class FieldTabularService
         return $out;
     }
 
-    protected function projectElements($list, array $fields)
+    protected function projectElements($list, array $fields, $group = null)
     {
         $out = array();
         foreach ((array)$list as $el) {
-            $out[] = $this->projectOne((array)$el, $fields);
+            $out[] = $this->projectOne((array)$el, $fields, $group);
         }
         return $out;
     }
 
-    protected function projectOne(array $el, array $fields)
+    protected function projectOne(array $el, array $fields, $group = null)
     {
         $proj = array();
         foreach ($fields as $f) {
             if (!isset($el[$f]) || $el[$f] === '' || $el[$f] === null) {
                 $proj[$f] = null;
-            } elseif (is_array($el[$f])) {
-                $vals = array_map('strval', $el[$f]);
+            } elseif (is_array($el[$f]) || $this->isMultipleField($group, $f)) {
+                // a select_multiple stored as one plain string is a one-item list
+                $vals = array_map('strval', (array)$el[$f]);
                 sort($vals);
                 $proj[$f] = $vals;
             } else {
@@ -1942,6 +2194,14 @@ class FieldTabularService
             }
         }
         return $proj;
+    }
+
+    /** Is group.name a select_multiple in the catalog? */
+    protected function isMultipleField($group, $name)
+    {
+        if ($group === null) { return false; }
+        $def = self::fieldDef($group, $name);
+        return is_array($def) && isset($def['type']) && $def['type'] === 'select_multiple';
     }
 
     /**
@@ -2737,10 +2997,10 @@ class FieldTabularService
                 if ($d['group'] === 'spot') {
                     if ($d['name'] === 'latitude')  { $spotCells[$d['header']] = $lat; continue; }
                     if ($d['name'] === 'longitude') { $spotCells[$d['header']] = $lng; continue; }
-                    $spotCells[$d['header']] = isset($props[$d['name']]) ? $this->stringifyCell($props[$d['name']]) : '';
+                    $spotCells[$d['header']] = isset($props[$d['name']]) ? $this->exportCell($props[$d['name']], $d['def'], null) : '';
                 } elseif ($d['group'] === 'geologic_unit' || $d['group'] === 'trace') {
                     $obj = isset($props[$d['group']]) && is_array($props[$d['group']]) ? $props[$d['group']] : array();
-                    $spotCells[$d['header']] = isset($obj[$d['name']]) ? $this->stringifyCell($obj[$d['name']]) : '';
+                    $spotCells[$d['header']] = isset($obj[$d['name']]) ? $this->exportCell($obj[$d['name']], $d['def'], null) : '';
                 }
                 // instance-group columns are filled per payload row below
             }
@@ -2799,6 +3059,11 @@ class FieldTabularService
                 if (isset($payloads[$i])) {
                     $pl = $payloads[$i];
                     $el = (array)$pl['el'];
+                    $elOt = null;   // this row's orientation type: its own labels (quality differs)
+                    if ($pl['kind'] === 'orientation' && isset($el['type'])) {
+                        $st = $this->shortOtype($el['type']);
+                        if (isset(self::$OTYPES[$st])) { $elOt = $st; }
+                    }
                     foreach ($defs as $d) {
                         if ($d['kind'] === 'system') {
                             if ($d['key'] === 'orientation_type' && $pl['kind'] === 'orientation') {
@@ -2812,7 +3077,7 @@ class FieldTabularService
                         if (($pl['kind'] === 'orientation' && $d['group'] === 'orientation')
                             || ($pl['kind'] === 'sample' && $d['group'] === 'sample')
                             || ($pl['kind'] === 'other_features' && $d['group'] === 'other_features')) {
-                            $row[$d['header']] = isset($el[$d['name']]) ? $this->stringifyCell($el[$d['name']]) : '';
+                            $row[$d['header']] = isset($el[$d['name']]) ? $this->exportCell($el[$d['name']], $d['def'], $elOt) : '';
                         }
                     }
                 }
@@ -2830,6 +3095,31 @@ class FieldTabularService
             if ($f === $full) { return $short; }
         }
         return $full;
+    }
+
+    /**
+     * One exported cell: stored choice names become their form labels when
+     * the field's list is labels_safe (else names, so the file still reads
+     * back unchanged); values outside the list stay as stored.
+     */
+    protected function exportCell($v, $def, $otShort)
+    {
+        if (is_array($def) && isset($def['type'])
+            && ($def['type'] === 'select_one' || $def['type'] === 'select_multiple')
+            && $this->labelsSafeFor($def, $otShort)) {
+            $labelOf = array();
+            foreach ($this->vocabFor($def, $otShort) as $e) { $labelOf[$e['value']] = $e['label']; }
+            if (is_array($v)) {
+                foreach ($v as $k => $item) {
+                    if ((is_string($item) || is_int($item) || is_float($item)) && isset($labelOf[(string)$item])) {
+                        $v[$k] = $labelOf[(string)$item];
+                    }
+                }
+            } elseif ((is_string($v) || is_int($v) || is_float($v)) && isset($labelOf[(string)$v])) {
+                $v = $labelOf[(string)$v];
+            }
+        }
+        return $this->stringifyCell($v);
     }
 
     protected function stringifyCell($v)
@@ -2977,8 +3267,16 @@ class FieldTabularService
                 $vocabColumns[] = array('header' => $d['header'], 'label' => 'Orientation Role',
                                         'values' => array('primary', 'associated'));
             } elseif ($d['kind'] === 'field' && isset($d['def']['vocab']) && count($d['def']['vocab'])) {
+                // orientation: every type's labels (a tabular row can pick
+                // "5 - best - accurate"); retired choices are never offered
                 $labels = array();
-                foreach ($d['def']['vocab'] as $vv) { $labels[] = $vv['label']; }
+                if (isset($d['def']['dropdown'])) {
+                    $labels = $d['def']['dropdown'];
+                } else {
+                    foreach ($d['def']['vocab'] as $vv) {
+                        if (empty($vv['retired'])) { $labels[] = $vv['label']; }
+                    }
+                }
                 $vocabColumns[] = array('header' => $d['header'],
                                         'label' => self::displayHeader($d['group'], $d['name']),
                                         'values' => $labels);
