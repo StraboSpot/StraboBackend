@@ -153,7 +153,9 @@
 
     // Set subtitle
     var subtitle = rootSpot.properties.name || ('Spot ' + spotId);
-    var profileLabel = (stratSection.column_profile || '').replace(/_/g, ' ');
+    var rootShown = displayProps(rootSpot);
+    var profileLabel = (rootShown.sed && rootShown.sed.strat_section && rootShown.sed.strat_section.column_profile) || '';
+    if (!isLabel(profileLabel)) profileLabel = profileLabel.replace(/_/g, ' ');
     document.getElementById('strat-subtitle').textContent = subtitle + ' — ' + profileLabel;
 
     return { rootSpot: rootSpot, spots: spots, stratSection: stratSection };
@@ -979,7 +981,7 @@
     var content = document.getElementById('detail-panel-content');
     var title = document.getElementById('detail-panel-title');
 
-    var props = spot.properties || {};
+    var props = displayProps(spot);   // form labels; the drawing keeps spot.properties raw
     var sed = props.sed || {};
 
     title.textContent = props.name || 'Unit Details';
@@ -1042,7 +1044,19 @@
 
   function formatLabel(str) {
     if (!str) return '';
-    return str.replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+    if (isLabel(str)) return str;   // a form label: exactly as the app writes it (D6)
+    return String(str).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
+  }
+
+  // Form labels (feature.labels from getData.php) applied to a COPY of the
+  // properties (FieldVocabDisplay), for display only.
+  function displayProps(spot) {
+    var props = (spot && spot.properties) || {};
+    return (spot && window.FieldVocabDisplay) ? window.FieldVocabDisplay.copy(props, spot.labels) : props;
+  }
+
+  function isLabel(s) {
+    return !!(window.FieldVocabDisplay && window.FieldVocabDisplay.isLabel(s));
   }
 
   function escapeHtml(str) {

@@ -17,7 +17,8 @@
  *                                           (Globe View D7: one marker
  *                                           per matching project)
  *                GET  ?action=facets[&subsystems=field,micro,...]
- *                GET  ?action=vocab&facet=<facet>
+ *                GET  ?action=vocab&facet=<facet>   (+ labels: {value: form label})
+ *                GET  ?action=vocab_labels&facet=<facet>&values=<JSON array>
  *                GET  ?action=saved_list
  *                POST ?action=saved_create  body = {search_name, dsl}
  *                POST ?action=saved_update  body = {pkey, search_name?, dsl?}
@@ -98,6 +99,11 @@ try {
         case 'vocab':
             $facet = isset($_GET['facet']) ? (string)$_GET['facet'] : '';
             respond($svc->vocab($facet));
+
+        case 'vocab_labels':
+            $facet = isset($_GET['facet']) ? (string)$_GET['facet'] : '';
+            $values = isset($_GET['values']) ? json_decode((string)$_GET['values'], true) : array();
+            respond($svc->vocabLabels($facet, $values));
 
         case 'saved_list':
             requireLogin($svc);

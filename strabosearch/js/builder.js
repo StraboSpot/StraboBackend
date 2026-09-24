@@ -406,10 +406,13 @@
 		function renderChips() {
 			chips.innerHTML = '';
 			row.value.forEach(function (v) {
-				var chip = el('span', 'ss-chip', String(v));
+				// the chip reads the form label; row.value keeps the stored name
+				var text = C.displayValue(c.vocab, v);
+				var chip = el('span', 'ss-chip', text);
+				if (text !== String(v)) chip.title = String(v);
 				var x = el('a', null, '×');
 				x.setAttribute('role', 'button');
-				x.setAttribute('aria-label', 'Remove ' + v);
+				x.setAttribute('aria-label', 'Remove ' + text);
 				x.tabIndex = 0;
 				function remove() {
 					var i = row.value.indexOf(v);
@@ -441,6 +444,8 @@
 		box.appendChild(chips);
 		if (c.hint) box.appendChild(el('span', 'ss-hint', c.hint));
 		renderChips();
+		// values from a URL / saved search: relabel once their labels arrive
+		C.ensureValues(c.vocab, row.value.slice()).then(renderChips);
 	}
 
 	function wSinglePick(row, box, c) {

@@ -19,6 +19,7 @@
  */
 
 require_once(__DIR__ . '/SearchQueryBuilder.php');
+require_once(__DIR__ . '/SearchVocabLabels.php');
 
 class StraboSearchService
 {
@@ -167,6 +168,37 @@ class StraboSearchService
 
     public function vocab($facet)
     {
+        $r = $this->vocabValues($facet);
+        if (SearchVocabLabels::handles($facet)) {
+            // Display labels (form labels) beside the stored values: value =>
+            // label where they differ. Values, the DSL and the index stay raw.
+            $vals = array();
+            foreach ($r['values'] as $v) {
+                if (is_array($v)) $v = isset($v['path']) ? $v['path'] : (isset($v['value']) ? $v['value'] : null);
+                if ($v !== null) $vals[] = $v;
+            }
+            $r['labels'] = (object)SearchVocabLabels::labels($facet, $vals);
+        }
+        return $r;
+    }
+
+    /**
+     * Labels for stored values of one facet (chips and summaries of saved
+     * searches / URLs whose values are not in the public vocab feed).
+     *
+     * @param string $facet
+     * @param array  $values
+     * @return array {facet, labels: {value: label}} (only values whose label differs)
+     */
+    public function vocabLabels($facet, $values)
+    {
+        if (!is_array($values)) $values = array();
+        $values = array_slice(array_values($values), 0, 500);
+        return array('facet' => $facet, 'labels' => (object)SearchVocabLabels::labels($facet, $values));
+    }
+
+    private function vocabValues($facet)
+    {
         switch ($facet) {
             case 'rock_type':
                 $rows = $this->db->get_results_prepared(
@@ -174,8 +206,10 @@ class StraboSearchService
                      ORDER BY path", array());
                 $out = array();
                 foreach ((array)$rows as $r) {
+                    $segs = explode(':', $r->path);
                     $out[] = array('path' => $r->path, 'parent_path' => $r->parent_path,
-                                   'depth' => (int)$r->depth);
+                                   'depth' => (int)$r->depth,
+                                   'label' => SearchVocabLabels::segmentLabel('rock_type', $segs, count($segs) - 1));
                 }
                 return array('facet' => $facet, 'values' => $out);
 

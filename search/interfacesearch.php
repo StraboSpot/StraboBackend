@@ -23,6 +23,7 @@ include "../neodb.php"; //neo4j database abstraction layer
 include "../db/strabospotclass.php"; //strabospot specific functions
 include_once('../includes/geophp/geoPHP.inc'); //geospatial functions
 include_once('../includes/UUID.php'); //UUID Class
+include_once('../includes/fieldvocab/FieldVocab.php'); //Field choice labels (display overlay)
 include_once('../includes/straboClasses/searchQueryRowBuilder.php'); //Build SearchQuery
 $querybuilder = new searchQueryRowBuilder();
 $querybuilder->setDb($db);
@@ -336,6 +337,10 @@ if($dsids == ""){
 			
 			} //end if hasimagebasemap = no
 			
+			// Form labels for the sidebar (display only; properties stay as stored)
+			$labels = FieldVocab::displayOverlay($thisspot->properties);
+			if($labels) $thisspot->labels = $labels;
+
 			$spots[]=$thisspot;
 
 		} // end if wkt
@@ -386,6 +391,10 @@ if($dsids == ""){
 	if($project_tags!=""){
 		$project_tags = json_decode($project_tags);
 		$out['tags'] = $project_tags;
+		// Form labels of the tag values: [[[index, field], label], ...] (the type stays raw)
+		$tagLabels = FieldVocab::displayOverlay(array('tags' => $project_tags), array('tags:type'));
+		foreach($tagLabels as $i => $tl) array_shift($tagLabels[$i][0]);
+		if($tagLabels) $out['tag_labels'] = $tagLabels;
 	}
 
 	$project_relationships = $neodb->get_var("match (p:Project)-[HAS_DATASET]->(d:Dataset) where d.id=$dsids and d.userpkey = $thisuserpkey return p.json_relationships;");

@@ -32,6 +32,8 @@
  *                          "retired": {last_seen}                    // field gone from the form
  *                        }
  *                      },
+ *                      "layout": [[name, label, type], ...],         // every data row in form order (additive,
+ *                                                                    // 2026-09-24: legacy viewers' field lists)
  *                      "retired": {last_seen}                        // form gone from the registry
  *                    }
  *                  }
@@ -181,6 +183,40 @@ class FieldVocabBuilder
 		return $fields;
 	}
 
+	/** Survey row types that hold no stored value (groups, metadata, UI rows). */
+	const NON_DATA_TYPES = array('begin_group', 'end_group', 'begin_repeat', 'end_repeat', 'begin', 'end',
+		'calculate', 'start', 'acknowledge', 'note', 'deviceid', 'today', 'hidden');
+
+	/**
+	 * Every data row of one KoBo form in form order: [[name, label, type], ...].
+	 * type is the first word of the survey type (text, select_one, decimal, ...);
+	 * an empty label becomes the name.
+	 *
+	 * @param string $json  form file text
+	 * @return array
+	 * @throws Exception on unparseable JSON
+	 */
+	public static function formLayout($json)
+	{
+		$form = json_decode($json, true);
+		if (!is_array($form) || !isset($form['survey']) || !is_array($form['survey'])) {
+			throw new Exception('not a KoBo form (no survey array)');
+		}
+		$out = array();
+		$seen = array();
+		foreach ($form['survey'] as $row) {
+			if (!isset($row['type'], $row['name']) || (string)$row['name'] === '') continue;
+			$type = preg_split('/\s+/', trim((string)$row['type']))[0];
+			if (in_array($type, self::NON_DATA_TYPES, true)) continue;
+			$name = (string)$row['name'];
+			if (isset($seen[$name])) continue;
+			$seen[$name] = true;
+			$label = trim(isset($row['label']) ? (string)$row['label'] : '');
+			$out[] = array($name, $label === '' ? $name : $label, $type);
+		}
+		return $out;
+	}
+
 	/**
 	 * Build a fresh map from the forms folder of one release.
 	 *
@@ -211,7 +247,7 @@ class FieldVocabBuilder
 				throw new Exception("$path: " . $e->getMessage());
 			}
 			ksort($fields);
-			$forms[$key] = array('file' => $path, 'fields' => $fields);
+			$forms[$key] = array('file' => $path, 'fields' => $fields, 'layout' => self::formLayout($files[$path]));
 		}
 
 		return array(

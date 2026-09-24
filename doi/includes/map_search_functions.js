@@ -665,17 +665,33 @@ var spotStyleFunction = function() {
 	};
 };
 
+// Layer names: the form label from data_model.js (controlledVocab) first, then the old built-in lists.
+var cvLayerLabel = function(keys, value){
+	if(typeof controlledVocab == 'undefined') return undefined;
+	for(var i = 0; i < keys.length; i++){
+		var v = controlledVocab[keys[i]];
+		if(v && typeof v[value] != 'undefined') return v[value];
+	}
+	return undefined;
+}
+
 var getFeatureTypeLabel = function(feature_type){
+	var l = cvLayerLabel(['planar_orientation_feature_type', 'linear_orientation_feature_type', 'tabular_zone_orientation_feature_type', 'fabric_feature_type', 'fold_feature_type', 'tensor_feature_type', 'other_3d_structure_feature_type', 'fault_feature_type'], feature_type);
+	if(l !== undefined) return l;
 	var feature_types = JSON.parse('{"groove_marks":"groove marks","parting_lineat":"parting lineations","magmatic_miner_1":"magmatic mineral alignment","xenolith_encla":"xenolith/enclave alignment","intersection":"intersection","pencil_cleav":"pencil cleavage","mineral_align":"mineral alignment","deformed_marke":"deformed marker","rodding":"rodding","boudin":"boudin","mullions":"mullions","fold_hinge":"fold hinge","striations":"striations","slickenlines":"slickenlines","slickenfibers":"slickenfibers","mineral_streak":"mineral streaks","vorticity_axis":"vorticity axis","flow_transport":"flow/transport direction","vergence":"vergence","vector":"vector","other":"other","bedding":"bedding","contact":"contact","foliation":"foliation","fracture":"fracture","vein":"vein","fault":"fault","shear_zone":"shear zone","shear_zone_bou":"shear zone boundary","fold_axial_surface":"fold axial surface","plane_of_boudinage":"plane of boudinage","plane_of_mullions":"plane of mullions","stratigraphic":"stratigraphic","intrusive":"intrusive body","injection":"injection structure","vein_array":"vein array","zone_fracturin":"zone of fracturing","zone_faulting":"zone of faulting","damage_zone":"damage zone","alteration_zone":"alteration zone","enveloping_surface":"enveloping surface","unknown":"unknown","tectonite":"tectonite","igneous_migmat":"igneous/migmatite","soft_sediment_":"soft sediment deformation","other_fabric":"other fabric","anticline":"anticline","syncline":"syncline","monocline":"monocline","antiform":"antiform","synform":"synform","s_fold":"s-fold","z_fold":"z-fold","m_fold":"m-fold","sheath":"sheath","single_layer_b":"single-layer buckle","ptygmatic":"ptygmatic","crenulation":"crenulation","interfolial":"interfolial","boudinage":"boudinage","mullion":"mullion","lobate_cuspate":"lobate-cuspate","other_3d_structure":"other 3D structure","ellipsoidal_data":"ellipsoidal data","non_ellipsoidal_data":"non-ellipsoidal data","elliptical_data":"elliptical data"}');
 	return feature_types[feature_type];
 }
 
 var getTraceTypeLabel = function(feature_type){
+	var l = cvLayerLabel(['trace_trace_type'], feature_type);
+	if(l !== undefined) return l;
 	var feature_types = JSON.parse('{"contact":"contact","geologic_struc":"geologic structure","geomorphic_fea":"geomorphic feature","anthropenic_fe":"anthropogenic feature","scale_bar":"scale bar","geological_cross_section":"geological cross section","geophysical_cross_section":"geophysical cross section","stratigraphic_section":"stratigraphic section","other_feature":"other feature"}');
 	return feature_types[feature_type];
 }
 
 var getSurfaceFeatureTypeLabel = function(feature_type){
+	var l = cvLayerLabel(['surface_feature_surface_feature_type'], feature_type);
+	if(l !== undefined) return l;
 	var feature_types = JSON.parse('{"rock_unit":"rock unit","contiguous_outcrop":"contiguous outcrop","geologic_structure":"geologic structure","geomorphic_feature":"geomorphic feature","anthropogenic_feature":"anthropogenic feature","extent_of_mapping":"extent of mapping","extent_of_biological_marker":"extent of biological marker","subjected_to_similar_process":"subjected to similar process","gradients":"gradients","other":"other"}');
 	return feature_types[feature_type];
 }
@@ -1204,6 +1220,8 @@ var addFeatures = function(id){
 
 			loadedFeatures.datasets.push(newds);
 		});
+		// tag values as form labels (display only: id, type, spots, features stay as stored)
+		if(window.FieldVocabDisplay && result.tag_labels) result.tags = FieldVocabDisplay.copy(result.tags, result.tag_labels);
 		_.each(result.tags, function(newtag){
 			newtag.datasetid=id;
 			loadedFeatures.tags.push(newtag);
@@ -1325,7 +1343,7 @@ var getCurrentSpot = function(){
 		currentSpot="";
 		_.each(loadedFeatures.features, function (spot) {
 			if(spot.properties.id == clickedMapFeature){
-				currentSpot = spot;
+				currentSpot = window.FieldVocabDisplay ? FieldVocabDisplay.feature(spot) : spot;   // sidebar reads form labels; loadedFeatures keeps the stored names
 			}	
 		});
 		resolve();

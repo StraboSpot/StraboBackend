@@ -138,6 +138,42 @@ function text_diff($want, $got) {
 /* ----------------------------------------------------------------- main */
 
 $captured = array();   // surface => canonical text
+/**
+ * Capture a viewer feed with its per-feature `labels` overlay removed, then
+ * check the overlay: every path lands on a stored scalar that differs from
+ * its label, never on a tag type.
+ */
+function overlay_capture($name, $st, $tx) {
+	$ov = array();
+	$j = $st === 200 ? json_decode($tx, true) : null;
+	if (is_array($j) && isset($j['features'])) {
+		foreach ($j['features'] as $i => $f) {
+			if (isset($f['labels'])) { $ov[] = array($f['properties'], $f['labels']); unset($j['features'][$i]['labels']); }
+		}
+	}
+	// legacy viewer feeds also label the project tags they return: tag_labels = [[[index, field], label], ...]
+	if (is_array($j) && isset($j['tag_labels'])) {
+		$tl = array();
+		foreach ($j['tag_labels'] as $e) { array_unshift($e[0], 'tags'); $tl[] = $e; }
+		$ov[] = array(array('tags' => isset($j['tags']) ? $j['tags'] : array()), $tl);
+		unset($j['tag_labels']);
+	}
+	capture($name, is_array($j) ? canon($j) : null, "HTTP $st");
+	$bad = array(); $n = 0;
+	foreach ($ov as $pl) {
+		foreach ($pl[1] as $e) {
+			$n++;
+			$o = $pl[0];
+			foreach ($e[0] as $k) { $o = (is_array($o) && array_key_exists($k, $o)) ? $o[$k] : null; }
+			$last = end($e[0]);
+			if (!is_string($o) && !is_int($o)) $bad[] = json_encode($e) . ' (no stored value)';
+			elseif ((string)$o === $e[1]) $bad[] = json_encode($e) . ' (label equals the stored value)';
+			elseif ($e[0][0] === 'tags' && $last === 'type') $bad[] = json_encode($e) . ' (tag type translated)';
+		}
+	}
+	check("$name labels overlay: $n entries, each on a stored choice value", $n > 0 && !$bad, implode('; ', array_slice($bad, 0, 5)));
+}
+
 function capture($name, $canonText, $what = '') {
 	global $captured;
 	$ok = $canonText !== null && trim($canonText) !== '' && trim($canonText) !== 'null';
@@ -178,14 +214,20 @@ try {
 	list($st, $tx) = http('GET', '/spot/' . $S['interval'], null, 'session');      capture('spotjson_interval', $st === 200 ? canon_text($tx) : null, "HTTP $st");
 
 	section('JS feeds');
-	list($st, $tx) = http('GET', '/StraboFieldDatasetDetail/api/spots.php?dataset_id=' . GF_DS_A, null, 'none');   capture('js_datasetdetail_spots_a', $st === 200 ? canon_text($tx) : null, "HTTP $st");
-	list($st, $tx) = http('GET', '/stratSectionDetail/getData.php?spot_id=' . $S['sedbase'], null, 'none');        capture('js_stratsection', $st === 200 ? canon_text($tx) : null, "HTTP $st");
+	// Phase 5b: the two viewer feeds carry a sanctioned `labels` overlay beside
+	// the raw properties (display only). Compare each feed without it; check the
+	// overlay on its own (overlay_check).
+	list($st, $tx) = http('GET', '/StraboFieldDatasetDetail/api/spots.php?dataset_id=' . GF_DS_A, null, 'none');
+	overlay_capture('js_datasetdetail_spots_a', $st, $tx);
+	list($st, $tx) = http('GET', '/stratSectionDetail/getData.php?spot_id=' . $S['sedbase'], null, 'none');
+	overlay_capture('js_stratsection', $st, $tx);
 	list($st, $tx) = http('GET', '/doi/geoJSON.php?datasetid=' . GF_DS_A, null, 'none');                          capture('js_doi_geojson_a', $st === 200 ? canon_text($tx) : null, "HTTP $st");
 	$doiDir = "/srv/app/www/doi/doiFiles/$DOI_UUID";
 	@mkdir($doiDir, 0775, true);
 	file_put_contents("$doiDir/data.json", json_encode($doi, JSON_PRETTY_PRINT));   // exactly how build_doi.php writes it
 	list($st, $tx) = http('GET', "/doi/doiproject.php?u=$DOI_UUID", null, 'none');                                capture('js_doiproject', $st === 200 ? canon_text($tx) : null, "HTTP $st");
-	list($st, $tx) = http('GET', "/doi/doisearch.php?u=$DOI_UUID-" . GF_DS_A, null, 'none');                      capture('js_doisearch_a', $st === 200 ? canon_text($tx) : null, "HTTP $st");
+	list($st, $tx) = http('GET', "/doi/doisearch.php?u=$DOI_UUID-" . GF_DS_A, null, 'none');
+	overlay_capture('js_doisearch_a', $st, $tx);
 
 	section('StraboSamples');
 	list($st, $tx) = http('GET', "/samplesdb/sample/977910000301?owner=$OWNER");

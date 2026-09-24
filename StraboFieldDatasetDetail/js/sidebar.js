@@ -106,8 +106,20 @@
 		});
 	}
 
-	function renderSidebar(spot) {
+	// Form labels (feature.labels from api/spots.php) applied to a COPY of
+	// the properties (FieldVocabDisplay): the sidebar reads labels, symbology
+	// and the strat patterns keep the stored names.
+	function displayProps(spot) {
 		var props = (spot && spot.properties) || {};
+		return (spot && global.FieldVocabDisplay) ? global.FieldVocabDisplay.copy(props, spot.labels) : props;
+	}
+
+	function titleText(v) {
+		return global.FieldVocabDisplay ? global.FieldVocabDisplay.title(v, prettyLabel) : prettyLabel(v);
+	}
+
+	function renderSidebar(spot) {
+		var props = displayProps(spot);
 		var sections = buildSections(spot, props);
 
 		var html = '';
@@ -296,7 +308,7 @@
 	}
 
 	function orientationLabel(o, idx) {
-		var type = o.feature_type ? prettyLabel(o.feature_type) : (o.type ? prettyLabel(o.type) : 'Orientation');
+		var type = o.feature_type ? titleText(o.feature_type) : (o.type ? prettyLabel(o.type) : 'Orientation');
 		return type + ' ' + (idx + 1);
 	}
 
@@ -339,7 +351,7 @@
 		var html = '';
 		arr.forEach(function (item, idx) {
 			var title = (item && (item.label || item.type || item.name))
-				? prettyLabel(item.label || item.type || item.name)
+				? titleText(item.label || item.type || item.name)
 				: (itemLabel + ' ' + (idx + 1));
 			html += '<div class="ds-item">';
 			html += '  <div class="ds-item-title">' + escapeHtml(title) + '</div>';

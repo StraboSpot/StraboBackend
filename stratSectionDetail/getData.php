@@ -3,6 +3,9 @@
  * File: getData.php
  * Description: AJAX endpoint for strat section data. Returns GeoJSON FeatureCollection
  *              containing the root strat section spot and all child spots.
+ *              Properties stay as stored (the patterns key on the raw names);
+ *              a feature with form labels also carries labels: [[path, label], ...]
+ *              (FieldVocab::displayOverlay) for the detail panel.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -13,6 +16,7 @@
 
 session_start();
 include("../prepare_connections.php");
+include_once(__DIR__ . "/../includes/fieldvocab/FieldVocab.php");
 
 header('Content-type: application/json');
 
@@ -72,6 +76,11 @@ foreach ($features as $feature) {
 
         $outfeatures[] = $newfeature;
     }
+}
+
+foreach ($outfeatures as $f) {
+    $labels = FieldVocab::displayOverlay($f->properties);
+    if ($labels) $f->labels = $labels;
 }
 
 $out->features = $outfeatures;

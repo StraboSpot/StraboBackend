@@ -87,7 +87,8 @@ $spot_id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 <script>
     var STRAT_SPOT_ID = <?php echo $spot_id; ?>;
 </script>
-<script src="js/stratViewer.js"></script>
+<script src="/assets/js/fieldvocab_display.js?v=<?php echo filemtime(__DIR__ . '/../assets/js/fieldvocab_display.js'); ?>"></script>
+<script src="js/stratViewer.js?v=<?php echo filemtime(__DIR__ . '/js/stratViewer.js'); ?>"></script>
 <?php endif; ?>
 
 <?php include("../includes/mfooter.php"); ?>

@@ -1,0 +1,5718 @@
+{
+    "about": "Frozen 2026-09-24 from includes/straboClasses/kobofiles/xls (2019 KoBo forms; rock_unit + tephra 2024) by straboModelClass::loadXLSFiles, then the xls were retired. Shapefile import column catalog + legacy field/choice fallbacks. Current labels come from the StraboField forms (includes/fieldvocab).",
+    "fields": [
+        {
+            "group": "spot",
+            "name": "name",
+            "label": "Spot Name",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "spot",
+            "name": "altitude",
+            "label": "Altitude",
+            "hint": "Height of the position in meters above the ellipsoid of the earth.",
+            "type": "geopoint"
+        },
+        {
+            "group": "spot",
+            "name": "spot_radius",
+            "label": "Radius of Spot",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "spot",
+            "name": "spot_radius_units",
+            "label": "Spot Radius Units",
+            "hint": "",
+            "type": "select_one lx2qe26"
+        },
+        {
+            "group": "spot",
+            "name": "notes",
+            "label": "Notes",
+            "hint": "",
+            "type": "note"
+        },
+        {
+            "group": "rock_unit",
+            "name": "name",
+            "label": "Rock Unit Name",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "unit_label_abbreviation",
+            "label": "Unit Label (abbreviation)",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "map_unit_name",
+            "label": "Map Unit Name",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "member_name",
+            "label": "Member Name",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "submember_name",
+            "label": "Submember Name",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "absolute_age_of_geologic_unit",
+            "label": "Absolute Age of Geologic Unit (Ma)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "rock_unit",
+            "name": "age_uncertainty",
+            "label": "Age Uncertainty (Ma)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "rock_unit",
+            "name": "rock_type",
+            "label": "Rock Type",
+            "hint": "Type: sedimentary, igneous, metamorphic, or sediment",
+            "type": "select_one rm0pv08"
+        },
+        {
+            "group": "rock_unit",
+            "name": "sediment_type",
+            "label": "Sediment Type",
+            "hint": "Specific type of sediment",
+            "type": "select_one ej6zw88"
+        },
+        {
+            "group": "rock_unit",
+            "name": "other_sediment_type",
+            "label": "Other Sediment Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "sedimentary_rock_type",
+            "label": "Sedimentary Rock Type",
+            "hint": "Specific type of sedimentary rock",
+            "type": "select_one bt4yo56"
+        },
+        {
+            "group": "rock_unit",
+            "name": "other_sedimentary_rock_type",
+            "label": "Other Sedimentary Rock Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "igneous_rock_class",
+            "label": "Igneous Rock Class",
+            "hint": "Volcanic, hypabyssal or plutonic",
+            "type": "select_one nm4yc64"
+        },
+        {
+            "group": "rock_unit",
+            "name": "volcanic_rock_type",
+            "label": "Volcanic Rock Type",
+            "hint": "Specific volcanic rock type",
+            "type": "select_one gw1hp47"
+        },
+        {
+            "group": "rock_unit",
+            "name": "other_volcanic_rock_type",
+            "label": "Other Volcanic Rock Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "plutonic_rock_types",
+            "label": "Plutonic Rock Types",
+            "hint": "Specific plutonic rock type",
+            "type": "select_one pu9hj08"
+        },
+        {
+            "group": "rock_unit",
+            "name": "other_plutonic_rock_type",
+            "label": "Other Plutonic Rock Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "metamorphic_rock_types",
+            "label": "Metamorphic Rock Types",
+            "hint": "Specific metamorphic rock type",
+            "type": "select_one yg0ew35"
+        },
+        {
+            "group": "rock_unit",
+            "name": "other_metamorphic_rock_type",
+            "label": "Other Metamorphic Rock Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "metamorphic_grade",
+            "label": "Metamorphic Grade",
+            "hint": "Specific metamorphic grade",
+            "type": "select_one ak6ci54"
+        },
+        {
+            "group": "rock_unit",
+            "name": "other_metamorphic_grade",
+            "label": "Other Metamorphic Grade",
+            "hint": "metamorphic grade not given in list",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "epoch",
+            "label": "Epoch",
+            "hint": "Specific geologic time epoch",
+            "type": "select_one kf0mi66"
+        },
+        {
+            "group": "rock_unit",
+            "name": "other_epoch",
+            "label": "Other Epoch",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "period",
+            "label": "Period",
+            "hint": "Specific geologic time period",
+            "type": "select_one xw5wu04"
+        },
+        {
+            "group": "rock_unit",
+            "name": "era",
+            "label": "Era",
+            "hint": "Specific geologic time era",
+            "type": "select_one kb2cc45"
+        },
+        {
+            "group": "rock_unit",
+            "name": "eon",
+            "label": "Eon",
+            "hint": "Specific geologic time eon",
+            "type": "select_one fy5ep25"
+        },
+        {
+            "group": "rock_unit",
+            "name": "age_modifier",
+            "label": "Age Modifier",
+            "hint": "Age modifier to era, period or epoch",
+            "type": "select_one ns6qv42"
+        },
+        {
+            "group": "rock_unit",
+            "name": "description",
+            "label": "Description",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "rock_unit",
+            "name": "notes",
+            "label": "Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "trace_quality",
+            "label": "Trace Quality",
+            "hint": "Quality of trace? Known, approximate, inferred, concealed, questioned",
+            "type": "select_one wb5nf41"
+        },
+        {
+            "group": "trace",
+            "name": "other_trace_quality",
+            "label": "Other Trace Quality",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "trace_type",
+            "label": "Trace Type",
+            "hint": "contact, structure, geomorphic, anthropogenic, other",
+            "type": "select_one pl5yo85"
+        },
+        {
+            "group": "trace",
+            "name": "contact_type",
+            "label": "Contact Type",
+            "hint": "depositional, metamorphic, igneous, marker, other",
+            "type": "select_one lx9ax28"
+        },
+        {
+            "group": "trace",
+            "name": "other_contact_type",
+            "label": "Other Contact Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "depositional_contact_type",
+            "label": "Depositional Contact Type",
+            "hint": "stratigraphic, alluvial, unconformities",
+            "type": "select_one bi4sw60"
+        },
+        {
+            "group": "trace",
+            "name": "other_depositional_type",
+            "label": "Other Depositional Contact",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "intrusive_contact_type",
+            "label": "Intrusive Contact Type",
+            "hint": "dike, sill, pluton, migmatite, injectite",
+            "type": "select_one cj4zw02"
+        },
+        {
+            "group": "trace",
+            "name": "other_intrusive_contact",
+            "label": "Other Intrusive Contact",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "metamorphic_contact_type",
+            "label": "Metamorphic Contact Type",
+            "hint": "between layers, isograd, other",
+            "type": "select_one pb5wo52"
+        },
+        {
+            "group": "trace",
+            "name": "other_metamorphic_contact",
+            "label": "Other Metamorphic Contact",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "marker_layer_details",
+            "label": "Marker Layer Details",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "geologic_structure_type",
+            "label": "Geologic Structure Type",
+            "hint": "fault, shear zone, axial trace",
+            "type": "select_one iz4fr14"
+        },
+        {
+            "group": "trace",
+            "name": "shear_sense",
+            "label": "Shear Sense",
+            "hint": "dextral, sinistral, normal, reverse, oblique",
+            "type": "select_one os1df47"
+        },
+        {
+            "group": "trace",
+            "name": "other_shear_sense",
+            "label": "Other Shear Sense",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "other_structural_zones",
+            "label": "Other Structural Zones",
+            "hint": "deformation band; fracture, damage, alteration zones, domain boundary",
+            "type": "select_one hz6ha86"
+        },
+        {
+            "group": "trace",
+            "name": "other_other_structural_zone",
+            "label": "Other Other Structural Zone",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "fold_type",
+            "label": "Fold Type",
+            "hint": "What is the shape of the fold when looking down-plunge?",
+            "type": "select_one wg6ry31"
+        },
+        {
+            "group": "trace",
+            "name": "other_fold_type",
+            "label": "Other Fold Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "fold_attitude",
+            "label": "Fold Attitude",
+            "hint": "Orientation of fold: pluging, upright, overturned, etc.",
+            "type": "select_one iq4bx64"
+        },
+        {
+            "group": "trace",
+            "name": "other_fold_attitude",
+            "label": "Other Fold Attitude",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "geomorphic_feature",
+            "label": "Geomorphic Feature",
+            "hint": "gully, ridge, rill, striation, stream, shoreline",
+            "type": "select_one er5hu03"
+        },
+        {
+            "group": "trace",
+            "name": "other_geomorphic_feature",
+            "label": "Other Geomorphic Feature",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "antropogenic_feature",
+            "label": "Antropogenic Feature",
+            "hint": "fence, property line, road, trail, other",
+            "type": "select_one gw8je20"
+        },
+        {
+            "group": "trace",
+            "name": "other_anthropogenic_feature",
+            "label": "Other Anthropogenic Feature",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "other_feature",
+            "label": "Other Feature",
+            "hint": "extent of mapping or biological marker",
+            "type": "select_one lh87q41"
+        },
+        {
+            "group": "trace",
+            "name": "other_other_feature",
+            "label": "Other Other Features",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "trace_character",
+            "label": "Trace Character",
+            "hint": "sharp, gradational, chilled, brecciated, other",
+            "type": "select_one rd1pp06"
+        },
+        {
+            "group": "trace",
+            "name": "other_trace_character",
+            "label": "Other Trace Character",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "trace",
+            "name": "tace_notes",
+            "label": "Trace Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "label",
+            "label": "Label",
+            "hint": "If a label is not specified a default label will be given.",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "feature_type",
+            "label": "Planar Feature Type",
+            "hint": "Type of planar geologic feature: e.g., bedding, contact, foliation, fracture, vein, shear zone",
+            "type": "select_one yy6na02"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "strike",
+            "label": "Strike",
+            "hint": "Azimuth in degrees",
+            "type": "integer"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "dip_direction",
+            "label": "Dip Direction",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "dip",
+            "label": "Dip",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "facing",
+            "label": "Plane Facing",
+            "hint": "Orientation of plane relative to original position e.g., upright, overturned, vertical",
+            "type": "select_one fr08c16"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "facing_defined_by",
+            "label": "Plane Facing Defined By",
+            "hint": "Criteria for facing direction: e.g., stratigraphy, facing iindicators, other",
+            "type": "select_one rf3od15"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_facing_defined_by",
+            "label": "Other Plane Facing Defined By",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "quality",
+            "label": "Planar Measurement Quality",
+            "hint": "How well was this plane exposed or measured?",
+            "type": "select_one qt5nd15"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "bedding_type",
+            "label": "Bedding Type",
+            "hint": "Bedding defined by? change in lithology or sedimentary feature",
+            "type": "select_one ry4pa50"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "contact_type",
+            "label": "Contact Type",
+            "hint": "Specific contacts types under depositional, igneous and metamorphic",
+            "type": "select_one lx9ax28"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_contact_type",
+            "label": "Other Contact Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_dep_contact_type",
+            "label": "Other Depositional Contact Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_ig_contact_type",
+            "label": "Other Igneous Contact Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_met_contact_type",
+            "label": "Other Metamorphic Contact Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "foliation_type",
+            "label": "Foliation Type",
+            "hint": "Specific type of foliation defined by planar and/or linear elements",
+            "type": "select_one vn7df87"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_foliation_type",
+            "label": "Other Foliation Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "foliation_defined_by",
+            "label": "Foliation Defined by",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "fracture_type",
+            "label": "Fracture Type",
+            "hint": "Specific type of fracture: e.g., joint, shear or others",
+            "type": "select_one gz3mh75"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_fracture_type",
+            "label": "Other Fracture Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "fracture_defined_by",
+            "label": "Fracture Defined by",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "vein_type",
+            "label": "Vein Type",
+            "hint": "Specific type: e.g., antitaxial, syntaxial, normal, oblique",
+            "type": "select_one vi28v96"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "vein_fill",
+            "label": "Vein Mineral Fill",
+            "hint": "Mineral filling veins: calcite, quartz or other",
+            "type": "select_one sg8qo24"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_vein_fill",
+            "label": "Other Vein Mineral",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "fault_or_sz_type",
+            "label": "Type of Fault or Shear Zone Boundary",
+            "hint": "Specific type: e.g., dextral, sinistral, normal, reverse, oblique",
+            "type": "select_one kk9ik41"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_fault_or_sz_type",
+            "label": "Other Fault or Shear Zone Boundary Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "movement",
+            "label": "Movement",
+            "hint": "Relative movement across structure",
+            "type": "select_one ia36i83"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_movement",
+            "label": "Other Movement",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "movement_justification",
+            "label": "Movement Justification",
+            "hint": "Offset feature types used to determine relative movement",
+            "type": "select_multiple gq4wq38"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_movement_justification",
+            "label": "Other Movement Justification",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "directional_indicators",
+            "label": "Directional Indicators",
+            "hint": "Specific sense of shear indicator, such as Riedel shears, S-C fabrics, drag folds, etc.",
+            "type": "select_multiple tj67x48"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_directional_indic",
+            "label": "Other Directional Indicator",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "other_feature",
+            "label": "Other Planar Feature",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "movement_amount_m",
+            "label": "Movement Amount (m)",
+            "hint": "How much movement?",
+            "type": "decimal"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "movement_amount_qualifier",
+            "label": "Movement Amount Qualifier",
+            "hint": "",
+            "type": "select_one kh6kx98"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "thickness",
+            "label": "Planar Feature Thickness (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "length",
+            "label": "Planar Feature Length (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "notes",
+            "label": "Planar Feature Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "min_age",
+            "label": "Minimum Age of Structure (Ma)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "min_age_just",
+            "label": "Justification of Minimum Age",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "max_age",
+            "label": "Maximum Age of Structure (Ma)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "max_age_just",
+            "label": "Justification of Maximum Age",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "planar_orientation",
+            "name": "geo_age",
+            "label": "Geologic Age of Structure",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "label",
+            "label": "Label",
+            "hint": "If a label is not specified a default label will be given.",
+            "type": "text"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "trend",
+            "label": "Trend",
+            "hint": "Azimuth in degrees",
+            "type": "integer"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "plunge",
+            "label": "Plunge",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "rake",
+            "label": "Rake",
+            "hint": "down dip angle from strike on plane (0-180)?",
+            "type": "integer"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "rake_calculated",
+            "label": "Rake Calculated?",
+            "hint": "",
+            "type": "select_one hq7tk98"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "quality",
+            "label": "Linear Measurement Quality",
+            "hint": "Quality of linear feature or of measurement",
+            "type": "select_one ex15z66"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "feature_type",
+            "label": "Linear Feature Type",
+            "hint": "Specific lineation type: e.g., striation, groove mark, intersection, fold hinge, alignment, many others",
+            "type": "select_one wa7uq58"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "vorticity",
+            "label": "Vorticity Type",
+            "hint": "Clockwise or counterclockwise looking down plunge",
+            "type": "select_one ip7ah36"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "other_feature",
+            "label": "Other Linear Feature",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "defined_by",
+            "label": "Lineation Defined by",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "min_age",
+            "label": "Minimum Age of Structure (Ma)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "min_age_just",
+            "label": "Justification of Minimum Age",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "max_age",
+            "label": "Maximum Age of Structure (Ma)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "max_age_just",
+            "label": "Justification of Maximum Age",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "geo_age",
+            "label": "Geologic Age of Structure",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "linear_orientation",
+            "name": "notes",
+            "label": "Line Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "label",
+            "label": "Label",
+            "hint": "If a label is not specified a default label will be given.",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "strike",
+            "label": "Strike",
+            "hint": "Azimuth in degrees",
+            "type": "integer"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "dip_direction",
+            "label": "Dip Direction",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "dip",
+            "label": "Dip",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "facing",
+            "label": "Feature Facing",
+            "hint": "",
+            "type": "select_one to1en66"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "facing_defined_by",
+            "label": "Facing Direction Defined By",
+            "hint": "",
+            "type": "select_one bl4bp16"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_facing_defined_by",
+            "label": "Other Facing Defined By",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "quality",
+            "label": "Tabular Feature Orientation Quality",
+            "hint": "How well was this plane measured?",
+            "type": "select_one xn9nf56"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "feature_type",
+            "label": "Tabular Feature Type",
+            "hint": "",
+            "type": "select_one pr4xf92"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_feature",
+            "label": "Other Tabular Feature",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "strat_type",
+            "label": "Stratigraphic Type",
+            "hint": "",
+            "type": "select_one kk7zi98"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "intrusive_body_type",
+            "label": "Intrusive Body Type",
+            "hint": "",
+            "type": "select_one ts5su86"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_intrusive_body",
+            "label": "Other Intrusive Body",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "injection_type",
+            "label": "Injection Structure Type",
+            "hint": "",
+            "type": "select_one vc5ce46"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "vein_type",
+            "label": "Vein Type",
+            "hint": "",
+            "type": "select_one py8ss97"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "vein_fill",
+            "label": "Vein Mineral Fill",
+            "hint": "",
+            "type": "select_one pa42s24"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_vein_fill",
+            "label": "Other Vein Mineral",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "vein_array",
+            "label": "Vein Array",
+            "hint": "",
+            "type": "select_one kl8yo32"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_vein_array",
+            "label": "Other Vein Array",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "fracture_zone",
+            "label": "Fracture Zone Type",
+            "hint": "",
+            "type": "select_one hy9rz06"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "fracture_zone_def_by",
+            "label": "Fracture Zone Boundary Define By",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "fault_or_sz",
+            "label": "Fault Zone or Shear Zone Type",
+            "hint": "",
+            "type": "select_one kk9ik41"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_fault_or_sz",
+            "label": "Other Fault Zone or Shear Zone Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "movement",
+            "label": "Movement",
+            "hint": "",
+            "type": "select_one ia36i83"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_movement",
+            "label": "Other Movement",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "movement_justification",
+            "label": "Movement Justification",
+            "hint": "",
+            "type": "select_multiple gq4wq38"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_movement_justification",
+            "label": "Other Movement Justification",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "dir_indicators",
+            "label": "Directional Indicators",
+            "hint": "",
+            "type": "select_multiple tj67x48"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_dir_indicators",
+            "label": "Other Directional Indicator",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "damage_zone",
+            "label": "Damage Zone Type",
+            "hint": "",
+            "type": "select_one se5kx99"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "damage_zone_defined_by",
+            "label": "Damage Zone defined by",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "alteration_zone",
+            "label": "Alteration Zone Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "enveloping_surface",
+            "label": "Enveloping Surface Features",
+            "hint": "",
+            "type": "select_one pb5nf39"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "enveloping_surface_geometry",
+            "label": "Enveloping Surface Features Geometry",
+            "hint": "",
+            "type": "select_one ni1sn96"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "other_surface_geometry",
+            "label": "Other Surface Geometry Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "thickness",
+            "label": "Tabular Feature Thickness (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "tabularity",
+            "label": "Tabular Thickness Type/Tabularity",
+            "hint": "",
+            "type": "select_one sm74i02"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "length",
+            "label": "Tabular Feature Length (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "defined_by",
+            "label": "Tabular Feature Defined By",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "notes",
+            "label": "Tabular Feature Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "min_age",
+            "label": "Minimum Age of Structure (Ma)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "min_age_just",
+            "label": "Justification of Minimum Age",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "max_age",
+            "label": "Maximum Age of Structure (Ma)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "max_age_just",
+            "label": "Justification of Maximum Age",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tabular_zone_orientation",
+            "name": "geo_age",
+            "label": "Geologic Age of Structure",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fabric",
+            "name": "label",
+            "label": "Label",
+            "hint": "If a label is not specified a default label will be given.",
+            "type": "text"
+        },
+        {
+            "group": "fabric",
+            "name": "feature_type",
+            "label": "Fabric Type",
+            "hint": "",
+            "type": "select_one sv2ru77"
+        },
+        {
+            "group": "fabric",
+            "name": "tectonite_type",
+            "label": "Tectonite Type",
+            "hint": "",
+            "type": "select_one tectonite_type_ny4wm6D8TYk_"
+        },
+        {
+            "group": "fabric",
+            "name": "tectonite_character",
+            "label": "Tectonite Character",
+            "hint": "",
+            "type": "select_one tectonite_character_gSrbYXndbvA_"
+        },
+        {
+            "group": "fabric",
+            "name": "approximate_scale_of_mullions",
+            "label": "Approximate Scale of Mullions (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_geometry",
+            "label": "Mullion Geometry",
+            "hint": "",
+            "type": "select_one mullion_geometry_fp6DFIJzyoE_"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_symmetry",
+            "label": "Mullion Symmetry",
+            "hint": "",
+            "type": "select_one mullion_symmetry_psAZYtG5Up4_"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_competent_material",
+            "label": "Competent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_incompetent_material",
+            "label": "Incompetent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_wavelength_m",
+            "label": "Wavelength (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_layer_thickness_m",
+            "label": "Mullion Layer Thickness (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_strike",
+            "label": "Strike",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_dip_direction",
+            "label": "Dip Direction",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_dip",
+            "label": "Dip",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_trend",
+            "label": "Trend",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_plunge",
+            "label": "Plunge",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_uncertainty",
+            "label": "Uncertainty",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fabric",
+            "name": "mullion_linear_measure_quality",
+            "label": "Linear Measurement Quality",
+            "hint": "",
+            "type": "select_one mullion_linear_measure_quality_c1cEhvbJNzg_"
+        },
+        {
+            "group": "fabric",
+            "name": "igneous_migmatite_feat_descrip",
+            "label": "Igneous/Migmatite Features Description",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fabric",
+            "name": "soft_sediment_def_description",
+            "label": "Soft Sediment Deformation Description",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fabric",
+            "name": "other_fabric_description",
+            "label": "Other Fabric Description",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fabric",
+            "name": "struct_notes",
+            "label": "Fabric Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fold",
+            "name": "label",
+            "label": "Label",
+            "hint": "If a label is not specified a default label will be given.",
+            "type": "text"
+        },
+        {
+            "group": "fold",
+            "name": "feature_type",
+            "label": "Fold Type",
+            "hint": "",
+            "type": "select_one fold_geometry_YZp6QecM4sc_"
+        },
+        {
+            "group": "fold",
+            "name": "other_dominant_fold_geometry",
+            "label": "Other Fold Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fold",
+            "name": "fold_shape",
+            "label": "Dominant Fold Shape",
+            "hint": "",
+            "type": "select_one fold_shape_zAkwyn9tNVk_"
+        },
+        {
+            "group": "fold",
+            "name": "fold_attitude",
+            "label": "Dominant Fold Attitude",
+            "hint": "",
+            "type": "select_one fold_attitude_JRxvawYUuD4_"
+        },
+        {
+            "group": "fold",
+            "name": "tightness",
+            "label": "Tightness / Interlimb Angle",
+            "hint": "",
+            "type": "select_one tightness_1u_TZ7ZL3Tg_"
+        },
+        {
+            "group": "fold",
+            "name": "vergence",
+            "label": "Vergence",
+            "hint": "",
+            "type": "select_one vergence_n4QvBpOQFvw_"
+        },
+        {
+            "group": "fold",
+            "name": "competent_material_fold",
+            "label": "Competent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fold",
+            "name": "incompetent_material_fold",
+            "label": "Incompetent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fold",
+            "name": "wavelength_m",
+            "label": "Wavelength (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "fold",
+            "name": "folded_layer_thickness_m",
+            "label": "Folded Layer Thickness (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "fold",
+            "name": "fold_notes",
+            "label": "Fold Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "fold",
+            "name": "fold_shortening_dir_trend",
+            "label": "Trend",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fold",
+            "name": "fold_shortening_dir_plunge",
+            "label": "Plunge",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fold",
+            "name": "fold_shortening_dir_uncertaint",
+            "label": "Uncertainty",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fold",
+            "name": "fold_fol_strike",
+            "label": "Strike",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fold",
+            "name": "fold_fol_dip_direction",
+            "label": "Dip Direction",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fold",
+            "name": "fold_fol_dip",
+            "label": "Dip",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "fold",
+            "name": "fold_fol_quality",
+            "label": "Orientation Quality",
+            "hint": "",
+            "type": "select_one fold_fol_quality_5Cye72eaqyA_"
+        },
+        {
+            "group": "fold",
+            "name": "fold_foliation_Type",
+            "label": "Foliation Type",
+            "hint": "",
+            "type": "select_one fold_foliation_Type_VKGfG3jCKt8_"
+        },
+        {
+            "group": "fold",
+            "name": "fold_foliation_description",
+            "label": "Description of Foliation",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tensor",
+            "name": "label",
+            "label": "Label",
+            "hint": "If a label is not specified a default label will be given.",
+            "type": "text"
+        },
+        {
+            "group": "tensor",
+            "name": "feature_type",
+            "label": "Tensor Type",
+            "hint": "",
+            "type": "select_one vu34h42"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_type",
+            "label": "Ellipsoid Type",
+            "hint": "",
+            "type": "select_one ellipsoid_type_g88VSB1bdWQ_"
+        },
+        {
+            "group": "tensor",
+            "name": "other_ellipsoid_type",
+            "label": "Other Ellipsoid Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_max_value",
+            "label": "Ellipsoidal Maximum Axis Value",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_max_uncertainty",
+            "label": "Ellipsoidal Maximum Axis Value Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_max_trend",
+            "label": "Ellipsoidal Maximum Axis Trend",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_max_trend_uncertaint",
+            "label": "Ellipsoidal Maximum Axis Trend Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_max_plunge",
+            "label": "Ellipsoidal Maximum Axis Plunge",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_max_plunge_uncertain",
+            "label": "Ellipsoidal Maximum Axis Plunge Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_max_orient_uncertain",
+            "label": "Ellipsoidal Maximum Axis Orientation Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_int_value",
+            "label": "Ellipsoidal Intermediate Axis Value",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_int_value_uncertaint",
+            "label": "Ellipsoidal Intermediate Axis Value Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_int_trend",
+            "label": "Ellipsoidal Intermediate Axis Trend",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_int_trend_uncertaint",
+            "label": "Ellipsoidal Intermediate Axis Trend Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_int_plunge",
+            "label": "Ellipsoidal Intermediate Axis Plunge",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_int_plunge_uncertain",
+            "label": "Ellipsoidal Intermediate Axis Plunge Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_int_orient_uncertain",
+            "label": "Ellipsoidal Intermediate Axis Orientation Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_min_value",
+            "label": "Ellipsoidal Minimum Axis Value",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_min_value_uncertaint",
+            "label": "Ellipsoidal Minimum Axis Value Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_min_trend",
+            "label": "Ellipsoidal Minimum Axis Trend",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_min_trend_uncertaint",
+            "label": "Ellipsoidal Minimum Axis Trend Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_min_plunge",
+            "label": "Ellipsoidal Minimum Axis Plunge",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_min_plunge_uncertain",
+            "label": "Ellipsoidal Minimum Axis Plunge Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_min_orient_uncertain",
+            "label": "Ellipsoidal Minimum Axis Orientation Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoidal_tensor_notes",
+            "label": "Ellipsoidal Tensor Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipsoid_quality",
+            "label": "Ellipsoidal Quality of Measurement",
+            "hint": "",
+            "type": "select_one ellipsoid_quality_gC8xoXKvpWA_"
+        },
+        {
+            "group": "tensor",
+            "name": "non_ellipsoidal_type",
+            "label": "Non-ellipsoidal Type",
+            "hint": "",
+            "type": "select_one non_ellipsoidal_type_oc_HHFCS25E_"
+        },
+        {
+            "group": "tensor",
+            "name": "other_non_ellipsoidal_type",
+            "label": "Other Non-ellipsoidal Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_max_value",
+            "label": "Non-Ellipsoidal Maximum Axis Value",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_max_value_uncer",
+            "label": "Non-Ellipsoidal Maximum Axis Value Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_max_trend",
+            "label": "Non-Ellipsoidal Maximum Axis Trend",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_max_trend_uncer",
+            "label": "Non-Ellipsoidal Maximum Axis Trend Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_max_plunge",
+            "label": "Non-Ellipsoidal Maximum Axis Plunge",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_max_plunge_unce",
+            "label": "Non-Ellipsoidal Maximum Axis Plunge Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_max_orient_Unce",
+            "label": "Non-Ellipsoidal Maximum Axis Orientation Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_int_value",
+            "label": "Non-Ellipsoidal Intermediate Axis Value",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_int_value_uncer",
+            "label": "Non-Ellipsoidal Intermediate Axis Value Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_int_trend",
+            "label": "Non-Ellipsoidal Intermediate Axis Trend",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_int_uncertainty",
+            "label": "Non-Ellipsoidal Intermediate Axis Trend Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_int_plunge",
+            "label": "Non-Ellipsoidal Intermediate Axis Plunge",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_int_plunge_unce",
+            "label": "Non-Ellipsoidal Intermediate Axis Plunge Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_int_orient_unce",
+            "label": "Non-Ellipsoidal Intermediate Axis Orientation Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_min_value",
+            "label": "Non-Ellipsoidal Minimum Axis Value",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_min_value_uncer",
+            "label": "Non-Ellipsoidal Minimum Axis Value Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_min_trend",
+            "label": "Non-Ellipsoidal Minimum Axis Trend",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_min_trend_uncer",
+            "label": "Non-Ellipsoidal Minimum Axis Trend Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_min_plunge",
+            "label": "Non-Ellipsoidal Minimum Axis Plunge",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_min_plunge_unce",
+            "label": "Non-Ellipsoidal Minimum Axis Plunge Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_min_orient_Unce",
+            "label": "Non-Ellipsoidal Minimum Axis Orientation Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "non_ellipsoidal_tensor_notes",
+            "label": "Non-Ellipsoidal Tensor Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tensor",
+            "name": "nonellipsoidal_quality_of_meas",
+            "label": "Non-Ellipsoidal Quality of Measurement",
+            "hint": "",
+            "type": "select_one nonellipsoidal_quality_of_meas_qO2zEvV3_Aw_"
+        },
+        {
+            "group": "tensor",
+            "name": "ellipse_type",
+            "label": "Ellipse Type",
+            "hint": "",
+            "type": "select_one ellipse_type_Vmcq91PsyQo_"
+        },
+        {
+            "group": "tensor",
+            "name": "other_ellipse_type",
+            "label": "Other Ellipse Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_strike",
+            "label": "Elliptical Strike",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_dip",
+            "label": "Elliptical Dip",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_dip_direction",
+            "label": "Elliptical Dip Direction",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_rake",
+            "label": "Elliptical Rake",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_quality",
+            "label": "Elliptical Quality",
+            "hint": "",
+            "type": "select_one elliptical_quality_T4gjnTMk9Fg_"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_ratio",
+            "label": "Elliptical Ratio",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_value_uncertainty",
+            "label": "Elliptical Value Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_orientation_uncerta",
+            "label": "Elliptical Orientation Uncertainty",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_quality_of_measurem",
+            "label": "Elliptical Quality of Measurement",
+            "hint": "",
+            "type": "select_one elliptical_quality_of_measurem_JSy5jmE_mkI_"
+        },
+        {
+            "group": "tensor",
+            "name": "elliptical_notes",
+            "label": "Elliptical Data Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tensor",
+            "name": "struct_notes",
+            "label": "Tensor Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "label",
+            "label": "Label",
+            "hint": "If a label is not specified a default label will be given.",
+            "type": "text"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "feature_type",
+            "label": "3D Type",
+            "hint": "",
+            "type": "select_one zi8se01"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "approximate_scale_of_boudinage",
+            "label": "Approximate Scale of Boudinage (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_geometry",
+            "label": "Boudinage Geometry",
+            "hint": "",
+            "type": "select_one boudinage_geometry_cIwYEvF1UV4_"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_shape",
+            "label": "Boudinage Shape",
+            "hint": "",
+            "type": "select_one boudinage_shape_ZD9cxOdth_M_"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "movement",
+            "label": "Boudinage Movement",
+            "hint": "",
+            "type": "select_one movement_WnUOwSY9L_U_"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_competent",
+            "label": "Boudinage Competent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_incompetent",
+            "label": "Boudinage Incompetent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "average_width_of_boudin_neck",
+            "label": "Average Width of Boudin Neck (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "number_of_necks_measured",
+            "label": "Number of Necks Measured",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_wavelength_m",
+            "label": "Boudinage Wavelength (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinaged_layer_thickness_m",
+            "label": "Boudinaged Layer Thickness (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_strike",
+            "label": "Primary Boudin Layer Plane Strike",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_dip_direction",
+            "label": "Primary Boudin Layer Plane Dip Direction",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_dip",
+            "label": "Primary Boudin Layer Plane Dip",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_trend",
+            "label": "Primary Neckline Orientation Trend",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_plunge",
+            "label": "Primary Neckline Orientation Plunge",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_trend_uncertainty",
+            "label": "Primary Neckline Orientation Measured Uncertainty",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_2nd_trend",
+            "label": "Secondary Neckline Orientation Trend",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_2nd_plunge",
+            "label": "Secondary Neckline Orientation Plunge",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudinage_2nd_trend_uncertaint",
+            "label": "Secondary Neckline Orientation Uncertainty",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "boudin_linear_measure_quality",
+            "label": "Boudinage Linear Measurement Quality",
+            "hint": "",
+            "type": "select_one boudin_linear_measure_quality_MsZ_GRdvYC8_"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "approximate_scale_of_mullions",
+            "label": "Approximate Scale of Mullions (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_geometry",
+            "label": "Mullion Geometry",
+            "hint": "",
+            "type": "select_one mullion_geometry_lXB2_OMfsSs_"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_symmetry",
+            "label": "Mullion Symmetry",
+            "hint": "",
+            "type": "select_one mullion_symmetry_sTJijyawqd8_"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_competent_material",
+            "label": "Mullion Competent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_incompetent_material",
+            "label": "Mullion Incompetent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_wavelength_m",
+            "label": "Mullion Wavelength (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_layer_thickness_m",
+            "label": "Mullion Layer Thickness (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_strike",
+            "label": "Mullion Strike",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_dip_direction",
+            "label": "Mullion Dip Direction",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_dip",
+            "label": "Mullion Dip",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_trend",
+            "label": "Mullion Neckline Trend",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_plunge",
+            "label": "Mullion Neckline Plunge",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_uncertainty",
+            "label": "Mullion NecklineUncertainty",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "mullion_linear_measure_quality",
+            "label": "Mullion NecklineLinear Measurement Quality",
+            "hint": "",
+            "type": "select_one mullion_linear_measure_quality_RHTisa3LUcA_"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "approximate_scale_m_lobate",
+            "label": "Lobate-Cuspate Approximate Scale (m)",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "lobate_competent_material",
+            "label": "Lobate-Cuspate Competent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "lobate_incompetent_material",
+            "label": "Lobate-Cuspate Incompetent Material",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "other_structure_description",
+            "label": "Other Structure Description",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_3d_structure",
+            "name": "struct_notes",
+            "label": "3D Structure Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "sample",
+            "name": "label",
+            "label": "Label",
+            "hint": "If a label is not specified a default label will be given.",
+            "type": "text"
+        },
+        {
+            "group": "sample",
+            "name": "sample_id_name",
+            "label": "Sample Specific ID/Name",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "sample",
+            "name": "oriented_sample",
+            "label": "Oriented Sample",
+            "hint": "",
+            "type": "select_one hz9zw76"
+        },
+        {
+            "group": "sample",
+            "name": "sample_orientation_notes",
+            "label": "Sample Orientation Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "sample",
+            "name": "sample_description",
+            "label": "Sample Description",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "sample",
+            "name": "material_type",
+            "label": "Material Type",
+            "hint": "",
+            "type": "select_one jq8qd30"
+        },
+        {
+            "group": "sample",
+            "name": "other_material_type",
+            "label": "Other Material Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "sample",
+            "name": "sample_size",
+            "label": "Sample Size",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "sample",
+            "name": "main_sampling_purpose",
+            "label": "Main Sampling Purpose",
+            "hint": "",
+            "type": "select_one to0mv13"
+        },
+        {
+            "group": "sample",
+            "name": "other_sampling_purpose",
+            "label": "Other Sampling Purpose",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "sample",
+            "name": "inplaceness_of_sample",
+            "label": "Inplaceness of Sample",
+            "hint": "",
+            "type": "select_one fc6dz57"
+        },
+        {
+            "group": "sample",
+            "name": "degree_of_weathering",
+            "label": "Degree of Weathering",
+            "hint": "",
+            "type": "select_one sl0bq45"
+        },
+        {
+            "group": "sample",
+            "name": "sample_notes",
+            "label": "Sample Notes",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tephra",
+            "name": "layer_type",
+            "label": "Layer Type",
+            "hint": "",
+            "type": "select_one ou9ax73"
+        },
+        {
+            "group": "tephra",
+            "name": "thickness_units",
+            "label": "Thickness Units",
+            "hint": "",
+            "type": "select_one ay7bp40"
+        },
+        {
+            "group": "tephra",
+            "name": "thickness_typical",
+            "label": "Typical Thickness",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tephra",
+            "name": "thickness_minimum",
+            "label": "Minimum Thickness",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tephra",
+            "name": "thickness_maximum",
+            "label": "Maximum Thickness",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "tephra",
+            "name": "contact_bottom",
+            "label": "Bottom Contact",
+            "hint": "",
+            "type": "select_one uu5sd70"
+        },
+        {
+            "group": "tephra",
+            "name": "contact_top",
+            "label": "Top Contact",
+            "hint": "",
+            "type": "select_one tv9gx70"
+        },
+        {
+            "group": "tephra",
+            "name": "grainsize_bottom",
+            "label": "Bottom Grainsize",
+            "hint": "",
+            "type": "select_one lv1et65"
+        },
+        {
+            "group": "tephra",
+            "name": "grainsize_top",
+            "label": "Top Grainsize",
+            "hint": "",
+            "type": "select_one fn8fy99"
+        },
+        {
+            "group": "tephra",
+            "name": "grading",
+            "label": "Grading",
+            "hint": "",
+            "type": "select_one gg1yf28"
+        },
+        {
+            "group": "tephra",
+            "name": "grainsize_maximum",
+            "label": "Maximum Grainsize",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tephra",
+            "name": "layer_color",
+            "label": "Layer Color",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tephra",
+            "name": "layer_sorting",
+            "label": "Sorting",
+            "hint": "",
+            "type": "select_one qr36o66"
+        },
+        {
+            "group": "tephra",
+            "name": "layer_support",
+            "label": "Grain Support",
+            "hint": "",
+            "type": "select_one ds0ex44"
+        },
+        {
+            "group": "tephra",
+            "name": "grain_angularity",
+            "label": "Grain Angularity",
+            "hint": "",
+            "type": "select_multiple kc0hp09"
+        },
+        {
+            "group": "tephra",
+            "name": "components",
+            "label": "Defining Component(s)",
+            "hint": "",
+            "type": "select_multiple ye44h22"
+        },
+        {
+            "group": "tephra",
+            "name": "tephra_concentration",
+            "label": "Tephra Concentration",
+            "hint": "",
+            "type": "select_one vn0qh36"
+        },
+        {
+            "group": "tephra",
+            "name": "layer_description",
+            "label": "Layer Description",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tephra",
+            "name": "possible_source_volcano",
+            "label": "Possible Source Volcano(es)",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "tephra",
+            "name": "unit_id",
+            "label": "Unit ID",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_features",
+            "name": "id",
+            "label": "ID",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_features",
+            "name": "label",
+            "label": "Label",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_features",
+            "name": "type",
+            "label": "Other Feature Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_features",
+            "name": "name",
+            "label": "Other Feature Name",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "other_features",
+            "name": "description",
+            "label": "Description",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "surface_feature",
+            "name": "name",
+            "label": "label",
+            "hint": "",
+            "type": "type"
+        },
+        {
+            "group": "surface_feature",
+            "name": "surface_feature_type",
+            "label": "Surface Feature Type",
+            "hint": "",
+            "type": "select_one qn1ps78"
+        },
+        {
+            "group": "surface_feature",
+            "name": "other_surface_feature_type",
+            "label": "Other Surface Feature Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "image",
+            "name": "title",
+            "label": "Image Name",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "image",
+            "name": "image_type",
+            "label": "Image Type",
+            "hint": "",
+            "type": "select_one cs3xd00"
+        },
+        {
+            "group": "image",
+            "name": "other_image_type",
+            "label": "Other Image Type",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "image",
+            "name": "caption",
+            "label": "Image Description",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "image",
+            "name": "image_source",
+            "label": "Image Source",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "image",
+            "name": "scale_of_image",
+            "label": "Scale of Overall Image",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "image",
+            "name": "scale_of_object",
+            "label": "Scale and type of object in image (m)",
+            "hint": "",
+            "type": "text"
+        },
+        {
+            "group": "image",
+            "name": "width_of_image_view",
+            "label": "Width of Image View",
+            "hint": "Enables Scalebar",
+            "type": "decimal"
+        },
+        {
+            "group": "image",
+            "name": "units_of_image_view",
+            "label": "Units of Image View",
+            "hint": "",
+            "type": "select_one vt86z05"
+        },
+        {
+            "group": "image",
+            "name": "lat",
+            "label": "Latitude",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "image",
+            "name": "lng",
+            "label": "Longitude",
+            "hint": "",
+            "type": "decimal"
+        },
+        {
+            "group": "image",
+            "name": "view_azimuth_trend",
+            "label": "View azimuth (trend)",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "image",
+            "name": "view_angle_plunge",
+            "label": "View angle (plunge)",
+            "hint": "",
+            "type": "integer"
+        },
+        {
+            "group": "image",
+            "name": "orientation_of_view_subject",
+            "label": "Orientation of View Subject",
+            "hint": "e.g., facing direction of cliff face",
+            "type": "text"
+        },
+        {
+            "group": "tag",
+            "name": "name",
+            "label": "Name",
+            "hint": "",
+            "type": "text"
+        }
+    ],
+    "vocab": {
+        "spot_spot_radius_units": [
+            [
+                "kilometer",
+                "kilometer"
+            ],
+            [
+                "meter",
+                "meter"
+            ],
+            [
+                "millimeter",
+                "millimeter"
+            ],
+            [
+                "micrometer",
+                "micrometer"
+            ]
+        ],
+        "rock_unit_rock_type": [
+            [
+                "igneous",
+                "igneous"
+            ],
+            [
+                "metamorphic",
+                "metamorphic"
+            ],
+            [
+                "sedimentary",
+                "sedimentary"
+            ],
+            [
+                "sediment",
+                "sediment"
+            ]
+        ],
+        "rock_unit_sediment_type": [
+            [
+                "alluvium",
+                "alluvium"
+            ],
+            [
+                "older_alluvium",
+                "older alluvium"
+            ],
+            [
+                "colluvium",
+                "colluvium"
+            ],
+            [
+                "lake_deposit",
+                "lake deposit"
+            ],
+            [
+                "eolian",
+                "eolian"
+            ],
+            [
+                "talus",
+                "talus"
+            ],
+            [
+                "breccia",
+                "breccia"
+            ],
+            [
+                "gravel",
+                "gravel"
+            ],
+            [
+                "sand",
+                "sand"
+            ],
+            [
+                "silt",
+                "silt"
+            ],
+            [
+                "clay",
+                "clay"
+            ],
+            [
+                "moraine",
+                "moraine"
+            ],
+            [
+                "till",
+                "till"
+            ],
+            [
+                "loess",
+                "loess"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "rock_unit_sedimentary_rock_type": [
+            [
+                "limestone",
+                "limestone"
+            ],
+            [
+                "dolostone",
+                "dolostone"
+            ],
+            [
+                "travertine",
+                "travertine"
+            ],
+            [
+                "evaporite",
+                "evaporite"
+            ],
+            [
+                "chert",
+                "chert"
+            ],
+            [
+                "conglomerate",
+                "conglomerate"
+            ],
+            [
+                "breccia",
+                "breccia"
+            ],
+            [
+                "sandstone",
+                "sandstone"
+            ],
+            [
+                "siltstone",
+                "siltstone"
+            ],
+            [
+                "mudstone",
+                "mudstone"
+            ],
+            [
+                "shale",
+                "shale"
+            ],
+            [
+                "claystone",
+                "claystone"
+            ],
+            [
+                "coal",
+                "coal"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "rock_unit_igneous_rock_class": [
+            [
+                "volcanic",
+                "volcanic"
+            ],
+            [
+                "plutonic",
+                "plutonic"
+            ],
+            [
+                "hypabyssal",
+                "hypabyssal"
+            ]
+        ],
+        "rock_unit_volcanic_rock_type": [
+            [
+                "basalt",
+                "basalt"
+            ],
+            [
+                "basaltic_andes",
+                "basaltic-andesite"
+            ],
+            [
+                "andesite",
+                "andesite"
+            ],
+            [
+                "latite",
+                "latite"
+            ],
+            [
+                "dacite",
+                "dacite"
+            ],
+            [
+                "rhyolite",
+                "rhyolite"
+            ],
+            [
+                "tuff",
+                "tuff"
+            ],
+            [
+                "ash_fall_tuff",
+                "ash-fall tuff"
+            ],
+            [
+                "ash_flow_tuff",
+                "ash-flow tuff"
+            ],
+            [
+                "vitrophyre",
+                "vitrophyre"
+            ],
+            [
+                "trachyte",
+                "trachyte"
+            ],
+            [
+                "trachyandesite",
+                "trachyandesite"
+            ],
+            [
+                "tuff_breccia",
+                "tuff breccia"
+            ],
+            [
+                "lapilli_tuff",
+                "lapilli tuff"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "rock_unit_plutonic_rock_types": [
+            [
+                "granite",
+                "granite"
+            ],
+            [
+                "alkali_granite",
+                "alkali feldspar granite"
+            ],
+            [
+                "quartz_monz",
+                "quartz monzonite"
+            ],
+            [
+                "syenite",
+                "syenite"
+            ],
+            [
+                "granodiorite",
+                "granodiorite"
+            ],
+            [
+                "monzonite",
+                "monzonite"
+            ],
+            [
+                "tonalite",
+                "tonalite"
+            ],
+            [
+                "diorite",
+                "diorite"
+            ],
+            [
+                "gabbro",
+                "gabbro"
+            ],
+            [
+                "anorthosite",
+                "anorthosite"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "rock_unit_metamorphic_rock_types": [
+            [
+                "slate",
+                "slate"
+            ],
+            [
+                "phyllite",
+                "phyllite"
+            ],
+            [
+                "schist",
+                "schist"
+            ],
+            [
+                "gneiss",
+                "gneiss"
+            ],
+            [
+                "migmatite",
+                "migmatite"
+            ],
+            [
+                "marble",
+                "marble"
+            ],
+            [
+                "calc_silicate",
+                "calc-silicate"
+            ],
+            [
+                "calc_schist",
+                "calc schist"
+            ],
+            [
+                "greenschist",
+                "greenschist"
+            ],
+            [
+                "amphibolite",
+                "amphibolite"
+            ],
+            [
+                "blueschist",
+                "blueschist"
+            ],
+            [
+                "eclogite",
+                "eclogite"
+            ],
+            [
+                "hornfels",
+                "hornfels"
+            ],
+            [
+                "granofels",
+                "granofels"
+            ],
+            [
+                "skarn",
+                "skarn"
+            ],
+            [
+                "quartzite",
+                "quartzite"
+            ],
+            [
+                "serpentinite",
+                "serpentinite"
+            ],
+            [
+                "jadeite",
+                "jadeite"
+            ],
+            [
+                "glaucophanite",
+                "glaucophanite"
+            ],
+            [
+                "garnetite",
+                "garnetite"
+            ],
+            [
+                "pyroxenite",
+                "pyroxenite"
+            ],
+            [
+                "cordierite-ant",
+                "cordierite-anthophyllite"
+            ],
+            [
+                "cataclasite",
+                "cataclasite"
+            ],
+            [
+                "mylonite",
+                "mylonite"
+            ],
+            [
+                "metapelite",
+                "metapelite"
+            ],
+            [
+                "metaarkose",
+                "metaarkose"
+            ],
+            [
+                "metagreywacke",
+                "metagreywacke"
+            ],
+            [
+                "metabasite",
+                "metabasite"
+            ],
+            [
+                "metacarbonate",
+                "metacarbonate"
+            ],
+            [
+                "metagranite",
+                "metagranite"
+            ],
+            [
+                "metaigneous",
+                "metaigneous"
+            ],
+            [
+                "metavolcanic",
+                "metavolcanic"
+            ],
+            [
+                "blackwall",
+                "blackwall"
+            ],
+            [
+                "metasomatite",
+                "metasomatite"
+            ],
+            [
+                "meta_ultramafi",
+                "meta-ultramafic"
+            ],
+            [
+                "meta-iron_form",
+                "meta-iron formation"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "rock_unit_metamorphic_grade": [
+            [
+                "zeolite_facies",
+                "zeolite facies"
+            ],
+            [
+                "prehnite-pumpe",
+                "prehnite-pumpellyite facies"
+            ],
+            [
+                "greenschist_fa",
+                "greenschist facies"
+            ],
+            [
+                "amphibolite_fa",
+                "amphibolite facies"
+            ],
+            [
+                "epidote_amphib",
+                "epidote amphibolite facies"
+            ],
+            [
+                "granulite_faci",
+                "granulite facies"
+            ],
+            [
+                "blueschist_fac",
+                "blueschist facies"
+            ],
+            [
+                "eclogite_facie",
+                "eclogite facies"
+            ],
+            [
+                "hornfels_facie",
+                "hornfels facies"
+            ],
+            [
+                "chlorite_zone",
+                "chlorite zone"
+            ],
+            [
+                "biotite_zone",
+                "biotite zone"
+            ],
+            [
+                "garnet_zone",
+                "garnet zone"
+            ],
+            [
+                "staurolite_zon",
+                "staurolite zone"
+            ],
+            [
+                "staurolite-kya",
+                "staurolite-kyanite zone"
+            ],
+            [
+                "kyanite_zone",
+                "kyanite zone"
+            ],
+            [
+                "sillimanite_zo",
+                "sillimanite zone"
+            ],
+            [
+                "andalusite_zon",
+                "andalusite zone"
+            ],
+            [
+                "sillimanite-K_",
+                "sillimanite-K feldspar zone"
+            ],
+            [
+                "garnet-cordier",
+                "garnet-cordierite zone"
+            ],
+            [
+                "migmatite_zone",
+                "migmatite zone"
+            ],
+            [
+                "ultra_high_pre",
+                "ultra high pressure facies"
+            ],
+            [
+                "ultra_high_tem",
+                "ultra high temperature facies"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "rock_unit_epoch": [
+            [
+                "holocene",
+                "Holocene"
+            ],
+            [
+                "pleistocene",
+                "Pleistocene"
+            ],
+            [
+                "pliocene",
+                "Pliocene"
+            ],
+            [
+                "miocene",
+                "Miocene"
+            ],
+            [
+                "oligocene",
+                "Oligocene"
+            ],
+            [
+                "eocene",
+                "Eocene"
+            ],
+            [
+                "paleocene",
+                "Paleocene"
+            ],
+            [
+                "other",
+                "Other"
+            ]
+        ],
+        "rock_unit_period": [
+            [
+                "quaternary",
+                "Quaternary"
+            ],
+            [
+                "tertiary",
+                "Tertiary"
+            ],
+            [
+                "neogene",
+                "Neogene"
+            ],
+            [
+                "paleogene",
+                "Paleogene"
+            ],
+            [
+                "cretaceous",
+                "Cretaceous"
+            ],
+            [
+                "jurassic",
+                "Jurassic"
+            ],
+            [
+                "triassic",
+                "Triassic"
+            ],
+            [
+                "permian",
+                "Permian"
+            ],
+            [
+                "carboniferous",
+                "Carboniferous"
+            ],
+            [
+                "pennsylvanian",
+                "Pennsylvanian"
+            ],
+            [
+                "mississippian",
+                "Mississippian"
+            ],
+            [
+                "devonian",
+                "Devonian"
+            ],
+            [
+                "silurian",
+                "Silurian"
+            ],
+            [
+                "ordovician",
+                "Ordovician"
+            ],
+            [
+                "cambrian",
+                "Cambrian"
+            ],
+            [
+                "ediacaran",
+                "Ediacaran"
+            ],
+            [
+                "cryogenian",
+                "Cryogenian"
+            ],
+            [
+                "tonian",
+                "Tonian"
+            ],
+            [
+                "stenian",
+                "Stenian"
+            ],
+            [
+                "ectasian",
+                "Ectasian"
+            ],
+            [
+                "calymmian",
+                "Calymmian"
+            ],
+            [
+                "statherian",
+                "Statherian"
+            ],
+            [
+                "orosirian",
+                "Orosirian"
+            ],
+            [
+                "rhyacian",
+                "Rhyacian"
+            ],
+            [
+                "siderian",
+                "Siderian"
+            ]
+        ],
+        "rock_unit_era": [
+            [
+                "cenozoic",
+                "Cenozoic"
+            ],
+            [
+                "mesozoic",
+                "Mesozoic"
+            ],
+            [
+                "paleozoic",
+                "Paleozoic"
+            ],
+            [
+                "neoproterozoic",
+                "Neoproterozoic"
+            ],
+            [
+                "mesoproterozoi",
+                "Mesoproterozoic"
+            ],
+            [
+                "paleoproterozo",
+                "Paleoproterozoic"
+            ],
+            [
+                "neoarchean",
+                "Neoarchean"
+            ],
+            [
+                "mesoarchean",
+                "Mesoarchean"
+            ],
+            [
+                "paleoarchean",
+                "Paleoarchean"
+            ],
+            [
+                "eoarchean",
+                "Eoarchean"
+            ]
+        ],
+        "rock_unit_eon": [
+            [
+                "phanerozoic",
+                "Phanerozoic"
+            ],
+            [
+                "proterozoic",
+                "Proterozoic"
+            ],
+            [
+                "archean",
+                "Archean"
+            ],
+            [
+                "hadean",
+                "Hadean"
+            ]
+        ],
+        "rock_unit_age_modifier": [
+            [
+                "late",
+                "Late"
+            ],
+            [
+                "middle",
+                "Middle"
+            ],
+            [
+                "early",
+                "Early"
+            ]
+        ],
+        "trace_trace_quality": [
+            [
+                "known",
+                "known"
+            ],
+            [
+                "approximate",
+                "approximate"
+            ],
+            [
+                "approximate(?)",
+                "questionable approximate"
+            ],
+            [
+                "inferred",
+                "inferred"
+            ],
+            [
+                "inferred(?)",
+                "questionable inferred"
+            ],
+            [
+                "concealed",
+                "concealed"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_trace_type": [
+            [
+                "contact",
+                "contact"
+            ],
+            [
+                "geologic_struc",
+                "geologic structure"
+            ],
+            [
+                "geomorphic_fea",
+                "geomorphic feature"
+            ],
+            [
+                "anthropenic_fe",
+                "anthropogenic feature"
+            ],
+            [
+                "other_feature",
+                "other feature"
+            ]
+        ],
+        "trace_contact_type": [
+            [
+                "depositional",
+                "depositional"
+            ],
+            [
+                "intrusive",
+                "intrusive"
+            ],
+            [
+                "metamorphic",
+                "metamorphic"
+            ],
+            [
+                "marker_layer",
+                "marker layer"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_depositional_contact_type": [
+            [
+                "stratigraphic",
+                "stratigraphic"
+            ],
+            [
+                "alluvial",
+                "alluvial"
+            ],
+            [
+                "unconformity",
+                "unconformity"
+            ],
+            [
+                "angular_unconf",
+                "angular unconformity"
+            ],
+            [
+                "disconformity",
+                "disconformity"
+            ],
+            [
+                "nonconformity",
+                "nonconformity"
+            ],
+            [
+                "volcanic",
+                "volcanic"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_intrusive_contact_type": [
+            [
+                "dike",
+                "dike"
+            ],
+            [
+                "sill",
+                "sill"
+            ],
+            [
+                "pluton",
+                "pluton"
+            ],
+            [
+                "migmatite",
+                "migmatite"
+            ],
+            [
+                "injectite",
+                "injectite"
+            ],
+            [
+                "unknown",
+                "other"
+            ]
+        ],
+        "trace_metamorphic_contact_type": [
+            [
+                "btwn_2_dif_mm",
+                "between different metamorphic rocks"
+            ],
+            [
+                "isograd",
+                "isograd"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_geologic_structure_type": [
+            [
+                "fault",
+                "fault"
+            ],
+            [
+                "shear_zone",
+                "shear zone"
+            ],
+            [
+                "deformation_zo",
+                "deformation zone"
+            ],
+            [
+                "fold_axial_tra",
+                "fold axial trace"
+            ],
+            [
+                "other_structur",
+                "other structural zone"
+            ]
+        ],
+        "trace_shear_sense": [
+            [
+                "dextral",
+                "dextral strike-slip"
+            ],
+            [
+                "sinistral",
+                "sinistral strike-slip"
+            ],
+            [
+                "normal",
+                "normal"
+            ],
+            [
+                "low_angle_norm",
+                "low-angle normal"
+            ],
+            [
+                "reverse",
+                "reverse"
+            ],
+            [
+                "thrust",
+                "thrust"
+            ],
+            [
+                "dextral_reverse",
+                "dextral reverse"
+            ],
+            [
+                "dextral_normal",
+                "dextral normal"
+            ],
+            [
+                "sinistral_reverse",
+                "sinistral reverse"
+            ],
+            [
+                "sinistral_normal",
+                "sinistral normal"
+            ],
+            [
+                "high_angle",
+                "high-angle"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_other_structural_zones": [
+            [
+                "deformation_ba",
+                "deformation band"
+            ],
+            [
+                "fracture_zone",
+                "fracture zone"
+            ],
+            [
+                "damage_zone",
+                "damage zone"
+            ],
+            [
+                "alteration_zon",
+                "alteration zone"
+            ],
+            [
+                "structural_dom",
+                "structural domain boundary"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_fold_type": [
+            [
+                "syncline",
+                "syncline"
+            ],
+            [
+                "anticline",
+                "anticline"
+            ],
+            [
+                "monocline",
+                "monocline"
+            ],
+            [
+                "antiformal_syn",
+                "antiformal syncline"
+            ],
+            [
+                "synformal_anti",
+                "synformal anticline"
+            ],
+            [
+                "synform",
+                "synform"
+            ],
+            [
+                "antiform",
+                "antiform"
+            ],
+            [
+                "s_fold",
+                "s-fold"
+            ],
+            [
+                "z_fold",
+                "z-fold"
+            ],
+            [
+                "m_fold",
+                "m-fold"
+            ],
+            [
+                "sheath",
+                "sheath"
+            ],
+            [
+                "ptygmatic",
+                "ptygmatic"
+            ],
+            [
+                "unknown",
+                "other"
+            ]
+        ],
+        "trace_fold_attitude": [
+            [
+                "plunging",
+                "plunging"
+            ],
+            [
+                "upright",
+                "upright"
+            ],
+            [
+                "overturned",
+                "overturned"
+            ],
+            [
+                "vertical",
+                "vertical"
+            ],
+            [
+                "unknown",
+                "unknown"
+            ],
+            [
+                "horizontal",
+                "horizontal"
+            ],
+            [
+                "recumbent",
+                "recumbent"
+            ],
+            [
+                "inclined",
+                "inclined"
+            ],
+            [
+                "reclined",
+                "reclined"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_geomorphic_feature": [
+            [
+                "gulley",
+                "gulley"
+            ],
+            [
+                "ridge",
+                "ridge"
+            ],
+            [
+                "striation",
+                "striation"
+            ],
+            [
+                "rill",
+                "rill"
+            ],
+            [
+                "stream_bed",
+                "stream bed"
+            ],
+            [
+                "shoreline_stra",
+                "shoreline/strandline"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_antropogenic_feature": [
+            [
+                "fence_line",
+                "fence line"
+            ],
+            [
+                "property_line",
+                "property line"
+            ],
+            [
+                "road",
+                "road"
+            ],
+            [
+                "trail",
+                "trail"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_other_feature": [
+            [
+                "extent_of_mapp",
+                "extent of mapping"
+            ],
+            [
+                "extent_of_biol",
+                "extent of biological marker"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "trace_trace_character": [
+            [
+                "sharp",
+                "sharp"
+            ],
+            [
+                "gradational",
+                "gradational"
+            ],
+            [
+                "chilled",
+                "chilled"
+            ],
+            [
+                "brecciated",
+                "brecciated"
+            ],
+            [
+                "unknown",
+                "unknown"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "planar_orientation_feature_type": [
+            [
+                "bedding",
+                "bedding"
+            ],
+            [
+                "contact",
+                "contact"
+            ],
+            [
+                "foliation",
+                "foliation"
+            ],
+            [
+                "fracture",
+                "fracture"
+            ],
+            [
+                "vein",
+                "vein"
+            ],
+            [
+                "fault",
+                "fault"
+            ],
+            [
+                "shear_zone",
+                "shear zone"
+            ],
+            [
+                "shear_zone_bou",
+                "shear zone boundary"
+            ],
+            [
+                "fold_axial_surface",
+                "fold axial surface"
+            ],
+            [
+                "plane_of_boudinage",
+                "plane of boudinage"
+            ],
+            [
+                "plane_of_mullions",
+                "plane of mullions"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "planar_orientation_facing": [
+            [
+                "upright",
+                "upright"
+            ],
+            [
+                "overturned",
+                "overturned"
+            ],
+            [
+                "vertical",
+                "vertical"
+            ],
+            [
+                "not_applicable",
+                "not applicable"
+            ]
+        ],
+        "planar_orientation_facing_defined_by": [
+            [
+                "stratigraphy",
+                "stratigraphy"
+            ],
+            [
+                "facing_indicat",
+                "facing indicator"
+            ],
+            [
+                "assumed",
+                "assumed"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "planar_orientation_quality": [
+            [
+                "5",
+                "5 - best - accurate"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3 - approximate"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1",
+                "1 - poor - irregular - uncertain"
+            ]
+        ],
+        "planar_orientation_bedding_type": [
+            [
+                "lithologic_cha",
+                "lithologic change"
+            ],
+            [
+                "sedimentary_fe",
+                "sedimentary feature"
+            ]
+        ],
+        "planar_orientation_contact_type": [
+            [
+                "stratigraphic",
+                "stratigraphic"
+            ],
+            [
+                "alluvial",
+                "alluvial"
+            ],
+            [
+                "unconformity",
+                "unconformity"
+            ],
+            [
+                "angular_unconf",
+                "angular unconformity"
+            ],
+            [
+                "nonconformity",
+                "nonconformity"
+            ],
+            [
+                "disconformity",
+                "disconformity"
+            ],
+            [
+                "volcanic",
+                "volcanic"
+            ],
+            [
+                "other_depositional_contact",
+                "other depositional"
+            ],
+            [
+                "dike",
+                "dike"
+            ],
+            [
+                "sill",
+                "sill"
+            ],
+            [
+                "pluton",
+                "pluton"
+            ],
+            [
+                "migmatite",
+                "migmatite"
+            ],
+            [
+                "injectite",
+                "injectite"
+            ],
+            [
+                "other_igneous",
+                "other igneous"
+            ],
+            [
+                "boundary_of_metamorphic_rocks",
+                "boundary of metamorphic rock"
+            ],
+            [
+                "isograd",
+                "isograd"
+            ],
+            [
+                "other_metamorp",
+                "other metamorphic"
+            ],
+            [
+                "other",
+                "other"
+            ],
+            [
+                "unknown",
+                "unknown"
+            ]
+        ],
+        "planar_orientation_foliation_type": [
+            [
+                "cleavage",
+                "cleavage"
+            ],
+            [
+                "slatey_cleavage",
+                "slatey cleavage"
+            ],
+            [
+                "phyllitic_cleavage",
+                "phyllitic cleavage"
+            ],
+            [
+                "crenulation_cl",
+                "crenulation cleavage"
+            ],
+            [
+                "phacoidal",
+                "phacoidal (lenticular)"
+            ],
+            [
+                "schistosity",
+                "schistosity"
+            ],
+            [
+                "planar_schistosity",
+                "planar schistosity"
+            ],
+            [
+                "anast_schistos",
+                "anastomosing schistosity"
+            ],
+            [
+                "gneissic_folia",
+                "gneissic foliation"
+            ],
+            [
+                "mineral_alignm",
+                "mineral alignment"
+            ],
+            [
+                "comp_banding",
+                "compositional banding"
+            ],
+            [
+                "deformed_marker",
+                "deformed marker"
+            ],
+            [
+                "mylonitic_foliation",
+                "mylonitic foliation"
+            ],
+            [
+                "s_plane",
+                "S plane"
+            ],
+            [
+                "c_plane",
+                "C plane"
+            ],
+            [
+                "c__or_extensional_plane",
+                "C' or extensional plane"
+            ],
+            [
+                "protomylonite",
+                "protomylonite"
+            ],
+            [
+                "mylonite",
+                "mylonite"
+            ],
+            [
+                "ultramylonite",
+                "ultramylonite"
+            ],
+            [
+                "gouge",
+                "gouge"
+            ],
+            [
+                "cataclasite",
+                "cataclasite"
+            ],
+            [
+                "solid_state_mineral_alignment",
+                "solid-state mineral alignment"
+            ],
+            [
+                "magmatic_mineral_alignment",
+                "magmatic mineral alignment"
+            ],
+            [
+                "migmatitic",
+                "migmatite foliation"
+            ],
+            [
+                "migmatitic_mineral_alignment",
+                "migmatitic mineral alignment"
+            ],
+            [
+                "mineral_elongation",
+                "mineral elongation"
+            ],
+            [
+                "compaction",
+                "compaction"
+            ],
+            [
+                "soft_sediment",
+                "soft sediment"
+            ],
+            [
+                "stylolites",
+                "stylolites"
+            ],
+            [
+                "slickolites",
+                "slickolites"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "planar_orientation_fracture_type": [
+            [
+                "joint",
+                "joint"
+            ],
+            [
+                "opening_mode",
+                "opening mode"
+            ],
+            [
+                "shear_fracture",
+                "shear fracture"
+            ],
+            [
+                "filled_fractur",
+                "filled fracture"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "planar_orientation_vein_type": [
+            [
+                "normal_opening",
+                "normal opening"
+            ],
+            [
+                "oblique_openin",
+                "oblique opening"
+            ],
+            [
+                "antitaxial",
+                "antitaxial"
+            ],
+            [
+                "syntaxial",
+                "syntaxial"
+            ],
+            [
+                "unknown",
+                "unknown"
+            ]
+        ],
+        "planar_orientation_vein_fill": [
+            [
+                "quartz",
+                "quartz"
+            ],
+            [
+                "calcite",
+                "calcite"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "planar_orientation_fault_or_sz_type": [
+            [
+                "dextral",
+                "dextral strike-slip"
+            ],
+            [
+                "sinistral",
+                "sinistral strike-slip"
+            ],
+            [
+                "oblique",
+                "normal"
+            ],
+            [
+                "reverse",
+                "reverse"
+            ],
+            [
+                "thrust",
+                "thrust"
+            ],
+            [
+                "low_angle_normal",
+                "low-angle normal"
+            ],
+            [
+                "dextral_reverse",
+                "dextral reverse"
+            ],
+            [
+                "dextral_normal",
+                "dextral normal"
+            ],
+            [
+                "sinistral_reverse",
+                "sinistral reverse"
+            ],
+            [
+                "sinistral_normal",
+                "sinistral normal"
+            ],
+            [
+                "high_angle",
+                "high-angle"
+            ],
+            [
+                "low_angle",
+                "low-angle"
+            ],
+            [
+                "scissor",
+                "scissor"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "planar_orientation_movement": [
+            [
+                "n_side_up",
+                "N side up"
+            ],
+            [
+                "ne_side_up",
+                "NE side up"
+            ],
+            [
+                "e_side_up",
+                "E side up"
+            ],
+            [
+                "se_side_up",
+                "SE side up"
+            ],
+            [
+                "s_side_up",
+                "S side up"
+            ],
+            [
+                "sw_side_up",
+                "SW side up"
+            ],
+            [
+                "w_side_up",
+                "W side up"
+            ],
+            [
+                "nw_side_up",
+                "NW side up"
+            ],
+            [
+                "top_to_n",
+                "top to N"
+            ],
+            [
+                "top_to_ne",
+                "top to NE"
+            ],
+            [
+                "top_to_e",
+                "top to E"
+            ],
+            [
+                "top_to_se",
+                "top to SE"
+            ],
+            [
+                "top_to_s",
+                "top to S"
+            ],
+            [
+                "top_to_sw",
+                "top to SW"
+            ],
+            [
+                "top_to_w",
+                "top to W"
+            ],
+            [
+                "top_to_nw",
+                "top to NW"
+            ],
+            [
+                "right_lateral",
+                "right-lateral"
+            ],
+            [
+                "left_lateral",
+                "left-lateral"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "planar_orientation_movement_amount_qualifier": [
+            [
+                "maximum_amount",
+                "maximum amount"
+            ],
+            [
+                "minimum_amount",
+                "minimum amount"
+            ],
+            [
+                "estimate_of_am",
+                "estimate of amount"
+            ]
+        ],
+        "linear_orientation_rake_calculated": [
+            [
+                "yes",
+                "yes"
+            ],
+            [
+                "no",
+                "no"
+            ]
+        ],
+        "linear_orientation_quality": [
+            [
+                "5",
+                "5 - best - accurate"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3 - approximate"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1",
+                "1 - poor - irregular - uncertain"
+            ]
+        ],
+        "linear_orientation_feature_type": [
+            [
+                "groove_marks",
+                "groove marks"
+            ],
+            [
+                "parting_lineat",
+                "parting lineations"
+            ],
+            [
+                "magmatic_miner_1",
+                "magmatic mineral alignment"
+            ],
+            [
+                "xenolith_encla",
+                "xenolith/enclave alignment"
+            ],
+            [
+                "intersection",
+                "intersection"
+            ],
+            [
+                "pencil_cleav",
+                "pencil cleavage"
+            ],
+            [
+                "mineral_align",
+                "mineral alignment"
+            ],
+            [
+                "deformed_marke",
+                "deformed marker"
+            ],
+            [
+                "rodding",
+                "rodding"
+            ],
+            [
+                "boudin",
+                "boudin"
+            ],
+            [
+                "mullions",
+                "mullions"
+            ],
+            [
+                "fold_hinge",
+                "fold hinge"
+            ],
+            [
+                "striations",
+                "striations"
+            ],
+            [
+                "slickenlines",
+                "slickenlines"
+            ],
+            [
+                "slickenfibers",
+                "slickenfibers"
+            ],
+            [
+                "mineral_streak",
+                "mineral streaks"
+            ],
+            [
+                "vorticity_axis",
+                "vorticity axis"
+            ],
+            [
+                "flow_transport",
+                "flow/transport direction"
+            ],
+            [
+                "vergence",
+                "vergence"
+            ],
+            [
+                "vector",
+                "vector"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "linear_orientation_vorticity": [
+            [
+                "clockwise",
+                "clockwise"
+            ],
+            [
+                "counterclockwi",
+                "counterclockwise"
+            ]
+        ],
+        "tabular_zone_orientation_facing": [
+            [
+                "upright",
+                "upright"
+            ],
+            [
+                "overturned",
+                "overturned"
+            ],
+            [
+                "vertical",
+                "vertical"
+            ],
+            [
+                "uncertain",
+                "uncertain"
+            ],
+            [
+                "not_applicable",
+                "not applicable"
+            ]
+        ],
+        "tabular_zone_orientation_facing_defined_by": [
+            [
+                "stratigraphy",
+                "stratigraphy"
+            ],
+            [
+                "facing_indicat",
+                "facing indicator"
+            ],
+            [
+                "assumed",
+                "assumed"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tabular_zone_orientation_quality": [
+            [
+                "5",
+                "5 - best - accurate"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3 - approximate"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1",
+                "1 - poor - irregular - uncertain"
+            ]
+        ],
+        "tabular_zone_orientation_feature_type": [
+            [
+                "stratigraphic",
+                "stratigraphic"
+            ],
+            [
+                "intrusive",
+                "intrusive body"
+            ],
+            [
+                "injection",
+                "injection structure"
+            ],
+            [
+                "vein",
+                "vein"
+            ],
+            [
+                "vein_array",
+                "vein array"
+            ],
+            [
+                "zone_fracturin",
+                "zone of fracturing"
+            ],
+            [
+                "zone_faulting",
+                "zone of faulting"
+            ],
+            [
+                "shear_zone",
+                "shear zone"
+            ],
+            [
+                "damage_zone",
+                "damage zone"
+            ],
+            [
+                "alteration_zone",
+                "alteration zone"
+            ],
+            [
+                "enveloping_surface",
+                "enveloping surface"
+            ],
+            [
+                "unknown",
+                "unknown"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tabular_zone_orientation_strat_type": [
+            [
+                "bedded_rock",
+                "bedded rock"
+            ],
+            [
+                "volcanic_flows",
+                "volcanic flows or deposits"
+            ]
+        ],
+        "tabular_zone_orientation_intrusive_body_type": [
+            [
+                "dike",
+                "dike"
+            ],
+            [
+                "sill",
+                "sill"
+            ],
+            [
+                "migmatite",
+                "tabular migmatite"
+            ],
+            [
+                "injectite",
+                "injectite"
+            ],
+            [
+                "schlieren",
+                "schlieren"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tabular_zone_orientation_injection_type": [
+            [
+                "clastic_dike",
+                "clastic dike"
+            ],
+            [
+                "injectite",
+                "injectite"
+            ],
+            [
+                "pseudotachylit",
+                "pseudotachylite"
+            ]
+        ],
+        "tabular_zone_orientation_vein_type": [
+            [
+                "normal_opening",
+                "normal opening"
+            ],
+            [
+                "oblique_openin",
+                "oblique opening"
+            ],
+            [
+                "antitaxial",
+                "antitaxial"
+            ],
+            [
+                "syntaxial",
+                "syntaxial"
+            ],
+            [
+                "unknown",
+                "unknown"
+            ]
+        ],
+        "tabular_zone_orientation_vein_fill": [
+            [
+                "quartz",
+                "quartz"
+            ],
+            [
+                "calcite",
+                "calcite"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tabular_zone_orientation_vein_array": [
+            [
+                "en_echelon",
+                "en echelon"
+            ],
+            [
+                "general",
+                "general"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tabular_zone_orientation_fracture_zone": [
+            [
+                "joints",
+                "joints"
+            ],
+            [
+                "opening_mode",
+                "opening mode fractures"
+            ],
+            [
+                "shear_fracture",
+                "shear fractures"
+            ],
+            [
+                "filled_fractur",
+                "filled fractures"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tabular_zone_orientation_fault_or_sz": [
+            [
+                "dextral",
+                "dextral strike-slip"
+            ],
+            [
+                "sinistral",
+                "sinistral strike-slip"
+            ],
+            [
+                "oblique",
+                "normal"
+            ],
+            [
+                "reverse",
+                "reverse"
+            ],
+            [
+                "thrust",
+                "thrust"
+            ],
+            [
+                "low_angle_normal",
+                "low-angle normal"
+            ],
+            [
+                "dextral_reverse",
+                "dextral reverse"
+            ],
+            [
+                "dextral_normal",
+                "dextral normal"
+            ],
+            [
+                "sinistral_reverse",
+                "sinistral reverse"
+            ],
+            [
+                "sinistral_normal",
+                "sinistral normal"
+            ],
+            [
+                "high_angle",
+                "high-angle"
+            ],
+            [
+                "low_angle",
+                "low-angle"
+            ],
+            [
+                "scissor",
+                "scissor"
+            ],
+            [
+                "coaxial",
+                "coaxial"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tabular_zone_orientation_movement": [
+            [
+                "n_side_up",
+                "N side up"
+            ],
+            [
+                "ne_side_up",
+                "NE side up"
+            ],
+            [
+                "e_side_up",
+                "E side up"
+            ],
+            [
+                "se_side_up",
+                "SE side up"
+            ],
+            [
+                "s_side_up",
+                "S side up"
+            ],
+            [
+                "sw_side_up",
+                "SW side up"
+            ],
+            [
+                "w_side_up",
+                "W side up"
+            ],
+            [
+                "nw_side_up",
+                "NW side up"
+            ],
+            [
+                "top_to_n",
+                "top to N"
+            ],
+            [
+                "top_to_ne",
+                "top to NE"
+            ],
+            [
+                "top_to_e",
+                "top to E"
+            ],
+            [
+                "top_to_se",
+                "top to SE"
+            ],
+            [
+                "top_to_s",
+                "top to S"
+            ],
+            [
+                "top_to_sw",
+                "top to SW"
+            ],
+            [
+                "top_to_w",
+                "top to W"
+            ],
+            [
+                "top_to_nw",
+                "top to NW"
+            ],
+            [
+                "left_lateral",
+                "left-lateral"
+            ],
+            [
+                "right_lateral",
+                "right-lateral"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tabular_zone_orientation_damage_zone": [
+            [
+                "vein_formation",
+                "vein formation"
+            ],
+            [
+                "fractures",
+                "fractures"
+            ],
+            [
+                "faulting",
+                "faulting"
+            ],
+            [
+                "def_bands",
+                "deformation bands"
+            ],
+            [
+                "defined_by_other",
+                "defined by other"
+            ]
+        ],
+        "tabular_zone_orientation_enveloping_surface": [
+            [
+                "fractures",
+                "fractures"
+            ],
+            [
+                "veins",
+                "veins"
+            ],
+            [
+                "faults",
+                "faults"
+            ],
+            [
+                "shear_zones",
+                "shear zones"
+            ],
+            [
+                "folds",
+                "folds"
+            ]
+        ],
+        "tabular_zone_orientation_enveloping_surface_geometry": [
+            [
+                "planar",
+                "planar"
+            ],
+            [
+                "en_echelon",
+                "en echelon"
+            ],
+            [
+                "random",
+                "random"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tabular_zone_orientation_tabularity": [
+            [
+                "constant",
+                "constant"
+            ],
+            [
+                "semi_constant",
+                "semi-constant"
+            ],
+            [
+                "variable",
+                "variable"
+            ],
+            [
+                "highly_variabl",
+                "highly variable"
+            ]
+        ],
+        "fabric_feature_type": [
+            [
+                "tectonite",
+                "tectonite"
+            ],
+            [
+                "mullion",
+                "mullion"
+            ],
+            [
+                "igneous_migmat",
+                "igneous/migmatite"
+            ],
+            [
+                "soft_sediment_",
+                "soft sediment deformation"
+            ],
+            [
+                "other_fabric",
+                "other fabric"
+            ]
+        ],
+        "fabric_tectonite_type": [
+            [
+                "s_tectonite",
+                "S tectonite"
+            ],
+            [
+                "sl_tectonite",
+                "SL tectonite"
+            ],
+            [
+                "ls_tectonite",
+                "LS tectonite"
+            ],
+            [
+                "l_tectonite",
+                "L tectonite"
+            ]
+        ],
+        "fabric_tectonite_character": [
+            [
+                "s_only",
+                "S only"
+            ],
+            [
+                "s___l",
+                "S >> L"
+            ],
+            [
+                "s___l_1",
+                "S > L"
+            ],
+            [
+                "s___l_2",
+                "S = L"
+            ],
+            [
+                "l___s",
+                "L > S"
+            ],
+            [
+                "l___s_1",
+                "L >> S"
+            ],
+            [
+                "l_only",
+                "L only"
+            ]
+        ],
+        "fabric_mullion_geometry": [
+            [
+                "unidirectional",
+                "unidirectional"
+            ],
+            [
+                "bidirectional",
+                "bidirectional"
+            ]
+        ],
+        "fabric_mullion_symmetry": [
+            [
+                "symmetrical",
+                "symmetrical"
+            ],
+            [
+                "asymmetrical",
+                "asymmetrical"
+            ]
+        ],
+        "fabric_mullion_linear_measure_quality": [
+            [
+                "5",
+                "5 - best - accurate"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3 - approximate"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1",
+                "1 - poor - irregular - uncertain"
+            ]
+        ],
+        "fold_feature_type": [
+            [
+                "anticline",
+                "anticline"
+            ],
+            [
+                "syncline",
+                "syncline"
+            ],
+            [
+                "monocline",
+                "monocline"
+            ],
+            [
+                "antiform",
+                "antiform"
+            ],
+            [
+                "synform",
+                "synform"
+            ],
+            [
+                "s_fold",
+                "s-fold"
+            ],
+            [
+                "z_fold",
+                "z-fold"
+            ],
+            [
+                "m_fold",
+                "m-fold"
+            ],
+            [
+                "sheath",
+                "sheath"
+            ],
+            [
+                "single_layer_b",
+                "single-layer buckle"
+            ],
+            [
+                "ptygmatic",
+                "ptygmatic"
+            ],
+            [
+                "crenulation",
+                "crenulation"
+            ],
+            [
+                "interfolial",
+                "interfolial"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "fold_fold_shape": [
+            [
+                "chevron",
+                "chevron"
+            ],
+            [
+                "cuspate",
+                "cuspate"
+            ],
+            [
+                "circular",
+                "circular"
+            ],
+            [
+                "elliptical",
+                "elliptical"
+            ]
+        ],
+        "fold_fold_attitude": [
+            [
+                "upright",
+                "upright"
+            ],
+            [
+                "overturned",
+                "overturned"
+            ],
+            [
+                "vertical",
+                "vertical"
+            ],
+            [
+                "horizontal",
+                "horizontal"
+            ],
+            [
+                "recumbent",
+                "recumbent"
+            ],
+            [
+                "inclined",
+                "inclined"
+            ]
+        ],
+        "fold_tightness": [
+            [
+                "gentle",
+                "gentle   (180º –120º)"
+            ],
+            [
+                "open",
+                "open   (120º–70º)"
+            ],
+            [
+                "close",
+                "close   (70º–30º)"
+            ],
+            [
+                "tight",
+                "tight   (30º–10º)"
+            ],
+            [
+                "isoclinal",
+                "isoclinal   (10º–0º)"
+            ]
+        ],
+        "fold_vergence": [
+            [
+                "north",
+                "North"
+            ],
+            [
+                "ne",
+                "NE"
+            ],
+            [
+                "east",
+                "East"
+            ],
+            [
+                "se",
+                "SE"
+            ],
+            [
+                "south",
+                "South"
+            ],
+            [
+                "sw",
+                "SW"
+            ],
+            [
+                "west",
+                "West"
+            ],
+            [
+                "nw",
+                "NW"
+            ]
+        ],
+        "fold_fold_fol_quality": [
+            [
+                "accurate",
+                "accurate"
+            ],
+            [
+                "approximate",
+                "approximate"
+            ],
+            [
+                "irregular",
+                "irregular"
+            ]
+        ],
+        "fold_fold_foliation_Type": [
+            [
+                "axial_planar",
+                "axial planar"
+            ],
+            [
+                "fanning_conver",
+                "fanning-convergent"
+            ],
+            [
+                "fanning_diverg",
+                "fanning-divergent"
+            ],
+            [
+                "transected",
+                "transected"
+            ]
+        ],
+        "tensor_feature_type": [
+            [
+                "ellipsoidal_data",
+                "ellipsoidal data"
+            ],
+            [
+                "non_ellipsoidal_data",
+                "non-ellipsoidal data"
+            ],
+            [
+                "elliptical_data",
+                "elliptical data"
+            ]
+        ],
+        "tensor_ellipsoid_type": [
+            [
+                "finite_strain",
+                "finite strain"
+            ],
+            [
+                "shape_preferred_orientation",
+                "shape preferred orientation"
+            ],
+            [
+                "anisotropy_of_magnetic_suspect",
+                "anisotropy of magnetic suspectibility"
+            ],
+            [
+                "stress",
+                "stress"
+            ],
+            [
+                "infinitesimal_strain",
+                "infinitesimal strain"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tensor_ellipsoid_quality": [
+            [
+                "5___best",
+                "5 - best"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1___worst",
+                "1 - worst"
+            ]
+        ],
+        "tensor_non_ellipsoidal_type": [
+            [
+                "flow_apophyses",
+                "flow apophyses"
+            ],
+            [
+                "displacements",
+                "displacements"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tensor_nonellipsoidal_quality_of_meas": [
+            [
+                "5___best",
+                "5 - best"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1___worst",
+                "1 - worst"
+            ]
+        ],
+        "tensor_ellipse_type": [
+            [
+                "finite_strain",
+                "finite strain"
+            ],
+            [
+                "preferred_shap",
+                "preferred shape orientation"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "tensor_elliptical_quality": [
+            [
+                "accurate",
+                "accurate"
+            ],
+            [
+                "approximate",
+                "approximate"
+            ],
+            [
+                "irregular",
+                "irregular"
+            ]
+        ],
+        "tensor_elliptical_quality_of_measurem": [
+            [
+                "5___best",
+                "5 - best"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1___worst",
+                "1 - worst"
+            ]
+        ],
+        "other_3d_structure_feature_type": [
+            [
+                "boudinage",
+                "boudinage"
+            ],
+            [
+                "mullion",
+                "mullion"
+            ],
+            [
+                "lobate_cuspate",
+                "lobate-cuspate"
+            ],
+            [
+                "other_3d_structure",
+                "other 3D structure"
+            ]
+        ],
+        "other_3d_structure_boudinage_geometry": [
+            [
+                "unidirectional",
+                "unidirectional"
+            ],
+            [
+                "bidirectional",
+                "bidirectional"
+            ]
+        ],
+        "other_3d_structure_boudinage_shape": [
+            [
+                "symmetrical",
+                "symmetrical"
+            ],
+            [
+                "asymmetrical",
+                "asymmetrical"
+            ]
+        ],
+        "other_3d_structure_movement": [
+            [
+                "n_side_up",
+                "N side up"
+            ],
+            [
+                "ne_side_up",
+                "NE side up"
+            ],
+            [
+                "e_side_up",
+                "E side up"
+            ],
+            [
+                "se_side_up",
+                "SE side up"
+            ],
+            [
+                "s_side_up",
+                "S side up"
+            ],
+            [
+                "sw_side_up",
+                "SW side up"
+            ],
+            [
+                "w_side_up",
+                "W side up"
+            ],
+            [
+                "nw_side_up",
+                "NW side up"
+            ],
+            [
+                "top_to_n",
+                "top to N"
+            ],
+            [
+                "top_to_ne",
+                "top to NE"
+            ],
+            [
+                "top_to_e",
+                "top to E"
+            ],
+            [
+                "top_to_se",
+                "top to SE"
+            ],
+            [
+                "top_to_s",
+                "top to S"
+            ],
+            [
+                "top_to_sw",
+                "top to SW"
+            ],
+            [
+                "top_to_w",
+                "top to W"
+            ],
+            [
+                "top_to_nw",
+                "top to NW"
+            ],
+            [
+                "right_lateral",
+                "right-lateral"
+            ],
+            [
+                "left_lateral",
+                "left-lateral"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "other_3d_structure_boudin_linear_measure_quality": [
+            [
+                "5",
+                "5 - best - accurate"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3 - approximate"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1",
+                "1 - poor - irregular - uncertain"
+            ]
+        ],
+        "other_3d_structure_mullion_geometry": [
+            [
+                "unidirectional",
+                "unidirectional"
+            ],
+            [
+                "bidirectional",
+                "bidirectional"
+            ]
+        ],
+        "other_3d_structure_mullion_symmetry": [
+            [
+                "symmetrical",
+                "symmetrical"
+            ],
+            [
+                "asymmetrical",
+                "asymmetrical"
+            ]
+        ],
+        "other_3d_structure_mullion_linear_measure_quality": [
+            [
+                "5",
+                "5 - best - accurate"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3 - approximate"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1",
+                "1 - poor - irregular - uncertain"
+            ]
+        ],
+        "sample_oriented_sample": [
+            [
+                "yes",
+                "Yes"
+            ],
+            [
+                "no",
+                "No"
+            ]
+        ],
+        "sample_material_type": [
+            [
+                "intact_rock",
+                "intact rock"
+            ],
+            [
+                "fragmented_roc",
+                "fragmented rock"
+            ],
+            [
+                "sediment",
+                "sediment"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "sample_main_sampling_purpose": [
+            [
+                "fabric___micro",
+                "fabric / microstructure"
+            ],
+            [
+                "petrology",
+                "petrology"
+            ],
+            [
+                "geochronology",
+                "geochronology"
+            ],
+            [
+                "geochemistry",
+                "geochemistry"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "sample_inplaceness_of_sample": [
+            [
+                "5___definitely",
+                "5 - definitely in place"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1___float",
+                "1 - float"
+            ]
+        ],
+        "sample_degree_of_weathering": [
+            [
+                "5___fresh",
+                "5 - fresh"
+            ],
+            [
+                "4",
+                "4"
+            ],
+            [
+                "3",
+                "3"
+            ],
+            [
+                "2",
+                "2"
+            ],
+            [
+                "1___highly_wea",
+                "1 - highly weathered"
+            ]
+        ],
+        "surface_feature_surface_feature_type": [
+            [
+                "rock_unit",
+                "rock unit"
+            ],
+            [
+                "contiguous_outcrop",
+                "contiguous outcrop"
+            ],
+            [
+                "geologic_structure",
+                "geologic structure"
+            ],
+            [
+                "extent_of_mapping",
+                "extent of mapping"
+            ],
+            [
+                "geomorphic_feature",
+                "geomorphic feature"
+            ],
+            [
+                "anthropogenic_feature",
+                "anthropogenic feature"
+            ],
+            [
+                "extent_of_biological_marker",
+                "extent of biological marker"
+            ],
+            [
+                "subjected_to_similar_process",
+                "subjected to similar process"
+            ],
+            [
+                "gradients",
+                "gradients"
+            ],
+            [
+                "other",
+                "other"
+            ]
+        ],
+        "image_image_type": [
+            [
+                "photo",
+                "photo"
+            ],
+            [
+                "sketch",
+                "sketch"
+            ],
+            [
+                "thin_section",
+                "thin section"
+            ],
+            [
+                "geological_cs",
+                "geological cross section"
+            ],
+            [
+                "geophysical_cs",
+                "geophysical cross section"
+            ],
+            [
+                "strat_section",
+                "stratigraphic section"
+            ],
+            [
+                "other_image_ty",
+                "other"
+            ]
+        ],
+        "image_units_of_image_view": [
+            [
+                "km",
+                "km"
+            ],
+            [
+                "m",
+                "m"
+            ],
+            [
+                "cm",
+                "cm"
+            ],
+            [
+                "mm",
+                "mm"
+            ],
+            [
+                "_m",
+                "um"
+            ]
+        ]
+    }
+}

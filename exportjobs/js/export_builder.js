@@ -283,7 +283,11 @@
 			var rows = (CFG.initial && CFG.initial.criteria) || [];
 			if (!box) return;
 			if (!rows.length) { box.appendChild(el('span', 'ss-chip', '(no filters)')); return; }
-			rows.forEach(function (e) { box.appendChild(el('span', 'ss-chip', C && C.criterionText ? C.criterionText(e) : e.id)); });
+			var chips = rows.map(function (e) { var c = el('span', 'ss-chip', C && C.criterionText ? C.criterionText(e) : e.id); box.appendChild(c); return c; });
+			// relabel once the form labels of the filter values are loaded
+			if (C && C.ensureLabels) C.ensureLabels({ criteria: rows }).then(function () {
+				rows.forEach(function (e, i) { chips[i].textContent = C.criterionText(e); });
+			});
 			return;
 		}
 		if (!C || !window.SSBuilder) return;

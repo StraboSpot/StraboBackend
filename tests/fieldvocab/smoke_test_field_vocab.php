@@ -178,6 +178,20 @@ try {
     $threw = false;
     try { FieldVocabBuilder::formFields(json_encode(array('survey' => array(array('type' => 'select_one NOPE', 'name' => 'z')), 'choices' => array()))); } catch (Exception $e) { $threw = true; }
     check('formFields: missing list throws', $threw);
+    $lay = FieldVocabBuilder::formLayout(json_encode(array('survey' => array(
+        array('type' => 'start', 'name' => 'start'),
+        array('type' => 'begin_group', 'name' => 'g1', 'label' => 'Group'),
+        array('type' => 'text', 'name' => 'label', 'label' => ' Label '),
+        array('type' => 'select_one L1', 'name' => 'kind', 'label' => 'Kind'),
+        array('type' => 'decimal', 'name' => 'size'),
+        array('type' => 'calculate', 'name' => '__version__'),
+        array('type' => 'acknowledge', 'name' => 'ack', 'label' => 'Ack'),
+        array('type' => 'note', 'name' => 'n1', 'label' => 'Read me'),
+        array('type' => 'end_group'),
+        array('type' => 'text', 'name' => 'label', 'label' => 'dup'),
+    ))));
+    check('formLayout: data rows in order, labels trimmed, empty label -> name, no group/meta rows, first of a dup name',
+        $lay === array(array('label', 'Label', 'text'), array('kind', 'Kind', 'select_one'), array('size', 'size', 'decimal')), $lay);
 
     $files1 = array('index.js' => "import f from './f.json';\nconst forms = {\n  c: {\n    f: f,\n  },\n};\n", 'f.json' => $form);
     $m1 = FieldVocabBuilder::build($files1, 'v1.0.0', str_repeat('a', 40));
@@ -304,7 +318,8 @@ try {
     check('first run: .htaccess deny-all in data dir', strpos((string)@file_get_contents("$dataDir/.htaccess"), 'Require all denied') !== false);
     check('first run: sync.log written', is_file("$dataDir/sync.log"));
     $liveMap = FieldVocab::readMapFile($live);
-    $noList = function ($forms) { foreach ($forms as $k => $f) foreach ($f['fields'] as $n => $x) unset($forms[$k]['fields'][$n]['list']); return $forms; };   // synthetic lists are named L_<field>
+    // synthetic lists are named L_<field>; synthetic surveys carry only the select rows (no layout to compare)
+    $noList = function ($forms) { foreach ($forms as $k => $f) { unset($forms[$k]['layout']); foreach ($f['fields'] as $n => $x) unset($forms[$k]['fields'][$n]['list']); } return $forms; };
     check('live map == baseline forms (list names aside)', $liveMap !== null && $noList($liveMap['forms']) == $noList($base['forms']));
     FieldVocab::setMap(null);
     check('FieldVocab now loads the synced map', FieldVocab::source()['origin'] === 'data');
