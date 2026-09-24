@@ -119,6 +119,8 @@ class FieldbookNets
 	private static function measurement(array $r)
 	{
 		$feature = isset($r['feature']) ? (string)$r['feature'] : '';
+		// the stored feature_type picks the symbol slot; the printed text (now a form label) is the legend
+		$fkey = isset($r['featureKey']) && (string)$r['featureKey'] !== '' ? (string)$r['featureKey'] : strtolower(str_replace(' ', '_', $feature));
 		$a = isset($r['a']) ? trim((string)$r['a']) : '';
 		$b = isset($r['b']) ? trim((string)$r['b']) : '';
 		if (!empty($r['planar'])) {
@@ -127,12 +129,12 @@ class FieldbookNets
 			if (!is_numeric($a) || !is_numeric($b)) return null;
 			$dip = (float)$b;
 			if ($dip < 0 || $dip > 90) return null;
-			return array('planar' => true, 'feature' => $feature, 'strike' => self::norm360($a), 'dip' => $dip, 'associated' => false);
+			return array('planar' => true, 'feature' => $feature, 'featureKey' => $fkey, 'strike' => self::norm360($a), 'dip' => $dip, 'associated' => false);
 		}
 		if (!is_numeric($a) || !is_numeric($b)) return null;
 		$plunge = (float)$b;
 		if ($plunge < 0 || $plunge > 90) return null;
-		return array('planar' => false, 'feature' => $feature, 'trend' => self::norm360($a), 'plunge' => $plunge, 'associated' => false);
+		return array('planar' => false, 'feature' => $feature, 'featureKey' => $fkey, 'trend' => self::norm360($a), 'plunge' => $plunge, 'associated' => false);
 	}
 
 	// ------------------------------------------------------------ symbols
@@ -146,17 +148,17 @@ class FieldbookNets
 		list($ms) = self::measurements($rows);
 		foreach ($ms as $m) {
 			$slots = $m['planar'] ? self::$planeSlots : self::$lineSlots;
-			if (isset($slots[strtolower(str_replace(' ', '_', $m['feature']))])) $this->symbol($m['planar'], $m['feature']);
+			if (isset($slots[$m['featureKey']])) $this->symbol($m['planar'], $m['feature'], $m['featureKey']);
 		}
 	}
 
 	/** Book-wide symbol for a (kind, feature type): filled shapes for poles, open shapes for lines. */
-	public function symbol($planar, $feature)
+	public function symbol($planar, $feature, $featureKey = null)
 	{
-		$key = ($planar ? 'P|' : 'L|') . $feature;
+		$token = $featureKey !== null && $featureKey !== '' ? (string)$featureKey : strtolower(str_replace(' ', '_', $feature));
+		$key = ($planar ? 'P|' : 'L|') . $token;
 		if (isset($this->registry[$key])) return $this->registry[$key];
 		$slots = $planar ? self::$planeSlots : self::$lineSlots;
-		$token = strtolower(str_replace(' ', '_', $feature));
 		$shape = null; $tone = 0;
 		if (isset($slots[$token]) && !$this->taken($planar, $slots[$token], 0)) $shape = $slots[$token];
 		if ($shape === null) {
@@ -167,7 +169,7 @@ class FieldbookNets
 			}
 			if ($shape === null) { $shape = 'circle'; $tone = 180; }   // beyond 24 types per kind: share
 		}
-		$label = $feature !== '' ? $feature : ($planar ? 'Plane' : 'Line');
+		$label = $feature !== '' ? ucfirst($feature) : ($planar ? 'Plane' : 'Line');   // legend entry = heading: leading capital (D6)
 		$this->registry[$key] = array('shape' => $shape, 'tone' => $tone, 'filled' => (bool)$planar, 'label' => $label, 'key' => $key);
 		return $this->registry[$key];
 	}
@@ -193,7 +195,7 @@ class FieldbookNets
 		foreach ($measurements as $m) if ($m['planar']) $nPlanes++;
 		if ($circles === null) $circles = !$dataset || $nPlanes <= self::CIRCLES_MAX;
 		foreach ($measurements as $m) {
-			$sym = $this->symbol($m['planar'], $m['feature']);
+			$sym = $this->symbol($m['planar'], $m['feature'], $m['featureKey']);
 			if (!isset($counts[$sym['key']])) { $counts[$sym['key']] = 0; $order[] = $sym; }
 			$counts[$sym['key']]++;
 			if ($m['planar']) {
@@ -221,7 +223,7 @@ class FieldbookNets
 		if (!$ms) return array();
 		$out = array(array('title' => 'All measurements', 'fig' => $this->figure($ms, $skipped, null, true)));
 		$groups = array(); $labels = array();
-		foreach ($ms as $m) { $sym = $this->symbol($m['planar'], $m['feature']); $groups[$sym['key']][] = $m; $labels[$sym['key']] = $sym['label']; }
+		foreach ($ms as $m) { $sym = $this->symbol($m['planar'], $m['feature'], $m['featureKey']); $groups[$sym['key']][] = $m; $labels[$sym['key']] = $sym['label']; }
 		if (count($groups) > 1) {
 			uasort($groups, function ($a, $b) { return count($b) - count($a); });
 			foreach ($groups as $k => $g) {

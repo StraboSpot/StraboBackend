@@ -13,6 +13,8 @@
  * @license    https://opensource.org/licenses/MIT MIT License
  */
 
+require_once dirname(__DIR__) . '/fieldvocab/FieldVocab.php';
+
 class FieldbookProps
 {
 	/** Spot keys handled by the designed blocks or that are system bookkeeping (never in the generic block). */
@@ -45,6 +47,8 @@ class FieldbookProps
 			return implode(', ', $parts);
 		}
 		$v = (string)$v;
+		// a form label from the display copy (FieldVocab): exactly as the app writes it (D6)
+		if (FieldVocab::isProducedLabel($v)) return $v;
 		// vocabulary token (snake_case, possibly "5___definitely") => sentence case
 		if (preg_match('/^[a-z][a-z0-9]*(_+[a-z0-9]+)*$/', $v) || preg_match('/^[0-9]+(_+[a-z0-9]+)+$/', $v)) {
 			return ucfirst(preg_replace('/_+/', ' ', $v));
@@ -55,6 +59,18 @@ class FieldbookProps
 			if ($t !== false) return gmdate('F j, Y H:i', $t) . ' UTC';
 		}
 		return $v;
+	}
+
+	/** A value used as a heading / item title: form labels get a leading capital (D6), raw names are humanized. */
+	public static function title($v)
+	{
+		return FieldVocab::isProducedLabel($v) ? ucfirst((string)$v) : self::humanize($v);
+	}
+
+	/** A tag's type as printed: the tags form label ("Concept"), else the humanized name. */
+	public static function tagType($type)
+	{
+		return FieldVocab::labelText(FieldVocab::formsFor('tags', array('type' => (string)$type)), 'type', (string)$type, ', ', array('FieldbookProps', 'humanize'));
 	}
 
 	/** Leaf keys that hold bookkeeping, not observations (documented in the design doc §4.1). */
@@ -179,7 +195,7 @@ class FieldbookProps
 	public static function itemTitle(array $item, $fallback)
 	{
 		foreach (array('label', 'name', 'sample_id_name', 'type', 'feature_type') as $k) {
-			if (isset($item[$k]) && is_scalar($item[$k]) && (string)$item[$k] !== '') return self::humanize($item[$k]);
+			if (isset($item[$k]) && is_scalar($item[$k]) && (string)$item[$k] !== '') return self::title($item[$k]);
 		}
 		return $fallback;
 	}
