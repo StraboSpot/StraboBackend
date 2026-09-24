@@ -1,7 +1,17 @@
 <?php
 /**
  * File: straboModelClass.php
- * Description: straboModelClass class
+ * Description: straboModelClass class: the StraboField data model behind the
+ *              shapefile import (load_shapefile.php: column catalog, controlled
+ *              vocab checks) and the legacy viewers' data_model.js (jsdatamodel.php).
+ *
+ *              Fields (the import catalog) come from kobofiles/legacy_model.json,
+ *              frozen 2026-09-24 from the retired 2019 kobofiles xls. Choice labels
+ *              come from the app's current forms (includes/fieldvocab, synced
+ *              nightly): each legacy list takes the current label of every name
+ *              the app still has and gains the app's other choices; the legacy
+ *              labels stay accepted on import. GROUP_FORMS maps each legacy group
+ *              to its form(s).
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -13,8 +23,29 @@
 
 libxml_use_internal_errors(true);
 
+require_once(__DIR__ . '/../fieldvocab/FieldVocab.php');
+
 class straboModelClass
 {
+	/** Legacy model group => StraboField form key(s) (includes/fieldvocab map). */
+	const GROUP_FORMS = array(
+		'spot'                     => array(),
+		'rock_unit'                => array('project.geologic_unit'),
+		'trace'                    => array('general.trace'),
+		'planar_orientation'       => array('measurement.planar_orientation'),
+		'linear_orientation'       => array('measurement.linear_orientation'),
+		'tabular_zone_orientation' => array('measurement.tabular_orientation'),
+		'fabric'                   => array('_3d_structures.fabric'),
+		'fold'                     => array('_3d_structures.fold'),
+		'tensor'                   => array('_3d_structures.tensor'),
+		'other_3d_structure'       => array('_3d_structures.other'),
+		'sample'                   => array('general.samples'),
+		'tephra'                   => array('tephra.basic', 'tephra.additional'),
+		'other_features'           => array(),
+		'surface_feature'          => array('general.surface_feature'),
+		'image'                    => array('general.images'),
+		'tag'                      => array('project.tags'),
+	);
 
 	 public function straboModelClass(){
 
@@ -23,7 +54,7 @@ class straboModelClass
 		 $this->founditems = array(); //store found matches between shapefile vars and data model vars
 		 $this->controlledlist = array();
 
-		 $this->loadXLSFiles();
+		 $this->loadModel();
 	 }
 
 	public function dumpVar($var){
@@ -350,6 +381,12 @@ class straboModelClass
 					$this->filevocab["labels"][$strabocol][]=$c["label"];
 				}
 
+				// 2019 labels stay accepted (the list above carries the app's current ones)
+				foreach(isset($this->legacylabels[$colnum]) ? $this->legacylabels[$colnum] : array() as $c){
+					$this->filevocab["names"][$strabocol][]=$c["name"];
+					$this->filevocab["labels"][$strabocol][]=$c["label"];
+				}
+
 			}
 
 		}
@@ -660,109 +697,69 @@ class straboModelClass
 
 	}
 
-	public function loadXLSFiles(){
+	/**
+	 * Load the frozen legacy model, then take choice labels and extra choices
+	 * from the app's current forms (see file header).
+	 */
+	public function loadModel(){
 
-		 unset($this->fields);
-		 $this->fields = array();
-		 $this->fieldnum=0;
+		$this->fields = array();
+		$this->controlledlist = array();
+		$this->legacylabels = array();
+		$this->fieldnum = 0;
 
-		$this->loadXLSFile("spot.xls","spot");
-		$this->loadXLSFile("rock_unit.xls","rock_unit");
-		$this->loadXLSFile("trace.xls","trace");
+		$model = json_decode((string)@file_get_contents(__DIR__ . '/kobofiles/legacy_model.json'), true);
+		if (!is_array($model) || !isset($model['fields'])) return;
 
-		$this->loadXLSFile("planar_orientation.xls","planar_orientation");
-		$this->loadXLSFile("linear_orientation.xls","linear_orientation");
-		$this->loadXLSFile("tabular_zone_orientation.xls","tabular_zone_orientation");
+		foreach ($model['fields'] as $f) {
+			if (in_array($f['name'], $this->ignorelist)) continue;
+			$num = $this->fieldnum++;
+			$this->fields[$num] = array(
+				'group' => $f['group'], 'name' => $f['name'], 'label' => $f['label'], 'hint' => $f['hint'],
+				'num' => $num, 'type' => $f['type'], 'strabolabel' => $f['group'] . '_' . $f['name'],
+			);
+			$key = $f['group'] . '_' . $f['name'];
+			if (empty($model['vocab'][$key])) continue;
 
-		$this->loadXLSFile("fabric.xls","fabric");
-		$this->loadXLSFile("fold.xls","fold");
-		$this->loadXLSFile("tensor.xls","tensor");
-		$this->loadXLSFile("other_3d_structure.xls","other_3d_structure");
-
-		$this->loadXLSFile("sample.xls","sample");
-
-		$this->loadXLSFile("tephra.xls","tephra");
-
-		$this->loadXLSFile("other_features.xls","other_features");
-
-		$this->loadXLSFile("surface_feature.xls","surface_feature");
-
-		$this->loadXLSFile("image_properties.xls","image");
-
-		$this->loadXLSFile("tag.xls","tag");
-
-	}
-
-	public function getXLSRow($rows,$name){
-		for($y=1;$y<20;$y++){
-			if($rows[1][$y]==$name) return $y;
+			$forms = isset(self::GROUP_FORMS[$f['group']]) ? self::GROUP_FORMS[$f['group']] : array();
+			$list = array();
+			$seen = array();
+			foreach ($model['vocab'][$key] as $c) {
+				$name = (string)$c[0];
+				// the app's current label where it still has the name, else the legacy label
+				$legacy = (string)$c[1];
+				$label = FieldVocab::label($forms, $f['name'], $name, function ($v) use ($legacy) { return $legacy; });
+				$list[] = array('name' => $name, 'label' => $label);
+				$seen[$name] = true;
+				$this->legacylabels[$num][] = array('name' => $name, 'label' => (string)$c[1]);
+			}
+			foreach ($this->mapChoices($forms, $f['name']) as $name => $label) {
+				if (!isset($seen[$name])) $list[] = array('name' => $name, 'label' => $label);
+			}
+			$this->controlledlist[$num] = $list;
 		}
-		return false;
 	}
 
-	public function loadXLSFile($filename,$group){
-
-		include_once 'excel_reader/excel_reader.php';
-		$excel = new PhpExcelReader;
-
-		$excel->read("includes/straboClasses/kobofiles/xls/$filename");
-
-		$rows = $excel->sheets[0]["cells"];
-
-		$namecol = $this->getXLSRow($rows,"name");
-		$typecol = $this->getXLSRow($rows,"type");
-		$labelcol = $this->getXLSRow($rows,"label");
-		$hintcol = $this->getXLSRow($rows,"hint");
-
-		foreach($rows as $row){
-
-			$name = $row[$namecol];
-			$type = $row[$typecol];
-			$label = $row[$labelcol];
-			$hint = $row[$hintcol];
-
-			if(!in_array ( $name , $this->ignorelist ) && $name!="" && $type!="acknowledge" && $type!="begin group" && $hint!="hint"){
-
-				$this->fields[$this->fieldnum]['group']=$group;
-				$this->fields[$this->fieldnum]['name']=$name;
-				$this->fields[$this->fieldnum]['label']=$label;
-				$this->fields[$this->fieldnum]['hint']=$hint;
-				$this->fields[$this->fieldnum]['num']=$this->fieldnum;
-				$this->fields[$this->fieldnum]['type']=$type;
-				$this->fields[$this->fieldnum]['strabolabel']=$group."_".$name;
-
-				if(substr($type,0,10)=="select_one"){
-					$selectvar = explode(" ",$type)[1];
-					$this->addControlledItems($selectvar,$excel->sheets[1]["cells"]);
-				}
-
-				$this->fieldnum++;
-
+	/**
+	 * Current + retired choices (name => label) of a field across forms, in
+	 * form order; empty when the forms do not have it as a choice field.
+	 */
+	public function mapChoices($forms, $field){
+		$map = FieldVocab::map();
+		$out = array();
+		foreach ((array)$forms as $fk) {
+			if (!isset($map['forms'][$fk]['fields'][$field])) continue;
+			$fd = $map['forms'][$fk]['fields'][$field];
+			foreach ($fd['choices'] as $name => $label) {
+				$name = (string)$name;
+				if (!isset($out[$name])) $out[$name] = FieldVocab::label($forms, $field, $name, function ($v) use ($label) { return $label; });
+			}
+			foreach (isset($fd['retired_choices']) ? $fd['retired_choices'] : array() as $name => $r) {
+				$name = (string)$name;
+				if (!isset($out[$name])) $out[$name] = $r['label'];
 			}
 		}
-	}
-
-	public function addControlledItems($selectvar,$rows){
-
-		$namecol = $this->getXLSRow($rows,"name");
-		$labelcol = $this->getXLSRow($rows,"label");
-		$listnamecol = $this->getXLSRow($rows,"list name");
-
-		$varnum=0;
-
-		foreach($rows as $row){
-			$name = $row[$namecol];
-			$label = $row[$labelcol];
-			$listname = $row[$listnamecol];
-
-			if( $listname==$selectvar ){
-				$this->controlledlist[$this->fieldnum][$varnum]["name"]=$name;
-				$this->controlledlist[$this->fieldnum][$varnum]["label"]=$label;
-				$varnum++;
-			}
-
-		}
-
+		return $out;
 	}
 
 }

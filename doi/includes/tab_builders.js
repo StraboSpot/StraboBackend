@@ -70,19 +70,23 @@ var addTabCategory = function (group, label, modelvars, spotvars){
 
 cvFixVal = function (group,itemname,value){
 
-	var thisval="";
-	if(typeof controlledVocab[group+'_'+itemname] != 'undefined'){
-		if(typeof controlledVocab[group+'_'+itemname][value] != 'undefined'){
-			thisval = controlledVocab[group+'_'+itemname][value];
-		}else{
-			thisval = value;
-		}
-	}else{
-		thisval = value;
-	}
-	
-	return thisval;
+	// a form label already (the sidebar renders a relabeled copy of the spot, fieldvocab_display.js)
+	if(window.FieldVocabDisplay && FieldVocabDisplay.isLabel(value)) return value;
 
+	var vocab = controlledVocab[group+'_'+itemname];
+	if(typeof vocab == 'undefined') return value;
+
+	// select_multiple: label each name, joined the way the app shows them
+	if(Array.isArray(value)) return value.map(function(v){ return cvFixVal(group,itemname,v); }).join(', ');
+
+	return (typeof vocab[value] != 'undefined') ? vocab[value] : value;
+}
+
+// data_model.js group of a stored object type (orientation / 3D structure)
+var cvGroup = function (type){
+	if(type=="tabular_orientation") return "tabular_zone_orientation";
+	if(type=="other") return "other_3d_structure";
+	return type;
 }
 
 
@@ -612,7 +616,7 @@ var addOrientation = function (o,bordertop){
 	var groupvars = "";
 	if(o.type=="planar_orientation") groupvars = planar_orientation_vars;
 	if(o.type=="linear_orientation") groupvars = linear_orientation_vars;
-	if(o.type=="tabular_zone_orientation") groupvars = tabular_zone_orienation_vars;
+	if(o.type=="tabular_orientation" || o.type=="tabular_zone_orientation") groupvars = tabular_zone_orientation_vars;
 
 	thishtml += '<div class = "sidebar_value_row'+thisborderclass+'">';
 	
@@ -633,7 +637,7 @@ var addOrientation = function (o,bordertop){
 	_.each(groupvars, function(value, key){
 		if(o[key]){
 			if(key!='label'){
-				var thisval = cvFixVal(o.type,key,o[key]);
+				var thisval = cvFixVal(cvGroup(o.type),key,o[key]);
 				thishtml += addDetailValueRow(value,thisval);
 				bordertop = true;
 			}
@@ -678,7 +682,7 @@ var addSample = function (samp,bordertop){
 		if(samp[key]){
 			if(key!='label'){
 				console.log(samp.type);
-				var thisval = cvFixVal(samp.type,key,samp[key]);
+				var thisval = cvFixVal('sample',key,samp[key]);
 				thishtml += addDetailValueRow(value,thisval);
 				bordertop = true;
 			}
@@ -713,7 +717,7 @@ var addTephra = function (tephra,bordertop){
 	_.each(groupvars, function(value, key){
 		if(tephra[key]){
 			if(key!='label'){
-				var thisval = cvFixVal(tephra.type,key,tephra[key]);
+				var thisval = cvFixVal('tephra',key,tephra[key]);
 				thishtml += addDetailValueRow(value,thisval);
 				bordertop = true;
 			}
@@ -750,7 +754,7 @@ var addOtherFeature = function (otherfeature,bordertop){
 	_.each(groupvars, function(value, key){
 		if(otherfeature[key]){
 			if(otherfeature!='label'){
-				var thisval = cvFixVal(otherfeature.type,key,otherfeature[key]);
+				var thisval = cvFixVal('other_features',key,otherfeature[key]);
 				thishtml += addDetailValueRow(value,thisval);
 				bordertop = true;
 			}
@@ -776,7 +780,8 @@ var add3DStructure = function (structure,bordertop){
 	if(structure.type=="fabric") groupvars = fabric_vars;
 	if(structure.type=="fold") groupvars = fold_vars;
 	if(structure.type=="tensor") groupvars = tensor_vars;
-	if(structure.type=="other_3d_structure") groupvars = other_3d_structure_vars;
+	if(structure.type=="other" || structure.type=="other_3d_structure") groupvars = other_3d_structure_vars;
+	if(structure.type=="fault") groupvars = fault_vars;
 
 	thishtml += '<div class = "sidebar_value_row'+thisborderclass+'">';
 	
@@ -790,7 +795,7 @@ var add3DStructure = function (structure,bordertop){
 	_.each(groupvars, function(value, key){
 		if(structure[key]){
 			if(key!='label'){
-				var thisval = cvFixVal(structure.type,key,structure[key]);
+				var thisval = cvFixVal(cvGroup(structure.type),key,structure[key]);
 				thishtml += addDetailValueRow(value,thisval);
 				bordertop = true;
 			}
