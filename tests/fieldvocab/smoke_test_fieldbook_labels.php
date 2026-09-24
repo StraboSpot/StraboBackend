@@ -236,6 +236,49 @@ try {
 	$pdfBytes = (string)@file_get_contents("$doiDir/project.pdf");
 	check('DOI project.pdf built (doiPDFOut saveToDisk, the build_doi.php call)', strpos($pdfBytes, '%PDF') === 0 && strlen($pdfBytes) > 5000, strlen($pdfBytes) . ' bytes, stray: ' . substr($stray, 0, 200));
 
+	section('KMZ balloons + stereonet (straboOutputClass, doiOutputClass)');
+	$kmlExpect = array('joint', "R'-fracture", 'T-fracture', 'zone of fracturing', 'fragmented rock', 'fabric / microstructure',
+		'5 - definitely in place', 'geologic structure', 'fold axial trace', 's-fold', 'dextral strike-slip');
+	$kmlRaw = array('option_13', 'option_7', 'option_8', 'zone_fracturin', 'fragmented_roc', 'fabric___micro', '5___definitely', 'geologic_struc', 'fold_axial_tra');
+	$netExpect = array('joint', 'fracture', 'flow/transport direction');   // feature_type of planar + linear only (tabular zones and fracture_type are not in the file)
+	$netRaw = array('Option 13', 'Flow Transport');
+	$texts = array();
+	foreach (array('kmlOut' => 'kml', 'stereonetOut' => 'stereonet') as $method => $what) {
+		$dir = sys_get_temp_dir() . "/fvk_{$what}_" . getmypid();
+		exec('rm -rf ' . escapeshellarg($dir)); mkdir($dir, 0775, true);
+		$o = new straboOutputClass(fresh_strabo(), array('dsids' => GF_DS_A . ',' . GF_DS_B, 'userpkey' => $OWNER));
+		$o->captureDir = $dir;
+		ob_start(); $o->$method(); ob_end_clean();
+		$t = '';
+		foreach (glob("$dir/*") as $fpath) {
+			if (preg_match('/\.kmz$/i', $fpath)) $t .= (string)shell_exec('unzip -p ' . escapeshellarg($fpath) . ' "*.kml"');
+			else $t .= (string)file_get_contents($fpath);
+		}
+		$texts[$what] = html_entity_decode($t, ENT_QUOTES, 'UTF-8');
+		exec('rm -rf ' . escapeshellarg($dir));
+	}
+	list(, $texts['doikml']) = http('GET', "/doi/doisearchdownload.php?type=kml&u=$DOI_UUID", null, 'none');
+	if (substr($texts['doikml'], 0, 2) === "PK") {   // kmz
+		$z = sys_get_temp_dir() . '/fvk_doi_' . getmypid() . '.kmz'; file_put_contents($z, $texts['doikml']);
+		$texts['doikml'] = (string)shell_exec('unzip -p ' . escapeshellarg($z) . ' "*.kml"'); @unlink($z);
+	}
+	$texts['doikml'] = html_entity_decode($texts['doikml'], ENT_QUOTES, 'UTF-8');
+	list(, $texts['doistereonet']) = http('GET', "/doi/doisearchdownload.php?type=stereonet&u=$DOI_UUID", null, 'none');
+	foreach (array('kml' => 'KMZ', 'doikml' => 'DOI KMZ') as $k => $what) {
+		$miss = array(); $leak = array();
+		foreach ($kmlExpect as $l) if (stripos($texts[$k], $l) === false) $miss[] = $l;
+		foreach ($kmlRaw as $r) if (preg_match('/[:>]\s*' . preg_quote($r, '/') . '\s*</', $texts[$k]) || stripos($texts[$k], str_replace('_', ' ', $r) . '<') !== false) $leak[] = $r;
+		check("$what balloons print the labels (" . strlen($texts[$k]) . ' bytes)', strlen($texts[$k]) > 1000 && !$miss, 'missing: ' . implode(' | ', $miss));
+		check("$what balloons: no raw names", !$leak, implode(' | ', $leak));
+	}
+	foreach (array('stereonet' => 'stereonet txt', 'doistereonet' => 'DOI stereonet txt') as $k => $what) {
+		$miss = array(); $leak = array();
+		foreach ($netExpect as $l) if (strpos($texts[$k], "\t$l\t") === false) $miss[] = $l;
+		foreach ($netRaw as $r) if (strpos($texts[$k], "\t$r\t") !== false) $leak[] = $r;
+		check("$what: feature types are labels, still tab-delimited", strlen($texts[$k]) > 100 && !$miss, 'missing: ' . implode(' | ', $miss) . ' | head: ' . substr($texts[$k], 0, 200));
+		check("$what: no old Title Case names", !$leak, implode(' | ', $leak));
+	}
+
 	section('Real PDFs build');
 	Fieldbook::$mapsOverride = array('set' => 'none');
 	// the legacy book takes ONE dataset (two dsids build invalid Cypher: long-standing, unlinked download)
