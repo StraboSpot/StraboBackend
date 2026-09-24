@@ -90,7 +90,14 @@ function tw_field_hint($f)
 {
     $bits = array();
     if (!empty($f['vocab'])) {
-        $bits[] = 'dropdown, ' . count($f['vocab']) . ' values';
+        // the dropdown the sheet will carry (retired choices never offered)
+        $n = 0;
+        if (isset($f['dropdown'])) {
+            $n = count($f['dropdown']);
+        } else {
+            foreach ($f['vocab'] as $e) { if (empty($e['retired'])) { $n++; } }
+        }
+        $bits[] = 'dropdown, ' . $n . ' values';
     } elseif (isset($f['type'])) {
         $t = $f['type'];
         if ($t === 'integer' || $t === 'decimal') {
