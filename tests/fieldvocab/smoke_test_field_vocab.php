@@ -125,6 +125,7 @@ try {
     check('pet.igneous no class -> both', FieldVocab::formsFor('pet.igneous', array()) === array('pet.plutonic', 'pet.volcanic'));
     check('sed.bedding interbedded', FieldVocab::formsFor('sed.bedding', null, 'interbedded') === array('sed.bedding_shared_interbedded'));
     check('sed.bedding package', FieldVocab::formsFor('sed.bedding', null, 'package_succe') === array('sed.bedding_shared_package'));
+    check('sed.bedding bed_mixed_lit -> interbedded (app rule)', FieldVocab::formsFor('sed.bedding', null, 'bed_mixed_lit') === array('sed.bedding_shared_interbedded'));
     check('tags geologic unit', FieldVocab::formsFor('tags', array('type' => 'geologic_unit')) === array('project.geologic_unit', 'project.tags'));
     check('tags concept', FieldVocab::formsFor('tags', array('type' => 'concept')) === array('project.tags'));
     check('unknown family -> none', FieldVocab::formsFor('nope') === array());

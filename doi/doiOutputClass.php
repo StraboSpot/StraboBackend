@@ -10,6 +10,8 @@
  * @link       https://strabospot.org
  */
 
+require_once dirname(__DIR__) . '/includes/fieldvocab/FieldVocab.php';
+
 class doiOutputClass
 {
 
@@ -609,7 +611,19 @@ class doiOutputClass
 		return $newstring;
 	}
 
-	public function fixLabel($label){
+	/** fixLabel for VALUES: form labels from a FieldVocab display copy print exactly as written (D6). */
+	/** KML balloon value: form labels HTML-escaped (some carry < > "), anything else exactly as fixLabel did. */
+	public function kmlValue($value){
+		if(FieldVocab::isProducedLabel($value)) return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+		return $this->fixLabel($value);
+	}
+
+	public function fixValue($value){
+		if(FieldVocab::isProducedLabel($value)) return $value;
+		return $this->fixLabel($value);
+	}
+
+		public function fixLabel($label){
 		$returnlabel = "";
 		$delim = "";
 		$labels = explode("_",$label);
@@ -1649,6 +1663,14 @@ class doiOutputClass
 
 	public function addSpotToPDF($uuid, &$pdf, &$spot, &$allspots, $indent = 0){
 
+		// Field choice translation: print from a display copy with choice names as their form
+		// labels (new DOIs only: minted project.pdf files are never regenerated, decision D3).
+		// unset() breaks the reference so the copy never reaches the caller; the mineral class and
+		// image type stay raw because this walker branches on them.
+		$displaySpot = FieldVocab::displayProperties($spot, array('pet.minerals:igneous_or_metamorphic', 'images:image_type'));
+		unset($spot);
+		$spot = $displaySpot;
+
 		//Move all of this to its own function.
 
 		$spotname = $spot['name'];
@@ -1682,7 +1704,7 @@ class doiOutputClass
 			foreach($spot['surface_feature'] as $key=>$value){
 				$key = $this->fixLabel($key);
 				if(is_string($value)){
-					$value = $this->fixLabel($value);
+					$value = $this->fixValue($value);
 				}
 				$pdf->valueRow($key,$value,15 + $indent);
 			}
@@ -1693,7 +1715,7 @@ class doiOutputClass
 				if($key != "trace_feature"){
 					$key = $this->fixLabel($key);
 					if(is_string($value)){
-						$value = $this->fixLabel($value);
+						$value = $this->fixValue($value);
 					}
 					$pdf->valueRow($key,$value,15 + $indent);
 				}
@@ -1708,7 +1730,7 @@ class doiOutputClass
 					if($key!="id" && $key!="associated_orientation" && $key!="type"){
 						$key = $this->fixLabel($key);
 						if(is_string($value)){
-							$value = $this->fixLabel($value);
+							$value = $this->fixValue($value);
 						}
 						$pdf->valueRow($key,$value,20 + $indent);
 					}
@@ -1723,7 +1745,7 @@ class doiOutputClass
 							if($key!="id" && $key!="associated_orientation" && $key!="type"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->fixValue($value);
 								}
 								$pdf->valueRow($key,$value,30 + $indent);
 							}
@@ -1749,7 +1771,7 @@ class doiOutputClass
 					if($key!="id" && $key!="type"){
 						$key = $this->fixLabel($key);
 						if(is_string($value)){
-							$value = $this->fixLabel($value);
+							$value = $this->fixValue($value);
 						}
 						$pdf->valueRow($key,$value,20 + $indent);
 					}
@@ -1767,7 +1789,7 @@ class doiOutputClass
 					if($key!="id" && $key!="label"){
 						$key = $this->fixLabel($key);
 						if(is_string($value)){
-							$value = $this->fixLabel($value);
+							$value = $this->fixValue($value);
 						}
 						$pdf->valueRow($key,$value,20 + $indent);
 					}
@@ -1787,7 +1809,7 @@ class doiOutputClass
 						if(is_array($value)){
 							$value = implode(", ", $value);
 						}elseif(is_string($value)){
-							$value = $this->fixLabel($value);
+							$value = $this->fixValue($value);
 						}
 						$pdf->valueRow($key,$value,20 + $indent);
 					}
@@ -1805,7 +1827,7 @@ class doiOutputClass
 					if($key!="id" && $key!="label"){
 						$key = $this->fixLabel($key);
 						if(is_string($value)){
-							$value = $this->fixLabel($value);
+							$value = $this->fixValue($value);
 						}
 						$pdf->valueRow($key,$value,20 + $indent);
 					}
@@ -1853,12 +1875,12 @@ class doiOutputClass
 					if($found == "yes"){
 
 						$pdf->valueTitle($tag->name,20 + $indent);
-						foreach($tag as $key=>$value){
+						foreach(FieldVocab::displayTag($tag) as $key=>$value){
 
 							if($key != "date" && $key != "spots" && $key != "features" && $key != "id" && $key != "name" ){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->fixValue($value);
 								}elseif(is_array($value)){
 									$value = implode(", ", $value);
 								}
@@ -1913,12 +1935,12 @@ class doiOutputClass
 					if($found == "yes"){
 
 						$pdf->valueTitle($tag->name,20 + $indent);
-						foreach($tag as $key=>$value){
+						foreach(FieldVocab::displayTag($tag) as $key=>$value){
 
 							if($key != "date" && $key != "spots" && $key != "features" && $key != "id" && $key != "name" ){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->fixValue($value);
 								}elseif(is_array($value)){
 									$value = implode(", ", $value);
 								}
@@ -3905,7 +3927,7 @@ class doiOutputClass
 						if($key!="id" && $key!="self" && $key!="annotated" && $key!="title" && $key!="width" && $key!="height" && $key!="image_type" && $key!="caption" ){
 							$key = $this->fixLabel($key);
 							if(is_string($value)){
-								$value = $this->fixLabel($value);
+								$value = $this->fixValue($value);
 							}
 							$pdf->valueRow($key,$value,20 + $indent);
 						}
@@ -6313,7 +6335,7 @@ $html.='
 								$notes = $or->notes;
 
 								if($or->feature_type != ""){
-									$showtype = ucwords(str_replace("_", " ", $or->feature_type));
+									$showtype = FieldVocab::labelText(FieldVocab::formsFor('orientation', $or), 'feature_type', $or->feature_type, ', ', function ($v) { return ucwords(str_replace("_", " ", $v)); });   // form label, else the old text
 								}else{
 									$showtype = "Plane";
 								}
@@ -6348,7 +6370,7 @@ $html.='
 								$notes = $or->notes;
 
 								if($or->feature_type != ""){
-									$showtype = ucwords(str_replace("_", " ", $or->feature_type));
+									$showtype = FieldVocab::labelText(FieldVocab::formsFor('orientation', $or), 'feature_type', $or->feature_type, ', ', function ($v) { return ucwords(str_replace("_", " ", $v)); });   // form label, else the old text
 								}else{
 									$showtype = "Line";
 								}
@@ -6387,7 +6409,7 @@ $html.='
 									$notes = $aor->notes;
 
 									if($aor->feature_type != ""){
-										$showtype = ucwords(str_replace("_", " ", $aor->feature_type));
+										$showtype = FieldVocab::labelText(FieldVocab::formsFor('orientation', $aor), 'feature_type', $aor->feature_type, ', ', function ($v) { return ucwords(str_replace("_", " ", $v)); });   // form label, else the old text
 									}else{
 										$showtype = "Plane";
 									}
@@ -6422,7 +6444,7 @@ $html.='
 									$notes = $aor->notes;
 
 									if($aor->feature_type != ""){
-										$showtype = ucwords(str_replace("_", " ", $aor->feature_type));
+										$showtype = FieldVocab::labelText(FieldVocab::formsFor('orientation', $aor), 'feature_type', $aor->feature_type, ', ', function ($v) { return ucwords(str_replace("_", " ", $v)); });   // form label, else the old text
 									}else{
 										$showtype = "Line";
 									}
@@ -6831,7 +6853,9 @@ $html.='
 					$kmlgeo="";
 				}
 
-				$spot = $spot['properties'];
+				// Field choice translation: balloons print from a display copy (choice names as form labels);
+				// mineral class + image type stay raw because this code branches on them
+				$spot = FieldVocab::displayProperties($spot['properties'], array('pet.minerals:igneous_or_metamorphic', 'images:image_type'));
 
 				$id = $spot['id'];
 
@@ -6856,7 +6880,7 @@ $html.='
 					foreach($spot['surface_feature'] as $key=>$value){
 						$key = $this->fixLabel($key);
 						if(is_string($value)){
-							$value = $this->fixLabel($value);
+							$value = $this->kmlValue($value);
 						}
 						$html.="<div>$key: $value</div>\n";
 					}
@@ -6872,7 +6896,7 @@ $html.='
 							if($key!="id" && $key!="associated_orientation" && $key!="type"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -6888,7 +6912,7 @@ $html.='
 									if($key!="id" && $key!="associated_orientation" && $key!="type"){
 										$key = $this->fixLabel($key);
 										if(is_string($value)){
-											$value = $this->fixLabel($value);
+											$value = $this->kmlValue($value);
 										}
 										$html.="<div>$key: $value</div>\n";
 									}
@@ -7017,7 +7041,7 @@ $html.='
 							if($key!="id" && $key!="type"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7037,7 +7061,7 @@ $html.='
 							if($key!="trace_feature"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7056,7 +7080,7 @@ $html.='
 							if($key!="id" && $key!="label"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7078,7 +7102,7 @@ $html.='
 								if(is_array($value)){
 									$value = implode(", ", $value);
 								}elseif(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7098,7 +7122,7 @@ $html.='
 							if($key!="id" && $key!="label"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7125,11 +7149,11 @@ $html.='
 
 								$html.="<div>Rock Unit:</div>\n";
 								$html.="<div class=\"leftPad\">\n";
-								foreach($tag as $key=>$value){
+								foreach(FieldVocab::displayTag($tag) as $key=>$value){
 									if($key != "date" && $key != "spots" && $key != "features" && $key != "id" ){
 										$key = $this->fixLabel($key);
 										if(is_string($value)){
-											$value = $this->fixLabel($value);
+											$value = $this->kmlValue($value);
 										}
 										$html.="<div>$key: $value</div>\n";
 									}
@@ -7180,12 +7204,12 @@ $html.='
 							if($found == "yes"){
 
 								$html.="<div class=\"sectionTitle\">".$tag->name.": "."</div>\n";
-								foreach($tag as $key=>$value){
+								foreach(FieldVocab::displayTag($tag) as $key=>$value){
 
 									if($key != "date" && $key != "spots" && $key != "features" && $key != "id" && $key != "name" ){
 										$key = $this->fixLabel($key);
 										if(is_string($value)){
-											$value = $this->fixLabel($value);
+											$value = $this->kmlValue($value);
 										}
 										$html.="<div>$key: $value</div>\n";
 									}
@@ -7214,7 +7238,7 @@ $html.='
 							if($key!="id" && $key!="self" && $key!="annotated" && $key!="title"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}

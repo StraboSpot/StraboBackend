@@ -738,7 +738,7 @@ class FieldbookRenderer
 			$pdf->SetX($x0);
 			$pdf->SetFont($pdf->head, 'B', 9);
 			$label = $it['name'];
-			if ($it['type'] !== '' && $it['type'] !== 'geologic_unit') $label .= '  (' . FieldbookProps::humanize($it['type']) . ')';
+			if ($it['type'] !== '' && $it['type'] !== 'geologic_unit') $label .= '  (' . FieldbookProps::tagType($it['type']) . ')';
 			$pdf->MultiCell($w, 4.5, $label, 0, 'L');
 			if (!empty($it['on'])) {
 				$pdf->SetX($x0 + 3);
@@ -808,7 +808,7 @@ class FieldbookRenderer
 			$pdf->SetX($x0);
 			$pdf->SetFont($pdf->head, 'B', 9.5);
 			$label = $t['name'];
-			if ($t['type'] !== '' && $t['type'] !== 'geologic_unit') $label .= '  (' . FieldbookProps::humanize($t['type']) . ')';
+			if ($t['type'] !== '' && $t['type'] !== 'geologic_unit') $label .= '  (' . FieldbookProps::tagType($t['type']) . ')';
 			$pdf->MultiCell($w, 4.8, $label, 0, 'L');
 			if ($t['rows']) $this->kvRows($t['rows'], $x0 + 3, $w - 3);
 			$bits = array();
@@ -962,7 +962,7 @@ class FieldbookRenderer
 	{
 		$bits = array('id ' . $img['id']);
 		if ($img['width'] && $img['height']) $bits[] = $img['width'] . ' x ' . $img['height'];
-		if ($img['type'] !== '' && strtolower($img['type']) !== 'photo') $bits[] = FieldbookProps::humanize($img['type']);
+		if ($img['type'] !== '' && strtolower($img['type']) !== 'photo') $bits[] = $img['typeLabel'];
 		if ($img['annotated']) $bits[] = 'annotated';
 		return implode(' · ', $bits);
 	}
@@ -972,7 +972,7 @@ class FieldbookRenderer
 	{
 		$bits = array('id ' . $img['id']);
 		if ($img['width'] && $img['height']) $bits[] = $img['width'] . ' x ' . $img['height'];
-		if ($img['type'] !== '') $bits[] = FieldbookProps::humanize($img['type']);
+		if ($img['type'] !== '') $bits[] = $img['typeLabel'];
 		$bits[] = $img['annotated'] ? 'annotated' : 'not annotated';
 		foreach ($img['rows'] as $r) if (!$r['h']) $bits[] = $r['k'] . ($r['v'] !== '' ? ': ' . $r['v'] : '');
 		if (!empty($img['children'])) $bits[] = count($img['children']) . ' spot' . (count($img['children']) === 1 ? '' : 's') . ' drawn on it';
@@ -1134,7 +1134,7 @@ class FieldbookRenderer
 			$pdf->SetFont($pdf->head, 'B', 9);
 			$label = '[' . $no . ']  ' . $this->photoTitle($img);
 			$bits = array();
-			if ($img['type'] !== '') $bits[] = FieldbookProps::humanize($img['type']);
+			if ($img['type'] !== '') $bits[] = $img['typeLabel'];
 			if ($img['annotated']) $bits[] = 'annotated';
 			if ($img['width'] && $img['height']) $bits[] = $img['width'] . ' x ' . $img['height'];
 			$bits[] = 'id ' . $img['id'];
@@ -1265,7 +1265,7 @@ class FieldbookRenderer
 			foreach ($m->summary['tags'] as $t) {
 				$desc = array();
 				foreach ($t['rows'] as $r) if (!$r['h']) $desc[] = $r['k'] . ': ' . $r['v'];
-				$data[] = array('cells' => array($t['name'], FieldbookProps::humanize($t['type']), (string)$t['count'], implode(';  ', $desc)));
+				$data[] = array('cells' => array($t['name'], FieldbookProps::tagType($t['type']), (string)$t['count'], implode(';  ', $desc)));
 			}
 			$this->table(array(array('Tag', 45, 'L'), array('Type', 28, 'L'), array('Spots', 14, 'R'), array('Notes', 0, 'L')), $data, $pdf->lm(), $w);
 		}

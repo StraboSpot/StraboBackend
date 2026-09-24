@@ -11,6 +11,8 @@
  */
 
 
+require_once dirname(__DIR__) . '/fieldvocab/FieldVocab.php';
+
 class newSearchOutputClass
 {
 
@@ -551,6 +553,17 @@ class newSearchOutputClass
 
 		return $newstring;
 	}
+
+	/** KML balloon value: form labels HTML-escaped (some carry < > "), anything else exactly as fixLabel did. */
+
+	public function kmlValue($value){
+
+		if(FieldVocab::isProducedLabel($value)) return htmlspecialchars($value, ENT_QUOTES, 'UTF-8');
+
+		return $this->fixLabel($value);
+
+	}
+
 
 	public function fixLabel($label){
 		$returnlabel = "";
@@ -7036,7 +7049,9 @@ public function getKMLHtml($inSpots, $geoType){
 					$kmlgeo="";
 				}
 
-				$spot = $spot['properties'];
+				// Field choice translation: balloons print from a display copy (choice names as form labels);
+				// mineral class + image type stay raw because this code branches on them
+				$spot = FieldVocab::displayProperties($spot['properties'], array('pet.minerals:igneous_or_metamorphic', 'images:image_type'));
 
 				$id = $spot['id'];
 
@@ -7061,7 +7076,7 @@ public function getKMLHtml($inSpots, $geoType){
 					foreach($spot['surface_feature'] as $key=>$value){
 						$key = $this->fixLabel($key);
 						if(is_string($value)){
-							$value = $this->fixLabel($value);
+							$value = $this->kmlValue($value);
 						}
 						$html.="<div>$key: $value</div>\n";
 					}
@@ -7076,7 +7091,7 @@ public function getKMLHtml($inSpots, $geoType){
 							if($key!="id" && $key!="associated_orientation" && $key!="type"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7091,7 +7106,7 @@ public function getKMLHtml($inSpots, $geoType){
 									if($key!="id" && $key!="associated_orientation" && $key!="type"){
 										$key = $this->fixLabel($key);
 										if(is_string($value)){
-											$value = $this->fixLabel($value);
+											$value = $this->kmlValue($value);
 										}
 										$html.="<div>$key: $value</div>\n";
 									}
@@ -7206,7 +7221,7 @@ public function getKMLHtml($inSpots, $geoType){
 							if($key!="id" && $key!="type"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7226,7 +7241,7 @@ public function getKMLHtml($inSpots, $geoType){
 							if($key!="trace_feature"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7245,7 +7260,7 @@ public function getKMLHtml($inSpots, $geoType){
 							if($key!="id" && $key!="label"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7267,7 +7282,7 @@ public function getKMLHtml($inSpots, $geoType){
 								if(is_array($value)){
 									$value = implode(", ", $value);
 								}elseif(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7287,7 +7302,7 @@ public function getKMLHtml($inSpots, $geoType){
 							if($key!="id" && $key!="label"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}
@@ -7314,11 +7329,11 @@ public function getKMLHtml($inSpots, $geoType){
 
 								$html.="<div>Rock Unit:</div>\n";
 								$html.="<div class=\"leftPad\">\n";
-								foreach($tag as $key=>$value){
+								foreach(FieldVocab::displayTag($tag) as $key=>$value){
 									if($key != "date" && $key != "spots" && $key != "features" && $key != "id" ){
 										$key = $this->fixLabel($key);
 										if(is_string($value)){
-											$value = $this->fixLabel($value);
+											$value = $this->kmlValue($value);
 										}
 										$html.="<div>$key: $value</div>\n";
 									}
@@ -7369,12 +7384,12 @@ public function getKMLHtml($inSpots, $geoType){
 							if($found == "yes"){
 
 								$html.="<div class=\"sectionTitle\">".$tag->name.": "."</div>\n";
-								foreach($tag as $key=>$value){
+								foreach(FieldVocab::displayTag($tag) as $key=>$value){
 
 									if($key != "date" && $key != "spots" && $key != "features" && $key != "id" && $key != "name" ){
 										$key = $this->fixLabel($key);
 										if(is_string($value)){
-											$value = $this->fixLabel($value);
+											$value = $this->kmlValue($value);
 										}
 										$html.="<div>$key: $value</div>\n";
 									}
@@ -7403,7 +7418,7 @@ public function getKMLHtml($inSpots, $geoType){
 							if($key!="id" && $key!="self" && $key!="annotated" && $key!="title"){
 								$key = $this->fixLabel($key);
 								if(is_string($value)){
-									$value = $this->fixLabel($value);
+									$value = $this->kmlValue($value);
 								}
 								$html.="<div>$key: $value</div>\n";
 							}

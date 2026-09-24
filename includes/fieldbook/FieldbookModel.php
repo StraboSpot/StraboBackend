@@ -291,7 +291,9 @@ class FieldbookModel
 				'id' => isset($img['id']) ? (string)$img['id'] : '',
 				'title' => isset($img['title']) ? (string)$img['title'] : '',
 				'caption' => isset($img['caption']) ? (string)$img['caption'] : '',
-				'type' => isset($img['image_type']) ? (string)$img['image_type'] : '',
+				'type' => isset($img['image_type']) ? (string)$img['image_type'] : '',   // raw name: the renderer branches on it (photo / sketch)
+				'typeLabel' => isset($img['image_type']) && (string)$img['image_type'] !== ''
+					? FieldVocab::labelText(FieldVocab::formsFor('images'), 'image_type', (string)$img['image_type'], ', ', array('FieldbookProps', 'humanize')) : '',
 				'annotated' => !empty($img['annotated']),
 				'width' => isset($img['width']) ? (int)$img['width'] : 0, 'height' => isset($img['height']) ? (int)$img['height'] : 0,
 				'rows' => $rows, 'children' => array(),
@@ -316,7 +318,7 @@ class FieldbookModel
 				$ctx = preg_replace('/(_data|s)$/', '', $ctx);
 				$title = 'Feature ' . $fid;
 				foreach (array('label', 'name', 'sample_id_name', 'feature_type', 'title', 'type') as $tk) {   // feature_type before type: "Bedding", not "Planar orientation"
-					if (isset($v[$tk]) && is_scalar($v[$tk]) && (string)$v[$tk] !== '') { $title = FieldbookProps::humanize($v[$tk]); break; }
+					if (isset($v[$tk]) && is_scalar($v[$tk]) && (string)$v[$tk] !== '') { $title = FieldbookProps::title($v[$tk]); break; }
 				}
 				return $title . ($ctx !== '' ? ' (' . strtolower(FieldbookProps::label($ctx)) . ')' : '');
 			}
@@ -353,7 +355,10 @@ class FieldbookModel
 	/** One spot feature => block (designed fields + generic families). */
 	public static function spotBlock(array $f, array $tags)
 	{
-		$p = isset($f['properties']) ? (array)$f['properties'] : array();
+		$raw = isset($f['properties']) ? (array)$f['properties'] : array();
+		// Choice values print as their form labels (Field choice translation): render from a
+		// display copy; $raw keeps the stored names for logic (symbol slots, image types).
+		$p = (array)FieldVocab::displayProperties($raw, array('images:image_type'));
 		$geom = isset($f['geometry']) ? $f['geometry'] : null;
 		if (is_array($geom)) $geom = (object)$geom;
 		$id = isset($p['id']) ? (string)$p['id'] : '';
@@ -428,12 +433,18 @@ class FieldbookModel
 		}
 		// orientations
 		if (!empty($p['orientation_data'])) {
-			foreach ((array)$p['orientation_data'] as $o) {
-				$row = self::orientationRow((array)$o);
+			$rawOs = array_values((array)$raw['orientation_data']);
+			foreach (array_values((array)$p['orientation_data']) as $oi => $o) {
+				$ro = isset($rawOs[$oi]) ? (array)$rawOs[$oi] : array();
+				$row = self::orientationRow((array)$o, $ro);
 				$b['orientationCount']++;
 				if (!empty($o->associated_orientation) || (is_array($o) && !empty($o['associated_orientation']))) {
 					$ao = is_object($o) ? $o->associated_orientation : $o['associated_orientation'];
-					foreach ((array)$ao as $a) { $row['children'][] = self::orientationRow((array)$a); $b['orientationCount']++; }
+					$rawAo = isset($ro['associated_orientation']) ? array_values((array)$ro['associated_orientation']) : array();
+					foreach (array_values((array)$ao) as $ai => $a) {
+						$row['children'][] = self::orientationRow((array)$a, isset($rawAo[$ai]) ? (array)$rawAo[$ai] : array());
+						$b['orientationCount']++;
+					}
 				}
 				$b['orientations'][] = $row;
 			}
@@ -456,7 +467,7 @@ class FieldbookModel
 		// A tag lists the spots it is on (spots) and, for a tag on a sub-feature, features = {spot id: [feature ids]} (M7).
 		$seenTag = array();
 		foreach ($tags as $t) {
-			$t = (array)$t;
+			$t = (array)FieldVocab::displayTag($t);
 			$hit = false;
 			if (!empty($t['spots'])) foreach ((array)$t['spots'] as $sid) if ((string)$sid === $id) { $hit = true; break; }
 			$on = array();
@@ -482,7 +493,11 @@ class FieldbookModel
 		return $b;
 	}
 
-	private static function orientationRow(array $o)
+	/**
+	 * @param array $o    orientation from the display copy (labels)
+	 * @param array $raw  the same orientation as stored (featureKey = raw feature_type for the nets' symbol slots)
+	 */
+	private static function orientationRow(array $o, array $raw = array())
 	{
 		$type = isset($o['type']) ? (string)$o['type'] : '';
 		$kind = $type === 'planar_orientation' ? 'Plane' : ($type === 'linear_orientation' ? 'Line' : ($type === 'tabular_orientation' ? 'Tabular zone' : FieldbookProps::humanize($type)));
@@ -490,6 +505,7 @@ class FieldbookModel
 		$row = array(
 			'kind' => $kind, 'planar' => $planar,
 			'feature' => isset($o['feature_type']) ? FieldbookProps::humanize($o['feature_type']) : '',
+			'featureKey' => isset($raw['feature_type']) && is_scalar($raw['feature_type']) ? (string)$raw['feature_type'] : '',
 			'a' => $planar ? (isset($o['strike']) ? (string)$o['strike'] : '') : (isset($o['trend']) ? (string)$o['trend'] : ''),
 			'b' => $planar ? (isset($o['dip']) ? (string)$o['dip'] : '') : (isset($o['plunge']) ? (string)$o['plunge'] : ''),
 			'dipdir' => isset($o['dip_direction']) ? (string)$o['dip_direction'] : '',
@@ -591,7 +607,7 @@ class FieldbookModel
 		foreach ($b['samples'] as $s) { $out[] = $s['title']; foreach ($s['rows'] as $r) { $out[] = $r['k']; if ($r['v'] !== '') $out[] = $r['v']; } }
 		foreach (array_merge($b['units'], $b['tags']) as $t) { $out[] = $t['name']; foreach ($t['rows'] as $r) { $out[] = $r['k']; if ($r['v'] !== '') $out[] = $r['v']; } if (!empty($t['on'])) foreach ($t['on'] as $o) $out[] = $o; }
 		foreach ($b['images'] as $img) {
-			$out[] = $img['title']; $out[] = $img['caption']; $out[] = $img['type']; $out[] = $img['id'];
+			$out[] = $img['title']; $out[] = $img['caption']; $out[] = $img['typeLabel']; $out[] = $img['id'];
 			foreach ($img['rows'] as $r) { $out[] = $r['k']; if ($r['v'] !== '') $out[] = $r['v']; }
 			foreach ($img['children'] as $c) self::blockScalars($c, $out);
 		}

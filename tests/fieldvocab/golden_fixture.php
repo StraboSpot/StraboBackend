@@ -187,7 +187,8 @@ function gf_features()
 				'fossils' => array(array('invertebrate' => array('porifera_spong'), 'shape' => 'bioherm_lens')),
 				'bedding' => array('interbed_proportion' => 40, 'lithology_at_bottom_contact' => 'lithology_1',
 					'package_geometry' => array('tabular_parall'),
-					'beds' => array(array('avg_thickness' => 0.2, 'character_of_lower_contacts' => array('flat'),
+					// package_geometry belongs to the per-bed form; the copy one level up is off-form (stays raw)
+					'beds' => array(array('avg_thickness' => 0.2, 'character_of_lower_contacts' => array('flat'), 'package_geometry' => array('tabular_parall'),
 						'character_of_upper_contacts' => array('well_defined')))),
 			),
 		)),
