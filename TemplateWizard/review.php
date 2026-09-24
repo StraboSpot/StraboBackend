@@ -49,6 +49,17 @@ $templateName = '';
 $myProjects = $twsvc->myProjects();
 $templates  = $twsvc->listTemplates();
 
+// Deep link from My StraboField Data (project Options menu, new project page):
+// ?project_id= on the upload view, carried through the upload POST, preselects
+// the import target. Only the user's own projects count (myProjects is owned-only).
+$prefillProject = isset($_POST['prefill_project']) ? trim($_POST['prefill_project'])
+                : (isset($_GET['project_id']) ? trim($_GET['project_id']) : '');
+$prefillName = '';
+foreach ($myProjects as $p) {
+    if ($prefillProject !== '' && (string)$p['id'] === $prefillProject) { $prefillName = $p['name']; break; }
+}
+if ($prefillName === '') { $prefillProject = ''; }
+
 function tw_b64($s) { return rtrim(strtr(base64_encode($s), '+/', '-_'), '='); }
 function tw_unb64($s) { return base64_decode(strtr($s, '-_', '+/')); }
 
@@ -131,6 +142,12 @@ if ($action === 'upload') {
                 $view = 'target';
                 $sourceLabel = $label;
                 $rowCount = count($parsed['rows']);
+                if ($prefillProject !== '') {
+                    $target['project_id'] = $prefillProject;
+                    // A project with one dataset (a new project's Default) needs no choice.
+                    $ds = $twsvc->projectDatasets($prefillProject);
+                    if (count($ds) === 1) { $target['dataset_id'] = (string)$ds[0]['id']; }
+                }
             }
         }
     }
@@ -205,8 +222,19 @@ include("includes/mheader.php");
 									for a custom layout.
 								</div>
 							</div>
+							<?php if ($prefillProject !== ''): ?>
+							<p>
+								Adding data to <strong><?php echo htmlspecialchars($prefillName); ?></strong>.
+								No spreadsheet yet? Download a blank
+								<a href="export.php?what=template&amp;template_id=<?php echo FieldTabularService::BASIC_TEMPLATE_ID; ?>&amp;format=xlsx">Basic layout spreadsheet</a>,
+								fill in one row per spot, and upload it here.
+							</p>
+							<?php endif; ?>
 							<form method="post" enctype="multipart/form-data">
 								<input type="hidden" name="action" value="upload">
+								<?php if ($prefillProject !== ''): ?>
+								<input type="hidden" name="prefill_project" value="<?php echo htmlspecialchars($prefillProject); ?>">
+								<?php endif; ?>
 								<div class="row gtr-uniform gtr-25">
 									<div class="col-6 col-12-small">
 										<!-- styled picker: native input visually hidden inside the
