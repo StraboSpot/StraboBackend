@@ -11,7 +11,13 @@
  */
 
 
-$id=$_GET['id'];
+// Image ids are integers; anything else is rejected before it can reach Cypher or the page.
+$id = isset($_GET['id']) ? trim($_GET['id']) : '';
+if(!preg_match('/^[0-9]{1,20}$/', $id)){
+	http_response_code(404);
+	exit("Image not found.");
+}
+$id = (int)$id;
 
 include("prepare_connections.php");
 
@@ -369,9 +375,11 @@ else document.observe('dom:loaded', initFlyouts);
 $hidecols = array("annotated", "userpkey", "origfilename", "filename", "imagesha1", "width", "id", "lat", "lng");
 
 $results = $neodb->get_results("match (i:Image) where i.id=$id return i limit 1");
-$results = $results[0];
-$results = $results->get("i");
-$results = $results->values();
+if(!empty($results)){
+	$results = $results[0]->get("i")->values();
+}else{
+	$results = array();
+}
 
 ?>
 <br><br>
@@ -383,7 +391,7 @@ foreach($results as $key=>$value){
 	if(!in_array($key,$hidecols)){
 		$label=fixLabel($key);
 		?>
-		<tr><td nowrap valign="top" style=""><?php echo $label?>: </td><td><?php echo $value?></td></tr>
+		<tr><td nowrap valign="top" style=""><?php echo htmlspecialchars($label)?>: </td><td><?php echo htmlspecialchars(is_array($value) ? implode(", ", $value) : (string)$value)?></td></tr>
 		<?php
 	}
 }
