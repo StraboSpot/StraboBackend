@@ -37,6 +37,11 @@
  *
  *   Exit codes: 0 ok or nothing to do, 1 failure (live map untouched), 2 usage.
  *
+ *   Prod setup (done 2026-09-24): the checkout belongs to ubuntu, so www-data
+ *   cannot create the data folder itself ("cannot create .../fieldvocab_data"):
+ *     cd ~/DC/Strabo/www && mkdir fieldvocab_data && sudo chown 33:33 fieldvocab_data
+ *   then one manual run as www-data, then the cron line below.
+ *
  *   Prod host crontab (nightly):
  *   15 3 * * * sudo docker exec -u www-data strabo-php php /srv/app/www/includes/fieldvocab/sync.php --quiet >> /var/log/strabo_fieldvocab.log 2>&1
  *
