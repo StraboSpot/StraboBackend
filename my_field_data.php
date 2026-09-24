@@ -189,6 +189,8 @@ include("includes/mheader.php");
 						     project cards below. -->
 						<div class="mfd-toolbar">
 							<a href="/new_project" class="button primary small">+ New Project</a>
+							<a href="/TemplateWizard/" class="button small" title="Design reusable spreadsheet templates for your field data">Template Wizard</a>
+							<a href="/TemplateWizard/review.php" class="button small" title="Bulk-import spots from a spreadsheet (XLSX/CSV)">&#8682; Import Tabular Data</a>
 							<?php /*<a href="/export_builder" class="button small" title="Build a downloadable package from several projects or datasets, with optional filters (Export Builder)">Custom export&hellip;</a>*/?>
 						</div>
 
@@ -529,7 +531,7 @@ if($datasetCreatedBy == $userpkey || $collaboration_level == "admin"){
 															<option value="gpkg">GeoPackage</option>
 															<option value="geojson">GeoJSON</option>
 															<option value="gems">USGS GeMS</option>
-																<option value="image_basemaps">Image Basemaps</option>
+															<option value="image_basemaps">Image Basemaps</option>
 														</select>
 													</td>
 													<td><?php echo $name?></td>
@@ -720,7 +722,8 @@ if($userpkey==3 || $userpkey==3){
 															<option value="gpkg">GeoPackage</option>
 															<option value="geojson">GeoJSON</option>
 															<option value="gems">USGS GeMS</option>
-																<option value="image_basemaps">Image Basemaps</option>
+															<option value="custom_template">Template Wizard</option>
+															<option value="image_basemaps">Image Basemaps</option>
 														</select>
 													</td>
 													<td><?php echo $name?></td>
