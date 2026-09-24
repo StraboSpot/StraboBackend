@@ -461,6 +461,10 @@ class straboOutputClass
 			$rawOrientationJson = json_encode($spot['properties']['orientation_data']);
 		}
 
+		// Field choice translation: shapefile / GeoPackage attributes carry form labels (D1). The raw
+		// orientation JSON above stays raw (machine field for the QML arrow generator).
+		$spot['properties'] = FieldVocab::displayProperties($spot['properties']);
+
 		if($spot['properties']['orientation_data']){
 			$orientations = $this->gatherOrientations($spot['properties']['orientation_data']);
 			foreach($orientations as $key=>$value){
@@ -529,7 +533,7 @@ class straboOutputClass
 
 				if($found == "yes"){
 					if($tag->type=="geologic_unit"){
-						foreach($tag as $key=>$value){
+						foreach(FieldVocab::displayTag($tag) as $key=>$value){
 							if($key != "date" && $key != "spots" && $key != "features" && $key != "id" ){
 								$spot['properties']['ru_'.$key]=$value;
 							}
@@ -1509,7 +1513,8 @@ class straboOutputClass
 				$foundSamples = [];
 				foreach($data['features'] as $feature){
 
-					$samples = $feature['properties']['samples'];
+					// Field choice translation: sample cells carry form labels
+					$samples = FieldVocab::displayProperties(array('samples' => $feature['properties']['samples']))['samples'];
 					if($samples){
 						foreach($samples as $sample){
 							$sample->geometry = $feature['geometry'];
@@ -21518,6 +21523,8 @@ $html.='
 				//write data
 				$rownum=4;
 				foreach($data['features'] as $feature){
+					// Field choice translation: cells carry form labels, translated in place (no extra columns)
+					$feature['properties'] = FieldVocab::displayProperties($feature['properties']);
 
 					//use geoPHP to get WKT
 					$mygeojson=$feature['geometry'];
@@ -21863,7 +21870,7 @@ $html.='
 
 					$rownum = 3;
 					foreach($this->alltags as $tag){
-						foreach($tag as $key=>$value){
+						foreach(FieldVocab::displayTag($tag) as $key=>$value){   // Tag Details cells = form labels
 							if($key!="id" && $key!="spots" && $key!="features"){
 								if(is_array($value)){
 									$showvalue = implode(",", $value);
@@ -24387,6 +24394,8 @@ $html.='
 			//write data
 			$rownum=1;
 			foreach($data['features'] as $feature){
+				// Field choice translation: cells carry form labels, translated in place (no extra columns)
+				$feature['properties'] = FieldVocab::displayProperties($feature['properties']);
 
 				if($feature['properties']['strat_section_id'] == "" && $feature['properties']['image_basemap'] == ""){
 
@@ -26025,6 +26034,22 @@ XML;
 	 *   - For a one-sided tick extending in the dip direction: use a "line" marker with
 	 *     vertical_anchor_point=0 (top at point) and rotation = po_strike - 90.
 	 */
+	/**
+	 * Rewrite the choice names in a QML rule filter to the labels fixSpot writes
+	 * (po_ = planar, lo_ = linear, to_ = tabular orientation; feature_type / facing).
+	 * Unknown names stay as they are, like the attribute values themselves.
+	 *
+	 * @param string $filter  e.g. "po_feature_type = 'shear_zone' AND po_dip = 90"
+	 * @return string
+	 */
+	public static function qmlFilterLabels($filter){
+		$forms = array('po' => 'measurement.planar_orientation', 'lo' => 'measurement.linear_orientation', 'to' => 'measurement.tabular_orientation');
+		return preg_replace_callback("/\\b(po|lo|to)_(feature_type|facing)(\\s*(?:=|!=)\\s*)'([^']*)'/", function($m) use ($forms){
+			$label = FieldVocab::label($forms[$m[1]], $m[2], $m[4]);
+			return $m[1] . '_' . $m[2] . $m[3] . "'" . str_replace("'", "''", (string)$label) . "'";
+		}, $filter);
+	}
+
 	private function generateOrientationQml($layerName){
 
 		// ----------------------------------------------------------------
@@ -26067,6 +26092,7 @@ XML;
 
 		$rulesXml = '';
 		foreach($rules as $r){
+			$r['filter'] = self::qmlFilterLabels($r['filter']);   // the attribute columns carry form labels (fixSpot display copy)
 			$f = htmlspecialchars($r['filter'], ENT_XML1 | ENT_COMPAT, 'UTF-8');
 			$l = htmlspecialchars($r['label'],  ENT_XML1 | ENT_COMPAT, 'UTF-8');
 			$rulesXml .= '      <rule key="{' . $r['key'] . '}" filter="' . $f . '" label="' . $l . '" symbol="' . $r['symbol'] . '"/>' . "\n";
@@ -27396,7 +27422,7 @@ QML;
 
 			if($tag->type == "geologic_unit"){
 
-				foreach($tag as $key=>$val){
+				foreach(FieldVocab::displayTag($tag) as $key=>$val){   // cells = form labels
 
 					if(in_array($key, $foundvars)){
 

@@ -231,7 +231,7 @@ check('merged zip: extras per project folder', $has('projects/Fmt_Project_One_' 
 $guTmp = sys_get_temp_dir() . '/ejt_gu_' . getmypid() . '.xlsx';
 file_put_contents($guTmp, ejt_zip_read($svc, $j, 'projects/Fmt_Project_One_' . $P1 . '/geologic_units.xlsx'));
 $gus = (string)shell_exec('unzip -p ' . escapeshellarg($guTmp) . ' xl/sharedStrings.xml'); @unlink($guTmp);
-check('geologic_units.xlsx: unit with a "features" object writes (crash fixed), list values joined, no Features/Spots columns', strpos($gus, 'Kgf') !== false && strpos($gus, 'phanerozoic') !== false && stripos($gus, 'features') === false && stripos($gus, '>spots<') === false, substr($gus, 0, 300));
+check('geologic_units.xlsx: unit with a "features" object writes (crash fixed), list values as form labels (Phanerozoic), no Features/Spots columns', strpos($gus, 'Kgf') !== false && strpos($gus, 'Phanerozoic') !== false && stripos($gus, 'features') === false && stripos($gus, '>spots<') === false, substr($gus, 0, 300));
 $readme = ejt_zip_read($svc, $j, 'README.txt');
 check('README names both projects and the no-units warning for project two', strpos($readme, 'Fmt Project One') !== false && strpos($readme, 'Fmt Project Two') !== false && strpos($readme, 'has no geologic units') !== false, substr($readme, 0, 300));
 $gjm = null; foreach ($zl as $m) if (substr($m, -5) === '.json' && strpos($m, 'manifest') === false && strpos($m, 'project.json') === false) $gjm = $m;
