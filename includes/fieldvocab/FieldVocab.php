@@ -258,6 +258,151 @@ class FieldVocab
 		return (string)key($labels);
 	}
 
+	/* ------------------------------------------------------ display copies */
+
+	/** @var array label => true for every label a display copy produced (see isProducedLabel) */
+	private static $produced = array();
+
+	/**
+	 * Did a display copy produce this exact string as a label? Prettifiers
+	 * (FieldbookProps::humanize, straboOutputClass::fixValue) use it to leave
+	 * labels exactly as the app writes them (decision D6) while still
+	 * sentence-casing raw names the map could not resolve.
+	 *
+	 * @param mixed $s
+	 * @return bool
+	 */
+	public static function isProducedLabel($s)
+	{
+		return is_string($s) && isset(self::$produced[$s]);
+	}
+
+	/**
+	 * A translated deep copy of a spot's properties for DISPLAY ONLY (PDF,
+	 * KMZ, ...): every choice value becomes its form label, everything else
+	 * (keys, free text, numbers, arrays vs objects) is kept as is. The input
+	 * is never modified. Never feed the copy back into storage or into a
+	 * round-trip output.
+	 *
+	 * @param array|object $props   spot properties (arrays and/or stdClass, as decoded)
+	 * @param string[]     $except  "path:field" pairs to keep raw because the caller
+	 *                              branches on the raw name, e.g. "pet.minerals:igneous_or_metamorphic"
+	 * @return array|object same shape as $props
+	 */
+	public static function displayProperties($props, array $except = array())
+	{
+		return self::displayNode($props, '', $props, $except);
+	}
+
+	/**
+	 * A translated copy of one project tag / geologic unit (display only).
+	 *
+	 * @param array|object $tag
+	 * @return array|object
+	 */
+	public static function displayTag($tag)
+	{
+		$a = is_object($tag) ? (array)$tag : $tag;
+		if (!is_array($a)) return $tag;
+		$forms = self::formsFor('tags', $a);
+		$out = array();
+		foreach ($a as $k => $x) {
+			// the tag type selects the form and is compared by callers ("geologic_unit"): keep it raw
+			$out[$k] = ($k !== 'type' && self::isTranslatable($x)) ? self::displayValue($forms, (string)$k, $x) : $x;
+		}
+		return is_object($tag) ? (object)$out : $out;
+	}
+
+	/**
+	 * Form keys for an object at a property path of a spot ("orientation_data",
+	 * "orientation_data.associated_orientation", "sed.lithologies",
+	 * "sed.bedding.beds", "pet.igneous", "pet" for the flat legacy pet, ...).
+	 * List indices are not part of the path.
+	 *
+	 * @param string            $path
+	 * @param array|null        $obj        the object at that path (type-selected families)
+	 * @param array|object|null $spotProps  the whole properties (sed.bedding needs sed.character)
+	 * @return string[]
+	 */
+	public static function formsForPath($path, $obj = null, $spotProps = null)
+	{
+		switch ($path) {
+			case 'orientation_data':
+			case 'orientation_data.associated_orientation':
+				return self::formsFor('orientation', $obj);
+			case '_3d_structures':
+			case 'fabrics':
+			case 'pet.igneous':
+				return self::formsFor($path, $obj);
+			case 'sed.bedding':
+				$sed = self::prop($spotProps, 'sed');
+				return self::formsFor('sed.bedding', null, self::prop($sed, 'character'));
+			case 'strat_section':
+				return array('sed.strat_section');
+		}
+		return self::formsFor($path, $obj);
+	}
+
+	private static function prop($o, $k)
+	{
+		if (is_object($o)) return isset($o->$k) ? $o->$k : null;
+		if (is_array($o)) return isset($o[$k]) ? $o[$k] : null;
+		return null;
+	}
+
+	private static function isList($a)
+	{
+		return is_array($a) && ($a === array() || array_keys($a) === range(0, count($a) - 1));
+	}
+
+	/** A scalar or a list of scalars (a select_one / select_multiple value). */
+	private static function isTranslatable($x)
+	{
+		if (is_string($x) || is_int($x) || is_float($x)) return true;
+		if (!self::isList($x) || $x === array()) return false;
+		foreach ($x as $v) if (!is_string($v) && !is_int($v) && !is_float($v)) return false;
+		return true;
+	}
+
+	private static function displayNode($v, $path, $root, array $except)
+	{
+		$isObj = is_object($v);
+		$a = $isObj ? (array)$v : $v;
+		if (!is_array($a)) return $v;
+		if (self::isList($a)) {
+			$out = array();
+			foreach ($a as $x) $out[] = (is_array($x) || is_object($x)) ? self::displayNode($x, $path, $root, $except) : $x;
+			return $out;
+		}
+		$forms = $path === '' ? array() : self::formsForPath($path, $a, $root);
+		$out = array();
+		foreach ($a as $k => $x) {
+			$k = (string)$k;
+			if ($forms && self::isTranslatable($x) && !in_array("$path:$k", $except, true)) {
+				$out[$k] = self::displayValue($forms, $k, $x);
+			} elseif (is_array($x) || is_object($x)) {
+				$out[$k] = self::displayNode($x, $path === '' ? $k : "$path.$k", $root, $except);
+			} else {
+				$out[$k] = $x;
+			}
+		}
+		return $isObj ? (object)$out : $out;
+	}
+
+	/** Translate one field value (scalar or list), recording produced labels. */
+	private static function displayValue(array $forms, $field, $x)
+	{
+		if (is_array($x)) {
+			$out = array();
+			foreach ($x as $v) $out[] = self::displayValue($forms, $field, $v);
+			return $out;
+		}
+		$hit = self::lookup($forms, $field, (string)$x);
+		if ($hit === null) return $x;
+		self::$produced[$hit] = true;
+		return $hit;
+	}
+
 	/* ----------------------------------------------------------- resolver */
 
 	/**
@@ -286,6 +431,7 @@ class FieldVocab
 	 */
 	public static function formsFor($family, $obj = null, $context = null)
 	{
+		if (is_object($obj)) $obj = (array)$obj;
 		if (isset(self::$FIXED[$family])) return self::$FIXED[$family];
 		$type = is_array($obj) && isset($obj['type']) && is_string($obj['type']) ? $obj['type'] : null;
 		switch ($family) {
@@ -304,7 +450,7 @@ class FieldVocab
 				if ($class === 'volcanic') return array('pet.volcanic');
 				return array('pet.plutonic', 'pet.volcanic');
 			case 'sed.bedding':
-				if ($context === 'interbedded') return array('sed.bedding_shared_interbedded');
+				if ($context === 'interbedded' || $context === 'bed_mixed_lit') return array('sed.bedding_shared_interbedded');   // app BeddingPage.js
 				if ($context === 'package_succe') return array('sed.bedding_shared_package');
 				return array('sed.bedding_shared_interbedded', 'sed.bedding_shared_package');
 			case 'tags':

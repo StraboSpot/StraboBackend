@@ -551,6 +551,9 @@
                                 ],
                                 "character_of_upper_contacts": [
                                     "well_defined"
+                                ],
+                                "package_geometry": [
+                                    "tabular_parall"
                                 ]
                             }
                         ],
