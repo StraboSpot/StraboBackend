@@ -2055,8 +2055,8 @@ class FieldTabularService
 
         if (!empty($sampleFields)) {
             $curList = is_array($cur['groups']['samples']) ? $cur['groups']['samples'] : array();
-            $fileProj = $this->projectElements($res['samples'], $sampleFields);
-            $curProj  = $this->projectElements($curList, $sampleFields);
+            $fileProj = $this->projectElements($res['samples'], $sampleFields, 'sample');
+            $curProj  = $this->projectElements($curList, $sampleFields, 'sample');
             if ($fileProj !== $curProj) {
                 if (empty($res['samples']) && !empty($curList)) {
                     $warnings[] = array('row' => $n0, 'column' => 'sample',
@@ -2070,8 +2070,8 @@ class FieldTabularService
 
         if (!empty($otherFields)) {
             $curList = is_array($cur['groups']['other_features']) ? $cur['groups']['other_features'] : array();
-            $fileProj = $this->projectElements($res['other_features'], $otherFields);
-            $curProj  = $this->projectElements($curList, $otherFields);
+            $fileProj = $this->projectElements($res['other_features'], $otherFields, 'other_features');
+            $curProj  = $this->projectElements($curList, $otherFields, 'other_features');
             if ($fileProj !== $curProj) {
                 $overlay['groups']['other_features'] = $res['other_features'];
                 $changed = true;
@@ -2153,13 +2153,13 @@ class FieldTabularService
         $out = array();
         foreach ((array)$list as $el) {
             $el = (array)$el;
-            $proj = $this->projectOne($el, $fields);
+            $proj = $this->projectOne($el, $fields, 'orientation');
             $proj['_type'] = isset($el['type']) ? (string)$el['type'] : '';
             $proj['_assoc'] = array();
             if (isset($el['associated_orientation']) && is_array($el['associated_orientation'])) {
                 foreach ($el['associated_orientation'] as $child) {
                     $child = (array)$child;
-                    $cp = $this->projectOne($child, $fields);
+                    $cp = $this->projectOne($child, $fields, 'orientation');
                     $cp['_type'] = isset($child['type']) ? (string)$child['type'] : '';
                     $proj['_assoc'][] = $cp;
                 }
@@ -2169,23 +2169,24 @@ class FieldTabularService
         return $out;
     }
 
-    protected function projectElements($list, array $fields)
+    protected function projectElements($list, array $fields, $group = null)
     {
         $out = array();
         foreach ((array)$list as $el) {
-            $out[] = $this->projectOne((array)$el, $fields);
+            $out[] = $this->projectOne((array)$el, $fields, $group);
         }
         return $out;
     }
 
-    protected function projectOne(array $el, array $fields)
+    protected function projectOne(array $el, array $fields, $group = null)
     {
         $proj = array();
         foreach ($fields as $f) {
             if (!isset($el[$f]) || $el[$f] === '' || $el[$f] === null) {
                 $proj[$f] = null;
-            } elseif (is_array($el[$f])) {
-                $vals = array_map('strval', $el[$f]);
+            } elseif (is_array($el[$f]) || $this->isMultipleField($group, $f)) {
+                // a select_multiple stored as one plain string is a one-item list
+                $vals = array_map('strval', (array)$el[$f]);
                 sort($vals);
                 $proj[$f] = $vals;
             } else {
@@ -2193,6 +2194,14 @@ class FieldTabularService
             }
         }
         return $proj;
+    }
+
+    /** Is group.name a select_multiple in the catalog? */
+    protected function isMultipleField($group, $name)
+    {
+        if ($group === null) { return false; }
+        $def = self::fieldDef($group, $name);
+        return is_array($def) && isset($def['type']) && $def['type'] === 'select_multiple';
     }
 
     /**

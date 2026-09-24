@@ -7,6 +7,11 @@
  *              Re-run whenever the schema/forms copies are refreshed from the
  *              StraboField app source.
  *
+ *              Since 2026-09-24 the choice lists written here are only a
+ *              fallback: FieldTabularService::catalog() replaces them at load
+ *              time with the synced app form map (includes/fieldvocab), per
+ *              form and field. A rebuild is only needed for NEW fields.
+ *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
  * @copyright  2025 StraboSpot

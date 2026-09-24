@@ -32,6 +32,14 @@
  *                13. Compensating rollback: mid-run failure deletes created
  *                    spots and restores updated ones from prior JSON
  *                14. State files: save / load / foreign-user / discard
+ *                15. Choice labels (Field choice translation Phase 6): names
+ *                    typed in -> stored names; export writes form labels
+ *                    (option_13 -> joint, per-type quality, select_multiple,
+ *                    geologic unit + trace + sample, free text kept);
+ *                    XLSX + CSV round trip all-noop; dropdowns; typed labels
+ *                    incl. commas + another type's quality label; plain-string
+ *                    multi; injected map: label == name, shared labels,
+ *                    former + retired labels, comma labels, fallback list
  *
  *              Hermetic: own Project node 96669001, all spot/dataset ids
  *              collected and removed in the finally block; template +
@@ -908,6 +916,221 @@ try {
     $svc->discardState($token);
     check('discard kills token', $svc->loadState($token) === null);
 
+    // ------------------------------------------------------------------
+    echo "\n=== 15. choice labels: export labels, import names (Field choice translation Phase 6) ===\n";
+    // ------------------------------------------------------------------
+    $LSPEC = FieldTabularService::defaultSpec();
+    foreach (array(array('orientation', 'movement_justification'), array('geologic_unit', 'metamorphic_grade'),
+                   array('geologic_unit', 'era_proterozoic'), array('trace', 'trace_type'),
+                   array('sample', 'sample_id_name'), array('sample', 'sample_type')) as $gn) {
+        $LSPEC['columns'][] = array('kind' => 'field', 'group' => $gn[0], 'name' => $gn[1]);
+    }
+    $lv = $svc->validateSpec($LSPEC);
+    check('label spec validates', !empty($lv['ok']));
+    $LSPEC = $lv['spec'];
+    $lHeaders = array();
+    foreach ($svc->columnDefs($LSPEC) as $d) { $lHeaders[] = $d['header']; }
+    $hdr = function ($g, $n) { return FieldTabularService::displayHeader($g, $n); };
+    $lcsv = function (array $rows) use ($lHeaders) {
+        $fh = fopen('php://temp', 'r+');
+        fputcsv($fh, $lHeaders);
+        foreach ($rows as $r) {
+            $line = array();
+            foreach ($lHeaders as $h) { $line[] = isset($r[$h]) ? $r[$h] : ''; }
+            fputcsv($fh, $line);
+        }
+        rewind($fh);
+        $s = stream_get_contents($fh);
+        fclose($fh);
+        return csvFile($s);
+    };
+    $tabFt = FieldTabularService::fieldDef('orientation', 'feature_type')['vocab_by_type']['tabular_zone'][0];
+    $linFt = FieldTabularService::fieldDef('orientation', 'feature_type')['vocab_by_type']['linear'][0];
+    $H_FT = $hdr('orientation', 'feature_type'); $H_Q = $hdr('orientation', 'quality');
+    $H_MJ = $hdr('orientation', 'movement_justification'); $H_MG = $hdr('geologic_unit', 'metamorphic_grade');
+    $H_EP = $hdr('geologic_unit', 'era_proterozoic'); $H_TT = $hdr('trace', 'trace_type');
+    $H_ST = $hdr('sample', 'sample_type'); $H_SN = $hdr('sample', 'sample_id_name');
+    $base = array('name' => 'SP-LBL1', 'latitude' => '34.3', 'longitude' => '-118.3');
+
+    // stored names typed straight in (older files, power users)
+    $namesFile = $lcsv(array(
+        $base + array('orientation_type' => 'planar', $H_FT => 'option_13', 'strike' => '101', 'dip' => '41', $H_Q => '5',
+                      $H_MJ => 'offset_bedding; sedimentary_fe', $H_MG => 'greenschist_fa',
+                      $H_EP => 'mesoproterozoi; paleoproterozo', $H_TT => 'geologic_struc'),
+        $base + array('orientation_type' => 'tabular_zone', $H_FT => $tabFt['value'], 'strike' => '21', 'dip' => '11', $H_Q => '1'),
+        $base + array('orientation_type' => 'linear', $H_FT => $linFt['value'], 'trend' => '11', 'plunge' => '6', $H_Q => '3'),
+        $base + array($H_SN => "FS-LBL-$stamp", $H_ST => 'oriented_core'),
+        $base + array('orientation_type' => 'planar', $H_FT => 'my odd plane', 'strike' => '2', 'dip' => '3'),
+    ));
+    $lParsed = $svc->parseUpload($namesFile, 'names.csv');
+    $lTarget = array('project_id' => $PROJECT_ID, 'dataset_id' => null, 'dataset_name' => "smokewiz DSLBL $stamp");
+    $lPlan = $svc->plan($lParsed, $lTarget);
+    check('names file: only the free-text feature type needs review',
+        empty($lPlan['clean']) && array_keys($lPlan['soft_vocab']) === array('orientation.feature_type')
+        && array_keys($lPlan['soft_vocab']['orientation.feature_type']) === array('my odd plane'));
+    $lRes = array('vocab' => array('orientation.feature_type' => array('my odd plane' => FieldTabularService::RESOLUTION_FREE_TEXT)));
+    $lPlan = $svc->plan($lParsed, $lTarget, $lRes);
+    check('names file plan clean after free-text resolution', !empty($lPlan['clean']));
+    $lCommit = $svc->commit($lPlan);
+    check('names file commit ok (1 spot)', !empty($lCommit['ok']) && $lCommit['created'] === 1);
+    $DSL = (int)$lCommit['dataset_id'];
+    $datasetIds[] = $DSL;
+    foreach ($lCommit['minted'] as $mid) { $spotIds[] = (int)$mid; }
+    $L1 = (int)$lCommit['minted'][0];
+    $l1 = spotProps($neodb, $L1, $owner);
+    $lod = json_decode($l1['json_orientation_data'], true);
+    $jprop = function ($p, $k) {   // geologic_unit is stored without the json_ prefix
+        $v = isset($p['json_' . $k]) ? $p['json_' . $k] : (isset($p[$k]) ? $p[$k] : null);
+        return is_string($v) ? json_decode($v, true) : json_decode(json_encode($v), true);
+    };
+    $lgu = $jprop($l1, 'geologic_unit');
+    $ltr = json_decode($l1['json_trace'], true);
+    $lsa = json_decode($l1['json_samples'], true);
+    check('stored names: option_13, quality 5, multi names',
+        $lod[0]['feature_type'] === 'option_13' && (string)$lod[0]['quality'] === '5'
+        && $lod[0]['movement_justification'] === array('offset_bedding', 'sedimentary_fe'));
+    check('stored names: geologic unit + trace + sample',
+        $lgu['metamorphic_grade'] === 'greenschist_fa' && $lgu['era_proterozoic'] === array('mesoproterozoi', 'paleoproterozo')
+        && $ltr['trace_type'] === 'geologic_struc' && $lsa[0]['sample_type'] === 'oriented_core');
+
+    $lExport = $svc->exportLong($DSL, $LSPEC);
+    check('label export ok', !empty($lExport['ok']) && count($lExport['rows']) === 5);
+    $byStrike = array();
+    foreach ($lExport['rows'] as $r) {
+        $k = $r['strike'] !== '' ? 's' . $r['strike'] : ($r['trend'] !== '' ? 't' . $r['trend'] : 'sample');
+        $byStrike[$k] = $r;
+    }
+    $p1 = $byStrike['s101'];
+    check('export: option_13 -> joint', $p1[$H_FT] === 'joint');
+    check('export: planar quality 5 -> "5 - excellent"', $p1[$H_Q] === '5 - excellent');
+    check('export: select_multiple labels joined "; "', $p1[$H_MJ] === 'offset bedding; sedimentary feature');
+    check('export: geologic unit labels (one + multi)',
+        $p1[$H_MG] === 'greenschist facies' && $p1[$H_EP] === 'Mesoproterozoic; Paleoproterozoic');
+    check('export: trace label', $p1[$H_TT] === 'geologic structure');
+    check('export: tabular row uses tabular quality label', $byStrike['s21'][$H_Q] === '1 - poor - irregular - uncertain');
+    check('export: tabular / linear feature types labeled',
+        $byStrike['s21'][$H_FT] === $tabFt['label'] && $byStrike['t11'][$H_FT] === $linFt['label']);
+    check('export: linear quality 3 stays "3"', $byStrike['t11'][$H_Q] === '3');
+    check('export: sample type label', $byStrike['sample'][$H_ST] === 'Oriented Core');
+    check('export: free text outside the vocab stays as stored', $byStrike['s2'][$H_FT] === 'my odd plane');
+
+    $lwb = $svc->buildWorkbook($lExport, false, "smokewiz-lbl-$stamp");
+    $lPath = tempnam(sys_get_temp_dir(), 'wizsmoke_') . '.xlsx';
+    $tmpFiles[] = $lPath;
+    $lw = new PHPExcel_Writer_Excel2007($lwb);
+    $lw->save($lPath);
+    $lTarget2 = array('project_id' => $PROJECT_ID, 'dataset_id' => $DSL, 'dataset_name' => '');
+    $lRe = $svc->parseUpload($lPath, 'labels.xlsx');
+    $lRtPlan = $svc->plan($lRe, $lTarget2);
+    check('label XLSX round trip == all-noop (clean, no review)', !empty($lRtPlan['clean']) && empty($lRtPlan['soft_vocab'])
+        && $lRtPlan['counts']['noop'] === 1 && $lRtPlan['counts']['update'] === 0 && $lRtPlan['counts']['create'] === 0);
+    $lCsvPath = csvFile($svc->buildCsv($lExport));
+    $lRtCsv = $svc->plan($svc->parseUpload($lCsvPath, 'labels.csv'), $lTarget2);
+    check('label CSV round trip == all-noop', !empty($lRtCsv['clean']) && $lRtCsv['counts']['noop'] === 1);
+
+    // Vocabulary sheet: labels only, every orientation type's quality labels
+    $vs = PHPExcel_IOFactory::load($lPath)->getSheetByName('Vocabulary');
+    $vcols = array();
+    foreach ($vs->toArray(null, false, false, false) as $i => $vr) {
+        foreach ($vr as $c => $val) {
+            if ($i === 0) { $vcols[$c] = array('head' => (string)$val, 'vals' => array()); }
+            elseif ($val !== null && $val !== '' && isset($vcols[$c])) { $vcols[$c]['vals'][] = (string)$val; }
+        }
+    }
+    $vcol = function ($head) use ($vcols) {
+        foreach ($vcols as $c) { if ($c['head'] === $head) { return $c['vals']; } }
+        return array();
+    };
+    $vq = $vcol($H_Q);
+    check('dropdown: quality offers planar AND tabular labels',
+        in_array('5 - excellent', $vq, true) && in_array('5 - best - accurate', $vq, true) && !in_array('5', $vq, true));
+    $vf = $vcol($H_FT);
+    check('dropdown: feature type offers labels, not names (joint, dike)',
+        in_array('joint', $vf, true) && in_array('dike', $vf, true) && !in_array('option_13', $vf, true));
+
+    // labels typed by hand: case, commas, another type's quality label
+    $labelsFile = $lcsv(array(
+        array('name' => 'SP-LBL2') + $base + array('orientation_type' => 'planar', $H_FT => 'Joint', 'strike' => '102', 'dip' => '42',
+                      $H_Q => '1 - poor', $H_MJ => 'Offset Bedding, sedimentary feature', $H_MG => 'Greenschist Facies',
+                      $H_EP => 'Mesoproterozoic;Paleoproterozoic', $H_TT => 'Geologic Structure'),
+        array('name' => 'SP-LBL2') + $base + array('orientation_type' => 'tabular_zone', $H_FT => $tabFt['label'], 'strike' => '22', 'dip' => '12',
+                      $H_Q => '5 - excellent'),
+        array('name' => 'SP-LBL2') + $base + array('orientation_type' => 'linear', $H_FT => $linFt['label'], 'trend' => '12', 'plunge' => '7',
+                      $H_Q => '5 - best - accurate'),
+        array('name' => 'SP-LBL2') + $base + array($H_SN => "FS-LBL2-$stamp", $H_ST => 'Oriented Core'),
+    ));
+    $l2Plan = $svc->plan($svc->parseUpload($labelsFile, 'labels-typed.csv'), $lTarget2);
+    check('typed labels resolve with no review', !empty($l2Plan['clean']) && empty($l2Plan['soft_vocab']));
+    $l2Commit = $svc->commit($l2Plan);
+    check('typed labels commit (1 create)', !empty($l2Commit['ok']) && $l2Commit['created'] === 1);
+    foreach ($l2Commit['minted'] as $mid) { $spotIds[] = (int)$mid; }
+    $l2 = spotProps($neodb, (int)$l2Commit['minted'][0], $owner);
+    $l2od = json_decode($l2['json_orientation_data'], true);
+    $l2gu = $jprop($l2, 'geologic_unit');
+    check('typed labels stored as names (joint -> option_13, comma multi split)',
+        $l2od[0]['feature_type'] === 'option_13' && (string)$l2od[0]['quality'] === '1'
+        && $l2od[0]['movement_justification'] === array('offset_bedding', 'sedimentary_fe'));
+    check('another type\'s quality label resolves to the shared name (tabular "5 - excellent", linear "5 - best - accurate")',
+        (string)$l2od[1]['quality'] === '5' && $l2od[1]['feature_type'] === $tabFt['value']
+        && (string)$l2od[2]['quality'] === '5');
+    check('typed geologic unit labels stored as names',
+        $l2gu['metamorphic_grade'] === 'greenschist_fa' && $l2gu['era_proterozoic'] === array('mesoproterozoi', 'paleoproterozo'));
+
+    // a select_multiple the app stored as one plain string reads back unchanged
+    $lod[0]['movement_justification'] = 'offset_bedding';
+    $neodb->query("MATCH (s:Spot {id: $L1, userpkey: $owner}) SET s.json_orientation_data = '"
+        . addslashes(json_encode($lod)) . "'");
+    $strExport = $svc->exportLong($DSL, $LSPEC);
+    $strRow = null;
+    foreach ($strExport['rows'] as $r) { if ($r['strike'] === '101') { $strRow = $r; } }
+    check('plain-string multi exports its label', $strRow !== null && $strRow[$H_MJ] === 'offset bedding');
+    $strPath = csvFile($svc->buildCsv($strExport));
+    $strPlan = $svc->plan($svc->parseUpload($strPath, 'strmulti.csv'), $lTarget2);
+    check('plain-string multi round trip == noop (was always "changed")',
+        !empty($strPlan['clean']) && $strPlan['counts']['update'] === 0 && $strPlan['counts']['noop'] === 2);
+
+    // Edge cases the v2.31.3 wizard forms do not have yet, on an injected map
+    require_once '/srv/app/www/includes/fieldvocab/FieldVocab.php';
+    $realMap = FieldVocab::map();
+    $inj = $realMap;
+    $inj['forms']['general.trace']['fields']['trace_type'] = array('type' => 'select_one', 'list' => 't', 'choices' => array(
+        'a' => 'alpha', 'b' => 'a',                       // label equals another name -> list exports names
+    ));
+    $inj['forms']['general.trace']['fields']['trace_quality'] = array('type' => 'select_one', 'list' => 'q', 'choices' => array(
+        'k' => 'known', 'n' => 'new label', 's1' => 'same', 's2' => 'Same',
+    ), 'former_labels' => array('n' => array('old label')), 'retired_choices' => array('r' => array('label' => 'gone', 'last_seen' => 'v1.0.0')));
+    $inj['forms']['project.geologic_unit']['fields']['era_proterozoic'] = array('type' => 'select_multiple', 'list' => 'e', 'choices' => array(
+        'rb' => 'red, blue', 'g' => 'green',
+    ));
+    unset($inj['forms']['general.trace']['fields']['fold_type']);
+    FieldVocab::setMap($inj);
+    FieldTabularService::resetCatalog();
+    $probe = new class($db, $neodb, $strabo) extends FieldTabularService {
+        public function call($m, array $a) { return call_user_func_array(array($this, $m), $a); }
+    };
+    $dTT = FieldTabularService::fieldDef('trace', 'trace_type');
+    $dTQ = FieldTabularService::fieldDef('trace', 'trace_quality');
+    $dEP = FieldTabularService::fieldDef('geologic_unit', 'era_proterozoic');
+    check('injected: label == other name -> not label-safe, exports names',
+        $dTT['labels_safe'] === false && $probe->call('exportCell', array('a', $dTT, null)) === 'a');
+    check('injected: shared label (case) -> not label-safe; the label goes to review, never first-match',
+        $dTQ['labels_safe'] === false && $probe->call('matchVocab', array('same', $dTQ['vocab'])) === null
+        && $probe->call('matchVocab', array('s2', $dTQ['vocab'])) === 's2');
+    check('injected: former label resolves to its name', $probe->call('matchVocab', array('Old Label', $dTQ['vocab'])) === 'n');
+    check('injected: retired choice resolves by label, never offered',
+        $probe->call('matchVocab', array('gone', $dTQ['vocab'])) === 'r'
+        && $probe->call('suggestVocab', array('gone', $dTQ['vocab'])) !== 'gone');
+    check('injected: comma label exports whole, splits back as one token',
+        $dEP['labels_safe'] === true
+        && $probe->call('exportCell', array(array('rb', 'g'), $dEP, null)) === 'red, blue; green'
+        && $probe->call('splitMultiple', array('red, blue; green', $dEP['vocab'])) === array('red, blue', ' green'));
+    check('injected: hand-typed comma list still splits', count($probe->call('splitMultiple', array('green, red', $dEP['vocab']))) === 2);
+    check('injected: map without the field keeps the catalog list',
+        count(FieldTabularService::fieldDef('trace', 'fold_type')['vocab']) > 0);
+    FieldVocab::setMap(null);
+    FieldTabularService::resetCatalog();
+    check('real map restored', FieldTabularService::fieldDef('trace', 'trace_type')['labels_safe'] === true);
+
 } finally {
     echo "\n=== cleanup ===\n";
     foreach (array_unique($spotIds) as $sid) {
@@ -926,14 +1149,17 @@ try {
     $db->query("DELETE FROM field_tabular_runs WHERE project_id = '$PROJECT_ID'");
     $db->get_var_prepared("DELETE FROM strabosamples.samples WHERE userpkey = $1 AND name = $2 RETURNING id",
         array($owner, "FS-001-$stamp"));
+    foreach (array("FS-LBL-$stamp", "FS-LBL2-$stamp") as $sn) {
+        $db->get_var_prepared("DELETE FROM strabosamples.samples WHERE userpkey = $1 AND name = $2 RETURNING id", array($owner, $sn));
+    }
     foreach ($tmpFiles as $f) { @unlink($f); }
     try { $neodb->query("MATCH (i:Image {id: 96669901, userpkey: $owner}) DETACH DELETE i"); } catch (Exception $e) {}
 
     // residue checks
-    $r1 = (int)$neodb->get_var("MATCH (s:Spot {userpkey: $owner}) WHERE s.name IN ['SP-A','SP-B','SP-C','SP-LINE','SP-D2'] RETURN count(s)");
+    $r1 = (int)$neodb->get_var("MATCH (s:Spot {userpkey: $owner}) WHERE s.name IN ['SP-A','SP-B','SP-C','SP-LINE','SP-D2','SP-LBL1','SP-LBL2'] RETURN count(s)");
     $r2 = (int)$neodb->get_var("MATCH (d:Dataset {userpkey: $owner}) WHERE d.name =~ 'smokewiz.*' RETURN count(d)");
-    $r3 = $db->get_var_prepared("SELECT count(*) FROM strabosamples.samples WHERE userpkey = $1 AND name = $2",
-        array($owner, "FS-001-$stamp"));
+    $r3 = $db->get_var_prepared("SELECT count(*) FROM strabosamples.samples WHERE userpkey = $1 AND name IN ($2, $3, $4)",
+        array($owner, "FS-001-$stamp", "FS-LBL-$stamp", "FS-LBL2-$stamp"));
     echo 'residue: spots=' . $r1 . ' datasets=' . $r2 . ' spine=' . (int)$r3 . "\n";
 }
 
