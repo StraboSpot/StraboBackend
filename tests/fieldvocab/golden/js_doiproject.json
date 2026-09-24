@@ -1,0 +1,30 @@
+{
+    "centroid": {
+        "latitude": "39.7",
+        "longitude": "-105.2"
+    },
+    "datasets": [
+        {
+            "count": 4,
+            "doi": null,
+            "id": 977910000011,
+            "name": "Golden A structures and rocks",
+            "owner": " ",
+            "projectname": "Field vocab golden fixture"
+        },
+        {
+            "count": 3,
+            "doi": null,
+            "id": 977910000012,
+            "name": "Golden B sed and surface",
+            "owner": " ",
+            "projectname": "Field vocab golden fixture"
+        }
+    ],
+    "datecreated": null,
+    "doi": null,
+    "envelope": "POLYGON ((-105.3 39.6, -105.3 39.81, -105.1 39.81, -105.1 39.6, -105.3 39.6))",
+    "owner": " ",
+    "projectname": "Field vocab golden fixture",
+    "uuid": null
+}

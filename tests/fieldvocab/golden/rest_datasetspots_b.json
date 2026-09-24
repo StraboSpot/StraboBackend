@@ -1,0 +1,219 @@
+{
+    "features": [
+        {
+            "geometry": {
+                "coordinates": [
+                    -105.2,
+                    39.7
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "date": "2025-09-24T07:46:40.000Z",
+                "id": 977910000105,
+                "modified_timestamp": 1758700000000,
+                "name": "GF section",
+                "notes": "golden fixture GF section",
+                "sed": {
+                    "strat_section": {
+                        "column_profile": "mixed_clastic",
+                        "column_y_axis_units": "m",
+                        "how_is_section_georeferenced": "point_at_secti",
+                        "purpose": [
+                            "facies_arch",
+                            "res_char"
+                        ],
+                        "scale_of_interest": [
+                            "multi_outcrop"
+                        ],
+                        "strat_section_id": 977910000601
+                    }
+                },
+                "self": "https://strabospot.org/db/feature/977910000105",
+                "time": "2025-09-24T07:46:40.000Z"
+            },
+            "type": "Feature"
+        },
+        {
+            "geometry": {
+                "coordinates": [
+                    [
+                        [
+                            0,
+                            0
+                        ],
+                        [
+                            10,
+                            0
+                        ],
+                        [
+                            10,
+                            1.5
+                        ],
+                        [
+                            0,
+                            1.5
+                        ],
+                        [
+                            0,
+                            0
+                        ]
+                    ]
+                ],
+                "type": "Polygon"
+            },
+            "properties": {
+                "date": "2025-09-24T07:46:40.000Z",
+                "id": 977910000106,
+                "modified_timestamp": 1758700000000,
+                "name": "GF interval",
+                "notes": "golden fixture GF interval",
+                "sed": {
+                    "bedding": {
+                        "beds": [
+                            {
+                                "avg_thickness": 0.2,
+                                "character_of_lower_contacts": [
+                                    "flat"
+                                ],
+                                "character_of_upper_contacts": [
+                                    "well_defined"
+                                ]
+                            }
+                        ],
+                        "interbed_proportion": 40,
+                        "lithology_at_bottom_contact": "lithology_1",
+                        "package_geometry": [
+                            "tabular_parall"
+                        ]
+                    },
+                    "character": "interbedded",
+                    "diagenesis": [
+                        {
+                            "nodules_concretions_shape": [
+                                "other",
+                                "pods"
+                            ],
+                            "non_selective": [
+                                "cavern"
+                            ],
+                            "recrystallization_type": "recrystallized"
+                        }
+                    ],
+                    "fossils": [
+                        {
+                            "invertebrate": [
+                                "porifera_spong"
+                            ],
+                            "shape": "bioherm_lens"
+                        }
+                    ],
+                    "interpretations": [
+                        {
+                            "carbonate": [
+                                "tidal_flat",
+                                "subaerial_expo"
+                            ],
+                            "clastic": [
+                                "tidal_flat",
+                                "alluvial_fan"
+                            ]
+                        }
+                    ],
+                    "interval": {
+                        "interval_thickness": 1.5,
+                        "thickness_units": "m"
+                    },
+                    "lithologies": [
+                        {
+                            "bedding_thickness": "thin",
+                            "laminae_thickness_i_select_more_than_one": [
+                                "thin"
+                            ],
+                            "primary_lithology": "volcaniclastic",
+                            "volcaniclastic_type": [
+                                "volcanic_mudst",
+                                "glass"
+                            ]
+                        },
+                        {
+                            "organic_coal_lithologies": [
+                                "coal_ball"
+                            ],
+                            "primary_lithology": "organic_coal"
+                        }
+                    ],
+                    "structures": [
+                        {
+                            "cross_bedding_type": [
+                                "cross_bedding"
+                            ],
+                            "graded_bedding_type": "normally_grade",
+                            "lag_type": [
+                                "rip_up_clasts"
+                            ]
+                        }
+                    ]
+                },
+                "self": "https://strabospot.org/db/feature/977910000106",
+                "strat_section_id": 977910000601,
+                "time": "2025-09-24T07:46:40.000Z"
+            },
+            "type": "Feature"
+        },
+        {
+            "geometry": {
+                "coordinates": [
+                    [
+                        [
+                            -105.3,
+                            39.8
+                        ],
+                        [
+                            -105.29,
+                            39.8
+                        ],
+                        [
+                            -105.29,
+                            39.81
+                        ],
+                        [
+                            -105.3,
+                            39.81
+                        ],
+                        [
+                            -105.3,
+                            39.8
+                        ]
+                    ]
+                ],
+                "type": "Polygon"
+            },
+            "properties": {
+                "date": "2025-09-24T07:46:40.000Z",
+                "id": 977910000107,
+                "modified_timestamp": 1758700000000,
+                "name": "GF surface",
+                "notes": "golden fixture GF surface",
+                "self": "https://strabospot.org/db/feature/977910000107",
+                "surface_feature": {
+                    "surface_feature_quality": "approximate(?)",
+                    "surface_feature_type": "rock_unit"
+                },
+                "tephra": [
+                    {
+                        "grading": "none_or_massive",
+                        "grainsize_bottom": "clay",
+                        "id": 977910000251,
+                        "label": "GF tephra",
+                        "layer_type": "package",
+                        "thickness_units": "cm"
+                    }
+                ],
+                "time": "2025-09-24T07:46:40.000Z"
+            },
+            "type": "Feature"
+        }
+    ],
+    "type": "FeatureCollection"
+}

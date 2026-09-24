@@ -1,0 +1,16 @@
+[
+    {
+        "annotated": null,
+        "caption": "golden image",
+        "image_id": "977910000401",
+        "image_type": "other",
+        "met_facies": null,
+        "orientation_features": "{option_13,fracture,fracture,zone_fracturin}",
+        "parent_sample_id": null,
+        "parent_spot_id": "977910000101",
+        "rock_types": null,
+        "tag_names": "{\"Fixture concept\"}",
+        "title": "GF cross section",
+        "trace_types": null
+    }
+]

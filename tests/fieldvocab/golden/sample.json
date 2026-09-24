@@ -1,0 +1,52 @@
+{
+    "children": [],
+    "collaborators": [],
+    "composition": [],
+    "created_at": "<VOLATILE>",
+    "created_by": "<OWNER>",
+    "custom_data": null,
+    "description": null,
+    "display_sample_purpose": "fabric___micro",
+    "display_sample_type": "fragmented_roc",
+    "documents": [],
+    "experimental_data": null,
+    "field_data": {
+        "degree_of_weathering": "1___highly_wea",
+        "id": 977910000301,
+        "inplaceness_of_sample": "5___definitely",
+        "label": "GF-S1",
+        "main_sampling_purpose": "fabric___micro",
+        "material_type": "fragmented_roc",
+        "oriented_sample": "yes",
+        "sample_id_name": "GF-S1",
+        "sample_notes": "golden sample"
+    },
+    "id": "977910000301",
+    "igsn": null,
+    "latitude": 39.6,
+    "longitude": -105.1,
+    "micro_data": null,
+    "modified_at": "<VOLATILE>",
+    "modified_by": "<OWNER>",
+    "name": "GF-S1",
+    "notes": "golden sample",
+    "parameters": [],
+    "parent": null,
+    "parent_sample_id": null,
+    "parent_userpkey": null,
+    "subsystem_links": [
+        {
+            "created_at": "<VOLATILE>",
+            "modified_at": "<VOLATILE>",
+            "reference_id": "977910000101",
+            "reference_metadata": {
+                "dataset_id": "977910000011",
+                "project_id": "977910000001",
+                "rich": false
+            },
+            "reference_userpkey": "<OWNER>",
+            "subsystem": "field"
+        }
+    ],
+    "userpkey": "<OWNER>"
+}
