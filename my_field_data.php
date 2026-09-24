@@ -192,8 +192,8 @@ include("includes/mheader.php");
 						     project cards below. -->
 						<div class="mfd-toolbar">
 							<a href="/new_project" class="button primary small">+ New Project</a>
-							<a href="/TemplateWizard/" class="button small" title="Design reusable spreadsheet templates for your field data">Template Wizard</a>
-							<a href="/TemplateWizard/review.php" class="button small" title="Bulk-import spots from a spreadsheet (XLSX/CSV)">&#8682; Import Tabular Data</a>
+							<a href="/TemplateWizard/" class="button primary small" title="Design reusable spreadsheet templates for your field data">Template Wizard</a>
+							<a href="/TemplateWizard/review.php" class="button primary small" title="Bulk-import spots from a spreadsheet (XLSX/CSV)">&#8682; Import Tabular Data</a>
 							<?php /*<a href="/export_builder" class="button small" title="Build a downloadable package from several projects or datasets, with optional filters (Export Builder)">Custom export&hellip;</a>*/?>
 						</div>
 
