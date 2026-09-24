@@ -2080,12 +2080,26 @@ class StraboSpot
 
 	}
 
+	// Comma-separated (or array) id list -> "1,2,3" of integers, safe inside a Cypher list.
+	// Non-numeric pieces are dropped, so a bad list matches nothing instead of reaching the query.
+	public function intIdList($ids){
+		$ids = is_array($ids) ? $ids : explode(",", (string)$ids);
+		$out = array();
+		foreach($ids as $id){
+			$id = trim((string)$id);
+			if(preg_match('/^[0-9]{1,20}$/', $id)) $out[] = (int)$id;
+		}
+		return implode(",", array_values(array_unique($out)));
+	}
+
 	public function getDatasetSpotsSearch($ingtype=null, $get){
 
-		$dsids = $get['dsids'];
+		// dsids and userpkey come straight from request parameters and are interpolated into
+		// Cypher below: integers only.
+		$dsids = $this->intIdList($get['dsids']);
 		$range = $get['range'];
 		$envelope = $get['envelope'];
-		$getuserpkey = $get['userpkey'];
+		$getuserpkey = (($get['userpkey'] ?? '') !== '') ? (int)$get['userpkey'] : '';
 
 		// Export Builder (docs/ExportBuilder_Design.md §7.3): optional spot-id
 		// restriction so the FIND stage's resolved set drives every generator
@@ -2409,6 +2423,7 @@ class StraboSpot
 
 	public function getDatasetName($feature_id){
 
+		$feature_id = (int)$feature_id;
 		$querystring = "match (a:Dataset) where a.userpkey=$this->userpkey and a.id=$feature_id RETURN a.name;";
 
 		$datasetname = $this->neodb->get_var($querystring);
@@ -4919,6 +4934,7 @@ public function getSpotName($id){
 
 	public function getTagsFromDatasetIds($feature_ids){
 
+		$feature_ids = $this->intIdList($feature_ids);
 		$tags = [];
 
 		$data = new stdClass();
