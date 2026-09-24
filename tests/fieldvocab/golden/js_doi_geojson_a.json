@@ -1,0 +1,390 @@
+{
+    "features": [
+        {
+            "geometry": {
+                "coordinates": [
+                    -105.1,
+                    39.6
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "_3d_structures": [
+                    {
+                        "Linearity": "5___straight",
+                        "feature_type": "s_fold",
+                        "fold_shape": "class_1b__para",
+                        "id": 977910000211,
+                        "label": "fold",
+                        "tightness": "gentle",
+                        "type": "fold",
+                        "vergence": "ne"
+                    },
+                    {
+                        "directional_indicators": [
+                            "crescentic_fra",
+                            "oblique_gouge"
+                        ],
+                        "fault_or_sz_type": "dextral",
+                        "id": 977910000212,
+                        "label": "fault",
+                        "movement": "ne_side_up",
+                        "movement_justification": [
+                            "sedimentary_fe"
+                        ],
+                        "quality": "5",
+                        "type": "fault"
+                    },
+                    {
+                        "feature_type": "tectonite",
+                        "id": 977910000213,
+                        "label": "tectonite",
+                        "tectonite_character": "l___s_1",
+                        "tectonite_type": "ls_tectonite",
+                        "type": "fabric"
+                    }
+                ],
+                "date": "2025-09-24T07:46:40.000Z",
+                "id": 977910000101,
+                "images": [
+                    {
+                        "annotated": false,
+                        "caption": "golden image",
+                        "created_by": "<OWNER>",
+                        "height": 48,
+                        "id": 977910000401,
+                        "image_type": "geological_cs",
+                        "modified_timestamp": "",
+                        "self": "https://strabospot.org/db/image/977910000401",
+                        "title": "GF cross section",
+                        "units_of_image_view": "_m",
+                        "width": 64
+                    }
+                ],
+                "modified_timestamp": 1758700000000,
+                "name": "GF structure",
+                "notes": "golden fixture GF structure",
+                "orientation_data": [
+                    {
+                        "associated_orientation": [
+                            {
+                                "feature_type": "flow_transport",
+                                "id": 977910000202,
+                                "plunge": 20,
+                                "quality": "1",
+                                "trend": 210,
+                                "type": "linear_orientation"
+                            }
+                        ],
+                        "bedding_type": "sedimentary_fe",
+                        "dip": 35,
+                        "dip_direction": 210,
+                        "facing": "upright",
+                        "feature_type": "option_13",
+                        "id": 977910000201,
+                        "movement_justification": [
+                            "sedimentary_fe",
+                            "geomorphic_fea"
+                        ],
+                        "quality": "5",
+                        "strike": 120,
+                        "type": "planar_orientation"
+                    },
+                    {
+                        "dip": 80,
+                        "feature_type": "fracture",
+                        "fracture_type": "option_7",
+                        "id": 977910000203,
+                        "quality": 4,
+                        "strike": 40,
+                        "type": "planar_orientation"
+                    },
+                    {
+                        "dip": 82,
+                        "feature_type": "fracture",
+                        "fracture_type": "option_8",
+                        "id": 977910000204,
+                        "strike": 45,
+                        "type": "planar_orientation"
+                    },
+                    {
+                        "dip": 60,
+                        "feature_type": "zone_fracturin",
+                        "id": 977910000205,
+                        "quality": "5",
+                        "strike": 300,
+                        "type": "tabular_orientation"
+                    }
+                ],
+                "samples": [
+                    {
+                        "degree_of_weathering": "1___highly_wea",
+                        "id": 977910000301,
+                        "inplaceness_of_sample": "5___definitely",
+                        "label": "GF-S1",
+                        "main_sampling_purpose": "fabric___micro",
+                        "material_type": "fragmented_roc",
+                        "oriented_sample": "yes",
+                        "sample_id_name": "GF-S1",
+                        "sample_notes": "golden sample"
+                    }
+                ],
+                "self": "https://strabospot.org/db/feature/977910000101",
+                "time": "2025-09-24T07:46:40.000Z"
+            },
+            "type": "Feature"
+        },
+        {
+            "geometry": {
+                "coordinates": [
+                    -105.11,
+                    39.61
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "date": "2025-09-24T07:46:40.000Z",
+                "fabrics": [
+                    {
+                        "id": 977910000231,
+                        "label": "fault rock fabric",
+                        "structural_fabric": [
+                            "fractures"
+                        ],
+                        "tectonite_type": "s",
+                        "type": "fault_rock",
+                        "type_of_fracture": [
+                            "frac_joint"
+                        ]
+                    },
+                    {
+                        "id": 977910000232,
+                        "label": "metamorphic rock fabric",
+                        "mullion_type": "fold_bed",
+                        "planar_fabric": [
+                            "gneissic_band"
+                        ],
+                        "relict_sed_fab": [
+                            "bed"
+                        ],
+                        "type": "metamorphic_rock"
+                    },
+                    {
+                        "id": 977910000233,
+                        "label": "igneous rock fabric",
+                        "planar_fab": [
+                            "foliation"
+                        ],
+                        "type": "igneous_rock"
+                    }
+                ],
+                "id": 977910000102,
+                "modified_timestamp": 1758700000000,
+                "name": "GF petrology",
+                "notes": "golden fixture GF petrology",
+                "pet": {
+                    "alteration_or": [
+                        {
+                            "hydrothermal_alteration": [
+                                "albite_epidote"
+                            ],
+                            "id": 977910000224,
+                            "ore_type": "dolorite_mica_"
+                        }
+                    ],
+                    "igneous": [
+                        {
+                            "id": 977910000221,
+                            "igneous_rock_class": "volcanic",
+                            "volcanic_rock_type": "basaltic_andes"
+                        },
+                        {
+                            "id": 977910000222,
+                            "igneous_rock_class": "plutonic",
+                            "plutonic_rock_type": "quartz_monz"
+                        }
+                    ],
+                    "metamorphic": [
+                        {
+                            "facies": [
+                                "prehnite_pumpy"
+                            ],
+                            "id": 977910000223,
+                            "metamorphic_rock_type": "calc_silicate",
+                            "protolith": "pelite",
+                            "zone": [
+                                "garnet_corider"
+                            ]
+                        }
+                    ],
+                    "minerals": [
+                        {
+                            "habit": "bladed",
+                            "id": 977910000225,
+                            "igneous_or_metamorphic": "ig_min",
+                            "textural_setting_igneous": [
+                                "ig_matrix"
+                            ]
+                        }
+                    ],
+                    "reactions": [
+                        {
+                            "based_on": [
+                                "mineral_degrad"
+                            ],
+                            "id": 977910000226
+                        }
+                    ]
+                },
+                "self": "https://strabospot.org/db/feature/977910000102",
+                "time": "2025-09-24T07:46:40.000Z"
+            },
+            "type": "Feature"
+        },
+        {
+            "geometry": {
+                "coordinates": [
+                    -105.12,
+                    39.62
+                ],
+                "type": "Point"
+            },
+            "properties": {
+                "date": "2025-09-24T07:46:40.000Z",
+                "id": 977910000103,
+                "modified_timestamp": 1758700000000,
+                "name": "GF legacy pet",
+                "notes": "golden fixture GF legacy pet",
+                "pet": {
+                    "facies": [
+                        "ultra_high_pre"
+                    ],
+                    "igneous_rock_class": [
+                        "volcanic"
+                    ],
+                    "metamorphic_rock_type": [
+                        "calc_silicate",
+                        "meta_ultramafi"
+                    ],
+                    "rock_type": [
+                        "igneous",
+                        "metamorphic"
+                    ],
+                    "volcanic_rock_type": "basaltic_andes"
+                },
+                "self": "https://strabospot.org/db/feature/977910000103",
+                "time": "2025-09-24T07:46:40.000Z"
+            },
+            "type": "Feature"
+        },
+        {
+            "geometry": {
+                "coordinates": [
+                    [
+                        -105.13,
+                        39.63
+                    ],
+                    [
+                        -105.12,
+                        39.64
+                    ]
+                ],
+                "type": "LineString"
+            },
+            "properties": {
+                "date": "2025-09-24T07:46:40.000Z",
+                "id": 977910000104,
+                "modified_timestamp": 1758700000000,
+                "name": "GF trace",
+                "notes": "golden fixture GF trace",
+                "other_features": [
+                    {
+                        "description": "golden",
+                        "id": 977910000241,
+                        "label": "GF other feature",
+                        "type": "other"
+                    }
+                ],
+                "self": "https://strabospot.org/db/feature/977910000104",
+                "time": "2025-09-24T07:46:40.000Z",
+                "trace": {
+                    "geologic_structure_type": "fold_axial_tra",
+                    "trace_feature": true,
+                    "trace_type": "geologic_struc"
+                }
+            },
+            "type": "Feature"
+        }
+    ],
+    "projectMetadata": {
+        "centroid": "POINT (-105.1583333333333 39.66166666666667)",
+        "date": "2025-09-24T07:46:40.000Z",
+        "description": {
+            "project_name": "Field vocab golden fixture",
+            "purpose_of_study": "golden-file guard for choice translation"
+        },
+        "detailURL": "https://strabospot.org/search/dsmap/977910000011",
+        "id": 977910000001,
+        "modified_timestamp": 1758700000000,
+        "project_name": "Field vocab golden fixture",
+        "projecttype": "app",
+        "purpose_of_study": "golden-file guard for choice translation",
+        "reports": "[]",
+        "tags": [
+            {
+                "concept_type": "geological_structure",
+                "id": 977910000501,
+                "name": "Fixture concept",
+                "spots": [
+                    977910000101,
+                    977910000104
+                ],
+                "type": "concept"
+            },
+            {
+                "documentation_type": "observation_timing",
+                "id": 977910000502,
+                "name": "Fixture documentation",
+                "spots": [
+                    977910000102
+                ],
+                "type": "documentation"
+            },
+            {
+                "eon": [
+                    "phanerozoic"
+                ],
+                "era_phanerozoic": [
+                    "mesozoic"
+                ],
+                "id": 977910000503,
+                "igneous_rock_class": "plutonic",
+                "name": "Fixture Granite",
+                "plutonic_rock_types": "alkali_granite",
+                "rock_type": "igneous",
+                "spots": [
+                    977910000102,
+                    977910000103
+                ],
+                "type": "geologic_unit",
+                "unit_label_abbreviation": "Kfg"
+            },
+            {
+                "eon": [
+                    "proterozoic"
+                ],
+                "id": 977910000504,
+                "metamorphic_grade": "greenschist_fa",
+                "name": "Fixture Schist",
+                "rock_type": "metamorphic",
+                "spots": [
+                    977910000103
+                ],
+                "type": "geologic_unit"
+            }
+        ],
+        "uploaddate": "<VOLATILE>",
+        "useContinuousTagging": "false"
+    },
+    "type": "FeatureCollection"
+}

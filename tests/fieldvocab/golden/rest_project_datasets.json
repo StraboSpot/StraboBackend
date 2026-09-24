@@ -1,0 +1,30 @@
+{
+    "datasets": [
+        {
+            "centroid": "POINT (-105.11375 39.61625)",
+            "datasettype": "app",
+            "date": "2025-09-24T07:46:40.000Z",
+            "id": 977910000011,
+            "isReadOnly": false,
+            "modified_timestamp": 1758700000000,
+            "name": "Golden A structures and rocks",
+            "owner_email": "owner@test.strabospot.org",
+            "owner_name": "Test Owner",
+            "owner_straboUserId": "<OWNER>",
+            "self": "https://strabospot.org/db/dataset/977910000011"
+        },
+        {
+            "centroid": "POINT (-105.2475 39.7525)",
+            "datasettype": "app",
+            "date": "2025-09-24T07:46:40.000Z",
+            "id": 977910000012,
+            "isReadOnly": false,
+            "modified_timestamp": 1758700000000,
+            "name": "Golden B sed and surface",
+            "owner_email": "owner@test.strabospot.org",
+            "owner_name": "Test Owner",
+            "owner_straboUserId": "<OWNER>",
+            "self": "https://strabospot.org/db/dataset/977910000012"
+        }
+    ]
+}

@@ -1,0 +1,73 @@
+{
+    "date": "2025-09-24T07:46:40.000Z",
+    "description": {
+        "project_name": "Field vocab golden fixture",
+        "purpose_of_study": "golden-file guard for choice translation"
+    },
+    "id": 977910000001,
+    "isCollaborativeProject": false,
+    "isOwner": true,
+    "isReadOnly": false,
+    "modified_timestamp": 1758700000000,
+    "owner_email": "owner@test.strabospot.org",
+    "owner_name": "Test Owner",
+    "owner_straboUserId": "<OWNER>",
+    "preferences": [],
+    "projecttype": "app",
+    "reports": [],
+    "self": "https://strabospot.org/db/project/977910000001",
+    "tags": [
+        {
+            "concept_type": "geological_structure",
+            "id": 977910000501,
+            "name": "Fixture concept",
+            "spots": [
+                977910000101,
+                977910000104
+            ],
+            "type": "concept"
+        },
+        {
+            "documentation_type": "observation_timing",
+            "id": 977910000502,
+            "name": "Fixture documentation",
+            "spots": [
+                977910000102
+            ],
+            "type": "documentation"
+        },
+        {
+            "eon": [
+                "phanerozoic"
+            ],
+            "era_phanerozoic": [
+                "mesozoic"
+            ],
+            "id": 977910000503,
+            "igneous_rock_class": "plutonic",
+            "name": "Fixture Granite",
+            "plutonic_rock_types": "alkali_granite",
+            "rock_type": "igneous",
+            "spots": [
+                977910000102,
+                977910000103
+            ],
+            "type": "geologic_unit",
+            "unit_label_abbreviation": "Kfg"
+        },
+        {
+            "eon": [
+                "proterozoic"
+            ],
+            "id": 977910000504,
+            "metamorphic_grade": "greenschist_fa",
+            "name": "Fixture Schist",
+            "rock_type": "metamorphic",
+            "spots": [
+                977910000103
+            ],
+            "type": "geologic_unit"
+        }
+    ],
+    "useContinuousTagging": false
+}
