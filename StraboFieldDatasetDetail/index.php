@@ -189,6 +189,7 @@ window.DATASET_DETAIL_CONFIG = {
 <script src="https://unpkg.com/ol-layerswitcher@4.1.2/dist/ol-layerswitcher.js"></script>
 <script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/basemaps.js') ?>"></script>
 <script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/symbology.js') ?>"></script>
+<script src="<?= dsd_asset('/assets/js/fieldvocab_display.js') ?>"></script>
 <script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/sidebar.js') ?>"></script>
 <script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/spots.js') ?>"></script>
 <script src="<?= dsd_asset('/StraboFieldDatasetDetail/js/image_basemap.js') ?>"></script>

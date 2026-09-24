@@ -155,7 +155,7 @@
     var subtitle = rootSpot.properties.name || ('Spot ' + spotId);
     var rootShown = displayProps(rootSpot);
     var profileLabel = (rootShown.sed && rootShown.sed.strat_section && rootShown.sed.strat_section.column_profile) || '';
-    if (!produced[profileLabel]) profileLabel = profileLabel.replace(/_/g, ' ');
+    if (!isLabel(profileLabel)) profileLabel = profileLabel.replace(/_/g, ' ');
     document.getElementById('strat-subtitle').textContent = subtitle + ' — ' + profileLabel;
 
     return { rootSpot: rootSpot, spots: spots, stratSection: stratSection };
@@ -1044,29 +1044,19 @@
 
   function formatLabel(str) {
     if (!str) return '';
-    if (produced[str]) return str;   // a form label: exactly as the app writes it (D6)
+    if (isLabel(str)) return str;   // a form label: exactly as the app writes it (D6)
     return String(str).replace(/_/g, ' ').replace(/\b\w/g, function (c) { return c.toUpperCase(); });
   }
 
   // Form labels (feature.labels from getData.php) applied to a COPY of the
-  // properties, for display only. produced = every label set.
-  var produced = {};
-
+  // properties (FieldVocabDisplay), for display only.
   function displayProps(spot) {
     var props = (spot && spot.properties) || {};
-    if (!spot || !Array.isArray(spot.labels) || !spot.labels.length) return props;
-    var copy = JSON.parse(JSON.stringify(props));
-    spot.labels.forEach(function (pl) {
-      var path = pl[0], o = copy;
-      for (var i = 0; i < path.length - 1; i++) {
-        if (o == null || typeof o !== 'object') return;
-        o = o[path[i]];
-      }
-      if (o == null || typeof o !== 'object' || !(path[path.length - 1] in o)) return;
-      o[path[path.length - 1]] = pl[1];
-      produced[pl[1]] = true;
-    });
-    return copy;
+    return (spot && window.FieldVocabDisplay) ? window.FieldVocabDisplay.copy(props, spot.labels) : props;
+  }
+
+  function isLabel(s) {
+    return !!(window.FieldVocabDisplay && window.FieldVocabDisplay.isLabel(s));
   }
 
   function escapeHtml(str) {

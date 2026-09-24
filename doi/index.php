@@ -73,8 +73,9 @@ if(isset($_GET['u']) && $_GET['u'] != ""){
 	<script src="/assets/js/layerswitcher/layerswitcher.js"></script>
 
 	<!-- Map Search-Specific Files-->
-	<script src="../includes/map_search_functions.js"></script>
-	<script src="../includes/tab_builders.js"></script>
+	<script src="/assets/js/fieldvocab_display.js?v=<?php echo @filemtime(__DIR__ . '/../assets/js/fieldvocab_display.js'); ?>"></script>
+	<script src="../includes/map_search_functions.js?v=<?php echo @filemtime(__DIR__ . '/includes/map_search_functions.js'); ?>"></script>
+	<script src="../includes/tab_builders.js?v=<?php echo @filemtime(__DIR__ . '/includes/tab_builders.js'); ?>"></script>
 	<script src="../includes/strat.js"></script>
 	<script src="../includes/data_model.js"></script>
 	<script src="../includes/sidebar.js"></script>

@@ -107,31 +107,15 @@
 	}
 
 	// Form labels (feature.labels from api/spots.php) applied to a COPY of
-	// the properties: the sidebar reads labels, everything else (symbology,
-	// strat patterns) keeps the stored names. produced = every label set, so
-	// titles keep a label as written apart from a leading capital (D6).
-	var produced = {};
-
+	// the properties (FieldVocabDisplay): the sidebar reads labels, symbology
+	// and the strat patterns keep the stored names.
 	function displayProps(spot) {
 		var props = (spot && spot.properties) || {};
-		if (!spot || !Array.isArray(spot.labels) || !spot.labels.length) return props;
-		var copy = JSON.parse(JSON.stringify(props));
-		spot.labels.forEach(function (pl) {
-			var path = pl[0], o = copy;
-			for (var i = 0; i < path.length - 1; i++) {
-				if (o == null || typeof o !== 'object') return;
-				o = o[path[i]];
-			}
-			if (o == null || typeof o !== 'object' || !(path[path.length - 1] in o)) return;
-			o[path[path.length - 1]] = pl[1];
-			produced[pl[1]] = true;
-		});
-		return copy;
+		return (spot && global.FieldVocabDisplay) ? global.FieldVocabDisplay.copy(props, spot.labels) : props;
 	}
 
 	function titleText(v) {
-		var s = String(v);
-		return produced[s] ? s.charAt(0).toUpperCase() + s.slice(1) : prettyLabel(s);
+		return global.FieldVocabDisplay ? global.FieldVocabDisplay.title(v, prettyLabel) : prettyLabel(v);
 	}
 
 	function renderSidebar(spot) {

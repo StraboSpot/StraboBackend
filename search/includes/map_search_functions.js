@@ -1162,6 +1162,8 @@ var addFeatures = function(id){
 		_.each(result.datasets, function(newds){
 			loadedFeatures.datasets.push(newds);
 		});
+		// tag values as form labels (display only: id, type, spots, features stay as stored)
+		if(window.FieldVocabDisplay && result.tag_labels) result.tags = FieldVocabDisplay.copy(result.tags, result.tag_labels);
 		_.each(result.tags, function(newtag){
 			newtag.datasetid=id;
 			loadedFeatures.tags.push(newtag);
@@ -1265,6 +1267,8 @@ var OLDDDDDDDDDDDaddFeatures = function(id){
 		_.each(result.datasets, function(newds){
 			loadedFeatures.datasets.push(newds);
 		});
+		// tag values as form labels (display only: id, type, spots, features stay as stored)
+		if(window.FieldVocabDisplay && result.tag_labels) result.tags = FieldVocabDisplay.copy(result.tags, result.tag_labels);
 		_.each(result.tags, function(newtag){
 			newtag.datasetid=id;
 			loadedFeatures.tags.push(newtag);
@@ -1353,7 +1357,7 @@ var getCurrentSpot = function(){
 		currentSpot="";
 		_.each(loadedFeatures.features, function (spot) {
 			if(spot.properties.id == clickedMapFeature){
-				currentSpot = spot;
+				currentSpot = window.FieldVocabDisplay ? FieldVocabDisplay.feature(spot) : spot;   // sidebar reads form labels; loadedFeatures keeps the stored names
 			}	
 		});
 		resolve();

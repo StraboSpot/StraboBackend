@@ -151,6 +151,13 @@ function overlay_capture($name, $st, $tx) {
 			if (isset($f['labels'])) { $ov[] = array($f['properties'], $f['labels']); unset($j['features'][$i]['labels']); }
 		}
 	}
+	// legacy viewer feeds also label the project tags they return: tag_labels = [[[index, field], label], ...]
+	if (is_array($j) && isset($j['tag_labels'])) {
+		$tl = array();
+		foreach ($j['tag_labels'] as $e) { array_unshift($e[0], 'tags'); $tl[] = $e; }
+		$ov[] = array(array('tags' => isset($j['tags']) ? $j['tags'] : array()), $tl);
+		unset($j['tag_labels']);
+	}
 	capture($name, is_array($j) ? canon($j) : null, "HTTP $st");
 	$bad = array(); $n = 0;
 	foreach ($ov as $pl) {
@@ -219,7 +226,8 @@ try {
 	@mkdir($doiDir, 0775, true);
 	file_put_contents("$doiDir/data.json", json_encode($doi, JSON_PRETTY_PRINT));   // exactly how build_doi.php writes it
 	list($st, $tx) = http('GET', "/doi/doiproject.php?u=$DOI_UUID", null, 'none');                                capture('js_doiproject', $st === 200 ? canon_text($tx) : null, "HTTP $st");
-	list($st, $tx) = http('GET', "/doi/doisearch.php?u=$DOI_UUID-" . GF_DS_A, null, 'none');                      capture('js_doisearch_a', $st === 200 ? canon_text($tx) : null, "HTTP $st");
+	list($st, $tx) = http('GET', "/doi/doisearch.php?u=$DOI_UUID-" . GF_DS_A, null, 'none');
+	overlay_capture('js_doisearch_a', $st, $tx);
 
 	section('StraboSamples');
 	list($st, $tx) = http('GET', "/samplesdb/sample/977910000301?owner=$OWNER");

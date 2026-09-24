@@ -11,6 +11,7 @@
  */
 
 include("../prepare_connections.php");
+include_once("../includes/fieldvocab/FieldVocab.php");
 
 function median($arr){
 	if($arr){
@@ -144,6 +145,11 @@ foreach($json->spotsDb as $key=>$spot){
 
 		$spot->properties->datasetid = $u;
 		$spot->properties->owner = $owner;
+
+		// Form labels for the sidebar (display only; properties stay as stored, D3)
+		$labels = FieldVocab::displayOverlay($spot->properties);
+		if($labels) $spot->labels = $labels;
+
 		$foundSpots[] = $spot;
 	}
 }
@@ -158,6 +164,11 @@ if(count($imagebasemaps)>0){
 $tags = $json->projectDb->project->tags;
 if($tags == "") $tags = [];
 $out->tags = $tags;
+
+// Form labels of the tag values: [[[index, field], label], ...] (the type stays raw)
+$tagLabels = FieldVocab::displayOverlay(array('tags' => $tags), array('tags:type'));
+foreach($tagLabels as $i => $tl) array_shift($tagLabels[$i][0]);
+if($tagLabels) $out->tag_labels = $tagLabels;
 
 //Relationships (just null for now)
 $out->relationships = [];
