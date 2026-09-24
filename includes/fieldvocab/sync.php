@@ -12,14 +12,16 @@
  *                 validate, write to a temp file, rename over the live map;
  *                 the previous map is kept as field_vocab_map.prev.json.
  *              5. Log to fieldvocab_data/sync.log; mail a change summary on
- *                 change and the error on failure (the live map is kept).
+ *                 change or on new warnings (FieldVocabBuilder::warnings, never
+ *                 blocking) and the error on failure (the live map is kept).
  *
  *              The live map is fieldvocab_data/field_vocab_map.json (see
  *              FieldVocab::dataDir); with no live map yet, the repo baseline
  *              includes/fieldvocab/field_vocab_baseline.json is the merge base.
  *
  *              Mail goes to $fieldvocab_notify (string or array of addresses)
- *              from includes/config.inc.php; unset = log only.
+ *              from includes/config.inc.php; unset = log only. The
+ *              FIELDVOCAB_NOTIFY env var (comma list, empty = none) wins (tests).
  *
  * Usage (inside the container, as www-data on prod):
  *   php includes/fieldvocab/sync.php [--force] [--dry-run] [--quiet]
@@ -113,6 +115,10 @@ try {
 	$from = isset($base['source']['tag']) ? $base['source']['tag'] : 'none';
 	$say(($changes ? count($changes) . ' change(s)' : 'no changes') . " vs $baseName ($from -> $tag)", (bool)$changes);
 	foreach ($changes as $c) $say("  $c", true);
+	// Warnings never block a sync; only ones the previous map did not have are news.
+	$newWarnings = array_values(array_diff(FieldVocabBuilder::warnings($map), $base !== null ? FieldVocabBuilder::warnings($base) : array()));
+	if ($newWarnings) $say(count($newWarnings) . ' new warning(s) (map still used):', true);
+	foreach ($newWarnings as $w) $say("  $w", true);
 
 	if ($dry) {
 		$say('dry run: nothing written');
@@ -125,11 +131,13 @@ try {
 		if (!$toFile && $live !== null) @copy($livePath, $prevPath);
 		if (!rename($tmp, $target)) { @unlink($tmp); throw new Exception("cannot rename $tmp to $target"); }
 		$say("wrote $target (" . strlen($json) . ' bytes)');
-		if (!$toFile && $changes && $live !== null) {
+		if (!$toFile && ($changes || $newWarnings) && $live !== null) {
+			$detail = $changes;
+			if ($newWarnings) $detail = array_merge($detail, array(count($newWarnings) . ' new warning(s), the map is still used:'), $newWarnings);
 			fv_mail("StraboField choice labels updated to $tag", array(
 				"The StraboField choice map was updated from $from to $tag (" . substr($sha, 0, 7) . ').',
 				count($changes) . ' change(s):',
-			), $changes);
+			), $detail);
 		}
 	}
 	fv_log($logPath, $lines, $dry || $toFile);
@@ -231,7 +239,9 @@ function fv_read_dir($dir)
 /** Mail $fieldvocab_notify (if set); a mail failure is logged, never fatal. */
 function fv_mail($subject, array $intro, array $detail)
 {
-	$to = isset($GLOBALS['fieldvocab_notify']) ? (array)$GLOBALS['fieldvocab_notify'] : array();
+	$env = getenv('FIELDVOCAB_NOTIFY');   // tests: wins over config.inc.php; empty = no mail
+	if ($env !== false) $to = array_filter(array_map('trim', explode(',', $env)));
+	else $to = isset($GLOBALS['fieldvocab_notify']) ? (array)$GLOBALS['fieldvocab_notify'] : array();
 	if (!$to) return;
 	require_once dirname(__DIR__) . '/StraboMail.php';
 	$shown = array_slice($detail, 0, 200);

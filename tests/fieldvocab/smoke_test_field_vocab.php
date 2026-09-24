@@ -166,12 +166,14 @@ try {
         array('list_name' => 'L2', 'name' => 'y', 'label' => 'why'),
         array('list_name' => 'L3', 'name' => '0', 'label' => 'zero'),
         array('list_name' => 'L3', 'name' => '1', 'label' => 'one'),
+        array('list_name' => 'L3', 'name' => '2', 'label' => '  '),
     ), 'settings' => array(array('id_string' => 'x'))));
     $ff = FieldVocabBuilder::formFields($form);
     check('formFields: only selects', array_keys($ff) === array('kind', 'many', 'nums'));
     check('formFields: label trimmed', $ff['kind']['choices']['a'] === 'Alpha');
     check('formFields: type + list', $ff['many']['type'] === 'select_multiple' && $ff['many']['list'] === 'L2');
     check('formFields: duplicate name -> ambiguous, not a choice', !isset($ff['many']['choices']['x']) && $ff['many']['ambiguous']['x'] === array('ex', 'ecks'));
+    check('formFields: empty label -> unlabeled, not a choice', !isset($ff['nums']['choices']['2']) && $ff['nums']['unlabeled'] === array('2'));
     $threw = false;
     try { FieldVocabBuilder::formFields(json_encode(array('survey' => array(array('type' => 'select_one NOPE', 'name' => 'z')), 'choices' => array()))); } catch (Exception $e) { $threw = true; }
     check('formFields: missing list throws', $threw);
@@ -230,7 +232,12 @@ try {
     check('validate: tiny map fails (core forms, field floor)', count($v) > 5);
     $bad = $base;
     $bad['forms']['measurement.planar_orientation']['fields']['feature_type']['choices']['zzz'] = 'joint';
-    check('validate: two names with one label fails', (bool)preg_grep('/label "joint" is shared by/', FieldVocabBuilder::validate($bad)));
+    check('two names with one label: still valid (display is fine)', FieldVocabBuilder::validate($bad) === array());
+    check('two names with one label: warning', (bool)preg_grep('/^measurement\.planar_orientation\.feature_type: label "joint" is shared by names /', FieldVocabBuilder::warnings($bad)));
+    $bw = FieldVocabBuilder::warnings($base);
+    check('baseline warnings: label equal to another name (sed.surfaces other)', (bool)preg_grep('/^sed\.surfaces\.type: label "other" \(of other_surf_typ\) is also the name of another choice$/', $bw));
+    check('baseline warnings: duplicate names (tidal_flat, other)', count(preg_grep('/is listed 2 times/', $bw)) === 2);
+    check('baseline warnings: no shared labels, no empty labels', !preg_grep('/is shared by|has no label/', $bw));
     $bad = $base; unset($bad['forms']['sed.lithology']);
     check('validate: missing core form fails', in_array('core form sed.lithology is missing', FieldVocabBuilder::validate($bad), true));
 
@@ -273,10 +280,19 @@ try {
     $tag = $base['source']['tag']; $sha = $base['source']['sha'];
     $run = function ($args) use ($sync, $dataDir) {
         $out = array(); $rc = 0;
-        exec('FIELDVOCAB_DATA_DIR=' . escapeshellarg($dataDir) . ' php ' . escapeshellarg($sync) . ' ' . $args . ' 2>&1', $out, $rc);
+        // Fixture-domain recipient: StraboMail always files it to mail.log, never sends.
+        exec('FIELDVOCAB_NOTIFY=fieldvocab-smoke@test.strabospot.org FIELDVOCAB_DATA_DIR=' . escapeshellarg($dataDir) . ' php ' . escapeshellarg($sync) . ' ' . $args . ' 2>&1', $out, $rc);
         return array($rc, implode("\n", $out));
     };
     $live = "$dataDir/field_vocab_map.json";
+
+    require_once '/srv/app/www/includes/StraboMail.php';
+    $mailLog = StraboMail::logFile();
+    $mailCount = function ($subject) use ($mailLog) {
+        return is_file($mailLog) ? substr_count(file_get_contents($mailLog), "To: fieldvocab-smoke@test.strabospot.org\nSubject: $subject") : 0;
+    };
+    $changeMails0 = $mailCount('StraboField choice labels updated to v9.9.9');
+    $failMails0 = $mailCount('StraboField choice map sync FAILED');
 
     list($rc, $out) = $run("--from-dir=$formsDir --tag=$tag --sha=$sha --dry-run");
     check('dry run: exit 0, no changes vs baseline', $rc === 0 && strpos($out, 'no changes vs repo baseline') !== false);
@@ -300,10 +316,25 @@ try {
     });
     list($rc, $out) = $run("--from-dir=$formsDir --tag=v9.9.9 --sha=" . str_repeat('9', 40));
     check('relabel run: exit 0 + change reported', $rc === 0 && strpos($out, 'label changed: measurement.planar_orientation.feature_type option_13 "joint" -> "joint (fracture)"') !== false);
+    check('relabel run: change mail filed', $mailCount('StraboField choice labels updated to v9.9.9') > $changeMails0);
     check('relabel run: .prev copy of the old live map', is_file("$dataDir/field_vocab_map.prev.json") && FieldVocab::readMapFile("$dataDir/field_vocab_map.prev.json")['source']['tag'] === $tag);
     FieldVocab::setMap(null);
     check('relabel run: new label live', FieldVocab::label($planar, 'feature_type', 'option_13') === 'joint (fracture)' && FieldVocab::source()['tag'] === 'v9.9.9');
     check('relabel run: former label kept', in_array('joint', FieldVocab::map()['forms']['measurement.planar_orientation']['fields']['feature_type']['former_labels']['option_13'], true));
+
+    // A release that adds a shared label: synced (not blocked), warning reported once.
+    $writeForms($base, $formsDir, function ($file, $doc) {
+        if ($file !== 'measurement/planar-orientation.json') return $doc;
+        $doc['choices'][] = array('list_name' => 'L_feature_type', 'name' => 'option_99', 'label' => 'bedding');
+        return $doc;
+    });
+    list($rc, $out) = $run("--from-dir=$formsDir --tag=v9.9.9a --sha=" . str_repeat('7', 40));
+    check('shared-label release: exit 0 (not blocked)', $rc === 0);
+    check('shared-label release: new warning reported', strpos($out, 'new warning(s)') !== false && strpos($out, 'label "bedding" is shared by names') !== false);
+    FieldVocab::setMap(null);
+    check('shared-label release: both names show the label', FieldVocab::label($planar, 'feature_type', 'option_99') === 'bedding' && FieldVocab::label($planar, 'feature_type', 'bedding') === 'bedding');
+    list($rc, $out) = $run("--from-dir=$formsDir --tag=v9.9.9b --sha=" . str_repeat('6', 40));
+    check('same warning next release: not reported again', $rc === 0 && strpos($out, 'new warning(s)') === false);
 
     // A broken release: planar orientation form gone -> fails, live map untouched.
     $before = file_get_contents($live);
@@ -311,6 +342,7 @@ try {
     file_put_contents("$formsDir/index.js", str_replace('planar_orientation:', 'planar_orientation_x:', file_get_contents("$formsDir/index.js")));
     list($rc, $out) = $run("--from-dir=$formsDir --tag=v9.9.10 --sha=" . str_repeat('8', 40));
     check('broken release: exit 1 + reason', $rc === 1 && strpos($out, 'core form measurement.planar_orientation is not in this release') !== false);
+    check('broken release: failure mail filed', $mailCount('StraboField choice map sync FAILED') === $failMails0 + 1);
     check('broken release: live map byte-identical', file_get_contents($live) === $before);
     check('broken release: no temp files left', count(glob("$dataDir/*.tmp.*")) === 0);
     check('broken release: failure in sync.log', strpos(file_get_contents("$dataDir/sync.log"), 'FAILED') !== false);

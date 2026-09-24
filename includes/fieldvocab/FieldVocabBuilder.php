@@ -26,6 +26,7 @@
  *                          "list": "<KoBo list_name>",
  *                          "choices": {name: label},                 // current release
  *                          "ambiguous": {name: [label, ...]},        // same name twice in one list: never translated
+ *                          "unlabeled": [name, ...],                 // empty label: never translated
  *                          "retired_choices": {name: {label, last_seen}},
  *                          "former_labels": {name: [label, ...]},    // labels a name used to have
  *                          "retired": {last_seen}                    // field gone from the form
@@ -43,9 +44,11 @@
  *                  form a previous map knew, marked retired with the last
  *                  tag that had it, so data written by older app builds
  *                  still translates.
- *                - validate() refuses a map that lost a core form, has too
- *                  few select fields, or has two names with one label in a
- *                  field (the sync then keeps the last good map).
+ *                - validate() refuses a map that lost a core form or has too
+ *                  few select fields (the sync then keeps the last good map);
+ *                  warnings() lists oddities that do not block a sync (two
+ *                  names with one label, a label equal to another name,
+ *                  duplicate names, empty labels).
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -162,14 +165,17 @@ class FieldVocabBuilder
 			$seen = array();   // name => [labels]
 			foreach ($lists[$parts[1]] as $pair) $seen[$pair[0]][] = $pair[1];
 			$ambiguous = array();
+			$unlabeled = array();
 			foreach ($seen as $name => $labels) {
 				$name = (string)$name;   // PHP int-coerces numeric keys ("5" -> 5)
 				$labels = array_values(array_unique($labels));
-				if (count($labels) === 1) $choices[$name] = $labels[0];
-				else $ambiguous[$name] = $labels;
+				if (count($labels) > 1) $ambiguous[$name] = $labels;
+				elseif ($labels[0] === '') $unlabeled[] = $name;
+				else $choices[$name] = $labels[0];
 			}
 			$f = array('type' => $parts[0], 'list' => $parts[1], 'choices' => $choices);
 			if ($ambiguous) $f['ambiguous'] = $ambiguous;
+			if ($unlabeled) $f['unlabeled'] = $unlabeled;
 			$fields[(string)$row['name']] = $f;
 		}
 		return $fields;
@@ -316,7 +322,10 @@ class FieldVocabBuilder
 	}
 
 	/**
-	 * Check a map before it replaces the live one.
+	 * Check a map before it replaces the live one. Only problems that would
+	 * make the map unusable fail it; oddities that still translate correctly
+	 * name -> label are warnings() instead, so one app-side quirk never
+	 * freezes every later update.
 	 *
 	 * @param array $map
 	 * @return string[] problems (empty = valid)
@@ -332,23 +341,52 @@ class FieldVocabBuilder
 			elseif (isset($map['forms'][$k]['retired'])) $errors[] = "core form $k is not in this release";
 		}
 		$selects = 0;
-		foreach ($map['forms'] as $fkey => $form) {
+		foreach ($map['forms'] as $form) {
 			if (isset($form['retired'])) continue;
-			foreach ($form['fields'] as $fname => $f) {
-				if (isset($f['retired'])) continue;
-				$selects++;
-				$byLabel = array();
-				foreach ($f['choices'] as $name => $label) {
-					if ($label === '') $errors[] = "$fkey.$fname: choice $name has an empty label";
-					$byLabel[$label][] = (string)$name;
-				}
-				foreach ($byLabel as $label => $names) {
-					if (count($names) > 1) $errors[] = "$fkey.$fname: label \"$label\" is shared by " . implode(', ', $names);
-				}
+			foreach ($form['fields'] as $f) {
+				if (!isset($f['retired'])) $selects++;
 			}
 		}
 		if ($selects < self::MIN_SELECT_FIELDS) $errors[] = "only $selects select fields (expected at least " . self::MIN_SELECT_FIELDS . ')';
 		return $errors;
+	}
+
+	/**
+	 * Oddities in the current (non-retired) choice lists that do not block a
+	 * sync but matter for the reverse direction (label -> name, Template
+	 * Wizard import) and are worth a look:
+	 *   - two names with one label in a field (both display the same text)
+	 *   - a label equal to a different choice's name in the same field
+	 *   - the same name listed twice with different labels (never translated)
+	 *   - a choice with an empty label (never translated)
+	 *
+	 * @param array $map
+	 * @return string[]
+	 */
+	public static function warnings(array $map)
+	{
+		$out = array();
+		foreach ($map['forms'] as $fkey => $form) {
+			if (isset($form['retired'])) continue;
+			foreach ($form['fields'] as $fname => $f) {
+				if (isset($f['retired'])) continue;
+				$byLabel = array();
+				foreach ($f['choices'] as $name => $label) $byLabel[$label][] = (string)$name;
+				foreach ($byLabel as $label => $names) {
+					if (count($names) > 1) $out[] = "$fkey.$fname: label \"$label\" is shared by names " . implode(', ', $names);
+				}
+				foreach ($f['choices'] as $name => $label) {
+					if ((string)$label !== (string)$name && isset($f['choices'][$label])) $out[] = "$fkey.$fname: label \"$label\" (of $name) is also the name of another choice";
+				}
+				foreach (isset($f['ambiguous']) ? $f['ambiguous'] : array() as $name => $labels) {
+					$out[] = "$fkey.$fname: name $name is listed " . count($labels) . ' times (' . implode(' | ', $labels) . '), shown raw';
+				}
+				foreach (isset($f['unlabeled']) ? $f['unlabeled'] : array() as $name) {
+					$out[] = "$fkey.$fname: choice $name has no label, shown raw";
+				}
+			}
+		}
+		return $out;
 	}
 
 	/**
