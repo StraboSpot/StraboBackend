@@ -1475,6 +1475,22 @@ include("includes/mheader.php");
 </div>
 
 <script type="application/json" id="sd-data"><?php echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
+<?php
+// Display labels (Field choice translation Phase 7): material / purpose from
+// the curated samples list (D8), the Field link card's in-place-ness from the
+// synced StraboField form. Stored values stay raw everywhere else.
+require_once __DIR__ . '/includes/fieldvocab/FieldVocab.php';
+$sdVocab = samples_vocab_display_maps();
+$sdInplace = array();
+$sdFvMap = FieldVocab::map();
+if (isset($sdFvMap['forms']['general.samples']['fields']['inplaceness_of_sample'])) {
+    $sdInpField = $sdFvMap['forms']['general.samples']['fields']['inplaceness_of_sample'];
+    foreach (isset($sdInpField['retired_choices']) ? $sdInpField['retired_choices'] : array() as $n => $r) { $sdInplace[(string)$n] = $r['label']; }
+    foreach ($sdInpField['choices'] as $n => $l) { $sdInplace[(string)$n] = $l; }
+}
+$sdVocab['inplaceness'] = (object)$sdInplace;
+?>
+<script type="application/json" id="sd-vocab-data"><?php echo json_encode($sdVocab, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <script type="application/json" id="sd-share-url-data"><?php echo json_encode($shareUrl, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <script type="text/javascript">
 (function() {
@@ -1494,6 +1510,14 @@ include("includes/mheader.php");
         return String(s)
             .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+    // Stored vocab value -> display label (material / purpose / inplaceness);
+    // unknown values (free text, Experimental) print as stored.
+    var vocabMaps = JSON.parse(document.getElementById('sd-vocab-data').textContent || '{}');
+    function vocabLabel(kind, v) {
+        if (v == null || v === '') return v;
+        var m = vocabMaps[kind] || {};
+        return Object.prototype.hasOwnProperty.call(m, String(v)) ? m[String(v)] : v;
     }
     function parsePgTimestamp(ts) {
         // Postgres timestamptz renders as "YYYY-MM-DD HH:MM:SS.ffffff-04"
@@ -1602,8 +1626,8 @@ include("includes/mheader.php");
     metaHtml += field('Sample ID',                    sample.name || sample.id);
     metaHtml += field('Sample Owner',                 owner && owner.name);
     metaHtml += field('Last Updated',                 fmtDate(sample.modified_at));
-    metaHtml += field('Material Type',                sample.display_sample_type);
-    metaHtml += field('Sample Purpose',               sample.display_sample_purpose);
+    metaHtml += field('Material Type',                vocabLabel('material', sample.display_sample_type));
+    metaHtml += field('Sample Purpose',               vocabLabel('purpose', sample.display_sample_purpose));
     if (sample.latitude !== null && sample.longitude !== null) {
         metaHtml += field('Current Sample Location', sample.latitude.toFixed(6) + ', ' + sample.longitude.toFixed(6));
     }
@@ -1814,8 +1838,8 @@ include("includes/mheader.php");
                 html += '<div class="sd-family-tooltip-meta">id: ' + escapeHtml(node.parent_sample_id || '?') + '</div>';
             } else if (node) {
                 html += '<div class="sd-family-tooltip-name">' + escapeHtml(node.name || node.id) + '</div>';
-                var t = node.display_sample_type || '—';
-                var p = node.display_sample_purpose || '—';
+                var t = vocabLabel('material', node.display_sample_type) || '—';
+                var p = vocabLabel('purpose', node.display_sample_purpose) || '—';
                 html += '<div class="sd-family-tooltip-meta">' + escapeHtml(t) + ' / ' + escapeHtml(p) + '</div>';
                 if (key !== 'focus') {
                     html += '<div class="sd-family-tooltip-hint">Click to explore</div>';
@@ -1968,10 +1992,16 @@ include("includes/mheader.php");
         fieldsHtml += field('Reference ID', link.reference_id);
         if (meta.project_name)  fieldsHtml += field('Project',  meta.project_name);
         if (meta.dataset_name)  fieldsHtml += field('Dataset',  meta.dataset_name);
-        if (subData.material_type)  fieldsHtml += field('Material Type',  subData.material_type);
+        // Field stores material_type / inplaceness_of_sample / sample_notes,
+        // Micro materialtype (same names as Field); the old keys stay as a
+        // fallback.
+        var subMaterial = subData.material_type || subData.materialtype;
+        var subInplace  = subData.inplaceness_of_sample || subData.inplaceness;
+        var subNotes    = subData.notes || subData.sample_notes;
+        if (subMaterial)            fieldsHtml += field('Material Type',  vocabLabel('material', subMaterial));
         if (subData.sample_id_name) fieldsHtml += field('Sample Label',   subData.sample_id_name);
-        if (subData.inplaceness)    fieldsHtml += field('In-place-ness',  subData.inplaceness);
-        if (subData.notes)          fieldsHtml += field('Notes',          subData.notes);
+        if (subInplace)             fieldsHtml += field('In-place-ness',  link.subsystem === 'field' ? vocabLabel('inplaceness', subInplace) : subInplace);
+        if (subNotes)               fieldsHtml += field('Notes',          subNotes);
         if (!fieldsHtml) fieldsHtml = '<div style="opacity:.6">No subsystem-specific fields stored.</div>';
 
         return ''
@@ -2694,7 +2724,7 @@ include("includes/mheader.php");
         $emParentResults.innerHTML = hits.map(function(s) {
             return '<div class="em-parent-hit" data-id="' + escapeHtml(s.id) + '" data-uk="' + s.userpkey + '">'
                  + '<strong>' + escapeHtml(s.name || s.id) + '</strong>'
-                 + (s.display_sample_type ? ' <span style="opacity:.7">' + escapeHtml(s.display_sample_type) + '</span>' : '')
+                 + (s.display_sample_type ? ' <span style="opacity:.7">' + escapeHtml(vocabLabel('material', s.display_sample_type)) + '</span>' : '')
                  + '</div>';
         }).join('');
         $emParentResults.hidden = false;
@@ -2879,8 +2909,8 @@ include("includes/mheader.php");
         metaHtml += field('Sample ID',                    sample.name || sample.id);
         metaHtml += field('Sample Owner',                 owner && owner.name);
         metaHtml += field('Last Updated',                 fmtDate(sample.modified_at));
-        metaHtml += field('Material Type',                sample.display_sample_type);
-        metaHtml += field('Sample Purpose',               sample.display_sample_purpose);
+        metaHtml += field('Material Type',                vocabLabel('material', sample.display_sample_type));
+        metaHtml += field('Sample Purpose',               vocabLabel('purpose', sample.display_sample_purpose));
         if (sample.latitude !== null && sample.longitude !== null) {
             metaHtml += field('Current Sample Location', sample.latitude.toFixed(6) + ', ' + sample.longitude.toFixed(6));
         }
