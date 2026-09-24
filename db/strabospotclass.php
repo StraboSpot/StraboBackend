@@ -1986,7 +1986,8 @@ class StraboSpot
 
 		if($range == "envelope"){
 			//build polygon and make row for search
-			$parts = explode(",", $envelope);
+			// Envelope values reach SQL inside a WKT string: numbers only.
+			$parts = array_map('floatval', array_pad(explode(",", (string)$envelope), 4, 0));
 			$left = $parts[0];
 			$top = $parts[1];
 			$right = $parts[2];
@@ -2008,19 +2009,22 @@ class StraboSpot
 		$dsidparts = [];
 
 		foreach($ids as $thisid){
-			$parts = explode("-", $thisid);
+			// Each id is "userpkey-datasetid" or a bare dataset id, straight from the request and
+			// interpolated into SQL below: digits only, anything else is skipped.
+			if(!preg_match('/^[0-9]{1,20}(-[0-9]{1,20})?$/', trim($thisid))) continue;
+			$parts = explode("-", trim($thisid));
 			if($parts[1]!=""){
-				$partuserpkey = $parts[0];
+				$partuserpkey = (int)$parts[0];
 				$partdatasetid = $parts[1];
 				$dsidparts[] = "( dataset.strabo_dataset_id = '$partdatasetid' and dataset.user_pkey = $partuserpkey)";
 			}else{
 				$partdatasetid = $parts[0];
-				$dsidparts[] = "( dataset.strabo_dataset_id = $partdatasetid )";
+				$dsidparts[] = "( dataset.strabo_dataset_id = '$partdatasetid' )";
 			}
 
 		}
 
-		$dsidparts = implode(" or ", $dsidparts);
+		$dsidparts = count($dsidparts) ? implode(" or ", $dsidparts) : "false";
 
 		$spotsquery = "select
 				spot.spotjson,
@@ -4977,19 +4981,22 @@ public function getSpotName($id){
 		$dsidparts = [];
 
 		foreach($ids as $thisid){
-			$parts = explode("-", $thisid);
+			// "userpkey-datasetid" or a bare dataset id from the request, interpolated into Cypher:
+			// digits only, anything else is skipped.
+			if(!preg_match('/^[0-9]{1,20}(-[0-9]{1,20})?$/', trim($thisid))) continue;
+			$parts = explode("-", trim($thisid));
 			if($parts[1]!=""){
-				$partuserpkey = $parts[0];
-				$partdatasetid = $parts[1];
+				$partuserpkey = (int)$parts[0];
+				$partdatasetid = (int)$parts[1];
 				$dsidparts[] = "( d.id = $partdatasetid and d.userpkey = $partuserpkey)";
 			}else{
-				$partdatasetid = $parts[0];
+				$partdatasetid = (int)$parts[0];
 				$dsidparts[] = "( d.id = $partdatasetid )";
 			}
 
 		}
 
-		$dsidparts = implode(" or ", $dsidparts);
+		$dsidparts = count($dsidparts) ? implode(" or ", $dsidparts) : "false";
 
 		$querystring = "MATCH (n:Project)-[HAS_DATASET]->(d:Dataset) WHERE 1=1 and ($dsidparts) RETURN distinct(n);";
 
