@@ -964,6 +964,7 @@ include("includes/mheader.php");
 </div>
 
 <script type="application/json" id="ms-data"><?php echo json_encode($samples, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
+<script type="application/json" id="ms-vocab-data"><?php echo json_encode(samples_vocab_display_maps(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <script type="application/json" id="ms-invitations-data"><?php echo json_encode(!empty($invitations) ? $invitations : array(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 
 <script type="text/javascript">
@@ -1148,6 +1149,14 @@ include("includes/mheader.php");
             .replace(/"/g, '&quot;')
             .replace(/'/g, '&#039;');
     }
+    // Stored material / purpose value -> display label (Field choice
+    // translation Phase 7); free text and Experimental values print as stored.
+    var vocabMaps = JSON.parse(document.getElementById('ms-vocab-data').textContent || '{}');
+    function vocabLabel(kind, v) {
+        if (v == null || v === '') return v;
+        var m = vocabMaps[kind] || {};
+        return Object.prototype.hasOwnProperty.call(m, String(v)) ? m[String(v)] : v;
+    }
     function highlight(text, q) {
         if (!q) return escapeHtml(text);
         var safe = escapeHtml(text);
@@ -1208,13 +1217,14 @@ include("includes/mheader.php");
         var hay = [
             sample.id, sample.name, sample.description, sample.notes, sample.igsn,
             sample.display_sample_type, sample.display_sample_purpose,
+            vocabLabel('material', sample.display_sample_type), vocabLabel('purpose', sample.display_sample_purpose),
         ].filter(Boolean).join(' ').toLowerCase();
         return hay.indexOf(q.toLowerCase()) !== -1;
     }
     function sortFn(mode) {
         if (mode === 'modified_asc')  return function(a, b) { return (a.modified_at || '').localeCompare(b.modified_at || ''); };
-        if (mode === 'purpose')       return function(a, b) { return (a.display_sample_purpose || '').localeCompare(b.display_sample_purpose || ''); };
-        if (mode === 'type')          return function(a, b) { return (a.display_sample_type    || '').localeCompare(b.display_sample_type    || ''); };
+        if (mode === 'purpose')       return function(a, b) { return (vocabLabel('purpose', a.display_sample_purpose) || '').localeCompare(vocabLabel('purpose', b.display_sample_purpose) || ''); };
+        if (mode === 'type')          return function(a, b) { return (vocabLabel('material', a.display_sample_type) || '').localeCompare(vocabLabel('material', b.display_sample_type) || ''); };
         if (mode === 'id_asc')        return function(a, b) { return (a.name || a.id || '').localeCompare(b.name || b.id || ''); };
         return function(a, b) { return (b.modified_at || '').localeCompare(a.modified_at || ''); };  // modified_desc default
     }
@@ -1276,8 +1286,8 @@ include("includes/mheader.php");
         html += '      <div class="ms-sample-id">' + highlight(sample.name || sample.id, q) + '</div>';
         html += '      ' + pillHtml;
         html += '      ' + parentChip;
-        html += '      <div class="ms-row"><strong>Material:</strong> ' + highlight(sample.display_sample_type || '—', q) + '</div>';
-        html += '      <div class="ms-row"><strong>Purpose:</strong> ' + highlight(sample.display_sample_purpose || '—', q) + '</div>';
+        html += '      <div class="ms-row"><strong>Material:</strong> ' + highlight(vocabLabel('material', sample.display_sample_type) || '—', q) + '</div>';
+        html += '      <div class="ms-row"><strong>Purpose:</strong> ' + highlight(vocabLabel('purpose', sample.display_sample_purpose) || '—', q) + '</div>';
         html += '      <div class="ms-row"><strong>Updated:</strong> ' + fmtDate(sample.modified_at) + '</div>';
         html += '      <a class="ms-view-btn" href="' + escapeHtml(viewSampleHref(sample)) + '">View Sample</a>';
         html += '    </div>';
@@ -1293,7 +1303,7 @@ include("includes/mheader.php");
                 children.forEach(function(child) {
                     html += '<div class="ms-child-row">';
                     html += '<span class="ms-child-id">' + escapeHtml(child.name || child.id) + '</span>';
-                    html += '<span style="opacity:.7">' + escapeHtml(child.display_sample_type || '—') + ' / ' + escapeHtml(child.display_sample_purpose || '—') + '</span>';
+                    html += '<span style="opacity:.7">' + escapeHtml(vocabLabel('material', child.display_sample_type) || '—') + ' / ' + escapeHtml(vocabLabel('purpose', child.display_sample_purpose) || '—') + '</span>';
                     html += '<span style="opacity:.7">Updated ' + escapeHtml(fmtDate(child.modified_at)) + '</span>';
                     html += '<a class="ms-view-btn" href="' + escapeHtml(viewSampleHref(child)) + '">View Sample</a>';
                     html += '</div>';
@@ -1477,7 +1487,7 @@ include("includes/mheader.php");
         $parentResults.innerHTML = hits.map(function(s) {
             return '<div class="ms-parent-hit" data-id="' + escapeHtml(s.id) + '" data-uk="' + s.userpkey + '">'
                  + '<strong>' + escapeHtml(s.name || s.id) + '</strong>'
-                 + (s.display_sample_type ? ' <span style="opacity:.7">' + escapeHtml(s.display_sample_type) + '</span>' : '')
+                 + (s.display_sample_type ? ' <span style="opacity:.7">' + escapeHtml(vocabLabel('material', s.display_sample_type)) + '</span>' : '')
                  + '</div>';
         }).join('');
         $parentResults.hidden = false;

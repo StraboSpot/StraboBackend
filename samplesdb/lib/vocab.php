@@ -108,6 +108,29 @@ function samples_vocab_material_flat()
 }
 
 /**
+ * Display maps for the samples pages (My Samples, Sample Overview): stored
+ * value => label for Material Type and Sampling Purpose. The spine columns
+ * hold the subsystem names (intact_rock, fabric___micro); the pages print
+ * these labels and keep the raw value for edit selects and anything the
+ * map does not know (free text, Experimental values). Decision D8 of the
+ * Field choice translation audit: this curated Title Case list stays the
+ * cross-system label source; tests/fieldvocab/smoke_test_samples_vocab.php
+ * checks it against the synced StraboField form labels.
+ *
+ * Returned as objects so an all-numeric key set still encodes as a JSON
+ * object, never a list.
+ *
+ * @return array{material: object, purpose: object}
+ */
+function samples_vocab_display_maps()
+{
+    return array(
+        'material' => (object)samples_vocab_material_flat(),
+        'purpose'  => (object)samples_vocab_sample_purposes(),
+    );
+}
+
+/**
  * Case-insensitive resolver: accepts either a storage value or a display
  * label and returns the canonical storage value, or NULL when the input
  * matches neither. Shared by both vocab columns on the tabular import path.
