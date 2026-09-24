@@ -1,0 +1,2 @@
+# Test suites run from the CLI only (docker exec strabo-php php ...): never served or executed over HTTP
+Require all denied
