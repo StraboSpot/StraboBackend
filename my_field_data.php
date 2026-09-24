@@ -165,6 +165,9 @@ include("includes/mheader.php");
 			case "geologic_units":
 				window.location='/project_geologic_units?p='+pid;
 				break;
+			case "template_wizard":
+				window.location='/TemplateWizard/review.php?project_id='+pid;
+				break;
 		}
 	}
 
@@ -626,6 +629,7 @@ if(count($projectrows)==0){
 												<select class="myDataSelect" id="pdl-<?php echo $projectid?>" onChange="doProjectDownload(<?php echo $projectid?>,'<?php echo $dropdown_projectname?>');">
 													<option value="" style="display:none">Options...</option>
 													<option value="edit">View/Edit/Add Data</option>
+													<option value="template_wizard">Add Data with Template Wizard</option>
 													<option value="field">Download/Share StraboMobile Project File</option>
 													<option value="doi">Get DOI for Project</option>
 <?php

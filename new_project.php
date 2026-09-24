@@ -176,7 +176,10 @@ if($_POST['submit']!=""){
 	<?php
 	}else{
 	?>
-	<a href="my_field_data">Continue...</a>
+	<ul class="actions">
+		<li><a href="/TemplateWizard/review.php?project_id=<?php echo (int)$strabo_project_id?>" class="button primary">Add Data with Template Wizard</a></li>
+		<li><a href="my_field_data" class="button">Continue...</a></li>
+	</ul>
 	<?php
 	}
 	?>
