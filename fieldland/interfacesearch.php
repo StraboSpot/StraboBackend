@@ -14,6 +14,11 @@
 session_start();
 
 $dsids = $_GET['dsids'];
+// "<owner pkey>-<dataset id>" or empty (dataset-level search); both parts go into SQL below
+if($dsids != "" && !preg_match('/^[0-9]+-[0-9]+$/', $dsids)){
+	http_response_code(400);
+	exit("Invalid dsids.");
+}
 
 //$_SESSION[userpkey] => 3;
 
