@@ -38,7 +38,7 @@
  *   Exit codes: 0 ok or nothing to do, 1 failure (live map untouched), 2 usage.
  *
  *   Prod host crontab (nightly):
- *   15 3 * * * docker exec -u www-data strabo-php php /srv/app/www/includes/fieldvocab/sync.php --quiet >> /var/log/strabo_fieldvocab.log 2>&1
+ *   15 3 * * * sudo docker exec -u www-data strabo-php php /srv/app/www/includes/fieldvocab/sync.php --quiet >> /var/log/strabo_fieldvocab.log 2>&1
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
