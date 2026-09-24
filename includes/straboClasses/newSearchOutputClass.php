@@ -409,6 +409,9 @@ class newSearchOutputClass
 
 		unset($spot['original_geometry']);
 
+		// Field choice translation: shapefile attributes carry form labels
+		$spot['properties'] = FieldVocab::displayProperties($spot['properties']);
+
 		if($spot['properties']['orientation_data']){
 			$orientations = $this->gatherOrientations($spot['properties']['orientation_data']);
 			foreach($orientations as $key=>$value){
@@ -477,7 +480,7 @@ class newSearchOutputClass
 
 				if($found == "yes"){
 					if($tag->type=="geologic_unit"){
-						foreach($tag as $key=>$value){
+						foreach(FieldVocab::displayTag($tag) as $key=>$value){
 							if($key != "date" && $key != "spots" && $key != "features" && $key != "id" ){
 								$spot['properties']['ru_'.$key]=$value;
 							}
@@ -1452,6 +1455,8 @@ class newSearchOutputClass
 				//write data
 				$rownum=4;
 				foreach($data['features'] as $feature){
+					// Field choice translation: cells carry form labels, translated in place (no extra columns)
+					$feature['properties'] = FieldVocab::displayProperties($feature['properties']);
 
 					//use geoPHP to get WKT
 					$mygeojson=$feature['geometry'];
@@ -1780,7 +1785,7 @@ class newSearchOutputClass
 
 					$rownum = 3;
 					foreach($this->alltags as $tag){
-						foreach($tag as $key=>$value){
+						foreach(FieldVocab::displayTag($tag) as $key=>$value){   // Tag Details cells = form labels
 							if($key!="id" && $key!="spots" && $key!="features"){
 								if(is_array($value)){
 									$showvalue = implode(",", $value);

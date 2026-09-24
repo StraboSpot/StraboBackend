@@ -14,6 +14,7 @@
 include("logincheck.php");
 include("prepare_connections.php");
 include_once("includes/straboSVG.php");
+require_once("includes/fieldvocab/FieldVocab.php");
 
 ini_set('max_execution_time', '300'); //300 seconds = 5 minutes
 
@@ -71,9 +72,11 @@ foreach($allspots as $spot){
 		$newSpot->unitBase = $min / 20;
 		$newSpot->unitTop = $max / 20;
 
-		$newSpot->unitThickness = $spot['properties']['sed']->interval->interval_thickness . " " . $spot['properties']['sed']->interval->thickness_units;
+		// Field choice translation: units + lithology as form labels ("" doubled for the CSV quoting)
+		$dsed = FieldVocab::displayProperties($spot['properties'])['sed'];
+		$newSpot->unitThickness = str_replace('"', '""', $dsed->interval->interval_thickness . " " . $dsed->interval->thickness_units);
 
-		$newSpot->primaryLithology = $spot['properties']['sed']->lithologies[0]->primary_lithology;
+		$newSpot->primaryLithology = str_replace('"', '""', (string)$dsed->lithologies[0]->primary_lithology);
 
 		$csvSpots[] = $newSpot;
 	}
