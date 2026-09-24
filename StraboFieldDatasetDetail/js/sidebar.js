@@ -106,8 +106,36 @@
 		});
 	}
 
-	function renderSidebar(spot) {
+	// Form labels (feature.labels from api/spots.php) applied to a COPY of
+	// the properties: the sidebar reads labels, everything else (symbology,
+	// strat patterns) keeps the stored names. produced = every label set, so
+	// titles keep a label as written apart from a leading capital (D6).
+	var produced = {};
+
+	function displayProps(spot) {
 		var props = (spot && spot.properties) || {};
+		if (!spot || !Array.isArray(spot.labels) || !spot.labels.length) return props;
+		var copy = JSON.parse(JSON.stringify(props));
+		spot.labels.forEach(function (pl) {
+			var path = pl[0], o = copy;
+			for (var i = 0; i < path.length - 1; i++) {
+				if (o == null || typeof o !== 'object') return;
+				o = o[path[i]];
+			}
+			if (o == null || typeof o !== 'object' || !(path[path.length - 1] in o)) return;
+			o[path[path.length - 1]] = pl[1];
+			produced[pl[1]] = true;
+		});
+		return copy;
+	}
+
+	function titleText(v) {
+		var s = String(v);
+		return produced[s] ? s.charAt(0).toUpperCase() + s.slice(1) : prettyLabel(s);
+	}
+
+	function renderSidebar(spot) {
+		var props = displayProps(spot);
 		var sections = buildSections(spot, props);
 
 		var html = '';
@@ -296,7 +324,7 @@
 	}
 
 	function orientationLabel(o, idx) {
-		var type = o.feature_type ? prettyLabel(o.feature_type) : (o.type ? prettyLabel(o.type) : 'Orientation');
+		var type = o.feature_type ? titleText(o.feature_type) : (o.type ? prettyLabel(o.type) : 'Orientation');
 		return type + ' ' + (idx + 1);
 	}
 
@@ -339,7 +367,7 @@
 		var html = '';
 		arr.forEach(function (item, idx) {
 			var title = (item && (item.label || item.type || item.name))
-				? prettyLabel(item.label || item.type || item.name)
+				? titleText(item.label || item.type || item.name)
 				: (itemLabel + ' ' + (idx + 1));
 			html += '<div class="ds-item">';
 			html += '  <div class="ds-item-title">' + escapeHtml(title) + '</div>';

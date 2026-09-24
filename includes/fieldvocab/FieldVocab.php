@@ -295,6 +295,41 @@ class FieldVocab
 	}
 
 	/**
+	 * The display copy as a sparse overlay for JS viewers that keep the raw
+	 * properties for symbology: [[path, label], ...] where path is the list
+	 * of keys / list indices down to one translated value, e.g.
+	 * [["orientation_data", 0, "feature_type"], "joint"]. Empty when nothing
+	 * translates. The viewer clones the raw properties and sets each path.
+	 *
+	 * @param array|object $props
+	 * @param string[]     $except  as displayProperties()
+	 * @return array
+	 */
+	public static function displayOverlay($props, array $except = array())
+	{
+		$out = array();
+		self::diffInto($props, self::displayProperties($props, $except), array(), $out);
+		return $out;
+	}
+
+	private static function diffInto($raw, $disp, array $path, array &$out)
+	{
+		if (is_object($raw)) $raw = (array)$raw;
+		if (is_object($disp)) $disp = (array)$disp;
+		if (is_array($raw) && is_array($disp)) {
+			foreach ($raw as $k => $v) {
+				if (!array_key_exists($k, $disp)) continue;
+				$p = $path;
+				$p[] = self::isList($raw) ? (int)$k : (string)$k;
+				self::diffInto($v, $disp[$k], $p, $out);
+			}
+			return;
+		}
+		// a changed string only (an int 4 whose label is "4" is no translation)
+		if (is_string($disp) && (is_string($raw) || is_int($raw) || is_float($raw)) && (string)$raw !== $disp) $out[] = array($path, $disp);
+	}
+
+	/**
 	 * A translated copy of one project tag / geologic unit (display only).
 	 *
 	 * @param array|object $tag

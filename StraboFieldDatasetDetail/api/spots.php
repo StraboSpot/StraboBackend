@@ -18,6 +18,12 @@
  *                  dataset: { id, name, project_id, project_name, owner_pkey, is_public }
  *                }
  *
+ *              Feature properties stay exactly as stored (symbology.js and the
+ *              strat patterns key on the raw choice names). A feature whose
+ *              choice values have form labels also carries
+ *              labels: [[path, label], ...] (FieldVocab::displayOverlay); the
+ *              sidebar applies it to a copy for display only.
+ *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
  * @copyright  2026 StraboSpot
@@ -34,6 +40,7 @@ include 'neodb.php';
 include 'db/strabospotclass.php';
 include_once 'includes/geophp/geoPHP.inc';
 include_once 'includes/UUID.php';
+include_once 'includes/fieldvocab/FieldVocab.php';
 
 $geoPHP = new geoPHP;
 
@@ -141,6 +148,10 @@ if ($spot_rows) {
 		if ($spot_key !== '' && isset($tag_map[$spot_key])) {
 			$feature['properties']['tags'] = $tag_map[$spot_key];
 		}
+
+		// Form labels for the sidebar (the tag type picks the section: raw)
+		$labels = FieldVocab::displayOverlay($feature['properties'], array('tags:type'));
+		if ($labels) $feature['labels'] = $labels;
 
 		// Only geographic spots contribute to the map envelope. Spots that live
 		// on an image basemap or strat section are in pixel space.
