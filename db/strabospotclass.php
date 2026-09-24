@@ -1595,8 +1595,9 @@ class StraboSpot
 
 	public function getProjectIdFromSpotId($spotid){
 
+		$spotid = (int)$spotid;
 		$projectid = $this->neodb->get_var("match (p:Project {userpkey:$this->userpkey})-[:HAS_DATASET]->(d:Dataset)-[HAS_SPOT]->(s:Spot {id:$spotid,userpkey:$this->userpkey}) return p.id");
-		return $datasetid;
+		return $projectid;
 
 	}
 
@@ -5794,7 +5795,13 @@ public function getSpotName($id){
 	public function setProjectCenter($projectid, $ownerPkey = null){
 		//gathers geometries for project and calculates center
 		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
-		$ownerPkey = $ownerPkey ?? $this->userpkey;
+		$ownerPkey = (int)($ownerPkey ?? $this->userpkey);
+		// Both ids are interpolated into Cypher and SQL below. An empty or non-numeric project id
+		// (e.g. a lookup that found nothing) used to build invalid Cypher and fatal the request.
+		if(!preg_match('/^[0-9]{1,20}$/', trim((string)$projectid)) || $ownerPkey <= 0){
+			return;
+		}
+		$projectid = (int)$projectid;
 
 		$pointarray = array();
 

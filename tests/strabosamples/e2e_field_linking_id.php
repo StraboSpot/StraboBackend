@@ -233,7 +233,9 @@ $r = http('POST', "/db/datasetspots/$datasetId", bulkBody(array(richFeat($spotRi
 $r = http('GET', "/samplesdb/sample/$linkId", null);
 check("re-linked", $r['status'] === 200 && fieldLinkRefs($r['json']) === array((string)$spotRich));
 $r = http('DELETE', "/db/feature/$spotRich", null);
-check("spot delete 2xx", $r['status'] >= 200 && $r['status'] < 300);
+// 204 exactly: a PHP fatal after the delete (09-24: getProjectIdFromSpotId returned NULL ->
+// setProjectCenter built invalid Cypher) still came back as 200 with an error page as the body.
+check("spot delete 204 with no error body", $r['status'] === 204 && stripos($r['body'], 'error') === false);
 $r = http('GET', "/samplesdb/sample/$linkId", null);
 check("linked sample survives the spot delete, field link gone",
     $r['status'] === 200 && fieldLinkRefs($r['json']) === array());
