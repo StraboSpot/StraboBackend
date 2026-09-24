@@ -51,7 +51,7 @@ $row = $db->get_row_prepared("select
 							user_pkey,
 							to_char(date_created, 'Mon DD, YYYY HH12:MIAM OF (TZ)') as date_created
 
-							from dois where uuid = %s", [$uuid]);
+							from dois where uuid = $1", [$uuid]);
 
 
 //$uuid = $row->uuid;
