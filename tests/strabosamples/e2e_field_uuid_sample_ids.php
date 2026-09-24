@@ -264,14 +264,16 @@ $row = spineRow($db, $sampleE_num, $ownerPkey);
 check("E no empty spine row materialized", $row === null || $row === false);
 
 // =========================================================================
-echo "=== F: remove mirror — stub-carrying parent delete leaves rich row ===\n";
+echo "=== F: remove mirror, stub-carrying parent delete leaves rich row ===\n";
+// DELETE /db/feature answers 204. It used to answer 200 only because a PHP fatal after the
+// delete (fixed 09-24, getProjectIdFromSpotId returned NULL) replaced the response.
 $r = http('DELETE', "/db/feature/$spotC_parent", null, $up);
-check("F parent delete HTTP 200", $r['status'] === 200);
+check("F parent delete HTTP 204", $r['status'] === 204);
 $row = spineRow($db, $uuidRich, $ownerPkey);
 check("F rich UUID row SURVIVES parent-spot delete", $row && $row->name === 'UUIDE2E-rich');
 
 $r = http('DELETE', "/db/feature/$spotB_rich", null, $up);
-check("F rich spot delete HTTP 200", $r['status'] === 200);
+check("F rich spot delete HTTP 204", $r['status'] === 204);
 $row = spineRow($db, $uuidRich, $ownerPkey);
 check("F rich UUID row REMOVED after rich-spot delete", !$row);
 
