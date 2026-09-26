@@ -15,6 +15,11 @@
  *
  *              State lives in a JSON file guarded by flock, so child
  *              processes (the concurrent-refresh test) share one SESAR.
+ *              - (Phase 3) auth/user/ in the real {data:{user:{individual,
+ *                email, orcid}}} shape; per-ORCID SESAR codes; POST
+ *                sesar-codes/ with the real BARE 400 field dicts; POST
+ *                api-access-request/ recorded in state['access_requests'].
+ *
  *              Knobs: $fake->set('refresh_delay_us', n), 'fail_next' =>
  *              {path fragment: status|0}, 'register_then_timeout' => true.
  *
@@ -40,6 +45,8 @@ class FakeSesar implements SesarTransport
 	{
 		return array(
 			'orcid_users' => new stdClass(),   // id_token => {orcid, upload}
+			'codes'       => new stdClass(),   // orcid => [sesar codes]
+			'access_requests' => array(),
 			'tokens'      => new stdClass(),   // token => {kind, orcid, exp, blacklisted}
 			'seq'         => 0,
 			'samples'     => new stdClass(),   // igsn => record
@@ -50,10 +57,27 @@ class FakeSesar implements SesarTransport
 
 	// ---- test setup / inspection -----------------------------------------
 
-	public function addOrcidUser($idToken, $orcid, $uploadPermission = true)
+	public function addOrcidUser($idToken, $orcid, $uploadPermission = true, $codes = array('IEFAK'))
 	{
-		$this->mutate(function (&$s) use ($idToken, $orcid, $uploadPermission) {
+		$this->mutate(function (&$s) use ($idToken, $orcid, $uploadPermission, $codes) {
 			$s['orcid_users'][$idToken] = array('orcid' => $orcid, 'upload' => $uploadPermission);
+			if (!isset($s['codes'][$orcid])) $s['codes'][$orcid] = $codes;
+		});
+	}
+
+	/** The user pressed "Revoke All Active JWTs" (or SESAR blacklisted them). */
+	public function revokeTokensFor($orcid)
+	{
+		$this->mutate(function (&$s) use ($orcid) {
+			foreach ($s['tokens'] as $t => $v) if ($v['orcid'] === $orcid) $s['tokens'][$t]['blacklisted'] = true;
+		});
+	}
+
+	/** SESAR staff approve an API access request. */
+	public function grantUpload($orcid)
+	{
+		$this->mutate(function (&$s) use ($orcid) {
+			foreach ($s['orcid_users'] as $t => $u) if ($u['orcid'] === $orcid) $s['orcid_users'][$t]['upload'] = true;
 		});
 	}
 
@@ -167,6 +191,16 @@ class FakeSesar implements SesarTransport
 			))), 0);
 		}
 
+		// -- anonymous: the API access request form (emails SESAR staff) -------
+		if ($method === 'POST' && $path === 'api-access-request/') {
+			$b = json_decode((string)$body, true);
+			foreach (array('message', 'first_name', 'last_name', 'email', 'orcid', 'institution', 'position_role') as $req) {
+				if (!is_array($b) || !isset($b[$req]) || $b[$req] === '') return array(400, json_encode(array($req => array('This field is required.'))), 0);
+			}
+			$s['access_requests'][] = $b;
+			return array(200, '', 0);
+		}
+
 		// -- everything else needs a valid access token ------------------------
 		$bearer = preg_replace('/^Bearer\s+/', '', (string)self::header($headers, 'Authorization'));
 		$tok = ($bearer !== '' && isset($s['tokens'][$bearer])) ? $s['tokens'][$bearer] : null;
@@ -174,11 +208,31 @@ class FakeSesar implements SesarTransport
 		if ($bearer !== '' && !$authed) return array(401, json_encode(array('detail' => 'Given token not valid for any token type', 'code' => 'token_not_valid')), 0);
 
 		if ($method === 'GET' && $path === 'auth/user/') {
-			return array(200, json_encode(array('data' => array('orcid' => $tok['orcid'], 'name' => 'Fake User ' . $tok['orcid'],
-				'jwt_connection' => strtoupper($tok['connection'])))), 0);
+			// Real shape (sandbox 09-26); jwt_connection comes back null despite the claim.
+			return array(200, json_encode(array('data' => array('user' => array(
+				'individual' => array('label' => 'User, Fake', 'fname' => 'Fake', 'lname' => 'User'),
+				'email' => 'fake+' . $tok['orcid'] . '@example.org', 'orcid' => $tok['orcid'], 'upload_permission_status' => 1),
+				'jwt_connection' => null))), 0);
 		}
 		if ($method === 'GET' && $path === 'sesar-codes/by-permission/') {
-			return array(200, json_encode(array(array('code' => 'IEFAK', 'name' => 'Fake code'))), 0);
+			$mine = isset($s['codes'][$tok['orcid']]) ? $s['codes'][$tok['orcid']] : array();
+			return array(200, json_encode(array_map(function ($c) use ($tok) {
+				return array('sesar_user' => $tok['orcid'], 'team' => null, 'sesar_code' => $c, 'doi_prefix' => '10.58052/', 'igsn_count' => 0);
+			}, $mine)), 0);
+		}
+		if ($method === 'POST' && $path === 'sesar-codes/') {
+			if (!$authed) return self::err(401, 'detail', 'Authentication credentials were not provided.');
+			$b = json_decode((string)$body, true);
+			$code = is_array($b) && isset($b['sesar_code']) ? (string)$b['sesar_code'] : '';
+			// Real SESAR answers these with a BARE field dict (no message/errors envelope).
+			if (!preg_match('/^IE[A-Za-z0-9]{3}$/', $code)) {
+				return array(400, json_encode(array('sesar_code' => array('SESAR code must be 5 characters long, alphanumeric, and begin with IE.'))), 0);
+			}
+			foreach ($s['codes'] as $o => $list) {
+				if (in_array($code, $list, true)) return array(400, json_encode(array('sesar_code' => array('sesar code with this sesar code already exists.'))), 0);
+			}
+			$s['codes'][$tok['orcid']][] = $code;
+			return array(201, json_encode(array('sesar_code' => $code, 'sesar_user' => $tok['orcid'], 'team' => null)), 0);
 		}
 		if ($method === 'POST' && $path === 'samples/') {
 			if (!$authed) return self::err(401, 'detail', 'Authentication credentials were not provided.');

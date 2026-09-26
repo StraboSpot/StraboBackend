@@ -48,7 +48,8 @@ class SesarConnection
 	/**
 	 * Exchange a verified ORCID id_token for a SESAR pair and store it.
 	 * Throws SesarError (kind no_permission = the SESAR account lacks API
-	 * upload permission; the page explains how to request it).
+	 * upload permission; no_account = the ORCID has no SESAR account;
+	 * SesarOnboarding turns both into guidance).
 	 */
 	public function connectWithOrcid($userpkey, $orcidIdToken, $orcidId)
 	{
@@ -115,7 +116,7 @@ class SesarConnection
 			try {
 				$pair = $this->client->refresh($refresh);
 			} catch (SesarError $e) {
-				if ($e->kind === 'auth' || $e->kind === 'no_permission') {
+				if ($e->kind === 'auth' || $e->kind === 'no_permission' || $e->kind === 'no_account') {
 					$this->markNeedsReconnect($userpkey, $e->getMessage());
 					$this->db->query("COMMIT");
 					throw new SesarError(401, 'Your SESAR connection has expired. Please reconnect.');
@@ -143,10 +144,33 @@ class SesarConnection
 		}
 	}
 
+	/**
+	 * Run $fn($accessToken). If SESAR rejects a token we still thought valid
+	 * (revoked at SESAR, clock skew), drop the cached access token and retry
+	 * ONCE through a refresh; a failed refresh marks the connection
+	 * needs_reconnect (accessToken()). Every SESAR call made on a user's
+	 * behalf goes through here.
+	 */
+	public function withAccess($userpkey, callable $fn)
+	{
+		try {
+			return $fn($this->accessToken($userpkey));
+		} catch (SesarError $e) {
+			if ($e->kind !== 'auth') throw $e;
+			$this->db->prepare_query(
+				"UPDATE strabosamples.sesar_connections SET access_token_enc = NULL, access_expires_at = NULL, updated_at = now()
+				  WHERE userpkey = $1 AND environment = $2",
+				array((int)$userpkey, $this->env)
+			);
+			return $fn($this->accessToken($userpkey));
+		}
+	}
+
 	/** Re-read the SESAR codes the user may register under (D2 dropdown). */
 	public function refreshCodes($userpkey)
 	{
-		$codes = $this->client->codesForCreate($this->accessToken($userpkey));
+		$client = $this->client;
+		$codes = $this->withAccess($userpkey, function ($access) use ($client) { return $client->codesForCreate($access); });
 		$this->db->prepare_query(
 			"UPDATE strabosamples.sesar_connections SET sesar_codes = $1::jsonb, codes_fetched_at = now(), updated_at = now()
 			  WHERE userpkey = $2 AND environment = $3",

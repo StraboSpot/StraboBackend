@@ -17,6 +17,9 @@
 --              sesar_vocab_cache   SESAR controlled vocabularies (object types,
 --                                  material types), refreshed from the public
 --                                  vocab endpoints.
+--              sesar_onboarding    per (user, environment) progress toward a
+--                                  usable connection (account, API permission,
+--                                  SESAR code) + the in-app access request.
 --
 --              No FK from sesar_registrations to samples on purpose: deleting
 --              a sample must NOT delete the record that its IGSN is still live
@@ -31,7 +34,8 @@
 -- code that uses it (D10 rollout step 1).
 --
 -- Rollback: DROP TABLE strabosamples.sesar_registrations,
---           strabosamples.sesar_connections, strabosamples.sesar_vocab_cache;
+--           strabosamples.sesar_connections, strabosamples.sesar_vocab_cache,
+--           strabosamples.sesar_onboarding;
 -- (only after the launch cleanup has removed sandbox IGSNs from the spine,
 -- since these rows are the only record of which IGSNs are sandbox ones).
 -- =============================================================================
@@ -118,6 +122,35 @@ CREATE TABLE IF NOT EXISTS strabosamples.sesar_vocab_cache (
     PRIMARY KEY (environment, vocab)
 );
 
+-- Getting a user from "never heard of SESAR" to "connected with a SESAR code"
+-- (D1 addition, 2026-09-26). One row per (user, SESAR environment).
+--   id_token_enc   the ORCID id_token verified by our callback, ENCRYPTED like
+--                  the SESAR tokens. Kept for its own 24 h life so "Check
+--                  again" after flipping something at SESAR needs no new ORCID
+--                  popup; cleared once the SESAR connection exists.
+--   stage          last answer from SESAR: no_account (ORCID unknown to
+--                  SESAR), no_permission (API access not granted yet),
+--                  no_code (connected, no SESAR code), connected.
+--   access_*       the in-app API access request (POST /api/api-access-request/),
+--                  so the page can say "requested on <date>".
+--   institution / position_role  typed once for that request, remembered.
+CREATE TABLE IF NOT EXISTS strabosamples.sesar_onboarding (
+    userpkey              INTEGER     NOT NULL REFERENCES users(pkey),
+    environment           TEXT        NOT NULL CHECK (environment IN ('sandbox', 'production')),
+    orcid                 TEXT,
+    id_token_enc          TEXT,
+    id_token_expires_at   TIMESTAMPTZ,
+    stage                 TEXT        CHECK (stage IN ('no_account', 'no_permission', 'no_code', 'connected')),
+    checked_at            TIMESTAMPTZ,
+    last_error            TEXT,       -- SESAR unreachable etc. (stage kept as it was)
+    access_requested_at   TIMESTAMPTZ,
+    access_request_error  TEXT,       -- in-app request failed: page falls back to SESAR's own form
+    institution           TEXT,
+    position_role         TEXT,
+    updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+    PRIMARY KEY (userpkey, environment)
+);
+
 -- ---------------------------------------------------------------------------
 -- Privileges: created by the superuser, used by the web role. The schema's
 -- default ACL already grants these on dev; explicit here so prod does not
@@ -126,6 +159,7 @@ CREATE TABLE IF NOT EXISTS strabosamples.sesar_vocab_cache (
 GRANT SELECT, INSERT, UPDATE, DELETE ON strabosamples.sesar_connections   TO strabodbuser;
 GRANT SELECT, INSERT, UPDATE, DELETE ON strabosamples.sesar_registrations TO strabodbuser;
 GRANT SELECT, INSERT, UPDATE, DELETE ON strabosamples.sesar_vocab_cache   TO strabodbuser;
+GRANT SELECT, INSERT, UPDATE, DELETE ON strabosamples.sesar_onboarding   TO strabodbuser;
 GRANT USAGE, SELECT ON SEQUENCE strabosamples.sesar_connections_pkey_seq   TO strabodbuser;
 GRANT USAGE, SELECT ON SEQUENCE strabosamples.sesar_registrations_pkey_seq TO strabodbuser;
 

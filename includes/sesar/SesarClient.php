@@ -45,6 +45,8 @@ class SesarError extends Exception
 
 	/**
 	 * Coarse category the UI turns into guidance (D1 addition):
+	 *   no_account     ORCID id_token rejected: with a token our callback
+	 *                  just verified, the ORCID has no SESAR account
 	 *   no_permission  SESAR account lacks API upload permission
 	 *   auth           token invalid / expired / revoked: reconnect
 	 *   not_found      no such sample (or not visible to this account)
@@ -56,7 +58,11 @@ class SesarError extends Exception
 	public static function kindFor($status, $errors)
 	{
 		if ($status === 0) return 'network';
-		if ($status === 401 || $status === 403) return isset($errors['permissions']) ? 'no_permission' : 'auth';
+		if ($status === 401 || $status === 403) {
+			if (isset($errors['permissions'])) return 'no_permission';
+			if (isset($errors['token'])) return 'no_account';
+			return 'auth';
+		}
 		if ($status === 404) return 'not_found';
 		if ($status === 410) return 'gone';
 		if ($status === 400 || $status === 422) return 'validation';
@@ -135,6 +141,23 @@ class SesarClient
 	public function currentUser($access)
 	{
 		return $this->unwrap($this->call('GET', 'auth/user/', $access));
+	}
+
+	/**
+	 * Files SESAR's "Request permission for using the API" form for a user
+	 * (D1 addition). Anonymous endpoint; emails SESAR staff, who approve by
+	 * hand. The ORCID must already have a SESAR account. $fields: message,
+	 * first_name, last_name, email, orcid, institution, position_role.
+	 */
+	public function requestApiAccess(array $fields)
+	{
+		$this->call('POST', 'api-access-request/', null, $fields, 'json');
+	}
+
+	/** Creates a PERSONAL SESAR code ("IE" + 3 alphanumerics). 400 = taken or malformed. */
+	public function createCode($access, $code)
+	{
+		return $this->unwrap($this->call('POST', 'sesar-codes/', $access, array('sesar_code' => (string)$code), 'json'));
 	}
 
 	/** SESAR codes this account may register under (D2 dropdown). */
@@ -261,11 +284,28 @@ class SesarClient
 		if ($status === 0) {
 			throw new SesarError(0, 'SESAR did not respond. Please try again.');
 		}
+		$errors = (is_array($json) && isset($json['errors']) && is_array($json['errors'])) ? $json['errors'] : array();
+		// Some endpoints (sesar-codes/) answer 400 with a BARE field dict:
+		// {"sesar_code": ["...already exists."]}. Treat it as the errors object.
+		if (empty($errors) && is_array($json) && !isset($json['message']) && !isset($json['detail'])) {
+			foreach ($json as $f => $v) {
+				if (is_array($v)) $errors[$f] = $v;
+			}
+		}
 		$msg = (is_array($json) && isset($json['message']) && is_string($json['message'])) ? $json['message']
 			: ((is_array($json) && isset($json['detail']) && is_string($json['detail'])) ? $json['detail']
-			: 'SESAR returned an error (HTTP ' . $status . ').');
-		$errors = (is_array($json) && isset($json['errors']) && is_array($json['errors'])) ? $json['errors'] : array();
+			: (self::firstMessage($errors) !== null ? self::firstMessage($errors)
+			: 'SESAR returned an error (HTTP ' . $status . ').'));
 		throw new SesarError($status, $msg, $errors);
+	}
+
+	private static function firstMessage(array $errors)
+	{
+		foreach ($errors as $v) {
+			if (is_string($v)) return $v;
+			if (is_array($v) && isset($v[0]) && is_string($v[0])) return $v[0];
+		}
+		return null;
 	}
 
 	/** Most SESAR detail/create responses wrap the object in {"data": {...}}. */

@@ -16,6 +16,9 @@
  *                $sesar_orcid_client_id      ORCID Public API client (web only)
  *                $sesar_orcid_client_secret
  *                $sesar_token_key            base64 32-byte secretbox key
+ *                $sesar_dev_paste_code       true on DEV only: ORCID refuses a
+ *                                            localhost redirect, so dev pastes
+ *                                            the ?code= from the prod callback URL
  *              A missing or unknown $sesar_env means 'sandbox', so a config
  *              slip can never register real IGSNs.
  *
@@ -99,6 +102,12 @@ class SesarAccess
 		if (!isset($GLOBALS['sesar_token_key'])) return null;
 		$raw = base64_decode((string)$GLOBALS['sesar_token_key'], true);
 		return ($raw !== false && strlen($raw) === SODIUM_CRYPTO_SECRETBOX_KEYBYTES) ? $raw : null;
+	}
+
+	/** Dev-only "paste the ORCID code" box (never set on prod). */
+	public static function devCodePaste()
+	{
+		return isset($GLOBALS['sesar_dev_paste_code']) && $GLOBALS['sesar_dev_paste_code'] === true;
 	}
 
 	/** True when everything the connect flow needs is configured. */
