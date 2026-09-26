@@ -338,7 +338,7 @@ include("includes/mheader.php");
                 + '<p class="si-muted" style="margin-top:1em">No answer after a few days? Write to ' + ext('mailto:info@geosamples.org', 'info@geosamples.org') + '.</p>';
         }
         if (s.access_request_error) {
-            return h + '<div class="si-note si-err">We could not send the request for you (SESAR said: ' + esc(s.access_request_error) + ').</div>'
+            return h + '<div class="si-note si-err">We could not send the request for you. SESAR replied: ' + esc(s.access_request_error) + '</div>'
                 + '<p style="margin-top:1em">You can send it at SESAR instead:</p>'
                 + '<ol class="si-howto">'
                 + '<li>Open ' + ext(L.developer_settings, 'SESAR Developer Settings') + ' (sign in with ORCID if asked).</li>'
