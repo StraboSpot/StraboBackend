@@ -11,7 +11,10 @@
  *                display_sample_type, display_sample_purpose,
  *                field_data (array|null), field_linked (bool), micro_linked (bool),
  *                latitude_end / longitude_end (Field LineString spots, optional),
- *                parent_igsn (optional: the parent's IGSN, if it has one)
+ *                parent_igsn (optional: the parent's IGSN, if it has one),
+ *                field_rock_types (optional: rock names from the linked Field
+ *                  spot's geologic unit / petrology, most specific first;
+ *                  choice names or labels, e.g. "granite", "basaltic-andesite")
  *
  *              Field stores choice NAMES (option_13, fabric___micro); SESAR
  *              gets LABELS via FieldVocab, never names.
@@ -49,14 +52,12 @@ class SesarMapper
 
 	/**
 	 * Field material_type choice name -> SESAR material label candidates,
-	 * first match in the live vocabulary wins (the Field app's
-	 * getMaterialName map, checked against SESAR's current vocabulary).
-	 * UNVERIFIED: SESAR's material vocab flags "Rock" for_registration=false;
-	 * whether general_material_type enforces that is a sandbox question.
+	 * first registrable match wins. intact_rock / fragmented_roc have NO
+	 * entry: SESAR refuses "Rock" (for_registration is enforced, sandbox
+	 * 09-26), so rock samples get a material only from a specific rock name
+	 * (field_rock_types) and are otherwise left blank (D2, option A).
 	 */
 	const FIELD_MATERIAL_TO_SESAR = array(
-		'intact_rock'      => array('Rock'),
-		'fragmented_roc'   => array('Rock'),
 		'sediment'         => array('Sediment'),
 		'tephra'           => array('Tephra'),
 		'carbon_or_animal' => array('Organic biological material', 'Biological material'),
@@ -110,16 +111,47 @@ class SesarMapper
 	}
 
 	/**
-	 * @param string[] $materialLabels SESAR material labels (vocab); empty = trust the map
-	 * @return string|null a material label, or null (optional field left blank)
+	 * D2 option A: pre-fill the material only on a confident match that
+	 * SESAR will register; otherwise null (the optional field stays blank).
+	 * Specific rock names from the linked spot win over the coarse Field
+	 * material_type. Matches SESAR labels and their synonyms, ignoring case,
+	 * underscores and hyphens.
+	 *
+	 * @param array $registrable SesarVocab::registrableMaterials() rows
+	 *                           ({label, synonyms}) or plain labels; empty =
+	 *                           cannot verify, so no suggestion
+	 * @return string|null a registrable material label, or null
 	 */
-	public static function suggestMaterial(array $s, array $materialLabels = array())
+	public static function suggestMaterial(array $s, array $registrable)
 	{
+		$candidates = array();
+		if (!empty($s['field_rock_types']) && is_array($s['field_rock_types'])) {
+			foreach ($s['field_rock_types'] as $r) {
+				if (is_string($r)) $candidates[] = $r;
+			}
+		}
 		$mat = self::fieldMaterial($s);
-		if ($mat === null || !isset(self::FIELD_MATERIAL_TO_SESAR[$mat])) return null;
-		foreach (self::FIELD_MATERIAL_TO_SESAR[$mat] as $c) {
-			$hit = self::matchLabel($c, $materialLabels);
+		if ($mat !== null && isset(self::FIELD_MATERIAL_TO_SESAR[$mat])) {
+			$candidates = array_merge($candidates, self::FIELD_MATERIAL_TO_SESAR[$mat]);
+		}
+		foreach ($candidates as $c) {
+			$hit = self::matchMaterial($c, $registrable);
 			if ($hit !== null) return $hit;
+		}
+		return null;
+	}
+
+	/**
+	 * The exact registrable label for a user-chosen material (form
+	 * validation before POST), or null when SESAR would refuse it.
+	 */
+	public static function registrableMaterial($label, array $registrable)
+	{
+		$key = self::materialKey($label);
+		if ($key === '') return null;
+		foreach ($registrable as $m) {
+			$l = is_array($m) ? (string)$m['label'] : (string)$m;
+			if (self::materialKey($l) === $key) return $l;
 		}
 		return null;
 	}
@@ -326,6 +358,29 @@ class SesarMapper
 	{
 		if ($v === null || !is_numeric($v)) return null;
 		return rtrim(rtrim(number_format((float)$v, 6, '.', ''), '0'), '.');
+	}
+
+	/** Label match first across all terms, then synonyms (a synonym never beats an exact label). */
+	private static function matchMaterial($candidate, array $registrable)
+	{
+		$hit = self::registrableMaterial($candidate, $registrable);
+		if ($hit !== null) return $hit;
+		$key = self::materialKey($candidate);
+		if ($key === '') return null;
+		foreach ($registrable as $m) {
+			if (!is_array($m) || empty($m['synonyms'])) continue;
+			foreach ($m['synonyms'] as $syn) {
+				if (self::materialKey($syn) === $key) return (string)$m['label'];
+			}
+		}
+		return null;
+	}
+
+	/** "Basaltic-Andesite" / "basaltic_andesite" -> "basaltic andesite". */
+	private static function materialKey($v)
+	{
+		$v = mb_strtolower(trim((string)$v));
+		return trim(preg_replace('/[\s_-]+/u', ' ', $v));
 	}
 
 	private static function matchLabel($candidate, array $labels)

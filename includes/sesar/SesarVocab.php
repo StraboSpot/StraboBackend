@@ -69,6 +69,34 @@ class SesarVocab
 	}
 
 	/**
+	 * Materials SESAR will accept as general_material_type (D2 picker +
+	 * SesarMapper suggestions): [{label, synonyms[]}]. SESAR enforces
+	 * for_registration: broad categories ("Rock", "Igneous rock") are
+	 * refused, specific names ("Limestone") are accepted (sandbox 09-26).
+	 * Synonyms come from alt_label ("dolostone, pure dolomitic ...").
+	 */
+	public function registrableMaterials()
+	{
+		$out = array();
+		$seen = array();
+		foreach ($this->terms(self::MATERIAL_TYPES) as $t) {
+			if (!is_array($t) || !isset($t['label']) || empty($t['for_registration'])) continue;
+			$label = (string)$t['label'];
+			if (isset($seen[mb_strtolower($label)])) continue;
+			$seen[mb_strtolower($label)] = true;
+			$syn = array();
+			if (!empty($t['alt_label']) && is_string($t['alt_label'])) {
+				foreach (explode(',', $t['alt_label']) as $a) {
+					if (trim($a) !== '') $syn[] = trim($a);
+				}
+			}
+			$out[] = array('label' => $label, 'synonyms' => $syn);
+		}
+		usort($out, function ($a, $b) { return strcasecmp($a['label'], $b['label']); });
+		return $out;
+	}
+
+	/**
 	 * Object types grouped for the D2 dropdown: [group label => [leaf labels]].
 	 * Top-level terms with no children form their own group.
 	 */

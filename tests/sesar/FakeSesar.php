@@ -155,8 +155,15 @@ class FakeSesar implements SesarTransport
 		}
 		if ($method === 'GET' && $path === 'vocab/material-types/') {
 			return array(200, json_encode(array('data' => array(
-				array('id' => 1, 'label' => 'Rock'), array('id' => 2, 'label' => 'Sediment'),
-				array('id' => 3, 'label' => 'Tephra'), array('id' => 4, 'label' => 'Biological material'),
+				// Real shape (sandbox 09-26): broad categories are for_registration false.
+				array('id' => 1, 'label' => 'Rock', 'for_registration' => false),
+				array('id' => 2, 'label' => 'Sediment', 'for_registration' => true),
+				array('id' => 3, 'label' => 'Tephra', 'for_registration' => true),
+				array('id' => 4, 'label' => 'Biological material', 'for_registration' => true),
+				array('id' => 5, 'label' => 'Limestone', 'for_registration' => true),
+				array('id' => 6, 'label' => 'Granite', 'for_registration' => true),
+				array('id' => 7, 'label' => 'Dolomite', 'for_registration' => true, 'alt_label' => 'dolostone, pure dolomitic or magnesian carbonate sedimentary rock,'),
+				array('id' => 8, 'label' => 'Igneous rock', 'for_registration' => false),
 			))), 0);
 		}
 

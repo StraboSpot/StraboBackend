@@ -212,9 +212,28 @@ check('Micro-linked, no Field type -> Thin section', SesarMapper::suggestObjectT
 check('nothing known -> Individual sample', SesarMapper::suggestObjectType($s(null), $leaves) === 'Individual sample');
 check('suggestion only returns labels that exist in the vocab', SesarMapper::suggestObjectType($s(array('sample_type' => 'trawl')), $leaves) === 'Individual sample');
 check('vocab label casing wins', SesarMapper::suggestObjectType($s(array('sample_type' => 'core')), array('CORE', 'Individual sample')) === 'CORE');
-check('material: intact rock -> Rock', SesarMapper::suggestMaterial($s(array('material_type' => 'intact_rock')), array('Rock', 'Sediment')) === 'Rock');
-check('material: carbon_or_animal -> first available candidate', SesarMapper::suggestMaterial($s(array('material_type' => 'carbon_or_animal')), array('Biological material')) === 'Biological material');
-check('material: other -> no suggestion', SesarMapper::suggestMaterial($s(array('material_type' => 'other'))) === null);
+// D2 option A: registrable names only, blank unless confident (SESAR refuses "Rock", sandbox 09-26).
+$reg = array(array('label' => 'Sediment', 'synonyms' => array()), array('label' => 'Limestone', 'synonyms' => array()),
+	array('label' => 'Granite', 'synonyms' => array()), array('label' => 'Biological material', 'synonyms' => array()),
+	array('label' => 'Basaltic andesite', 'synonyms' => array()),
+	array('label' => 'Dolomite', 'synonyms' => array('dolostone', 'pure dolomitic or magnesian carbonate sedimentary rock')));
+check('material: intact rock alone -> blank (Rock is not registrable)', SesarMapper::suggestMaterial($s(array('material_type' => 'intact_rock')), $reg) === null);
+check('material: fragmented rock alone -> blank', SesarMapper::suggestMaterial($s(array('material_type' => 'fragmented_roc')), $reg) === null);
+check('material: spot rock name wins (granite -> Granite)', SesarMapper::suggestMaterial($s(array('material_type' => 'intact_rock'), array('field_rock_types' => array('granite'))), $reg) === 'Granite');
+check('material: first registrable rock name wins', SesarMapper::suggestMaterial($s(null, array('field_rock_types' => array('mylonite', 'limestone'))), $reg) === 'Limestone');
+check('material: hyphen/underscore names match (basaltic-andesite)', SesarMapper::suggestMaterial($s(null, array('field_rock_types' => array('basaltic-andesite'))), $reg) === 'Basaltic andesite'
+	&& SesarMapper::suggestMaterial($s(null, array('field_rock_types' => array('Basaltic_Andesite'))), $reg) === 'Basaltic andesite');
+check('material: SESAR synonym matches (dolostone -> Dolomite)', SesarMapper::suggestMaterial($s(null, array('field_rock_types' => array('dolostone'))), $reg) === 'Dolomite');
+check('material: unmatched rock name + intact rock -> blank', SesarMapper::suggestMaterial($s(array('material_type' => 'intact_rock'), array('field_rock_types' => array('mylonite'))), $reg) === null);
+check('material: sediment -> Sediment', SesarMapper::suggestMaterial($s(array('material_type' => 'sediment')), $reg) === 'Sediment');
+check('material: carbon_or_animal -> first registrable candidate', SesarMapper::suggestMaterial($s(array('material_type' => 'carbon_or_animal')), $reg) === 'Biological material');
+check('material: tephra not in the registrable list -> blank', SesarMapper::suggestMaterial($s(array('material_type' => 'tephra')), $reg) === null);
+check('material: other -> no suggestion', SesarMapper::suggestMaterial($s(array('material_type' => 'other')), $reg) === null);
+check('material: no vocab -> no suggestion (cannot verify)', SesarMapper::suggestMaterial($s(array('material_type' => 'sediment')), array()) === null);
+check('material: plain label lists accepted', SesarMapper::suggestMaterial($s(array('material_type' => 'sediment')), array('Sediment')) === 'Sediment');
+check('registrableMaterial: exact label back, any case', SesarMapper::registrableMaterial('  limestone ', $reg) === 'Limestone');
+check('registrableMaterial: broad category refused', SesarMapper::registrableMaterial('Rock', $reg) === null && SesarMapper::registrableMaterial('', $reg) === null);
+check('registrableMaterial: synonyms are not a valid submitted value', SesarMapper::registrableMaterial('dolostone', $reg) === null);
 
 // ===========================================================================
 section('SesarMapper: D2 forward mapping');
@@ -233,9 +252,9 @@ check('purpose sent as the Field LABEL, not the stored name', $o['purpose'] === 
 check('collection date -> SESAR date-time + precision', $o['sampling_start_date'] === '2025-07-12T04:45:10Z' && $o['sampling_date_precision'] === 'time');
 check('external_sample_id truncated to 100', strlen($o['external_sample_id']) === 100);
 check('parent IGSN carried', $o['parent_sample'] === '10.58052/IEFAK0001');
-$p = SesarMapper::registrationPayload($sample, array('sesar_code' => 'IEFAK', 'object_type' => 'Rock hand sample', 'general_material_type' => 'Rock', 'collector' => 'Claire Martin'));
+$p = SesarMapper::registrationPayload($sample, array('sesar_code' => 'IEFAK', 'object_type' => 'Rock hand sample', 'general_material_type' => 'Limestone', 'collector' => 'Claire Martin'));
 check('payload adds code, object type, material, collector', $p['sesar_code'] === 'IEFAK' && $p['object_type'] === 'Rock hand sample'
-	&& $p['general_material_type'] === 'Rock' && $p['collectors'] === array(array('individual' => array('label' => 'Claire Martin'))));
+	&& $p['general_material_type'] === 'Limestone' && $p['collectors'] === array(array('individual' => array('label' => 'Claire Martin'))));
 $bare = SesarMapper::registrationPayload(array('id' => 'S2', 'name' => 'B', 'latitude' => 1, 'longitude' => 2), array('sesar_code' => 'IEFAK', 'object_type' => 'Core'));
 check('optional fields omitted when empty', !isset($bare['sample_description']) && !isset($bare['purpose']) && !isset($bare['collectors'])
 	&& !isset($bare['general_material_type']) && !isset($bare['sampling_start_date']) && !isset($bare['parent_sample']), $bare);
@@ -299,6 +318,13 @@ check('cache hit makes no call', count($fake->calls('vocab/object-types/')) === 
 $db->query("UPDATE strabosamples.sesar_vocab_cache SET fetched_at = now() - interval '8 days' WHERE environment = 'sandbox'");
 $fake->set('fail_next', array('vocab/object-types/' => 503));
 check('stale cache served when SESAR is down', in_array('Core', $vocab->labels(SesarVocab::OBJECT_TYPES), true));
+$rm = $vocab->registrableMaterials();
+$rmLabels = array_map(function ($m) { return $m['label']; }, $rm);
+check('registrableMaterials drops for_registration=false terms', !in_array('Rock', $rmLabels, true) && !in_array('Igneous rock', $rmLabels, true)
+	&& in_array('Limestone', $rmLabels, true) && in_array('Sediment', $rmLabels, true), $rmLabels);
+$dolo = array_values(array_filter($rm, function ($m) { return $m['label'] === 'Dolomite'; }));
+check('registrableMaterials splits alt_label into synonyms', count($dolo) === 1 && $dolo[0]['synonyms'] === array('dolostone', 'pure dolomitic or magnesian carbonate sedimentary rock'), $dolo);
+check('live vocab feeds the suggestion (granite -> Granite)', SesarMapper::suggestMaterial(array('field_rock_types' => array('granite')), $rm) === 'Granite');
 $groups = $vocab->objectTypeGroups();
 check('object types grouped for the dropdown', isset($groups['General sample types']) && in_array('Rock hand sample', $groups['General sample types'], true)
 	&& $groups['Material sample'] === array('Material sample') && in_array('Thin section', $groups['Analytical preparations'], true), $groups);
