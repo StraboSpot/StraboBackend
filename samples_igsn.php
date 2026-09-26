@@ -56,7 +56,7 @@ if ($allowed && $configured) {
 		if ($igsn === '') $state = 'none';
 		elseif ($r->reg_igsn !== null) $state = 'managed';
 		elseif ($cls['kind'] === 'sesar') $state = 'unmanaged';
-		elseif ($cls['kind'] === 'other_registrar') $state = 'other';
+		elseif ($cls['kind'] === 'doi') $state = 'other';
 		else $state = 'invalid';
 		$rows[] = array(
 			'id'     => (string)$r->id,
@@ -162,7 +162,7 @@ include("includes/mheader.php");
                     <option value="none">No IGSN</option>
                     <option value="managed">IGSN managed here</option>
                     <option value="unmanaged">SESAR IGSN, not managed here</option>
-                    <option value="other">IGSN from another registrar</option>
+                    <option value="other">Other DOI prefix</option>
                     <option value="invalid">Not a valid IGSN</option>
                 </select>
                 <select id="si-loc">
@@ -463,9 +463,9 @@ include("includes/mheader.php");
     var tbody = document.getElementById('si-rows'), count = document.getElementById('si-count'), more = document.getElementById('si-more');
     var shown = PAGE;
     var STATE_TEXT = { none: 'No IGSN', managed: 'Managed here', unmanaged: 'SESAR, not managed here',
-                       other: 'Other registrar', invalid: 'Not a valid IGSN' };
+                       other: 'Other DOI prefix', invalid: 'Not a valid IGSN' };
     var STATE_TIP = { invalid: 'The IGSN field holds text that is not an IGSN. It is never sent to SESAR.',
-                      other: 'An IGSN from a registrar other than SESAR. StraboSpot cannot manage it at SESAR.' };
+                      other: 'A DOI under a prefix other than SESAR\'s 10.58052. Some SESAR teams use their own prefix; SESAR is asked before any action.' };
 
     function filtered() {
         var term = q.value.trim().toLowerCase(), st = fState.value, loc = fLoc.value;

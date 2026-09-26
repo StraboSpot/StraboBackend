@@ -266,7 +266,9 @@ check('canonical SESAR IGSN', $cls('10.58052/IEJMA0002') === 'sesar:10.58052/IEJ
 check('DOI URL, lower case -> normalized', $cls(' https://doi.org/10.58052/iejma0002 ') === 'sesar:10.58052/IEJMA0002');
 check('igsn.org URL + igsn: label -> normalized', $cls('https://igsn.org/IEJMA0002') === 'sesar:10.58052/IEJMA0002' && $cls('IGSN: IEJMA0002') === 'sesar:10.58052/IEJMA0002');
 check('bare 9-character IGSN gets the prefix SESAR needs', $cls('IEJMA0002') === 'sesar:10.58052/IEJMA0002' && $cls('hrv003m16') === 'sesar:10.58052/HRV003M16');
-check("another registrar's IGSN is not SESAR", $cls('10.60510/ICDP5054EHW1001') === 'other_registrar:10.60510/ICDP5054EHW1001');
+check('other DOI prefixes are kept for a SESAR lookup (SESAR hosts team prefixes)', $cls('10.60471/ODP01BXOT') === 'doi:10.60471/ODP01BXOT'
+	&& $cls('https://doi.org/10.60510/ICDP5054EHW1001') === 'doi:10.60510/ICDP5054EHW1001');
+check('legacy 3-letter namespaces without IE are valid (WHO000L1B, ABC000123)', $cls('WHO000L1B') === 'sesar:10.58052/WHO000L1B' && $cls('ABC000123') === 'sesar:10.58052/ABC000123');
 check('SESAR prefix with the wrong length is invalid', $cls('10.58052/IEJMA00021') === 'invalid' && $cls('10.58052/') === 'invalid');
 foreach (array('sdfbsbd', 'UC0068', 'Carr_057_UM_#19', 'testing IGSN', 'Ignshere', 'L', '96-13-D30') as $junk) {
 	check("junk '$junk' is invalid", $cls($junk) === 'invalid');

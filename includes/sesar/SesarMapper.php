@@ -297,7 +297,11 @@ class SesarMapper
 	// Stored IGSN values (free text in StraboSamples)
 	// =======================================================================
 
-	/** SESAR's DOI prefix: every SESAR IGSN is 10.58052/ + 9 letters/digits. */
+	/**
+	 * SESAR's own DOI prefix (10.58052/ + 9 letters/digits). NOT the only one:
+	 * SESAR also hosts IGSNs under team prefixes (e.g. 10.60471/ODP01BXOT, the
+	 * ODP collection, resolves at SESAR prod; checked 2026-09-26).
+	 */
 	const SESAR_PREFIX = '10.58052/';
 
 	/**
@@ -307,11 +311,11 @@ class SesarMapper
 	 * SESAR (lookup, link, parent_sample) unless this says 'sesar'.
 	 *
 	 * @return array {kind, normalized}
-	 *   kind: empty | sesar (well-formed SESAR IGSN; existence NOT yet checked)
-	 *         | other_registrar (an IGSN/DOI from another allocating agent)
+	 *   kind: empty | sesar (well-formed 10.58052/ IGSN; existence NOT yet checked)
+	 *         | doi (IGSN-shaped DOI under another prefix: may be a SESAR team
+	 *           prefix OR another registrar; only a SESAR lookup can tell)
 	 *         | invalid (not an IGSN)
-	 *   normalized: "10.58052/IEJMA0002" for sesar, the DOI for
-	 *               other_registrar, else null
+	 *   normalized: "10.58052/IEJMA0002" for sesar, the DOI for doi, else null
 	 */
 	public static function classifyIgsn($value)
 	{
@@ -326,7 +330,7 @@ class SesarMapper
 		}
 		if (stripos($v, self::SESAR_PREFIX) === 0) return array('kind' => 'invalid', 'normalized' => null);   // SESAR prefix, wrong shape
 		if (preg_match('#^10\.[0-9]{4,9}/\S+$#', $v)) {
-			return array('kind' => 'other_registrar', 'normalized' => $v);
+			return array('kind' => 'doi', 'normalized' => $v);
 		}
 		// Bare 9-character IGSN (pre-DOI SESAR style, e.g. IEJMA0002, HRV003M16).
 		if (preg_match('#^[A-Za-z0-9]{9}$#', $v)) {
