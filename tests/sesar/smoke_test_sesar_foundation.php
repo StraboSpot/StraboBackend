@@ -260,6 +260,20 @@ check('optional fields omitted when empty', !isset($bare['sample_description']) 
 	&& !isset($bare['general_material_type']) && !isset($bare['sampling_start_date']) && !isset($bare['parent_sample']), $bare);
 
 // ===========================================================================
+section('SesarMapper: stored IGSN values are free text (classify before any SESAR use)');
+$cls = function ($v) { $c = SesarMapper::classifyIgsn($v); return $c['kind'] . ($c['normalized'] !== null ? ':' . $c['normalized'] : ''); };
+check('canonical SESAR IGSN', $cls('10.58052/IEJMA0002') === 'sesar:10.58052/IEJMA0002');
+check('DOI URL, lower case -> normalized', $cls(' https://doi.org/10.58052/iejma0002 ') === 'sesar:10.58052/IEJMA0002');
+check('igsn.org URL + igsn: label -> normalized', $cls('https://igsn.org/IEJMA0002') === 'sesar:10.58052/IEJMA0002' && $cls('IGSN: IEJMA0002') === 'sesar:10.58052/IEJMA0002');
+check('bare 9-character IGSN gets the prefix SESAR needs', $cls('IEJMA0002') === 'sesar:10.58052/IEJMA0002' && $cls('hrv003m16') === 'sesar:10.58052/HRV003M16');
+check("another registrar's IGSN is not SESAR", $cls('10.60510/ICDP5054EHW1001') === 'other_registrar:10.60510/ICDP5054EHW1001');
+check('SESAR prefix with the wrong length is invalid', $cls('10.58052/IEJMA00021') === 'invalid' && $cls('10.58052/') === 'invalid');
+foreach (array('sdfbsbd', 'UC0068', 'Carr_057_UM_#19', 'testing IGSN', 'Ignshere', 'L', '96-13-D30') as $junk) {
+	check("junk '$junk' is invalid", $cls($junk) === 'invalid');
+}
+check('blank is empty', $cls('   ') === 'empty' && $cls(null) === 'empty');
+
+// ===========================================================================
 section('SesarMapper: D6 fingerprint + push patch');
 $fp = SesarMapper::fingerprint($o);
 check('fingerprint stable across key order', $fp === SesarMapper::fingerprint(array_reverse($o, true)));

@@ -27,6 +27,7 @@
 include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . "/includes/sesar/SesarOnboarding.php";
+require_once __DIR__ . "/includes/sesar/SesarMapper.php";
 
 $allowed = SesarAccess::canUse($userpkey);
 $configured = SesarAccess::isConfigured();
@@ -51,12 +52,18 @@ if ($allowed && $configured) {
 	);
 	foreach ((is_array($res) ? $res : array()) as $r) {
 		$igsn = trim((string)$r->igsn);
+		$cls = SesarMapper::classifyIgsn($igsn);
+		if ($igsn === '') $state = 'none';
+		elseif ($r->reg_igsn !== null) $state = 'managed';
+		elseif ($cls['kind'] === 'sesar') $state = 'unmanaged';
+		elseif ($cls['kind'] === 'other_registrar') $state = 'other';
+		else $state = 'invalid';
 		$rows[] = array(
 			'id'     => (string)$r->id,
 			'owner'  => (int)$r->userpkey,
 			'name'   => (string)$r->name,
 			'igsn'   => $igsn,
-			'state'  => $igsn === '' ? 'none' : ($r->reg_igsn !== null ? 'managed' : 'unmanaged'),
+			'state'  => $state,
 			'reg'    => $r->reg_state,
 			'hasLoc' => is_numeric($r->latitude) && is_numeric($r->longitude),
 		);
@@ -117,6 +124,8 @@ include("includes/mheader.php");
 .si-pill.none { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); }
 .si-pill.managed { background: rgba(110, 190, 120, 0.2); color: #a8e0b0; }
 .si-pill.unmanaged { background: rgba(120, 170, 230, 0.2); color: #b6d6f4; }
+.si-pill.other { background: rgba(170, 140, 230, 0.2); color: #d2c2f4; }
+.si-pill.invalid { background: rgba(228, 76, 101, 0.18); color: #f5a3b3; }
 .si-pill.noloc { background: rgba(240, 180, 60, 0.18); color: #f3c97a; }
 .si-more { text-align: center; margin: 1em 0; }
 @media (max-width: 640px) {
@@ -152,7 +161,9 @@ include("includes/mheader.php");
                     <option value="">All IGSN states</option>
                     <option value="none">No IGSN</option>
                     <option value="managed">IGSN managed here</option>
-                    <option value="unmanaged">IGSN from elsewhere</option>
+                    <option value="unmanaged">SESAR IGSN, not managed here</option>
+                    <option value="other">IGSN from another registrar</option>
+                    <option value="invalid">Not a valid IGSN</option>
                 </select>
                 <select id="si-loc">
                     <option value="">Any location</option>
@@ -451,7 +462,10 @@ include("includes/mheader.php");
     var q = document.getElementById('si-q'), fState = document.getElementById('si-state'), fLoc = document.getElementById('si-loc');
     var tbody = document.getElementById('si-rows'), count = document.getElementById('si-count'), more = document.getElementById('si-more');
     var shown = PAGE;
-    var STATE_TEXT = { none: 'No IGSN', managed: 'Managed here', unmanaged: 'From elsewhere' };
+    var STATE_TEXT = { none: 'No IGSN', managed: 'Managed here', unmanaged: 'SESAR, not managed here',
+                       other: 'Other registrar', invalid: 'Not a valid IGSN' };
+    var STATE_TIP = { invalid: 'The IGSN field holds text that is not an IGSN. It is never sent to SESAR.',
+                      other: 'An IGSN from a registrar other than SESAR. StraboSpot cannot manage it at SESAR.' };
 
     function filtered() {
         var term = q.value.trim().toLowerCase(), st = fState.value, loc = fLoc.value;
@@ -474,7 +488,7 @@ include("includes/mheader.php");
             return '<tr><td><a href="' + esc(href) + '">' + esc(r.name || r.id) + '</a>'
                 + (r.name && r.name !== r.id ? '<div class="si-muted">' + esc(r.id) + '</div>' : '') + '</td>'
                 + '<td class="si-igsn">' + (r.igsn ? esc(r.igsn) : '<span class="si-muted">none</span>') + '</td>'
-                + '<td><span class="si-pill ' + r.state + '">' + STATE_TEXT[r.state] + '</span></td>'
+                + '<td><span class="si-pill ' + r.state + '"' + (STATE_TIP[r.state] ? ' title="' + esc(STATE_TIP[r.state]) + '"' : '') + '>' + STATE_TEXT[r.state] + '</span></td>'
                 + '<td class="si-col-loc">' + (r.hasLoc ? 'Yes' : '<span class="si-pill noloc">Missing</span>') + '</td></tr>';
         }).join('') || '<tr><td colspan="4" class="si-muted">No samples match.</td></tr>';
         more.hidden = list.length <= shown;

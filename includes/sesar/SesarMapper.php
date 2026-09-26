@@ -293,6 +293,48 @@ class SesarMapper
 		return $out;
 	}
 
+	// =======================================================================
+	// Stored IGSN values (free text in StraboSamples)
+	// =======================================================================
+
+	/** SESAR's DOI prefix: every SESAR IGSN is 10.58052/ + 9 letters/digits. */
+	const SESAR_PREFIX = '10.58052/';
+
+	/**
+	 * What a stored IGSN field value really is. The field is free text, so it
+	 * holds sample names, placeholders and keyboard mashing as well as real
+	 * IGSNs (dev 09-26: 919 real, 68 junk). Never send a stored value to
+	 * SESAR (lookup, link, parent_sample) unless this says 'sesar'.
+	 *
+	 * @return array {kind, normalized}
+	 *   kind: empty | sesar (well-formed SESAR IGSN; existence NOT yet checked)
+	 *         | other_registrar (an IGSN/DOI from another allocating agent)
+	 *         | invalid (not an IGSN)
+	 *   normalized: "10.58052/IEJMA0002" for sesar, the DOI for
+	 *               other_registrar, else null
+	 */
+	public static function classifyIgsn($value)
+	{
+		$v = trim((string)$value);
+		if ($v === '') return array('kind' => 'empty', 'normalized' => null);
+		// Accepted wrappers: DOI / IGSN resolver URLs, "doi:" and "igsn:" labels.
+		$v = preg_replace('#^(https?://)?(dx\.)?doi\.org/#i', '', $v);
+		$v = preg_replace('#^(https?://)?(www\.)?igsn\.org/#i', '', $v);
+		$v = preg_replace('#^(doi|igsn)\s*:\s*#i', '', $v);
+		if (preg_match('#^10\.58052/([A-Za-z0-9]{9})$#', $v, $m)) {
+			return array('kind' => 'sesar', 'normalized' => self::SESAR_PREFIX . strtoupper($m[1]));
+		}
+		if (stripos($v, self::SESAR_PREFIX) === 0) return array('kind' => 'invalid', 'normalized' => null);   // SESAR prefix, wrong shape
+		if (preg_match('#^10\.[0-9]{4,9}/\S+$#', $v)) {
+			return array('kind' => 'other_registrar', 'normalized' => $v);
+		}
+		// Bare 9-character IGSN (pre-DOI SESAR style, e.g. IEJMA0002, HRV003M16).
+		if (preg_match('#^[A-Za-z0-9]{9}$#', $v)) {
+			return array('kind' => 'sesar', 'normalized' => self::SESAR_PREFIX . strtoupper($v));
+		}
+		return array('kind' => 'invalid', 'normalized' => null);
+	}
+
 	/** "Marine and lacustrine samples > Core piece" -> "Core piece" (SESAR reads return paths). */
 	public static function leaf($objectType)
 	{
