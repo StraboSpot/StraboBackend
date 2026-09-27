@@ -198,6 +198,13 @@ $res = $pull->apply($A, 'sesarpull-a', array('mode' => 'review', 'accept' => arr
 check('value changed at SESAR after the review -> skipped with a reason, others applied',
 	$res['applied'] === array('name') && count($res['skipped']) === 1 && $res['skipped'][0]['field'] === 'display_sample_purpose'
 	&& spine('sesarpull-a', $A)->display_sample_purpose === null && spine('sesarpull-a', $A)->name === 'SESAR name', $res);
+$p = $pull->preview($A, 'sesarpull-a');
+$seen = seenOf($p);
+unset($seen['display_sample_purpose']);
+$res = $pull->apply($A, 'sesarpull-a', array('mode' => 'review', 'accept' => array('display_sample_purpose'), 'seen' => $seen));
+check('review mode: ticked field without its seen value -> skipped, never applied unseen',
+	$res['applied'] === array() && count($res['skipped']) === 1 && $res['skipped'][0]['field'] === 'display_sample_purpose'
+	&& spine('sesarpull-a', $A)->display_sample_purpose === null, $res);
 check('re-pull refreshes the same row (no duplicate)', (int)$db->get_var_prepared(
 	"SELECT count(*) FROM strabosamples.sesar_registrations WHERE sample_id = 'sesarpull-a' AND sample_userpkey = $1", array($A)) === 1
 	&& json_decode(reg('sesarpull-a', $A)->snapshot, true)['purpose'] === 'Changed purpose');

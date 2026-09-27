@@ -127,7 +127,12 @@ class SesarPull
 				if ($mode === 'review') {
 					if (!in_array($f, $accept, true)) continue;
 					// The user approved the value they saw; SESAR may have changed since.
-					if (array_key_exists($f, $seen) && json_encode(self::displayValue($f, $seen[$f])) !== json_encode($row['sesar'])) {
+					// A ticked field without the value the user saw is never applied unseen.
+					if (!array_key_exists($f, $seen)) {
+						$skipped[] = array('field' => $f, 'why' => 'The reviewed value was not sent with the request. Pull again and apply from the review.');
+						continue;
+					}
+					if (json_encode(self::displayValue($f, $seen[$f])) !== json_encode($row['sesar'])) {
 						$skipped[] = array('field' => $f, 'why' => 'Changed at SESAR since the review was opened. Pull again to see the new value.');
 						continue;
 					}
