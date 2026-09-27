@@ -218,6 +218,11 @@ include("includes/mheader.php");
              background: rgba(255,255,255,0.05); }
 .si-selbar .si-selcount { flex: 1 1 auto; color: rgba(255,255,255,0.75); font-size: 0.92em; }
 /* My samples: the count and Clear selection share their own line, so the four actions stay together on the next. */
+/* Once a sample is ticked the bar pins under the site menu (fixed #header / #titleBar, measured in JS) so the actions stay in reach. */
+/* Narrow theme sets body overflow-x: hidden, which makes body a scroll box and breaks sticky; clip clips the same without that. */
+body { overflow-x: clip; overflow-y: visible; }
+.si-selbar.si-stuck { position: sticky; top: var(--si-stick-top, 54px); z-index: 50; background: #2b2c38;
+                      box-shadow: 0 6px 14px rgba(0,0,0,0.45); }
 .si-selinfo { flex-basis: 100%; display: flex; align-items: center; gap: 0.75em; min-height: 2.1em; }
 .si-selinfo .si-btn { padding: 0.3em 0.8em; font-size: 0.88em; }
 @media (max-width: 640px) {
@@ -335,7 +340,7 @@ include("includes/mheader.php");
                     <option value="no">Missing location</option>
                 </select>
             </div>
-            <div class="si-selbar">
+            <div class="si-selbar" id="si-selbar">
                 <div class="si-selinfo">
                     <span class="si-selcount" id="si-selcount"></span>
                     <button type="button" class="si-btn si-quiet" id="si-selclear" hidden>Clear selection</button>
@@ -680,6 +685,18 @@ include("includes/mheader.php");
     var selAll = document.getElementById('si-all'), selCount = document.getElementById('si-selcount');
     var selClear = document.getElementById('si-selclear'), regBtn = document.getElementById('si-register'), pullBtn = document.getElementById('si-pull');
     var pushBtn = document.getElementById('si-push'), batchBtn = document.getElementById('si-batch');
+    var selBar = document.getElementById('si-selbar');
+    // Pin offset = height of whichever fixed site menu is showing (desktop #header, narrow #titleBar).
+    function stickTop() {
+        var top = 0;
+        ['header', 'titleBar'].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el && getComputedStyle(el).position === 'fixed' && el.offsetHeight) top = Math.max(top, el.getBoundingClientRect().bottom);
+        });
+        selBar.style.setProperty('--si-stick-top', Math.max(0, Math.round(top)) + 'px');
+    }
+    stickTop();
+    window.addEventListener('resize', stickTop);
     var BY_ID = {};
     ROWS.forEach(function (r) { BY_ID[r.id] = r; });
     function selectable() { return true; }
@@ -742,6 +759,8 @@ include("includes/mheader.php");
         selCount.textContent = n === 0 ? 'Tick samples to register IGSNs, pull their SESAR records, or send their changes to SESAR.'
             : n + ' sample' + (n === 1 ? '' : 's') + ' selected' + (Math.max(m, p, u) > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '');
         selClear.hidden = n === 0;
+        if (n > 0) stickTop();   // the narrow title bar is built after load, so measure when pinning
+        selBar.classList.toggle('si-stuck', n > 0);
         regBtn.disabled = m === 0 || m > MAX_RUN;
         regBtn.textContent = 'Register IGSN' + (m > 1 ? 's (' + m + ')' : '');
         regBtn.title = n && !m ? 'None of the selected samples needs an IGSN.' : '';
