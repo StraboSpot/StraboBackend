@@ -195,7 +195,19 @@ include("includes/mheader.php");
 .si-tab[aria-selected="true"] { color: #fff; border-bottom-color: #e44c65; font-weight: 600; }
 .si-head { display: flex; flex-wrap: wrap; gap: 0.75em; align-items: center; margin-bottom: 0.75em; }
 .si-head h3 { margin: 0; flex: 1 1 auto; }
-.si-head-acts { display: flex; flex-wrap: wrap; gap: 0.75em; }
+.si-head-acts { display: flex; flex-wrap: wrap; gap: 0.75em; align-items: center; }
+.si-head-acts select { width: auto; }
+.si-intro { margin: 0 0 1.5em; color: rgba(255,255,255,0.8); }
+.si-intro p { margin: 0 0 0.5em; }
+.si-intro ul { margin: 0 0 0 1.25em; padding: 0; }
+.si-intro li { margin-bottom: 0.3em; }
+.si-lead { margin: 0 0 1em; color: rgba(255,255,255,0.8); }
+.si-help { margin: 0 0 1.25em; padding: 0.6em 1em; border-radius: 4px; background: rgba(255,255,255,0.05); font-size: 0.93em; }
+.si-help summary { cursor: pointer; color: #fff; font-weight: 600; }
+.si-help h4 { margin: 1.1em 0 0.2em; font-size: 0.78em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+.si-help dl { margin: 0; }
+.si-help dt { margin-top: 0.5em; color: #fff; font-weight: 600; }
+.si-help dd { margin: 0.1em 0 0 1em; color: rgba(255,255,255,0.75); }
 .si-pager { display: flex; gap: 0.75em; align-items: center; justify-content: center; margin: 1em 0; }
 .si-more { text-align: center; margin: 1em 0; }
 .si-table td.si-cb, .si-table th.si-cb { width: 2.2em; }
@@ -233,9 +245,20 @@ include("includes/mheader.php");
 
             <div class="si-panel" id="si-conn" aria-live="polite"></div>
 
+            <div class="si-intro">
+                <p>SESAR is the registry that issues IGSNs: permanent, citable IDs for physical samples. This page connects your
+                   StraboSamples samples to your SESAR account, in both directions.</p>
+                <ul>
+                    <li><strong>My samples</strong>: samples already in StraboSamples. Give them IGSNs, send your edits to SESAR,
+                        or copy their SESAR records in.</li>
+                    <li><strong>Import from SESAR</strong>: samples that exist at SESAR but not yet in StraboSamples. Bring them in
+                        as new samples, linked to their SESAR records.</li>
+                </ul>
+            </div>
+
             <div class="si-tabs" role="tablist">
                 <button type="button" class="si-tab" role="tab" id="si-tab-mine" aria-selected="true" aria-controls="si-pane-mine">My samples</button>
-                <button type="button" class="si-tab" role="tab" id="si-tab-import" aria-selected="false" aria-controls="si-pane-import">Import from my SESAR account</button>
+                <button type="button" class="si-tab" role="tab" id="si-tab-import" aria-selected="false" aria-controls="si-pane-import">Import from SESAR</button>
             </div>
 
             <div id="si-pane-mine" role="tabpanel" aria-labelledby="si-tab-mine">
@@ -249,10 +272,48 @@ include("includes/mheader.php");
                 <h3>My samples</h3>
                 <div class="si-head-acts">
                     <button type="button" class="si-btn si-quiet" id="si-findbatch" hidden title="Link IGSNs that SESAR assigned to samples you sent in a SESAR batch file">Find my batch IGSNs</button>
-                    <button type="button" class="si-btn si-quiet" id="si-create">Create samples from IGSNs</button>
                     <button type="button" class="si-btn si-quiet" id="si-report" title="Download an Excel or CSV report of your samples with IGSNs">Download report</button>
                 </div>
             </div>
+            <p class="si-lead">Every sample you own in StraboSamples, with its IGSN (if any) and how it stands with SESAR.
+               Tick samples, then choose an action below the filters.</p>
+            <details class="si-help">
+                <summary>What the buttons and IGSN states mean</summary>
+                <h4>Actions on ticked samples</h4>
+                <dl>
+                    <dt>Register IGSNs</dt>
+                    <dd>Asks SESAR for a new IGSN for each ticked sample that does not have one. You review everything before anything is sent.
+                        StraboSpot then keeps the SESAR record in step with the sample ("Managed here").</dd>
+                    <dt>SESAR batch file</dt>
+                    <dd>Another way to register: writes the ticked samples into your own SESAR spreadsheet template, which you upload at SESAR yourself.
+                        Afterwards, use <strong>Find my batch IGSNs</strong> to attach the IGSNs SESAR assigned back to these samples.</dd>
+                    <dt>Send to SESAR</dt>
+                    <dd>Updates SESAR records with edits you made here since they were last sent (only for IGSNs managed here).</dd>
+                    <dt>Pull from SESAR</dt>
+                    <dd>Copies details from the SESAR record into the sample (fills empty fields; overwriting is your choice) and links the IGSN,
+                        so an IGSN typed in by hand becomes one managed here (or read-only, if another SESAR account owns it).</dd>
+                </dl>
+                <h4>Other buttons</h4>
+                <dl>
+                    <dt>Find my batch IGSNs</dt>
+                    <dd>After a SESAR batch upload, finds the IGSNs SESAR assigned and links each one to its sample.</dd>
+                    <dt>Download report</dt>
+                    <dd>An Excel or CSV list of your samples with IGSNs (the ticked ones, or all shown).</dd>
+                </dl>
+                <h4>IGSN states</h4>
+                <dl>
+                    <dt>No IGSN</dt><dd>Nothing registered yet. Use Register IGSNs or a SESAR batch file.</dd>
+                    <dt>Managed here</dt><dd>Linked to its SESAR record; edits can be sent to SESAR.</dd>
+                    <dt>SESAR, not managed here</dt><dd>The sample has a SESAR IGSN that is not linked yet (for example, typed in by hand). Pull from SESAR links it.</dd>
+                    <dt>read-only</dt><dd>Linked to a record another SESAR account owns: you can pull from it but not send changes.</dd>
+                    <dt>Changed since sent</dt><dd>Edited here since the last send. Use Send to SESAR.</dd>
+                    <dt>Differs from Field</dt><dd>The sample comes from StraboField and its SESAR record disagrees on location, material or purpose.
+                        StraboField stays in charge of those; fix whichever side is wrong.</dd>
+                    <dt>Deactivation requested / Deactivated at SESAR</dt><dd>You asked SESAR to retire the IGSN (SESAR never deletes one) and a
+                        curator is reviewing it, or has done so. Request it from the sample's page.</dd>
+                    <dt>Other DOI prefix / Not a valid IGSN</dt><dd>The IGSN field holds an ID from another registry, or text that is not an IGSN.</dd>
+                </dl>
+            </details>
             <div class="si-filters">
                 <input type="text" id="si-q" placeholder="Search sample name, ID or IGSN" autocomplete="off">
                 <select id="si-state">
@@ -291,12 +352,24 @@ include("includes/mheader.php");
             </div>
 
             <div id="si-pane-import" role="tabpanel" aria-labelledby="si-tab-import" hidden>
-                <p>Samples registered under your SESAR account, including ones made at SESAR directly (for example with SESAR's spreadsheet upload).
-                   Tick the ones to bring into StraboSamples: each becomes a sample linked to its SESAR record.</p>
+                <p class="si-lead">Bring samples that already have IGSNs at SESAR into StraboSamples. Each becomes a new sample, filled in from
+                   its SESAR record and linked to it. Two ways:</p>
+                <ul class="si-lead">
+                    <li><strong>From your SESAR account</strong>: the list below shows every sample registered under your SESAR account, including
+                        ones made at SESAR directly. Tick the ones you want, then Create.</li>
+                    <li><strong>Paste a list of IGSNs</strong>: quicker when you already have the IGSNs (for example in a spreadsheet). Works for any
+                        public IGSN, including samples registered by colleagues; those are linked read-only.</li>
+                </ul>
+                <div class="si-head">
+                    <h3>Samples in my SESAR account</h3>
+                    <div class="si-head-acts">
+                        <button type="button" class="si-btn si-quiet" id="si-create" title="Create samples from IGSNs you paste in, from your account or anyone's public records">Paste a list of IGSNs</button>
+                        <select id="si-acct-fmt" aria-label="Account report format"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option></select>
+                        <button type="button" class="si-btn si-quiet" id="si-acct-report" title="Every sample in your SESAR account, drafts included, and whether it is in StraboSamples">Download account report</button>
+                    </div>
+                </div>
                 <div class="si-filters">
                     <input type="text" id="si-imp-q" placeholder="Search at SESAR (name or IGSN), then press Enter" autocomplete="off">
-                    <select id="si-acct-fmt" aria-label="Account report format"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option></select>
-                    <button type="button" class="si-btn si-quiet" id="si-acct-report" title="Every sample in your SESAR account, drafts included, and whether it is in StraboSamples">Download account report</button>
                 </div>
                 <div id="si-acct-msg" aria-live="polite"></div>
                 <div class="si-selbar">
@@ -773,7 +846,11 @@ include("includes/mheader.php");
         SesarBatch.find({ landingBase: STATUS.links.landing_base, onDone: function (changed) { if (changed) window.location.reload(); } });
     });
     document.getElementById('si-create').addEventListener('click', function () {
-        SesarPull.create({ onDone: function (changed) { if (changed) window.location.reload(); } });
+        SesarPull.create({ onDone: function (changed) {
+            if (!changed) return;
+            try { sessionStorage.setItem('si-tab', 'import'); } catch (e) { /* storage blocked */ }
+            window.location.reload();
+        } });
     });
 
     [q, fState, fLoc].forEach(function (el) {
