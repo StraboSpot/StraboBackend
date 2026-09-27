@@ -260,6 +260,21 @@ class SesarClient
 	}
 
 	/**
+	 * This account's list row for one IGSN, or null when the IGSN is not
+	 * among the account's own samples. The detail GET lacks sample_id,
+	 * external_sample_id and last_update_date; the personal list filtered by
+	 * ?igsn= has all three (sandbox 09-27, answers in well under a second).
+	 */
+	public function findOwnByIgsn($access, $igsn)
+	{
+		$page = $this->listSamples($access, array('igsn' => (string)$igsn, 'page_size' => 5));
+		foreach ($page['data'] as $r) {
+			if (is_array($r) && isset($r['igsn']) && strcasecmp((string)$r['igsn'], (string)$igsn) === 0) return $r;
+		}
+		return null;
+	}
+
+	/**
 	 * Public existence check for stored IGSN values (D3 revised): anonymous
 	 * GET samples/by-igsn/ for each normalized IGSN, several at once when the
 	 * transport can. Never throws; per IGSN:

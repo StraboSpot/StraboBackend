@@ -554,7 +554,7 @@ class SesarMint
 		$n = $cls['normalized'];
 		$st = isset($looked[$n]) ? $looked[$n]['status'] : 'error';
 		if ($st === 'found' || $st === 'private') {
-			return array('group' => 'blocked', 'text' => 'Its IGSN field holds ' . $n . ', which is registered at SESAR. (Linking to existing SESAR records comes in a later update.)');
+			return array('group' => 'blocked', 'text' => 'Its IGSN field holds ' . $n . ', which is registered at SESAR. Use Pull from SESAR to link it instead.');
 		}
 		if ($st === 'error') {
 			return array('group' => 'blocked', 'text' => 'Could not check its current IGSN (' . $n . ') with SESAR just now. Please try again.');

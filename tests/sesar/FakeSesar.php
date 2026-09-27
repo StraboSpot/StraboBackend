@@ -326,7 +326,7 @@ class FakeSesar implements SesarTransport
 			}
 			return array(201, json_encode(self::publicView($rec)), 0);   // real POST answer: not wrapped, no sample_id
 		}
-		if (preg_match('#^samples/(10\.58052/[^/]+)/deactivate/$#', $path, $m) && $method === 'POST') {
+		if (preg_match('#^samples/(10\.[0-9]+/[^/]+)/deactivate/$#', $path, $m) && $method === 'POST') {
 			$igsn = urldecode($m[1]);
 			if (!isset($s['samples'][$igsn])) return self::err(404, 'detail', 'Not found.');
 			$b = json_decode((string)$body, true);
@@ -334,11 +334,22 @@ class FakeSesar implements SesarTransport
 			$s['samples'][$igsn]['deactivation_requested'] = $b;
 			return array(200, json_encode(array('data' => array('igsn' => $igsn, 'status' => 'requested'))), 0);
 		}
-		if (preg_match('#^samples/(10\.58052/[^/]+)/$#', $path, $m)) {
+		if (preg_match('#^samples/(10\.[0-9]+/[^/]+)/$#', $path, $m)) {
 			$igsn = urldecode($m[1]);
 			if (!isset($s['samples'][$igsn])) return self::err(404, 'detail', 'Not found.');
 			if (!empty($s['samples'][$igsn]['_deactivated'])) return self::err(410, 'detail', 'This sample has been deactivated.');
-			if ($method === 'GET') return array(200, json_encode(array('data' => self::publicView($s['samples'][$igsn]))), 0);
+			if ($method === 'GET') {
+				// Real detail (sandbox 09-27): can_edit / can_deactivate for the caller,
+				// but NO last_update_date (nor sample_id / external_sample_id: only list rows carry those).
+				$rec = $s['samples'][$igsn];
+				$mine = $authed && $rec['_owner'] === $tok['orcid'];
+				if (!empty($rec['_private']) && !$mine) return self::err(403, 'detail', 'You do not have permission to perform this action.');
+				$out = self::publicView($rec);
+				unset($out['last_update_date'], $out['external_sample_id']);
+				$out['can_edit'] = $mine;
+				$out['can_deactivate'] = $mine && empty($rec['deactivation_requested']);
+				return array(200, json_encode(array('data' => $out)), 0);
+			}
 			if ($method === 'PATCH') {
 				if (!$authed || $s['samples'][$igsn]['_owner'] !== $tok['orcid']) return self::err(403, 'detail', 'You do not have permission to perform this action.');
 				foreach (json_decode((string)$body, true) as $k => $v) {
@@ -353,12 +364,24 @@ class FakeSesar implements SesarTransport
 			$rows = array();
 			foreach ($s['samples'] as $igsn => $rec) {
 				if (isset($query['external_sample_id']) && (string)$rec['external_sample_id'] !== (string)$query['external_sample_id']) continue;
+				if (isset($query['igsn'])) {
+					$want = strtoupper((string)$query['igsn']);
+					if (strpos($want, '/') === false) $want = '10.58052/' . $want;
+					if (strtoupper($igsn) !== $want) continue;
+				}
+				if (isset($query['search']) && stripos($igsn . ' ' . (isset($rec['name']) ? $rec['name'] : ''), (string)$query['search']) === false) continue;
 				if ($authed && $rec['_owner'] !== $tok['orcid']) continue;   // scope=personal
 				if (!empty($rec['_deactivated'])) continue;
+				if (!$authed && !empty($rec['_private'])) continue;
 				$rows[] = self::publicView($rec) + array('sample_id' => isset($rec['_sample_id']) ? $rec['_sample_id'] : null);
 			}
-			return array(200, json_encode(array('count' => count($rows), 'next' => null, 'previous' => null, 'data' => $rows,
-				'page_size' => 100, 'current_page' => 1, 'total_pages' => 1)), 0);
+			if (!empty($s['knobs']['list_timeout'])) return array(504, '<html>504 Gateway Time-out</html>', 0);
+			$size = isset($query['page_size']) ? max(1, (int)$query['page_size']) : 100;
+			$page = isset($query['page']) ? max(1, (int)$query['page']) : 1;
+			$total = count($rows);
+			$rows = array_slice($rows, ($page - 1) * $size, $size);
+			return array(200, json_encode(array('count' => $total, 'next' => ($page * $size < $total) ? 'next' : null, 'previous' => null, 'data' => $rows,
+				'page_size' => $size, 'current_page' => $page, 'total_pages' => max(1, (int)ceil($total / $size)))), 0);
 		}
 		return self::err(404, 'detail', 'Fake SESAR: no route for ' . $method . ' ' . $path);
 	}

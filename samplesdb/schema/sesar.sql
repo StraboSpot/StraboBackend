@@ -115,6 +115,14 @@ CREATE TABLE IF NOT EXISTS strabosamples.sesar_registrations (
 ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS sesar_sample_id     BIGINT;
 ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS related_resource_id BIGINT;
 
+-- Phase 5 (pull, 2026-09-27):
+--   field_flags  differences between the SESAR record and the linked Field
+--                spot that a pull shows but never applies (D5 option A:
+--                location, material, purpose), as of the last pull:
+--                [{field, current, sesar, distance_m?}]. NULL = never
+--                pulled or not Field-linked; [] = no differences.
+ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS field_flags JSONB;
+
 -- One live registration per sample per environment (D3 duplicate guard).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sesar_reg_sample_live
     ON strabosamples.sesar_registrations (sample_id, sample_userpkey, environment)
