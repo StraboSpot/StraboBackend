@@ -206,7 +206,11 @@ class SesarMapper
 
 	/**
 	 * Full registration payload (POST /api/samples/). $choices: sesar_code,
-	 * object_type (required); general_material_type, collector (optional).
+	 * object_type (required); general_material_type, collector (optional),
+	 * collector_individual (optional {label, fname, lname, individual_uri}:
+	 * SESAR resolves a bare label by name and refuses names it knows more
+	 * than once, "Ambiguous individual match by label" (sandbox 09-27), so
+	 * the connected person is sent with their ORCID individual_uri).
 	 */
 	public static function registrationPayload(array $s, array $choices)
 	{
@@ -215,7 +219,11 @@ class SesarMapper
 		$p['object_type'] = (string)$choices['object_type'];
 		if (!empty($choices['general_material_type'])) $p['general_material_type'] = (string)$choices['general_material_type'];
 		$collector = isset($choices['collector']) ? trim((string)$choices['collector']) : '';
-		if ($collector !== '') $p['collectors'] = array(array('individual' => array('label' => $collector)));
+		if (!empty($choices['collector_individual']) && is_array($choices['collector_individual'])) {
+			$p['collectors'] = array(array('individual' => $choices['collector_individual']));
+		} elseif ($collector !== '') {
+			$p['collectors'] = array(array('individual' => array('label' => $collector)));
+		}
 		return $p;
 	}
 

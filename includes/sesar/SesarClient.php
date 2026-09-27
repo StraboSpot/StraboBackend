@@ -323,6 +323,29 @@ class SesarClient
 		return (int)$d['id'];
 	}
 
+	/**
+	 * One of the user's related resources with exactly this URI, or null.
+	 * SESAR refuses a second resource with the same URI ("A resource with
+	 * this filename/URI already exists.", sandbox 09-27) and its `search`
+	 * matches LABELS only, so $labelTerm (a token our labels carry) narrows
+	 * it first; failing that, up to $maxPages pages of the list are scanned.
+	 */
+	public function findRelatedResourceByUri($access, $uri, $labelTerm = null, $maxPages = 5)
+	{
+		$queries = array();
+		if ($labelTerm !== null && $labelTerm !== '') $queries[] = array('search' => (string)$labelTerm, 'page_size' => 100);
+		for ($p = 1; $p <= $maxPages; $p++) $queries[] = array('page' => $p, 'page_size' => 100, 'ordering' => '-id');
+		foreach ($queries as $q) {
+			$d = $this->call('GET', 'related-resources/', $access, $q);
+			$rows = $this->listData($d);
+			foreach ($rows as $r) {
+				if (is_array($r) && isset($r['uri'], $r['id']) && (string)$r['uri'] === (string)$uri) return (int)$r['id'];
+			}
+			if (!isset($q['search']) && (empty($rows) || empty($d['next']))) break;
+		}
+		return null;
+	}
+
 	/** SESAR DeactivateReasonEnum, verbatim. */
 	const DEACTIVATE_REASONS = array('this was a test sample', 'this sample does not exist', 'duplicate igsn', 'other');
 

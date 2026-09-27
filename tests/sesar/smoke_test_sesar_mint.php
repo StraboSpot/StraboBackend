@@ -288,6 +288,17 @@ $res = $mint->mintOne($A, 'sesarmint-ready', $CH);
 check('re-run with the registration but an empty IGSN field: field repaired, nothing new at SESAR',
 	$res['igsn'] === $igsn && spineIgsn('sesarmint-ready', $A) === $igsn && atSesar($fake, 'sesarmint-ready') === 1);
 
+// Collector: the connected person goes by ORCID; an ambiguous typed name gets guidance.
+mk('sesarmint-col1', $A);
+$res = $mint->mintOne($A, 'sesarmint-col1', array('collector' => 'user, fake') + $CH);
+$c = $fake->state()['samples'][$res['igsn']]['collectors'][0]['individual'];
+check('collector = connected person -> SESAR individual with ORCID individual_uri + names', $c['individual_uri'] === '0000-0001-0000-0001'
+	&& $c['label'] === 'User, Fake' && $c['lname'] === 'User', $c);
+mk('sesarmint-col2', $A);
+$e = mintErr(function () use ($mint, $A, $CH) { $mint->mintOne($A, 'sesarmint-col2', array('collector' => 'Common, Name') + $CH); });
+check('typed name SESAR finds ambiguous -> plain guidance, tracking row removed', $e !== null && isset($e->errors['collector'])
+	&& strpos($e->getMessage(), 'more than one person') !== false && reg('sesarmint-col2', $A) === null, $e ? $e->getMessage() : '');
+
 // Field-linked line sample.
 $res = $mint->mintOne($A, 'sesarmint-field', array('object_type' => 'Oriented Core', 'material' => 'Granite') + $CH);
 $rec = $fake->state()['samples'][$res['igsn']];
@@ -354,6 +365,18 @@ $fake->set('fail_next', array('related-resources/' => 500));
 $res = $mint->mintOne($A, 'sesarmint-t5', $CH);
 check('link-back failure never blocks the mint (noted)', !empty($res['igsn']) && strpos(implode(' ', $res['notes']), 'link back') !== false
 	&& empty($fake->state()['samples'][$res['igsn']]['related_resources']));
+
+// The link-back resource survives a refused registration; the retry reuses it (one URI, one resource).
+mk('sesarmint-t8', $A);
+$fake->set('fail_next', array('samples/' => 400));
+mintErr(function () use ($mint, $A, $CH) { $mint->mintOne($A, 'sesarmint-t8', $CH); });
+$nRR = count((array)$fake->state()['related']);
+$res = $mint->mintOne($A, 'sesarmint-t8', $CH);
+$rec = $fake->state()['samples'][$res['igsn']];
+check('retry after a refusal reuses the existing link-back resource (found via its label), no note',
+	count((array)$fake->state()['related']) === $nRR && count($rec['related_resources']) === 1
+	&& $fake->state()['related'][(string)$rec['related_resources'][0]]['label'] === 'StraboSpot sample page (sesarmint-t8)'
+	&& empty($res['notes']), $res);
 
 mk('sesarmint-t6', $A);
 // A separate session, like a second web request (pg_connect would reuse ours,

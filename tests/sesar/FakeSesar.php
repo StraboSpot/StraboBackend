@@ -242,7 +242,7 @@ class FakeSesar implements SesarTransport
 		if ($method === 'GET' && $path === 'auth/user/') {
 			// Real shape (sandbox 09-26); jwt_connection comes back null despite the claim.
 			return array(200, json_encode(array('data' => array('user' => array(
-				'individual' => array('label' => 'User, Fake', 'fname' => 'Fake', 'lname' => 'User'),
+				'individual' => array('label' => 'User, Fake', 'fname' => 'Fake', 'lname' => 'User', 'individual_uri' => $tok['orcid']),
 				'email' => 'fake+' . $tok['orcid'] . '@example.org', 'orcid' => $tok['orcid'], 'upload_permission_status' => 1),
 				'jwt_connection' => null))), 0);
 		}
@@ -272,9 +272,22 @@ class FakeSesar implements SesarTransport
 			foreach (array('label', 'uri', 'related_resource_type') as $req) {
 				if (empty($b[$req])) return self::err(400, $req, 'This field is required.');
 			}
+			foreach ($s['related'] as $rr) {
+				if ($rr['uri'] === $b['uri']) return array(400, json_encode(array('message' => 'A resource with this filename/URI already exists.',
+					'errors' => array('uri' => array('A resource with this filename/URI already exists.')))), 0);
+			}
 			$s['rr_seq'] = (isset($s['rr_seq']) ? $s['rr_seq'] : 1208000) + 1;
 			$s['related'][(string)$s['rr_seq']] = $b + array('_owner' => $tok['orcid']);
 			return array(201, json_encode(array('data' => array('id' => $s['rr_seq']) + $b)), 0);
+		}
+		if ($method === 'GET' && $path === 'related-resources/') {
+			$rows = array();
+			foreach ($s['related'] as $id => $rr) {
+				if ($rr['_owner'] !== $tok['orcid']) continue;
+				if (isset($query['search']) && stripos($rr['label'], $query['search']) === false) continue;   // labels only, like SESAR
+				$rows[] = array('id' => (int)$id, 'label' => $rr['label'], 'uri' => $rr['uri']);
+			}
+			return array(200, json_encode(array('count' => count($rows), 'next' => null, 'data' => $rows)), 0);
 		}
 		if ($method === 'POST' && $path === 'samples/') {
 			if (!$authed) return self::err(401, 'detail', 'Authentication credentials were not provided.');
@@ -287,6 +300,12 @@ class FakeSesar implements SesarTransport
 			}
 			if (!empty($p['general_material_type']) && in_array($p['general_material_type'], array('Rock', 'Igneous rock'), true)) {
 				return self::err(400, 'general_material_type', "Material type '" . $p['general_material_type'] . "' is not available for registration.");
+			}
+			foreach ((array)(isset($p['collectors']) ? $p['collectors'] : array()) as $c) {
+				// Real sandbox 09-27: a bare label SESAR knows more than once is refused.
+				if (isset($c['individual']['label']) && $c['individual']['label'] === 'Common, Name' && empty($c['individual']['individual_uri'])) {
+					return self::err(400, 'collectors', 'Ambiguous individual match by label.');
+				}
 			}
 			foreach ((array)(isset($p['related_resources']) ? $p['related_resources'] : array()) as $rid) {
 				if (!isset($s['related'][(string)$rid])) return self::err(400, 'related_resources', 'Invalid pk "' . $rid . '" - object does not exist.');

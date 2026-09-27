@@ -14,8 +14,9 @@
  *              (SesarOnboarding, sesar_connect.php).
  *
  *              Below: the user's OWN samples (owner-only minting, D3) with
- *              their IGSN state. Mint / link / push actions arrive with
- *              Phases 4-6.
+ *              their IGSN state. Tick samples and "Register IGSNs" opens the
+ *              mint review (assets/js/sesar_mint.js, sesar_mint.php, D4).
+ *              Link / push actions arrive with Phases 5-6.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -128,6 +129,13 @@ include("includes/mheader.php");
 .si-pill.invalid { background: rgba(228, 76, 101, 0.18); color: #f5a3b3; }
 .si-pill.noloc { background: rgba(240, 180, 60, 0.18); color: #f3c97a; }
 .si-more { text-align: center; margin: 1em 0; }
+.si-table td.si-cb, .si-table th.si-cb { width: 2.2em; }
+.si-cb input[type="checkbox"] + label { padding-left: 1.6em; margin: 0; min-height: 1.4em; }
+.si-cb input[type="checkbox"] + label:before { top: 0; }
+.si-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.si-selbar { display: flex; flex-wrap: wrap; gap: 0.75em; align-items: center; margin: 0 0 1em; padding: 0.6em 0.9em; border-radius: 4px;
+             background: rgba(255,255,255,0.05); }
+.si-selbar .si-selcount { flex: 1 1 auto; color: rgba(255,255,255,0.75); font-size: 0.92em; }
 @media (max-width: 640px) {
     .si-form { grid-template-columns: 1fr; }
     .si-panel { padding: 1.1em; }
@@ -171,9 +179,15 @@ include("includes/mheader.php");
                     <option value="no">Missing location</option>
                 </select>
             </div>
+            <div class="si-selbar">
+                <span class="si-selcount" id="si-selcount"></span>
+                <button type="button" class="si-btn si-quiet" id="si-selclear" hidden>Clear selection</button>
+                <button type="button" class="si-btn" id="si-register" disabled>Register IGSNs</button>
+            </div>
             <p class="si-muted" id="si-count"></p>
             <table class="si-table">
-                <thead><tr><th>Sample</th><th>IGSN</th><th>IGSN state</th><th class="si-col-loc">Location</th></tr></thead>
+                <thead><tr><th class="si-cb"><input type="checkbox" id="si-all"><label for="si-all"><span class="si-sr">Select all shown samples</span></label></th>
+                    <th>Sample</th><th>IGSN</th><th>IGSN state</th><th class="si-col-loc">Location</th></tr></thead>
                 <tbody id="si-rows"></tbody>
             </table>
             <div class="si-more"><button type="button" class="si-btn si-quiet" id="si-more" hidden>Show more</button></div>
@@ -462,6 +476,11 @@ include("includes/mheader.php");
     var q = document.getElementById('si-q'), fState = document.getElementById('si-state'), fLoc = document.getElementById('si-loc');
     var tbody = document.getElementById('si-rows'), count = document.getElementById('si-count'), more = document.getElementById('si-more');
     var shown = PAGE;
+    var selected = {};   // sample id -> true
+    var MAX_RUN = 100;
+    var selAll = document.getElementById('si-all'), selCount = document.getElementById('si-selcount');
+    var selClear = document.getElementById('si-selclear'), regBtn = document.getElementById('si-register');
+    function selectable(r) { return r.state !== 'managed'; }
     var STATE_TEXT = { none: 'No IGSN', managed: 'Managed here', unmanaged: 'SESAR, not managed here',
                        other: 'Other DOI prefix', invalid: 'Not a valid IGSN' };
     var STATE_TIP = { invalid: 'The IGSN field holds text that is not an IGSN. It is never sent to SESAR.',
@@ -485,14 +504,47 @@ include("includes/mheader.php");
             : list.length + ' of ' + ROWS.length + ' samples';
         tbody.innerHTML = list.slice(0, shown).map(function (r) {
             var href = '/samples/' + encodeURIComponent(r.owner) + '/' + encodeURIComponent(r.id);
-            return '<tr><td><a href="' + esc(href) + '">' + esc(r.name || r.id) + '</a>'
+            var cb = selectable(r)
+                ? '<input type="checkbox" id="si-cb-' + esc(r.id) + '" data-id="' + esc(r.id) + '"' + (selected[r.id] ? ' checked' : '') + '>'
+                  + '<label for="si-cb-' + esc(r.id) + '"><span class="si-sr">Select ' + esc(r.name || r.id) + '</span></label>'
+                : '';
+            return '<tr><td class="si-cb">' + cb + '</td><td><a href="' + esc(href) + '">' + esc(r.name || r.id) + '</a>'
                 + (r.name && r.name !== r.id ? '<div class="si-muted">' + esc(r.id) + '</div>' : '') + '</td>'
                 + '<td class="si-igsn">' + (r.igsn ? esc(r.igsn) : '<span class="si-muted">none</span>') + '</td>'
                 + '<td><span class="si-pill ' + r.state + '"' + (STATE_TIP[r.state] ? ' title="' + esc(STATE_TIP[r.state]) + '"' : '') + '>' + STATE_TEXT[r.state] + '</span></td>'
                 + '<td class="si-col-loc">' + (r.hasLoc ? 'Yes' : '<span class="si-pill noloc">Missing</span>') + '</td></tr>';
-        }).join('') || '<tr><td colspan="4" class="si-muted">No samples match.</td></tr>';
+        }).join('') || '<tr><td colspan="5" class="si-muted">No samples match.</td></tr>';
         more.hidden = list.length <= shown;
+        var vis = list.slice(0, shown).filter(selectable);
+        selAll.checked = vis.length > 0 && vis.every(function (r) { return selected[r.id]; });
+        renderSel();
     }
+
+    function renderSel() {
+        var n = Object.keys(selected).length;
+        selCount.textContent = n === 0 ? 'Tick samples to register IGSNs for them at SESAR.'
+            : n + ' sample' + (n === 1 ? '' : 's') + ' selected' + (n > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '');
+        selClear.hidden = n === 0;
+        regBtn.disabled = n === 0 || n > MAX_RUN;
+        regBtn.textContent = n > 1 ? 'Register IGSNs (' + n + ')' : 'Register IGSN';
+    }
+
+    tbody.addEventListener('change', function (e) {
+        var id = e.target.getAttribute('data-id');
+        if (id === null) return;
+        if (e.target.checked) selected[id] = true; else delete selected[id];
+        renderRows();
+    });
+    selAll.addEventListener('change', function () {
+        filtered().slice(0, shown).filter(selectable).forEach(function (r) {
+            if (selAll.checked) selected[r.id] = true; else delete selected[r.id];
+        });
+        renderRows();
+    });
+    selClear.addEventListener('click', function () { selected = {}; renderRows(); });
+    regBtn.addEventListener('click', function () {
+        SesarMint.open({ sampleIds: Object.keys(selected), onDone: function (minted) { if (minted) window.location.reload(); } });
+    });
 
     [q, fState, fLoc].forEach(function (el) {
         el.addEventListener(el === q ? 'input' : 'change', function () { shown = PAGE; renderRows(); });
@@ -501,6 +553,7 @@ include("includes/mheader.php");
     renderRows();
 })();
 </script>
+<script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
 <?php endif; ?>
     </div>
 </div>

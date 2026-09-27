@@ -335,10 +335,20 @@ class SesarMint
 		$rrId = null;
 		if (self::LINK_BACK) {
 			$url = self::PAGE_BASE . $userpkey . '/' . rawurlencode($sampleId);
+			$label = 'StraboSpot sample page (' . $sampleId . ')';   // the id makes it findable: SESAR searches labels only
 			$client = $this->client;
 			try {
-				$rrId = $this->conn->withAccess($userpkey, function ($access) use ($client, $url) {
-					return $client->createRelatedResource($access, 'StraboSpot sample page', $url, 'This sample in StraboSamples (StraboSpot)');
+				$rrId = $this->conn->withAccess($userpkey, function ($access) use ($client, $url, $label, $sampleId) {
+					try {
+						return $client->createRelatedResource($access, $label, $url, 'This sample in StraboSamples (StraboSpot)');
+					} catch (SesarError $e) {
+						// One URI, one resource at SESAR: an earlier attempt (or an
+						// earlier IGSN of this sample) already made it. Reuse it.
+						if ($e->kind !== 'validation' || stripos($e->getMessage(), 'already exists') === false) throw $e;
+						$id = $client->findRelatedResourceByUri($access, $url, (string)$sampleId);
+						if ($id === null) throw $e;
+						return $id;
+					}
 				});
 			} catch (SesarError $e) {
 				if (in_array($e->kind, array('auth', 'no_permission', 'no_account'), true)) {
@@ -370,6 +380,10 @@ class SesarMint
 					array('outcome' => array('unknown')));
 			}
 			$this->deleteMintingRow($regPkey);
+			if ($e->kind === 'validation' && stripos($e->getMessage(), 'ambiguous individual') !== false) {
+				throw new SesarError(400, 'SESAR knows more than one person named "' . $choices['collector']
+					. '", so it cannot tell who the collector is. Leave the collector as yourself, or clear it.', array('collector' => array('ambiguous')));
+			}
 			throw $e;
 		}
 		if (empty($rec['igsn'])) {
@@ -581,16 +595,32 @@ class SesarMint
 			}
 		}
 		$collector = trim((string)(isset($in['collector']) ? $in['collector'] : ''));
-		if (mb_strlen($collector) > 255) throw new SesarError(400, 'The collector name is too long.', array('collector' => array('too_long')));
-		return array('sesar_code' => $code, 'object_type' => $hit, 'general_material_type' => $matLabel, 'collector' => $collector);
+		if (mb_strlen($collector) > 200) throw new SesarError(400, 'The collector name is too long.', array('collector' => array('too_long')));
+		// The connected person as collector: send their SESAR individual (ORCID), not just the name.
+		$me = self::sesarIndividual($summary);
+		$ind = null;
+		if ($collector !== '' && $me !== null && mb_strtolower($collector) === mb_strtolower((string)$me['label'])) {
+			$ind = array_filter(array('label' => $me['label'], 'fname' => isset($me['fname']) ? $me['fname'] : null,
+				'lname' => isset($me['lname']) ? $me['lname'] : null,
+				'individual_uri' => isset($me['individual_uri']) ? $me['individual_uri'] : null), function ($x) { return $x !== null && $x !== ''; });
+		}
+		return array('sesar_code' => $code, 'object_type' => $hit, 'general_material_type' => $matLabel, 'collector' => $collector,
+			'collector_individual' => $ind);
+	}
+
+	/** The connected account's SESAR individual {label, fname, lname, individual_uri, ...}, or null. */
+	private static function sesarIndividual(array $summary)
+	{
+		$i = isset($summary['sesar_user']['user']['individual']) ? $summary['sesar_user']['user']['individual']
+			: (isset($summary['sesar_user']['individual']) ? $summary['sesar_user']['individual'] : null);
+		return (is_array($i) && isset($i['label']) && is_string($i['label']) && trim($i['label']) !== '') ? $i : null;
 	}
 
 	/** SESAR individual label ("Last, First") when known, else the StraboSpot account name. */
 	private function defaultCollector($userpkey, array $summary)
 	{
-		$u = isset($summary['sesar_user']['user']['individual']['label']) ? $summary['sesar_user']['user']['individual']['label']
-			: (isset($summary['sesar_user']['individual']['label']) ? $summary['sesar_user']['individual']['label'] : null);
-		if (is_string($u) && trim($u) !== '') return trim($u);
+		$me = self::sesarIndividual($summary);
+		if ($me !== null) return trim($me['label']);
 		$r = $this->db->get_row_prepared("SELECT firstname, lastname FROM users WHERE pkey = $1", array((int)$userpkey));
 		if ($r === null) return '';
 		$last = trim((string)$r->lastname); $first = trim((string)$r->firstname);

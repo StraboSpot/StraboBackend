@@ -40,6 +40,8 @@ include("prepare_connections.php");
 require_once __DIR__ . "/samplesdb/services/StraboSamplesService.php";
 require_once __DIR__ . "/samplesdb/lib/vocab.php";
 require_once __DIR__ . "/microdb/lib/permalink.php";
+require_once __DIR__ . "/includes/sesar/SesarAccess.php";
+require_once __DIR__ . "/includes/sesar/SesarMapper.php";
 
 $ownerPkey = isset($_GET['owner']) ? (int)$_GET['owner'] : 0;
 $sampleId  = isset($_GET['id'])    ? trim((string)$_GET['id']) : '';
@@ -338,7 +340,29 @@ if (!$notFound) {
         $canEdit = (bool)$row;
     }
 
+    // IGSN at SESAR (StraboSamples IGSN integration): the registration
+    // StraboSpot manages for this sample, if any (the IGSN links to its
+    // SESAR page, with a badge while we use SESAR's test site), and the
+    // owner's "Register IGSN" button (pilot-gated, D10). The button shows
+    // only while the IGSN field is empty or holds text that is not an
+    // IGSN; the review (sesar_mint.php) decides everything else.
+    $sesarEnv = SesarAccess::environment();
+    $sesarReg = $db->get_row_prepared(
+        "SELECT igsn, state FROM strabosamples.sesar_registrations
+          WHERE sample_id = $1 AND sample_userpkey = $2 AND environment = $3 AND active AND state <> 'minting'",
+        array($sampleId, $ownerPkey, $sesarEnv)
+    );
+    $igsnKind = SesarMapper::classifyIgsn($sample['igsn']);
+    $sesar = array(
+        'igsn'        => $sesarReg ? $sesarReg->igsn : null,
+        'landing_url' => $sesarReg ? SesarAccess::landingUrl($sesarReg->igsn, $sesarEnv) : null,
+        'sandbox'     => $sesarEnv === 'sandbox',
+        'can_mint'    => $isOwner && SesarAccess::canUse($userpkey) && !$sesarReg
+                         && in_array($igsnKind['kind'], array('empty', 'invalid'), true),
+    );
+
     $payload = array(
+        'sesar'         => $sesar,
         'sample'        => $sample,
         'owner'         => array('pkey' => $ownerPkey, 'name' => $ownerName),
         'links'         => $links,
@@ -401,6 +425,8 @@ include("includes/mheader.php");
     text-decoration: none;
 }
 .sd-action-btn:hover { background: #f06880; color: #ffffff; }
+.sd-sesar-test { display: inline-block; margin-left: 0.4em; font-size: 0.78em; padding: 0 0.5em; border-radius: 4px;
+    background: rgba(240,180,60,0.18); color: #f3c97a; border: 1px solid rgba(240,180,60,0.45); }
 .sd-action-btn.outline {
     background: transparent;
     color: #e44c65;
@@ -1301,6 +1327,7 @@ include("includes/mheader.php");
                 <a class="sd-action-btn outline" href="#" id="sd-share-btn">Share</a>
                 <div class="sd-share-line"><strong>SAMPLE URL:</strong><span id="sd-share-url"></span></div>
                 <a class="sd-action-btn" href="#" id="sd-collab-btn" style="display:none">Collaborate</a>
+                <a class="sd-action-btn" href="#" id="sd-igsn-btn" style="display:none" title="Register an IGSN for this sample at SESAR">Register IGSN</a>
                 <div class="sd-avatars" id="sd-avatars"></div>
             </div>
 
@@ -1474,6 +1501,9 @@ include("includes/mheader.php");
     </div>
 </div>
 
+<?php if (!empty($payload['sesar']['can_mint'])): ?>
+<script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
+<?php endif; ?>
 <script type="application/json" id="sd-data"><?php echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <?php
 // Display labels (Field choice translation Phase 7): material / purpose from
@@ -1545,6 +1575,15 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     function field(label, value) {
         if (value === null || value === undefined || value === '') return '';
         return '<div><span class="sd-field-label">' + escapeHtml(label) + ':</span> ' + escapeHtml(value) + '</div>';
+    }
+    // The IGSN links to its SESAR page when StraboSpot manages it there.
+    function igsnFieldHtml(sample) {
+        var s = payload.sesar || {};
+        if (!sample.igsn || !s.igsn || sample.igsn !== s.igsn) return field('IGSN', sample.igsn);
+        return '<div><span class="sd-field-label">IGSN:</span> <a href="' + escapeHtml(s.landing_url) + '" target="_blank" rel="noopener">'
+            + escapeHtml(sample.igsn) + '</a>'
+            + (s.sandbox ? ' <span class="sd-sesar-test" title="Registered on SESAR\'s test site; not a real IGSN">SESAR test</span>' : '')
+            + '</div>';
     }
     // Custom key/value fields from the tabular import path (custom_data
     // JSONB). Read-only here — they're edited by re-uploading a sheet on
@@ -1631,7 +1670,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     if (sample.latitude !== null && sample.longitude !== null) {
         metaHtml += field('Current Sample Location', sample.latitude.toFixed(6) + ', ' + sample.longitude.toFixed(6));
     }
-    metaHtml += field('IGSN',                         sample.igsn);
+    metaHtml += igsnFieldHtml(sample);
     metaHtml += field('Description',                  sample.description);
     metaHtml += field('Notes',                        sample.notes);
     metaHtml += customFieldsHtml(sample);
@@ -1640,6 +1679,14 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     // Edit + Collaborate visibility from perms.
     if (perms.canEdit) document.getElementById('sd-edit-btn').style.display    = 'inline-block';
     if (perms.isOwner) document.getElementById('sd-collab-btn').style.display  = 'inline-block';
+    if (payload.sesar && payload.sesar.can_mint && window.SesarMint) {
+        var igsnBtn = document.getElementById('sd-igsn-btn');
+        igsnBtn.style.display = 'inline-block';
+        igsnBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            SesarMint.open({ sampleIds: [sample.id], onDone: function(minted) { if (minted) window.location.reload(); } });
+        });
+    }
     document.getElementById('sd-edit-btn').addEventListener('click', function(e) {
         e.preventDefault();
         openEditModal();
@@ -2914,7 +2961,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         if (sample.latitude !== null && sample.longitude !== null) {
             metaHtml += field('Current Sample Location', sample.latitude.toFixed(6) + ', ' + sample.longitude.toFixed(6));
         }
-        metaHtml += field('IGSN',                         sample.igsn);
+        metaHtml += igsnFieldHtml(sample);
         metaHtml += field('Description',                  sample.description);
         metaHtml += field('Notes',                        sample.notes);
         metaHtml += customFieldsHtml(sample);
