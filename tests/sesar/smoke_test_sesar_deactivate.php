@@ -200,10 +200,10 @@ check('may ask again after a denial; declined date cleared', row('sesardeact-m',
 section('nightly sweep (approvals)');
 $fake->markDeactivated('10.58052/IEFAK0201');   // curator approved
 $fake->set('fail_next', array('samples/by-igsn/' => 500));   // night 1: the first lookup (the approved one) fails
-$s = $deact->sweep();
+$s = $deact->sweep($U);
 check('night 1: 3 pending checked, lookup error counted, nothing changed', $s === array('checked' => 3, 'deactivated' => 0, 'errors' => 1)
 	&& row('sesardeact-m', $A)->state === 'deactivation_requested', $s);
-$s = $deact->sweep();
+$s = $deact->sweep($U);
 $row = row('sesardeact-m', $A);
 check('night 2: retried, 1 deactivated', $s === array('checked' => 3, 'deactivated' => 1, 'errors' => 0), $s);
 check('approved row: deactivated, inactive (history), date set', $row->state === 'deactivated' && $row->active === 'f' && $row->deactivated_at !== null);
@@ -221,7 +221,7 @@ mk('sesardeact-t', $A, '10.58052/IEFAK0206'); track('sesardeact-t', $A, '10.5805
 $deact->request($A, array('sample_id' => 'sesardeact-t'), array('reason' => 'this was a test sample', 'confirm' => 'IEFAK0206'));
 $db->query("UPDATE strabosamples.samples SET igsn = 'my own note' WHERE id = 'sesardeact-t' AND userpkey = $A");
 $fake->markDeactivated('10.58052/IEFAK0206');
-$deact->sweep();
+$deact->sweep($U);
 check('field no longer holds the tracked IGSN -> left alone', row('sesardeact-t', $A)->state === 'deactivated' && spineIgsn('sesardeact-t', $A) === 'my own note');
 
 // ===========================================================================

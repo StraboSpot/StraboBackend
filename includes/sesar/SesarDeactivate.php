@@ -220,15 +220,23 @@ class SesarDeactivate
 
 	/**
 	 * Anonymous 410 lookups for every pending request in this environment.
+	 * @param int[]|null $onlyUsers limit to these owners (test suites, so
+	 *                   real pending rows on a dev database never interfere)
 	 * @return array {checked, deactivated, errors}
 	 */
-	public function sweep()
+	public function sweep(array $onlyUsers = null)
 	{
+		$params = array($this->env);
+		$only = '';
+		if ($onlyUsers !== null) {
+			$params[] = '{' . implode(',', array_map('intval', $onlyUsers)) . '}';
+			$only = ' AND sample_userpkey = ANY($2::int[])';
+		}
 		$rows = $this->db->get_results_prepared(
 			"SELECT pkey, sample_userpkey, igsn FROM strabosamples.sesar_registrations
-			  WHERE environment = $1 AND active AND state = 'deactivation_requested' AND igsn IS NOT NULL
+			  WHERE environment = $1 AND active AND state = 'deactivation_requested' AND igsn IS NOT NULL" . $only . "
 			  ORDER BY pkey",
-			array($this->env)
+			$params
 		);
 		$rows = is_array($rows) ? $rows : array();
 		$out = array('checked' => count($rows), 'deactivated' => 0, 'errors' => 0);
