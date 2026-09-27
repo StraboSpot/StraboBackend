@@ -73,6 +73,22 @@ class SesarMapper
 		'parent_sample', 'external_sample_id',
 	);
 
+	/** Owned field -> SESAR batch spreadsheet column (template 8.0, sandbox 09-27). */
+	const BATCH_HEADERS = array(
+		'name'                    => 'Sample Name',
+		'parent_sample'           => 'Parent IGSN',
+		'external_sample_id'      => 'Other Name(s)',
+		'sample_description'      => 'Sample Description',
+		'purpose'                 => 'Purpose',
+		'latitude'                => 'Latitude (WGS84)',
+		'longitude'               => 'Longitude (WGS84)',
+		'latitude_end'            => 'Latitude End (WGS84)',
+		'longitude_end'           => 'Longitude End (WGS84)',
+		'sampling_start_date'     => 'Sampling start date',
+		'sampling_date_precision' => 'Sampling date precision',
+	);
+	const OTHER_NAME_PREFIX = 'StraboSpot ';
+
 	const MAX_NAME = 255;
 	const MAX_PURPOSE = 500;
 	const MAX_EXTERNAL_ID = 100;
@@ -225,6 +241,45 @@ class SesarMapper
 			$p['collectors'] = array(array('individual' => array('label' => $collector)));
 		}
 		return $p;
+	}
+
+	/**
+	 * Phase 8 (B1): the same data as a mint, as one row of SESAR's batch
+	 * spreadsheet, keyed by its column headers (template 8.0). There is no
+	 * external id column, so our id goes in "Other Name(s)" as
+	 * "StraboSpot <id>" (B2: readable on SESAR's page, matched back later).
+	 *
+	 * @param array $choices object_type (leaf label), general_material_type
+	 *                       (registrable label or null)
+	 * @return array header => value (coordinates as floats, the rest text)
+	 */
+	public static function batchRow(array $s, array $choices)
+	{
+		$owned = self::ownedFields($s);
+		$row = array('Object Type' => isset($choices['object_type']) ? (string)$choices['object_type'] : null);
+		foreach (self::BATCH_HEADERS as $f => $h) {
+			if (!array_key_exists($f, $owned) || $owned[$f] === null) continue;
+			$v = $owned[$f];
+			if (in_array($f, array('latitude', 'longitude', 'latitude_end', 'longitude_end'), true)) $v = (float)$v;
+			if ($f === 'external_sample_id') $v = self::OTHER_NAME_PREFIX . $v;
+			$row[$h] = $v;
+		}
+		if (!empty($choices['general_material_type'])) $row['General Material Type'] = (string)$choices['general_material_type'];
+		return $row;
+	}
+
+	/**
+	 * B2: our sample id from an Other Name(s) value ("StraboSpot 123",
+	 * possibly among other names split by comma or semicolon), or null.
+	 */
+	public static function idFromOtherNames($otherNames)
+	{
+		$names = is_array($otherNames) ? $otherNames : preg_split('/[;,]/', (string)$otherNames);
+		foreach ($names as $n) {
+			if (is_array($n)) $n = isset($n['name']) ? $n['name'] : (isset($n['label']) ? $n['label'] : '');
+			if (preg_match('/^\s*' . preg_quote(trim(self::OTHER_NAME_PREFIX), '/') . '\s+(\S+)\s*$/i', (string)$n, $m)) return $m[1];
+		}
+		return null;
 	}
 
 	/** D6: sha256 over the owned fields in a canonical order. */

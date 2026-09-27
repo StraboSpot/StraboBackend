@@ -204,6 +204,8 @@ include("includes/mheader.php");
 .si-selbar { display: flex; flex-wrap: wrap; gap: 0.75em; align-items: center; margin: 0 0 1em; padding: 0.6em 0.9em; border-radius: 4px;
              background: rgba(255,255,255,0.05); }
 .si-selbar .si-selcount { flex: 1 1 auto; color: rgba(255,255,255,0.75); font-size: 0.92em; }
+/* My samples: five actions, so the count gets its own line and the buttons stay together on the next. */
+.si-selbar #si-selcount { flex-basis: 100%; }
 @media (max-width: 640px) {
     .si-form { grid-template-columns: 1fr; }
     .si-panel { padding: 1.1em; }
@@ -271,6 +273,7 @@ include("includes/mheader.php");
                 <button type="button" class="si-btn si-quiet" id="si-selclear" hidden>Clear selection</button>
                 <button type="button" class="si-btn si-quiet" id="si-pull" disabled>Pull from SESAR</button>
                 <button type="button" class="si-btn si-quiet" id="si-push" disabled>Send to SESAR</button>
+                <button type="button" class="si-btn si-quiet" id="si-batch" disabled title="Write the selected samples into a SESAR batch template, to upload at SESAR yourself">SESAR batch file</button>
                 <button type="button" class="si-btn" id="si-register" disabled>Register IGSNs</button>
             </div>
             <p class="si-muted" id="si-count"></p>
@@ -592,7 +595,7 @@ include("includes/mheader.php");
     var MAX_RUN = 100;
     var selAll = document.getElementById('si-all'), selCount = document.getElementById('si-selcount');
     var selClear = document.getElementById('si-selclear'), regBtn = document.getElementById('si-register'), pullBtn = document.getElementById('si-pull');
-    var pushBtn = document.getElementById('si-push');
+    var pushBtn = document.getElementById('si-push'), batchBtn = document.getElementById('si-batch');
     var BY_ID = {};
     ROWS.forEach(function (r) { BY_ID[r.id] = r; });
     function selectable() { return true; }
@@ -664,6 +667,10 @@ include("includes/mheader.php");
         pushBtn.disabled = u === 0 || u > MAX_RUN;
         pushBtn.textContent = 'Send to SESAR' + (u > 1 ? ' (' + u + ')' : '');
         pushBtn.title = n && !u ? 'None of the selected samples has changes to send to SESAR.' : '';
+        batchBtn.disabled = m === 0;
+        batchBtn.textContent = 'SESAR batch file' + (m > 1 ? ' (' + m + ')' : '');
+        batchBtn.title = n && !m ? 'None of the selected samples needs an IGSN.'
+            : 'Write the selected samples into a SESAR batch template, to upload at SESAR yourself';
     }
 
     tbody.addEventListener('change', function (e) {
@@ -686,6 +693,10 @@ include("includes/mheader.php");
     pullBtn.addEventListener('click', function () {
         SesarPull.bulk({ samples: selectedRows(pullable).map(function (r) { return { id: r.id, name: r.name }; }),
                          onDone: function (changed) { if (changed) window.location.reload(); } });
+    });
+    batchBtn.addEventListener('click', function () {
+        SesarBatch.open({ samples: selectedRows(mintable).map(function (r) { return { id: r.id, name: r.name }; }),
+                          appBase: STATUS.links.sesar, connected: STATUS.step === 'connected' });
     });
     pushBtn.addEventListener('click', function () {
         SesarPush.bulk({ samples: selectedRows(pushable).map(function (r) { return { id: r.id, name: r.name }; }),
@@ -855,6 +866,7 @@ include("includes/mheader.php");
 <script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
 <script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
 <script src="/assets/js/sesar_push.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_push.js'); ?>"></script>
+<script src="/assets/js/sesar_batch.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_batch.js'); ?>"></script>
 <script src="/assets/js/sesar_deactivate.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_deactivate.js'); ?>"></script>
 <?php endif; ?>
     </div>
