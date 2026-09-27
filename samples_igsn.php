@@ -23,7 +23,10 @@
  *              - Import from my SESAR account: the account's own SESAR
  *                samples, page by page, each marked when a StraboSamples
  *                sample already holds it; tick to create samples (D5).
- *              Push arrives with Phase 6.
+ *              "Send to SESAR" pushes changed managed samples
+ *              (assets/js/sesar_push.js, sesar_push.php, Phase 6); the
+ *              "Changed since sent" pill compares each managed sample with
+ *              its stored SESAR snapshot, no SESAR call (P1).
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -36,6 +39,7 @@ include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . "/includes/sesar/SesarOnboarding.php";
 require_once __DIR__ . "/includes/sesar/SesarMapper.php";
+require_once __DIR__ . "/includes/sesar/SesarPush.php";
 
 $allowed = SesarAccess::canUse($userpkey);
 $configured = SesarAccess::isConfigured();
@@ -49,7 +53,9 @@ if ($allowed && $configured) {
 
 	$res = $db->get_results_prepared(
 		"SELECT s.id, s.userpkey, s.name, s.igsn, s.latitude, s.longitude, s.modified_at,
-		        r.igsn AS reg_igsn, r.state AS reg_state, r.access AS reg_access, r.field_flags::text AS field_flags
+		        r.igsn AS reg_igsn, r.state AS reg_state, r.access AS reg_access, r.field_flags::text AS field_flags,
+		        r.pkey AS reg_pkey, r.origin AS reg_origin, r.snapshot::text AS reg_snapshot,
+		        r.related_resource_id AS reg_rr, r.sesar_sample_id AS reg_sesar_id
 		   FROM strabosamples.samples s
 		   LEFT JOIN strabosamples.sesar_registrations r
 		          ON r.sample_id = s.id AND r.sample_userpkey = s.userpkey
@@ -58,7 +64,24 @@ if ($allowed && $configured) {
 		  ORDER BY s.modified_at DESC NULLS LAST, s.id",
 		array($userpkey, SesarAccess::environment())
 	);
+	// Push status per managed row (P1: sample vs snapshot; ~2 ms each, no SESAR call).
+	$conn = new SesarConnection($db, $client);
+	$views = new SesarSampleView($db, $neodb);
+	$push = new SesarPush($db, $client, $conn, $views,
+		new SesarMint($db, $client, $conn, new SesarVocab($db, $client), $views, null),
+		new SesarPull($db, $client, $conn, $views, $neodb));
 	foreach ((is_array($res) ? $res : array()) as $r) {
+		$pushSt = null;
+		if ($r->reg_igsn !== null && $r->reg_access === 'managed') {
+			$v = $views->build((string)$r->id, (int)$r->userpkey);
+			if ($v !== null) {
+				try {
+					$pushSt = $push->statusFor($v, (object)array('pkey' => $r->reg_pkey, 'igsn' => $r->reg_igsn, 'state' => $r->reg_state,
+						'origin' => $r->reg_origin, 'access' => $r->reg_access, 'snapshot' => $r->reg_snapshot,
+						'related_resource_id' => $r->reg_rr, 'sesar_sample_id' => $r->reg_sesar_id));
+				} catch (Throwable $e) { $pushSt = null; }
+			}
+		}
 		$igsn = trim((string)$r->igsn);
 		$cls = SesarMapper::classifyIgsn($igsn);
 		if ($igsn === '') $state = 'none';
@@ -78,6 +101,10 @@ if ($allowed && $configured) {
 			// Field vs SESAR differences as of the last pull (D5): labels only.
 			'differs'  => is_array($flags) ? array_values(array_map(function ($f) { return (string)$f['label']; }, $flags)) : array(),
 			'hasLoc' => is_numeric($r->latitude) && is_numeric($r->longitude),
+			// Phase 6: would a send change anything at SESAR (labels), or add the missing link back.
+			'pushable' => $pushSt !== null && $pushSt['pushable'],
+			'changed'  => ($pushSt !== null && $pushSt['pushable']) ? $pushSt['fields'] : array(),
+			'linkBack' => $pushSt !== null && $pushSt['pushable'] && $pushSt['link_back'],
 		);
 	}
 }
@@ -139,6 +166,7 @@ include("includes/mheader.php");
 .si-pill.other { background: rgba(170, 140, 230, 0.2); color: #d2c2f4; }
 .si-pill.invalid { background: rgba(228, 76, 101, 0.18); color: #f5a3b3; }
 .si-pill.noloc { background: rgba(240, 180, 60, 0.18); color: #f3c97a; }
+.si-pill.changed { background: rgba(228, 76, 101, 0.18); color: #f5a3b3; margin-left: 0.3em; }
 .si-pill.differs { background: rgba(240, 180, 60, 0.18); color: #f3c97a; margin-left: 0.3em; }
 .si-pill.ro { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); margin-left: 0.3em; }
 .si-tabs { display: flex; gap: 0.25em; margin: 0 0 1.25em; border-bottom: 1px solid rgba(255,255,255,0.15); }
@@ -203,6 +231,7 @@ include("includes/mheader.php");
                     <option value="other">Other DOI prefix</option>
                     <option value="invalid">Not a valid IGSN</option>
                     <option value="differs">Differs from StraboField</option>
+                    <option value="changed">Changed since last sent to SESAR</option>
                 </select>
                 <select id="si-loc">
                     <option value="">Any location</option>
@@ -214,6 +243,7 @@ include("includes/mheader.php");
                 <span class="si-selcount" id="si-selcount"></span>
                 <button type="button" class="si-btn si-quiet" id="si-selclear" hidden>Clear selection</button>
                 <button type="button" class="si-btn si-quiet" id="si-pull" disabled>Pull from SESAR</button>
+                <button type="button" class="si-btn si-quiet" id="si-push" disabled>Send to SESAR</button>
                 <button type="button" class="si-btn" id="si-register" disabled>Register IGSNs</button>
             </div>
             <p class="si-muted" id="si-count"></p>
@@ -534,11 +564,13 @@ include("includes/mheader.php");
     var MAX_RUN = 100;
     var selAll = document.getElementById('si-all'), selCount = document.getElementById('si-selcount');
     var selClear = document.getElementById('si-selclear'), regBtn = document.getElementById('si-register'), pullBtn = document.getElementById('si-pull');
+    var pushBtn = document.getElementById('si-push');
     var BY_ID = {};
     ROWS.forEach(function (r) { BY_ID[r.id] = r; });
     function selectable() { return true; }
     function mintable(r) { return r.state === 'none' || r.state === 'invalid'; }       // the mint review decides the rest
     function pullable(r) { return r.state === 'managed' || r.state === 'unmanaged' || r.state === 'other'; }
+    function pushable(r) { return r.pushable && (r.changed.length > 0 || r.linkBack); }   // manual send, only when it would do something
     function selectedRows(test) { return Object.keys(selected).map(function (id) { return BY_ID[id]; }).filter(function (r) { return r && test(r); }); }
     var STATE_TEXT = { none: 'No IGSN', managed: 'Managed here', unmanaged: 'SESAR, not managed here',
                        other: 'Other DOI prefix', invalid: 'Not a valid IGSN' };
@@ -548,7 +580,9 @@ include("includes/mheader.php");
     function filtered() {
         var term = q.value.trim().toLowerCase(), st = fState.value, loc = fLoc.value;
         return ROWS.filter(function (r) {
-            if (st === 'differs' ? !r.differs.length : (st && r.state !== st)) return false;
+            if (st === 'differs') { if (!r.differs.length) return false; }
+            else if (st === 'changed') { if (!pushable(r)) return false; }
+            else if (st && r.state !== st) return false;
             if (loc === 'yes' && !r.hasLoc) return false;
             if (loc === 'no' && r.hasLoc) return false;
             if (term && (r.name + ' ' + r.id + ' ' + r.igsn).toLowerCase().indexOf(term) < 0) return false;
@@ -572,6 +606,8 @@ include("includes/mheader.php");
                 + '<td class="si-igsn">' + (r.igsn ? esc(r.igsn) : '<span class="si-muted">none</span>') + '</td>'
                 + '<td><span class="si-pill ' + r.state + '"' + (STATE_TIP[r.state] ? ' title="' + esc(STATE_TIP[r.state]) + '"' : '') + '>' + STATE_TEXT[r.state] + '</span>'
                 + (r.readonly ? '<span class="si-pill ro" title="Linked to another SESAR account\'s record: you can pull from it, not send changes.">read-only</span>' : '')
+                + (pushable(r) ? '<span class="si-pill changed" title="' + esc(r.changed.length ? 'Changed here since last sent to SESAR: ' + r.changed.join(', ').toLowerCase()
+                    : 'The SESAR record has no link back to this sample yet') + '">' + (r.changed.length ? 'Changed since sent' : 'No link back') + '</span>' : '')
                 + (r.differs.length ? '<span class="si-pill differs" title="' + esc('As of the last pull, SESAR and the StraboField spot differ in: ' + r.differs.join(', ').toLowerCase()) + '">Differs from Field</span>' : '')
                 + '</td>'
                 + '<td class="si-col-loc">' + (r.hasLoc ? 'Yes' : '<span class="si-pill noloc">Missing</span>') + '</td></tr>';
@@ -583,9 +619,9 @@ include("includes/mheader.php");
     }
 
     function renderSel() {
-        var n = Object.keys(selected).length, m = selectedRows(mintable).length, p = selectedRows(pullable).length;
-        selCount.textContent = n === 0 ? 'Tick samples to register IGSNs for them, or to pull their SESAR records.'
-            : n + ' sample' + (n === 1 ? '' : 's') + ' selected' + (Math.max(m, p) > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '');
+        var n = Object.keys(selected).length, m = selectedRows(mintable).length, p = selectedRows(pullable).length, u = selectedRows(pushable).length;
+        selCount.textContent = n === 0 ? 'Tick samples to register IGSNs, pull their SESAR records, or send their changes to SESAR.'
+            : n + ' sample' + (n === 1 ? '' : 's') + ' selected' + (Math.max(m, p, u) > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '');
         selClear.hidden = n === 0;
         regBtn.disabled = m === 0 || m > MAX_RUN;
         regBtn.textContent = 'Register IGSN' + (m > 1 ? 's (' + m + ')' : '');
@@ -593,6 +629,9 @@ include("includes/mheader.php");
         pullBtn.disabled = p === 0 || p > MAX_RUN;
         pullBtn.textContent = 'Pull from SESAR' + (p > 1 ? ' (' + p + ')' : '');
         pullBtn.title = n && !p ? 'None of the selected samples has a SESAR IGSN.' : '';
+        pushBtn.disabled = u === 0 || u > MAX_RUN;
+        pushBtn.textContent = 'Send to SESAR' + (u > 1 ? ' (' + u + ')' : '');
+        pushBtn.title = n && !u ? 'None of the selected samples has changes to send to SESAR.' : '';
     }
 
     tbody.addEventListener('change', function (e) {
@@ -614,6 +653,10 @@ include("includes/mheader.php");
     });
     pullBtn.addEventListener('click', function () {
         SesarPull.bulk({ samples: selectedRows(pullable).map(function (r) { return { id: r.id, name: r.name }; }),
+                         onDone: function (changed) { if (changed) window.location.reload(); } });
+    });
+    pushBtn.addEventListener('click', function () {
+        SesarPush.bulk({ samples: selectedRows(pushable).map(function (r) { return { id: r.id, name: r.name }; }),
                          onDone: function (changed) { if (changed) window.location.reload(); } });
     });
     document.getElementById('si-create').addEventListener('click', function () {
@@ -744,6 +787,7 @@ include("includes/mheader.php");
 </script>
 <script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
 <script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
+<script src="/assets/js/sesar_push.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_push.js'); ?>"></script>
 <?php endif; ?>
     </div>
 </div>

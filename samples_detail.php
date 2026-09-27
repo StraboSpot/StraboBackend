@@ -52,6 +52,7 @@ require_once __DIR__ . "/microdb/lib/permalink.php";
 require_once __DIR__ . "/includes/sesar/SesarAccess.php";
 require_once __DIR__ . "/includes/sesar/SesarMapper.php";
 require_once __DIR__ . "/includes/sesar/SesarPull.php";
+require_once __DIR__ . "/includes/sesar/SesarPush.php";
 
 $ownerPkey = isset($_GET['owner']) ? (int)$_GET['owner'] : 0;
 $sampleId  = isset($_GET['id'])    ? trim((string)$_GET['id']) : '';
@@ -430,7 +431,23 @@ if (!$notFound) {
         'differs'     => (!$anonymous && is_array($sesarFlags)) ? $sesarFlags : array(),
         // Owner may unlink a PULLED link (never a minted IGSN) to move it to another sample.
         'can_unlink'  => $sesarPilot && $sesarReg && $sesarReg->origin === 'linked' && $sesarReg->state === 'active',
+        'push'        => null,
     );
+    // "Changed since last sent to SESAR" (Phase 6, P1 + P4): owner + pilot,
+    // managed links only; no SESAR call (sample vs the stored snapshot).
+    if ($sesarPilot && $sesarReg && $sesarReg->access === 'managed' && SesarAccess::isConfigured()) {
+        try {
+            $sesarClient = new SesarClient();
+            $sesarConn = new SesarConnection($db, $sesarClient);
+            $sesarViews = new SesarSampleView($db, $neodb);
+            $sesarPush = new SesarPush($db, $sesarClient, $sesarConn, $sesarViews,
+                new SesarMint($db, $sesarClient, $sesarConn, new SesarVocab($db, $sesarClient), $sesarViews, null),
+                new SesarPull($db, $sesarClient, $sesarConn, $sesarViews, $neodb));
+            $sesar['push'] = $sesarPush->status($userpkey, $sampleId);
+        } catch (Throwable $e) {
+            $sesar['push'] = null;   // the badge is a convenience; never break the page
+        }
+    }
 
     $payload = array(
         'sesar'         => $sesar,
@@ -505,6 +522,9 @@ include("includes/mheader.php");
 .sd-sesar-dl { display: grid; grid-template-columns: 12em 1fr; gap: 0.3em 1.2em; margin: 0; }
 .sd-sesar-dl dt { color: rgba(255,255,255,0.6); }
 .sd-sesar-dl dd { margin: 0; word-break: break-word; }
+.sd-sesar-push { margin: 0 0 0.9em; padding: 0.6em 0.9em; border-radius: 4px; font-size: 0.92em;
+    background: rgba(240,180,60,0.12); border: 1px solid rgba(240,180,60,0.4); }
+.sd-sesar-push a.sd-action-btn { margin: 0.5em 0 0; }
 .sd-sesar-unlink { margin-top: 0.9em; font-size: 0.92em; }
 .sd-sesar-unlink p { margin: 0 0 0.6em; }
 .sd-sesar-unlink .sd-sesar-err { color: #ff8a80; margin-top: 0.5em; }
@@ -1422,6 +1442,7 @@ include("includes/mheader.php");
                 <a class="sd-action-btn" href="#" id="sd-collab-btn" style="display:none">Collaborate</a>
                 <a class="sd-action-btn" href="#" id="sd-igsn-btn" style="display:none" title="Register an IGSN for this sample at SESAR">Register IGSN</a>
                 <a class="sd-action-btn outline" href="#" id="sd-pull-btn" style="display:none" title="Copy values from this sample's SESAR record">Pull from SESAR</a>
+                <a class="sd-action-btn" href="#" id="sd-push-btn" style="display:none" title="Send this sample's changes to its SESAR record">Send to SESAR</a>
                 <div class="sd-avatars" id="sd-avatars"></div>
             </div>
 
@@ -1449,6 +1470,7 @@ include("includes/mheader.php");
             <div class="sd-section" id="sd-sesar-card" style="display:none">
                 <h3>SESAR record</h3>
                 <p class="sd-sesar-meta" id="sd-sesar-meta"></p>
+                <div class="sd-sesar-push" id="sd-sesar-push" style="display:none"></div>
                 <dl class="sd-sesar-dl" id="sd-sesar-dl"></dl>
             </div>
 
@@ -1604,6 +1626,7 @@ include("includes/mheader.php");
 <?php if (!empty($payload['sesar']['can_mint']) || !empty($payload['sesar']['can_pull'])): ?>
 <script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
 <script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
+<script src="/assets/js/sesar_push.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_push.js'); ?>"></script>
 <?php endif; ?>
 <script type="application/json" id="sd-data"><?php echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <?php
@@ -1690,6 +1713,33 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             + (s.sandbox ? ' <span class="sd-sesar-test" title="Registered on SESAR\'s test site; not a real IGSN">SESAR test</span>' : '')
             + '</div>';
     }
+    // "Changed since last sent to SESAR" (Phase 6, P4): shown whenever a send
+    // would change something (own edit, collaborator, Field upload, family),
+    // re-checked right after an Edit Metadata save. Manual send only.
+    function openSesarPush(e) {
+        if (e) e.preventDefault();
+        SesarPush.single({ sampleId: sample.id, onDone: function(changed) { if (changed) window.location.reload(); } });
+    }
+    function renderSesarPush() {
+        var s = payload.sesar || {}, p = s.push, box = document.getElementById('sd-sesar-push'), btn = document.getElementById('sd-push-btn');
+        var due = !!(p && p.pushable && (p.changed || p.link_back) && window.SesarPush);
+        btn.style.display = due ? 'inline-block' : 'none';
+        if (!due) { box.style.display = 'none'; return; }
+        box.innerHTML = (p.changed
+                ? '<strong>Changed since last sent to SESAR:</strong> ' + escapeHtml(p.fields.join(', ')) + '.'
+                : '<strong>The SESAR record has no link back to this page yet.</strong>')
+            + ' Nothing is sent until you choose to.<br><a class="sd-action-btn" href="#" id="sd-push-inline">Send to SESAR</a>';
+        box.style.display = '';
+        document.getElementById('sd-push-inline').addEventListener('click', openSesarPush);
+    }
+    function refreshSesarPush() {
+        var s = payload.sesar || {};
+        if (!s.push || !s.push.pushable || !window.SesarPush) return;
+        SesarPush.status(sample.id).then(function(j) {
+            if (j && j.ok) { s.push = j.status; renderSesarPush(); }
+        });
+    }
+
     // "SESAR record" card: the last SESAR record read by a pull or a mint
     // (D5), read-only, with Field differences as of that read.
     function renderSesarCard() {
@@ -1841,6 +1891,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     // Edit + Collaborate visibility from perms.
     if (perms.canEdit) document.getElementById('sd-edit-btn').style.display    = 'inline-block';
     if (perms.isOwner) document.getElementById('sd-collab-btn').style.display  = 'inline-block';
+    document.getElementById('sd-push-btn').addEventListener('click', openSesarPush);
     if (payload.sesar && payload.sesar.can_pull && window.SesarPull) {
         var pullBtn = document.getElementById('sd-pull-btn');
         pullBtn.style.display = 'inline-block';
@@ -1850,6 +1901,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         });
     }
     renderSesarCard();
+    renderSesarPush();
     if (payload.sesar && payload.sesar.can_mint && window.SesarMint) {
         var igsnBtn = document.getElementById('sd-igsn-btn');
         igsnBtn.style.display = 'inline-block';
@@ -3144,6 +3196,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         metaHtml += field('Notes',                        sample.notes);
         metaHtml += customFieldsHtml(sample);
         document.getElementById('sd-metadata-fields').innerHTML = metaHtml || '<div style="opacity:.6">No metadata recorded.</div>';
+        refreshSesarPush();   // an edit may leave the SESAR record behind (Phase 6, P4)
 
         // Update page title (renders the same name-fallback as the metadata row).
         document.getElementById('sd-title').textContent = 'Sample: ' + (sample.name || sample.id);
