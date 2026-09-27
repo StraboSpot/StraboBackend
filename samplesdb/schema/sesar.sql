@@ -137,6 +137,15 @@ ALTER TABLE strabosamples.sesar_registrations DROP CONSTRAINT IF EXISTS sesar_re
 ALTER TABLE strabosamples.sesar_registrations ADD CONSTRAINT sesar_reg_active_chk
     CHECK (active = (state NOT IN ('deactivated', 'unlinked')));
 
+-- Phase 7 (deactivation, 2026-09-27):
+--   deactivation_declined_at  a curator DENIED our request (seen by "Check
+--                             with SESAR": can_deactivate true again); the
+--                             row is back to 'active'.
+--   orphan_kept_at            the owner chose "Keep" for a tracked IGSN whose
+--                             StraboSamples sample was deleted (IGSN page).
+ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS deactivation_declined_at TIMESTAMPTZ;
+ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS orphan_kept_at TIMESTAMPTZ;
+
 -- One live registration per sample per environment (D3 duplicate guard).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sesar_reg_sample_live
     ON strabosamples.sesar_registrations (sample_id, sample_userpkey, environment)

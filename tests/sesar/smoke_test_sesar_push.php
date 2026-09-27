@@ -282,8 +282,13 @@ track('sesarpush-gone', $A, '10.58052/IEFAK0108', 'minted');
 $fake->markDeactivated('10.58052/IEFAK0108');
 $e = err(function () use ($push, $A) { $push->apply($A, 'sesarpush-gone', array('mode' => 'bulk')); });
 check('deactivated at SESAR -> 410', $e !== null && $e->status === 410);
-$db->query("UPDATE strabosamples.sesar_registrations SET state = 'deactivation_requested' WHERE sample_id = 'sesarpush-gone' AND sample_userpkey = $A");
-$s = $push->status($A, 'sesarpush-gone');
+$g = $db->get_row_prepared("SELECT state, active FROM strabosamples.sesar_registrations WHERE sample_id = 'sesarpush-gone' AND sample_userpkey = $1", array($A));
+check('the 410 is recorded (Phase 7): row deactivated, IGSN text kept (not our request)', $g->state === 'deactivated' && $g->active === 'f'
+	&& $db->get_var_prepared("SELECT igsn FROM strabosamples.samples WHERE id = 'sesarpush-gone' AND userpkey = $1", array($A)) === '10.58052/IEFAK0108');
+$fake->seedSample('10.58052/IEFAK0109', array_merge($base, array('name' => 'Asked', 'external_sample_id' => 'sesarpush-asked')));
+mk('sesarpush-asked', $A, array('name' => 'Asked changed', 'igsn' => '10.58052/IEFAK0109'));
+track('sesarpush-asked', $A, '10.58052/IEFAK0109', 'minted', array('state' => 'deactivation_requested'));
+$s = $push->status($A, 'sesarpush-asked');
 check('deactivation requested -> not pushable', $s['pushable'] === false && strpos($s['reason'], 'deactivation request') !== false, $s);
 
 $pg2 = pg_connect("host=$dbhost dbname=$dbname user=$dbusername password=$dbpassword", PGSQL_CONNECT_FORCE_NEW);

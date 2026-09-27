@@ -126,6 +126,12 @@ class FakeSesar implements SesarTransport
 		$this->mutate(function (&$s) use ($igsn) { $s['samples'][$igsn]['_deactivated'] = true; });
 	}
 
+	/** A curator denies a pending deactivation request (the record stays live). */
+	public function denyDeactivation($igsn)
+	{
+		$this->mutate(function (&$s) use ($igsn) { unset($s['samples'][$igsn]['deactivation_requested']); });
+	}
+
 	public function editAtSesar($igsn, array $fields)
 	{
 		$this->mutate(function (&$s) use ($igsn, $fields) {
@@ -340,6 +346,10 @@ class FakeSesar implements SesarTransport
 			if (!isset($s['samples'][$igsn])) return self::err(404, 'detail', 'Not found.');
 			$b = json_decode((string)$body, true);
 			if (empty($b['deactivate_reason'])) return self::err(400, 'deactivate_reason', 'This field is required.');
+			if (!empty($s['samples'][$igsn]['deactivation_requested'])) {
+				return array(400, json_encode(array('message' => 'A deactivation request already exists for this sample.',
+					'errors' => array('non_field_errors' => array('A deactivation request already exists for this sample.')))), 0);
+			}
 			$s['samples'][$igsn]['deactivation_requested'] = $b;
 			return array(200, json_encode(array('data' => array('igsn' => $igsn, 'status' => 'requested'))), 0);
 		}

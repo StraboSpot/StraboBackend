@@ -45,6 +45,7 @@ require_once __DIR__ . '/SesarConnection.php';
 require_once __DIR__ . '/SesarMapper.php';
 require_once __DIR__ . '/SesarSampleView.php';
 require_once __DIR__ . '/SesarMint.php';
+require_once __DIR__ . '/SesarDeactivate.php';
 
 class SesarPull
 {
@@ -580,7 +581,11 @@ class SesarPull
 		try {
 			$rec = $this->conn->withAccess($userpkey, function ($access) use ($client, $igsn) { return $client->getSample($access, $igsn); });
 		} catch (SesarError $e) {
-			if ($e->kind === 'gone') throw new SesarError(410, $igsn . ' has been deactivated at SESAR, so there is nothing to pull.', array('igsn' => array('gone')));
+			if ($e->kind === 'gone') {
+				// Every signed-in read that meets a 410 records it (Phase 7, markGone).
+				(new SesarDeactivate($this->db, $this->client, $this->conn, SesarDeactivate::serviceIgsnClearer($this->db, $this->neodb)))->markGone($userpkey, $igsn);
+				throw new SesarError(410, $igsn . ' has been deactivated at SESAR, so there is nothing to pull.', array('igsn' => array('gone')));
+			}
 			if ($e->kind === 'not_found') throw new SesarError(404, 'SESAR has no sample with the IGSN ' . $igsn . '.', array('igsn' => array('not_found')));
 			if ($e->status === 403 && empty($e->errors['permissions'])) {
 				throw new SesarError(403, $igsn . ' is not public at SESAR and belongs to another SESAR account, so it cannot be read.', array('igsn' => array('private')));

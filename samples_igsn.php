@@ -23,6 +23,9 @@
  *              - Import from my SESAR account: the account's own SESAR
  *                samples, page by page, each marked when a StraboSamples
  *                sample already holds it; tick to create samples (D5).
+ *              Phase 7: "Deactivation requested" / "Deactivated at SESAR"
+ *              pills + filters, and "IGSNs whose sample was deleted" (orphan
+ *              rows: Request deactivation or Keep; assets/js/sesar_deactivate.js).
  *              "Send to SESAR" pushes changed managed samples
  *              (assets/js/sesar_push.js, sesar_push.php, Phase 6); the
  *              "Changed since sent" pill compares each managed sample with
@@ -40,6 +43,7 @@ include("prepare_connections.php");
 require_once __DIR__ . "/includes/sesar/SesarOnboarding.php";
 require_once __DIR__ . "/includes/sesar/SesarMapper.php";
 require_once __DIR__ . "/includes/sesar/SesarPush.php";
+require_once __DIR__ . "/includes/sesar/SesarDeactivate.php";
 
 $allowed = SesarAccess::canUse($userpkey);
 $configured = SesarAccess::isConfigured();
@@ -55,7 +59,10 @@ if ($allowed && $configured) {
 		"SELECT s.id, s.userpkey, s.name, s.igsn, s.latitude, s.longitude, s.modified_at,
 		        r.igsn AS reg_igsn, r.state AS reg_state, r.access AS reg_access, r.field_flags::text AS field_flags,
 		        r.pkey AS reg_pkey, r.origin AS reg_origin, r.snapshot::text AS reg_snapshot,
-		        r.related_resource_id AS reg_rr, r.sesar_sample_id AS reg_sesar_id
+		        r.related_resource_id AS reg_rr, r.sesar_sample_id AS reg_sesar_id,
+		        (SELECT g.igsn FROM strabosamples.sesar_registrations g
+		          WHERE g.sample_id = s.id AND g.sample_userpkey = s.userpkey AND g.environment = $2 AND g.state = 'deactivated'
+		          ORDER BY g.deactivated_at DESC NULLS LAST LIMIT 1) AS gone_igsn
 		   FROM strabosamples.samples s
 		   LEFT JOIN strabosamples.sesar_registrations r
 		          ON r.sample_id = s.id AND r.sample_userpkey = s.userpkey
@@ -70,6 +77,7 @@ if ($allowed && $configured) {
 	$push = new SesarPush($db, $client, $conn, $views,
 		new SesarMint($db, $client, $conn, new SesarVocab($db, $client), $views, null),
 		new SesarPull($db, $client, $conn, $views, $neodb));
+	$orphans = (new SesarDeactivate($db, $client, $conn))->orphans($userpkey);   // no SESAR call
 	foreach ((is_array($res) ? $res : array()) as $r) {
 		$pushSt = null;
 		if ($r->reg_igsn !== null && $r->reg_access === 'managed') {
@@ -105,6 +113,10 @@ if ($allowed && $configured) {
 			'pushable' => $pushSt !== null && $pushSt['pushable'],
 			'changed'  => ($pushSt !== null && $pushSt['pushable']) ? $pushSt['fields'] : array(),
 			'linkBack' => $pushSt !== null && $pushSt['pushable'] && $pushSt['link_back'],
+			// Phase 7: pending request; IGSN in the field deactivated at SESAR (kept until the owner acts).
+			'requested' => $r->reg_state === 'deactivation_requested',
+			'gone'      => $r->reg_igsn === null && $r->gone_igsn !== null && $cls['normalized'] !== null
+			               && strtoupper($cls['normalized']) === strtoupper((string)$r->gone_igsn),
 		);
 	}
 }
@@ -166,6 +178,13 @@ include("includes/mheader.php");
 .si-pill.other { background: rgba(170, 140, 230, 0.2); color: #d2c2f4; }
 .si-pill.invalid { background: rgba(228, 76, 101, 0.18); color: #f5a3b3; }
 .si-pill.noloc { background: rgba(240, 180, 60, 0.18); color: #f3c97a; }
+.si-orphans { margin: 0 0 1.75em; padding: 1em 1.25em; border-radius: 6px; background: rgba(240,180,60,0.08); border: 1px solid rgba(240,180,60,0.35); }
+.si-orphans h3 { margin: 0 0 0.4em; font-size: 1.05em; color: #fff; }
+.si-orphans td.si-oact { text-align: right; white-space: nowrap; }
+.si-orphans td.si-oact .si-btn { padding: 0.35em 0.8em; font-size: 0.9em; margin-left: 0.4em; }
+@media (max-width: 640px) { .si-orphans td.si-oact { text-align: left; white-space: normal; } .si-orphans tr { display: grid; } }
+.si-pill.requested { background: rgba(240, 180, 60, 0.18); color: #f3c97a; margin-left: 0.3em; }
+.si-pill.gone { background: rgba(228, 76, 101, 0.18); color: #f5a3b3; margin-left: 0.3em; }
 .si-pill.changed { background: rgba(228, 76, 101, 0.18); color: #f5a3b3; margin-left: 0.3em; }
 .si-pill.differs { background: rgba(240, 180, 60, 0.18); color: #f3c97a; margin-left: 0.3em; }
 .si-pill.ro { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); margin-left: 0.3em; }
@@ -217,6 +236,12 @@ include("includes/mheader.php");
             </div>
 
             <div id="si-pane-mine" role="tabpanel" aria-labelledby="si-tab-mine">
+            <div class="si-orphans" id="si-orphans" hidden>
+                <h3>IGSNs whose sample was deleted</h3>
+                <p class="si-muted">These IGSNs are still live at SESAR, but their StraboSamples sample no longer exists.
+                   Ask SESAR to deactivate them, or keep them if the specimen still exists.</p>
+                <table class="si-table"><tbody id="si-orphan-rows"></tbody></table>
+            </div>
             <div class="si-head">
                 <h3>My samples</h3>
                 <button type="button" class="si-btn si-quiet" id="si-create">Create samples from IGSNs</button>
@@ -232,6 +257,8 @@ include("includes/mheader.php");
                     <option value="invalid">Not a valid IGSN</option>
                     <option value="differs">Differs from StraboField</option>
                     <option value="changed">Changed since last sent to SESAR</option>
+                    <option value="requested">Deactivation requested</option>
+                    <option value="gone">Deactivated at SESAR</option>
                 </select>
                 <select id="si-loc">
                     <option value="">Any location</option>
@@ -282,6 +309,7 @@ include("includes/mheader.php");
     'use strict';
     var STATUS = <?= json_encode($status, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var ROWS = <?= json_encode($rows, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
+    var ORPHANS = <?= json_encode(isset($orphans) ? $orphans : array(), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
     var PAGE = 100;
     var AUTO_CHECK_EVERY = 60 * 1000;   // re-check on tab return at most once a minute
     var panel = document.getElementById('si-conn');
@@ -568,8 +596,8 @@ include("includes/mheader.php");
     var BY_ID = {};
     ROWS.forEach(function (r) { BY_ID[r.id] = r; });
     function selectable() { return true; }
-    function mintable(r) { return r.state === 'none' || r.state === 'invalid'; }       // the mint review decides the rest
-    function pullable(r) { return r.state === 'managed' || r.state === 'unmanaged' || r.state === 'other'; }
+    function mintable(r) { return r.state === 'none' || r.state === 'invalid' || r.gone; }   // the mint review decides the rest
+    function pullable(r) { return !r.gone && (r.state === 'managed' || r.state === 'unmanaged' || r.state === 'other'); }
     function pushable(r) { return r.pushable && (r.changed.length > 0 || r.linkBack); }   // manual send, only when it would do something
     function selectedRows(test) { return Object.keys(selected).map(function (id) { return BY_ID[id]; }).filter(function (r) { return r && test(r); }); }
     var STATE_TEXT = { none: 'No IGSN', managed: 'Managed here', unmanaged: 'SESAR, not managed here',
@@ -582,6 +610,8 @@ include("includes/mheader.php");
         return ROWS.filter(function (r) {
             if (st === 'differs') { if (!r.differs.length) return false; }
             else if (st === 'changed') { if (!pushable(r)) return false; }
+            else if (st === 'requested') { if (!r.requested) return false; }
+            else if (st === 'gone') { if (!r.gone) return false; }
             else if (st && r.state !== st) return false;
             if (loc === 'yes' && !r.hasLoc) return false;
             if (loc === 'no' && r.hasLoc) return false;
@@ -606,6 +636,8 @@ include("includes/mheader.php");
                 + '<td class="si-igsn">' + (r.igsn ? esc(r.igsn) : '<span class="si-muted">none</span>') + '</td>'
                 + '<td><span class="si-pill ' + r.state + '"' + (STATE_TIP[r.state] ? ' title="' + esc(STATE_TIP[r.state]) + '"' : '') + '>' + STATE_TEXT[r.state] + '</span>'
                 + (r.readonly ? '<span class="si-pill ro" title="Linked to another SESAR account\'s record: you can pull from it, not send changes.">read-only</span>' : '')
+                + (r.requested ? '<span class="si-pill requested" title="A SESAR curator is reviewing the deactivation request.">Deactivation requested</span>' : '')
+                + (r.gone ? '<span class="si-pill gone" title="SESAR deactivated this IGSN. It stays in the sample until you clear it or register a new IGSN.">Deactivated at SESAR</span>' : '')
                 + (pushable(r) ? '<span class="si-pill changed" title="' + esc(r.changed.length ? 'Changed here since last sent to SESAR: ' + r.changed.join(', ').toLowerCase()
                     : 'The SESAR record has no link back to this sample yet') + '">' + (r.changed.length ? 'Changed since sent' : 'No link back') + '</span>' : '')
                 + (r.differs.length ? '<span class="si-pill differs" title="' + esc('As of the last pull, SESAR and the StraboField spot differ in: ' + r.differs.join(', ').toLowerCase()) + '">Differs from Field</span>' : '')
@@ -659,6 +691,41 @@ include("includes/mheader.php");
         SesarPush.bulk({ samples: selectedRows(pushable).map(function (r) { return { id: r.id, name: r.name }; }),
                          onDone: function (changed) { if (changed) window.location.reload(); } });
     });
+    // ------------------------------------------------------------------
+    // IGSNs whose sample was deleted (Phase 7, Q2)
+    // ------------------------------------------------------------------
+    function renderOrphans() {
+        var box = document.getElementById('si-orphans');
+        box.hidden = ORPHANS.length === 0;
+        document.getElementById('si-orphan-rows').innerHTML = ORPHANS.map(function (o, i) {
+            var acts = o.state === 'deactivation_requested'
+                ? '<span class="si-pill requested">Deactivation requested</span> <button type="button" class="si-btn si-quiet" data-oact="check" data-i="' + i + '">Check with SESAR</button>'
+                : '<button type="button" class="si-btn si-quiet" data-oact="keep" data-i="' + i + '" title="The specimen still exists: stop listing this IGSN here">Keep</button>'
+                  + '<button type="button" class="si-btn" data-oact="deact" data-i="' + i + '">Request deactivation</button>';
+            return '<tr><td><a class="si-igsn" href="' + esc(o.landing_url) + '" target="_blank" rel="noopener">' + esc(o.igsn) + '</a>'
+                + (o.name ? '<div class="si-muted">' + esc(o.name) + '</div>' : '') + '<div class="si-muted" id="si-omsg-' + i + '"></div></td>'
+                + '<td class="si-oact">' + acts + '</td></tr>';
+        }).join('');
+    }
+    document.getElementById('si-orphan-rows').addEventListener('click', function (e) {
+        var b = e.target.closest('[data-oact]');
+        if (!b || b.disabled) return;
+        var i = +b.getAttribute('data-i'), o = ORPHANS[i], act = b.getAttribute('data-oact');
+        var msg = document.getElementById('si-omsg-' + i);
+        if (act === 'deact') {
+            SesarDeactivate.open({ reg: o.reg, onDone: function (changed) { if (changed) window.location.reload(); } });
+            return;
+        }
+        b.disabled = true;
+        (act === 'keep' ? SesarDeactivate.keep(o.reg) : SesarDeactivate.check({ reg: o.reg })).then(function (j) {
+            b.disabled = false;
+            if (!j || !j.ok) { msg.textContent = (j && j.message) || 'Something went wrong.'; return; }
+            if (act === 'check' && j.result.state === 'requested') { msg.textContent = j.result.message; return; }
+            window.location.reload();
+        });
+    });
+    renderOrphans();
+
     document.getElementById('si-create').addEventListener('click', function () {
         SesarPull.create({ onDone: function (changed) { if (changed) window.location.reload(); } });
     });
@@ -788,6 +855,7 @@ include("includes/mheader.php");
 <script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
 <script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
 <script src="/assets/js/sesar_push.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_push.js'); ?>"></script>
+<script src="/assets/js/sesar_deactivate.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_deactivate.js'); ?>"></script>
 <?php endif; ?>
     </div>
 </div>

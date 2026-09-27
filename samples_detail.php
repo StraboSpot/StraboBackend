@@ -53,6 +53,7 @@ require_once __DIR__ . "/includes/sesar/SesarAccess.php";
 require_once __DIR__ . "/includes/sesar/SesarMapper.php";
 require_once __DIR__ . "/includes/sesar/SesarPull.php";
 require_once __DIR__ . "/includes/sesar/SesarPush.php";
+require_once __DIR__ . "/includes/sesar/SesarDeactivate.php";
 
 $ownerPkey = isset($_GET['owner']) ? (int)$_GET['owner'] : 0;
 $sampleId  = isset($_GET['id'])    ? trim((string)$_GET['id']) : '';
@@ -408,13 +409,26 @@ if (!$notFound) {
     // pulled (or minted) SESAR record to signed-in viewers.
     $sesarEnv = SesarAccess::environment();
     $sesarReg = $db->get_row_prepared(
-        "SELECT igsn, state, origin, access, snapshot::text AS snapshot, snapshot_at, field_flags::text AS field_flags
+        "SELECT igsn, state, origin, access, snapshot::text AS snapshot, snapshot_at, field_flags::text AS field_flags,
+                deactivation_reason, deactivation_requested_at, deactivation_declined_at
            FROM strabosamples.sesar_registrations
           WHERE sample_id = $1 AND sample_userpkey = $2 AND environment = $3 AND active AND state <> 'minting'",
         array($sampleId, $ownerPkey, $sesarEnv)
     );
     $igsnKind = SesarMapper::classifyIgsn($sample['igsn']);
     $sesarPilot = $isOwner && SesarAccess::canUse($userpkey);
+    // Phase 7: the IGSN in the field was deactivated at SESAR without our
+    // request (kept, badge shown; the owner may register a replacement, D3).
+    $sesarGone = null;
+    if (!$sesarReg && $igsnKind['normalized'] !== null) {
+        $g = $db->get_row_prepared(
+            "SELECT igsn, deactivated_at FROM strabosamples.sesar_registrations
+              WHERE sample_id = $1 AND sample_userpkey = $2 AND environment = $3 AND state = 'deactivated' AND upper(igsn) = upper($4)
+              ORDER BY deactivated_at DESC NULLS LAST LIMIT 1",
+            array($sampleId, $ownerPkey, $sesarEnv, $igsnKind['normalized'])
+        );
+        if ($g) $sesarGone = array('igsn' => $g->igsn, 'at' => $g->deactivated_at ? date('c', strtotime($g->deactivated_at)) : null);
+    }
     $sesarSnap = ($sesarReg && $sesarReg->snapshot !== null) ? json_decode($sesarReg->snapshot, true) : null;
     $sesarFlags = ($sesarReg && $sesarReg->field_flags !== null) ? json_decode($sesarReg->field_flags, true) : null;
     $sesar = array(
@@ -423,7 +437,19 @@ if (!$notFound) {
         'landing_url' => $sesarReg ? SesarAccess::landingUrl($sesarReg->igsn, $sesarEnv) : null,
         'sandbox'     => $sesarEnv === 'sandbox',
         'can_mint'    => $sesarPilot && !$sesarReg
-                         && in_array($igsnKind['kind'], array('empty', 'invalid'), true),
+                         && (in_array($igsnKind['kind'], array('empty', 'invalid'), true) || $sesarGone !== null),
+        'gone'        => $sesarGone,
+        // Phase 7 (D7 + Q1-Q3): request deactivation of a managed IGSN; its pending / declined state.
+        'deact'       => ($sesarReg && !$anonymous) ? array(
+            'can_request'  => $sesarPilot && $sesarReg->access === 'managed' && $sesarReg->state === 'active',
+            'requested'    => $sesarReg->state === 'deactivation_requested',
+            'reason'       => $sesarReg->deactivation_reason !== null
+                              ? (isset(SesarDeactivate::REASONS[$sesarReg->deactivation_reason]) ? SesarDeactivate::REASONS[$sesarReg->deactivation_reason] : $sesarReg->deactivation_reason)
+                              : null,
+            'requested_at' => $sesarReg->deactivation_requested_at ? date('c', strtotime($sesarReg->deactivation_requested_at)) : null,
+            'declined_at'  => ($sesarReg->state === 'active' && $sesarReg->deactivation_declined_at) ? date('c', strtotime($sesarReg->deactivation_declined_at)) : null,
+            'can_check'    => $sesarPilot,
+        ) : null,
         'can_pull'    => $sesarPilot && ($sesarReg || in_array($igsnKind['kind'], array('sesar', 'doi'), true)),
         'record'      => (!$anonymous && is_array($sesarSnap)) ? SesarPull::summary($sesarSnap) : null,
         'record_at'   => ($sesarReg && $sesarReg->snapshot_at) ? date('c', strtotime($sesarReg->snapshot_at)) : null,
@@ -530,6 +556,11 @@ include("includes/mheader.php");
 .sd-sesar-push { margin: 0 0 0.9em; padding: 0.6em 0.9em; border-radius: 4px; font-size: 0.92em;
     background: rgba(240,180,60,0.12); border: 1px solid rgba(240,180,60,0.4); }
 .sd-sesar-push a.sd-action-btn { margin: 0.5em 0 0; }
+.sd-sesar-gone { display: inline-block; margin-left: 0.4em; font-size: 0.78em; padding: 0 0.5em; border-radius: 4px;
+    background: rgba(228,76,101,0.16); color: #f5a3b3; border: 1px solid rgba(228,76,101,0.45); }
+.sd-sesar-deact { margin-top: 0.9em; font-size: 0.92em; }
+.sd-sesar-deact .sd-sesar-pending { padding: 0.6em 0.9em; border-radius: 4px; background: rgba(240,180,60,0.12); border: 1px solid rgba(240,180,60,0.4); }
+.sd-sesar-deact a.sd-quiet-link { color: rgba(255,255,255,0.6); font-size: 0.92em; }
 .sd-sesar-unlink { margin-top: 0.9em; font-size: 0.92em; }
 .sd-sesar-unlink p { margin: 0 0 0.6em; }
 .sd-sesar-unlink .sd-sesar-err { color: #ff8a80; margin-top: 0.5em; }
@@ -1636,6 +1667,7 @@ include("includes/mheader.php");
 <script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
 <script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
 <script src="/assets/js/sesar_push.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_push.js'); ?>"></script>
+<script src="/assets/js/sesar_deactivate.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_deactivate.js'); ?>"></script>
 <?php endif; ?>
 <script type="application/json" id="sd-data"><?php echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <?php
@@ -1716,7 +1748,14 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         // A pulled link keeps the user's spelling (bare IEABC0001, a doi.org URL...): match it normalized.
         var same = s.igsn && sample.igsn && (sample.igsn === s.igsn
             || (sample.igsn === loadedIgsn && s.field_igsn && s.field_igsn.toUpperCase() === s.igsn.toUpperCase()));
-        if (!same) return field('IGSN', sample.igsn);
+        if (!same) {
+            if (s.gone && sample.igsn === loadedIgsn) {
+                return '<div><span class="sd-field-label">IGSN:</span> ' + escapeHtml(sample.igsn)
+                    + ' <span class="sd-sesar-gone" title="SESAR deactivated this IGSN' + (s.gone.at ? ' (noticed ' + escapeHtml(parsePgTimestamp(s.gone.at).toLocaleDateString()) + ')' : '')
+                    + '. It stays here until you clear it or register a new IGSN.">Deactivated at SESAR</span></div>';
+            }
+            return field('IGSN', sample.igsn);
+        }
         return '<div><span class="sd-field-label">IGSN:</span> <a href="' + escapeHtml(s.landing_url) + '" target="_blank" rel="noopener">'
             + escapeHtml(sample.igsn) + '</a>'
             + (s.sandbox ? ' <span class="sd-sesar-test" title="Registered on SESAR\'s test site; not a real IGSN">SESAR test</span>' : '')
@@ -1786,6 +1825,39 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
                     return escapeHtml(f.label) + ': Field ' + escapeHtml(f.current == null ? 'empty' : f.current) + ', SESAR ' + escapeHtml(f.sesar == null ? 'empty' : f.sesar)
                         + (f.distance_m != null ? ' (' + (f.distance_m >= 1000 ? (f.distance_m / 1000).toFixed(1) + ' km' : Math.round(f.distance_m) + ' m') + ' apart)' : '');
                 }).join('; ') + '</div>');
+        }
+        var d = s.deact;
+        if (d && window.SesarDeactivate && (d.can_request || d.requested || d.declined_at)) {
+            var dh = '<div class="sd-sesar-deact" id="sd-sesar-deact">';
+            if (d.requested) {
+                var reqAt = d.requested_at ? parsePgTimestamp(d.requested_at) : null;
+                dh += '<div class="sd-sesar-pending"><strong>Deactivation requested</strong>' + (reqAt ? ' on ' + escapeHtml(reqAt.toLocaleDateString()) : '')
+                    + (d.reason ? ' (' + escapeHtml(d.reason) + ')' : '') + '. A SESAR curator reviews it; SESAR emails you with the decision.'
+                    + (d.can_check ? '<br><a class="sd-action-btn outline" href="#" id="sd-deact-check" style="margin-top:0.5em">Check with SESAR now</a>'
+                        + ' <span id="sd-deact-msg"></span>' : '') + '</div>';
+            } else {
+                if (d.declined_at) dh += '<p>SESAR declined the deactivation request on ' + escapeHtml(parsePgTimestamp(d.declined_at).toLocaleDateString()) + '; the IGSN stays active.</p>';
+                if (d.can_request) dh += '<a class="sd-quiet-link" href="#" id="sd-deact-open">Request deactivation of this IGSN…</a>';
+            }
+            card.insertAdjacentHTML('beforeend', dh + '</div>');
+            var dOpen = document.getElementById('sd-deact-open');
+            if (dOpen) dOpen.addEventListener('click', function(e) {
+                e.preventDefault();
+                SesarDeactivate.open({ sampleId: sample.id, onDone: function(changed) { if (changed) window.location.reload(); } });
+            });
+            var dCheck = document.getElementById('sd-deact-check');
+            if (dCheck) dCheck.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (dCheck.dataset.busy) return;
+                dCheck.dataset.busy = '1'; dCheck.textContent = 'Checking…';
+                SesarDeactivate.check({ sampleId: sample.id }).then(function(r) {
+                    delete dCheck.dataset.busy; dCheck.textContent = 'Check with SESAR now';
+                    var msg = document.getElementById('sd-deact-msg');
+                    if (!r || !r.ok) { msg.textContent = (r && r.message) || 'Could not check. Please try again.'; return; }
+                    if (r.result.state === 'requested') { msg.textContent = r.result.message; return; }
+                    window.location.reload();
+                });
+            });
         }
         if (s.can_unlink && window.SesarPull) {
             card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-unlink" id="sd-sesar-unlink">'
