@@ -20,8 +20,15 @@
  *                sesar-codes/ with the real BARE 400 field dicts; POST
  *                api-access-request/ recorded in state['access_requests'].
  *
+ *              - (Phase 4) public GET samples/by-igsn/ (404 unknown, 410
+ *                deactivated, 403 private), POST related-resources/, SESAR's
+ *                integer sample_id on list rows only (the POST and detail
+ *                answers lack it, as on the sandbox), unregistrable
+ *                materials refused like the sandbox ("Rock").
+ *
  *              Knobs: $fake->set('refresh_delay_us', n), 'fail_next' =>
  *              {path fragment: status|0}, 'register_then_timeout' => true.
+ *              Setup: seedSample(igsn, fields), markDeactivated(igsn).
  *
  * @package    StraboSpot Tests
  */
@@ -104,6 +111,21 @@ class FakeSesar implements SesarTransport
 	}
 
 	/** Server-side edit (someone changed the record at SESAR). */
+	/** A record that exists at SESAR but was not made by these tests' users. */
+	public function seedSample($igsn, array $fields = array())
+	{
+		$this->mutate(function (&$s) use ($igsn, $fields) {
+			$s['sample_seq'] = (isset($s['sample_seq']) ? $s['sample_seq'] : 900000) + 1;
+			$s['samples'][$igsn] = array_merge(array('igsn' => $igsn, '_owner' => 'someone-else', '_sample_id' => $s['sample_seq'],
+				'name' => 'Seeded', 'external_sample_id' => null, 'metadata_store_status' => 'registered-datacite'), $fields);
+		});
+	}
+
+	public function markDeactivated($igsn)
+	{
+		$this->mutate(function (&$s) use ($igsn) { $s['samples'][$igsn]['_deactivated'] = true; });
+	}
+
 	public function editAtSesar($igsn, array $fields)
 	{
 		$this->mutate(function (&$s) use ($igsn, $fields) {
@@ -201,6 +223,16 @@ class FakeSesar implements SesarTransport
 			return array(200, '', 0);
 		}
 
+		// -- anonymous: landing-page lookup ---------------------------------------
+		if ($method === 'GET' && $path === 'samples/by-igsn/') {
+			$igsn = isset($query['igsn']) ? (string)$query['igsn'] : '';
+			if (!isset($s['samples'][$igsn])) return array(404, json_encode(array('error' => 'Sample does not exist')), 0);
+			$rec = $s['samples'][$igsn];
+			if (!empty($rec['_deactivated'])) return array(410, json_encode(array('igsn' => $igsn, 'name' => $rec['name'], 'archive_date' => '2026-01-01')), 0);
+			if (!empty($rec['_private'])) return self::err(403, 'detail', 'This sample is private.');
+			return array(200, json_encode(array('data' => self::publicView($rec))), 0);
+		}
+
 		// -- everything else needs a valid access token ------------------------
 		$bearer = preg_replace('/^Bearer\s+/', '', (string)self::header($headers, 'Authorization'));
 		$tok = ($bearer !== '' && isset($s['tokens'][$bearer])) ? $s['tokens'][$bearer] : null;
@@ -234,6 +266,16 @@ class FakeSesar implements SesarTransport
 			$s['codes'][$tok['orcid']][] = $code;
 			return array(201, json_encode(array('sesar_code' => $code, 'sesar_user' => $tok['orcid'], 'team' => null)), 0);
 		}
+		if ($method === 'POST' && $path === 'related-resources/') {
+			if (!$authed) return self::err(401, 'detail', 'Authentication credentials were not provided.');
+			$b = json_decode((string)$body, true);
+			foreach (array('label', 'uri', 'related_resource_type') as $req) {
+				if (empty($b[$req])) return self::err(400, $req, 'This field is required.');
+			}
+			$s['rr_seq'] = (isset($s['rr_seq']) ? $s['rr_seq'] : 1208000) + 1;
+			$s['related'][(string)$s['rr_seq']] = $b + array('_owner' => $tok['orcid']);
+			return array(201, json_encode(array('data' => array('id' => $s['rr_seq']) + $b)), 0);
+		}
 		if ($method === 'POST' && $path === 'samples/') {
 			if (!$authed) return self::err(401, 'detail', 'Authentication credentials were not provided.');
 			$p = json_decode((string)$body, true);
@@ -243,15 +285,27 @@ class FakeSesar implements SesarTransport
 			if (!empty($p['parent_sample']) && !isset($s['samples'][$p['parent_sample']])) {
 				return self::err(400, 'parent_sample', 'Parent sample not found.');
 			}
+			if (!empty($p['general_material_type']) && in_array($p['general_material_type'], array('Rock', 'Igneous rock'), true)) {
+				return self::err(400, 'general_material_type', "Material type '" . $p['general_material_type'] . "' is not available for registration.");
+			}
+			foreach ((array)(isset($p['related_resources']) ? $p['related_resources'] : array()) as $rid) {
+				if (!isset($s['related'][(string)$rid])) return self::err(400, 'related_resources', 'Invalid pk "' . $rid . '" - object does not exist.');
+			}
 			$s['seq']++;
+			$s['sample_seq'] = (isset($s['sample_seq']) ? $s['sample_seq'] : 900000) + 1;
 			$igsn = '10.58052/' . $p['sesar_code'] . str_pad((string)$s['seq'], 4, '0', STR_PAD_LEFT);
 			$rec = self::toRecord($p, $igsn, $tok['orcid']);
+			$rec['_sample_id'] = $s['sample_seq'];
 			$s['samples'][$igsn] = $rec;
+			if (!empty($s['knobs']['register_fail_after'])) {
+				unset($s['knobs']['register_fail_after']);
+				return array(502, '<html>502 Bad Gateway</html>', 0);   // registered, gateway error on the way back
+			}
 			if (!empty($s['knobs']['register_then_timeout'])) {
 				unset($s['knobs']['register_then_timeout']);
 				return array(0, '', 0);   // registered at SESAR, but the response is lost
 			}
-			return array(201, json_encode(array('data' => $rec)), 0);
+			return array(201, json_encode(self::publicView($rec)), 0);   // real POST answer: not wrapped, no sample_id
 		}
 		if (preg_match('#^samples/(10\.58052/[^/]+)/deactivate/$#', $path, $m) && $method === 'POST') {
 			$igsn = urldecode($m[1]);
@@ -265,7 +319,7 @@ class FakeSesar implements SesarTransport
 			$igsn = urldecode($m[1]);
 			if (!isset($s['samples'][$igsn])) return self::err(404, 'detail', 'Not found.');
 			if (!empty($s['samples'][$igsn]['_deactivated'])) return self::err(410, 'detail', 'This sample has been deactivated.');
-			if ($method === 'GET') return array(200, json_encode(array('data' => $s['samples'][$igsn])), 0);
+			if ($method === 'GET') return array(200, json_encode(array('data' => self::publicView($s['samples'][$igsn]))), 0);
 			if ($method === 'PATCH') {
 				if (!$authed || $s['samples'][$igsn]['_owner'] !== $tok['orcid']) return self::err(403, 'detail', 'You do not have permission to perform this action.');
 				foreach (json_decode((string)$body, true) as $k => $v) {
@@ -273,7 +327,7 @@ class FakeSesar implements SesarTransport
 					$s['samples'][$igsn][$k] = self::outValue($k, $v);
 				}
 				$s['samples'][$igsn]['last_update_date'] = gmdate('Y-m-d\TH:i:s\Z');
-				return array(200, json_encode(array('data' => $s['samples'][$igsn])), 0);
+				return array(200, json_encode(array('data' => self::publicView($s['samples'][$igsn]))), 0);
 			}
 		}
 		if ($method === 'GET' && $path === 'samples/') {
@@ -281,7 +335,8 @@ class FakeSesar implements SesarTransport
 			foreach ($s['samples'] as $igsn => $rec) {
 				if (isset($query['external_sample_id']) && (string)$rec['external_sample_id'] !== (string)$query['external_sample_id']) continue;
 				if ($authed && $rec['_owner'] !== $tok['orcid']) continue;   // scope=personal
-				$rows[] = $rec;
+				if (!empty($rec['_deactivated'])) continue;
+				$rows[] = self::publicView($rec) + array('sample_id' => isset($rec['_sample_id']) ? $rec['_sample_id'] : null);
 			}
 			return array(200, json_encode(array('count' => count($rows), 'next' => null, 'previous' => null, 'data' => $rows,
 				'page_size' => 100, 'current_page' => 1, 'total_pages' => 1)), 0);
@@ -297,9 +352,9 @@ class FakeSesar implements SesarTransport
 		flock($fh, LOCK_EX);
 		$raw = stream_get_contents($fh);
 		$s = json_decode($raw === '' ? json_encode(self::emptyState()) : $raw, true);
-		foreach (array('orcid_users', 'tokens', 'samples', 'knobs') as $k) if (!isset($s[$k]) || !is_array($s[$k])) $s[$k] = array();
+		foreach (array('orcid_users', 'tokens', 'samples', 'knobs', 'related') as $k) if (!isset($s[$k]) || !is_array($s[$k])) $s[$k] = array();
 		$fn($s);
-		foreach (array('orcid_users', 'tokens', 'samples', 'knobs') as $k) if (empty($s[$k])) $s[$k] = new stdClass();
+		foreach (array('orcid_users', 'tokens', 'samples', 'knobs', 'related') as $k) if (empty($s[$k])) $s[$k] = new stdClass();
 		ftruncate($fh, 0); rewind($fh);
 		fwrite($fh, json_encode($s));
 		fflush($fh);
@@ -341,6 +396,16 @@ class FakeSesar implements SesarTransport
 			return number_format((float)$v, 8, '.', '');
 		}
 		return $v;
+	}
+
+	/** What SESAR shows: no internal keys, no sample_id (only list rows carry it). */
+	private static function publicView(array $rec)
+	{
+		$out = array();
+		foreach ($rec as $k => $v) {
+			if ($k === '' || $k[0] !== '_') $out[$k] = $v;
+		}
+		return $out;
 	}
 
 	private static function err($status, $field, $msg)

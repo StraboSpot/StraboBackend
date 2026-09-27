@@ -53,7 +53,9 @@ function cleanup() {
 	global $db, $USERS;
 	$in = implode(',', array_map('intval', $USERS));
 	$db->query("DELETE FROM strabosamples.sesar_connections WHERE userpkey IN ($in)");
-	$db->query("DELETE FROM strabosamples.sesar_vocab_cache WHERE environment = 'sandbox' AND vocab LIKE 'test-%'");
+	// The suite fills the REAL sandbox vocab cache with fake terms: drop it
+	// so the next real use fetches SESAR's vocab again.
+	$db->query("DELETE FROM strabosamples.sesar_vocab_cache WHERE environment = 'sandbox'");
 	$db->query("DELETE FROM users WHERE pkey IN ($in)");
 }
 
