@@ -405,7 +405,7 @@ body { overflow-x: clip; overflow-y: visible; }
                     <input type="text" id="si-imp-q" placeholder="Search at SESAR (name or IGSN), then press Enter" autocomplete="off">
                 </div>
                 <div id="si-acct-msg" aria-live="polite"></div>
-                <div class="si-selbar">
+                <div class="si-selbar" id="si-imp-selbar">
                     <span class="si-selcount" id="si-imp-selcount"></span>
                     <button type="button" class="si-btn" id="si-imp-create" disabled>Create samples</button>
                 </div>
@@ -718,7 +718,7 @@ body { overflow-x: clip; overflow-y: visible; }
             var el = document.getElementById(id);
             if (el && getComputedStyle(el).position === 'fixed' && el.offsetHeight) top = Math.max(top, el.getBoundingClientRect().bottom);
         });
-        selBar.style.setProperty('--si-stick-top', Math.max(0, Math.round(top)) + 'px');
+        document.documentElement.style.setProperty('--si-stick-top', Math.max(0, Math.round(top)) + 'px');
     }
     stickTop();
     window.addEventListener('resize', stickTop);
@@ -1045,6 +1045,8 @@ body { overflow-x: clip; overflow-y: visible; }
         impSel.textContent = n === 0 ? 'Tick SESAR samples to create them in StraboSamples.'
             : n + ' selected' + (n > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '') + (imp.pages > 1 ? ' (kept across pages)' : '');
         impCreate.disabled = n === 0 || n > MAX_RUN;
+        if (n > 0) stickTop();
+        document.getElementById('si-imp-selbar').classList.toggle('si-stuck', n > 0);
         impCreate.textContent = n > 1 ? 'Create ' + n + ' samples' : 'Create sample';
     }
 
