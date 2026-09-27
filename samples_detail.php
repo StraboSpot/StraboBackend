@@ -560,7 +560,8 @@ include("includes/mheader.php");
     background: rgba(228,76,101,0.16); color: #f5a3b3; border: 1px solid rgba(228,76,101,0.45); }
 .sd-sesar-deact { margin-top: 0.9em; font-size: 0.92em; }
 .sd-sesar-deact .sd-sesar-pending { padding: 0.6em 0.9em; border-radius: 4px; background: rgba(240,180,60,0.12); border: 1px solid rgba(240,180,60,0.4); }
-.sd-sesar-deact a.sd-quiet-link { color: rgba(255,255,255,0.6); font-size: 0.92em; }
+.sd-sesar-btns { display: flex; flex-wrap: wrap; gap: 0.6em; margin-top: 0.9em; }
+.sd-sesar-btns:empty { display: none; }
 .sd-sesar-unlink { margin-top: 0.9em; font-size: 0.92em; }
 .sd-sesar-unlink p { margin: 0 0 0.6em; }
 .sd-sesar-unlink .sd-sesar-err { color: #ff8a80; margin-top: 0.5em; }
@@ -1835,11 +1836,18 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
                     + (d.reason ? ' (' + escapeHtml(d.reason) + ')' : '') + '. A SESAR curator reviews it; SESAR emails you with the decision.'
                     + (d.can_check ? '<br><a class="sd-action-btn outline" href="#" id="sd-deact-check" style="margin-top:0.5em">Check with SESAR now</a>'
                         + ' <span id="sd-deact-msg"></span>' : '') + '</div>';
-            } else {
-                if (d.declined_at) dh += '<p>SESAR declined the deactivation request on ' + escapeHtml(parsePgTimestamp(d.declined_at).toLocaleDateString()) + '; the IGSN stays active.</p>';
-                if (d.can_request) dh += '<a class="sd-quiet-link" href="#" id="sd-deact-open">Request deactivation of this IGSN…</a>';
+            } else if (d.declined_at) {
+                dh += '<p>SESAR declined the deactivation request on ' + escapeHtml(parsePgTimestamp(d.declined_at).toLocaleDateString()) + '; the IGSN stays active.</p>';
             }
             card.insertAdjacentHTML('beforeend', dh + '</div>');
+        }
+        // Card actions in one row (Request deactivation, Unlink from SESAR), same outline style.
+        card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-btns" id="sd-sesar-btns"></div>');
+        var btnRow = document.getElementById('sd-sesar-btns');
+        if (d && d.can_request && !d.requested && window.SesarDeactivate) {
+            btnRow.insertAdjacentHTML('beforeend', '<a class="sd-action-btn outline" href="#" id="sd-deact-open" title="Ask SESAR to deactivate this IGSN (a curator reviews it)">Request deactivation</a>');
+        }
+        if (d && window.SesarDeactivate) {
             var dOpen = document.getElementById('sd-deact-open');
             if (dOpen) dOpen.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -1860,8 +1868,8 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             });
         }
         if (s.can_unlink && window.SesarPull) {
+            btnRow.insertAdjacentHTML('beforeend', '<a class="sd-action-btn outline" href="#" id="sd-unlink-btn">Unlink from SESAR</a>');
             card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-unlink" id="sd-sesar-unlink">'
-                + '<a class="sd-action-btn outline" href="#" id="sd-unlink-btn">Unlink from SESAR</a>'
                 + '<div id="sd-unlink-confirm" style="display:none">'
                 + '<p>Unlink this sample from ' + escapeHtml(s.igsn) + '? Nothing changes at SESAR or in this sample\'s values, '
                 + 'and the IGSN field keeps its text. The IGSN can then be linked to another of your samples with Pull from SESAR.</p>'
@@ -1869,9 +1877,9 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
                 + '<a class="sd-action-btn outline" href="#" id="sd-unlink-no">Cancel</a>'
                 + '<div class="sd-sesar-err" id="sd-unlink-err"></div></div></div>');
             var ask = document.getElementById('sd-unlink-btn'), box = document.getElementById('sd-unlink-confirm');
-            ask.addEventListener('click', function(e) { e.preventDefault(); ask.style.display = 'none'; box.style.display = ''; });
+            ask.addEventListener('click', function(e) { e.preventDefault(); btnRow.style.display = 'none'; box.style.display = ''; });
             document.getElementById('sd-unlink-no').addEventListener('click', function(e) {
-                e.preventDefault(); box.style.display = 'none'; ask.style.display = ''; document.getElementById('sd-unlink-err').textContent = '';
+                e.preventDefault(); box.style.display = 'none'; btnRow.style.display = ''; document.getElementById('sd-unlink-err').textContent = '';
             });
             document.getElementById('sd-unlink-yes').addEventListener('click', function(e) {
                 e.preventDefault();
