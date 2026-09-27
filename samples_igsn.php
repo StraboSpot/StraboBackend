@@ -157,6 +157,12 @@ include("includes/mheader.php");
     border-radius: 4px; color: #fff; padding: 0.55em 0.75em; font-size: 1em; font-family: inherit; }
 /* background-color (not the shorthand) keeps the theme's dropdown arrow; leave room for it. */
 .si-filters select { padding-right: 2.9em; }
+.si-sort { background: none; border: none; padding: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap; }
+.si-sort:hover { color: #fff; background: none; }
+.si-sort .si-arrow { display: inline-block; width: 1em; margin-left: 0.2em; color: #e44c65; }
+.si-sort .si-arrow.si-idle { color: rgba(255,255,255,0.3); }
+.si-countline { display: flex; flex-wrap: wrap; align-items: center; gap: 0.4em 0.75em; }
+.si-countline .si-btn { padding: 0.25em 0.75em; font-size: 0.9em; }
 .si-fgrid .si-btn { height: 46px; padding: 0 1.2em; border: 1px solid transparent; white-space: nowrap; }
 .si-panel textarea { min-height: 5.5em; resize: vertical; }
 .si-readonly { padding: 0.55em 0; color: #fff; }
@@ -365,10 +371,14 @@ body { overflow-x: clip; overflow-y: visible; }
                 <button type="button" class="si-btn si-quiet" id="si-batch" disabled title="Write the selected samples into a SESAR batch template, to upload at SESAR yourself">SESAR batch file</button>
                 <button type="button" class="si-btn" id="si-register" disabled>Register IGSNs</button>
             </div>
-            <p class="si-muted" id="si-count"></p>
+            <p class="si-muted si-countline"><span id="si-count"></span>
+                <button type="button" class="si-btn si-quiet" id="si-sortreset" hidden>Sort by newest changes</button></p>
             <table class="si-table">
                 <thead><tr><th class="si-cb"><input type="checkbox" id="si-all"><label for="si-all"><span class="si-sr">Select all shown samples</span></label></th>
-                    <th>Sample</th><th>IGSN</th><th>IGSN state</th><th class="si-col-loc">Location</th></tr></thead>
+                    <th data-sort="name"><button type="button" class="si-sort">Sample<span class="si-arrow"></span></button></th>
+                    <th data-sort="igsn"><button type="button" class="si-sort">IGSN<span class="si-arrow"></span></button></th>
+                    <th data-sort="state"><button type="button" class="si-sort">IGSN state<span class="si-arrow"></span></button></th>
+                    <th data-sort="loc" class="si-col-loc"><button type="button" class="si-sort">Location<span class="si-arrow"></span></button></th></tr></thead>
                 <tbody id="si-rows"></tbody>
             </table>
             <div class="si-more"><button type="button" class="si-btn si-quiet" id="si-more" hidden>Show more</button></div>
@@ -724,9 +734,28 @@ body { overflow-x: clip; overflow-y: visible; }
     var STATE_TIP = { invalid: 'The IGSN field holds text that is not an IGSN. It is never sent to SESAR.',
                       other: 'A DOI under a prefix other than SESAR\'s 10.58052. Some SESAR teams use their own prefix; SESAR is asked before any action.' };
 
+    // Column sort. Default (key null) = server order, newest changes first. Empty IGSNs stay last either way.
+    var sort = { key: null, dir: 1 };
+    var collate = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' }).compare;
+    ROWS.forEach(function (r, i) { r.pos = i; });
+    var SORT_KEY = {
+        name:  function (a, b) { return collate(a.name || a.id, b.name || b.id); },
+        igsn:  function (a, b) { return collate(a.igsn, b.igsn); },
+        state: function (a, b) { return collate(STATE_TEXT[a.state], STATE_TEXT[b.state]); },
+        loc:   function (a, b) { return (b.hasLoc ? 1 : 0) - (a.hasLoc ? 1 : 0); }
+    };
+    function sorted(list) {
+        if (!sort.key) return list;
+        var cmp = SORT_KEY[sort.key];
+        return list.slice().sort(function (a, b) {
+            if (sort.key === 'igsn' && !a.igsn !== !b.igsn) return a.igsn ? -1 : 1;
+            return sort.dir * cmp(a, b) || SORT_KEY.name(a, b) || a.pos - b.pos;
+        });
+    }
+
     function filtered() {
         var term = q.value.trim().toLowerCase(), st = fState.value, loc = fLoc.value;
-        return ROWS.filter(function (r) {
+        return sorted(ROWS.filter(function (r) {
             if (st === 'differs') { if (!r.differs.length) return false; }
             else if (st === 'changed') { if (!pushable(r)) return false; }
             else if (st === 'requested') { if (!r.requested) return false; }
@@ -736,7 +765,7 @@ body { overflow-x: clip; overflow-y: visible; }
             if (loc === 'no' && r.hasLoc) return false;
             if (term && (r.name + ' ' + r.id + ' ' + r.igsn).toLowerCase().indexOf(term) < 0) return false;
             return true;
-        });
+        }));
     }
 
     function renderRows() {
@@ -744,6 +773,15 @@ body { overflow-x: clip; overflow-y: visible; }
         count.textContent = list.length === ROWS.length
             ? ROWS.length + ' sample' + (ROWS.length === 1 ? '' : 's') + ' you own'
             : list.length + ' of ' + ROWS.length + ' samples';
+        if (!sort.key) count.textContent += ', newest changes first';
+        document.getElementById('si-sortreset').hidden = !sort.key;
+        document.querySelectorAll('#si-pane-mine th[data-sort]').forEach(function (th) {
+            var on = th.getAttribute('data-sort') === sort.key;
+            th.setAttribute('aria-sort', on ? (sort.dir > 0 ? 'ascending' : 'descending') : 'none');
+            var arrow = th.querySelector('.si-arrow');
+            arrow.textContent = on ? (sort.dir > 0 ? '\u25B2' : '\u25BC') : '\u2195';
+            arrow.classList.toggle('si-idle', !on);
+        });
         tbody.innerHTML = list.slice(0, shown).map(function (r) {
             var href = '/samples/' + encodeURIComponent(r.owner) + '/' + encodeURIComponent(r.id);
             var cb = selectable(r)
@@ -905,6 +943,20 @@ body { overflow-x: clip; overflow-y: visible; }
     [q, fState, fLoc].forEach(function (el) {
         el.addEventListener(el === q ? 'input' : 'change', function () { shown = PAGE; saveFilters(); renderRows(); });
     });
+    try {
+        var savedSort = JSON.parse(sessionStorage.getItem('si-sort') || 'null');
+        if (savedSort && SORT_KEY[savedSort.key]) sort = { key: savedSort.key, dir: savedSort.dir < 0 ? -1 : 1 };
+    } catch (e) { /* storage blocked or bad JSON */ }
+    function setSort(key) {
+        sort = !key ? { key: null, dir: 1 } : { key: key, dir: sort.key === key ? -sort.dir : 1 };
+        try { sessionStorage.setItem('si-sort', JSON.stringify(sort)); } catch (e) { /* storage blocked */ }
+        shown = PAGE;
+        renderRows();
+    }
+    document.querySelectorAll('#si-pane-mine th[data-sort] .si-sort').forEach(function (b) {
+        b.addEventListener('click', function () { setSort(b.parentNode.getAttribute('data-sort')); });
+    });
+    document.getElementById('si-sortreset').addEventListener('click', function () { setSort(null); });
     document.getElementById('si-ready').addEventListener('click', function () {
         fState.value = 'none';
         fLoc.value = 'yes';
