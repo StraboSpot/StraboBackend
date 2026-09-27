@@ -1845,7 +1845,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-btns" id="sd-sesar-btns"></div>');
         var btnRow = document.getElementById('sd-sesar-btns');
         if (d && d.can_request && !d.requested && window.SesarDeactivate) {
-            btnRow.insertAdjacentHTML('beforeend', '<a class="sd-action-btn outline" href="#" id="sd-deact-open" title="Ask SESAR to deactivate this IGSN (a curator reviews it)">Request deactivation</a>');
+            btnRow.insertAdjacentHTML('beforeend', '<a class="sd-action-btn outline" href="#" id="sd-deact-open" title="Ask SESAR to retire this IGSN. A SESAR curator reviews the request; IGSNs are never deleted.">Request deactivation</a>');
         }
         if (d && window.SesarDeactivate) {
             var dOpen = document.getElementById('sd-deact-open');
@@ -1868,7 +1868,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             });
         }
         if (s.can_unlink && window.SesarPull) {
-            btnRow.insertAdjacentHTML('beforeend', '<a class="sd-action-btn outline" href="#" id="sd-unlink-btn">Unlink from SESAR</a>');
+            btnRow.insertAdjacentHTML('beforeend', '<a class="sd-action-btn outline" href="#" id="sd-unlink-btn" title="Remove this sample\'s link to its SESAR record, so the IGSN can be linked to another of your samples. Nothing changes at SESAR or in this sample.">Unlink from SESAR</a>');
             card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-unlink" id="sd-sesar-unlink">'
                 + '<div id="sd-unlink-confirm" style="display:none">'
                 + '<p>Unlink this sample from ' + escapeHtml(s.igsn) + '? Nothing changes at SESAR or in this sample\'s values, '
