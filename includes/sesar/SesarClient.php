@@ -82,9 +82,20 @@ interface SesarTransport
 	public function send($method, $url, array $headers, $body);
 }
 
-class SesarCurlTransport implements SesarTransport
+/** A transport that can run several independent GETs at once (public IGSN lookups). */
+interface SesarParallelTransport extends SesarTransport
+{
+	/**
+	 * @param array $requests key => [method, url, headers[], body]
+	 * @return array key => [int status, string body]
+	 */
+	public function sendMany(array $requests);
+}
+
+class SesarCurlTransport implements SesarParallelTransport
 {
 	const TIMEOUT = 60;
+	const PARALLEL = 8;
 
 	public function send($method, $url, array $headers, $body)
 	{
@@ -103,6 +114,43 @@ class SesarCurlTransport implements SesarTransport
 		$status = ($resp === false) ? 0 : (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
 		curl_close($ch);
 		return array($status, $resp === false ? '' : (string)$resp);
+	}
+
+	public function sendMany(array $requests)
+	{
+		$out = array();
+		foreach (array_chunk($requests, self::PARALLEL, true) as $chunk) {
+			$mh = curl_multi_init();
+			$handles = array();
+			foreach ($chunk as $k => $r) {
+				list($method, $url, $headers, $body) = $r;
+				$ch = curl_init($url);
+				curl_setopt_array($ch, array(
+					CURLOPT_CUSTOMREQUEST  => $method,
+					CURLOPT_RETURNTRANSFER => true,
+					CURLOPT_CONNECTTIMEOUT => 15,
+					CURLOPT_TIMEOUT        => self::TIMEOUT,
+					CURLOPT_HTTPHEADER     => $headers,
+					CURLOPT_FOLLOWLOCATION => false,
+				));
+				if ($body !== null) curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
+				curl_multi_add_handle($mh, $ch);
+				$handles[$k] = $ch;
+			}
+			do {
+				$st = curl_multi_exec($mh, $running);
+				if ($running) curl_multi_select($mh, 1.0);
+			} while ($running && $st === CURLM_OK);
+			foreach ($handles as $k => $ch) {
+				$resp = curl_multi_getcontent($ch);
+				$status = (curl_errno($ch) !== 0 || $resp === null) ? 0 : (int)curl_getinfo($ch, CURLINFO_HTTP_CODE);
+				$out[$k] = array($status, $status === 0 ? '' : (string)$resp);
+				curl_multi_remove_handle($mh, $ch);
+				curl_close($ch);
+			}
+			curl_multi_close($mh);
+		}
+		return $out;
 	}
 }
 
@@ -209,6 +257,70 @@ class SesarClient
 		if ($sesarCode !== null) $q['sesar_code'] = $sesarCode;
 		$page = $this->listSamples($access, $q);
 		return $page['data'];
+	}
+
+	/**
+	 * Public existence check for stored IGSN values (D3 revised): anonymous
+	 * GET samples/by-igsn/ for each normalized IGSN, several at once when the
+	 * transport can. Never throws; per IGSN:
+	 *   found      published record (record = SESAR's landing payload)
+	 *   private    exists at SESAR but is not public (403)
+	 *   not_found  SESAR has no such IGSN (404)
+	 *   gone       deactivated (410 tombstone)
+	 *   error      no answer / server error: existence UNKNOWN (callers
+	 *              must treat it as "cannot decide", never as not_found)
+	 *
+	 * @param string[] $igsns normalized ("10.58052/IEJMA0002")
+	 * @return array igsn => {status, record|null, message|null}
+	 */
+	public function lookupIgsns(array $igsns)
+	{
+		$reqs = array();
+		foreach (array_values(array_unique($igsns)) as $i => $igsn) {
+			$url = SesarAccess::apiBase($this->env) . 'samples/by-igsn/?' . http_build_query(array('igsn' => $igsn));
+			$reqs[$igsn] = array('GET', $url, array('Accept: application/json'), null);
+		}
+		if (empty($reqs)) return array();
+		if ($this->transport instanceof SesarParallelTransport) {
+			$answers = $this->transport->sendMany($reqs);
+		} else {
+			$answers = array();
+			foreach ($reqs as $k => $r) $answers[$k] = $this->transport->send($r[0], $r[1], $r[2], $r[3]);
+		}
+		$out = array();
+		foreach ($reqs as $igsn => $r) {
+			list($status, $raw) = isset($answers[$igsn]) ? $answers[$igsn] : array(0, '');
+			$json = json_decode($raw, true);
+			if ($status >= 200 && $status < 300) {
+				$out[$igsn] = array('status' => 'found', 'record' => is_array($json) ? $this->unwrap($json) : array(), 'message' => null);
+			} elseif ($status === 403) {
+				$out[$igsn] = array('status' => 'private', 'record' => null, 'message' => null);
+			} elseif ($status === 404) {
+				$out[$igsn] = array('status' => 'not_found', 'record' => null, 'message' => null);
+			} elseif ($status === 410) {
+				$out[$igsn] = array('status' => 'gone', 'record' => is_array($json) ? $this->unwrap($json) : null, 'message' => null);
+			} else {
+				$out[$igsn] = array('status' => 'error', 'record' => null,
+					'message' => $status === 0 ? 'SESAR did not respond.' : 'SESAR returned an error (HTTP ' . $status . ').');
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * A related resource (D2: link back to the sample's StraboSpot page).
+	 * Returns SESAR's id; link it at mint time via related_resources:[id].
+	 */
+	public function createRelatedResource($access, $label, $uri, $description = null)
+	{
+		$body = array('label' => (string)$label, 'related_resource_type' => 'PhysicalObject',
+			'uri' => (string)$uri, 'uri_type' => 'URL');
+		if ($description !== null && $description !== '') $body['description'] = (string)$description;
+		$d = $this->unwrap($this->call('POST', 'related-resources/', $access, $body, 'json'));
+		if (!isset($d['id']) || !is_numeric($d['id'])) {
+			throw new SesarError(502, 'SESAR did not return an id for the related resource.');
+		}
+		return (int)$d['id'];
 	}
 
 	/** SESAR DeactivateReasonEnum, verbatim. */

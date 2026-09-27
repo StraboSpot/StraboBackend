@@ -105,6 +105,16 @@ CREATE TABLE IF NOT EXISTS strabosamples.sesar_registrations (
     CONSTRAINT sesar_reg_active_chk CHECK (active = (state <> 'deactivated'))
 );
 
+-- Phase 4 (minting, 2026-09-27):
+--   sesar_sample_id      SESAR's own integer id. The detail GET lacks it but
+--                        related-resources link-samples needs it, so it is
+--                        stored at mint time (from the POST answer or a list
+--                        lookup by external_sample_id).
+--   related_resource_id  the "StraboSpot sample page" related resource
+--                        linked at mint (NULL = none).
+ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS sesar_sample_id     BIGINT;
+ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS related_resource_id BIGINT;
+
 -- One live registration per sample per environment (D3 duplicate guard).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sesar_reg_sample_live
     ON strabosamples.sesar_registrations (sample_id, sample_userpkey, environment)
