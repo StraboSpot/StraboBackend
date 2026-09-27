@@ -293,6 +293,40 @@ mk('sesarpull-dupe', $A, array('igsn' => 'IEFAK0001'));
 $e = err(function () use ($pull, $A) { $pull->preview($A, 'sesarpull-dupe'); });
 check('same IGSN already linked to another of my samples -> 409 naming it', $e !== null && $e->status === 409
 	&& strpos($e->getMessage(), 'SESAR name') !== false && ($e->errors['held'][0] ?? null) === 'sesarpull-a', $e ? $e->getMessage() : null);
+check('the refusal points at Unlink', $e !== null && strpos($e->getMessage(), 'Unlink from SESAR') !== false);
+
+// Unlink (Phase 5 review Q3): frees the IGSN for another sample, keeps the row as history.
+$before = spine('sesarpull-a', $A);
+$res = $pull->unlink($A, 'sesarpull-a');
+$old = $db->get_row_prepared("SELECT state, active, unlinked_at FROM strabosamples.sesar_registrations
+	WHERE sample_id = 'sesarpull-a' AND sample_userpkey = $1 ORDER BY pkey DESC LIMIT 1", array($A));
+check('unlink: ok, row kept as history (unlinked, inactive, dated)', $res['ok'] === true && $res['igsn'] === '10.58052/IEFAK0001'
+	&& reg('sesarpull-a', $A) === null && $old->state === 'unlinked' && $old->active === 'f' && $old->unlinked_at !== null, array($res, $old));
+$after = spine('sesarpull-a', $A);
+check('unlink: sample values and IGSN text untouched', $after->name === $before->name && $after->igsn === $before->igsn
+	&& $after->description === $before->description && $after->modified_at === $before->modified_at);
+$e = err(function () use ($pull, $A) { $pull->unlink($A, 'sesarpull-a'); });
+check('unlink again -> 404 not linked', $e !== null && $e->status === 404 && strpos($e->getMessage(), 'not linked') !== false);
+$res = $pull->apply($A, 'sesarpull-dupe', array('mode' => 'fill'));
+check('after unlink the IGSN links to the other sample', reg('sesarpull-dupe', $A) !== null && reg('sesarpull-dupe', $A)->igsn === '10.58052/IEFAK0001', $res);
+$pull->unlink($A, 'sesarpull-dupe');
+$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, origin, state, created_by)
+	VALUES ('sesarpull-deleted', $1, 'sandbox', '10.58052/IEFAK0001', 'linked', 'active', $1)", array($A));
+$e = err(function () use ($pull, $A) { $pull->preview($A, 'sesarpull-a'); });
+check('a link left by a DELETED sample does not block (no FK, D7)', $e === null, $e ? $e->getMessage() : null);
+$db->query("DELETE FROM strabosamples.sesar_registrations WHERE sample_id = 'sesarpull-deleted'");
+$pull->apply($A, 'sesarpull-a', array('mode' => 'fill'));
+check('relinked by a pull: new active row, history row stays', reg('sesarpull-a', $A) !== null && (int)$db->get_var_prepared(
+	"SELECT count(*) FROM strabosamples.sesar_registrations WHERE sample_id = 'sesarpull-a' AND sample_userpkey = $1", array($A)) === 2);
+mk('sesarpull-minted', $A, array('igsn' => '10.58052/IEFAK0003'));
+$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, origin, state, created_by)
+	VALUES ('sesarpull-minted', $1, 'sandbox', '10.58052/IEFAK0003', 'minted', 'active', $1)", array($A));
+$e = err(function () use ($pull, $A) { $pull->unlink($A, 'sesarpull-minted'); });
+check('a MINTED IGSN cannot be unlinked -> 409, row unchanged', $e !== null && $e->status === 409 && reg('sesarpull-minted', $A) !== null);
+$e = err(function () use ($pull, $B) { $pull->unlink($B, 'sesarpull-a'); });
+check("unlinking someone else's sample -> 404, link kept", $e !== null && $e->status === 404 && reg('sesarpull-a', $A) !== null);
+$db->prepare_query("DELETE FROM strabosamples.sesar_registrations WHERE sample_id = 'sesarpull-minted' AND sample_userpkey = $1", array($A));
+
 mk('sesarpull-minting', $A, array('igsn' => '10.58052/IEFAK0002x'));
 $db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, origin, state, created_by)
 	VALUES ('sesarpull-minting', $1, 'sandbox', NULL, 'minted', 'minting', $1)", array($A));
@@ -413,6 +447,8 @@ $r = http('POST', '/sesar_pull.php', $pilot, array('action' => 'explode'));
 check('unknown action -> 400', $r['status'] === 400 && $r['json']['error'] === 'unknown_action');
 $r = http('POST', '/sesar_pull.php', $pilot, array('action' => 'create_plan', 'igsns' => array()));
 check('create_plan with nothing -> 400', $r['status'] === 400 && $r['json']['error'] === 'validation');
+$r = http('POST', '/sesar_pull.php', $pilot, array('action' => 'unlink', 'sample_id' => 'sesarpull-a'));
+check("pilot unlinking someone else's sample -> 404, link kept", $r['status'] === 404 && reg('sesarpull-a', $A) !== null, $r['body']);
 $r = http('POST', '/sesar_pull.php', $pilot, array('action' => 'apply', 'sample_id' => 'sesarpull-a', 'mode' => 'overwrite'));
 check("pilot pulling someone else's sample -> 404, nothing changed", $r['status'] === 404 && $r['json']['error'] === 'not_found'
 	&& spine('sesarpull-a', $A)->name === 'SESAR name', $r['body']);

@@ -23,6 +23,9 @@
  *                            sample per IGSN, parents first.
  *              importPage()  one page of the user's own SESAR samples, each
  *                            marked with the StraboSamples sample holding it.
+ *              unlink()      removes a pulled link (origin 'linked') so the
+ *                            IGSN can be linked to another sample; nothing
+ *                            changes at SESAR or in the sample.
  *
  *              Reads: SESAR's detail GET has can_edit but lacks sample_id,
  *              external_sample_id and last_update_date; the account's own
@@ -415,6 +418,38 @@ class SesarPull
 	// =======================================================================
 
 	/**
+	 * Removes this sample's pulled SESAR link. Only 'linked' rows in state
+	 * 'active': a minted IGSN was made from this sample (its SESAR record
+	 * links back here), so it is never moved; the row stays as history.
+	 * @return array {ok, igsn}
+	 */
+	public function unlink($userpkey, $sampleId)
+	{
+		$userpkey = (int)$userpkey;
+		$sampleId = (string)$sampleId;
+		if ($this->views->build($sampleId, $userpkey) === null) throw new SesarError(404, 'This is not one of your samples.');
+		if (!$this->lock($userpkey, $sampleId)) {
+			throw new SesarError(409, 'This sample is busy with another SESAR action. Please wait a moment and try again.', array('busy' => array('busy')));
+		}
+		try {
+			$reg = $this->activeRegistration($sampleId, $userpkey);
+			if ($reg === null) throw new SesarError(404, 'This sample is not linked to a SESAR record.');
+			if ($reg->origin !== 'linked' || $reg->state !== 'active') {
+				throw new SesarError(409, 'Only a link made by Pull from SESAR can be unlinked. This IGSN was registered from this sample through StraboSpot.');
+			}
+			$this->db->prepare_query(
+				"UPDATE strabosamples.sesar_registrations
+				    SET state = 'unlinked', active = FALSE, unlinked_at = now(), updated_at = now()
+				  WHERE pkey = $1 AND active",
+				array((int)$reg->pkey)
+			);
+			return array('ok' => true, 'igsn' => (string)$reg->igsn);
+		} finally {
+			$this->unlock($userpkey, $sampleId);
+		}
+	}
+
+	/**
 	 * Everything a pull needs for one sample, read fresh.
 	 * @return array {view, reg, record, can_edit, proposals, parent}
 	 */
@@ -439,16 +474,18 @@ class SesarPull
 		$f = $this->fetch($userpkey, $igsn);
 		$rec = $f['record'];
 
-		// One IGSN, one sample (per user and environment).
+		// One IGSN, one sample (per user and environment). A link left by a
+		// deleted sample does not count (no FK by design, D7).
 		$other = $this->db->get_row_prepared(
 			"SELECT r.sample_id, s.name FROM strabosamples.sesar_registrations r
-			   LEFT JOIN strabosamples.samples s ON s.id = r.sample_id AND s.userpkey = r.sample_userpkey
+			   JOIN strabosamples.samples s ON s.id = r.sample_id AND s.userpkey = r.sample_userpkey
 			  WHERE r.sample_userpkey = $1 AND r.environment = $2 AND r.active AND upper(r.igsn) = upper($3) AND r.sample_id <> $4 LIMIT 1",
 			array($userpkey, $this->env, (string)$rec['igsn'], $sampleId)
 		);
 		if ($other !== null) {
 			throw new SesarError(409, $rec['igsn'] . ' is already linked to your sample "' . ($other->name !== null ? $other->name : $other->sample_id)
-				. '". An IGSN can be linked to only one sample.', array('held' => array((string)$other->sample_id)));
+				. '". An IGSN can be linked to only one sample. To move it here, open that sample and use "Unlink from SESAR" on its SESAR record card, then pull again.',
+				array('held' => array((string)$other->sample_id)));
 		}
 
 		return array(

@@ -428,6 +428,8 @@ if (!$notFound) {
         'record_at'   => ($sesarReg && $sesarReg->snapshot_at) ? date('c', strtotime($sesarReg->snapshot_at)) : null,
         'readonly'    => $sesarReg ? $sesarReg->access === 'readonly' : false,
         'differs'     => (!$anonymous && is_array($sesarFlags)) ? $sesarFlags : array(),
+        // Owner may unlink a PULLED link (never a minted IGSN) to move it to another sample.
+        'can_unlink'  => $sesarPilot && $sesarReg && $sesarReg->origin === 'linked' && $sesarReg->state === 'active',
     );
 
     $payload = array(
@@ -503,6 +505,9 @@ include("includes/mheader.php");
 .sd-sesar-dl { display: grid; grid-template-columns: 12em 1fr; gap: 0.3em 1.2em; margin: 0; }
 .sd-sesar-dl dt { color: rgba(255,255,255,0.6); }
 .sd-sesar-dl dd { margin: 0; word-break: break-word; }
+.sd-sesar-unlink { margin-top: 0.9em; font-size: 0.92em; }
+.sd-sesar-unlink p { margin: 0 0 0.6em; }
+.sd-sesar-unlink .sd-sesar-err { color: #ff8a80; margin-top: 0.5em; }
 .sd-sesar-differs { margin-top: 0.9em; padding: 0.6em 0.9em; border-radius: 4px; font-size: 0.92em;
     background: rgba(240,180,60,0.12); border: 1px solid rgba(240,180,60,0.35); color: rgba(255,255,255,0.85); }
 @media (max-width: 640px) {
@@ -1713,6 +1718,32 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
                     return escapeHtml(f.label) + ': Field ' + escapeHtml(f.current == null ? 'empty' : f.current) + ', SESAR ' + escapeHtml(f.sesar == null ? 'empty' : f.sesar)
                         + (f.distance_m != null ? ' (' + (f.distance_m >= 1000 ? (f.distance_m / 1000).toFixed(1) + ' km' : Math.round(f.distance_m) + ' m') + ' apart)' : '');
                 }).join('; ') + '</div>');
+        }
+        if (s.can_unlink && window.SesarPull) {
+            card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-unlink" id="sd-sesar-unlink">'
+                + '<a class="sd-action-btn outline" href="#" id="sd-unlink-btn">Unlink from SESAR</a>'
+                + '<div id="sd-unlink-confirm" style="display:none">'
+                + '<p>Unlink this sample from ' + escapeHtml(s.igsn) + '? Nothing changes at SESAR or in this sample\'s values, '
+                + 'and the IGSN field keeps its text. The IGSN can then be linked to another of your samples with Pull from SESAR.</p>'
+                + '<a class="sd-action-btn" href="#" id="sd-unlink-yes">Unlink</a> '
+                + '<a class="sd-action-btn outline" href="#" id="sd-unlink-no">Cancel</a>'
+                + '<div class="sd-sesar-err" id="sd-unlink-err"></div></div></div>');
+            var ask = document.getElementById('sd-unlink-btn'), box = document.getElementById('sd-unlink-confirm');
+            ask.addEventListener('click', function(e) { e.preventDefault(); ask.style.display = 'none'; box.style.display = ''; });
+            document.getElementById('sd-unlink-no').addEventListener('click', function(e) {
+                e.preventDefault(); box.style.display = 'none'; ask.style.display = ''; document.getElementById('sd-unlink-err').textContent = '';
+            });
+            document.getElementById('sd-unlink-yes').addEventListener('click', function(e) {
+                e.preventDefault();
+                var yes = this;
+                if (yes.dataset.busy) return;
+                yes.dataset.busy = '1'; yes.textContent = 'Unlinking...';
+                SesarPull.unlink(sample.id).then(function(r) {
+                    if (r && r.ok) { window.location.reload(); return; }
+                    delete yes.dataset.busy; yes.textContent = 'Unlink';
+                    document.getElementById('sd-unlink-err').textContent = (r && r.message) || 'Could not unlink. Please try again.';
+                });
+            });
         }
         card.style.display = '';
     }

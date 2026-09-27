@@ -91,6 +91,9 @@ try {
 		case 'create':
 			sesar_pull_out(200, array('ok' => true, 'result' => $pull->createOne($userpkey, $str('igsn'))));
 			break;
+		case 'unlink':
+			sesar_pull_out(200, array('ok' => true, 'result' => $pull->unlink($userpkey, $str('sample_id'))));
+			break;
 		case 'import_page':
 			sesar_pull_out(200, array('ok' => true, 'page' => $pull->importPage($userpkey, max(1, (int)$str('page')), $str('search'))));
 			break;

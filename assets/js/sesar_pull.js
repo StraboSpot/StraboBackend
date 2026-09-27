@@ -526,5 +526,8 @@
         });
     }
 
-    window.SesarPull = { single: single, bulk: bulk, create: create };
+    // Removes this sample's pulled link (the SESAR record card on Sample Overview).
+    function unlink(sampleId) { return post({ action: 'unlink', sample_id: sampleId }); }
+
+    window.SesarPull = { single: single, bulk: bulk, create: create, unlink: unlink };
 })();

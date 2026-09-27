@@ -80,10 +80,10 @@ CREATE TABLE IF NOT EXISTS strabosamples.sesar_registrations (
     access                  TEXT        NOT NULL DEFAULT 'managed' CHECK (access IN ('managed', 'readonly')),
 
     -- minting: in flight or unknown outcome (retry searches SESAR by
-    -- external_sample_id before POSTing again, D3); active; deactivation_requested; deactivated.
-    state                   TEXT        NOT NULL
-                                        CHECK (state IN ('minting', 'active', 'deactivation_requested', 'deactivated')),
-    active                  BOOLEAN     NOT NULL DEFAULT TRUE,   -- FALSE once deactivated (history row)
+    -- external_sample_id before POSTing again, D3); active; deactivation_requested;
+    -- deactivated; unlinked (a pulled link the owner removed, Phase 5 review).
+    state                   TEXT        NOT NULL,
+    active                  BOOLEAN     NOT NULL DEFAULT TRUE,   -- FALSE once deactivated or unlinked (history row)
 
     sesar_status            TEXT,       -- SESAR metadata_store_status (draft, pending-review, registered-datacite...)
     snapshot                JSONB,      -- last SESAR record seen (D5 "SESAR record" card, D9 reports)
@@ -101,8 +101,7 @@ CREATE TABLE IF NOT EXISTS strabosamples.sesar_registrations (
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
 
-    CONSTRAINT sesar_reg_igsn_chk CHECK (state = 'minting' OR igsn IS NOT NULL),
-    CONSTRAINT sesar_reg_active_chk CHECK (active = (state <> 'deactivated'))
+    CONSTRAINT sesar_reg_igsn_chk CHECK (state = 'minting' OR igsn IS NOT NULL)
 );
 
 -- Phase 4 (minting, 2026-09-27):
@@ -122,6 +121,21 @@ ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS related_r
 --                [{field, current, sesar, distance_m?}]. NULL = never
 --                pulled or not Field-linked; [] = no differences.
 ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS field_flags JSONB;
+
+-- Phase 5 review (2026-09-27): "Unlink from SESAR" on the SESAR record card.
+--   Removes a PULLED link only (origin 'linked'); nothing changes at SESAR
+--   or in the sample. The row is kept as history: state 'unlinked',
+--   active FALSE, unlinked_at. Frees the IGSN for another of the owner's
+--   samples (one IGSN, one sample). State/active checks are (re)created
+--   here so the file stays idempotent on tables built before this state.
+ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS unlinked_at TIMESTAMPTZ;
+ALTER TABLE strabosamples.sesar_registrations DROP CONSTRAINT IF EXISTS sesar_registrations_state_check;
+ALTER TABLE strabosamples.sesar_registrations DROP CONSTRAINT IF EXISTS sesar_reg_state_chk;
+ALTER TABLE strabosamples.sesar_registrations ADD CONSTRAINT sesar_reg_state_chk
+    CHECK (state IN ('minting', 'active', 'deactivation_requested', 'deactivated', 'unlinked'));
+ALTER TABLE strabosamples.sesar_registrations DROP CONSTRAINT IF EXISTS sesar_reg_active_chk;
+ALTER TABLE strabosamples.sesar_registrations ADD CONSTRAINT sesar_reg_active_chk
+    CHECK (active = (state NOT IN ('deactivated', 'unlinked')));
 
 -- One live registration per sample per environment (D3 duplicate guard).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sesar_reg_sample_live
