@@ -153,8 +153,11 @@ include("includes/mheader.php");
 .si-form label { display: block; font-size: 0.85em; color: rgba(255,255,255,0.65); margin-bottom: 0.25em; }
 .si-form .si-full { grid-column: 1 / -1; }
 .si-panel input[type="text"], .si-panel input[type="email"], .si-panel textarea, .si-filters input[type="text"], .si-filters select {
-    width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2);
+    width: 100%; box-sizing: border-box; background-color: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2);
     border-radius: 4px; color: #fff; padding: 0.55em 0.75em; font-size: 1em; font-family: inherit; }
+/* background-color (not the shorthand) keeps the theme's dropdown arrow; leave room for it. */
+.si-filters select { padding-right: 2.9em; }
+.si-fgrid .si-btn { height: 46px; padding: 0 1.2em; border: 1px solid transparent; white-space: nowrap; }
 .si-panel textarea { min-height: 5.5em; resize: vertical; }
 .si-readonly { padding: 0.55em 0; color: #fff; }
 .si-code { display: flex; align-items: center; gap: 0.5em; margin: 0.5em 0 0.75em; }
@@ -166,6 +169,14 @@ include("includes/mheader.php");
 .si-filters { display: flex; flex-wrap: wrap; gap: 0.75em; margin-bottom: 1em; }
 .si-filters input[type="text"] { flex: 1 1 16em; width: auto; }
 .si-filters select { flex: 0 1 13em; width: auto; }
+.si-filters select, .si-head-acts select { color-scheme: dark; }
+.si-filters select option, .si-head-acts select option { background: #2a2a3a; color: #fff; }
+/* My samples: search on its own row, then the two dropdowns + Ready for an IGSN. */
+.si-filters.si-fgrid { display: grid; grid-template-columns: 1fr 1fr auto; gap: 0.75em 1em; align-items: end; }
+.si-fgrid .si-fld-full { grid-column: 1 / -1; }
+.si-fgrid label { display: block; font-size: 0.85em; color: rgba(255,255,255,0.65); margin: 0 0 0.3em; }
+.si-fgrid select, .si-fgrid input[type="text"] { width: 100%; }
+@media (max-width: 640px) { .si-filters.si-fgrid { grid-template-columns: 1fr; } }
 .si-table { width: 100%; border-collapse: collapse; font-size: 0.95em; }
 .si-table th { text-align: left; font-weight: 600; color: rgba(255,255,255,0.7); border-bottom: 1px solid rgba(255,255,255,0.2); padding: 0.5em 0.6em; }
 .si-table td { border-bottom: 1px solid rgba(255,255,255,0.08); padding: 0.5em 0.6em; vertical-align: top; }
@@ -320,12 +331,14 @@ body { overflow-x: clip; overflow-y: visible; }
                     <dt>Other DOI prefix / Not a valid IGSN</dt><dd>The IGSN field holds an ID from another registry, or text that is not an IGSN.</dd>
                 </dl>
             </details>
-            <div class="si-filters">
-                <input type="text" id="si-q" placeholder="Search sample name, ID or IGSN" autocomplete="off">
+            <div class="si-filters si-fgrid">
+                <div class="si-fld-full"><label for="si-q">Search</label>
+                    <input type="text" id="si-q" placeholder="Sample name, ID or IGSN" autocomplete="off"></div>
+                <div><label for="si-state">IGSN state</label>
                 <select id="si-state">
-                    <option value="">All IGSN states</option>
-                    <option value="none">No IGSN</option>
-                    <option value="managed">IGSN managed here</option>
+                    <option value="">All samples</option>
+                    <option value="none">No IGSN yet</option>
+                    <option value="managed">Managed here</option>
                     <option value="unmanaged">SESAR IGSN, not managed here</option>
                     <option value="other">Other DOI prefix</option>
                     <option value="invalid">Not a valid IGSN</option>
@@ -333,12 +346,14 @@ body { overflow-x: clip; overflow-y: visible; }
                     <option value="changed">Changed since last sent to SESAR</option>
                     <option value="requested">Deactivation requested</option>
                     <option value="gone">Deactivated at SESAR</option>
-                </select>
+                </select></div>
+                <div><label for="si-loc">Location</label>
                 <select id="si-loc">
-                    <option value="">Any location</option>
+                    <option value="">All samples</option>
                     <option value="yes">Has a location</option>
-                    <option value="no">Missing location</option>
-                </select>
+                    <option value="no">Missing a location</option>
+                </select></div>
+                <div><button type="button" class="si-btn si-quiet" id="si-ready" title="Show only samples with no IGSN yet that have a location: SESAR needs a location to register one">Ready for an IGSN</button></div>
             </div>
             <div class="si-selbar" id="si-selbar">
                 <div class="si-selinfo">
@@ -875,8 +890,27 @@ body { overflow-x: clip; overflow-y: visible; }
         } });
     });
 
+    // Filters survive leaving the page and coming back (same tab).
+    function saveFilters() {
+        try { sessionStorage.setItem('si-filters', JSON.stringify({ q: q.value, state: fState.value, loc: fLoc.value })); } catch (e) { /* storage blocked */ }
+    }
+    try {
+        var saved = JSON.parse(sessionStorage.getItem('si-filters') || 'null');
+        if (saved) {
+            q.value = saved.q || '';
+            if (fState.querySelector('option[value="' + (saved.state || '') + '"]')) fState.value = saved.state || '';
+            if (fLoc.querySelector('option[value="' + (saved.loc || '') + '"]')) fLoc.value = saved.loc || '';
+        }
+    } catch (e) { /* storage blocked or bad JSON */ }
     [q, fState, fLoc].forEach(function (el) {
-        el.addEventListener(el === q ? 'input' : 'change', function () { shown = PAGE; renderRows(); });
+        el.addEventListener(el === q ? 'input' : 'change', function () { shown = PAGE; saveFilters(); renderRows(); });
+    });
+    document.getElementById('si-ready').addEventListener('click', function () {
+        fState.value = 'none';
+        fLoc.value = 'yes';
+        shown = PAGE;
+        saveFilters();
+        renderRows();
     });
     more.addEventListener('click', function () { shown += PAGE; renderRows(); });
     renderRows();
