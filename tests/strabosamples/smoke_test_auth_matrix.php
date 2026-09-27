@@ -753,13 +753,21 @@ foreach (array(
         $r['status'] === 401 && isset($r['json']['error']) && $r['json']['error'] === 'not_authenticated');
 }
 
-$p = httpPage($pageMain, null);
-check("anon detail page → 302 redirect to /login.php",
-    $p['status'] === 302 && strpos($p['location'], 'login.php') !== false);
-
-$p = httpPage($pageMain, substr(bin2hex(random_bytes(16)), 0, 26));   // garbage SID
-check("garbage-session detail page → 302 redirect to /login.php",
-    $p['status'] === 302 && strpos($p['location'], 'login.php') !== false);
+// Since 2026-09-27 logged-out visitors get a READ-ONLY page for public
+// samples (full contract: tests/strabosamples/e2e_public_sample_page.php).
+// This fixture is linked to a PUBLIC Micro project, so it is public: the
+// anonymous payload keeps only the public host cards, no collaborators and
+// no owner permissions.
+foreach (array('anon' => null, 'garbage-session' => substr(bin2hex(random_bytes(16)), 0, 26)) as $who => $sidX) {
+    $p = httpPage($pageMain, $sidX);
+    $ap = preg_match('#<script type="application/json" id="sd-data">(.*?)</script>#s', $p['body'], $mm) ? json_decode($mm[1], true) : null;
+    $subs = is_array($ap) ? array_map(function ($l) { return $l['subsystem'] . ':' . ($l['view_href'] !== null ? 'open' : 'closed'); }, $ap['links']) : array();
+    sort($subs);
+    check("$who detail page (public via Micro) → 200 read-only, public cards only",
+        $p['status'] === 200 && is_array($ap) && $ap['anonymous'] === true
+        && $subs === array('experimental:open', 'micro:open')
+        && $ap['collaborators'] === array() && $ap['permissions']['isOwner'] === false && $ap['permissions']['canEdit'] === false);
+}
 
 // -------------------------------------------------------------------------
 // Part 7 — C.3: public share URL E2E for the logged-in stranger

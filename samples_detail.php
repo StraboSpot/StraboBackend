@@ -7,11 +7,18 @@
  *              /samples/{owner_pkey}/{id} from the .htaccess rewrite.
  *
  *              Auth: §12.2 specifies the Share URL is public-read for
- *              any logged-in user. logincheck.php gates the page; the
- *              spine/links/family reads bypass StraboSamplesService's
- *              canRead because the URL itself acts as the auth gate.
- *              Editing (Collaborate / Edit buttons) is conditionally
- *              rendered based on ownership / accepted-collab grants.
+ *              any logged-in user; the spine/links/family reads bypass
+ *              StraboSamplesService's canRead because the URL itself acts
+ *              as the auth gate. Editing (Collaborate / Edit buttons) is
+ *              conditionally rendered based on ownership / accepted-collab
+ *              grants.
+ *
+ *              Logged-out visitors (2026-09-27, softlogincheck.php) see a
+ *              READ-ONLY page, only for public samples and only what is
+ *              already public (rule + trimming in
+ *              samplesdb/lib/sample_public.php). Anything else answers
+ *              "not found or not public" with a login link, the same for
+ *              missing and private samples so ids cannot be probed.
  *
  *              Layout (Phase 4 v1): card-per-link for §16 #9. The
  *              render layer takes a flat list of subsystem_links rows
@@ -35,9 +42,11 @@
  * @link       https://strabospot.org
  */
 
-include("logincheck.php");
+include("softlogincheck.php");
+$anonymous = (empty($_SESSION['loggedin']) || $_SESSION['loggedin'] !== 'yes');
 include("prepare_connections.php");
 require_once __DIR__ . "/samplesdb/services/StraboSamplesService.php";
+require_once __DIR__ . "/samplesdb/lib/sample_public.php";
 require_once __DIR__ . "/samplesdb/lib/vocab.php";
 require_once __DIR__ . "/microdb/lib/permalink.php";
 
@@ -64,6 +73,17 @@ if ($ownerPkey > 0 && $sampleId !== '') {
 }
 
 $notFound = !$spineRow;
+
+// Logged out: public samples only; missing and private look the same.
+$publicVia = null;
+if ($anonymous && !$notFound) {
+    $publicVia = samples_public_status($db, $sampleId, $ownerPkey);
+    if ($publicVia === null) $notFound = true;
+}
+if ($anonymous && $notFound) {
+    $_SESSION['uri'] = $_SERVER['REQUEST_URI'];   // login.php returns here
+    http_response_code(404);                        // crawlers must not index the prompt
+}
 
 if (!$notFound) {
     $sample = array(
@@ -323,10 +343,45 @@ if (!$notFound) {
         }
     }
 
+    // Logged-out view: only what is already public (sample_public.php).
+    if ($anonymous) {
+        if (empty($publicVia['via_project'])) {
+            // Public only through its IGSN: show what SESAR shows, no more.
+            $sample['notes'] = null;
+            $sample['custom_data'] = null;
+            $sample['field_data'] = null;
+            $sample['micro_data'] = null;
+            $sample['experimental_data'] = null;
+        }
+        $publicLinks = array();
+        foreach ($links as $l) {
+            if ($l['subsystem'] === 'field') {
+                if (samples_public_field_spot($db, $l['reference_id'], $l['reference_userpkey'])) $publicLinks[] = $l;
+            } elseif ($l['view_href'] !== null) {
+                $publicLinks[] = $l;   // Micro / Exp: view_href is set only for a public host (viewer owns nothing)
+            }
+        }
+        $links = $publicLinks;
+        $collaborators = array();
+        $rel = array();
+        if (!empty($family['parent']) && empty($family['parent']['orphaned'])) {
+            $rel[] = array($family['parent']['id'], $family['parent']['userpkey']);
+        }
+        foreach ($family['children'] as $c) $rel[] = array($c['id'], $c['userpkey']);
+        $relPublic = samples_public_many($db, $rel);
+        if (!empty($family['parent']) && (!empty($family['parent']['orphaned'])
+                || !isset($relPublic[$family['parent']['id'] . '|' . $family['parent']['userpkey']]))) {
+            $family['parent'] = null;
+        }
+        $family['children'] = array_values(array_filter($family['children'], function ($c) use ($relPublic) {
+            return isset($relPublic[$c['id'] . '|' . $c['userpkey']]);
+        }));
+    }
+
     // Permission flags: drive Edit/Collaborate button visibility.
-    $isOwner = ((int)$userpkey === $ownerPkey);
+    $isOwner = !$anonymous && ((int)$userpkey === $ownerPkey);
     $canEdit = $isOwner;
-    if (!$canEdit) {
+    if (!$canEdit && !$anonymous) {
         $row = $db->get_row_prepared(
             "SELECT 1 AS ok FROM strabosamples.sample_collaborators
               WHERE sample_id=$1 AND sample_userpkey=$2
@@ -345,6 +400,7 @@ if (!$notFound) {
         'collaborators' => $collaborators,
         'family'        => $family,
         'permissions'   => array('isOwner' => $isOwner, 'canEdit' => $canEdit),
+        'anonymous'     => $anonymous,
     );
 }
 
@@ -359,6 +415,8 @@ include("includes/mheader.php");
 
 <style>
 .sd-wrap { max-width: 1100px; margin: 0 auto; padding: 0 1em; color: #ffffff; }
+/* Logged-out read-only view: no My Samples, no change history. */
+.sd-anon #sd-back-link, .sd-anon #sd-changelog-btn { display: none !important; }
 .sd-header {
     text-align: center;
     margin-bottom: 1em;
@@ -1284,14 +1342,20 @@ include("includes/mheader.php");
 <div id="main" class="wrapper style1">
     <div class="container">
 
-<?php if ($notFound): ?>
+<?php if ($notFound && $anonymous): ?>
+        <div class="sd-notfound">
+            <h2>Sample not found or not public.</h2>
+            <p>This sample does not exist, or its owner has not made it public. If it is yours or shared with you, log in to see it.</p>
+            <p><a class="sd-action-btn" href="/login.php">Log in</a></p>
+        </div>
+<?php elseif ($notFound): ?>
         <div class="sd-notfound">
             <h2>Sample not found.</h2>
             <p>The sample may have been removed, or you may have followed a broken link.</p>
             <p><a class="sd-action-btn" href="/my_samples.php">Back to My Samples</a></p>
         </div>
 <?php else: ?>
-        <div class="sd-wrap">
+        <div class="sd-wrap<?php echo $anonymous ? ' sd-anon' : ''; ?>">
             <a class="sd-back-link" id="sd-back-link" href="/my_samples.php">← Back to My Samples</a>
             <div class="sd-header">
                 <h1 id="sd-title"></h1>
@@ -1912,6 +1976,12 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             var p = positions[idx];
             if (!p) return;
             if (p.key === 'focus') return;   // re-clicking focus is a no-op
+            if (payload.anonymous) {
+                // Logged out: exploring needs samples_family.php (login only);
+                // relatives shown here are public, so open their own page.
+                if (p.node && !p.node.orphaned) window.location.href = viewSampleHref(p.node);
+                return;
+            }
             focusOn(p.node);
             // Hide tooltip during the transition so it doesn't trail.
             hideTooltip();
@@ -1954,6 +2024,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             return typeFilter === 'all' || l.subsystem === typeFilter;
         });
         if (!links.length) {
+            if (payload.anonymous) return '<div class="sd-empty-cards">No public project links.</div>';
             return '<div class="sd-empty-cards">No subsystem links yet. Upload a Field / Micro / Experimental project that references this sample.</div>';
         }
         if (!visible.length) {
