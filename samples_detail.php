@@ -2024,6 +2024,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             return typeFilter === 'all' || l.subsystem === typeFilter;
         });
         if (!links.length) {
+            if (payload.anonymous) return '<div class="sd-empty-cards">No public project links.</div>';
             return '<div class="sd-empty-cards">No subsystem links yet. Upload a Field / Micro / Experimental project that references this sample.</div>';
         }
         if (!visible.length) {
