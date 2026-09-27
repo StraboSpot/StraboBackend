@@ -295,7 +295,10 @@ include("includes/mheader.php");
                    Tick the ones to bring into StraboSamples: each becomes a sample linked to its SESAR record.</p>
                 <div class="si-filters">
                     <input type="text" id="si-imp-q" placeholder="Search at SESAR (name or IGSN), then press Enter" autocomplete="off">
+                    <select id="si-acct-fmt" aria-label="Account report format"><option value="xlsx">Excel (.xlsx)</option><option value="csv">CSV</option></select>
+                    <button type="button" class="si-btn si-quiet" id="si-acct-report" title="Every sample in your SESAR account, drafts included, and whether it is in StraboSamples">Download account report</button>
                 </div>
+                <div id="si-acct-msg" aria-live="polite"></div>
                 <div class="si-selbar">
                     <span class="si-selcount" id="si-imp-selcount"></span>
                     <button type="button" class="si-btn" id="si-imp-create" disabled>Create samples</button>
@@ -746,6 +749,23 @@ include("includes/mheader.php");
         var has = function (r) { return r.state !== 'none'; };
         SesarReports.igsns({ selected: selectedRows(has).map(function (r) { return r.id; }),
                              shown: filtered().filter(has).map(function (r) { return r.id; }) });
+    });
+    var acctBtn = document.getElementById('si-acct-report'), acctMsg = document.getElementById('si-acct-msg');
+    acctBtn.addEventListener('click', function () {
+        if (STATUS.step !== 'connected') {
+            acctMsg.innerHTML = '<div class="si-note si-err">Connect your SESAR account above first.</div>';
+            return;
+        }
+        acctBtn.disabled = true;
+        acctBtn.textContent = 'Preparing...';
+        acctMsg.innerHTML = '';
+        SesarReports.account({ format: document.getElementById('si-acct-fmt').value }).then(function (j) {
+            acctBtn.disabled = false;
+            acctBtn.textContent = 'Download account report';
+            acctMsg.innerHTML = j.ok
+                ? (j.notes ? '<div class="si-note si-err">' + esc(j.notes) + '</div>' : '')
+                : '<div class="si-note si-err">' + esc(j.message || 'The report could not be made.') + '</div>';
+        });
     });
     var findBtn = document.getElementById('si-findbatch');
     findBtn.hidden = STATUS.step !== 'connected';
