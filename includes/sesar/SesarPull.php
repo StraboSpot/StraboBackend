@@ -55,6 +55,10 @@ class SesarPull
 	/** Rows per page of the "Import from my SESAR account" list. */
 	const IMPORT_PAGE = 50;
 
+	/** Whole-account reads (Phase 8): SESAR allows page_size up to 2000. */
+	const ACCOUNT_PAGE = 500;
+	const ACCOUNT_MAX_PAGES = 40;
+
 	/** Plain labels for the review. */
 	const LABELS = array(
 		'name'                   => 'Name',
@@ -412,6 +416,159 @@ class SesarPull
 			'pages' => max(1, (int)ceil($res['count'] / self::IMPORT_PAGE)),
 			'rows'  => $rows,
 		);
+	}
+
+	// =======================================================================
+	// Whole account + batch match-back (Phase 8)
+	// =======================================================================
+
+	/**
+	 * Every sample in the connected account (personal scope, drafts
+	 * included), page by page. Shared by "Find my batch IGSNs" (B2) and the
+	 * "My SESAR account" report (D9).
+	 * @return array {rows[] (SESAR list rows), count, truncated}
+	 */
+	public function accountSamples($userpkey)
+	{
+		$client = $this->client;
+		$rows = array();
+		$count = 0;
+		for ($page = 1; $page <= self::ACCOUNT_MAX_PAGES; $page++) {
+			$q = array('scope' => 'personal', 'page' => $page, 'page_size' => self::ACCOUNT_PAGE, 'ordering' => 'igsn');
+			$res = $this->conn->withAccess((int)$userpkey, function ($access) use ($client, $q) { return $client->listSamples($access, $q); });
+			$count = $res['count'];
+			foreach ($res['data'] as $r) {
+				if (is_array($r) && !empty($r['igsn'])) $rows[] = $r;
+			}
+			if (count($res['data']) < self::ACCOUNT_PAGE || empty($res['next'])) break;
+		}
+		return array('rows' => $rows, 'count' => $count, 'truncated' => count($rows) < $count);
+	}
+
+	/** SESAR's workflow state for a list row: draft | pending | registered. */
+	public static function recordState(array $r)
+	{
+		if (!empty($r['is_draft']) && $r['is_draft'] !== 'false') return 'draft';
+		if (!empty($r['is_pending_review']) && $r['is_pending_review'] !== 'false') return 'pending';
+		return 'registered';
+	}
+
+	/**
+	 * B2 + B3: SESAR samples whose Other Name(s) carry "StraboSpot <id>" for
+	 * one of the user's samples (the batch export writes it). Registered
+	 * ones are ticked; drafts and pending ones are listed unticked.
+	 *
+	 * @return array {environment, rows[] {sample_id, name, igsn, sesar_name,
+	 *   state, linkable, checked, reason|null, note|null}, truncated}
+	 */
+	public function batchMatches($userpkey)
+	{
+		$userpkey = (int)$userpkey;
+		$acct = $this->accountSamples($userpkey);
+		$byId = array();
+		foreach ($acct['rows'] as $r) {
+			$id = SesarMapper::idFromOtherNames(isset($r['other_names']) ? $r['other_names'] : array());
+			if ($id !== null) $byId[$id][] = $r;
+		}
+		if (empty($byId)) return array('environment' => $this->env, 'rows' => array(), 'truncated' => $acct['truncated']);
+
+		$samples = $this->db->get_results_prepared(
+			"SELECT s.id, s.name, s.igsn,
+			        (SELECT r.igsn FROM strabosamples.sesar_registrations r
+			          WHERE r.sample_id = s.id AND r.sample_userpkey = s.userpkey AND r.environment = $3 AND r.active LIMIT 1) AS reg_igsn
+			   FROM strabosamples.samples s WHERE s.userpkey = $1 AND s.id = ANY($2::text[])",
+			array($userpkey, self::pgTextArray(array_keys($byId)), $this->env)
+		);
+		$holders = $this->holders($userpkey);
+		$out = array();
+		foreach ((is_array($samples) ? $samples : array()) as $s) {
+			foreach ($byId[(string)$s->id] as $r) {
+				$igsn = (string)$r['igsn'];
+				$state = self::recordState($r);
+				$cls = SesarMapper::classifyIgsn($s->igsn);
+				$row = array(
+					'sample_id'  => (string)$s->id,
+					'name'       => (string)$s->name,
+					'igsn'       => $igsn,
+					'sesar_name' => isset($r['name']) ? (string)$r['name'] : '',
+					'state'      => $state,
+					'linkable'   => true,
+					'checked'    => $state === 'registered',
+					'reason'     => null,
+					'note'       => null,
+				);
+				$held = isset($holders[strtoupper($igsn)]) ? $holders[strtoupper($igsn)] : null;
+				if ($s->reg_igsn !== null && strcasecmp((string)$s->reg_igsn, $igsn) === 0) {
+					continue;   // already linked: nothing to do
+				} elseif ($s->reg_igsn !== null) {
+					$row['reason'] = 'This sample is already linked to ' . $s->reg_igsn . '.';
+				} elseif ($held !== null && $held['id'] !== (string)$s->id) {
+					$row['reason'] = $igsn . ' is already in your sample "' . $held['name'] . '".';
+				} elseif ($cls['kind'] === 'sesar' || $cls['kind'] === 'doi') {
+					if (strcasecmp((string)$cls['normalized'], $igsn) !== 0) {
+						$row['reason'] = 'Its IGSN field already holds ' . $cls['normalized'] . '.';
+					} else {
+						$row['note'] = 'Its IGSN field already holds this IGSN; linking lets StraboSpot manage it.';
+					}
+				} elseif ($cls['kind'] === 'invalid') {
+					$row['checked'] = false;
+					$row['note'] = 'Replaces "' . trim((string)$s->igsn) . '" in its IGSN field (the old value is kept in the sample\'s history).';
+				}
+				if ($row['reason'] !== null) { $row['linkable'] = false; $row['checked'] = false; }
+				$out[] = $row;
+			}
+		}
+		usort($out, function ($a, $b) { return strcasecmp($a['igsn'], $b['igsn']); });
+		return array('environment' => $this->env, 'rows' => $out, 'truncated' => $acct['truncated']);
+	}
+
+	/**
+	 * Links one batch-registered IGSN to the sample its Other Name(s) names.
+	 * SESAR is re-read: the record must be this account's own and still
+	 * carry "StraboSpot <sample id>". The IGSN goes into the sample (history
+	 * kept by the service), then the usual pull link records it with nothing
+	 * else changed.
+	 * @return array apply() result
+	 */
+	public function batchLink($userpkey, $sampleId, $igsnInput)
+	{
+		$userpkey = (int)$userpkey;
+		$sampleId = (string)$sampleId;
+		$cls = SesarMapper::classifyIgsn($igsnInput);
+		if ($cls['kind'] !== 'sesar') throw new SesarError(400, 'That is not a SESAR IGSN.');
+		$igsn = $cls['normalized'];
+		$v = $this->views->build($sampleId, $userpkey);
+		if ($v === null) throw new SesarError(404, 'This is not one of your samples.');
+
+		$client = $this->client;
+		$row = $this->conn->withAccess($userpkey, function ($access) use ($client, $igsn) { return $client->findOwnByIgsn($access, $igsn); });
+		if (!is_array($row)) throw new SesarError(404, $igsn . ' is not one of the samples in your SESAR account.');
+		if (SesarMapper::idFromOtherNames(isset($row['other_names']) ? $row['other_names'] : array()) !== $sampleId) {
+			throw new SesarError(409, $igsn . ' no longer names this sample in its Other Name(s) at SESAR, so it was not linked.');
+		}
+		$reg = $this->activeRegistration($sampleId, $userpkey);
+		if ($reg !== null && strcasecmp((string)$reg->igsn, $igsn) !== 0) {
+			throw new SesarError(409, 'This sample is already linked to ' . $reg->igsn . '.');
+		}
+		$cur = SesarMapper::classifyIgsn($v['igsn']);
+		if (($cur['kind'] === 'sesar' || $cur['kind'] === 'doi') && strcasecmp((string)$cur['normalized'], $igsn) !== 0) {
+			throw new SesarError(409, 'Its IGSN field already holds ' . $cur['normalized'] . '.');
+		}
+		if ($reg === null && strcasecmp((string)$cur['normalized'], $igsn) !== 0) {
+			$r = $this->service($userpkey)->updateSample($sampleId, $userpkey, array('igsn' => $igsn));
+			if (empty($r['ok'])) {
+				throw new SesarError(409, 'The IGSN could not be added to the sample (' . (isset($r['error']) ? $r['error'] : 'unknown') . ').');
+			}
+		}
+		// Nothing accepted = only the link (tracking row + snapshot) is recorded.
+		return $this->apply($userpkey, $sampleId, array('mode' => 'review', 'accept' => array()));
+	}
+
+	private static function pgTextArray(array $vals)
+	{
+		return '{' . implode(',', array_map(function ($v) {
+			return '"' . str_replace(array('\\', '"'), array('\\\\', '\\"'), (string)$v) . '"';
+		}, $vals)) . '}';
 	}
 
 	// =======================================================================

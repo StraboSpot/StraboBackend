@@ -9,6 +9,11 @@
  *              (shared sm- styles).
  *
  *              SesarBatch.open({ samples: [{id, name}], appBase, connected })
+ *              SesarBatch.find({ onDone })
+ *                  "Find my batch IGSNs" (B2 + B3): SESAR samples whose
+ *                  Other Name(s) name one of the user's samples. Registered
+ *                  ones ticked, drafts / pending review listed unticked.
+ *                  One /sesar_pull.php batch_link call per ticked row.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -28,6 +33,8 @@
         + '.sb-fname { color: rgba(255,255,255,0.75); font-size: 0.92em; word-break: break-all; }'
         + '.sb-list { list-style: none; margin: 0 0 1em; padding: 0; font-size: 0.92em; }'
         + '.sb-list li { padding: 0.35em 0; border-bottom: 1px solid rgba(255,255,255,0.08); }'
+        + '.sb-igsn { word-break: break-word; }'
+        + '@media (max-width: 720px) { .sm-table td.sb-igsn { grid-column: 2; } }'
         + '.sm-msg.sb-warn { background: rgba(240,180,60,0.14); border: 1px solid rgba(240,180,60,0.4); color: #f3c97a; }';
 
     var MAX = 4999;
@@ -77,6 +84,10 @@
         ov.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
         ov.addEventListener('click', onClick);
         ov.addEventListener('change', function (e) {
+            if (st && st.mode === 'find' && e.target.hasAttribute('data-i')) {
+                st.rows[+e.target.getAttribute('data-i')].tick = e.target.checked;
+                return renderFind();
+            }
             if (e.target.id !== 'sb-file' || !e.target.files || !e.target.files[0]) return;
             st.file = e.target.files[0];
             st.plan = null;
@@ -90,16 +101,108 @@
 
     function open(opts) {
         ensureDom();
-        st = { opts: opts || {}, file: null, plan: null, busy: false, done: null, error: null };
+        st = { mode: 'file', opts: opts || {}, file: null, plan: null, busy: false, done: null, error: null };
+        document.getElementById('sb-title').textContent = 'SESAR batch upload file';
         document.getElementById('sb-overlay').hidden = false;
         render();
         document.getElementById('sb-x').focus();
     }
 
     function close() {
-        if (!st || st.busy) return;
+        if (!st || st.busy === 'fill' || st.busy === 'check') return;
+        if (st.busy === 'link') {
+            if (!window.confirm('Stop after the current sample?')) return;
+            st.stop = true;
+            return;
+        }
+        var cb = st.opts.onDone, changed = !!st.changed;
         st = null;
         document.getElementById('sb-overlay').hidden = true;
+        if (typeof cb === 'function') cb(changed);
+    }
+
+    // ------------------------------------------------------------------
+    // Find my batch IGSNs
+    // ------------------------------------------------------------------
+    var STATE_TAG = { draft: 'Draft at SESAR', pending: 'Waiting for curator review' };
+
+    function postPull(body) {
+        return fetch('/sesar_pull.php', {
+            method: 'POST', credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+        }).then(function (r) {
+            return r.json().catch(function () { return { ok: false, message: 'Unexpected response from StraboSpot (HTTP ' + r.status + ').' }; });
+        }, function () {
+            return { ok: false, message: 'Could not reach StraboSpot. Please check your connection.' };
+        });
+    }
+
+    function find(opts) {
+        ensureDom();
+        st = { mode: 'find', opts: opts || {}, busy: 'load', rows: null, error: null, results: {}, changed: false, stop: false };
+        document.getElementById('sb-title').textContent = 'Find my batch IGSNs';
+        document.getElementById('sb-overlay').hidden = false;
+        renderFind();
+        document.getElementById('sb-x').focus();
+        postPull({ action: 'batch_matches' }).then(function (j) {
+            if (!st) return;
+            st.busy = false;
+            if (!j.ok) st.error = j.message || 'Your SESAR account could not be read.';
+            else { st.rows = j.matches.rows; st.truncated = j.matches.truncated; st.rows.forEach(function (r) { r.tick = r.checked; }); }
+            renderFind();
+        });
+    }
+
+    function renderFind() {
+        var h = '<p>SESAR samples whose Other Name(s) name one of your StraboSpot samples, as the SESAR batch file writes them. '
+            + 'Tick the ones to link: each IGSN is added to its sample and linked, and nothing else in the sample changes.</p>';
+        if (st.error) h += '<div class="sm-msg err">' + esc(st.error) + '</div>';
+        if (st.busy === 'load') h += '<p class="sm-muted">Reading your SESAR account...</p>';
+        if (st.rows && !st.rows.length) h += '<div class="sm-msg">No SESAR samples in your account name a StraboSpot sample that is not linked yet.</div>';
+        if (st.truncated) h += '<div class="sm-msg sb-warn">Your SESAR account is very large; only part of it was read.</div>';
+        if (st.rows && st.rows.length) {
+            h += '<table class="sm-table"><tbody>' + st.rows.map(function (r, i) {
+                var res = st.results[i];
+                var cb = r.linkable && !res
+                    ? '<input type="checkbox" id="sb-m-' + i + '" data-i="' + i + '"' + (r.tick ? ' checked' : '') + (st.busy ? ' disabled' : '') + '>'
+                      + '<label for="sb-m-' + i + '"><span class="sm-sr">Link ' + esc(r.igsn) + '</span></label>' : '';
+                var status = res ? (res.ok ? '<div class="sm-status" style="color:#8cd296">Linked</div>' : '<div class="sm-reason">' + esc(res.message) + '</div>') : '';
+                return '<tr><td class="sm-cb">' + cb + '</td><td><div class="sm-name">' + esc(r.name) + '</div>'
+                    + (r.sesar_name && r.sesar_name !== r.name ? '<div class="sm-sub">At SESAR: ' + esc(r.sesar_name) + '</div>' : '')
+                    + '</td><td class="sb-igsn">' + ext(st.opts.landingBase ? st.opts.landingBase + r.igsn : '#', r.igsn)
+                    + (STATE_TAG[r.state] ? '<span class="sm-role">' + STATE_TAG[r.state] + '</span>' : '')
+                    + (r.reason ? '<div class="sm-reason">' + esc(r.reason) + '</div>' : '')
+                    + (r.note ? '<div class="sm-note">' + esc(r.note) + '</div>' : '')
+                    + (r.state !== 'registered' && !res ? '<div class="sm-sub">Not public yet. SESAR may still change or remove it.</div>' : '')
+                    + status + '</td></tr>';
+            }).join('') + '</tbody></table>';
+        }
+        body(h);
+        var n = st.rows ? st.rows.filter(function (r, i) { return r.tick && r.linkable && !st.results[i]; }).length : 0;
+        var doneAny = Object.keys(st.results).length > 0;
+        foot('<span class="sm-count">' + (st.busy === 'link' ? 'Linking...' : '') + '</span>'
+            + '<button type="button" class="sm-btn sm-quiet" data-act="close">' + (doneAny ? 'Close' : 'Cancel') + '</button>'
+            + (st.rows && st.rows.length ? '<button type="button" class="sm-btn" data-act="link"' + (n && !st.busy ? '' : ' disabled') + '>Link ' + (n > 1 ? n + ' IGSNs' : 'IGSN') + '</button>' : ''));
+    }
+
+    function linkAll() {
+        var queue = [];
+        st.rows.forEach(function (r, i) { if (r.tick && r.linkable && !st.results[i]) queue.push(i); });
+        st.busy = 'link';
+        st.stop = false;
+        renderFind();
+        (function next() {
+            if (!st) return;
+            if (!queue.length || st.stop) { st.busy = false; renderFind(); return; }
+            var i = queue.shift(), r = st.rows[i];
+            postPull({ action: 'batch_link', sample_id: r.sample_id, igsn: r.igsn }).then(function (j) {
+                if (!st) return;
+                st.results[i] = j.ok ? { ok: true } : { ok: false, message: j.message || 'Not linked.' };
+                if (j.ok) st.changed = true;
+                renderFind();
+                next();
+            });
+        })();
     }
 
     function intro() {
@@ -110,7 +213,7 @@
             + '<li>At ' + ext(o.appBase, 'SESAR') + ', open <strong>Batch Template Creator</strong> and create a template with your SESAR code. '
             + 'For <strong>Object Type</strong>, choose to enter it per sample. Tick any other fields you want, then click <strong>Generate Spreadsheet</strong>.</li>'
             + '<li>Choose that file below. StraboSpot fills in your samples and gives the file back. Nothing else in it changes.</li>'
-            + '<li>Upload the filled file at SESAR (batch upload). SESAR\'s curators review it before the IGSNs are assigned.</li>'
+            + '<li>Upload the filled file at SESAR (batch upload). SESAR assigns the IGSNs right away; its curators review the batch before they go public.</li>'
             + '</ol>'
             + '<div class="sb-pick"><input type="file" class="sb-file" id="sb-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">'
             + '<label for="sb-file" class="sm-btn' + (st.file ? ' sm-quiet' : '') + '">' + (st.file ? 'Choose a different file' : 'Choose SESAR template') + '</label>'
@@ -144,7 +247,7 @@
     function afterHtml() {
         var h = '<div class="sm-msg ok">Downloaded <strong>' + esc(st.done) + '</strong>. Upload it at ' + ext(st.opts.appBase, 'SESAR') + ' with batch upload.</div>'
             + '<p><strong>Getting the IGSNs back.</strong> Each sample carries "StraboSpot" and its StraboSpot id in SESAR\'s Other Name(s) column. '
-            + 'After SESAR\'s curators approve the batch, ';
+            + 'Once the upload finishes at SESAR, ';
         h += st.opts.connected
             ? 'use <strong>Find my batch IGSNs</strong> on this page to add each IGSN to its sample.</p>'
             : 'connect your SESAR account on this page and use <strong>Find my batch IGSNs</strong>. Without a connection, add the IGSNs with a spreadsheet import on '
@@ -212,7 +315,8 @@
         var act = b.getAttribute('data-act');
         if (act === 'close') return close();
         if (act === 'fill') return fill();
+        if (act === 'link') return linkAll();
     }
 
-    window.SesarBatch = { open: open };
+    window.SesarBatch = { open: open, find: find };
 })();

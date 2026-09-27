@@ -14,6 +14,10 @@
  *                create_plan  {igsns: [...]}                  -> {ok, plan}
  *                create       {igsn}                          -> {ok, result}
  *                import_page  {page, search}                  -> {ok, page}
+ *                batch_matches {}                             -> {ok, matches}
+ *                batch_link   {sample_id, igsn}               -> {ok, result}
+ *              (Phase 8 B2: IGSNs from SESAR batch uploads whose Other
+ *              Name(s) carry "StraboSpot <sample id>".)
  *              Errors: {ok:false, error, message, fields}
  *
  * @package    StraboSpot Web Site
@@ -96,6 +100,12 @@ try {
 			break;
 		case 'import_page':
 			sesar_pull_out(200, array('ok' => true, 'page' => $pull->importPage($userpkey, max(1, (int)$str('page')), $str('search'))));
+			break;
+		case 'batch_matches':
+			sesar_pull_out(200, array('ok' => true, 'matches' => $pull->batchMatches($userpkey)));
+			break;
+		case 'batch_link':
+			sesar_pull_out(200, array('ok' => true, 'result' => $pull->batchLink($userpkey, $str('sample_id'), $str('igsn'))));
 			break;
 		default:
 			sesar_pull_out(400, array('ok' => false, 'error' => 'unknown_action', 'message' => 'Unknown action.'));

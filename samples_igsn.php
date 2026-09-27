@@ -195,6 +195,7 @@ include("includes/mheader.php");
 .si-tab[aria-selected="true"] { color: #fff; border-bottom-color: #e44c65; font-weight: 600; }
 .si-head { display: flex; flex-wrap: wrap; gap: 0.75em; align-items: center; margin-bottom: 0.75em; }
 .si-head h3 { margin: 0; flex: 1 1 auto; }
+.si-head-acts { display: flex; flex-wrap: wrap; gap: 0.75em; }
 .si-pager { display: flex; gap: 0.75em; align-items: center; justify-content: center; margin: 1em 0; }
 .si-more { text-align: center; margin: 1em 0; }
 .si-table td.si-cb, .si-table th.si-cb { width: 2.2em; }
@@ -246,7 +247,10 @@ include("includes/mheader.php");
             </div>
             <div class="si-head">
                 <h3>My samples</h3>
-                <button type="button" class="si-btn si-quiet" id="si-create">Create samples from IGSNs</button>
+                <div class="si-head-acts">
+                    <button type="button" class="si-btn si-quiet" id="si-findbatch" hidden title="Link IGSNs that SESAR assigned to samples you sent in a SESAR batch file">Find my batch IGSNs</button>
+                    <button type="button" class="si-btn si-quiet" id="si-create">Create samples from IGSNs</button>
+                </div>
             </div>
             <div class="si-filters">
                 <input type="text" id="si-q" placeholder="Search sample name, ID or IGSN" autocomplete="off">
@@ -737,6 +741,11 @@ include("includes/mheader.php");
     });
     renderOrphans();
 
+    var findBtn = document.getElementById('si-findbatch');
+    findBtn.hidden = STATUS.step !== 'connected';
+    findBtn.addEventListener('click', function () {
+        SesarBatch.find({ landingBase: STATUS.links.landing_base, onDone: function (changed) { if (changed) window.location.reload(); } });
+    });
     document.getElementById('si-create').addEventListener('click', function () {
         SesarPull.create({ onDone: function (changed) { if (changed) window.location.reload(); } });
     });
