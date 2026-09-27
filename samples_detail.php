@@ -51,6 +51,7 @@ require_once __DIR__ . "/samplesdb/lib/vocab.php";
 require_once __DIR__ . "/microdb/lib/permalink.php";
 require_once __DIR__ . "/includes/sesar/SesarAccess.php";
 require_once __DIR__ . "/includes/sesar/SesarMapper.php";
+require_once __DIR__ . "/includes/sesar/SesarPull.php";
 
 $ownerPkey = isset($_GET['owner']) ? (int)$_GET['owner'] : 0;
 $sampleId  = isset($_GET['id'])    ? trim((string)$_GET['id']) : '';
@@ -401,19 +402,32 @@ if (!$notFound) {
     // owner's "Register IGSN" button (pilot-gated, D10). The button shows
     // only while the IGSN field is empty or holds text that is not an
     // IGSN; the review (sesar_mint.php) decides everything else.
+    // "Pull from SESAR" (D5) shows for the owner while the field holds an
+    // IGSN or the sample is linked; the "SESAR record" card shows the last
+    // pulled (or minted) SESAR record to signed-in viewers.
     $sesarEnv = SesarAccess::environment();
     $sesarReg = $db->get_row_prepared(
-        "SELECT igsn, state FROM strabosamples.sesar_registrations
+        "SELECT igsn, state, origin, access, snapshot::text AS snapshot, snapshot_at, field_flags::text AS field_flags
+           FROM strabosamples.sesar_registrations
           WHERE sample_id = $1 AND sample_userpkey = $2 AND environment = $3 AND active AND state <> 'minting'",
         array($sampleId, $ownerPkey, $sesarEnv)
     );
     $igsnKind = SesarMapper::classifyIgsn($sample['igsn']);
+    $sesarPilot = $isOwner && SesarAccess::canUse($userpkey);
+    $sesarSnap = ($sesarReg && $sesarReg->snapshot !== null) ? json_decode($sesarReg->snapshot, true) : null;
+    $sesarFlags = ($sesarReg && $sesarReg->field_flags !== null) ? json_decode($sesarReg->field_flags, true) : null;
     $sesar = array(
         'igsn'        => $sesarReg ? $sesarReg->igsn : null,
+        'field_igsn'  => $igsnKind['normalized'],   // the IGSN field, normalized (a pulled link keeps the user's spelling)
         'landing_url' => $sesarReg ? SesarAccess::landingUrl($sesarReg->igsn, $sesarEnv) : null,
         'sandbox'     => $sesarEnv === 'sandbox',
-        'can_mint'    => $isOwner && SesarAccess::canUse($userpkey) && !$sesarReg
+        'can_mint'    => $sesarPilot && !$sesarReg
                          && in_array($igsnKind['kind'], array('empty', 'invalid'), true),
+        'can_pull'    => $sesarPilot && ($sesarReg || in_array($igsnKind['kind'], array('sesar', 'doi'), true)),
+        'record'      => (!$anonymous && is_array($sesarSnap)) ? SesarPull::summary($sesarSnap) : null,
+        'record_at'   => ($sesarReg && $sesarReg->snapshot_at) ? date('c', strtotime($sesarReg->snapshot_at)) : null,
+        'readonly'    => $sesarReg ? $sesarReg->access === 'readonly' : false,
+        'differs'     => (!$anonymous && is_array($sesarFlags)) ? $sesarFlags : array(),
     );
 
     $payload = array(
@@ -485,6 +499,16 @@ include("includes/mheader.php");
 .sd-action-btn:hover { background: #f06880; color: #ffffff; }
 .sd-sesar-test { display: inline-block; margin-left: 0.4em; font-size: 0.78em; padding: 0 0.5em; border-radius: 4px;
     background: rgba(240,180,60,0.18); color: #f3c97a; border: 1px solid rgba(240,180,60,0.45); }
+.sd-sesar-meta { color: rgba(255,255,255,0.65); font-size: 0.9em; margin: -0.3em 0 0.8em; }
+.sd-sesar-dl { display: grid; grid-template-columns: 12em 1fr; gap: 0.3em 1.2em; margin: 0; }
+.sd-sesar-dl dt { color: rgba(255,255,255,0.6); }
+.sd-sesar-dl dd { margin: 0; word-break: break-word; }
+.sd-sesar-differs { margin-top: 0.9em; padding: 0.6em 0.9em; border-radius: 4px; font-size: 0.92em;
+    background: rgba(240,180,60,0.12); border: 1px solid rgba(240,180,60,0.35); color: rgba(255,255,255,0.85); }
+@media (max-width: 640px) {
+    .sd-sesar-dl { grid-template-columns: 1fr; }
+    .sd-sesar-dl dt { margin-top: 0.5em; }
+}
 .sd-action-btn.outline {
     background: transparent;
     color: #e44c65;
@@ -1392,6 +1416,7 @@ include("includes/mheader.php");
                 <div class="sd-share-line"><strong>SAMPLE URL:</strong><span id="sd-share-url"></span></div>
                 <a class="sd-action-btn" href="#" id="sd-collab-btn" style="display:none">Collaborate</a>
                 <a class="sd-action-btn" href="#" id="sd-igsn-btn" style="display:none" title="Register an IGSN for this sample at SESAR">Register IGSN</a>
+                <a class="sd-action-btn outline" href="#" id="sd-pull-btn" style="display:none" title="Copy values from this sample's SESAR record">Pull from SESAR</a>
                 <div class="sd-avatars" id="sd-avatars"></div>
             </div>
 
@@ -1414,6 +1439,12 @@ include("includes/mheader.php");
                         <div class="sd-family-tooltip" id="sd-family-tooltip" aria-hidden="true"></div>
                     </div>
                 </div>
+            </div>
+
+            <div class="sd-section" id="sd-sesar-card" style="display:none">
+                <h3>SESAR record</h3>
+                <p class="sd-sesar-meta" id="sd-sesar-meta"></p>
+                <dl class="sd-sesar-dl" id="sd-sesar-dl"></dl>
             </div>
 
             <div class="sd-type-tabs">
@@ -1565,8 +1596,9 @@ include("includes/mheader.php");
     </div>
 </div>
 
-<?php if (!empty($payload['sesar']['can_mint'])): ?>
+<?php if (!empty($payload['sesar']['can_mint']) || !empty($payload['sesar']['can_pull'])): ?>
 <script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
+<script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
 <?php endif; ?>
 <script type="application/json" id="sd-data"><?php echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <?php
@@ -1641,13 +1673,48 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         return '<div><span class="sd-field-label">' + escapeHtml(label) + ':</span> ' + escapeHtml(value) + '</div>';
     }
     // The IGSN links to its SESAR page when StraboSpot manages it there.
+    var loadedIgsn = payload.sample ? payload.sample.igsn : null;
     function igsnFieldHtml(sample) {
         var s = payload.sesar || {};
-        if (!sample.igsn || !s.igsn || sample.igsn !== s.igsn) return field('IGSN', sample.igsn);
+        // A pulled link keeps the user's spelling (bare IEABC0001, a doi.org URL...): match it normalized.
+        var same = s.igsn && sample.igsn && (sample.igsn === s.igsn
+            || (sample.igsn === loadedIgsn && s.field_igsn && s.field_igsn.toUpperCase() === s.igsn.toUpperCase()));
+        if (!same) return field('IGSN', sample.igsn);
         return '<div><span class="sd-field-label">IGSN:</span> <a href="' + escapeHtml(s.landing_url) + '" target="_blank" rel="noopener">'
             + escapeHtml(sample.igsn) + '</a>'
             + (s.sandbox ? ' <span class="sd-sesar-test" title="Registered on SESAR\'s test site; not a real IGSN">SESAR test</span>' : '')
             + '</div>';
+    }
+    // "SESAR record" card: the last SESAR record read by a pull or a mint
+    // (D5), read-only, with Field differences as of that read.
+    function renderSesarCard() {
+        var s = payload.sesar || {};
+        if (!s.record) return;
+        var keys = Object.keys(s.record);
+        var when = s.record_at ? parsePgTimestamp(s.record_at) : null;
+        var meta = 'As SESAR had it ' + (when ? 'on ' + when.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'when last read')
+            + '. <a href="' + escapeHtml(s.landing_url) + '" target="_blank" rel="noopener">Open at SESAR</a>'
+            + (s.sandbox ? ' <span class="sd-sesar-test" title="SESAR\'s test site; not a real IGSN">SESAR test</span>' : '')
+            + (s.readonly ? '<br>Linked read-only: this record belongs to another SESAR account.' : '');
+        document.getElementById('sd-sesar-meta').innerHTML = meta;
+        var dl = keys.map(function(k) {
+            var v = s.record[k];
+            if (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v)) {   // SESAR timestamps -> local date
+                var d = new Date(v.replace(/(\.\d{3})\d+/, '$1'));
+                if (!isNaN(d)) v = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            }
+            return '<dt>' + escapeHtml(k) + '</dt><dd>' + escapeHtml(v) + '</dd>';
+        }).join('');
+        document.getElementById('sd-sesar-dl').innerHTML = dl;
+        var card = document.getElementById('sd-sesar-card');
+        if (s.differs && s.differs.length) {
+            card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-differs"><strong>Differs from the StraboField spot</strong> (not changed; the Field app owns these): '
+                + s.differs.map(function(f) {
+                    return escapeHtml(f.label) + ': Field ' + escapeHtml(f.current == null ? 'empty' : f.current) + ', SESAR ' + escapeHtml(f.sesar == null ? 'empty' : f.sesar)
+                        + (f.distance_m != null ? ' (' + (f.distance_m >= 1000 ? (f.distance_m / 1000).toFixed(1) + ' km' : Math.round(f.distance_m) + ' m') + ' apart)' : '');
+                }).join('; ') + '</div>');
+        }
+        card.style.display = '';
     }
     // Custom key/value fields from the tabular import path (custom_data
     // JSONB). Read-only here — they're edited by re-uploading a sheet on
@@ -1743,6 +1810,15 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     // Edit + Collaborate visibility from perms.
     if (perms.canEdit) document.getElementById('sd-edit-btn').style.display    = 'inline-block';
     if (perms.isOwner) document.getElementById('sd-collab-btn').style.display  = 'inline-block';
+    if (payload.sesar && payload.sesar.can_pull && window.SesarPull) {
+        var pullBtn = document.getElementById('sd-pull-btn');
+        pullBtn.style.display = 'inline-block';
+        pullBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            SesarPull.single({ sampleId: sample.id, onDone: function(changed) { if (changed) window.location.reload(); } });
+        });
+    }
+    renderSesarCard();
     if (payload.sesar && payload.sesar.can_mint && window.SesarMint) {
         var igsnBtn = document.getElementById('sd-igsn-btn');
         igsnBtn.style.display = 'inline-block';

@@ -267,6 +267,7 @@ class SesarOnboarding
 				'sesar'              => $app,
 				'developer_settings' => $app . 'profile/developer-settings',
 				'code_help'          => 'https://docs.geosamples.org/for-researchers/accounts-and-access/choose-a-sesar-code',
+				'landing_base'       => $app . 'sample/igsn/',   // + IGSN = SesarAccess::landingUrl()
 			),
 		);
 	}

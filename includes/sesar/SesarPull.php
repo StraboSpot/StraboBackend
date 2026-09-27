@@ -189,7 +189,7 @@ class SesarPull
 	 *
 	 * @param string[] $inputs raw values as typed
 	 * @return array {environment, cap, rows[] {input, igsn, group: ready|held|
-	 *   blocked, reason, name, parent_igsn, parent_in_run, holder {id,name}|null,
+	 *   blocked, reason, name, parent_igsn, parent_in_run, holder {id,name,url}|null,
 	 *   depth}}
 	 */
 	public function createPlan($userpkey, array $inputs)
@@ -582,7 +582,7 @@ class SesarPull
 			$c = SesarMapper::classifyIgsn($r->igsn);
 			if ($c['normalized'] === null) continue;
 			$k = strtoupper($c['normalized']);
-			if (!isset($out[$k])) $out[$k] = array('id' => (string)$r->id, 'name' => (string)$r->name);
+			if (!isset($out[$k])) $out[$k] = self::holder($userpkey, $r->id, $r->name);
 		}
 		$regs = $this->db->get_results_prepared(
 			"SELECT r.sample_id, r.igsn, s.name FROM strabosamples.sesar_registrations r
@@ -591,9 +591,14 @@ class SesarPull
 			array((int)$userpkey, $this->env)
 		);
 		foreach ((is_array($regs) ? $regs : array()) as $r) {
-			$out[strtoupper((string)$r->igsn)] = array('id' => (string)$r->sample_id, 'name' => (string)$r->name);
+			$out[strtoupper((string)$r->igsn)] = self::holder($userpkey, $r->sample_id, $r->name);
 		}
 		return $out;
+	}
+
+	private static function holder($userpkey, $id, $name)
+	{
+		return array('id' => (string)$id, 'name' => (string)$name, 'url' => '/samples/' . (int)$userpkey . '/' . rawurlencode((string)$id));
 	}
 
 	/** Records (or refreshes) the link: tracking row + snapshot (D5). */

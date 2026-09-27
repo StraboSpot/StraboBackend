@@ -127,11 +127,18 @@
         });
     }
 
-    function ensureDom() {
-        if (document.getElementById('sm-overlay')) return;
+    // Shared with the pull modal (assets/js/sesar_pull.js), which reuses the sm- classes.
+    function injectStyles() {
+        if (document.getElementById('sm-styles')) return;
         var style = document.createElement('style');
+        style.id = 'sm-styles';
         style.textContent = CSS;
         document.head.appendChild(style);
+    }
+
+    function ensureDom() {
+        if (document.getElementById('sm-overlay')) return;
+        injectStyles();
         var ov = document.createElement('div');
         ov.id = 'sm-overlay';
         ov.className = 'sm-overlay';
@@ -468,5 +475,5 @@
         });
     }
 
-    window.SesarMint = { open: open };
+    window.SesarMint = { open: open, injectStyles: injectStyles };
 })();

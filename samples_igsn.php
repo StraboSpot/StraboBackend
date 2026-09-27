@@ -13,10 +13,17 @@
  *              itself when the user comes back to the tab
  *              (SesarOnboarding, sesar_connect.php).
  *
- *              Below: the user's OWN samples (owner-only minting, D3) with
- *              their IGSN state. Tick samples and "Register IGSNs" opens the
- *              mint review (assets/js/sesar_mint.js, sesar_mint.php, D4).
- *              Link / push actions arrive with Phases 5-6.
+ *              Below, two tabs:
+ *              - My samples: the user's OWN samples (owner-only, D3) with
+ *                their IGSN state. Tick samples, then "Register IGSNs" opens
+ *                the mint review (assets/js/sesar_mint.js, sesar_mint.php,
+ *                D4) or "Pull from SESAR" fills them from their SESAR records
+ *                (assets/js/sesar_pull.js, sesar_pull.php, D5). "Create
+ *                samples from IGSNs" takes a pasted list.
+ *              - Import from my SESAR account: the account's own SESAR
+ *                samples, page by page, each marked when a StraboSamples
+ *                sample already holds it; tick to create samples (D5).
+ *              Push arrives with Phase 6.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -42,7 +49,7 @@ if ($allowed && $configured) {
 
 	$res = $db->get_results_prepared(
 		"SELECT s.id, s.userpkey, s.name, s.igsn, s.latitude, s.longitude, s.modified_at,
-		        r.igsn AS reg_igsn, r.state AS reg_state
+		        r.igsn AS reg_igsn, r.state AS reg_state, r.access AS reg_access, r.field_flags::text AS field_flags
 		   FROM strabosamples.samples s
 		   LEFT JOIN strabosamples.sesar_registrations r
 		          ON r.sample_id = s.id AND r.sample_userpkey = s.userpkey
@@ -59,6 +66,7 @@ if ($allowed && $configured) {
 		elseif ($cls['kind'] === 'sesar') $state = 'unmanaged';
 		elseif ($cls['kind'] === 'doi') $state = 'other';
 		else $state = 'invalid';
+		$flags = ($r->field_flags !== null) ? json_decode($r->field_flags, true) : null;
 		$rows[] = array(
 			'id'     => (string)$r->id,
 			'owner'  => (int)$r->userpkey,
@@ -66,6 +74,9 @@ if ($allowed && $configured) {
 			'igsn'   => $igsn,
 			'state'  => $state,
 			'reg'    => $r->reg_state,
+			'readonly' => $r->reg_access === 'readonly',
+			// Field vs SESAR differences as of the last pull (D5): labels only.
+			'differs'  => is_array($flags) ? array_values(array_map(function ($f) { return (string)$f['label']; }, $flags)) : array(),
 			'hasLoc' => is_numeric($r->latitude) && is_numeric($r->longitude),
 		);
 	}
@@ -128,6 +139,16 @@ include("includes/mheader.php");
 .si-pill.other { background: rgba(170, 140, 230, 0.2); color: #d2c2f4; }
 .si-pill.invalid { background: rgba(228, 76, 101, 0.18); color: #f5a3b3; }
 .si-pill.noloc { background: rgba(240, 180, 60, 0.18); color: #f3c97a; }
+.si-pill.differs { background: rgba(240, 180, 60, 0.18); color: #f3c97a; margin-left: 0.3em; }
+.si-pill.ro { background: rgba(255,255,255,0.1); color: rgba(255,255,255,0.7); margin-left: 0.3em; }
+.si-tabs { display: flex; gap: 0.25em; margin: 0 0 1.25em; border-bottom: 1px solid rgba(255,255,255,0.15); }
+.si-tab { background: none; border: none; border-bottom: 3px solid transparent; color: rgba(255,255,255,0.65); padding: 0.55em 1em;
+          font-size: 1em; cursor: pointer; box-shadow: none; height: auto; line-height: 1.4; margin-bottom: -1px; border-radius: 0; }
+.si-tab:hover { color: #fff; background: none; }
+.si-tab[aria-selected="true"] { color: #fff; border-bottom-color: #e44c65; font-weight: 600; }
+.si-head { display: flex; flex-wrap: wrap; gap: 0.75em; align-items: center; margin-bottom: 0.75em; }
+.si-head h3 { margin: 0; flex: 1 1 auto; }
+.si-pager { display: flex; gap: 0.75em; align-items: center; justify-content: center; margin: 1em 0; }
 .si-more { text-align: center; margin: 1em 0; }
 .si-table td.si-cb, .si-table th.si-cb { width: 2.2em; }
 .si-cb input[type="checkbox"] + label { padding-left: 1.6em; margin: 0; min-height: 1.4em; }
@@ -162,7 +183,16 @@ include("includes/mheader.php");
 
             <div class="si-panel" id="si-conn" aria-live="polite"></div>
 
-            <h3 style="margin-bottom:0.75em">My samples</h3>
+            <div class="si-tabs" role="tablist">
+                <button type="button" class="si-tab" role="tab" id="si-tab-mine" aria-selected="true" aria-controls="si-pane-mine">My samples</button>
+                <button type="button" class="si-tab" role="tab" id="si-tab-import" aria-selected="false" aria-controls="si-pane-import">Import from my SESAR account</button>
+            </div>
+
+            <div id="si-pane-mine" role="tabpanel" aria-labelledby="si-tab-mine">
+            <div class="si-head">
+                <h3>My samples</h3>
+                <button type="button" class="si-btn si-quiet" id="si-create">Create samples from IGSNs</button>
+            </div>
             <div class="si-filters">
                 <input type="text" id="si-q" placeholder="Search sample name, ID or IGSN" autocomplete="off">
                 <select id="si-state">
@@ -172,6 +202,7 @@ include("includes/mheader.php");
                     <option value="unmanaged">SESAR IGSN, not managed here</option>
                     <option value="other">Other DOI prefix</option>
                     <option value="invalid">Not a valid IGSN</option>
+                    <option value="differs">Differs from StraboField</option>
                 </select>
                 <select id="si-loc">
                     <option value="">Any location</option>
@@ -182,6 +213,7 @@ include("includes/mheader.php");
             <div class="si-selbar">
                 <span class="si-selcount" id="si-selcount"></span>
                 <button type="button" class="si-btn si-quiet" id="si-selclear" hidden>Clear selection</button>
+                <button type="button" class="si-btn si-quiet" id="si-pull" disabled>Pull from SESAR</button>
                 <button type="button" class="si-btn" id="si-register" disabled>Register IGSNs</button>
             </div>
             <p class="si-muted" id="si-count"></p>
@@ -191,6 +223,28 @@ include("includes/mheader.php");
                 <tbody id="si-rows"></tbody>
             </table>
             <div class="si-more"><button type="button" class="si-btn si-quiet" id="si-more" hidden>Show more</button></div>
+            </div>
+
+            <div id="si-pane-import" role="tabpanel" aria-labelledby="si-tab-import" hidden>
+                <p>Samples registered under your SESAR account, including ones made at SESAR directly (for example with SESAR's spreadsheet upload).
+                   Tick the ones to bring into StraboSamples: each becomes a sample linked to its SESAR record.</p>
+                <div class="si-filters">
+                    <input type="text" id="si-imp-q" placeholder="Search at SESAR (name or IGSN), then press Enter" autocomplete="off">
+                </div>
+                <div class="si-selbar">
+                    <span class="si-selcount" id="si-imp-selcount"></span>
+                    <button type="button" class="si-btn" id="si-imp-create" disabled>Create samples</button>
+                </div>
+                <p class="si-muted" id="si-imp-count"></p>
+                <table class="si-table">
+                    <thead><tr><th class="si-cb"><input type="checkbox" id="si-imp-all"><label for="si-imp-all"><span class="si-sr">Select all importable samples on this page</span></label></th>
+                        <th>SESAR sample</th><th>IGSN</th><th>In StraboSamples</th><th class="si-col-loc">Location</th></tr></thead>
+                    <tbody id="si-imp-rows"></tbody>
+                </table>
+                <div class="si-pager"><button type="button" class="si-btn si-quiet" id="si-imp-prev" hidden>Previous</button>
+                    <span class="si-muted" id="si-imp-page"></span>
+                    <button type="button" class="si-btn si-quiet" id="si-imp-next" hidden>Next</button></div>
+            </div>
         </div>
 
 <script>
@@ -479,8 +533,13 @@ include("includes/mheader.php");
     var selected = {};   // sample id -> true
     var MAX_RUN = 100;
     var selAll = document.getElementById('si-all'), selCount = document.getElementById('si-selcount');
-    var selClear = document.getElementById('si-selclear'), regBtn = document.getElementById('si-register');
-    function selectable(r) { return r.state !== 'managed'; }
+    var selClear = document.getElementById('si-selclear'), regBtn = document.getElementById('si-register'), pullBtn = document.getElementById('si-pull');
+    var BY_ID = {};
+    ROWS.forEach(function (r) { BY_ID[r.id] = r; });
+    function selectable() { return true; }
+    function mintable(r) { return r.state === 'none' || r.state === 'invalid'; }       // the mint review decides the rest
+    function pullable(r) { return r.state === 'managed' || r.state === 'unmanaged' || r.state === 'other'; }
+    function selectedRows(test) { return Object.keys(selected).map(function (id) { return BY_ID[id]; }).filter(function (r) { return r && test(r); }); }
     var STATE_TEXT = { none: 'No IGSN', managed: 'Managed here', unmanaged: 'SESAR, not managed here',
                        other: 'Other DOI prefix', invalid: 'Not a valid IGSN' };
     var STATE_TIP = { invalid: 'The IGSN field holds text that is not an IGSN. It is never sent to SESAR.',
@@ -489,7 +548,7 @@ include("includes/mheader.php");
     function filtered() {
         var term = q.value.trim().toLowerCase(), st = fState.value, loc = fLoc.value;
         return ROWS.filter(function (r) {
-            if (st && r.state !== st) return false;
+            if (st === 'differs' ? !r.differs.length : (st && r.state !== st)) return false;
             if (loc === 'yes' && !r.hasLoc) return false;
             if (loc === 'no' && r.hasLoc) return false;
             if (term && (r.name + ' ' + r.id + ' ' + r.igsn).toLowerCase().indexOf(term) < 0) return false;
@@ -511,7 +570,10 @@ include("includes/mheader.php");
             return '<tr><td class="si-cb">' + cb + '</td><td><a href="' + esc(href) + '">' + esc(r.name || r.id) + '</a>'
                 + (r.name && r.name !== r.id ? '<div class="si-muted">' + esc(r.id) + '</div>' : '') + '</td>'
                 + '<td class="si-igsn">' + (r.igsn ? esc(r.igsn) : '<span class="si-muted">none</span>') + '</td>'
-                + '<td><span class="si-pill ' + r.state + '"' + (STATE_TIP[r.state] ? ' title="' + esc(STATE_TIP[r.state]) + '"' : '') + '>' + STATE_TEXT[r.state] + '</span></td>'
+                + '<td><span class="si-pill ' + r.state + '"' + (STATE_TIP[r.state] ? ' title="' + esc(STATE_TIP[r.state]) + '"' : '') + '>' + STATE_TEXT[r.state] + '</span>'
+                + (r.readonly ? '<span class="si-pill ro" title="Linked to another SESAR account\'s record: you can pull from it, not send changes.">read-only</span>' : '')
+                + (r.differs.length ? '<span class="si-pill differs" title="' + esc('As of the last pull, SESAR and the StraboField spot differ in: ' + r.differs.join(', ').toLowerCase()) + '">Differs from Field</span>' : '')
+                + '</td>'
                 + '<td class="si-col-loc">' + (r.hasLoc ? 'Yes' : '<span class="si-pill noloc">Missing</span>') + '</td></tr>';
         }).join('') || '<tr><td colspan="5" class="si-muted">No samples match.</td></tr>';
         more.hidden = list.length <= shown;
@@ -521,12 +583,16 @@ include("includes/mheader.php");
     }
 
     function renderSel() {
-        var n = Object.keys(selected).length;
-        selCount.textContent = n === 0 ? 'Tick samples to register IGSNs for them at SESAR.'
-            : n + ' sample' + (n === 1 ? '' : 's') + ' selected' + (n > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '');
+        var n = Object.keys(selected).length, m = selectedRows(mintable).length, p = selectedRows(pullable).length;
+        selCount.textContent = n === 0 ? 'Tick samples to register IGSNs for them, or to pull their SESAR records.'
+            : n + ' sample' + (n === 1 ? '' : 's') + ' selected' + (Math.max(m, p) > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '');
         selClear.hidden = n === 0;
-        regBtn.disabled = n === 0 || n > MAX_RUN;
-        regBtn.textContent = n > 1 ? 'Register IGSNs (' + n + ')' : 'Register IGSN';
+        regBtn.disabled = m === 0 || m > MAX_RUN;
+        regBtn.textContent = 'Register IGSN' + (m > 1 ? 's (' + m + ')' : '');
+        regBtn.title = n && !m ? 'None of the selected samples needs an IGSN.' : '';
+        pullBtn.disabled = p === 0 || p > MAX_RUN;
+        pullBtn.textContent = 'Pull from SESAR' + (p > 1 ? ' (' + p + ')' : '');
+        pullBtn.title = n && !p ? 'None of the selected samples has a SESAR IGSN.' : '';
     }
 
     tbody.addEventListener('change', function (e) {
@@ -543,7 +609,15 @@ include("includes/mheader.php");
     });
     selClear.addEventListener('click', function () { selected = {}; renderRows(); });
     regBtn.addEventListener('click', function () {
-        SesarMint.open({ sampleIds: Object.keys(selected), onDone: function (minted) { if (minted) window.location.reload(); } });
+        SesarMint.open({ sampleIds: selectedRows(mintable).map(function (r) { return r.id; }),
+                         onDone: function (minted) { if (minted) window.location.reload(); } });
+    });
+    pullBtn.addEventListener('click', function () {
+        SesarPull.bulk({ samples: selectedRows(pullable).map(function (r) { return { id: r.id, name: r.name }; }),
+                         onDone: function (changed) { if (changed) window.location.reload(); } });
+    });
+    document.getElementById('si-create').addEventListener('click', function () {
+        SesarPull.create({ onDone: function (changed) { if (changed) window.location.reload(); } });
     });
 
     [q, fState, fLoc].forEach(function (el) {
@@ -551,9 +625,125 @@ include("includes/mheader.php");
     });
     more.addEventListener('click', function () { shown += PAGE; renderRows(); });
     renderRows();
+
+    // ------------------------------------------------------------------
+    // Tabs
+    // ------------------------------------------------------------------
+    var tabs = { mine: document.getElementById('si-tab-mine'), 'import': document.getElementById('si-tab-import') };
+    var panes = { mine: document.getElementById('si-pane-mine'), 'import': document.getElementById('si-pane-import') };
+    var impLoaded = false;
+    function showTab(k) {
+        Object.keys(tabs).forEach(function (t) {
+            tabs[t].setAttribute('aria-selected', t === k ? 'true' : 'false');
+            panes[t].hidden = t !== k;
+        });
+        try { sessionStorage.setItem('si-tab', k); } catch (e) { /* storage blocked */ }
+        if (k === 'import' && !impLoaded) { impLoaded = true; loadImport(1); }
+    }
+    tabs.mine.addEventListener('click', function () { showTab('mine'); });
+    tabs['import'].addEventListener('click', function () { showTab('import'); });
+
+    // ------------------------------------------------------------------
+    // Import from my SESAR account (one SESAR page at a time)
+    // ------------------------------------------------------------------
+    var imp = { page: 1, pages: 1, rows: [], selected: {}, busy: false, search: '' };
+    var impRows = document.getElementById('si-imp-rows'), impCount = document.getElementById('si-imp-count');
+    var impPrev = document.getElementById('si-imp-prev'), impNext = document.getElementById('si-imp-next'), impPage = document.getElementById('si-imp-page');
+    var impAll = document.getElementById('si-imp-all'), impSel = document.getElementById('si-imp-selcount'), impCreate = document.getElementById('si-imp-create');
+    var impQ = document.getElementById('si-imp-q');
+
+    function loadImport(page) {
+        if (STATUS.step !== 'connected') {
+            impRows.innerHTML = '<tr><td colspan="5" class="si-muted">Connect your SESAR account above to see its samples.</td></tr>';
+            impCount.textContent = '';
+            return;
+        }
+        imp.busy = true;
+        impRows.innerHTML = '<tr><td colspan="5" class="si-muted">Loading your samples from SESAR…</td></tr>';
+        impPrev.hidden = impNext.hidden = true;
+        fetch('/sesar_pull.php', {
+            method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ action: 'import_page', page: page, search: imp.search })
+        }).then(function (r) { return r.json(); }).catch(function () {
+            return { ok: false, message: 'Could not reach StraboSpot. Please check your connection.' };
+        }).then(function (j) {
+            imp.busy = false;
+            if (!j.ok) {
+                impRows.innerHTML = '<tr><td colspan="5"><div class="si-note si-err">' + esc(j.message || 'Something went wrong.')
+                    + ' <a href="#" data-imp-retry>Try again</a></div></td></tr>';
+                return;
+            }
+            imp.page = j.page.page; imp.pages = j.page.pages; imp.rows = j.page.rows; imp.count = j.page.count;
+            renderImport();
+        });
+    }
+
+    function renderImport() {
+        impCount.textContent = imp.count === 0 ? '' : imp.count + ' sample' + (imp.count === 1 ? '' : 's') + ' at SESAR'
+            + (imp.search ? ' matching "' + imp.search + '"' : '');
+        impRows.innerHTML = imp.rows.map(function (r, i) {
+            var cb = r.holder ? '' : '<input type="checkbox" id="si-imp-' + i + '" data-igsn="' + esc(r.igsn) + '"' + (imp.selected[r.igsn] ? ' checked' : '') + '>'
+                + '<label for="si-imp-' + i + '"><span class="si-sr">Import ' + esc(r.name || r.igsn) + '</span></label>';
+            var meta = [r.object_type, r.material].filter(Boolean).join(', ');
+            return '<tr><td class="si-cb">' + cb + '</td><td>' + esc(r.name || '(no name)')
+                + (meta ? '<div class="si-muted">' + esc(meta) + '</div>' : '') + '</td>'
+                + '<td class="si-igsn"><a href="' + esc(STATUS.links.landing_base + r.igsn) + '" target="_blank" rel="noopener">' + esc(r.igsn) + '</a></td>'
+                + '<td>' + (r.holder ? '<a href="' + esc(r.holder.url) + '">' + esc(r.holder.name) + '</a>' : '<span class="si-muted">not yet</span>') + '</td>'
+                + '<td class="si-col-loc">' + (r.has_location ? 'Yes' : '<span class="si-pill noloc">Missing</span>') + '</td></tr>';
+        }).join('') || '<tr><td colspan="5" class="si-muted">' + (imp.search ? 'No samples match.' : 'Your SESAR account has no samples yet.') + '</td></tr>';
+        impPrev.hidden = imp.page <= 1;
+        impNext.hidden = imp.page >= imp.pages;
+        impPage.textContent = imp.pages > 1 ? 'Page ' + imp.page + ' of ' + imp.pages : '';
+        var open = imp.rows.filter(function (r) { return !r.holder; });
+        impAll.checked = open.length > 0 && open.every(function (r) { return imp.selected[r.igsn]; });
+        renderImpSel();
+    }
+
+    function renderImpSel() {
+        var n = Object.keys(imp.selected).length;
+        impSel.textContent = n === 0 ? 'Tick SESAR samples to create them in StraboSamples.'
+            : n + ' selected' + (n > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '') + (imp.pages > 1 ? ' (kept across pages)' : '');
+        impCreate.disabled = n === 0 || n > MAX_RUN;
+        impCreate.textContent = n > 1 ? 'Create ' + n + ' samples' : 'Create sample';
+    }
+
+    impRows.addEventListener('change', function (e) {
+        var g = e.target.getAttribute('data-igsn');
+        if (g === null) return;
+        if (e.target.checked) imp.selected[g] = true; else delete imp.selected[g];
+        renderImport();
+    });
+    impRows.addEventListener('click', function (e) {
+        if (e.target.hasAttribute('data-imp-retry')) { e.preventDefault(); loadImport(imp.page); }
+    });
+    impAll.addEventListener('change', function () {
+        imp.rows.forEach(function (r) { if (!r.holder) { if (impAll.checked) imp.selected[r.igsn] = true; else delete imp.selected[r.igsn]; } });
+        renderImport();
+    });
+    impPrev.addEventListener('click', function () { if (!imp.busy) loadImport(imp.page - 1); });
+    impNext.addEventListener('click', function () { if (!imp.busy) loadImport(imp.page + 1); });
+    impQ.addEventListener('keydown', function (e) {
+        if (e.key !== 'Enter') return;
+        e.preventDefault();
+        imp.search = impQ.value.trim();
+        loadImport(1);
+    });
+    impCreate.addEventListener('click', function () {
+        SesarPull.create({ igsns: Object.keys(imp.selected), onDone: function (changed) {
+            if (!changed) return;
+            imp.selected = {};
+            try { sessionStorage.setItem('si-tab', 'import'); } catch (e) { /* storage blocked */ }
+            window.location.reload();   // the My samples list gains the new samples
+        } });
+    });
+
+    var startTab = 'mine';
+    try { startTab = sessionStorage.getItem('si-tab') === 'import' ? 'import' : 'mine'; } catch (e) { /* storage blocked */ }
+    showTab(startTab);
 })();
 </script>
 <script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
+<script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
 <?php endif; ?>
     </div>
 </div>
