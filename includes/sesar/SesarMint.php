@@ -305,15 +305,7 @@ class SesarMint
 		}
 
 		// parent_sample: never from raw spine text (D3 rule).
-		$parentIgsn = null;
-		if ($v['parent_sample_id'] !== null) {
-			$p = $this->parentFacts($v['parent_sample_id'], (int)$v['parent_userpkey']);
-			if ($p !== null) {
-				$looked = ($p['reg_igsn'] === null && in_array($p['cls']['kind'], array('sesar', 'doi'), true))
-					? $this->client->lookupIgsns(array($p['cls']['normalized'])) : array();
-				$parentIgsn = $this->verifiedParentIgsn($p, $looked);
-			}
-		}
+		$parentIgsn = $this->parentIgsnFor($v);
 		if ($expectParent && $parentIgsn === null) {
 			throw new SesarError(409, 'Skipped: its parent was not registered, so it would lose its parent link.', array('parent' => array('parent_not_minted')));
 		}
@@ -334,22 +326,8 @@ class SesarMint
 		// D2 link back to the sample page (best-effort, never blocks the mint).
 		$rrId = null;
 		if (self::LINK_BACK) {
-			$url = self::PAGE_BASE . $userpkey . '/' . rawurlencode($sampleId);
-			$label = 'StraboSpot sample page (' . $sampleId . ')';   // the id makes it findable: SESAR searches labels only
-			$client = $this->client;
 			try {
-				$rrId = $this->conn->withAccess($userpkey, function ($access) use ($client, $url, $label, $sampleId) {
-					try {
-						return $client->createRelatedResource($access, $label, $url, 'This sample in StraboSamples (StraboSpot)');
-					} catch (SesarError $e) {
-						// One URI, one resource at SESAR: an earlier attempt (or an
-						// earlier IGSN of this sample) already made it. Reuse it.
-						if ($e->kind !== 'validation' || stripos($e->getMessage(), 'already exists') === false) throw $e;
-						$id = $client->findRelatedResourceByUri($access, $url, (string)$sampleId);
-						if ($id === null) throw $e;
-						return $id;
-					}
-				});
+				$rrId = $this->linkBackResource($userpkey, $sampleId);
 			} catch (SesarError $e) {
 				if (in_array($e->kind, array('auth', 'no_permission', 'no_account'), true)) {
 					$this->deleteMintingRow($regPkey);
@@ -514,6 +492,50 @@ class SesarMint
 		$out = array();
 		foreach ((is_array($rows) ? $rows : array()) as $r) $out[(string)$r->sample_id] = $r;
 		return $out;
+	}
+
+	/**
+	 * The IGSN to send as parent_sample for sample view $v, or null. Never
+	 * raw spine text (D3): the parent's registration, else its IGSN field
+	 * once SESAR confirms it ($lookup). Without $lookup (cheap status
+	 * checks, no network) a well-formed 10.58052/ value is taken as is.
+	 */
+	public function parentIgsnFor(array $v, $lookup = true)
+	{
+		if (!isset($v['parent_sample_id']) || $v['parent_sample_id'] === null) return null;
+		$p = $this->parentFacts($v['parent_sample_id'], (int)$v['parent_userpkey']);
+		if ($p === null) return null;
+		if (!$lookup) {
+			if ($p['reg_igsn'] !== null) return (string)$p['reg_igsn'];
+			return $p['cls']['kind'] === 'sesar' ? $p['cls']['normalized'] : null;
+		}
+		$looked = ($p['reg_igsn'] === null && in_array($p['cls']['kind'], array('sesar', 'doi'), true))
+			? $this->client->lookupIgsns(array($p['cls']['normalized'])) : array();
+		return $this->verifiedParentIgsn($p, $looked);
+	}
+
+	/**
+	 * D2 link back: the id of the related resource pointing at the sample's
+	 * StraboSpot page, created now or reused (SESAR allows one resource per
+	 * URI). Throws SesarError.
+	 */
+	public function linkBackResource($userpkey, $sampleId)
+	{
+		$url = self::PAGE_BASE . (int)$userpkey . '/' . rawurlencode((string)$sampleId);
+		$label = 'StraboSpot sample page (' . $sampleId . ')';   // the id makes it findable: SESAR searches labels only
+		$client = $this->client;
+		return $this->conn->withAccess($userpkey, function ($access) use ($client, $url, $label, $sampleId) {
+			try {
+				return $client->createRelatedResource($access, $label, $url, 'This sample in StraboSamples (StraboSpot)');
+			} catch (SesarError $e) {
+				// One URI, one resource at SESAR: an earlier attempt (or an
+				// earlier IGSN of this sample) already made it. Reuse it.
+				if ($e->kind !== 'validation' || stripos($e->getMessage(), 'already exists') === false) throw $e;
+				$id = $client->findRelatedResourceByUri($access, $url, (string)$sampleId);
+				if ($id === null) throw $e;
+				return $id;
+			}
+		});
 	}
 
 	/** What we know about a parent outside the run (may belong to another user). */

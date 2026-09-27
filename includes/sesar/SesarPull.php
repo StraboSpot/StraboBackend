@@ -498,20 +498,41 @@ class SesarPull
 		);
 	}
 
+	/**
+	 * Field-vs-SESAR differences for a Field-linked sample view against a
+	 * SESAR record (stored as field_flags); null when not Field-linked.
+	 * Push refreshes them after sending.
+	 */
+	public static function fieldFlags(array $v, array $rec)
+	{
+		if (empty($v['field_linked'])) return null;
+		$out = array();
+		foreach (SesarMapper::pullProposals($v, $rec) as $p) {
+			if ($p['action'] === 'flag') $out[] = self::proposalRow($p);
+		}
+		return $out;
+	}
+
+	private static function proposalRow(array $p)
+	{
+		$row = array(
+			'field'   => $p['field'],
+			'label'   => self::LABELS[$p['field']],
+			'current' => self::displayValue($p['field'], $p['current']),
+			'sesar'   => self::displayValue($p['field'], $p['sesar']),
+			'action'  => $p['action'],
+			'checked' => $p['action'] === 'fill',
+		);
+		if (array_key_exists('distance_m', $p)) $row['distance_m'] = $p['distance_m'] === null ? null : round($p['distance_m']);
+		return $row;
+	}
+
 	private function describe(array $x)
 	{
 		$rows = array();
 		$flags = array();
 		foreach ($x['proposals'] as $p) {
-			$row = array(
-				'field'   => $p['field'],
-				'label'   => self::LABELS[$p['field']],
-				'current' => self::displayValue($p['field'], $p['current']),
-				'sesar'   => self::displayValue($p['field'], $p['sesar']),
-				'action'  => $p['action'],
-				'checked' => $p['action'] === 'fill',
-			);
-			if (array_key_exists('distance_m', $p)) $row['distance_m'] = $p['distance_m'] === null ? null : round($p['distance_m']);
+			$row = self::proposalRow($p);
 			if ($p['action'] === 'flag') $flags[] = $row;
 			else $rows[] = $row;
 		}

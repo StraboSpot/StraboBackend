@@ -361,6 +361,17 @@ class SesarClient
 		return null;
 	}
 
+	/**
+	 * Links samples (SESAR's integer sample ids) to an existing related
+	 * resource. Used instead of PATCH related_resources, which REPLACES a
+	 * sample's non-image links (sandbox spec).
+	 */
+	public function linkSamplesToResource($access, $resourceId, array $sesarSampleIds)
+	{
+		$ids = array_values(array_map('intval', $sesarSampleIds));
+		return $this->call('POST', 'related-resources/' . (int)$resourceId . '/link-samples/', $access, array('sample_ids' => $ids), 'json');
+	}
+
 	/** SESAR DeactivateReasonEnum, verbatim. */
 	const DEACTIVATE_REASONS = array('this was a test sample', 'this sample does not exist', 'duplicate igsn', 'other');
 

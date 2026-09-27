@@ -461,7 +461,8 @@ class SesarMapper
 		return trim((string)$v);
 	}
 
-	private static function sameValue($f, $ours, $theirs)
+	/** Same value for push field $f, after SESAR's formatting (decimals, dates). */
+	public static function sameValue($f, $ours, $theirs)
 	{
 		$a = self::norm($f, $ours);
 		$b = self::norm($f, $theirs);

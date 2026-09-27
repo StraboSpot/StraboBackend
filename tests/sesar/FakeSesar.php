@@ -280,6 +280,15 @@ class FakeSesar implements SesarTransport
 			$s['related'][(string)$s['rr_seq']] = $b + array('_owner' => $tok['orcid']);
 			return array(201, json_encode(array('data' => array('id' => $s['rr_seq']) + $b)), 0);
 		}
+		if ($method === 'POST' && preg_match('#^related-resources/([0-9]+)/link-samples/$#', $path, $m)) {
+			if (!$authed) return self::err(401, 'detail', 'Authentication credentials were not provided.');
+			if (!isset($s['related'][$m[1]])) return self::err(404, 'detail', 'Related resource not found.');
+			if ($s['related'][$m[1]]['_owner'] !== $tok['orcid']) return self::err(403, 'detail', 'Insufficient permission on this resource.');
+			$b = json_decode((string)$body, true);
+			if (empty($b['sample_ids'])) return self::err(400, 'sample_ids', 'No samples to process.');
+			foreach ($b['sample_ids'] as $sid) $s['related'][$m[1]]['_samples'][] = (int)$sid;
+			return array(200, json_encode(array('data' => array('processed' => count($b['sample_ids'])))), 0);
+		}
 		if ($method === 'GET' && $path === 'related-resources/') {
 			$rows = array();
 			foreach ($s['related'] as $id => $rr) {
