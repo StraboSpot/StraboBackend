@@ -497,14 +497,19 @@ include("includes/mheader.php");
     display: inline-block;
     padding-bottom: 0.3em;
 }
-.sd-actions {
+/* Two rows: Share + the (long) sample URL, then the actions (Collaborate,
+   then the SESAR group). One wrapping row pushed Send to SESAR onto a line
+   of its own once the SESAR buttons showed. */
+.sd-actions { margin-bottom: 1.25em; }
+.sd-actions-share, .sd-actions-row {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75em;
     justify-content: center;
     align-items: center;
-    margin-bottom: 1.25em;
 }
+.sd-actions-row { margin-top: 0.75em; }
+.sd-actions-row[hidden] { display: none; }
 .sd-action-btn {
     background: #e44c65;
     color: #ffffff;
@@ -1437,13 +1442,17 @@ include("includes/mheader.php");
             </div>
 
             <div class="sd-actions">
-                <a class="sd-action-btn outline" href="#" id="sd-share-btn">Share</a>
-                <div class="sd-share-line"><strong>SAMPLE URL:</strong><span id="sd-share-url"></span></div>
+                <div class="sd-actions-share">
+                    <a class="sd-action-btn outline" href="#" id="sd-share-btn">Share</a>
+                    <div class="sd-share-line"><strong>SAMPLE URL:</strong><span id="sd-share-url"></span></div>
+                </div>
+                <div class="sd-actions-row" id="sd-actions-row">
                 <a class="sd-action-btn" href="#" id="sd-collab-btn" style="display:none">Collaborate</a>
                 <a class="sd-action-btn" href="#" id="sd-igsn-btn" style="display:none" title="Register an IGSN for this sample at SESAR">Register IGSN</a>
                 <a class="sd-action-btn outline" href="#" id="sd-pull-btn" style="display:none" title="Copy values from this sample's SESAR record">Pull from SESAR</a>
                 <a class="sd-action-btn" href="#" id="sd-push-btn" style="display:none" title="Send this sample's changes to its SESAR record">Send to SESAR</a>
                 <div class="sd-avatars" id="sd-avatars"></div>
+                </div>
             </div>
 
             <div class="sd-section">
@@ -1724,6 +1733,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         var s = payload.sesar || {}, p = s.push, box = document.getElementById('sd-sesar-push'), btn = document.getElementById('sd-push-btn');
         var due = !!(p && p.pushable && (p.changed || p.link_back) && window.SesarPush);
         btn.style.display = due ? 'inline-block' : 'none';
+        syncActionRow();
         if (!due) { box.style.display = 'none'; return; }
         box.innerHTML = (p.changed
                 ? '<strong>Changed since last sent to SESAR:</strong> ' + escapeHtml(p.fields.join(', ')) + '.'
@@ -1731,6 +1741,14 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             + ' Nothing is sent until you choose to.<br><a class="sd-action-btn" href="#" id="sd-push-inline">Send to SESAR</a>';
         box.style.display = '';
         document.getElementById('sd-push-inline').addEventListener('click', openSesarPush);
+    }
+    // The action row hides itself when nothing in it shows (logged-out
+    // visitors, viewers with no actions), so it leaves no empty gap.
+    function syncActionRow() {
+        var row = document.getElementById('sd-actions-row');
+        row.hidden = !Array.prototype.some.call(row.children, function(el) {
+            return el.id === 'sd-avatars' ? el.children.length > 0 : el.style.display !== 'none';
+        });
     }
     function refreshSesarPush() {
         var s = payload.sesar || {};
@@ -1929,6 +1947,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         return '<span class="sd-avatar" title="' + escapeHtml(title) + '">' + escapeHtml(c.initials || '?') + '</span>';
     }).join('');
     document.getElementById('sd-avatars').innerHTML = avatarsHtml;
+    syncActionRow();
 
     // ---- Family tree widget (simple radial; §12.2.1 v1) ----
     // ---- Family-tree mini-explorer (samples/ui-family-explorer) ----
