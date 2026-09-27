@@ -217,8 +217,9 @@ include("includes/mheader.php");
 .si-selbar { display: flex; flex-wrap: wrap; gap: 0.75em; align-items: center; margin: 0 0 1em; padding: 0.6em 0.9em; border-radius: 4px;
              background: rgba(255,255,255,0.05); }
 .si-selbar .si-selcount { flex: 1 1 auto; color: rgba(255,255,255,0.75); font-size: 0.92em; }
-/* My samples: five actions, so the count gets its own line and the buttons stay together on the next. */
-.si-selbar #si-selcount { flex-basis: 100%; }
+/* My samples: the count and Clear selection share their own line, so the four actions stay together on the next. */
+.si-selinfo { flex-basis: 100%; display: flex; align-items: center; gap: 0.75em; min-height: 2.1em; }
+.si-selinfo .si-btn { padding: 0.3em 0.8em; font-size: 0.88em; }
 @media (max-width: 640px) {
     .si-form { grid-template-columns: 1fr; }
     .si-panel { padding: 1.1em; }
@@ -335,8 +336,10 @@ include("includes/mheader.php");
                 </select>
             </div>
             <div class="si-selbar">
-                <span class="si-selcount" id="si-selcount"></span>
-                <button type="button" class="si-btn si-quiet" id="si-selclear" hidden>Clear selection</button>
+                <div class="si-selinfo">
+                    <span class="si-selcount" id="si-selcount"></span>
+                    <button type="button" class="si-btn si-quiet" id="si-selclear" hidden>Clear selection</button>
+                </div>
                 <button type="button" class="si-btn si-quiet" id="si-pull" disabled>Pull from SESAR</button>
                 <button type="button" class="si-btn si-quiet" id="si-push" disabled>Send to SESAR</button>
                 <button type="button" class="si-btn si-quiet" id="si-batch" disabled title="Write the selected samples into a SESAR batch template, to upload at SESAR yourself">SESAR batch file</button>
