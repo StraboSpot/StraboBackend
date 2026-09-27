@@ -445,6 +445,12 @@ class SesarPull
 		return array('rows' => $rows, 'count' => $count, 'truncated' => count($rows) < $count);
 	}
 
+	/** normalized IGSN (upper case) => {id, name, url} of the user's sample holding it (reports). */
+	public function holdersFor($userpkey)
+	{
+		return $this->holders((int)$userpkey);
+	}
+
 	/** SESAR's workflow state for a list row: draft | pending | registered. */
 	public static function recordState(array $r)
 	{

@@ -250,6 +250,7 @@ include("includes/mheader.php");
                 <div class="si-head-acts">
                     <button type="button" class="si-btn si-quiet" id="si-findbatch" hidden title="Link IGSNs that SESAR assigned to samples you sent in a SESAR batch file">Find my batch IGSNs</button>
                     <button type="button" class="si-btn si-quiet" id="si-create">Create samples from IGSNs</button>
+                    <button type="button" class="si-btn si-quiet" id="si-report" title="Download an Excel or CSV report of your samples with IGSNs">Download report</button>
                 </div>
             </div>
             <div class="si-filters">
@@ -741,6 +742,11 @@ include("includes/mheader.php");
     });
     renderOrphans();
 
+    document.getElementById('si-report').addEventListener('click', function () {
+        var has = function (r) { return r.state !== 'none'; };
+        SesarReports.igsns({ selected: selectedRows(has).map(function (r) { return r.id; }),
+                             shown: filtered().filter(has).map(function (r) { return r.id; }) });
+    });
     var findBtn = document.getElementById('si-findbatch');
     findBtn.hidden = STATUS.step !== 'connected';
     findBtn.addEventListener('click', function () {
@@ -875,6 +881,7 @@ include("includes/mheader.php");
 <script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
 <script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
 <script src="/assets/js/sesar_push.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_push.js'); ?>"></script>
+<script src="/assets/js/sesar_reports.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_reports.js'); ?>"></script>
 <script src="/assets/js/sesar_batch.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_batch.js'); ?>"></script>
 <script src="/assets/js/sesar_deactivate.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_deactivate.js'); ?>"></script>
 <?php endif; ?>
