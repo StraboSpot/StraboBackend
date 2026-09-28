@@ -1,4 +1,6 @@
 php_value memory_limit 4086M
+# No Apache "Index of" pages anywhere: data folder file names (version uuids, micro files) act as access keys
+Options -Indexes
 RewriteEngine on
 # Export Builder job data (exportjobs_data/, gitignored): never served; exportjobs/download.php streams results
 RewriteRule ^exportjobs_data(/|$) - [F,L]
