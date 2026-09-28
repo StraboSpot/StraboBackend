@@ -31,6 +31,27 @@ function getRandVal(){
 	return(uniqid());
 }
 
+//Each processing step writes a new file in files/. Once the step has
+//written its output, the previous step's file is removed; if the step
+//failed, both are removed so a failed upload leaves nothing behind.
+function finishStep($from, $to, $rc){
+	$fromfile = "/srv/app/www/geotiff/upload/files/$from.tif";
+	$tofile = "/srv/app/www/geotiff/upload/files/$to.tif";
+	clearstatcache();
+	$ok = ($rc == 0 && file_exists($tofile) && filesize($tofile) > 0);
+	@unlink($fromfile);
+	if(!$ok){
+		@unlink($tofile);
+	}
+	return $ok;
+}
+
+function failUpload($error){
+	header('Content-Type: application/json');
+	echo json_encode(array('error' => $error), JSON_PRETTY_PRINT);
+	exit();
+}
+
 function dumpVar($var){
 	echo "<pre>";
 	print_r($var);
@@ -59,7 +80,7 @@ $tempname=$_FILES['geotifffile']['tmp_name'];
 $fileerror=$_FILES['geotifffile']['error'];
 $filesize=$_FILES['geotifffile']['size'];
 if($filesize==""){
-	$filesize="null";
+	$filesize=null;
 }
 
 /*
@@ -198,7 +219,10 @@ Text: tempname: /tmp/php4oAndL files/6877d6e6bb26d.tif
 
 						$newtemp = getRandVal();
 						//gdal_translate -of GTiff -scale 0 65535 -ot Byte stormmtn.tif byte.tif
-						exec("gdal_translate -of GTiff -scale $min $max -ot Byte files/".$hash.".tif files/".$newtemp.".tif");
+						exec("gdal_translate -of GTiff -scale $min $max -ot Byte files/".$hash.".tif files/".$newtemp.".tif", $foo, $rc);
+						if(!finishStep($hash, $newtemp, $rc)){
+							failUpload("GeoTIFF file could not be converted.");
+						}
 						$hash = $newtemp;
 
 					}
@@ -207,7 +231,10 @@ Text: tempname: /tmp/php4oAndL files/6877d6e6bb26d.tif
 
 					//Do usual gdalwarp
 					$newtemp = getRandVal();
-					exec("gdalwarp files/".$hash.".tif files/".$newtemp.".tif -co \"PHOTOMETRIC=RGB\" -t_srs \"+proj=longlat +ellps=WGS84\"");
+					exec("gdalwarp files/".$hash.".tif files/".$newtemp.".tif -co \"PHOTOMETRIC=RGB\" -t_srs \"+proj=longlat +ellps=WGS84\"", $foo, $rc);
+					if(!finishStep($hash, $newtemp, $rc)){
+						failUpload("GeoTIFF file could not be reprojected.");
+					}
 					$hash = $newtemp;
 
 					$out['hash']=$hash;
@@ -247,10 +274,18 @@ Text: tempname: /tmp/php4oAndL files/6877d6e6bb26d.tif
 
 					file_put_contents("/var/www/geotiff/upload/maps/$hash".".map",$mapfile);
 
-					//add to database
-					$db->prepare_query("
+					//add to database; without a row the map is unreachable, so remove its files
+					//(errors hidden so a warning does not land in front of the JSON answer)
+					$db->hide_errors();
+					$inserted = $db->prepare_query("
 						INSERT INTO geotiffs(userpkey, hash, gdalinfo, name, filesize) VALUES ($1, $2, $3, $4, $5)
 					", array($userpkey, $hash, $gdalinfo, $filename, $filesize));
+					$db->show_errors();
+					if($inserted === false){
+						@unlink("/srv/app/www/geotiff/upload/files/$hash.tif");
+						@unlink("/var/www/geotiff/upload/maps/$hash.map");
+						failUpload("Map could not be saved. Please try again.");
+					}
 
 				}
 
