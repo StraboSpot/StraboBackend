@@ -97,6 +97,7 @@
         foot('<button type="button" class="sm-btn sm-quiet" data-act="close">Cancel</button>');
         post({ action: 'preview', sample_id: st.opts.sampleId }).then(function (j) {
             if (!st) return;
+            if (ui.notConnected(j)) { st.phase = 'done'; close(); ui.connectFirst({ title: 'Send to SESAR', what: 'send changes to SESAR', reconnect: /expired|reconnect/i.test(j.message || '') }); return; }
             if (!j.ok) return fail(j.message);
             st.p = j.preview;
             st.phase = 'review';

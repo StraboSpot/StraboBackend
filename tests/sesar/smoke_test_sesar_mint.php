@@ -194,6 +194,20 @@ $many = array(); for ($i = 0; $i < 101; $i++) $many[] = 'x' . $i;
 $e = mintErr(function () use ($mint, $A, $many) { $mint->plan($A, $many); });
 check('more than 100 picked -> refused', $e !== null && strpos($e->getMessage(), 'at most 100') !== false);
 
+// 09-28 prod bug: a never-connected user got choices.codes = null, which stopped the dialog on "Checking...".
+mk('sesarmint-b1', $B);
+$pb = $mint->plan($B, array('sesarmint-b1'));
+check('never connected: codes is an empty LIST, connected false, no reconnect, no last code',
+	$pb['choices']['codes'] === array() && $pb['choices']['connected'] === false && $pb['choices']['reconnect'] === false
+	&& $pb['choices']['last_code'] === null, $pb['choices']);
+check('connected user: plan says connected', $mint->plan($A, array('sesarmint-ready'))['choices']['connected'] === true);
+$ka = array_keys($conn->summary($A)); $kb = array_keys($conn->summary($B)); sort($ka); sort($kb);
+check('summary has the same keys with or without a connection', $ka === $kb, array($ka, $kb));
+$db->prepare_query("INSERT INTO strabosamples.sesar_connections (userpkey, environment, connection_name, status) VALUES ($1, 'sandbox', 'strabospot-web', 'needs_reconnect')", array($B));
+$pb = $mint->plan($B, array('sesarmint-b1'));
+check('expired connection: connected false, reconnect true', $pb['choices']['connected'] === false && $pb['choices']['reconnect'] === true, $pb['choices']);
+$db->prepare_query("DELETE FROM strabosamples.sesar_connections WHERE userpkey = $1", array($B));
+
 // Field-linked: rock name from the spot -> registrable material; LineString ends.
 mk('sesarmint-field', $A, array('lat' => null, 'lon' => null, 'field_data' => array('material_type' => 'intact_rock', 'sample_type' => 'oriented_core')));
 $db->prepare_query("INSERT INTO strabosamples.sample_subsystem_links (sample_id, sample_userpkey, subsystem, reference_id, reference_userpkey, reference_metadata)

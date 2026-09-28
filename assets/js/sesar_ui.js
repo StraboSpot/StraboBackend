@@ -93,6 +93,7 @@
         + '.sm-btn { background: #e44c65; color: #fff; border: none; border-radius: 4px; padding: 0.55em 1.15em; font-size: 0.95em; cursor: pointer;'
         + '  line-height: 1.4; box-shadow: none; height: auto; }'
         + '.sm-btn:hover { background: #f06880; }'
+        + 'a.sm-btn, a.sm-btn:hover, a.sm-btn:focus, a.sm-btn:visited { color: #fff; text-decoration: none; display: inline-block; }'
         + '.sm-btn.sm-quiet { background: rgba(255,255,255,0.12); }'
         + '.sm-btn.sm-quiet:hover { background: rgba(255,255,255,0.2); }'
         + '.sm-btn[disabled] { opacity: 0.5; cursor: default; }'
@@ -220,5 +221,46 @@
         return { show: show, hide: hide, title: title, env: env, body: body, foot: foot, closeFoot: closeFoot, fail: fail };
     }
 
-    window.SesarUi = { esc: esc, link: link, post: post, postForm: postForm, save: save, injectStyles: injectStyles, modal: modal };
+    // ------------------------------------------------------------------
+    // "Connect SESAR first": every action that needs the user's SESAR
+    // connection opens this instead when there is none (or it expired).
+    // The connection flow itself lives on the IGSN page's panel.
+    // ------------------------------------------------------------------
+    var IGSN_PAGE = '/samples_igsn.php';
+    var cf = null;
+    function onIgsnPage() { return window.location.pathname === IGSN_PAGE; }
+
+    /** o: {title, what ("register IGSNs"), reconnect (bool)} */
+    function connectFirst(o) {
+        o = o || {};
+        if (!cf) {
+            cf = modal({ prefix: 'sc', title: '', close: function () { cf.hide(); }, click: function (e) {
+                var b = e.target.closest('[data-act]');
+                if (!b) return;
+                if (b.getAttribute('data-act') === 'close') { cf.hide(); return; }
+                if (b.getAttribute('data-act') === 'connect') {
+                    cf.hide();
+                    if (onIgsnPage()) {   // the panel is on this page: go to it
+                        e.preventDefault();
+                        var panel = document.getElementById('si-conn');
+                        if (panel) { panel.scrollIntoView({ behavior: 'smooth', block: 'center' }); panel.focus && panel.focus(); }
+                    }
+                }
+            } });
+        }
+        cf.show(o.title || 'SESAR');
+        cf.body('<p>' + (o.reconnect
+                ? 'Your SESAR connection has expired. To ' + esc(o.what || 'use SESAR') + ', connect your SESAR account again. It takes one sign-in with ORCID.'
+                : 'To ' + esc(o.what || 'use SESAR') + ', first connect your SESAR account. It is a one-time sign-in with ORCID.')
+            + '</p>' + (onIgsnPage() ? '' : '<p class="sm-muted">The IGSNs page opens in a new tab. Come back here when you are connected and try again.</p>'));
+        cf.foot('<button type="button" class="sm-btn sm-quiet" data-act="close">Cancel</button>'
+            + '<a class="sm-btn" data-act="connect" href="' + IGSN_PAGE + '"' + (onIgsnPage() ? '' : ' target="_blank" rel="noopener"')
+            + '>Connect SESAR</a>');
+    }
+
+    /** True for an endpoint answer meaning "no usable SESAR connection" (SesarConnection's 401s). */
+    function notConnected(j) { return !!(j && j.ok === false && j.error === 'auth'); }
+
+    window.SesarUi = { esc: esc, link: link, post: post, postForm: postForm, save: save, injectStyles: injectStyles, modal: modal,
+                       connectFirst: connectFirst, notConnected: notConnected };
 })();

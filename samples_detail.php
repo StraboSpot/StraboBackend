@@ -512,7 +512,15 @@ if (!$notFound) {
     }
     $sesarSnap = ($sesarReg && $sesarReg->snapshot !== null) ? json_decode($sesarReg->snapshot, true) : null;
     $sesarFlags = ($sesarReg && $sesarReg->field_flags !== null) ? json_decode($sesarReg->field_flags, true) : null;
+    // Connection state: every SESAR action checks it first and offers "Connect SESAR" (09-28 bug:
+    // Register IGSN without a connection stopped on "Checking...").
+    $sesarConnSummary = null;
+    if ($sesarPilot && SesarAccess::isConfigured()) {
+        try { $sesarConnSummary = (new SesarConnection($db, new SesarClient()))->summary($userpkey); } catch (Throwable $e) { $sesarConnSummary = null; }
+    }
     $sesar = array(
+        'connected'   => $sesarConnSummary !== null && !empty($sesarConnSummary['connected']),
+        'reconnect'   => $sesarConnSummary !== null && $sesarConnSummary['status'] === 'needs_reconnect',
         'igsn'        => $sesarReg ? $sesarReg->igsn : null,
         'field_igsn'  => $igsnKind['normalized'],   // the IGSN field, normalized (a pulled link keeps the user's spelling)
         'landing_url' => $sesarReg ? SesarAccess::landingUrl($sesarReg->igsn, $sesarEnv) : null,
@@ -1849,8 +1857,16 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     // "Changed since last sent to SESAR" (Phase 6, P4): shown whenever a send
     // would change something (own edit, collaborator, Field upload, family),
     // re-checked right after an Edit Metadata save. Manual send only.
+    // SESAR actions need the owner's SESAR connection: without one, say so and offer to connect.
+    function needSesarConnection(title, what) {
+        var s = payload.sesar || {};
+        if (s.connected || !window.SesarUi) return false;
+        SesarUi.connectFirst({ title: title, what: what, reconnect: !!s.reconnect });
+        return true;
+    }
     function openSesarPush(e) {
         if (e) e.preventDefault();
+        if (needSesarConnection('Send to SESAR', 'send changes to SESAR')) return;
         SesarPush.single({ sampleId: sample.id, onDone: function(changed) { if (changed) window.location.reload(); } });
     }
     function renderSesarPush() {
@@ -1940,12 +1956,14 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             var dOpen = document.getElementById('sd-deact-open');
             if (dOpen) dOpen.addEventListener('click', function(e) {
                 e.preventDefault();
+                if (needSesarConnection('Request deactivation', 'request a deactivation')) return;
                 SesarDeactivate.open({ sampleId: sample.id, onDone: function(changed) { if (changed) window.location.reload(); } });
             });
             var dCheck = document.getElementById('sd-deact-check');
             if (dCheck) dCheck.addEventListener('click', function(e) {
                 e.preventDefault();
                 if (dCheck.dataset.busy) return;
+                if (needSesarConnection('Check with SESAR', 'check with SESAR')) return;
                 dCheck.dataset.busy = '1'; dCheck.textContent = 'Checking…';
                 SesarDeactivate.check({ sampleId: sample.id }).then(function(r) {
                     delete dCheck.dataset.busy; dCheck.textContent = 'Check with SESAR now';
@@ -2095,6 +2113,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         pullBtn.style.display = 'inline-block';
         pullBtn.addEventListener('click', function(e) {
             e.preventDefault();
+            if (needSesarConnection('Pull from SESAR', 'pull from SESAR')) return;
             SesarPull.single({ sampleId: sample.id, onDone: function(changed) { if (changed) window.location.reload(); } });
         });
     }
@@ -2105,6 +2124,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         igsnBtn.style.display = 'inline-block';
         igsnBtn.addEventListener('click', function(e) {
             e.preventDefault();
+            if (needSesarConnection('Register IGSNs at SESAR', 'register IGSNs')) return;
             SesarMint.open({ sampleIds: [sample.id], onDone: function(minted) { if (minted) window.location.reload(); } });
         });
     }

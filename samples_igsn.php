@@ -842,11 +842,19 @@ body { overflow-x: clip; overflow-y: visible; }
         renderRows();
     });
     selClear.addEventListener('click', function () { selected = {}; renderRows(); });
+    // SESAR actions need a connection: without one, point at the panel above.
+    function needConnection(title, what) {
+        if (STATUS.step === 'connected') return false;
+        SesarUi.connectFirst({ title: title, what: what, reconnect: STATUS.step === 'reconnect' });
+        return true;
+    }
     regBtn.addEventListener('click', function () {
+        if (needConnection('Register IGSNs at SESAR', 'register IGSNs')) return;
         SesarMint.open({ sampleIds: selectedRows(mintable).map(function (r) { return r.id; }),
                          onDone: function (minted) { if (minted) window.location.reload(); } });
     });
     pullBtn.addEventListener('click', function () {
+        if (needConnection('Pull from SESAR', 'pull from SESAR')) return;
         SesarPull.bulk({ samples: selectedRows(pullable).map(function (r) { return { id: r.id, name: r.name }; }),
                          onDone: function (changed) { if (changed) window.location.reload(); } });
     });
@@ -855,6 +863,7 @@ body { overflow-x: clip; overflow-y: visible; }
                           appBase: STATUS.links.sesar, connected: STATUS.step === 'connected' });
     });
     pushBtn.addEventListener('click', function () {
+        if (needConnection('Send to SESAR', 'send changes to SESAR')) return;
         SesarPush.bulk({ samples: selectedRows(pushable).map(function (r) { return { id: r.id, name: r.name }; }),
                          onDone: function (changed) { if (changed) window.location.reload(); } });
     });
@@ -881,6 +890,8 @@ body { overflow-x: clip; overflow-y: visible; }
         if (!b || b.disabled) return;
         var i = +b.getAttribute('data-i'), o = ORPHANS[i], act = b.getAttribute('data-oact');
         var msg = document.getElementById('si-omsg-' + i);
+        if ((act === 'deact' || act === 'check') && needConnection(act === 'deact' ? 'Request deactivation' : 'Check with SESAR',
+                act === 'deact' ? 'request a deactivation' : 'check with SESAR')) return;
         if (act === 'deact') {
             SesarDeactivate.open({ reg: o.reg, onDone: function (changed) { if (changed) window.location.reload(); } });
             return;
@@ -924,6 +935,7 @@ body { overflow-x: clip; overflow-y: visible; }
         SesarBatch.find({ landingBase: STATUS.links.landing_base, onDone: function (changed) { if (changed) window.location.reload(); } });
     });
     document.getElementById('si-create').addEventListener('click', function () {
+        if (needConnection('Create samples from IGSNs', 'create samples from IGSNs')) return;
         SesarPull.create({ onDone: function (changed) {
             if (!changed) return;
             try { sessionStorage.setItem('si-tab', 'import'); } catch (e) { /* storage blocked */ }

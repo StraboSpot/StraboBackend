@@ -49,6 +49,12 @@
                 document.getElementById('sm-body').innerHTML = '<div class="sm-msg err">' + esc(j.message || 'Something went wrong.') + '</div>';
                 return;
             }
+            if (!j.plan.choices.connected) {   // nothing can be registered without a SESAR connection
+                st.phase = 'error';
+                close();
+                ui.connectFirst({ title: 'Register IGSNs at SESAR', what: 'register IGSNs', reconnect: j.plan.choices.reconnect });
+                return;
+            }
             st.plan = j.plan;
             st.rows = j.plan.rows.map(function (r) {
                 return Object.assign({}, r, {
@@ -60,6 +66,10 @@
             });
             st.phase = 'review';
             render();
+        }).catch(function () {   // never leave the dialog on "Checking..."
+            if (!st) return;
+            st.phase = 'error';
+            dlg.fail('The review could not be shown. Please reload the page and try again.');
         });
     }
 
@@ -147,8 +157,8 @@
         var p = st.plan, c = p.choices;
         document.getElementById('sm-env').hidden = p.environment !== 'sandbox';
         var body = '';
-        if (!c.codes.length) {
-            document.getElementById('sm-body').innerHTML = '<div class="sm-msg err">Your SESAR account is not connected, or has no SESAR code yet. '
+        if (!c.codes || !c.codes.length) {
+            document.getElementById('sm-body').innerHTML = '<div class="sm-msg err">Your SESAR account has no SESAR code yet. '
                 + '<a href="/samples_igsn.php">Set it up on the IGSNs page</a>, then try again.</div>';
             document.getElementById('sm-foot').innerHTML = '<button type="button" class="sm-btn sm-quiet" data-act="close">Close</button>';
             return;
