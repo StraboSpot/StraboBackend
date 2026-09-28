@@ -843,29 +843,32 @@ body { overflow-x: clip; overflow-y: visible; }
     });
     selClear.addEventListener('click', function () { selected = {}; renderRows(); });
     // SESAR actions need a connection: without one, point at the panel above.
-    function needConnection(title, what) {
-        if (STATUS.step === 'connected') return false;
-        SesarUi.connectFirst({ title: title, what: what, reconnect: STATUS.step === 'reconnect' });
-        return true;
+    // STATUS is from the last panel check: "not connected" is asked again (another tab may have connected).
+    function withConnection(title, what, go) {
+        SesarUi.ensureConnected({ connected: STATUS.step === 'connected' || STATUS.step === 'no_code', reconnect: STATUS.step === 'reconnect',
+                                  title: title, what: what }, go);
     }
     regBtn.addEventListener('click', function () {
-        if (needConnection('Register IGSNs at SESAR', 'register IGSNs')) return;
-        SesarMint.open({ sampleIds: selectedRows(mintable).map(function (r) { return r.id; }),
-                         onDone: function (minted) { if (minted) window.location.reload(); } });
+        withConnection('Register IGSNs at SESAR', 'register IGSNs', function () {
+            SesarMint.open({ sampleIds: selectedRows(mintable).map(function (r) { return r.id; }),
+                             onDone: function (minted) { if (minted) window.location.reload(); } });
+        });
     });
     pullBtn.addEventListener('click', function () {
-        if (needConnection('Pull from SESAR', 'pull from SESAR')) return;
-        SesarPull.bulk({ samples: selectedRows(pullable).map(function (r) { return { id: r.id, name: r.name }; }),
-                         onDone: function (changed) { if (changed) window.location.reload(); } });
+        withConnection('Pull from SESAR', 'pull from SESAR', function () {
+            SesarPull.bulk({ samples: selectedRows(pullable).map(function (r) { return { id: r.id, name: r.name }; }),
+                             onDone: function (changed) { if (changed) window.location.reload(); } });
+        });
     });
     batchBtn.addEventListener('click', function () {
         SesarBatch.open({ samples: selectedRows(mintable).map(function (r) { return { id: r.id, name: r.name }; }),
                           appBase: STATUS.links.sesar, connected: STATUS.step === 'connected' });
     });
     pushBtn.addEventListener('click', function () {
-        if (needConnection('Send to SESAR', 'send changes to SESAR')) return;
-        SesarPush.bulk({ samples: selectedRows(pushable).map(function (r) { return { id: r.id, name: r.name }; }),
-                         onDone: function (changed) { if (changed) window.location.reload(); } });
+        withConnection('Send to SESAR', 'send changes to SESAR', function () {
+            SesarPush.bulk({ samples: selectedRows(pushable).map(function (r) { return { id: r.id, name: r.name }; }),
+                             onDone: function (changed) { if (changed) window.location.reload(); } });
+        });
     });
     // ------------------------------------------------------------------
     // IGSNs whose sample was deleted (Phase 7, Q2)
@@ -890,20 +893,25 @@ body { overflow-x: clip; overflow-y: visible; }
         if (!b || b.disabled) return;
         var i = +b.getAttribute('data-i'), o = ORPHANS[i], act = b.getAttribute('data-oact');
         var msg = document.getElementById('si-omsg-' + i);
-        if ((act === 'deact' || act === 'check') && needConnection(act === 'deact' ? 'Request deactivation' : 'Check with SESAR',
-                act === 'deact' ? 'request a deactivation' : 'check with SESAR')) return;
-        if (act === 'deact') {
-            SesarDeactivate.open({ reg: o.reg, onDone: function (changed) { if (changed) window.location.reload(); } });
-            return;
+        function run() {
+            if (act === 'deact') {
+                SesarDeactivate.open({ reg: o.reg, onDone: function (changed) { if (changed) window.location.reload(); } });
+                return;
+            }
+            b.disabled = true;
+            (act === 'keep' ? SesarDeactivate.keep(o.reg)
+                : (act === 'release' ? SesarDeactivate.release({ reg: o.reg }) : SesarDeactivate.check({ reg: o.reg }))).then(function (j) {
+                b.disabled = false;
+                if (!j || !j.ok) { msg.textContent = (j && j.message) || 'Something went wrong.'; return; }
+                if (act === 'check' && j.result.state === 'requested') { msg.textContent = j.result.message; return; }
+                window.location.reload();
+            });
         }
-        b.disabled = true;
-        (act === 'keep' ? SesarDeactivate.keep(o.reg)
-            : (act === 'release' ? SesarDeactivate.release({ reg: o.reg }) : SesarDeactivate.check({ reg: o.reg }))).then(function (j) {
-            b.disabled = false;
-            if (!j || !j.ok) { msg.textContent = (j && j.message) || 'Something went wrong.'; return; }
-            if (act === 'check' && j.result.state === 'requested') { msg.textContent = j.result.message; return; }
-            window.location.reload();
-        });
+        if (act === 'deact' || act === 'check') {
+            withConnection(act === 'deact' ? 'Request deactivation' : 'Check with SESAR', act === 'deact' ? 'request a deactivation' : 'check with SESAR', run);
+        } else {
+            run();
+        }
     });
     renderOrphans();
 
@@ -935,12 +943,13 @@ body { overflow-x: clip; overflow-y: visible; }
         SesarBatch.find({ landingBase: STATUS.links.landing_base, onDone: function (changed) { if (changed) window.location.reload(); } });
     });
     document.getElementById('si-create').addEventListener('click', function () {
-        if (needConnection('Create samples from IGSNs', 'create samples from IGSNs')) return;
-        SesarPull.create({ onDone: function (changed) {
-            if (!changed) return;
-            try { sessionStorage.setItem('si-tab', 'import'); } catch (e) { /* storage blocked */ }
-            window.location.reload();
-        } });
+        withConnection('Create samples from IGSNs', 'create samples from IGSNs', function () {
+            SesarPull.create({ onDone: function (changed) {
+                if (!changed) return;
+                try { sessionStorage.setItem('si-tab', 'import'); } catch (e) { /* storage blocked */ }
+                window.location.reload();
+            } });
+        });
     });
 
     // Filters survive leaving the page and coming back (same tab).

@@ -258,9 +258,33 @@
             + '>Connect SESAR</a>');
     }
 
+    /**
+     * Run go() when the user has a SESAR connection, else show connectFirst(o).
+     * o.connected is what the page knew when it loaded; when false the server
+     * is asked again (database only, no SESAR call), because the user may
+     * have connected in another tab since. o.onConnected(status) lets the
+     * page remember it.
+     */
+    var checking = false;
+    function ensureConnected(o, go) {
+        if (o.connected) { go(); return; }
+        if (checking) return;   // a double click while the check is out
+        checking = true;
+        post('/sesar_connect.php', { action: 'status' }).then(function (j) {
+            checking = false;
+            var step = (j && j.ok && j.status) ? j.status.step : null;
+            if (step === 'connected' || step === 'no_code') {   // no_code: connected; the dialog explains the missing code
+                if (o.onConnected) o.onConnected(j.status);
+                go();
+                return;
+            }
+            connectFirst({ title: o.title, what: o.what, reconnect: step === 'reconnect' || (step === null && !!o.reconnect) });
+        });
+    }
+
     /** True for an endpoint answer meaning "no usable SESAR connection" (SesarConnection's 401s). */
     function notConnected(j) { return !!(j && j.ok === false && j.error === 'auth'); }
 
     window.SesarUi = { esc: esc, link: link, post: post, postForm: postForm, save: save, injectStyles: injectStyles, modal: modal,
-                       connectFirst: connectFirst, notConnected: notConnected };
+                       connectFirst: connectFirst, ensureConnected: ensureConnected, notConnected: notConnected };
 })();
