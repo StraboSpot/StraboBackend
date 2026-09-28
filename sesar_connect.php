@@ -105,6 +105,7 @@ try {
 } catch (SesarError $e) {
 	$code = ($e->kind === 'validation') ? 400 : (($e->kind === 'network') ? 504 : 502);
 	if ($e->kind === 'auth' || $e->kind === 'no_permission' || $e->kind === 'no_account') $code = 409;
+	if ($e->kind === 'forbidden') $code = 403;
 	sesar_out($code, array('ok' => false, 'error' => $e->kind, 'message' => $e->getMessage(),
 		'fields' => $e->errors, 'status' => $onboarding->status($userpkey)));
 }

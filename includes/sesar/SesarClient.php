@@ -48,7 +48,10 @@ class SesarError extends Exception
 	 *   no_account     ORCID id_token rejected: with a token our callback
 	 *                  just verified, the ORCID has no SESAR account
 	 *   no_permission  SESAR account lacks API upload permission
-	 *   auth           token invalid / expired / revoked: reconnect
+	 *   auth           token invalid / expired / revoked (401): reconnect
+	 *   forbidden      the token is fine, but this account may not do that
+	 *                  (403: another account's private or read-only
+	 *                  record). Never a reason to refresh or reconnect.
 	 *   not_found      no such sample (or not visible to this account)
 	 *   gone           deactivated IGSN (410 tombstone)
 	 *   validation     SESAR rejected the payload (field errors)
@@ -61,7 +64,7 @@ class SesarError extends Exception
 		if ($status === 401 || $status === 403) {
 			if (isset($errors['permissions'])) return 'no_permission';
 			if (isset($errors['token'])) return 'no_account';
-			return 'auth';
+			return $status === 403 ? 'forbidden' : 'auth';
 		}
 		if ($status === 404) return 'not_found';
 		if ($status === 410) return 'gone';

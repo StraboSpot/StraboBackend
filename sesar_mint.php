@@ -99,5 +99,6 @@ try {
 } catch (SesarError $e) {
 	$code = ($e->kind === 'validation') ? 400 : (($e->kind === 'network') ? 504 : ($e->status === 409 || $e->status === 404 ? $e->status : 502));
 	if ($e->kind === 'auth' || $e->kind === 'no_permission' || $e->kind === 'no_account') $code = 409;
+	if ($e->kind === 'forbidden') $code = 403;
 	sesar_mint_out($code, array('ok' => false, 'error' => $e->kind, 'message' => $e->getMessage(), 'fields' => $e->errors));
 }

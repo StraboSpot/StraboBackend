@@ -149,7 +149,8 @@ class SesarConnection
 	 * (revoked at SESAR, clock skew), drop the cached access token and retry
 	 * ONCE through a refresh; a failed refresh marks the connection
 	 * needs_reconnect (accessToken()). Every SESAR call made on a user's
-	 * behalf goes through here.
+	 * behalf goes through here. A 403 (kind 'forbidden') is SESAR refusing
+	 * the action, not the token: passed on as is, no refresh, no second call.
 	 */
 	public function withAccess($userpkey, callable $fn)
 	{

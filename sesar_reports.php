@@ -102,5 +102,6 @@ try {
 } catch (SesarError $e) {
 	$code = ($e->kind === 'validation') ? 400 : (($e->kind === 'network') ? 504 : 502);
 	if (in_array($e->kind, array('auth', 'no_permission', 'no_account'), true)) $code = 409;
+	if ($e->kind === 'forbidden') $code = 403;
 	sesar_reports_out($code, array('ok' => false, 'error' => $e->kind, 'message' => $e->getMessage()));
 }

@@ -118,7 +118,7 @@ try {
 	}
 } catch (SesarError $e) {
 	$code = ($e->kind === 'validation') ? 400 : (($e->kind === 'network') ? 504 : (in_array($e->status, array(403, 404, 409, 410), true) ? $e->status : 502));
-	if ($e->kind === 'auth' && $e->status !== 403) $code = 409;
+	if ($e->kind === 'auth') $code = 409;
 	if ($e->kind === 'no_permission' || $e->kind === 'no_account') $code = 409;
 	if (in_array($e->status, array(0, 503, 504), true)) {   // the sandbox list can hit its 60 s gateway limit
 		$e = new SesarError($e->status, 'SESAR did not answer in time. Please try again in a moment.', $e->errors);

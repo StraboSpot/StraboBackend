@@ -187,6 +187,24 @@ check('exactly one refresh call reached SESAR', count($fake->calls('auth/token/r
 check('connection still connected afterwards', $conn->summary($U1)['status'] === 'connected');
 
 // ===========================================================================
+section('A 403 is SESAR refusing the action, never the token');
+check('403 -> forbidden, 401 -> auth, permissions / token keys keep their kinds', SesarError::kindFor(403, array('detail' => array('x'))) === 'forbidden'
+	&& SesarError::kindFor(401, array('detail' => array('x'))) === 'auth' && SesarError::kindFor(403, array('permissions' => array('x'))) === 'no_permission'
+	&& SesarError::kindFor(403, array('token' => array('x'))) === 'no_account');
+$fake->seedSample('10.58052/IEPRV0009', array('_private' => true));
+$tokenSql = "SELECT access_token_enc FROM strabosamples.sesar_connections WHERE userpkey = $1";
+$r0 = count($fake->calls('auth/token/refresh/'));
+$g0 = count($fake->calls('samples/10.58052/IEPRV0009/'));
+$t0 = $db->get_var_prepared($tokenSql, array($U1));
+$k = throwsKind(function () use ($conn, $client, $U1) {
+	$conn->withAccess($U1, function ($a) use ($client) { return $client->getSample($a, '10.58052/IEPRV0009'); });
+}, 'forbidden');
+check("another account's private record: forbidden after ONE call, no refresh, cached token kept", $k === true
+	&& count($fake->calls('samples/10.58052/IEPRV0009/')) === $g0 + 1 && count($fake->calls('auth/token/refresh/')) === $r0
+	&& $t0 !== null && $db->get_var_prepared($tokenSql, array($U1)) === $t0, $k);
+check('connection untouched by the refusal', $conn->summary($U1)['status'] === 'connected');
+
+// ===========================================================================
 section('Revoked refresh token -> needs_reconnect');
 $cur = SesarCrypto::open($db->get_var_prepared("SELECT refresh_token_enc FROM strabosamples.sesar_connections WHERE userpkey = $1", array($U1)), $KEY);
 $client->refresh($cur);   // someone else used it: now blacklisted at SESAR, our copy is stale
