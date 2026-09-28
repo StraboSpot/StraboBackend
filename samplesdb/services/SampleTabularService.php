@@ -223,6 +223,9 @@ class SampleTabularService
             foreach ($headerMap as $col => $field) {
                 $val = $this->cellToString(isset($grid[$i][$col]) ? $grid[$i][$col] : null);
                 if ($field === '_id') {
+                    // SESAR batch files carry our id as "StraboSpot <id>" in
+                    // Other Name(s) (IGSN Phase 8, B2); accept it pasted as is.
+                    if ($val !== null && preg_match('/^StraboSpot\s+(\S+)$/i', $val, $m)) { $val = $m[1]; }
                     $rec['id'] = ($val === null) ? null : $val;
                 } else {
                     $rec['values'][$field] = $val;

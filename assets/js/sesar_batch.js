@@ -1,0 +1,269 @@
+/**
+ * File: assets/js/sesar_batch.js
+ * Description: "SESAR batch file" modal (StraboSamples IGSN integration
+ *              Phase 8, B1 + B2). The user picks the spreadsheet SESAR's
+ *              Batch Template Creator gave them; /sesar_batch.php checks it
+ *              (what goes in, what is left out and why), then fills its
+ *              Samples sheet with the selected samples and sends it back as
+ *              a download. Needs assets/js/sesar_ui.js loaded first
+ *              (dialog shell, styles).
+ *
+ *              SesarBatch.open({ samples: [{id, name}], appBase, connected })
+ *              SesarBatch.find({ onDone })
+ *                  "Find my batch IGSNs" (B2 + B3): SESAR samples whose
+ *                  Other Name(s) name one of the user's samples. Registered
+ *                  ones ticked, drafts / pending review listed unticked.
+ *                  One /sesar_pull.php batch_link call per ticked row.
+ *
+ * @package    StraboSpot Web Site
+ * @author     Jason Ash <jasonash@ku.edu>
+ * @copyright  2026 StraboSpot
+ * @license    https://opensource.org/licenses/MIT MIT License
+ * @link       https://strabospot.org
+ */
+(function () {
+    'use strict';
+
+    var CSS = ''
+        + '.sb-steps { margin: 0 0 1em 1.2em; padding: 0; }'
+        + '.sb-steps li { margin: 0 0 0.45em; color: rgba(255,255,255,0.85); }'
+        + '.sb-file { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }'
+        + '.sb-pick { display: flex; flex-wrap: wrap; gap: 0.6em 1em; align-items: center; margin: 0 0 1em; }'
+        + '.sb-pick label.sm-btn { display: inline-block; margin: 0; }'
+        + '.sb-fname { color: rgba(255,255,255,0.75); font-size: 0.92em; word-break: break-all; }'
+        + '.sb-list { list-style: none; margin: 0 0 1em; padding: 0; font-size: 0.92em; }'
+        + '.sb-list li { padding: 0.35em 0; border-bottom: 1px solid rgba(255,255,255,0.08); }'
+        + '.sb-igsn { word-break: break-word; }'
+        + '@media (max-width: 720px) { .sm-table td.sb-igsn { grid-column: 2; } }'
+        + '.sm-msg.sb-warn { background: rgba(240,180,60,0.14); border: 1px solid rgba(240,180,60,0.4); color: #f3c97a; }';
+
+    var MAX = 4999;
+    var st = null;
+
+    var ui = window.SesarUi, esc = ui.esc, ext = ui.link;
+    var dlg = ui.modal({ prefix: 'sb', style: 'max-width: 760px', title: 'SESAR batch upload file', css: CSS,
+                         close: close, click: onClick, change: onChange });
+    var body = dlg.body, foot = dlg.foot;
+
+    function send(action) {
+        var fd = new FormData();
+        fd.append('action', action);
+        fd.append('ids', JSON.stringify(st.opts.samples.map(function (s) { return s.id; })));
+        fd.append('file', st.file, st.file.name);
+        return ui.postForm('/sesar_batch.php', fd, function (type) { return type.indexOf('spreadsheetml') !== -1; }).then(function (j) {
+            if (j.blob && !j.name) j.name = 'SESAR_batch.xlsx';
+            return j;
+        });
+    }
+
+    function onChange(e) {
+        if (st && st.mode === 'find' && e.target.hasAttribute('data-i')) {
+            st.rows[+e.target.getAttribute('data-i')].tick = e.target.checked;
+            return renderFind();
+        }
+        if (e.target.id !== 'sb-file' || !e.target.files || !e.target.files[0]) return;
+        st.file = e.target.files[0];
+        st.plan = null;
+        st.done = null;
+        check();
+    }
+
+    function open(opts) {
+        st = { mode: 'file', opts: opts || {}, file: null, plan: null, busy: false, done: null, error: null };
+        dlg.show('SESAR batch upload file');
+        render();
+    }
+
+    function close() {
+        if (!st || st.busy === 'fill' || st.busy === 'check') return;
+        if (st.busy === 'link') {
+            if (!window.confirm('Stop after the current sample?')) return;
+            st.stop = true;
+            return;
+        }
+        var cb = st.opts.onDone, changed = !!st.changed;
+        st = null;
+        dlg.hide();
+        if (typeof cb === 'function') cb(changed);
+    }
+
+    // ------------------------------------------------------------------
+    // Find my batch IGSNs
+    // ------------------------------------------------------------------
+    var STATE_TAG = { draft: 'Draft at SESAR', pending: 'Waiting for curator review' };
+
+    function postPull(body) { return ui.post('/sesar_pull.php', body); }
+
+    function find(opts) {
+        st = { mode: 'find', opts: opts || {}, busy: 'load', rows: null, error: null, results: {}, changed: false, stop: false };
+        dlg.show('Find my batch IGSNs');
+        renderFind();
+        postPull({ action: 'batch_matches' }).then(function (j) {
+            if (!st) return;
+            st.busy = false;
+            if (!j.ok) st.error = j.message || 'Your SESAR account could not be read.';
+            else { st.rows = j.matches.rows; st.truncated = j.matches.truncated; st.rows.forEach(function (r) { r.tick = r.checked; }); }
+            renderFind();
+        });
+    }
+
+    function renderFind() {
+        var h = '<p>SESAR samples whose Other Name(s) name one of your StraboSpot samples, as the SESAR batch file writes them. '
+            + 'Tick the ones to link: each IGSN is added to its sample and linked, and nothing else in the sample changes.</p>';
+        if (st.error) h += '<div class="sm-msg err">' + esc(st.error) + '</div>';
+        if (st.busy === 'load') h += '<p class="sm-muted">Reading your SESAR account...</p>';
+        if (st.rows && !st.rows.length) h += '<div class="sm-msg">No SESAR samples in your account name a StraboSpot sample that is not linked yet.</div>';
+        if (st.truncated) h += '<div class="sm-msg sb-warn">Your SESAR account is very large; only part of it was read.</div>';
+        if (st.rows && st.rows.length) {
+            h += '<table class="sm-table"><tbody>' + st.rows.map(function (r, i) {
+                var res = st.results[i];
+                var cb = r.linkable && !res
+                    ? '<input type="checkbox" id="sb-m-' + i + '" data-i="' + i + '"' + (r.tick ? ' checked' : '') + (st.busy ? ' disabled' : '') + '>'
+                      + '<label for="sb-m-' + i + '"><span class="sm-sr">Link ' + esc(r.igsn) + '</span></label>' : '';
+                var status = res ? (res.ok ? '<div class="sm-status" style="color:#8cd296">Linked</div>' : '<div class="sm-reason">' + esc(res.message) + '</div>') : '';
+                return '<tr><td class="sm-cb">' + cb + '</td><td><div class="sm-name">' + esc(r.name) + '</div>'
+                    + (r.sesar_name && r.sesar_name !== r.name ? '<div class="sm-sub">At SESAR: ' + esc(r.sesar_name) + '</div>' : '')
+                    + '</td><td class="sb-igsn">' + ext(st.opts.landingBase ? st.opts.landingBase + r.igsn : '#', r.igsn)
+                    + (STATE_TAG[r.state] ? '<span class="sm-role">' + STATE_TAG[r.state] + '</span>' : '')
+                    + (r.reason ? '<div class="sm-reason">' + esc(r.reason) + '</div>' : '')
+                    + (r.note ? '<div class="sm-note">' + esc(r.note) + '</div>' : '')
+                    + (r.state !== 'registered' && !res ? '<div class="sm-sub">Not public yet. SESAR may still change or remove it.</div>' : '')
+                    + status + '</td></tr>';
+            }).join('') + '</tbody></table>';
+        }
+        body(h);
+        var n = st.rows ? st.rows.filter(function (r, i) { return r.tick && r.linkable && !st.results[i]; }).length : 0;
+        var doneAny = Object.keys(st.results).length > 0;
+        foot('<span class="sm-count">' + (st.busy === 'link' ? 'Linking...' : '') + '</span>'
+            + '<button type="button" class="sm-btn sm-quiet" data-act="close">' + (doneAny ? 'Close' : 'Cancel') + '</button>'
+            + (st.rows && st.rows.length ? '<button type="button" class="sm-btn" data-act="link"' + (n && !st.busy ? '' : ' disabled') + '>Link ' + (n > 1 ? n + ' IGSNs' : 'IGSN') + '</button>' : ''));
+    }
+
+    function linkAll() {
+        var queue = [];
+        st.rows.forEach(function (r, i) { if (r.tick && r.linkable && !st.results[i]) queue.push(i); });
+        st.busy = 'link';
+        st.stop = false;
+        renderFind();
+        (function next() {
+            if (!st) return;
+            if (!queue.length || st.stop) { st.busy = false; renderFind(); return; }
+            var i = queue.shift(), r = st.rows[i];
+            postPull({ action: 'batch_link', sample_id: r.sample_id, igsn: r.igsn }).then(function (j) {
+                if (!st) return;
+                st.results[i] = j.ok ? { ok: true } : { ok: false, message: j.message || 'Not linked.' };
+                if (j.ok) st.changed = true;
+                renderFind();
+                next();
+            });
+        })();
+    }
+
+    function intro() {
+        var o = st.opts, n = o.samples.length;
+        return '<p>This writes the ' + (n === 1 ? 'selected sample' : n + ' selected samples')
+            + ' into a spreadsheet you upload to SESAR yourself. Use it if you register samples through SESAR\'s batch upload instead of from StraboSpot.</p>'
+            + '<ol class="sb-steps">'
+            + '<li>At ' + ext(o.appBase, 'SESAR') + ', open <strong>Batch Template Creator</strong> and create a template with your SESAR code. '
+            + 'For <strong>Object Type</strong>, choose to enter it per sample. Tick any other fields you want, then click <strong>Generate Spreadsheet</strong>.</li>'
+            + '<li>Choose that file below. StraboSpot fills in your samples and gives the file back. Nothing else in it changes.</li>'
+            + '<li>Upload the filled file at SESAR (batch upload). SESAR assigns the IGSNs right away; its curators review the batch before they go public.</li>'
+            + '</ol>'
+            + '<div class="sb-pick"><input type="file" class="sb-file" id="sb-file" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">'
+            + '<label for="sb-file" class="sm-btn' + (st.file ? ' sm-quiet' : '') + '">' + (st.file ? 'Choose a different file' : 'Choose SESAR template') + '</label>'
+            + (st.file ? '<span class="sb-fname">' + esc(st.file.name) + '</span>' : '') + '</div>';
+    }
+
+    function planHtml(p) {
+        var h = '';
+        if (p.code_warning) h += '<div class="sm-msg sb-warn">' + esc(p.code_warning) + '</div>';
+        h += '<p><strong>' + p.included + '</strong> sample' + (p.included === 1 ? '' : 's') + ' will be written to this template (SESAR code '
+            + esc(p.sesar_code) + (p.template_version ? ', template ' + esc(p.template_version) : '') + ').</p>';
+        if (p.unfilled_columns && p.unfilled_columns.length) {
+            h += '<div class="sm-msg sb-warn">Your template has no column for: ' + esc(p.unfilled_columns.join(', '))
+                + '. Those values are left out. To include them, tick those fields in the Batch Template Creator and generate a new template.</div>';
+        }
+        var skipped = p.samples.filter(function (s) { return !s.included; });
+        var noted = p.samples.filter(function (s) { return s.included && s.notes.length; });
+        if (skipped.length) {
+            h += '<div class="sm-group">Left out (' + skipped.length + ')</div><ul class="sb-list">'
+                + skipped.map(function (s) { return '<li><span class="sm-name">' + esc(s.name) + '</span><div class="sm-reason">' + esc(s.reason) + '</div></li>'; }).join('')
+                + '</ul>';
+        }
+        if (noted.length) {
+            h += '<div class="sm-group">Notes</div><ul class="sb-list">'
+                + noted.map(function (s) { return '<li><span class="sm-name">' + esc(s.name) + '</span>' + s.notes.map(function (x) { return '<div class="sm-note">' + esc(x) + '</div>'; }).join('') + '</li>'; }).join('')
+                + '</ul>';
+        }
+        return h;
+    }
+
+    function afterHtml() {
+        var h = '<div class="sm-msg ok">Downloaded <strong>' + esc(st.done) + '</strong>. Upload it at ' + ext(st.opts.appBase, 'SESAR') + ' with batch upload.</div>'
+            + '<p><strong>Getting the IGSNs back.</strong> Each sample carries "StraboSpot" and its StraboSpot id in SESAR\'s Other Name(s) column. '
+            + 'Once the upload finishes at SESAR, ';
+        h += st.opts.connected
+            ? 'use <strong>Find my batch IGSNs</strong> on this page to add each IGSN to its sample.</p>'
+            : 'connect your SESAR account on this page and use <strong>Find my batch IGSNs</strong>. Without a connection, add the IGSNs with a spreadsheet import on '
+              + '<a href="/my_samples.php">My Samples</a>: put each sample\'s StraboSpot id (with or without "StraboSpot") in the strabo_internal_id column and its IGSN in the igsn column.</p>';
+        return h;
+    }
+
+    function render() {
+        var o = st.opts;
+        if (o.samples.length > MAX) {
+            body('<div class="sm-msg err">SESAR takes at most ' + MAX + ' samples per file. Select fewer samples.</div>');
+            foot('<span class="sm-count"></span><button type="button" class="sm-btn" data-act="close">Close</button>');
+            return;
+        }
+        var h = intro();
+        if (st.error) h += '<div class="sm-msg err">' + esc(st.error) + '</div>';
+        if (st.busy === 'check') h += '<p class="sm-muted">Checking the template...</p>';
+        if (st.plan && !st.done) h += planHtml(st.plan);
+        if (st.done) h += afterHtml();
+        body(h);
+        var canFill = st.plan && st.plan.included > 0 && !st.busy;
+        foot('<span class="sm-count"></span>'
+            + '<button type="button" class="sm-btn sm-quiet" data-act="close">' + (st.done ? 'Close' : 'Cancel') + '</button>'
+            + (st.done ? '' : '<button type="button" class="sm-btn" data-act="fill"' + (canFill ? '' : ' disabled') + '>'
+                + (st.busy === 'fill' ? 'Filling...' : 'Download filled template') + '</button>'));
+    }
+
+    function check() {
+        st.busy = 'check';
+        st.error = null;
+        render();
+        send('check').then(function (j) {
+            if (!st) return;
+            st.busy = false;
+            if (!j.ok) { st.error = j.message || 'The template could not be checked.'; st.plan = null; }
+            else st.plan = j.plan;
+            render();
+        });
+    }
+
+    function fill() {
+        st.busy = 'fill';
+        st.error = null;
+        render();
+        send('fill').then(function (j) {
+            if (!st) return;
+            st.busy = false;
+            if (!j.ok || !j.blob) { st.error = j.message || 'The template could not be filled.'; render(); return; }
+            ui.save(j.blob, j.name);
+            st.done = j.name;
+            render();
+        });
+    }
+
+    function onClick(e) {
+        var b = e.target.closest('[data-act]');
+        if (!b || b.disabled) return;
+        var act = b.getAttribute('data-act');
+        if (act === 'close') return close();
+        if (act === 'fill') return fill();
+        if (act === 'link') return linkAll();
+    }
+
+    window.SesarBatch = { open: open, find: find };
+})();

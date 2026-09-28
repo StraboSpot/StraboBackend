@@ -30,6 +30,7 @@ include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . "/samplesdb/services/StraboSamplesService.php";
 require_once __DIR__ . "/samplesdb/lib/vocab.php";
+require_once __DIR__ . "/includes/sesar/SesarAccess.php";
 
 $svc = new StraboSamplesService($db, $neodb);
 $svc->setUserpkey($userpkey);
@@ -853,6 +854,9 @@ include("includes/mheader.php");
             <button type="button" class="ms-new-btn" id="ms-new-sample-btn">+ New Sample</button>
             <a class="ms-io-btn" href="/samples_import.php" title="Bulk-import samples from a spreadsheet (XLSX/CSV)">&#8682; Import</a>
             <a class="ms-io-btn" href="/samples_tabular_download.php?what=export" title="Download your samples as a spreadsheet"><span class="ms-io-flip">&#8682;</span> Export</a>
+            <?php if (SesarAccess::canUse($userpkey)): ?>
+            <a class="ms-io-btn" href="/samples_igsn.php" title="Register and manage IGSNs for your samples at SESAR">IGSNs</a>
+            <?php endif; ?>
             <span class="ms-search-wrap">
                 <input type="text" id="ms-search" placeholder="Search ID, location, internal…" autocomplete="off">
                 <button type="button" class="ms-search-clear" id="ms-search-clear" aria-label="Clear search" hidden>&times;</button>

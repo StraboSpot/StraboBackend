@@ -47,8 +47,14 @@ $anonymous = (empty($_SESSION['loggedin']) || $_SESSION['loggedin'] !== 'yes');
 include("prepare_connections.php");
 require_once __DIR__ . "/samplesdb/services/StraboSamplesService.php";
 require_once __DIR__ . "/samplesdb/lib/sample_public.php";
+require_once __DIR__ . "/samplesdb/lib/sample_moved.php";
 require_once __DIR__ . "/samplesdb/lib/vocab.php";
 require_once __DIR__ . "/microdb/lib/permalink.php";
+require_once __DIR__ . "/includes/sesar/SesarAccess.php";
+require_once __DIR__ . "/includes/sesar/SesarMapper.php";
+require_once __DIR__ . "/includes/sesar/SesarPull.php";
+require_once __DIR__ . "/includes/sesar/SesarPush.php";
+require_once __DIR__ . "/includes/sesar/SesarDeactivate.php";
 
 $ownerPkey = isset($_GET['owner']) ? (int)$_GET['owner'] : 0;
 $sampleId  = isset($_GET['id'])    ? trim((string)$_GET['id']) : '';
@@ -73,6 +79,17 @@ if ($ownerPkey > 0 && $sampleId !== '') {
 }
 
 $notFound = !$spineRow;
+
+// Moved by "Transfer to Other Account": old links (bookmarks, the link back on
+// a SESAR / DataCite IGSN record) follow it. Logged out, only to a public sample,
+// so a private sample's new owner stays hidden.
+if ($notFound && $ownerPkey > 0 && $sampleId !== '') {
+    $movedTo = samples_moved_to($db, $sampleId, $ownerPkey);
+    if ($movedTo !== null && (!$anonymous || samples_public_status($db, $sampleId, $movedTo) !== null)) {
+        header('Location: /samples/' . $movedTo . '/' . rawurlencode($sampleId), true, 301);
+        exit;
+    }
+}
 
 // Logged out: public samples only; missing and private look the same.
 $publicVia = null;
@@ -462,7 +479,87 @@ if (!$notFound) {
         $canEdit = (bool)$row;
     }
 
+    // IGSN at SESAR (StraboSamples IGSN integration): the registration
+    // StraboSpot manages for this sample, if any (the IGSN links to its
+    // SESAR page, with a badge while we use SESAR's test site), and the
+    // owner's "Register IGSN" button (pilot-gated, D10). The button shows
+    // only while the IGSN field is empty or holds text that is not an
+    // IGSN; the review (sesar_mint.php) decides everything else.
+    // "Pull from SESAR" (D5) shows for the owner while the field holds an
+    // IGSN or the sample is linked; the "SESAR record" card shows the last
+    // pulled (or minted) SESAR record to signed-in viewers.
+    $sesarEnv = SesarAccess::environment();
+    $sesarReg = $db->get_row_prepared(
+        "SELECT igsn, state, origin, access, snapshot::text AS snapshot, snapshot_at, field_flags::text AS field_flags,
+                deactivation_reason, deactivation_requested_at, deactivation_declined_at
+           FROM strabosamples.sesar_registrations
+          WHERE sample_id = $1 AND sample_userpkey = $2 AND environment = $3 AND active AND state <> 'minting'",
+        array($sampleId, $ownerPkey, $sesarEnv)
+    );
+    $igsnKind = SesarMapper::classifyIgsn($sample['igsn']);
+    $sesarPilot = $isOwner && SesarAccess::canUse($userpkey);
+    // Phase 7: the IGSN in the field was deactivated at SESAR without our
+    // request (kept, badge shown; the owner may register a replacement, D3).
+    $sesarGone = null;
+    if (!$sesarReg && $igsnKind['normalized'] !== null) {
+        $g = $db->get_row_prepared(
+            "SELECT igsn, deactivated_at FROM strabosamples.sesar_registrations
+              WHERE sample_id = $1 AND sample_userpkey = $2 AND environment = $3 AND state = 'deactivated' AND upper(igsn) = upper($4)
+              ORDER BY deactivated_at DESC NULLS LAST LIMIT 1",
+            array($sampleId, $ownerPkey, $sesarEnv, $igsnKind['normalized'])
+        );
+        if ($g) $sesarGone = array('igsn' => $g->igsn, 'at' => $g->deactivated_at ? date('c', strtotime($g->deactivated_at)) : null);
+    }
+    $sesarSnap = ($sesarReg && $sesarReg->snapshot !== null) ? json_decode($sesarReg->snapshot, true) : null;
+    $sesarFlags = ($sesarReg && $sesarReg->field_flags !== null) ? json_decode($sesarReg->field_flags, true) : null;
+    $sesar = array(
+        'igsn'        => $sesarReg ? $sesarReg->igsn : null,
+        'field_igsn'  => $igsnKind['normalized'],   // the IGSN field, normalized (a pulled link keeps the user's spelling)
+        'landing_url' => $sesarReg ? SesarAccess::landingUrl($sesarReg->igsn, $sesarEnv) : null,
+        'sandbox'     => $sesarEnv === 'sandbox',
+        'can_mint'    => $sesarPilot && !$sesarReg
+                         && (in_array($igsnKind['kind'], array('empty', 'invalid'), true) || $sesarGone !== null),
+        'gone'        => $sesarGone,
+        // Phase 7 (D7 + Q1-Q3): request deactivation of a managed IGSN; its pending / declined state.
+        'deact'       => ($sesarReg && !$anonymous) ? array(
+            'can_request'  => $sesarPilot && $sesarReg->access === 'managed' && $sesarReg->state === 'active',
+            'requested'    => $sesarReg->state === 'deactivation_requested',
+            'reason'       => $sesarReg->deactivation_reason !== null
+                              ? (isset(SesarDeactivate::REASONS[$sesarReg->deactivation_reason]) ? SesarDeactivate::REASONS[$sesarReg->deactivation_reason] : $sesarReg->deactivation_reason)
+                              : null,
+            'requested_at' => $sesarReg->deactivation_requested_at ? date('c', strtotime($sesarReg->deactivation_requested_at)) : null,
+            'declined_at'  => ($sesarReg->state === 'active' && $sesarReg->deactivation_declined_at) ? date('c', strtotime($sesarReg->deactivation_declined_at)) : null,
+            'can_check'    => $sesarPilot,
+            // Recorded with "Show as requested" (no reason: not sent from here); the owner may take it back.
+            'can_release'  => $sesarPilot && $sesarReg->state === 'deactivation_requested' && $sesarReg->deactivation_reason === null,
+        ) : null,
+        'can_pull'    => $sesarPilot && ($sesarReg || in_array($igsnKind['kind'], array('sesar', 'doi'), true)),
+        'record'      => (!$anonymous && is_array($sesarSnap)) ? SesarPull::summary($sesarSnap) : null,
+        'record_at'   => ($sesarReg && $sesarReg->snapshot_at) ? date('c', strtotime($sesarReg->snapshot_at)) : null,
+        'readonly'    => $sesarReg ? $sesarReg->access === 'readonly' : false,
+        'differs'     => (!$anonymous && is_array($sesarFlags)) ? $sesarFlags : array(),
+        // Owner may unlink a PULLED link (never a minted IGSN) to move it to another sample.
+        'can_unlink'  => $sesarPilot && $sesarReg && $sesarReg->origin === 'linked' && $sesarReg->state === 'active',
+        'push'        => null,
+    );
+    // "Changed since last sent to SESAR" (Phase 6, P1 + P4): owner + pilot,
+    // managed links only; no SESAR call (sample vs the stored snapshot).
+    if ($sesarPilot && $sesarReg && $sesarReg->access === 'managed' && SesarAccess::isConfigured()) {
+        try {
+            $sesarClient = new SesarClient();
+            $sesarConn = new SesarConnection($db, $sesarClient);
+            $sesarViews = new SesarSampleView($db, $neodb);
+            $sesarPush = new SesarPush($db, $sesarClient, $sesarConn, $sesarViews,
+                new SesarMint($db, $sesarClient, $sesarConn, new SesarVocab($db, $sesarClient), $sesarViews, null),
+                new SesarPull($db, $sesarClient, $sesarConn, $sesarViews, $neodb));
+            $sesar['push'] = $sesarPush->status($userpkey, $sampleId);
+        } catch (Throwable $e) {
+            $sesar['push'] = null;   // the badge is a convenience; never break the page
+        }
+    }
+
     $payload = array(
+        'sesar'         => $sesar,
         'sample'        => $sample,
         'owner'         => array('pkey' => $ownerPkey, 'name' => $ownerName),
         'links'         => $links,
@@ -509,14 +606,19 @@ include("includes/mheader.php");
     display: inline-block;
     padding-bottom: 0.3em;
 }
-.sd-actions {
+/* Two rows: Share + the (long) sample URL, then the actions (Collaborate,
+   then the SESAR group). One wrapping row pushed Send to SESAR onto a line
+   of its own once the SESAR buttons showed. */
+.sd-actions { margin-bottom: 1.25em; }
+.sd-actions-share, .sd-actions-row {
     display: flex;
     flex-wrap: wrap;
     gap: 0.75em;
     justify-content: center;
     align-items: center;
-    margin-bottom: 1.25em;
 }
+.sd-actions-row { margin-top: 0.75em; }
+.sd-actions-row[hidden] { display: none; }
 .sd-action-btn {
     background: #e44c65;
     color: #ffffff;
@@ -528,6 +630,30 @@ include("includes/mheader.php");
     text-decoration: none;
 }
 .sd-action-btn:hover { background: #f06880; color: #ffffff; }
+.sd-sesar-test { display: inline-block; margin-left: 0.4em; font-size: 0.78em; padding: 0 0.5em; border-radius: 4px;
+    background: rgba(240,180,60,0.18); color: #f3c97a; border: 1px solid rgba(240,180,60,0.45); }
+.sd-sesar-meta { color: rgba(255,255,255,0.65); font-size: 0.9em; margin: -0.3em 0 0.8em; }
+.sd-sesar-dl { display: grid; grid-template-columns: 12em 1fr; gap: 0.3em 1.2em; margin: 0; }
+.sd-sesar-dl dt { color: rgba(255,255,255,0.6); }
+.sd-sesar-dl dd { margin: 0; word-break: break-word; }
+.sd-sesar-push { margin: 0 0 0.9em; padding: 0.6em 0.9em; border-radius: 4px; font-size: 0.92em;
+    background: rgba(240,180,60,0.12); border: 1px solid rgba(240,180,60,0.4); }
+.sd-sesar-push a.sd-action-btn { margin: 0.5em 0 0; }
+.sd-sesar-gone { display: inline-block; margin-left: 0.4em; font-size: 0.78em; padding: 0 0.5em; border-radius: 4px;
+    background: rgba(228,76,101,0.16); color: #f5a3b3; border: 1px solid rgba(228,76,101,0.45); }
+.sd-sesar-deact { margin-top: 0.9em; font-size: 0.92em; }
+.sd-sesar-deact .sd-sesar-pending { padding: 0.6em 0.9em; border-radius: 4px; background: rgba(240,180,60,0.12); border: 1px solid rgba(240,180,60,0.4); }
+.sd-sesar-btns { display: flex; flex-wrap: wrap; gap: 0.6em; margin-top: 0.9em; }
+.sd-sesar-btns:empty { display: none; }
+.sd-sesar-unlink { margin-top: 0.9em; font-size: 0.92em; }
+.sd-sesar-unlink p { margin: 0 0 0.6em; }
+.sd-sesar-unlink .sd-sesar-err { color: #ff8a80; margin-top: 0.5em; }
+.sd-sesar-differs { margin-top: 0.9em; padding: 0.6em 0.9em; border-radius: 4px; font-size: 0.92em;
+    background: rgba(240,180,60,0.12); border: 1px solid rgba(240,180,60,0.35); color: rgba(255,255,255,0.85); }
+@media (max-width: 640px) {
+    .sd-sesar-dl { grid-template-columns: 1fr; }
+    .sd-sesar-dl dt { margin-top: 0.5em; }
+}
 .sd-action-btn.outline {
     background: transparent;
     color: #e44c65;
@@ -1431,10 +1557,17 @@ include("includes/mheader.php");
             </div>
 
             <div class="sd-actions">
-                <a class="sd-action-btn outline" href="#" id="sd-share-btn">Share</a>
-                <div class="sd-share-line"><strong>SAMPLE URL:</strong><span id="sd-share-url"></span></div>
+                <div class="sd-actions-share">
+                    <a class="sd-action-btn outline" href="#" id="sd-share-btn">Share</a>
+                    <div class="sd-share-line"><strong>SAMPLE URL:</strong><span id="sd-share-url"></span></div>
+                </div>
+                <div class="sd-actions-row" id="sd-actions-row">
                 <a class="sd-action-btn" href="#" id="sd-collab-btn" style="display:none">Collaborate</a>
+                <a class="sd-action-btn" href="#" id="sd-igsn-btn" style="display:none" title="Register an IGSN for this sample at SESAR">Register IGSN</a>
+                <a class="sd-action-btn outline" href="#" id="sd-pull-btn" style="display:none" title="Copy values from this sample's SESAR record">Pull from SESAR</a>
+                <a class="sd-action-btn" href="#" id="sd-push-btn" style="display:none" title="Send this sample's changes to its SESAR record">Send to SESAR</a>
                 <div class="sd-avatars" id="sd-avatars"></div>
+                </div>
             </div>
 
             <div class="sd-section">
@@ -1456,6 +1589,13 @@ include("includes/mheader.php");
                         <div class="sd-family-tooltip" id="sd-family-tooltip" aria-hidden="true"></div>
                     </div>
                 </div>
+            </div>
+
+            <div class="sd-section" id="sd-sesar-card" style="display:none">
+                <h3>SESAR record</h3>
+                <p class="sd-sesar-meta" id="sd-sesar-meta"></p>
+                <div class="sd-sesar-push" id="sd-sesar-push" style="display:none"></div>
+                <dl class="sd-sesar-dl" id="sd-sesar-dl"></dl>
             </div>
 
             <div class="sd-type-tabs">
@@ -1607,6 +1747,13 @@ include("includes/mheader.php");
     </div>
 </div>
 
+<?php if (!empty($payload['sesar']['can_mint']) || !empty($payload['sesar']['can_pull'])): ?>
+<script src="/assets/js/sesar_ui.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_ui.js'); ?>"></script>
+<script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
+<script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
+<script src="/assets/js/sesar_push.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_push.js'); ?>"></script>
+<script src="/assets/js/sesar_deactivate.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_deactivate.js'); ?>"></script>
+<?php endif; ?>
 <script type="application/json" id="sd-data"><?php echo json_encode($payload, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT); ?></script>
 <?php
 // Display labels (Field choice translation Phase 7): material / purpose from
@@ -1678,6 +1825,175 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     function field(label, value) {
         if (value === null || value === undefined || value === '') return '';
         return '<div><span class="sd-field-label">' + escapeHtml(label) + ':</span> ' + escapeHtml(value) + '</div>';
+    }
+    // The IGSN links to its SESAR page when StraboSpot manages it there.
+    var loadedIgsn = payload.sample ? payload.sample.igsn : null;
+    function igsnFieldHtml(sample) {
+        var s = payload.sesar || {};
+        // A pulled link keeps the user's spelling (bare IEABC0001, a doi.org URL...): match it normalized.
+        var same = s.igsn && sample.igsn && (sample.igsn === s.igsn
+            || (sample.igsn === loadedIgsn && s.field_igsn && s.field_igsn.toUpperCase() === s.igsn.toUpperCase()));
+        if (!same) {
+            if (s.gone && sample.igsn === loadedIgsn) {
+                return '<div><span class="sd-field-label">IGSN:</span> ' + escapeHtml(sample.igsn)
+                    + ' <span class="sd-sesar-gone" title="SESAR deactivated this IGSN' + (s.gone.at ? ' (noticed ' + escapeHtml(parsePgTimestamp(s.gone.at).toLocaleDateString()) + ')' : '')
+                    + '. It stays here until you clear it or register a new IGSN.">Deactivated at SESAR</span></div>';
+            }
+            return field('IGSN', sample.igsn);
+        }
+        return '<div><span class="sd-field-label">IGSN:</span> <a href="' + escapeHtml(s.landing_url) + '" target="_blank" rel="noopener">'
+            + escapeHtml(sample.igsn) + '</a>'
+            + (s.sandbox ? ' <span class="sd-sesar-test" title="Registered on SESAR\'s test site; not a real IGSN">SESAR test</span>' : '')
+            + '</div>';
+    }
+    // "Changed since last sent to SESAR" (Phase 6, P4): shown whenever a send
+    // would change something (own edit, collaborator, Field upload, family),
+    // re-checked right after an Edit Metadata save. Manual send only.
+    function openSesarPush(e) {
+        if (e) e.preventDefault();
+        SesarPush.single({ sampleId: sample.id, onDone: function(changed) { if (changed) window.location.reload(); } });
+    }
+    function renderSesarPush() {
+        var s = payload.sesar || {}, p = s.push, box = document.getElementById('sd-sesar-push'), btn = document.getElementById('sd-push-btn');
+        var due = !!(p && p.pushable && (p.changed || p.link_back) && window.SesarPush);
+        btn.style.display = due ? 'inline-block' : 'none';
+        syncActionRow();
+        if (!due) { box.style.display = 'none'; return; }
+        box.innerHTML = (p.changed
+                ? '<strong>Changed since last sent to SESAR:</strong> ' + escapeHtml(p.fields.join(', ')) + '.'
+                : '<strong>The SESAR record has no link back to this page yet.</strong>')
+            + ' Nothing is sent until you choose to.<br><a class="sd-action-btn" href="#" id="sd-push-inline">Send to SESAR</a>';
+        box.style.display = '';
+        document.getElementById('sd-push-inline').addEventListener('click', openSesarPush);
+    }
+    // The action row hides itself when nothing in it shows (logged-out
+    // visitors, viewers with no actions), so it leaves no empty gap.
+    function syncActionRow() {
+        var row = document.getElementById('sd-actions-row');
+        row.hidden = !Array.prototype.some.call(row.children, function(el) {
+            return el.id === 'sd-avatars' ? el.children.length > 0 : el.style.display !== 'none';
+        });
+    }
+    function refreshSesarPush() {
+        var s = payload.sesar || {};
+        if (!s.push || !s.push.pushable || !window.SesarPush) return;
+        SesarPush.status(sample.id).then(function(j) {
+            if (j && j.ok) { s.push = j.status; renderSesarPush(); }
+        });
+    }
+
+    // "SESAR record" card: the last SESAR record read by a pull or a mint
+    // (D5), read-only, with Field differences as of that read.
+    function renderSesarCard() {
+        var s = payload.sesar || {};
+        if (!s.record) return;
+        var keys = Object.keys(s.record);
+        var when = s.record_at ? parsePgTimestamp(s.record_at) : null;
+        var meta = 'As SESAR had it ' + (when ? 'on ' + when.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : 'when last read')
+            + '. <a href="' + escapeHtml(s.landing_url) + '" target="_blank" rel="noopener">Open at SESAR</a>'
+            + (s.sandbox ? ' <span class="sd-sesar-test" title="SESAR\'s test site; not a real IGSN">SESAR test</span>' : '')
+            + (s.readonly ? '<br>Linked read-only: this record belongs to another SESAR account.' : '');
+        document.getElementById('sd-sesar-meta').innerHTML = meta;
+        var dl = keys.map(function(k) {
+            var v = s.record[k];
+            if (/^\d{4}-\d\d-\d\dT\d\d:\d\d/.test(v)) {   // SESAR timestamps -> local date
+                var d = new Date(v.replace(/(\.\d{3})\d+/, '$1'));
+                if (!isNaN(d)) v = d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+            }
+            return '<dt>' + escapeHtml(k) + '</dt><dd>' + escapeHtml(v) + '</dd>';
+        }).join('');
+        document.getElementById('sd-sesar-dl').innerHTML = dl;
+        var card = document.getElementById('sd-sesar-card');
+        if (s.differs && s.differs.length) {
+            card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-differs"><strong>Differs from the StraboField spot</strong> (not changed; the Field app owns these): '
+                + s.differs.map(function(f) {
+                    return escapeHtml(f.label) + ': Field ' + escapeHtml(f.current == null ? 'empty' : f.current) + ', SESAR ' + escapeHtml(f.sesar == null ? 'empty' : f.sesar)
+                        + (f.distance_m != null ? ' (' + (f.distance_m >= 1000 ? (f.distance_m / 1000).toFixed(1) + ' km' : Math.round(f.distance_m) + ' m') + ' apart)' : '');
+                }).join('; ') + '</div>');
+        }
+        var d = s.deact;
+        if (d && window.SesarDeactivate && (d.can_request || d.requested || d.declined_at)) {
+            var dh = '<div class="sd-sesar-deact" id="sd-sesar-deact">';
+            if (d.requested) {
+                var reqAt = d.requested_at ? parsePgTimestamp(d.requested_at) : null;
+                dh += '<div class="sd-sesar-pending"><strong>Deactivation requested</strong>'
+                    + (d.can_release
+                        ? ' (shown here' + (reqAt ? ' since ' + escapeHtml(reqAt.toLocaleDateString()) : '') + '; the request was not sent from StraboSpot).'
+                        : (reqAt ? ' on ' + escapeHtml(reqAt.toLocaleDateString()) : '') + (d.reason ? ' (' + escapeHtml(d.reason) + ')' : '') + '.')
+                    + ' A SESAR curator reviews it; SESAR emails you with the decision.'
+                    + (d.can_check ? '<div class="sd-sesar-btns" style="margin-top:0.6em"><a class="sd-action-btn outline" href="#" id="sd-deact-check">Check with SESAR now</a>'
+                        + (d.can_release ? '<a class="sd-action-btn outline" href="#" id="sd-deact-release"'
+                            + ' title="No deactivation request is waiting at SESAR after all: show this IGSN as active again. Nothing is sent to SESAR.">Show as active again</a>' : '')
+                        + '</div><div id="sd-deact-msg" style="margin-top:0.4em"></div>' : '') + '</div>';
+            } else if (d.declined_at) {
+                dh += '<p>SESAR declined the deactivation request on ' + escapeHtml(parsePgTimestamp(d.declined_at).toLocaleDateString()) + '; the IGSN stays active.</p>';
+            }
+            card.insertAdjacentHTML('beforeend', dh + '</div>');
+        }
+        // Card actions in one row (Request deactivation, Unlink from SESAR), same outline style.
+        card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-btns" id="sd-sesar-btns"></div>');
+        var btnRow = document.getElementById('sd-sesar-btns');
+        if (d && d.can_request && !d.requested && window.SesarDeactivate) {
+            btnRow.insertAdjacentHTML('beforeend', '<a class="sd-action-btn outline" href="#" id="sd-deact-open" title="Ask SESAR to retire this IGSN. A SESAR curator reviews the request; IGSNs are never deleted.">Request deactivation</a>');
+        }
+        if (d && window.SesarDeactivate) {
+            var dOpen = document.getElementById('sd-deact-open');
+            if (dOpen) dOpen.addEventListener('click', function(e) {
+                e.preventDefault();
+                SesarDeactivate.open({ sampleId: sample.id, onDone: function(changed) { if (changed) window.location.reload(); } });
+            });
+            var dCheck = document.getElementById('sd-deact-check');
+            if (dCheck) dCheck.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (dCheck.dataset.busy) return;
+                dCheck.dataset.busy = '1'; dCheck.textContent = 'Checking…';
+                SesarDeactivate.check({ sampleId: sample.id }).then(function(r) {
+                    delete dCheck.dataset.busy; dCheck.textContent = 'Check with SESAR now';
+                    var msg = document.getElementById('sd-deact-msg');
+                    if (!r || !r.ok) { msg.textContent = (r && r.message) || 'Could not check. Please try again.'; return; }
+                    if (r.result.state === 'requested') { msg.textContent = r.result.message; return; }
+                    window.location.reload();
+                });
+            });
+            var dRel = document.getElementById('sd-deact-release');
+            if (dRel) dRel.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (dRel.dataset.busy) return;
+                dRel.dataset.busy = '1';
+                SesarDeactivate.release({ sampleId: sample.id }).then(function(r) {
+                    delete dRel.dataset.busy;
+                    if (!r || !r.ok) { document.getElementById('sd-deact-msg').textContent = (r && r.message) || 'Could not change it. Please try again.'; return; }
+                    window.location.reload();
+                });
+            });
+        }
+        if (s.can_unlink && window.SesarPull) {
+            btnRow.insertAdjacentHTML('beforeend', '<a class="sd-action-btn outline" href="#" id="sd-unlink-btn" title="Remove this sample\'s link to its SESAR record, so the IGSN can be linked to another of your samples. Nothing changes at SESAR or in this sample.">Unlink from SESAR</a>');
+            card.insertAdjacentHTML('beforeend', '<div class="sd-sesar-unlink" id="sd-sesar-unlink">'
+                + '<div id="sd-unlink-confirm" style="display:none">'
+                + '<p>Unlink this sample from ' + escapeHtml(s.igsn) + '? Nothing changes at SESAR or in this sample\'s values, '
+                + 'and the IGSN field keeps its text. The IGSN can then be linked to another of your samples with Pull from SESAR.</p>'
+                + '<a class="sd-action-btn" href="#" id="sd-unlink-yes">Unlink</a> '
+                + '<a class="sd-action-btn outline" href="#" id="sd-unlink-no">Cancel</a>'
+                + '<div class="sd-sesar-err" id="sd-unlink-err"></div></div></div>');
+            var ask = document.getElementById('sd-unlink-btn'), box = document.getElementById('sd-unlink-confirm');
+            ask.addEventListener('click', function(e) { e.preventDefault(); btnRow.style.display = 'none'; box.style.display = ''; });
+            document.getElementById('sd-unlink-no').addEventListener('click', function(e) {
+                e.preventDefault(); box.style.display = 'none'; btnRow.style.display = ''; document.getElementById('sd-unlink-err').textContent = '';
+            });
+            document.getElementById('sd-unlink-yes').addEventListener('click', function(e) {
+                e.preventDefault();
+                var yes = this;
+                if (yes.dataset.busy) return;
+                yes.dataset.busy = '1'; yes.textContent = 'Unlinking...';
+                SesarPull.unlink(sample.id).then(function(r) {
+                    if (r && r.ok) { window.location.reload(); return; }
+                    delete yes.dataset.busy; yes.textContent = 'Unlink';
+                    document.getElementById('sd-unlink-err').textContent = (r && r.message) || 'Could not unlink. Please try again.';
+                });
+            });
+        }
+        card.style.display = '';
     }
     // Custom key/value fields from the tabular import path (custom_data
     // JSONB). Read-only here — they're edited by re-uploading a sheet on
@@ -1764,7 +2080,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     if (sample.latitude !== null && sample.longitude !== null) {
         metaHtml += field('Current Sample Location', sample.latitude.toFixed(6) + ', ' + sample.longitude.toFixed(6));
     }
-    metaHtml += field('IGSN',                         sample.igsn);
+    metaHtml += igsnFieldHtml(sample);
     metaHtml += field('Description',                  sample.description);
     metaHtml += field('Notes',                        sample.notes);
     metaHtml += customFieldsHtml(sample);
@@ -1773,6 +2089,25 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     // Edit + Collaborate visibility from perms.
     if (perms.canEdit) document.getElementById('sd-edit-btn').style.display    = 'inline-block';
     if (perms.isOwner) document.getElementById('sd-collab-btn').style.display  = 'inline-block';
+    document.getElementById('sd-push-btn').addEventListener('click', openSesarPush);
+    if (payload.sesar && payload.sesar.can_pull && window.SesarPull) {
+        var pullBtn = document.getElementById('sd-pull-btn');
+        pullBtn.style.display = 'inline-block';
+        pullBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            SesarPull.single({ sampleId: sample.id, onDone: function(changed) { if (changed) window.location.reload(); } });
+        });
+    }
+    renderSesarCard();
+    renderSesarPush();
+    if (payload.sesar && payload.sesar.can_mint && window.SesarMint) {
+        var igsnBtn = document.getElementById('sd-igsn-btn');
+        igsnBtn.style.display = 'inline-block';
+        igsnBtn.addEventListener('click', function(e) {
+            e.preventDefault();
+            SesarMint.open({ sampleIds: [sample.id], onDone: function(minted) { if (minted) window.location.reload(); } });
+        });
+    }
     document.getElementById('sd-edit-btn').addEventListener('click', function(e) {
         e.preventDefault();
         openEditModal();
@@ -1792,6 +2127,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         return '<span class="sd-avatar" title="' + escapeHtml(title) + '">' + escapeHtml(c.initials || '?') + '</span>';
     }).join('');
     document.getElementById('sd-avatars').innerHTML = avatarsHtml;
+    syncActionRow();
 
     // ---- Family tree widget (simple radial; §12.2.1 v1) ----
     // ---- Family-tree mini-explorer (samples/ui-family-explorer) ----
@@ -3053,11 +3389,12 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         if (sample.latitude !== null && sample.longitude !== null) {
             metaHtml += field('Current Sample Location', sample.latitude.toFixed(6) + ', ' + sample.longitude.toFixed(6));
         }
-        metaHtml += field('IGSN',                         sample.igsn);
+        metaHtml += igsnFieldHtml(sample);
         metaHtml += field('Description',                  sample.description);
         metaHtml += field('Notes',                        sample.notes);
         metaHtml += customFieldsHtml(sample);
         document.getElementById('sd-metadata-fields').innerHTML = metaHtml || '<div style="opacity:.6">No metadata recorded.</div>';
+        refreshSesarPush();   // an edit may leave the SESAR record behind (Phase 6, P4)
 
         // Update page title (renders the same name-fallback as the metadata row).
         document.getElementById('sd-title').textContent = 'Sample: ' + (sample.name || sample.id);
