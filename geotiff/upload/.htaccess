@@ -1,3 +1,9 @@
-# The GeoTIFF and map folders must not be browsable. A map's name is what
-# grants access to it (tiles, download), so a listing exposes private maps.
+# The GeoTIFF and map folders must not be browsable or fetched directly.
+# A map's name is what grants access to it, so a listing exposes private
+# maps. Tiles (tile.php), downloads (downloadgeotiff.php) and the upload
+# itself read these files from disk, never over the web.
 Options -Indexes
+
+<FilesMatch "(?i)\.(tif|map)$">
+	Require all denied
+</FilesMatch>
