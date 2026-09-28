@@ -81,7 +81,7 @@ if ($allowed && $configured) {
 	foreach ((is_array($res) ? $res : array()) as $r) {
 		$pushSt = null;
 		if ($r->reg_igsn !== null && $r->reg_access === 'managed') {
-			$v = $views->build((string)$r->id, (int)$r->userpkey);
+			$v = $views->build((string)$r->id, (int)$r->userpkey, true);   // status check only
 			if ($v !== null) {
 				try {
 					$pushSt = $push->statusFor($v, (object)array('pkey' => $r->reg_pkey, 'igsn' => $r->reg_igsn, 'state' => $r->reg_state,

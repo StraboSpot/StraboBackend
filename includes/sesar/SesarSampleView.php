@@ -53,8 +53,9 @@ class SesarSampleView
 	private $spotLoader;
 
 	/**
-	 * @param callable|null $spotLoader fn($spotId, $userpkey, $datasetId) ->
-	 *        {wkt, pet, sed, image_basemap, strat_section_id, json_tags} | null.
+	 * @param callable|null $spotLoader fn($spotId, $userpkey, $datasetId, $locationOnly) ->
+	 *        {wkt, pet, sed, image_basemap, strat_section_id, json_tags} | null
+	 *        ($locationOnly: pet, sed and json_tags may be left out).
 	 *        Default reads Neo4j through $neodb (tests pass a fake).
 	 */
 	public function __construct($db, $neodb = null, $spotLoader = null)
@@ -63,17 +64,23 @@ class SesarSampleView
 		if ($spotLoader !== null) {
 			$this->spotLoader = $spotLoader;
 		} else {
-			$this->spotLoader = function ($spotId, $userpkey, $datasetId) use ($neodb) {
-				return SesarSampleView::loadSpot($neodb, $spotId, $userpkey, $datasetId);
+			$this->spotLoader = function ($spotId, $userpkey, $datasetId, $locationOnly = false) use ($neodb) {
+				return SesarSampleView::loadSpot($neodb, $spotId, $userpkey, $datasetId, $locationOnly);
 			};
 		}
 	}
 
 	/**
+	 * @param bool $forStatus the view only feeds a "changed since sent" check
+	 *        (IGSN page and reports: one view per managed row). Such a check
+	 *        uses the spine plus a line spot's location, so the holding Spot
+	 *        is read only when the spine has no location, and without its
+	 *        rock names or the project's tags (up to 2 MB per row).
+	 *        field_rock_types then stays empty.
 	 * @return array|null the sample view, plus the spine extras callers need:
 	 *   userpkey, igsn, parent_sample_id, parent_userpkey
 	 */
-	public function build($sampleId, $ownerPkey)
+	public function build($sampleId, $ownerPkey, $forStatus = false)
 	{
 		$r = $this->db->get_row_prepared(
 			"SELECT id, userpkey, name, igsn, description, latitude, longitude,
@@ -115,10 +122,11 @@ class SesarSampleView
 			'field_rock_types'       => array(),
 		);
 
-		if ($field !== null && ctype_digit((string)$field->reference_id)) {
+		$hasLocation = $view['latitude'] !== null && $view['longitude'] !== null;
+		if ($field !== null && ctype_digit((string)$field->reference_id) && !($forStatus && $hasLocation)) {
 			$meta = ($field->rm !== null && $field->rm !== '') ? json_decode($field->rm, true) : array();
 			$did = (is_array($meta) && isset($meta['dataset_id'])) ? (string)$meta['dataset_id'] : null;
-			$spot = call_user_func($this->spotLoader, (string)$field->reference_id, (int)$field->reference_userpkey, $did);
+			$spot = call_user_func($this->spotLoader, (string)$field->reference_id, (int)$field->reference_userpkey, $did, (bool)$forStatus);
 			if (is_array($spot)) self::applySpot($view, $spot);
 		}
 		return $view;
@@ -201,8 +209,9 @@ class SesarSampleView
 	/**
 	 * The holding spot, anchored through the owner's User node (Strabo ids
 	 * are not unique across the graph). Best-effort, never throws.
+	 * $locationOnly: geometry only, no rock data and no project tags.
 	 */
-	public static function loadSpot($neodb, $spotId, $userpkey, $datasetId)
+	public static function loadSpot($neodb, $spotId, $userpkey, $datasetId, $locationOnly = false)
 	{
 		if ($neodb === null || !ctype_digit((string)$spotId)) return null;
 		$u = (int)$userpkey;
@@ -210,8 +219,10 @@ class SesarSampleView
 		$dsClause = ($datasetId !== null && ctype_digit((string)$datasetId)) ? " WHERE d.id = " . $datasetId : "";
 		$q = "MATCH (u:User {userpkey: $u})-[:HAS_PROJECT]->(p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot {id: $sid})"
 			. $dsClause
-			. " RETURN s.wkt AS wkt, s.pet AS pet, s.sed AS sed, s.image_basemap AS ib, s.strat_section_id AS ss,"
-			. " substring(toString(p.json_tags), 0, 2000000) AS tags LIMIT 1";
+			. ($locationOnly
+				? " RETURN s.wkt AS wkt, s.image_basemap AS ib, s.strat_section_id AS ss LIMIT 1"
+				: " RETURN s.wkt AS wkt, s.pet AS pet, s.sed AS sed, s.image_basemap AS ib, s.strat_section_id AS ss,"
+					. " substring(toString(p.json_tags), 0, 2000000) AS tags LIMIT 1");
 		try {
 			$rows = $neodb->query($q);
 			if (empty($rows) && $dsClause !== "") {

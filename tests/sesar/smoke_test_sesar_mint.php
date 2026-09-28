@@ -209,6 +209,27 @@ check('intact rock without a rock name -> no material (SESAR refuses "Rock"); Ro
 	rowOf($mint->plan($A, array('sesarmint-rockonly')), 'sesarmint-rockonly')['material'] === null
 	&& rowOf($mint->plan($A, array('sesarmint-rockonly')), 'sesarmint-rockonly')['object_type'] === 'Rock hand sample');
 
+// Status views (IGSN page, reports: one per managed row) read the spot only for a missing location.
+$asked = array();
+$watch = new SesarSampleView($db, null, function ($spotId, $u, $did, $locationOnly = false) use (&$spots, &$asked) {
+	$asked[] = array($spotId, $locationOnly);
+	return isset($spots[$spotId]) ? $spots[$spotId] : null;
+});
+$full = $watch->build('sesarmint-field', $A);
+$light = $watch->build('sesarmint-field', $A, true);
+check('no spine location: status view still reads the line (location only), same owned fields as the full view',
+	$asked === array(array('5550001', false), array('5550001', true)) && $light['latitude'] === 38.5 && $light['longitude_end'] === -105.3
+	&& SesarMapper::ownedFields($light) === SesarMapper::ownedFields($full), array($asked, $light));
+mk('sesarmint-fieldloc', $A, array('field_data' => array('material_type' => 'intact_rock')));
+$db->prepare_query("INSERT INTO strabosamples.sample_subsystem_links (sample_id, sample_userpkey, subsystem, reference_id, reference_userpkey, reference_metadata)
+	VALUES ('sesarmint-fieldloc', $1, 'field', '5550001', $1, '{\"dataset_id\": \"42\"}')", array($A));
+$asked = array();
+$full = $watch->build('sesarmint-fieldloc', $A);
+$light = $watch->build('sesarmint-fieldloc', $A, true);
+check('spine has a location: status view never reads the spot, same owned fields; the full view keeps the rock names',
+	$asked === array(array('5550001', false)) && $light['field_linked'] === true && $light['field_rock_types'] === array()
+	&& $full['field_rock_types'] === array('granite') && SesarMapper::ownedFields($light) === SesarMapper::ownedFields($full), array($asked, $light));
+
 // ===========================================================================
 section('plan: family (D8)');
 mk('sesarmint-g', $A, array('igsn' => '10.58052/IEOLD0001'));                  // grandparent, has a live IGSN

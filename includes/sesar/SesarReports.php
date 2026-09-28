@@ -140,7 +140,7 @@ class SesarReports
 			// Sync state (managed rows only; P1 = sample vs stored copy).
 			$changedHere = '';
 			if ($r->reg_access === 'managed' && $r->reg_state !== null) {
-				$v = $this->views->build((string)$r->id, $userpkey);
+				$v = $this->views->build((string)$r->id, $userpkey, true);   // status check only
 				if ($v !== null) {
 					try {
 						$st = $this->push->statusFor($v, (object)array('pkey' => $r->reg_pkey, 'igsn' => $r->reg_igsn, 'state' => $r->reg_state,
