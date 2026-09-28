@@ -48,6 +48,7 @@ require_once 'includes/transfer/ProjectTransfer.php';
 require_once 'db/services/CollaborationAuth.php';
 require_once 'searchdb/sync/StraboSearchSync.php';
 require_once 'samplesdb/services/StraboSamplesService.php';
+require_once 'samplesdb/lib/sample_moved.php';
 
 $OWNER = 94591; $RECIP = 94592; $COLLAB = 94593; $DELETED = 94594; $INACTIVE = 94595; $OTHER = 94596; $NONODE = 94597;
 $ALL_USERS = array($OWNER, $RECIP, $COLLAB, $DELETED, $INACTIVE, $OTHER, $NONODE);
@@ -88,6 +89,7 @@ function cleanup() {
 	$db->query("DELETE FROM vprojects WHERE userpkey IN ($in)");
 	$db->query("DELETE FROM project_merge_prefs WHERE project_owner_user_pkey IN ($in)");
 	$db->query("DELETE FROM dois WHERE user_pkey IN ($in)");
+	$db->query("DELETE FROM strabosamples.sesar_registrations WHERE sample_userpkey IN ($in)");
 	$db->query("DELETE FROM strabosamples.samples WHERE userpkey IN ($in)");
 	$db->query("DELETE FROM strabosearch.item_hit WHERE item_userpkey IN ($in) OR project_userpkey IN ($in)");
 	$db->query("DELETE FROM strabosearch.image_hit WHERE image_userpkey IN ($in) OR project_userpkey IN ($in)");
@@ -165,6 +167,12 @@ function seed($owner, $recip) {
 	$db->prepare_query("UPDATE strabosamples.samples SET parent_sample_id = $1, parent_userpkey = $2 WHERE id = $3 AND userpkey = $2", array($SMP_RICH, $owner, $SMP_LEG));
 	$db->prepare_query("INSERT INTO strabosamples.sample_composition (sample_id, sample_userpkey, mineral, fraction, unit) VALUES ($1, $2, 'quartz', '30', 'percent')", array($SMP_RICH, $owner));
 	$db->prepare_query("INSERT INTO strabosamples.sample_parameters (sample_id, sample_userpkey, control, value) VALUES ($1, $2, 'temperature', '650')", array($SMP_LEG, $owner));
+	// IGSN tracking rows (no FK): a live minted one + an unlinked history row
+	$db->prepare_query("UPDATE strabosamples.samples SET igsn = '10.58052/IEFAK9459' WHERE id = $1 AND userpkey = $2", array($SMP_RICH, $owner));
+	$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, sesar_code, origin, access, state, active, created_by)
+		VALUES ($1, $2, 'sandbox', '10.58052/IEFAK9459', 'IEFAK', 'minted', 'managed', 'active', TRUE, $2)", array($SMP_RICH, $owner));
+	$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, sesar_code, origin, access, state, active, unlinked_at, created_by)
+		VALUES ($1, $2, 'sandbox', '10.58052/IEFAK9458', 'IEFAK', 'linked', 'managed', 'unlinked', FALSE, now(), $2)", array($SMP_LEG, $owner));
 
 	// search index slice
 	StraboSearchSync::syncFieldDataset($db, $neodb, $DS1, $owner);
@@ -193,6 +201,7 @@ function snap($upk) {
 	$o['dois'] = pgn("SELECT count(*) FROM dois WHERE strabo_project_id = $1 AND user_pkey = $2", array((string)$P, $upk));
 	$o['samples'] = pgn("SELECT count(*) FROM strabosamples.samples WHERE userpkey = $1", array($upk));
 	$o['sample_children'] = pgn("SELECT (SELECT count(*) FROM strabosamples.sample_changelog WHERE sample_userpkey = $1) + (SELECT count(*) FROM strabosamples.sample_subsystem_links WHERE sample_userpkey = $1) + (SELECT count(*) FROM strabosamples.sample_collaborators WHERE sample_userpkey = $1) + (SELECT count(*) FROM strabosamples.sample_composition WHERE sample_userpkey = $1) + (SELECT count(*) FROM strabosamples.sample_parameters WHERE sample_userpkey = $1)", array($upk));
+	$o['sesar_regs'] = pgn("SELECT count(*) FROM strabosamples.sesar_registrations WHERE sample_userpkey = $1", array($upk));
 	$o['sample_links_ref'] = pgn("SELECT count(*) FROM strabosamples.sample_subsystem_links WHERE subsystem = 'field' AND reference_userpkey = $1", array($upk));
 	$o['search_items'] = pgn("SELECT count(*) FROM strabosearch.item_hit WHERE project_subsystem = 'field' AND project_id = $1 AND project_userpkey = $2", array((string)$P, $upk));
 	$o['search_images'] = pgn("SELECT count(*) FROM strabosearch.image_hit WHERE image_subsystem = 'field' AND project_id = $1 AND project_userpkey = $2", array((string)$P, $upk));
@@ -234,6 +243,7 @@ check('owner PG mirror: 1 project row, 3 spots', $b['pg_project'] === 1 && $b['p
 check('recipient holds a mirror copy row', snap($RECIP)['pg_project'] === 1);
 check('owner has 2 collaborator rows (COLLAB edit, RECIP readonly)', $b['collab_owner_rows'] === 2);
 check('owner has 3 spine samples with children', $b['samples'] === 3 && $b['sample_children'] > 6, json_encode(array($b['samples'], $b['sample_children'])));
+check('owner has 2 IGSN tracking rows (live minted + unlinked history)', $b['sesar_regs'] === 2, $b['sesar_regs']);
 check('search slice indexed for owner (items + samples)', $b['search_items'] >= 3 && $b['search_samples'] === 3, json_encode(array($b['search_items'], $b['search_samples'])));
 check('search images indexed for owner', $b['search_images'] === 2, $b['search_images']);
 
@@ -310,6 +320,22 @@ check('collaborators: COLLAB row now owned by recipient, recipient\'s own row go
 check('old owner stays on as accepted admin collaborator', pgv("SELECT collaboration_level FROM collaborators WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND collaborator_user_pkey = $3 AND accepted AND NOT disabled", array((string)$P, $RECIP, $OWNER)) === 'admin');
 check('versions / verlog / vprojects / merge pref moved', $n['versions'] === 1 && $n['verlog'] === 1 && $n['vprojects'] === 1 && $n['merge_prefs'] === 1, json_encode($n));
 check('spine: 3 samples now under the recipient with all children', $n['samples'] === 3 && $n['sample_children'] === $b['sample_children'] + 3 /* transfer changelog rows */ + 3 /* old owner as collaborator */ && $o['samples'] === 0, json_encode(array($n['samples'], $n['sample_children'], $b['sample_children'])));
+check('IGSN rows moved with their samples, state / origin / IGSN kept, none left behind', $n['sesar_regs'] === 2 && $o['sesar_regs'] === 0
+	&& pgv("SELECT state || '/' || origin || '/' || igsn FROM strabosamples.sesar_registrations WHERE sample_id = $1 AND sample_userpkey = $2", array($SMP_RICH, $RECIP)) === 'active/minted/10.58052/IEFAK9459'
+	&& pgv("SELECT state FROM strabosamples.sesar_registrations WHERE sample_id = $1 AND sample_userpkey = $2", array($SMP_LEG, $RECIP)) === 'unlinked', json_encode(array($n['sesar_regs'], $o['sesar_regs'])));
+check('verify(): IGSN rows counted (0 from, 2 to)', isset($v['stores']['sesar_registrations']) && $v['stores']['sesar_registrations']['from'] === 0 && $v['stores']['sesar_registrations']['to'] === 2, json_encode(isset($v['stores']['sesar_registrations']) ? $v['stores']['sesar_registrations'] : null));
+check('old URL: samples_moved_to finds the recipient', samples_moved_to($db, $SMP_RICH, $OWNER) === $RECIP);
+check('old URL: unknown sample / owner never moved -> null', samples_moved_to($db, 'no-such-sample', $OWNER) === null && samples_moved_to($db, $SMP_RICH, $COLLAB) === null);
+$oldUrl = 'http://localhost/samples/' . $OWNER . '/' . rawurlencode($SMP_RICH);
+$sid = 'transfer' . bin2hex(random_bytes(8));
+$sf = '/var/lib/php/sessions/sess_' . $sid;
+file_put_contents($sf, 'loggedin|s:3:"yes";userpkey|i:' . $COLLAB . ';username|s:5:"coll@";LAST_ACTIVITY|i:' . time() . ';');
+@chown($sf, 'www-data');
+$h = shell_exec('curl -s -o /dev/null -w "%{http_code} %{redirect_url}" -b PHPSESSID=' . $sid . ' ' . escapeshellarg($oldUrl));
+@unlink($sf);
+check('old URL, signed in: 301 to /samples/{recipient}/{id}', $h === '301 http://localhost/samples/' . $RECIP . '/' . rawurlencode($SMP_RICH), $h);
+$h = shell_exec('curl -s -o /dev/null -w "%{http_code}" ' . escapeshellarg($oldUrl));
+check('old URL, logged out, private sample: 404 as before (new owner not revealed)', $h === '404', $h);
 check('spine: field links point at the recipient as reference owner', $n['sample_links_ref'] === 3 && $o['sample_links_ref'] === 0);
 check('spine: parent pointer followed the parent', pgv("SELECT parent_userpkey FROM strabosamples.samples WHERE id = $1 AND userpkey = $2", array($SMP_LEG, $RECIP)) == $RECIP);
 check('spine: composition + parameters rows moved', pgn("SELECT count(*) FROM strabosamples.sample_composition WHERE sample_userpkey = $1", array($RECIP)) === 1 && pgn("SELECT count(*) FROM strabosamples.sample_parameters WHERE sample_userpkey = $1", array($RECIP)) === 1);
@@ -353,6 +379,8 @@ check('recipient holds nothing', fromZero($n) === array(), json_encode(fromZero(
 check('recipient\'s original readonly collaborator row restored', pgv("SELECT collaboration_level FROM collaborators WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND collaborator_user_pkey = $3 AND accepted AND NOT disabled", array((string)$P, $OWNER, $RECIP)) === 'readonly');
 check('old owner\'s admin row removed, COLLAB row back under owner', pgn("SELECT count(*) FROM collaborators WHERE collaborator_user_pkey = $1", array($OWNER)) === 0 && pgv("SELECT collaboration_level FROM collaborators WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND collaborator_user_pkey = $3", array((string)$P, $OWNER, $COLLAB)) === 'edit');
 check('DOI untouched by the reversal', $o['dois'] === 1);
+check('IGSN rows back with the owner after the reversal', $o['sesar_regs'] === 2 && $n['sesar_regs'] === 0);
+check('old URL after the round trip: recipient URL leads back to the owner, owner URL needs no redirect', samples_moved_to($db, $SMP_RICH, $RECIP) === $OWNER && samples_moved_to($db, $SMP_RICH, $OWNER) === null);
 check('spine: 6 ownership_transfer changelog rows in total (3 out, 3 back) now under the owner', pgn("SELECT count(*) FROM strabosamples.sample_changelog WHERE sample_userpkey = $1 AND change_type = 'ownership_transfer'", array($OWNER)) === 6);
 $g = $auth->canUploadProjectAsOwner((string)$P, $RECIP);
 check('guard now blocks the recipient', !$g['allowed'] && strpos($g['reason'], 'was transferred') !== false, $g['reason']);

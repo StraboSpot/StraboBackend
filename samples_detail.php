@@ -47,6 +47,7 @@ $anonymous = (empty($_SESSION['loggedin']) || $_SESSION['loggedin'] !== 'yes');
 include("prepare_connections.php");
 require_once __DIR__ . "/samplesdb/services/StraboSamplesService.php";
 require_once __DIR__ . "/samplesdb/lib/sample_public.php";
+require_once __DIR__ . "/samplesdb/lib/sample_moved.php";
 require_once __DIR__ . "/samplesdb/lib/vocab.php";
 require_once __DIR__ . "/microdb/lib/permalink.php";
 require_once __DIR__ . "/includes/sesar/SesarAccess.php";
@@ -78,6 +79,17 @@ if ($ownerPkey > 0 && $sampleId !== '') {
 }
 
 $notFound = !$spineRow;
+
+// Moved by "Transfer to Other Account": old links (bookmarks, the link back on
+// a SESAR / DataCite IGSN record) follow it. Logged out, only to a public sample,
+// so a private sample's new owner stays hidden.
+if ($notFound && $ownerPkey > 0 && $sampleId !== '') {
+    $movedTo = samples_moved_to($db, $sampleId, $ownerPkey);
+    if ($movedTo !== null && (!$anonymous || samples_public_status($db, $sampleId, $movedTo) !== null)) {
+        header('Location: /samples/' . $movedTo . '/' . rawurlencode($sampleId), true, 301);
+        exit;
+    }
+}
 
 // Logged out: public samples only; missing and private look the same.
 $publicVia = null;

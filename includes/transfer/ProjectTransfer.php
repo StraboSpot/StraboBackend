@@ -787,6 +787,11 @@ class ProjectTransfer
 			foreach (array('sample_collaborators', 'sample_changelog', 'sample_composition', 'sample_parameters', 'sample_documents', 'sample_subsystem_links') as $t) {
 				$this->pq("UPDATE strabosamples.$t SET sample_userpkey = $2 WHERE sample_userpkey = $1 AND sample_id = ANY($3::text[])", array($from, $to, $arr));
 			}
+			// IGSN tracking rows (no FK) follow their samples, every environment and state:
+			// left behind, the old owner's IGSN page would list a live IGSN as "sample deleted"
+			if ($this->sesarSchemaExists()) {
+				$this->pq("UPDATE strabosamples.sesar_registrations SET sample_userpkey = $2, updated_at = now() WHERE sample_userpkey = $1 AND sample_id = ANY($3::text[])", array($from, $to, $arr));
+			}
 			// the Field reference (the spot) changed owner too
 			$this->pq("UPDATE strabosamples.sample_subsystem_links SET reference_userpkey = $2, modified_at = now()
 			            WHERE subsystem = 'field' AND sample_userpkey = $2 AND reference_userpkey = $1 AND sample_id = ANY($3::text[])", array($from, $to, $arr));
@@ -1000,6 +1005,11 @@ class ProjectTransfer
 					                     + (SELECT count(*) FROM strabosamples.sample_composition WHERE sample_userpkey = $1 AND sample_id = ANY($2::text[]))
 					                     + (SELECT count(*) FROM strabosamples.sample_parameters WHERE sample_userpkey = $1 AND sample_id = ANY($2::text[]))
 					                     + (SELECT count(*) FROM strabosamples.sample_documents WHERE sample_userpkey = $1 AND sample_id = ANY($2::text[]))", array($to, $arr)));
+				if ($this->sesarSchemaExists()) {
+					$stores['sesar_registrations'] = array(
+						'from' => $cnt("SELECT count(*) FROM strabosamples.sesar_registrations WHERE sample_userpkey = $1 AND sample_id = ANY($2::text[])", array($from, $arr)),
+						'to'   => $cnt("SELECT count(*) FROM strabosamples.sesar_registrations WHERE sample_userpkey = $1 AND sample_id = ANY($2::text[])", array($to, $arr)));
+				}
 			} else {
 				// Before the PG step the moved set is unknown: count Field-hosted samples by project.
 				$stores['samples_spine'] = array(
@@ -1038,6 +1048,13 @@ class ProjectTransfer
 	{
 		static $k = null;
 		if ($k === null) $k = !empty($this->db->get_var("SELECT to_regclass('strabosamples.samples')"));
+		return $k;
+	}
+
+	private function sesarSchemaExists()
+	{
+		static $k = null;
+		if ($k === null) $k = !empty($this->db->get_var("SELECT to_regclass('strabosamples.sesar_registrations')"));
 		return $k;
 	}
 
