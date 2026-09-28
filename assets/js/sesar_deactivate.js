@@ -84,6 +84,7 @@
         foot('<button type="button" class="sm-btn sm-quiet" data-act="close">Cancel</button>');
         post(merge({ action: 'preview' }, target(st.opts))).then(function (j) {
             if (!st) return;
+            if (ui.notConnected(j)) { st.phase = 'done'; close(); ui.connectFirst({ title: 'Request deactivation', what: 'request a deactivation', reconnect: /expired|reconnect/i.test(j.message || '') }); return; }
             if (!j.ok) { st.phase = 'done'; body('<div class="sm-msg err">' + esc(j.message || 'Something went wrong.') + '</div>'); closeFoot(); return; }
             st.p = j.preview;
             dlg.env(st.p.environment);

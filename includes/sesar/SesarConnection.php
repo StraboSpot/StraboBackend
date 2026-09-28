@@ -207,7 +207,11 @@ class SesarConnection
 	{
 		$r = $this->row($userpkey, false);
 		if ($r === null) {
-			return array('environment' => $this->env, 'connected' => false, 'status' => 'none');
+			// Same keys as a stored connection: callers read them without checking (a missing
+			// sesar_codes reached the mint dialog as null and stopped it on "Checking...").
+			return array('environment' => $this->env, 'connected' => false, 'status' => 'none', 'orcid' => null,
+				'sesar_user' => null, 'sesar_codes' => array(), 'last_sesar_code' => null, 'refresh_expires_at' => null,
+				'last_error' => null, 'connected_at' => null);
 		}
 		$user = json_decode((string)$r->sesar_user, true);
 		$codes = json_decode((string)$r->sesar_codes, true);

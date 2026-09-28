@@ -236,6 +236,8 @@ class SesarMint
 			'rows'        => $out,
 			'missing'     => $missing,
 			'choices'     => array(
+				'connected'    => !empty($summary['connected']),
+				'reconnect'    => $summary['status'] === 'needs_reconnect',
 				'codes'        => $codes,
 				'last_code'    => $summary['last_sesar_code'],
 				'object_types' => $this->vocab->objectTypeGroups(),
