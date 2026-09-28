@@ -2,7 +2,7 @@
  * File: assets/js/sesar_reports.js
  * Description: Report downloads on the IGSN page (StraboSamples IGSN
  *              integration Phase 8, D9 + R1). Talks to /sesar_reports.php.
- *              Needs assets/js/sesar_mint.js loaded first (shared sm- styles).
+ *              Needs assets/js/sesar_ui.js loaded first (dialog shell, styles).
  *
  *              SesarReports.igsns({ selected: [ids], shown: [ids] })
  *                  "My IGSNs": which samples (selected, or all shown with an
@@ -32,64 +32,32 @@
 
     var st = null;
 
-    function esc(s) {
-        if (s == null) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
+    var ui = window.SesarUi, esc = ui.esc;
+    var dlg = ui.modal({ prefix: 'sr', style: 'max-width: 620px', title: 'Download IGSN report', css: CSS, close: close, click: onClick });
 
     /** POST form -> file download; resolves {ok, rows, notes} or {ok:false, message}. */
     function download(fields) {
         var fd = new FormData();
         Object.keys(fields).forEach(function (k) { fd.append(k, fields[k]); });
-        return fetch('/sesar_reports.php', { method: 'POST', credentials: 'same-origin', body: fd }).then(function (r) {
-            var type = r.headers.get('Content-Type') || '';
-            if (r.ok && type.indexOf('application/json') === -1) {
-                var m = /filename="([^"]+)"/.exec(r.headers.get('Content-Disposition') || '');
-                var rows = r.headers.get('X-Report-Rows'), notes = r.headers.get('X-Report-Notes');
-                return r.blob().then(function (b) {
-                    var url = URL.createObjectURL(b), a = document.createElement('a');
-                    a.href = url; a.download = m ? m[1] : 'report';
-                    document.body.appendChild(a); a.click(); a.remove();
-                    setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
-                    return { ok: true, name: a.download, rows: rows === null ? null : +rows, notes: notes ? decodeURIComponent(notes) : '' };
-                });
-            }
-            return r.json().catch(function () { return { ok: false, message: 'Unexpected response from StraboSpot (HTTP ' + r.status + ').' }; });
-        }, function () {
-            return { ok: false, message: 'Could not reach StraboSpot. Please check your connection.' };
+        return ui.postForm('/sesar_reports.php', fd, function (type) { return type.indexOf('application/json') === -1; }).then(function (j) {
+            if (!j.blob) return j;
+            var name = j.name || 'report', rows = j.headers.get('X-Report-Rows'), notes = j.headers.get('X-Report-Notes');
+            ui.save(j.blob, name);
+            return { ok: true, name: name, rows: rows === null ? null : +rows, notes: notes ? decodeURIComponent(notes) : '' };
         });
     }
 
-    function ensureDom() {
-        if (document.getElementById('sr-overlay')) return;
-        if (window.SesarMint && window.SesarMint.injectStyles) window.SesarMint.injectStyles();
-        var style = document.createElement('style');
-        style.textContent = CSS;
-        document.head.appendChild(style);
-        var ov = document.createElement('div');
-        ov.id = 'sr-overlay';
-        ov.className = 'sm-overlay';
-        ov.hidden = true;
-        ov.innerHTML = '<div class="sm-modal" role="dialog" aria-modal="true" aria-labelledby="sr-title" style="max-width: 620px">'
-            + '<div class="sm-head"><h3 id="sr-title">Download IGSN report</h3>'
-            + '<button type="button" class="sm-x" id="sr-x" aria-label="Close">&times;</button></div>'
-            + '<div class="sm-body" id="sr-body"></div>'
-            + '<div class="sm-foot" id="sr-foot"></div></div>';
-        document.body.appendChild(ov);
-        document.getElementById('sr-x').addEventListener('click', close);
-        ov.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-        ov.addEventListener('click', function (e) {
-            var b = e.target.closest('[data-act]');
-            if (!b || b.disabled) return;
-            if (b.getAttribute('data-act') === 'close') close();
-            if (b.getAttribute('data-act') === 'go') go();
-        });
+    function onClick(e) {
+        var b = e.target.closest('[data-act]');
+        if (!b || b.disabled) return;
+        if (b.getAttribute('data-act') === 'close') close();
+        if (b.getAttribute('data-act') === 'go') go();
     }
 
     function close() {
         if (!st || st.busy) return;
         st = null;
-        document.getElementById('sr-overlay').hidden = true;
+        dlg.hide();
     }
 
     function radio(name, value, label, checked, sub) {
@@ -99,7 +67,6 @@
     }
 
     function igsns(opts) {
-        ensureDom();
         st = { opts: opts || {}, busy: false, msg: null };
         var sel = st.opts.selected.length, shown = st.opts.shown.length;
         var h = '<p>One row per sample: its IGSN and links, its StraboSamples values, its SESAR values, and whether StraboSpot and SESAR are in step.</p>'
@@ -113,11 +80,9 @@
             + '<div class="sm-sub">Reads SESAR now and marks anything changed there since StraboSpot last read it. Nothing StraboSpot has stored is changed; use Pull from SESAR to take changes in. '
             + 'Untick to use StraboSpot\'s stored copies (faster).</div></div>'
             + '</fieldset></div><div id="sr-msg"></div>';
-        document.getElementById('sr-title').textContent = 'Download IGSN report';
-        document.getElementById('sr-body').innerHTML = h;
+        dlg.show('Download IGSN report');
+        dlg.body(h);
         renderFoot();
-        document.getElementById('sr-overlay').hidden = false;
-        document.getElementById('sr-x').focus();
     }
 
     function renderFoot() {

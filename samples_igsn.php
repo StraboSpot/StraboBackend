@@ -1088,6 +1088,7 @@ body { overflow-x: clip; overflow-y: visible; }
     showTab(startTab);
 })();
 </script>
+<script src="/assets/js/sesar_ui.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_ui.js'); ?>"></script>
 <script src="/assets/js/sesar_mint.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_mint.js'); ?>"></script>
 <script src="/assets/js/sesar_pull.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_pull.js'); ?>"></script>
 <script src="/assets/js/sesar_push.js?v=<?php echo @filemtime(__DIR__ . '/assets/js/sesar_push.js'); ?>"></script>

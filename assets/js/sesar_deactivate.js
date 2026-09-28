@@ -2,7 +2,7 @@
  * File: assets/js/sesar_deactivate.js
  * Description: "Request deactivation" dialog (StraboSamples IGSN integration
  *              Phase 7: D7 + review Q1-Q3). Talks to /sesar_deactivate.php.
- *              Needs assets/js/sesar_mint.js loaded first (shared sm- styles).
+ *              Needs assets/js/sesar_ui.js loaded first (dialog shell, styles).
  *
  *              SesarDeactivate.open({ sampleId | reg, onDone })
  *                  Reads SESAR first (may this account ask? already pending?),
@@ -44,59 +44,24 @@
 
     var st = null;
 
-    function esc(s) {
-        if (s == null) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
-    function link(url, text) { return '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(text) + '</a>'; }
     function target(o) { return o.reg ? { reg: o.reg } : { sample_id: o.sampleId }; }
 
-    function post(body) {
-        return fetch('/sesar_deactivate.php', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-        }).then(function (r) {
-            return r.json().catch(function () { return { ok: false, message: 'Unexpected response from StraboSpot (HTTP ' + r.status + ').' }; });
-        }, function () {
-            return { ok: false, message: 'Could not reach StraboSpot. Please check your connection.' };
-        });
-    }
     function merge(a, b) { var o = {}, k; for (k in a) o[k] = a[k]; for (k in b) o[k] = b[k]; return o; }
 
     // ------------------------------------------------------------------
-    // Modal shell (same look as the mint, pull and push modals)
+    // Dialog (shell and styles: assets/js/sesar_ui.js)
     // ------------------------------------------------------------------
-    function ensureDom() {
-        if (document.getElementById('sd7-overlay')) return;
-        if (window.SesarMint && window.SesarMint.injectStyles) window.SesarMint.injectStyles();
-        var style = document.createElement('style');
-        style.textContent = CSS;
-        document.head.appendChild(style);
-        var ov = document.createElement('div');
-        ov.id = 'sd7-overlay';
-        ov.className = 'sm-overlay';
-        ov.hidden = true;
-        ov.innerHTML = '<div class="sm-modal sd7-modal" role="dialog" aria-modal="true" aria-labelledby="sd7-title" style="max-width:640px">'
-            + '<div class="sm-head"><h3 id="sd7-title">Request deactivation</h3><span class="sm-env" id="sd7-env" hidden>SESAR test site (sandbox)</span>'
-            + '<button type="button" class="sm-x" id="sd7-x" aria-label="Close">&times;</button></div>'
-            + '<div class="sm-body" id="sd7-body"></div>'
-            + '<div class="sm-foot" id="sd7-foot"></div></div>';
-        document.body.appendChild(ov);
-        document.getElementById('sd7-x').addEventListener('click', close);
-        ov.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-        ov.addEventListener('click', onClick);
-        ov.addEventListener('input', onInput);
-        ov.addEventListener('change', onInput);
-    }
-    function body(html) { document.getElementById('sd7-body').innerHTML = html; }
-    function foot(html) { document.getElementById('sd7-foot').innerHTML = html; }
-    function closeFoot() { foot('<span class="sm-count"></span><button type="button" class="sm-btn" data-act="close">Close</button>'); }
+    var ui = window.SesarUi, esc = ui.esc, link = ui.link;
+    var dlg = ui.modal({ prefix: 'sd7', cls: 'sd7-modal', style: 'max-width:640px', title: 'Request deactivation', env: true, css: CSS,
+                         close: close, click: onClick, input: onInput, change: onInput });
+    var body = dlg.body, foot = dlg.foot, closeFoot = dlg.closeFoot;
+    function post(b) { return ui.post('/sesar_deactivate.php', b); }
 
     function close() {
         if (!st || st.phase === 'sending') return;
         var changed = st.changed, cb = st.opts.onDone;
         st = null;
-        document.getElementById('sd7-overlay').hidden = true;
+        dlg.hide();
         if (typeof cb === 'function') cb(changed);
     }
 
@@ -113,18 +78,15 @@
     // Flow
     // ------------------------------------------------------------------
     function open(opts) {
-        ensureDom();
         st = { opts: opts || {}, phase: 'loading', changed: false };
-        document.getElementById('sd7-env').hidden = true;
-        document.getElementById('sd7-overlay').hidden = false;
-        document.getElementById('sd7-x').focus();
+        dlg.show();
         body('<p>Checking this IGSN at SESAR…</p>');
         foot('<button type="button" class="sm-btn sm-quiet" data-act="close">Cancel</button>');
         post(merge({ action: 'preview' }, target(st.opts))).then(function (j) {
             if (!st) return;
             if (!j.ok) { st.phase = 'done'; body('<div class="sm-msg err">' + esc(j.message || 'Something went wrong.') + '</div>'); closeFoot(); return; }
             st.p = j.preview;
-            document.getElementById('sd7-env').hidden = st.p.environment !== 'sandbox';
+            dlg.env(st.p.environment);
             if (st.p.state === 'pending') {
                 // Nothing was recorded: the user decides whether StraboSpot shows it as requested.
                 st.phase = 'pending';

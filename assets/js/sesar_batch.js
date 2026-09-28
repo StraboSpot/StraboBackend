@@ -5,8 +5,8 @@
  *              Batch Template Creator gave them; /sesar_batch.php checks it
  *              (what goes in, what is left out and why), then fills its
  *              Samples sheet with the selected samples and sends it back as
- *              a download. Needs assets/js/sesar_mint.js loaded first
- *              (shared sm- styles).
+ *              a download. Needs assets/js/sesar_ui.js loaded first
+ *              (dialog shell, styles).
  *
  *              SesarBatch.open({ samples: [{id, name}], appBase, connected })
  *              SesarBatch.find({ onDone })
@@ -40,72 +40,38 @@
     var MAX = 4999;
     var st = null;
 
-    function esc(s) {
-        if (s == null) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
-    function ext(url, text) { return '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(text) + '</a>'; }
+    var ui = window.SesarUi, esc = ui.esc, ext = ui.link;
+    var dlg = ui.modal({ prefix: 'sb', style: 'max-width: 760px', title: 'SESAR batch upload file', css: CSS,
+                         close: close, click: onClick, change: onChange });
+    var body = dlg.body, foot = dlg.foot;
 
     function send(action) {
         var fd = new FormData();
         fd.append('action', action);
         fd.append('ids', JSON.stringify(st.opts.samples.map(function (s) { return s.id; })));
         fd.append('file', st.file, st.file.name);
-        return fetch('/sesar_batch.php', { method: 'POST', credentials: 'same-origin', body: fd }).then(function (r) {
-            var type = r.headers.get('Content-Type') || '';
-            if (r.ok && type.indexOf('spreadsheetml') !== -1) {
-                var cd = r.headers.get('Content-Disposition') || '';
-                var m = /filename="([^"]+)"/.exec(cd);
-                return r.blob().then(function (b) { return { ok: true, blob: b, name: m ? m[1] : 'SESAR_batch.xlsx' }; });
-            }
-            return r.json().catch(function () { return { ok: false, message: 'Unexpected response from StraboSpot (HTTP ' + r.status + ').' }; });
-        }, function () {
-            return { ok: false, message: 'Could not reach StraboSpot. Please check your connection.' };
+        return ui.postForm('/sesar_batch.php', fd, function (type) { return type.indexOf('spreadsheetml') !== -1; }).then(function (j) {
+            if (j.blob && !j.name) j.name = 'SESAR_batch.xlsx';
+            return j;
         });
     }
 
-    function ensureDom() {
-        if (document.getElementById('sb-overlay')) return;
-        if (window.SesarMint && window.SesarMint.injectStyles) window.SesarMint.injectStyles();
-        var style = document.createElement('style');
-        style.textContent = CSS;
-        document.head.appendChild(style);
-        var ov = document.createElement('div');
-        ov.id = 'sb-overlay';
-        ov.className = 'sm-overlay';
-        ov.hidden = true;
-        ov.innerHTML = '<div class="sm-modal" role="dialog" aria-modal="true" aria-labelledby="sb-title" style="max-width: 760px">'
-            + '<div class="sm-head"><h3 id="sb-title">SESAR batch upload file</h3>'
-            + '<button type="button" class="sm-x" id="sb-x" aria-label="Close">&times;</button></div>'
-            + '<div class="sm-body" id="sb-body"></div>'
-            + '<div class="sm-foot" id="sb-foot"></div></div>';
-        document.body.appendChild(ov);
-        document.getElementById('sb-x').addEventListener('click', close);
-        ov.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-        ov.addEventListener('click', onClick);
-        ov.addEventListener('change', function (e) {
-            if (st && st.mode === 'find' && e.target.hasAttribute('data-i')) {
-                st.rows[+e.target.getAttribute('data-i')].tick = e.target.checked;
-                return renderFind();
-            }
-            if (e.target.id !== 'sb-file' || !e.target.files || !e.target.files[0]) return;
-            st.file = e.target.files[0];
-            st.plan = null;
-            st.done = null;
-            check();
-        });
+    function onChange(e) {
+        if (st && st.mode === 'find' && e.target.hasAttribute('data-i')) {
+            st.rows[+e.target.getAttribute('data-i')].tick = e.target.checked;
+            return renderFind();
+        }
+        if (e.target.id !== 'sb-file' || !e.target.files || !e.target.files[0]) return;
+        st.file = e.target.files[0];
+        st.plan = null;
+        st.done = null;
+        check();
     }
-
-    function body(html) { document.getElementById('sb-body').innerHTML = html; }
-    function foot(html) { document.getElementById('sb-foot').innerHTML = html; }
 
     function open(opts) {
-        ensureDom();
         st = { mode: 'file', opts: opts || {}, file: null, plan: null, busy: false, done: null, error: null };
-        document.getElementById('sb-title').textContent = 'SESAR batch upload file';
-        document.getElementById('sb-overlay').hidden = false;
+        dlg.show('SESAR batch upload file');
         render();
-        document.getElementById('sb-x').focus();
     }
 
     function close() {
@@ -117,7 +83,7 @@
         }
         var cb = st.opts.onDone, changed = !!st.changed;
         st = null;
-        document.getElementById('sb-overlay').hidden = true;
+        dlg.hide();
         if (typeof cb === 'function') cb(changed);
     }
 
@@ -126,24 +92,12 @@
     // ------------------------------------------------------------------
     var STATE_TAG = { draft: 'Draft at SESAR', pending: 'Waiting for curator review' };
 
-    function postPull(body) {
-        return fetch('/sesar_pull.php', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-        }).then(function (r) {
-            return r.json().catch(function () { return { ok: false, message: 'Unexpected response from StraboSpot (HTTP ' + r.status + ').' }; });
-        }, function () {
-            return { ok: false, message: 'Could not reach StraboSpot. Please check your connection.' };
-        });
-    }
+    function postPull(body) { return ui.post('/sesar_pull.php', body); }
 
     function find(opts) {
-        ensureDom();
         st = { mode: 'find', opts: opts || {}, busy: 'load', rows: null, error: null, results: {}, changed: false, stop: false };
-        document.getElementById('sb-title').textContent = 'Find my batch IGSNs';
-        document.getElementById('sb-overlay').hidden = false;
+        dlg.show('Find my batch IGSNs');
         renderFind();
-        document.getElementById('sb-x').focus();
         postPull({ action: 'batch_matches' }).then(function (j) {
             if (!st) return;
             st.busy = false;
@@ -296,14 +250,7 @@
             if (!st) return;
             st.busy = false;
             if (!j.ok || !j.blob) { st.error = j.message || 'The template could not be filled.'; render(); return; }
-            var url = URL.createObjectURL(j.blob);
-            var a = document.createElement('a');
-            a.href = url;
-            a.download = j.name;
-            document.body.appendChild(a);
-            a.click();
-            a.remove();
-            setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+            ui.save(j.blob, j.name);
             st.done = j.name;
             render();
         });

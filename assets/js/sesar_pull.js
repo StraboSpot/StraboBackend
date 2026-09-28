@@ -2,7 +2,7 @@
  * File: assets/js/sesar_pull.js
  * Description: "Pull from SESAR" modals (StraboSamples IGSN integration
  *              Phase 5: D5). Talks to /sesar_pull.php. Needs
- *              assets/js/sesar_mint.js loaded first (shared sm- styles).
+ *              assets/js/sesar_ui.js loaded first (dialog shell, styles).
  *
  *              SesarPull.single({ sampleId, onDone })
  *                  Per-field review for one sample: empty fields SESAR can
@@ -61,10 +61,6 @@
                   display_sample_type: 'material type', location: 'location', parent: 'parent' };
     var st = null;
 
-    function esc(s) {
-        if (s == null) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
     function val(v) { return (v == null || v === '') ? '<span class="sp-empty">empty</span>' : esc(v); }
     function km(m) { return m == null ? '' : (m >= 1000 ? (m / 1000).toFixed(1) + ' km' : Math.round(m) + ' m'); }
     // SESAR timestamps ("2026-09-26T21:50:55.533105Z") as local dates; anything else as is.
@@ -73,61 +69,23 @@
         var d = new Date(v.replace(/(\.\d{3})\d+/, '$1'));
         return isNaN(d) ? v : d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
     }
-    function link(url, text) { return '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(text) + '</a>'; }
-
-    function post(body) {
-        return fetch('/sesar_pull.php', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-        }).then(function (r) {
-            return r.json().catch(function () { return { ok: false, message: 'Unexpected response from StraboSpot (HTTP ' + r.status + ').' }; });
-        }, function () {
-            return { ok: false, message: 'Could not reach StraboSpot. Please check your connection.' };
-        });
-    }
 
     // ------------------------------------------------------------------
-    // Modal shell
+    // Dialog (shell and styles: assets/js/sesar_ui.js)
     // ------------------------------------------------------------------
-    function ensureDom() {
-        if (document.getElementById('sp-overlay')) return;
-        if (window.SesarMint && window.SesarMint.injectStyles) window.SesarMint.injectStyles();
-        var style = document.createElement('style');
-        style.textContent = CSS;
-        document.head.appendChild(style);
-        var ov = document.createElement('div');
-        ov.id = 'sp-overlay';
-        ov.className = 'sm-overlay';
-        ov.hidden = true;
-        ov.innerHTML = '<div class="sm-modal sp-modal" role="dialog" aria-modal="true" aria-labelledby="sp-title">'
-            + '<div class="sm-head"><h3 id="sp-title"></h3><span class="sm-env" id="sp-env" hidden>SESAR test site (sandbox)</span>'
-            + '<button type="button" class="sm-x" id="sp-x" aria-label="Close">&times;</button></div>'
-            + '<div class="sm-body" id="sp-body"></div>'
-            + '<div class="sm-foot" id="sp-foot"></div></div>';
-        document.body.appendChild(ov);
-        document.getElementById('sp-x').addEventListener('click', close);
-        ov.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-        ov.addEventListener('click', onClick);
-        ov.addEventListener('change', onChange);
-    }
+    var ui = window.SesarUi, esc = ui.esc, link = ui.link;
+    var dlg = ui.modal({ prefix: 'sp', cls: 'sp-modal', env: true, css: CSS, close: close, click: onClick, change: onChange });
+    var body = dlg.body, foot = dlg.foot, env = dlg.env;
+    function post(b) { return ui.post('/sesar_pull.php', b); }
 
     function show(kind, title, opts) {
-        ensureDom();
         st = { kind: kind, opts: opts || {}, phase: 'loading', changed: false, stop: false };
-        document.getElementById('sp-title').textContent = title;
-        document.getElementById('sp-env').hidden = true;
-        document.getElementById('sp-overlay').hidden = false;
-        document.getElementById('sp-x').focus();
+        dlg.show(title);
     }
-
-    function body(html) { document.getElementById('sp-body').innerHTML = html; }
-    function foot(html) { document.getElementById('sp-foot').innerHTML = html; }
-    function env(e) { document.getElementById('sp-env').hidden = e !== 'sandbox'; }
 
     function fail(message) {
         st.phase = 'error';
-        body('<div class="sm-msg err">' + esc(message || 'Something went wrong.') + '</div>');
-        foot('<span class="sm-count"></span><button type="button" class="sm-btn" data-act="close">Close</button>');
+        dlg.fail(message);
     }
 
     function close() {
@@ -139,7 +97,7 @@
         }
         var changed = st.changed, cb = st.opts.onDone;
         st = null;
-        document.getElementById('sp-overlay').hidden = true;
+        dlg.hide();
         if (typeof cb === 'function') cb(changed);
     }
 

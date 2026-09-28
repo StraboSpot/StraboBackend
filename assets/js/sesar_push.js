@@ -2,7 +2,7 @@
  * File: assets/js/sesar_push.js
  * Description: "Send to SESAR" modals (StraboSamples IGSN integration
  *              Phase 6: D6 + review P1-P4). Talks to /sesar_push.php. Needs
- *              assets/js/sesar_mint.js loaded first (shared sm- styles).
+ *              assets/js/sesar_ui.js loaded first (dialog shell, styles).
  *
  *              SesarPush.status(sampleId) -> Promise of {ok, status}
  *                  No SESAR call: would sending change anything? Drives the
@@ -45,65 +45,24 @@
     var CAP = 100;
     var st = null;
 
-    function esc(s) {
-        if (s == null) return '';
-        return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
-    }
     function val(v) { return (v == null || v === '') ? '<span class="su-empty">empty</span>' : esc(v); }
-    function link(url, text) { return '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(text) + '</a>'; }
-
-    function post(body) {
-        return fetch('/sesar_push.php', {
-            method: 'POST', credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
-        }).then(function (r) {
-            return r.json().catch(function () { return { ok: false, message: 'Unexpected response from StraboSpot (HTTP ' + r.status + ').' }; });
-        }, function () {
-            return { ok: false, message: 'Could not reach StraboSpot. Please check your connection.' };
-        });
-    }
 
     // ------------------------------------------------------------------
-    // Modal shell (same look as the mint and pull modals)
+    // Dialog (shell and styles: assets/js/sesar_ui.js)
     // ------------------------------------------------------------------
-    function ensureDom() {
-        if (document.getElementById('su-overlay')) return;
-        if (window.SesarMint && window.SesarMint.injectStyles) window.SesarMint.injectStyles();
-        var style = document.createElement('style');
-        style.textContent = CSS;
-        document.head.appendChild(style);
-        var ov = document.createElement('div');
-        ov.id = 'su-overlay';
-        ov.className = 'sm-overlay';
-        ov.hidden = true;
-        ov.innerHTML = '<div class="sm-modal su-modal" role="dialog" aria-modal="true" aria-labelledby="su-title">'
-            + '<div class="sm-head"><h3 id="su-title"></h3><span class="sm-env" id="su-env" hidden>SESAR test site (sandbox)</span>'
-            + '<button type="button" class="sm-x" id="su-x" aria-label="Close">&times;</button></div>'
-            + '<div class="sm-body" id="su-body"></div>'
-            + '<div class="sm-foot" id="su-foot"></div></div>';
-        document.body.appendChild(ov);
-        document.getElementById('su-x').addEventListener('click', close);
-        ov.addEventListener('keydown', function (e) { if (e.key === 'Escape') close(); });
-        ov.addEventListener('click', onClick);
-    }
+    var ui = window.SesarUi, esc = ui.esc, link = ui.link;
+    var dlg = ui.modal({ prefix: 'su', cls: 'su-modal', env: true, css: CSS, close: close, click: onClick });
+    var body = dlg.body, foot = dlg.foot, env = dlg.env, closeFoot = dlg.closeFoot;
+    function post(b) { return ui.post('/sesar_push.php', b); }
 
     function show(kind, title, opts) {
-        ensureDom();
         st = { kind: kind, opts: opts || {}, phase: 'loading', changed: false, stop: false };
-        document.getElementById('su-title').textContent = title;
-        document.getElementById('su-env').hidden = true;
-        document.getElementById('su-overlay').hidden = false;
-        document.getElementById('su-x').focus();
+        dlg.show(title);
     }
-    function body(html) { document.getElementById('su-body').innerHTML = html; }
-    function foot(html) { document.getElementById('su-foot').innerHTML = html; }
-    function env(e) { document.getElementById('su-env').hidden = e !== 'sandbox'; }
-    function closeFoot() { foot('<span class="sm-count"></span><button type="button" class="sm-btn" data-act="close">Close</button>'); }
 
     function fail(message) {
         st.phase = 'error';
-        body('<div class="sm-msg err">' + esc(message || 'Something went wrong.') + '</div>');
-        closeFoot();
+        dlg.fail(message);
     }
 
     function close() {
@@ -115,7 +74,7 @@
         }
         var changed = st.changed, cb = st.opts.onDone;
         st = null;
-        document.getElementById('su-overlay').hidden = true;
+        dlg.hide();
         if (typeof cb === 'function') cb(changed);
     }
 
