@@ -195,6 +195,10 @@ class FakeSesar implements SesarTransport
 		}
 
 		// -- public vocab -----------------------------------------------------
+		// Knob 'vocab_empty': a 200 answer that holds no terms (maintenance page, changed envelope).
+		if ($method === 'GET' && strpos($path, 'vocab/') === 0 && !empty($s['knobs']['vocab_empty'])) {
+			return array(200, json_encode(array('data' => array())), 0);
+		}
 		if ($method === 'GET' && $path === 'vocab/object-types/') {
 			return array(200, json_encode(array('data' => array(
 				array('id' => 1, 'label' => 'Material sample', 'hierarchical_label' => 'Material sample'),

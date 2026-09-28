@@ -350,6 +350,24 @@ $groups = $vocab->objectTypeGroups();
 check('object types grouped for the dropdown', isset($groups['General sample types']) && in_array('Rock hand sample', $groups['General sample types'], true)
 	&& $groups['Material sample'] === array('Material sample') && in_array('Thin section', $groups['Analytical preparations'], true), $groups);
 
+// SESAR answers 200 without terms: never cached, the old copy keeps serving.
+$cachedAt = function () use ($db) {
+	return $db->get_row("SELECT jsonb_array_length(data) AS n, fetched_at < now() - interval '7 days' AS stale
+	                       FROM strabosamples.sesar_vocab_cache WHERE environment = 'sandbox' AND vocab = 'object-types'");
+};
+$fake->set('vocab_empty', true);
+$db->query("UPDATE strabosamples.sesar_vocab_cache SET fetched_at = now() - interval '8 days' WHERE environment = 'sandbox'");
+$labels = $vocab->labels(SesarVocab::OBJECT_TYPES);
+$c = $cachedAt();
+check('empty answer from SESAR: the stale copy is served and kept', in_array('Core', $labels, true) && (int)$c->n === 6 && $c->stale === 't', $c);
+$db->query("DELETE FROM strabosamples.sesar_vocab_cache WHERE environment = 'sandbox'");
+check('empty answer and no copy: nothing to offer, nothing cached', $vocab->labels(SesarVocab::OBJECT_TYPES) === array() && $cachedAt() === null);
+$db->query("INSERT INTO strabosamples.sesar_vocab_cache (environment, vocab, data, fetched_at) VALUES ('sandbox', 'object-types', '[]'::jsonb, now())");
+$fake->set('vocab_empty', false);
+$n1 = count($fake->calls('vocab/object-types/'));
+check('an empty list cached earlier counts as a miss (fetched again)', in_array('Core', $vocab->labels(SesarVocab::OBJECT_TYPES), true)
+	&& count($fake->calls('vocab/object-types/')) === $n1 + 1 && (int)$cachedAt()->n === 6);
+
 } catch (Throwable $e) {
 	check('suite ran without an uncaught exception', false, get_class($e) . ': ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
 }

@@ -40,15 +40,20 @@ class SesarVocab
 			   FROM strabosamples.sesar_vocab_cache WHERE environment = $1 AND vocab = $2",
 			array($env, $vocab)
 		);
-		if ($row !== null && (float)$row->age < self::MAX_AGE) {
-			return json_decode($row->data, true);
+		$cached = ($row !== null) ? json_decode($row->data, true) : null;
+		if (!self::usable($cached)) $cached = null;
+		if ($cached !== null && (float)$row->age < self::MAX_AGE) {
+			return $cached;
 		}
 		try {
 			$terms = $this->client->vocab($vocab);
 		} catch (SesarError $e) {
-			if ($row !== null) return json_decode($row->data, true);   // stale beats nothing
+			if ($cached !== null) return $cached;   // stale beats nothing
 			throw $e;
 		}
+		// SESAR answered without terms (maintenance page, changed envelope):
+		// never cached, or every mint would fail until the cache aged out.
+		if (!self::usable($terms)) return $cached !== null ? $cached : array();
 		$this->db->prepare_query(
 			"INSERT INTO strabosamples.sesar_vocab_cache (environment, vocab, data, fetched_at)
 			 VALUES ($1, $2, $3::jsonb, now())
@@ -56,6 +61,16 @@ class SesarVocab
 			array($env, $vocab, json_encode(array_values($terms)))
 		);
 		return $terms;
+	}
+
+	/** A vocab list worth keeping: at least one term with a label. */
+	private static function usable($terms)
+	{
+		if (!is_array($terms)) return false;
+		foreach ($terms as $t) {
+			if (is_array($t) && isset($t['label']) && trim((string)$t['label']) !== '') return true;
+		}
+		return false;
 	}
 
 	/** Plain labels (for SesarMapper suggestions and form validation). */
