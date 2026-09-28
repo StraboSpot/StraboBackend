@@ -210,6 +210,24 @@ check('no SESAR code -> 400', $e !== null && $e->status === 400 && strpos($e->ge
 $e = err(function () use ($TMP) { SesarBatchTemplate::load($TMP . '/missing.xlsx'); });
 check('missing / empty file -> 400', $e !== null && $e->status === 400);
 
+// A small file that unpacks to something huge, and a part that defines entities.
+$swap = function ($name, $part, $xml) use ($TMP, $ALL) {
+	$p = mkTemplate($TMP . '/' . $name, $ALL);
+	$z = new ZipArchive(); $z->open($p);
+	$z->addFromString($part, $xml);
+	$z->close();
+	return $p;
+};
+$big = $swap('bomb.xlsx', 'xl/sharedStrings.xml', '<?xml version="1.0"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>Sample Name</t></si>'
+	. str_repeat(' ', SesarBatchTemplate::MAX_PART_BYTES) . '</sst>');
+$e = err(function () use ($big) { SesarBatchTemplate::load($big); });
+check('a small file with a part that unpacks past the limit -> 400 "too large"', $e !== null && $e->status === 400 && strpos($e->getMessage(), 'too large') !== false
+	&& filesize($big) < 1048576, array(filesize($big), $e ? $e->getMessage() : null));
+$ent = $swap('entities.xlsx', 'xl/sharedStrings.xml', '<?xml version="1.0"?><!DOCTYPE sst [<!ENTITY a "Sample Name">]>'
+	. '<sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><si><t>&a;</t></si></sst>');
+$e = err(function () use ($ent) { SesarBatchTemplate::load($ent); });
+check('a part that declares a DOCTYPE -> 400 "damaged"', $e !== null && $e->status === 400 && strpos($e->getMessage(), 'damaged') !== false, $e ? $e->getMessage() : null);
+
 // ===========================================================================
 section('SesarBatchTemplate: filling');
 $bytes = $t->fill(array(

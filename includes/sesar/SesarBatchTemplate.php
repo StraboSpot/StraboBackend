@@ -33,6 +33,12 @@ class SesarBatchTemplate
 	/** SESAR: at most 5000 rows per file including the header row. */
 	const MAX_SAMPLES = 4999;
 	const MAX_BYTES = 20971520;   // 20 MB; SESAR's own template is under 1 MB
+	/**
+	 * Largest part (UNPACKED) that is read: MAX_BYTES only bounds the packed
+	 * file, and a small .xlsx can unpack to gigabytes. SESAR's largest part is
+	 * under 0.5 MB, about 20 MB with all 5000 rows filled.
+	 */
+	const MAX_PART_BYTES = 52428800;   // 50 MB
 
 	const NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 	const NS_REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
@@ -68,7 +74,7 @@ class SesarBatchTemplate
 			$shared = self::sharedStrings($zip);
 
 			$t->samplesPart = $sheets['Samples'];
-			$t->samplesXml = $zip->getFromName($t->samplesPart);
+			$t->samplesXml = self::part($zip, $t->samplesPart);
 			if ($t->samplesXml === false) self::bad('The Samples sheet could not be read.');
 			$doc = self::dom($t->samplesXml);
 			$grid = self::grid($doc, $shared);
@@ -89,13 +95,13 @@ class SesarBatchTemplate
 
 			// SESAR code + template version: hidden Metadata sheet, else the cover page.
 			if (isset($sheets['Metadata'])) {
-				$mg = self::grid(self::dom($zip->getFromName($sheets['Metadata'])), $shared);
+				$mg = self::grid(self::dom(self::part($zip, $sheets['Metadata'])), $shared);
 				foreach ($mg as $cells) {
 					if (isset($cells[1], $cells[2])) $t->meta[trim((string)$cells[1])] = trim((string)$cells[2]);
 				}
 			}
 			if (empty($t->meta['sesar_code']) && isset($sheets['Cover Page'])) {
-				$cg = self::grid(self::dom($zip->getFromName($sheets['Cover Page'])), $shared);
+				$cg = self::grid(self::dom(self::part($zip, $sheets['Cover Page'])), $shared);
 				foreach ($cg as $cells) {
 					if (isset($cells[1], $cells[2]) && strcasecmp(trim((string)$cells[1]), 'SESAR Code') === 0) $t->meta['sesar_code'] = trim((string)$cells[2]);
 				}
@@ -224,8 +230,8 @@ class SesarBatchTemplate
 	/** Sheet name => part path, via workbook.xml and its relationships. */
 	private static function sheetParts(ZipArchive $zip)
 	{
-		$wb = $zip->getFromName('xl/workbook.xml');
-		$rels = $zip->getFromName('xl/_rels/workbook.xml.rels');
+		$wb = self::part($zip, 'xl/workbook.xml');
+		$rels = self::part($zip, 'xl/_rels/workbook.xml.rels');
 		if ($wb === false || $rels === false) self::bad('This is not an .xlsx workbook. Upload the spreadsheet SESAR\'s Batch Template Creator gave you.');
 		$targets = array();
 		$rd = self::dom($rels);
@@ -244,7 +250,7 @@ class SesarBatchTemplate
 
 	private static function sharedStrings(ZipArchive $zip)
 	{
-		$xml = $zip->getFromName('xl/sharedStrings.xml');
+		$xml = self::part($zip, 'xl/sharedStrings.xml');
 		if ($xml === false) return array();
 		$out = array();
 		$d = self::dom($xml);
@@ -295,7 +301,7 @@ class SesarBatchTemplate
 			$values = null;
 			if (preg_match('/^\'?([^\'!]+)\'?!\$?([A-Z]+)\$?(\d+):\$?([A-Z]+)\$?(\d+)$/', $formula, $m)) {
 				if (!isset($sheets[$m[1]])) continue;
-				if (!isset($grids[$m[1]])) $grids[$m[1]] = self::grid(self::dom($zip->getFromName($sheets[$m[1]])), $shared);
+				if (!isset($grids[$m[1]])) $grids[$m[1]] = self::grid(self::dom(self::part($zip, $sheets[$m[1]])), $shared);
 				$col = self::colIndex($m[2]);
 				$values = array();
 				for ($r = (int)$m[3]; $r <= (int)$m[5]; $r++) {
@@ -321,12 +327,23 @@ class SesarBatchTemplate
 	// Helpers
 	// =======================================================================
 
+	/** One part of the package, or false when it has none by that name. Never unpacks more than MAX_PART_BYTES. */
+	private static function part(ZipArchive $zip, $name)
+	{
+		$st = $zip->statName($name);
+		if ($st === false) return false;
+		if ((int)$st['size'] > self::MAX_PART_BYTES) self::bad('The file is too large to be a SESAR template.');
+		return $zip->getFromName($name);
+	}
+
 	private static function dom($xml)
 	{
 		if ($xml === false || $xml === null || $xml === '') self::bad('The spreadsheet is damaged: a part of it is missing.');
+		// A spreadsheet part never declares a DOCTYPE; one that does could define entities that balloon when read.
+		if (stripos($xml, '<!DOCTYPE') !== false) self::bad('The spreadsheet is damaged and could not be read.');
 		$d = new DOMDocument();
 		$prev = libxml_use_internal_errors(true);
-		$ok = $d->loadXML($xml, LIBXML_NONET | LIBXML_COMPACT | LIBXML_PARSEHUGE);
+		$ok = $d->loadXML($xml, LIBXML_NONET | LIBXML_COMPACT);
 		libxml_clear_errors();
 		libxml_use_internal_errors($prev);
 		if (!$ok) self::bad('The spreadsheet is damaged and could not be read.');
