@@ -7,7 +7,7 @@
  *              SesarClient request shapes and error kinds, SesarConnection
  *              storage / refresh / rotation (incl. two processes refreshing
  *              at once), SesarMapper (D2 suggestions + forward mapping, D5
- *              pull proposals, D6 fingerprint + push patch), SesarVocab cache.
+ *              pull proposals, D6 push patch), SesarVocab cache.
  *
  *              Talks ONLY to tests/sesar/FakeSesar.php (never the network).
  *              Fixture users 94710-94712. Needs the DDL in
@@ -296,12 +296,7 @@ foreach (array('sdfbsbd', 'UC0068', 'Carr_057_UM_#19', 'testing IGSN', 'Ignshere
 check('blank is empty', $cls('   ') === 'empty' && $cls(null) === 'empty');
 
 // ===========================================================================
-section('SesarMapper: D6 fingerprint + push patch');
-$fp = SesarMapper::fingerprint($o);
-check('fingerprint stable across key order', $fp === SesarMapper::fingerprint(array_reverse($o, true)));
-$o2 = $o; $o2['sample_description'] = 'granite chip, weathered';
-check('fingerprint changes when an owned field changes', SesarMapper::fingerprint($o2) !== $fp);
-check('fingerprint ignores coordinate formatting noise', SesarMapper::fingerprint(array_merge($o, array('latitude' => '38.95717800'))) === $fp);
+section('SesarMapper: D6 push patch');
 // Register via the fake to get SESAR's own formatting back.
 $conn->connectWithOrcid($U1, 'orcid-id-token-1', '0000-0000-0000-0001');
 $acc = $conn->accessToken($U1);

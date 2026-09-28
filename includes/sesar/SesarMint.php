@@ -391,19 +391,18 @@ class SesarMint
 				if ($f !== null && isset($f['sample_id']) && is_numeric($f['sample_id'])) $sesarId = (int)$f['sample_id'];
 			} catch (SesarError $e) { /* filled by a later pull */ }
 		}
-		$owned = SesarMapper::ownedFields($v);
 		$this->db->prepare_query(
 			"UPDATE strabosamples.sesar_registrations
 			    SET igsn = $1, sesar_code = $2, state = 'active', access = 'managed', active = TRUE,
 			        sesar_sample_id = $3, related_resource_id = COALESCE($4, related_resource_id),
 			        sesar_status = $5, snapshot = $6::jsonb, snapshot_at = now(), sesar_last_update = $7,
-			        pushed_fingerprint = $8, pushed_at = now(), updated_at = now()
-			  WHERE pkey = $9",
+			        pushed_at = now(), updated_at = now()
+			  WHERE pkey = $8",
 			array($igsn, $choices['sesar_code'], $sesarId, $rrId,
 			      isset($rec['metadata_store_status']) ? $rec['metadata_store_status'] : null,
 			      json_encode($rec),
 			      !empty($rec['last_update_date']) ? $rec['last_update_date'] : null,
-			      SesarMapper::fingerprint($owned), (int)$regPkey)
+			      (int)$regPkey)
 		);
 		$this->conn->setLastCode($userpkey, $choices['sesar_code']);
 		$this->writeSpine($userpkey, $v['id'], $igsn, $notes);

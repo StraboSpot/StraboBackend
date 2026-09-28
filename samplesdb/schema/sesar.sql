@@ -10,9 +10,9 @@
 --                                  the SESAR identity and cached SESAR codes.
 --              sesar_registrations one row per sample StraboSpot minted or
 --                                  linked at SESAR (D3): IGSN, environment,
---                                  lifecycle state, last SESAR snapshot (D5)
---                                  and the fingerprint of the last payload
---                                  sent (D6). Rows are history: a confirmed
+--                                  lifecycle state, last SESAR snapshot (D5:
+--                                  also what "changed since sent" compares
+--                                  with, D6). Rows are history: a confirmed
 --                                  deactivation keeps its row (active=FALSE).
 --              sesar_vocab_cache   SESAR controlled vocabularies (object types,
 --                                  material types), refreshed from the public
@@ -89,7 +89,6 @@ CREATE TABLE IF NOT EXISTS strabosamples.sesar_registrations (
     snapshot                JSONB,      -- last SESAR record seen (D5 "SESAR record" card, D9 reports)
     snapshot_at             TIMESTAMPTZ,
     sesar_last_update       TIMESTAMPTZ, -- SESAR last_update_date at snapshot time (D6 pull-first check)
-    pushed_fingerprint      TEXT,        -- sha256 of the last payload sent (D6 change detection)
     pushed_at               TIMESTAMPTZ,
 
     deactivation_reason     TEXT,
@@ -145,6 +144,11 @@ ALTER TABLE strabosamples.sesar_registrations ADD CONSTRAINT sesar_reg_active_ch
 --                             StraboSamples sample was deleted (IGSN page).
 ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS deactivation_declined_at TIMESTAMPTZ;
 ALTER TABLE strabosamples.sesar_registrations ADD COLUMN IF NOT EXISTS orphan_kept_at TIMESTAMPTZ;
+
+-- Code review (2026-09-27): pushed_fingerprint (sha256 of the last payload
+--   sent) was written but never read. "Changed since sent" compares with the
+--   snapshot (Phase 6, P1). Dropped from tables built before this date.
+ALTER TABLE strabosamples.sesar_registrations DROP COLUMN IF EXISTS pushed_fingerprint;
 
 -- One live registration per sample per environment (D3 duplicate guard).
 CREATE UNIQUE INDEX IF NOT EXISTS idx_sesar_reg_sample_live

@@ -185,7 +185,7 @@ $snap = json_decode($r->snapshot, true);
 check('snapshot + list-only ids stored (sample_id, last_update_date)', $snap['name'] === 'SESAR name' && $r->sesar_sample_id !== null
 	&& strpos((string)$r->sesar_last_update, '2026-09-20') === 0 && $snap['last_update_date'] === $LU, array($r->sesar_sample_id, $r->sesar_last_update));
 check('field_flags NULL for a sample without a Field link', $r->field_flags === null);
-check('no push fingerprint on a linked row (Phase 6 compares with the snapshot)', $r->pushed_fingerprint === null);
+check('never sent from here: no sent time on a freshly linked row', $r->pushed_at === null);
 $log = $db->get_row_prepared("SELECT changes::text AS c FROM strabosamples.sample_changelog WHERE sample_id = $1 AND sample_userpkey = $2
 	AND change_type = 'update' ORDER BY pkey DESC LIMIT 1", array('sesarpull-a', $A));
 check('changelog records the pulled values', $log !== null && strpos($log->c, 'Described at SESAR') !== false && strpos($log->c, 'Granite') !== false, $log);

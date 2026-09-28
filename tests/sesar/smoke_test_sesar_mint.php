@@ -268,10 +268,10 @@ $rrs = $fake->state()['related'];
 check('related resource created and linked: the sample page on strabospot.org', count($rec['related_resources']) === 1
 	&& $rrs[(string)$rec['related_resources'][0]]['uri'] === 'https://strabospot.org/samples/' . $A . '/sesarmint-ready', $rrs);
 $r = reg('sesarmint-ready', $A);
-check('tracking row: active, managed, minted, code, SESAR sample_id (from the list), related resource, fingerprint',
+check('tracking row: active, managed, minted, code, SESAR sample_id (from the list), related resource, sent time',
 	$r !== null && $r->state === 'active' && $r->access === 'managed' && $r->origin === 'minted' && $r->igsn === $igsn && $r->sesar_code === 'IEFAK'
 	&& (int)$r->sesar_sample_id > 900000 && (int)$r->related_resource_id === (int)$rec['related_resources'][0]
-	&& strlen($r->pushed_fingerprint) === 64 && $r->environment === 'sandbox', $r);
+	&& $r->pushed_at !== null && $r->environment === 'sandbox', $r);
 check('spine IGSN written', spineIgsn('sesarmint-ready', $A) === $igsn);
 check('changelog records the IGSN change', (int)$db->get_var_prepared("SELECT count(*) FROM strabosamples.sample_changelog
 	WHERE sample_id = 'sesarmint-ready' AND sample_userpkey = $1 AND changes->'igsn'->>'new' = $2", array($A, $igsn)) === 1);

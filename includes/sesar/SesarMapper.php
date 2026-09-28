@@ -4,7 +4,7 @@
  * Description: Pure mapping between StraboSamples samples and SESAR sample
  *              records (no database, no network). Decisions: D2 (mint form +
  *              forward mapping + suggestions), D5 (pull / reverse mapping,
- *              Field-linked rule), D6 (push fields + change fingerprint).
+ *              Field-linked rule), D6 (push fields).
  *
  *              Input "sample view" (assembled by the caller):
  *                id, name, description, latitude, longitude,
@@ -66,7 +66,7 @@ class SesarMapper
 	/** Object type fallback when nothing better is known (D2 step 3). */
 	const DEFAULT_OBJECT_TYPE = 'Individual sample';
 
-	/** Fields StraboSamples owns at SESAR: pushed when they differ (D6), fingerprinted. */
+	/** Fields StraboSamples owns at SESAR: pushed when they differ (D6). */
 	const PUSH_FIELDS = array(
 		'name', 'latitude', 'longitude', 'latitude_end', 'longitude_end',
 		'sample_description', 'purpose', 'sampling_start_date', 'sampling_date_precision',
@@ -193,7 +193,7 @@ class SesarMapper
 
 	/**
 	 * The fields StraboSamples fills automatically (shown read-only in the
-	 * mint form; also the push/fingerprint source).
+	 * mint form; also the push source).
 	 */
 	public static function ownedFields(array $s)
 	{
@@ -280,16 +280,6 @@ class SesarMapper
 			if (preg_match('/^\s*' . preg_quote(trim(self::OTHER_NAME_PREFIX), '/') . '\s+(\S+)\s*$/i', (string)$n, $m)) return $m[1];
 		}
 		return null;
-	}
-
-	/** D6: sha256 over the owned fields in a canonical order. */
-	public static function fingerprint(array $owned)
-	{
-		$canon = array();
-		foreach (self::PUSH_FIELDS as $f) {
-			$canon[$f] = array_key_exists($f, $owned) ? self::norm($f, $owned[$f]) : null;
-		}
-		return hash('sha256', json_encode($canon));
 	}
 
 	/**

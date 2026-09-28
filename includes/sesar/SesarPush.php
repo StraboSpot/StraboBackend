@@ -201,13 +201,13 @@ class SesarPush
 			$this->db->prepare_query(
 				"UPDATE strabosamples.sesar_registrations
 				    SET snapshot = $1::jsonb, snapshot_at = now(), sesar_status = COALESCE($2, sesar_status),
-				        pushed_fingerprint = $3, pushed_at = CASE WHEN $4 THEN now() ELSE pushed_at END,
-				        related_resource_id = COALESCE($5, related_resource_id),
-				        sesar_sample_id = COALESCE(sesar_sample_id, $6),
-				        field_flags = $7::jsonb, updated_at = now()
-				  WHERE pkey = $8",
+				        pushed_at = CASE WHEN $3 THEN now() ELSE pushed_at END,
+				        related_resource_id = COALESCE($4, related_resource_id),
+				        sesar_sample_id = COALESCE(sesar_sample_id, $5),
+				        field_flags = $6::jsonb, updated_at = now()
+				  WHERE pkey = $7",
 				array(json_encode($rec), isset($rec['metadata_store_status']) ? $rec['metadata_store_status'] : null,
-				      SesarMapper::fingerprint($x['ours']), empty($x['patch']) ? 'f' : 't', $rrId,
+				      empty($x['patch']) ? 'f' : 't', $rrId,
 				      (isset($rec['sample_id']) && is_numeric($rec['sample_id'])) ? (int)$rec['sample_id'] : null,
 				      $flags === null ? null : json_encode(array_values($flags)),
 				      (int)$x['reg']->pkey)

@@ -191,8 +191,8 @@ check('SESAR now holds the values', atSesar('10.58052/IEFAK0101')['name'] === 'M
 	&& atSesar('10.58052/IEFAK0101')['sample_description'] === 'Edited after the review opened');
 $r = reg('sesarpush-m', $A);
 $snap = json_decode($r->snapshot, true);
-check('snapshot = SESAR answer, list-only keys kept, pushed_at + fingerprint set', $snap['name'] === 'Minted, renamed'
-	&& $snap['external_sample_id'] === 'sesarpush-m' && $r->pushed_at !== null && strlen((string)$r->pushed_fingerprint) === 64, $snap);
+check('snapshot = SESAR answer, list-only keys kept, pushed_at set', $snap['name'] === 'Minted, renamed'
+	&& $snap['external_sample_id'] === 'sesarpush-m' && $r->pushed_at !== null, $snap);
 check('status after the push: not changed', $push->status($A, 'sesarpush-m')['changed'] === false);
 
 // ===========================================================================
