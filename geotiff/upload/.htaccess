@@ -1,0 +1,3 @@
+# The GeoTIFF and map folders must not be browsable. A map's name is what
+# grants access to it (tiles, download), so a listing exposes private maps.
+Options -Indexes
