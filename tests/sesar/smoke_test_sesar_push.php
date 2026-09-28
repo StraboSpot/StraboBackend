@@ -245,6 +245,26 @@ check('our parent is registered, SESAR has none -> changed: Parent IGSN', $s['fi
 $push->apply($A, 'sesarpush-kid', array('mode' => 'bulk'));
 check('parent_sample sent as the parent registration IGSN', atSesar('10.58052/IEFAK0105')['parent_sample'] === '10.58052/IEFAK0101');
 
+// The parent's IGSN FIELD holds a well-formed IGSN SESAR does not know (no
+// registration here): status and the send review must agree.
+mk('sesarpush-ghostdad', $A, array('name' => 'Ghost dad', 'igsn' => '10.58052/IEFAK0999'));
+mk('sesarpush-kid2', $A, array('name' => 'Kid 2', 'igsn' => '10.58052/IEFAK0107', 'parent' => 'sesarpush-ghostdad'));
+$fake->seedSample('10.58052/IEFAK0107', array_merge($base, array('name' => 'Kid 2', 'external_sample_id' => 'sesarpush-kid2')));
+track('sesarpush-kid2', $A, '10.58052/IEFAK0107', 'minted');
+$s = $push->status($A, 'sesarpush-kid2');
+$p = $push->preview($A, 'sesarpush-kid2');
+check('parent IGSN field unknown to SESAR: status says not changed, as the review has nothing to send',
+	$s['changed'] === false && $s['fields'] === array() && $p['rows'] === array(), array($s, $p['rows']));
+// The same field holding an IGSN SESAR knows: status stays quiet (no SESAR call), the review sends it.
+$fake->seedSample('10.58052/IEFAK0999', array_merge($base, array('name' => 'Ghost dad')));
+$s = $push->status($A, 'sesarpush-kid2');
+$p = $push->preview($A, 'sesarpush-kid2');
+check('parent IGSN field known to SESAR but not linked here: the review still offers it',
+	$s['changed'] === false && count($p['rows']) === 1 && $p['rows'][0]['field'] === 'parent_sample' && $p['rows'][0]['send'] === '10.58052/IEFAK0999', array($s, $p['rows']));
+$push->apply($A, 'sesarpush-kid2', array('mode' => 'bulk'));
+$s = $push->status($A, 'sesarpush-kid2');
+check('after sending: parent stored at SESAR, status not changed', atSesar('10.58052/IEFAK0107')['parent_sample'] === '10.58052/IEFAK0999' && $s['changed'] === false, $s);
+
 // ===========================================================================
 section('link back (minted IGSN without one)');
 $fake->seedSample('10.58052/IEFAK0106', array_merge($base, array('name' => 'No link', 'external_sample_id' => 'sesarpush-nl')));

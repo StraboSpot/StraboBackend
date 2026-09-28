@@ -521,6 +521,18 @@ class SesarMint
 	}
 
 	/**
+	 * The parent's IGSN only when StraboSpot holds its registration (certain
+	 * without asking SESAR), else null. For status checks that must agree
+	 * with what a send (which verifies the parent's IGSN field) would do.
+	 */
+	public function registeredParentIgsn(array $v)
+	{
+		if (!isset($v['parent_sample_id']) || $v['parent_sample_id'] === null) return null;
+		$p = $this->parentFacts($v['parent_sample_id'], (int)$v['parent_userpkey']);
+		return ($p !== null && $p['reg_igsn'] !== null) ? (string)$p['reg_igsn'] : null;
+	}
+
+	/**
 	 * D2 link back: the id of the related resource pointing at the sample's
 	 * StraboSpot page, created now or reused (SESAR allows one resource per
 	 * URI). Throws SesarError.

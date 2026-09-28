@@ -300,10 +300,16 @@ class SesarPush
 		);
 	}
 
-	/** Owned fields as this row may send them (P3: no external_sample_id on linked rows). */
+	/**
+	 * Owned fields as this row may send them (P3: no external_sample_id on
+	 * linked rows). Without $lookup (status: no SESAR call) the parent counts
+	 * only when StraboSpot holds its registration. Text in the parent's IGSN
+	 * field is unknown until a send verifies it, so status never reports a
+	 * parent change that the send would then drop (a badge nothing clears).
+	 */
 	private function ours(array $v, $reg, $lookup)
 	{
-		$v['parent_igsn'] = $this->mint->parentIgsnFor($v, $lookup);
+		$v['parent_igsn'] = $lookup ? $this->mint->parentIgsnFor($v, true) : $this->mint->registeredParentIgsn($v);
 		$ours = SesarMapper::ownedFields($v);
 		if ($reg->origin === 'linked') unset($ours['external_sample_id']);
 		return $ours;
