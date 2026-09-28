@@ -8,8 +8,14 @@
  *                  Reads SESAR first (may this account ask? already pending?),
  *                  then: what deactivation means, SESAR's reason, type the
  *                  IGSN to confirm. reg = an orphan row (sample deleted).
+ *                  Opening it never changes anything: a request that seems
+ *                  to be waiting at SESAR is recorded only when the user
+ *                  presses "Show as requested".
  *              SesarDeactivate.check({ sampleId | reg }) -> Promise
  *                  "Check with SESAR now" for a pending request.
+ *              SesarDeactivate.release({ sampleId | reg }) -> Promise
+ *                  "Show as active again": takes back a request recorded
+ *                  with "Show as requested" (never one sent from here).
  *              SesarDeactivate.keep(reg) -> Promise
  *                  "Keep" an orphan IGSN (stop listing it).
  *
@@ -100,6 +106,7 @@
         var act = t.getAttribute('data-act');
         if (act === 'close') return close();
         if (act === 'send') return send();
+        if (act === 'mark') return mark();
     }
 
     // ------------------------------------------------------------------
@@ -118,9 +125,19 @@
             if (!j.ok) { st.phase = 'done'; body('<div class="sm-msg err">' + esc(j.message || 'Something went wrong.') + '</div>'); closeFoot(); return; }
             st.p = j.preview;
             document.getElementById('sd7-env').hidden = st.p.environment !== 'sandbox';
+            if (st.p.state === 'pending') {
+                // Nothing was recorded: the user decides whether StraboSpot shows it as requested.
+                st.phase = 'pending';
+                body('<div class="sm-msg">' + esc(st.p.message) + '</div>'
+                    + '<p>If you did ask SESAR to deactivate ' + link(st.p.landing_url, st.p.igsn) + ', StraboSpot can show it as requested.'
+                    + ' Changes are then no longer sent to it, and Check with SESAR shows the decision. You can take this back at any time.</p>');
+                foot('<span class="sm-count"></span><button type="button" class="sm-btn sm-quiet" data-act="close">Close</button>'
+                    + '<button type="button" class="sm-btn" data-act="mark">Show as requested</button>');
+                return;
+            }
             if (st.p.state !== 'ready') {
                 st.phase = 'done';
-                st.changed = true;   // the page should show the recorded state
+                st.changed = true;   // deactivated at SESAR: the page should show the recorded state
                 body('<div class="sm-msg">' + esc(st.p.message) + '</div>');
                 closeFoot();
                 return;
@@ -209,8 +226,23 @@
         });
     }
 
+    function mark() {
+        if (!st || st.phase !== 'pending') return;
+        st.phase = 'sending';
+        foot('<span class="sm-count">Checking with SESAR…</span>');
+        post(merge({ action: 'mark' }, target(st.opts))).then(function (j) {
+            if (!st) return;
+            st.phase = 'done';
+            if (!j.ok) { body('<div class="sm-msg err">' + esc(j.message || 'Something went wrong.') + '</div>'); closeFoot(); return; }
+            st.changed = true;
+            body('<div class="sm-msg ok">' + esc(j.result.message) + '</div>');
+            closeFoot();
+        });
+    }
+
     function check(opts) { return post(merge({ action: 'check' }, target(opts))); }
+    function release(opts) { return post(merge({ action: 'release' }, target(opts))); }
     function keep(reg) { return post({ action: 'keep', reg: reg }); }
 
-    window.SesarDeactivate = { open: open, check: check, keep: keep };
+    window.SesarDeactivate = { open: open, check: check, release: release, keep: keep };
 })();

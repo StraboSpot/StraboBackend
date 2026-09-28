@@ -449,6 +449,8 @@ if (!$notFound) {
             'requested_at' => $sesarReg->deactivation_requested_at ? date('c', strtotime($sesarReg->deactivation_requested_at)) : null,
             'declined_at'  => ($sesarReg->state === 'active' && $sesarReg->deactivation_declined_at) ? date('c', strtotime($sesarReg->deactivation_declined_at)) : null,
             'can_check'    => $sesarPilot,
+            // Recorded with "Show as requested" (no reason: not sent from here); the owner may take it back.
+            'can_release'  => $sesarPilot && $sesarReg->state === 'deactivation_requested' && $sesarReg->deactivation_reason === null,
         ) : null,
         'can_pull'    => $sesarPilot && ($sesarReg || in_array($igsnKind['kind'], array('sesar', 'doi'), true)),
         'record'      => (!$anonymous && is_array($sesarSnap)) ? SesarPull::summary($sesarSnap) : null,
@@ -1832,10 +1834,15 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             var dh = '<div class="sd-sesar-deact" id="sd-sesar-deact">';
             if (d.requested) {
                 var reqAt = d.requested_at ? parsePgTimestamp(d.requested_at) : null;
-                dh += '<div class="sd-sesar-pending"><strong>Deactivation requested</strong>' + (reqAt ? ' on ' + escapeHtml(reqAt.toLocaleDateString()) : '')
-                    + (d.reason ? ' (' + escapeHtml(d.reason) + ')' : '') + '. A SESAR curator reviews it; SESAR emails you with the decision.'
-                    + (d.can_check ? '<br><a class="sd-action-btn outline" href="#" id="sd-deact-check" style="margin-top:0.5em">Check with SESAR now</a>'
-                        + ' <span id="sd-deact-msg"></span>' : '') + '</div>';
+                dh += '<div class="sd-sesar-pending"><strong>Deactivation requested</strong>'
+                    + (d.can_release
+                        ? ' (shown here' + (reqAt ? ' since ' + escapeHtml(reqAt.toLocaleDateString()) : '') + '; the request was not sent from StraboSpot).'
+                        : (reqAt ? ' on ' + escapeHtml(reqAt.toLocaleDateString()) : '') + (d.reason ? ' (' + escapeHtml(d.reason) + ')' : '') + '.')
+                    + ' A SESAR curator reviews it; SESAR emails you with the decision.'
+                    + (d.can_check ? '<div class="sd-sesar-btns" style="margin-top:0.6em"><a class="sd-action-btn outline" href="#" id="sd-deact-check">Check with SESAR now</a>'
+                        + (d.can_release ? '<a class="sd-action-btn outline" href="#" id="sd-deact-release"'
+                            + ' title="No deactivation request is waiting at SESAR after all: show this IGSN as active again. Nothing is sent to SESAR.">Show as active again</a>' : '')
+                        + '</div><div id="sd-deact-msg" style="margin-top:0.4em"></div>' : '') + '</div>';
             } else if (d.declined_at) {
                 dh += '<p>SESAR declined the deactivation request on ' + escapeHtml(parsePgTimestamp(d.declined_at).toLocaleDateString()) + '; the IGSN stays active.</p>';
             }
@@ -1863,6 +1870,17 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
                     var msg = document.getElementById('sd-deact-msg');
                     if (!r || !r.ok) { msg.textContent = (r && r.message) || 'Could not check. Please try again.'; return; }
                     if (r.result.state === 'requested') { msg.textContent = r.result.message; return; }
+                    window.location.reload();
+                });
+            });
+            var dRel = document.getElementById('sd-deact-release');
+            if (dRel) dRel.addEventListener('click', function(e) {
+                e.preventDefault();
+                if (dRel.dataset.busy) return;
+                dRel.dataset.busy = '1';
+                SesarDeactivate.release({ sampleId: sample.id }).then(function(r) {
+                    delete dRel.dataset.busy;
+                    if (!r || !r.ok) { document.getElementById('sd-deact-msg').textContent = (r && r.message) || 'Could not change it. Please try again.'; return; }
                     window.location.reload();
                 });
             });

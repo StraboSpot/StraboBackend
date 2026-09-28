@@ -174,12 +174,37 @@ check('pulled (linked) managed IGSN may be deactivated (Q3); duplicate list sent
 	$r['state'] === 'requested' && json_decode(end($calls)['body'], true) === array('deactivate_reason' => 'duplicate igsn', 'duplicate_igsns' => '10.58052/IEFAK0201')
 	&& row('sesardeact-l', $A)->deactivation_detail === '10.58052/IEFAK0201', end($calls));
 
-// A request already pending at SESAR (made on SESAR's site) is adopted, not an error.
+// A request that seems to be pending at SESAR (made on SESAR's site): the dialog
+// only reports it; the owner records it, and may take that back.
 mk('sesardeact-p', $A, '10.58052/IEFAK0205'); track('sesardeact-p', $A, '10.58052/IEFAK0205', 'minted');
+$tp = array('sample_id' => 'sesardeact-p');
+$e = err(function () use ($deact, $A, $tp) { $deact->markPending($A, $tp); });
+check('Show as requested while SESAR would take a request -> 409, row untouched', $e !== null && $e->status === 409
+	&& row('sesardeact-p', $A)->state === 'active', $e ? $e->getMessage() : null);
 $fake->editAtSesar('10.58052/IEFAK0205', array('deactivation_requested' => array('deactivate_reason' => 'other')));
-$p = $deact->preview($A, array('sample_id' => 'sesardeact-p'));
-check('already pending at SESAR -> preview says so, row adopted (reason unknown)', $p['state'] === 'pending'
-	&& row('sesardeact-p', $A)->state === 'deactivation_requested' && row('sesardeact-p', $A)->deactivation_reason === null, $p);
+$before = row('sesardeact-p', $A);
+$p = $deact->preview($A, $tp);
+$after = row('sesardeact-p', $A);
+check('seems pending at SESAR -> the dialog says so and changes NOTHING', $p['state'] === 'pending' && strpos($p['message'], 'Nothing has changed') !== false
+	&& $after->state === 'active' && $after->updated_at === $before->updated_at && $after->deactivation_requested_at === null, $p);
+check('Send to SESAR still allowed after only opening the dialog', $push->status($A, 'sesardeact-p')['pushable'] === true);
+$e = err(function () use ($deact, $A, $tp) { $deact->release($A, $tp); });
+check('Show as active again with nothing recorded -> 409', $e !== null && $e->status === 409);
+$r = $deact->markPending($A, $tp);
+check('Show as requested: row recorded, reason unknown, nothing sent to SESAR', $r['state'] === 'requested'
+	&& row('sesardeact-p', $A)->state === 'deactivation_requested' && row('sesardeact-p', $A)->deactivation_reason === null
+	&& row('sesardeact-p', $A)->deactivation_requested_at !== null && count(deactCalls()) === 2, $r);
+$r = $deact->release($A, $tp);
+$row = row('sesardeact-p', $A);
+check('Show as active again: back to active, no declined date, Send to SESAR allowed', $r['state'] === 'active' && $row->state === 'active' && $row->active === 't'
+	&& $row->deactivation_requested_at === null && $row->deactivation_declined_at === null && $push->status($A, 'sesardeact-p')['pushable'] === true, $r);
+$e = err(function () use ($deact, $A) { $deact->release($A, array('sample_id' => 'sesardeact-l')); });
+check('a request SENT from StraboSpot is never released -> 409, row stays requested', $e !== null && $e->status === 409
+	&& strpos($e->getMessage(), 'until SESAR decides') !== false && row('sesardeact-l', $A)->state === 'deactivation_requested', $e ? $e->getMessage() : null);
+$e = err(function () use ($deact, $B, $tp) { $deact->release($B, $tp); });
+check("someone else's sample -> 404 for mark and release", $e !== null && $e->status === 404
+	&& err(function () use ($deact, $B, $tp) { $deact->markPending($B, $tp); })->status === 404);
+$deact->markPending($A, $tp);   // recorded again: the checks and sweeps below expect it pending
 
 // ===========================================================================
 section('check with SESAR');
@@ -311,6 +336,13 @@ $r = http('POST', '/sesar_deactivate.php', $pilot, array('action' => 'request', 
 check("pilot asking about someone else's sample -> 404", $r['status'] === 404 && $r['json']['error'] === 'not_found', $r['body']);
 $r = http('POST', '/sesar_deactivate.php', $pilot, array('action' => 'keep', 'reg' => $reg2));
 check("pilot keeping someone else's orphan -> 404", $r['status'] === 404, $r['body']);
+foreach (array('mark', 'release') as $act) {
+	$was = row('sesardeact-l', $A);
+	$r = http('POST', '/sesar_deactivate.php', $pilot, array('action' => $act, 'sample_id' => 'sesardeact-l'));
+	$now = row('sesardeact-l', $A);
+	check("pilot: $act on someone else's sample -> 404, row untouched", $r['status'] === 404 && $r['json']['error'] === 'not_found'
+		&& $now->state === $was->state && $now->updated_at === $was->updated_at, $r['body']);
+}
 
 } finally {
 	SesarAccess::setEnvironmentForTests(null);

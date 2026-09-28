@@ -12,8 +12,18 @@
  *                active FALSE), or back to active when SESAR declined.
  *
  *              preview()   signed-in read before the dialog: may this account
- *                          ask (SESAR's can_deactivate, Q3)? A request already
- *                          pending at SESAR is adopted; a 410 is recorded.
+ *                          ask (SESAR's can_deactivate, Q3)? Writes nothing
+ *                          but a 410 (markGone). A request that seems to be
+ *                          pending at SESAR already is only REPORTED (Jason
+ *                          2026-09-27: opening a dialog never changes a row).
+ *              markPending()  "Show as requested": the owner's choice to
+ *                          record such a request (reason NULL = unknown).
+ *              release()   "Show as active again": undoes a row recorded
+ *                          without a reason. can_deactivate false is the only
+ *                          evidence for it (SESAR lists no pending requests),
+ *                          so the owner can always take it back. Requests
+ *                          sent from here (they carry a reason) stay until
+ *                          SESAR decides.
  *              request()   type-the-IGSN confirmation, SESAR's reason rules,
  *                          POST .../deactivate/. Works for a sample or for an
  *                          orphan row whose sample was deleted (Q2).
@@ -93,6 +103,8 @@ class SesarDeactivate
 	 * @param array $target {sample_id} or {reg} (an orphan row's pkey)
 	 * @return array {state: ready|pending|deactivated, igsn, landing_url, environment,
 	 *                name, orphan, reasons{value: label}, message}
+	 *   pending = SESAR is not taking a request for it now; nothing recorded
+	 *   (markPending() records it when the owner says so).
 	 */
 	public function preview($userpkey, array $target)
 	{
@@ -110,13 +122,69 @@ class SesarDeactivate
 			if (!$det['can_edit']) {
 				throw new SesarError(403, 'Your SESAR account cannot ask for ' . $reg->igsn . ' to be deactivated: it belongs to another SESAR account.');
 			}
-			$this->markRequested($reg, null, null);
 			$out['state'] = 'pending';
-			$out['message'] = 'A deactivation request for ' . $reg->igsn . ' is already waiting at SESAR. StraboSpot now shows it as requested.';
+			$out['message'] = 'SESAR is not taking a deactivation request for ' . $reg->igsn . ' right now. That usually means a request is already waiting there'
+				. ' (one made on SESAR\'s own site, for example). Nothing has changed in StraboSpot.';
 			return $out;
 		}
 		$out['state'] = 'ready';
 		return $out;
+	}
+
+	/**
+	 * "Show as requested": record a request that seems to be pending at SESAR
+	 * (SESAR is asked again first). Reason NULL = not sent from here.
+	 * @return array {ok, igsn, state: requested|deactivated, message}
+	 */
+	public function markPending($userpkey, array $target)
+	{
+		$userpkey = (int)$userpkey;
+		$reg = $this->target($userpkey, $target);
+		$this->assertAskable($reg);
+		$lockKey = $reg->orphan ? 'reg:' . $reg->pkey : (string)$reg->sample_id;
+		if (!SesarDb::lock($this->db, $userpkey, $lockKey)) {
+			throw new SesarError(409, 'This IGSN is busy with another SESAR action. Please wait a moment and try again.', array('busy' => array('busy')));
+		}
+		try {
+			$det = $this->readDetail($userpkey, $reg);
+			if ($det === 'gone') {
+				return array('ok' => true, 'igsn' => $reg->igsn, 'state' => 'deactivated', 'message' => $reg->igsn . ' is already deactivated at SESAR.');
+			}
+			if ($det['can_deactivate']) {
+				throw new SesarError(409, 'SESAR has no deactivation request waiting for ' . $reg->igsn . '. Use Request deactivation to ask for one.');
+			}
+			if (!$det['can_edit']) {
+				throw new SesarError(403, 'Your SESAR account cannot ask for ' . $reg->igsn . ' to be deactivated: it belongs to another SESAR account.');
+			}
+			$this->markRequested($reg, null, null);
+			return array('ok' => true, 'igsn' => $reg->igsn, 'state' => 'requested',
+				'message' => $reg->igsn . ' is now shown as deactivation requested. Check with SESAR shows the decision; Show as active again takes this back.');
+		} finally {
+			SesarDb::unlock($this->db, $userpkey, $lockKey);
+		}
+	}
+
+	/**
+	 * "Show as active again": takes back a row recorded WITHOUT a reason
+	 * (markPending, or request() meeting can_deactivate false). Nothing is
+	 * sent to SESAR. A request sent from here is never released this way.
+	 * @return array {ok, igsn, state: active, message}
+	 */
+	public function release($userpkey, array $target)
+	{
+		$userpkey = (int)$userpkey;
+		$reg = $this->target($userpkey, $target);
+		if ($reg->state !== 'deactivation_requested') throw new SesarError(409, 'There is no deactivation request shown for ' . $reg->igsn . '.');
+		if ($reg->deactivation_reason !== null) {
+			throw new SesarError(409, 'The deactivation request for ' . $reg->igsn . ' was sent to SESAR from StraboSpot, so it stays until SESAR decides. Use Check with SESAR.');
+		}
+		$this->db->prepare_query(
+			"UPDATE strabosamples.sesar_registrations
+			    SET state = 'active', deactivation_requested_at = NULL, deactivation_detail = NULL, updated_at = now()
+			  WHERE pkey = $1 AND active AND state = 'deactivation_requested' AND deactivation_reason IS NULL",
+			array((int)$reg->pkey)
+		);
+		return array('ok' => true, 'igsn' => $reg->igsn, 'state' => 'active', 'message' => $reg->igsn . ' is shown as active again.');
 	}
 
 	/**
@@ -293,11 +361,11 @@ class SesarDeactivate
 	// Orphans: tracked IGSNs whose sample was deleted (Q2)
 	// =======================================================================
 
-	/** @return array[] {reg, igsn, landing_url, state, requested_at, sample_id, origin} */
+	/** @return array[] {reg, igsn, landing_url, state, requested_at, sample_id, origin, releasable} */
 	public function orphans($userpkey)
 	{
 		$rows = $this->db->get_results_prepared(
-			"SELECT r.pkey, r.igsn, r.state, r.origin, r.sample_id, r.deactivation_requested_at, r.snapshot->>'name' AS name
+			"SELECT r.pkey, r.igsn, r.state, r.origin, r.sample_id, r.deactivation_requested_at, r.deactivation_reason, r.snapshot->>'name' AS name
 			   FROM strabosamples.sesar_registrations r
 			  WHERE r.sample_userpkey = $1 AND r.environment = $2 AND r.active AND r.igsn IS NOT NULL
 			    AND r.state IN ('active', 'deactivation_requested') AND r.orphan_kept_at IS NULL
@@ -316,6 +384,8 @@ class SesarDeactivate
 				'origin'       => (string)$r->origin,
 				'sample_id'    => (string)$r->sample_id,
 				'requested_at' => $r->deactivation_requested_at !== null ? date('c', strtotime($r->deactivation_requested_at)) : null,
+				// Recorded without a reason (not sent from here): the owner may take it back.
+				'releasable'   => $r->state === 'deactivation_requested' && $r->deactivation_reason === null,
 			);
 		}
 		return $out;
@@ -339,7 +409,7 @@ class SesarDeactivate
 	{
 		if (isset($t['reg']) && (string)$t['reg'] !== '') {
 			$reg = $this->db->get_row_prepared(
-				"SELECT r.pkey, r.sample_id, r.igsn, r.state, r.access, r.origin, r.snapshot->>'name' AS name,
+				"SELECT r.pkey, r.sample_id, r.igsn, r.state, r.access, r.origin, r.deactivation_reason, r.snapshot->>'name' AS name,
 				        EXISTS (SELECT 1 FROM strabosamples.samples s WHERE s.id = r.sample_id AND s.userpkey = r.sample_userpkey) AS has_sample
 				   FROM strabosamples.sesar_registrations r
 				  WHERE r.pkey = $1 AND r.sample_userpkey = $2 AND r.environment = $3 AND r.active",
@@ -353,7 +423,7 @@ class SesarDeactivate
 		$s = $this->db->get_row_prepared("SELECT name FROM strabosamples.samples WHERE id = $1 AND userpkey = $2", array($sampleId, $userpkey));
 		if ($s === null) throw new SesarError(404, 'This is not one of your samples.');
 		$reg = $this->db->get_row_prepared(
-			"SELECT pkey, sample_id, igsn, state, access, origin FROM strabosamples.sesar_registrations
+			"SELECT pkey, sample_id, igsn, state, access, origin, deactivation_reason FROM strabosamples.sesar_registrations
 			  WHERE sample_id = $1 AND sample_userpkey = $2 AND environment = $3 AND active",
 			array($sampleId, $userpkey, $this->env)
 		);
@@ -391,7 +461,7 @@ class SesarDeactivate
 		             'can_edit' => self::truthy(isset($rec['can_edit']) ? $rec['can_edit'] : null));
 	}
 
-	/** $reason null = adopted from SESAR (a request already pending there, reason unknown). */
+	/** $reason null = not sent from here (a request that seems to be pending at SESAR; release() can take it back). */
 	private function markRequested($reg, $reason, $detail)
 	{
 		$this->db->prepare_query(

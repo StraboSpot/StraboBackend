@@ -10,7 +10,9 @@
  *              A target is {sample_id} or {reg} (an orphan row: its sample was
  *              deleted).
  *              Actions:
- *                preview  {target}                          -> {ok, preview}
+ *                preview  {target}                          -> {ok, preview}   (writes nothing)
+ *                mark     {target}                          -> {ok, result}    ("Show as requested")
+ *                release  {target}                          -> {ok, result}    ("Show as active again")
  *                request  {target, reason, detail, confirm} -> {ok, result}
  *                check    {target}                          -> {ok, result}
  *                keep     {reg}                             -> {ok, result}
@@ -84,6 +86,12 @@ try {
 		case 'request':
 			sesar_deact_out(200, array('ok' => true, 'result' => $deact->request($userpkey, $target, array(
 				'reason' => $str('reason'), 'detail' => $str('detail'), 'confirm' => $str('confirm')))));
+			break;
+		case 'mark':
+			sesar_deact_out(200, array('ok' => true, 'result' => $deact->markPending($userpkey, $target)));
+			break;
+		case 'release':
+			sesar_deact_out(200, array('ok' => true, 'result' => $deact->release($userpkey, $target)));
 			break;
 		case 'check':
 			sesar_deact_out(200, array('ok' => true, 'result' => $deact->check($userpkey, $target)));

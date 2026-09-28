@@ -867,6 +867,8 @@ body { overflow-x: clip; overflow-y: visible; }
         document.getElementById('si-orphan-rows').innerHTML = ORPHANS.map(function (o, i) {
             var acts = o.state === 'deactivation_requested'
                 ? '<span class="si-pill requested">Deactivation requested</span> <button type="button" class="si-btn si-quiet" data-oact="check" data-i="' + i + '">Check with SESAR</button>'
+                  + (o.releasable ? '<button type="button" class="si-btn si-quiet" data-oact="release" data-i="' + i + '"'
+                      + ' title="No deactivation request is waiting at SESAR after all: show this IGSN as active again. Nothing is sent to SESAR.">Show as active again</button>' : '')
                 : '<button type="button" class="si-btn si-quiet" data-oact="keep" data-i="' + i + '" title="The specimen still exists: stop listing this IGSN here">Keep</button>'
                   + '<button type="button" class="si-btn" data-oact="deact" data-i="' + i + '">Request deactivation</button>';
             return '<tr><td><a class="si-igsn" href="' + esc(o.landing_url) + '" target="_blank" rel="noopener">' + esc(o.igsn) + '</a>'
@@ -884,7 +886,8 @@ body { overflow-x: clip; overflow-y: visible; }
             return;
         }
         b.disabled = true;
-        (act === 'keep' ? SesarDeactivate.keep(o.reg) : SesarDeactivate.check({ reg: o.reg })).then(function (j) {
+        (act === 'keep' ? SesarDeactivate.keep(o.reg)
+            : (act === 'release' ? SesarDeactivate.release({ reg: o.reg }) : SesarDeactivate.check({ reg: o.reg }))).then(function (j) {
             b.disabled = false;
             if (!j || !j.ok) { msg.textContent = (j && j.message) || 'Something went wrong.'; return; }
             if (act === 'check' && j.result.state === 'requested') { msg.textContent = j.result.message; return; }
