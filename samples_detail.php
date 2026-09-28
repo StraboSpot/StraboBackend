@@ -2128,7 +2128,6 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         }
 
         var fieldsHtml = '';
-        if (link.subsystem !== 'field') fieldsHtml += field('Reference ID', link.reference_id);
         if (link.project_name)  fieldsHtml += field('Project',    link.project_name);
         if (link.dataset_name)  fieldsHtml += field('Dataset',    link.dataset_name);
         if (link.experiment_id) fieldsHtml += field('Experiment', link.experiment_id);
