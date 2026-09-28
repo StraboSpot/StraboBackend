@@ -141,10 +141,23 @@ if ($hasSesar) {
 	mk('pubpage-igsn');
 	$db->prepare_query("UPDATE strabosamples.samples SET igsn = '10.58052/IEXXX0001' WHERE id = 'pubpage-igsn' AND userpkey = $1", array($OWNER));
 	$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, origin, state, created_by)
-		VALUES ('pubpage-igsn', $1, 'sandbox', '10.58052/IEXXX0001', 'minted', 'active', $1)", array($OWNER));
+		VALUES ('pubpage-igsn', $1, 'production', '10.58052/IEXXX0001', 'minted', 'active', $1)", array($OWNER));
 	mk('pubpage-igsn-gone');
 	$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, origin, state, active, created_by)
-		VALUES ('pubpage-igsn-gone', $1, 'sandbox', '10.58052/IEXXX0002', 'minted', 'deactivated', FALSE, $1)", array($OWNER));
+		VALUES ('pubpage-igsn-gone', $1, 'production', '10.58052/IEXXX0002', 'minted', 'deactivated', FALSE, $1)", array($OWNER));
+	// Only production mints count: sandbox and pulled / batch-linked rows stay private.
+	mk('pubpage-igsn-asked');
+	$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, origin, state, created_by)
+		VALUES ('pubpage-igsn-asked', $1, 'production', '10.58052/IEXXX0003', 'minted', 'deactivation_requested', $1)", array($OWNER));
+	mk('pubpage-igsn-sandbox');
+	$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, origin, state, created_by)
+		VALUES ('pubpage-igsn-sandbox', $1, 'sandbox', '10.58052/IEXXX0004', 'minted', 'active', $1)", array($OWNER));
+	mk('pubpage-igsn-pulled');
+	$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, origin, access, state, created_by)
+		VALUES ('pubpage-igsn-pulled', $1, 'production', '10.58052/IEXXX0005', 'linked', 'managed', 'active', $1)", array($OWNER));
+	mk('pubpage-igsn-theirs');
+	$db->prepare_query("INSERT INTO strabosamples.sesar_registrations (sample_id, sample_userpkey, environment, igsn, origin, access, state, created_by)
+		VALUES ('pubpage-igsn-theirs', $1, 'production', '10.58052/IEXXX0006', 'linked', 'readonly', 'active', $1)", array($OWNER));
 }
 
 // ===========================================================================
@@ -164,6 +177,11 @@ if ($hasSesar) {
 	$st = samples_public_status($db, 'pubpage-igsn', $OWNER);
 	check('registered IGSN -> public via IGSN only', $st !== null && $st['via_igsn'] && !$st['via_project'], $st);
 	check('deactivated registration -> not public', samples_public_status($db, 'pubpage-igsn-gone', $OWNER) === null);
+	$st = samples_public_status($db, 'pubpage-igsn-asked', $OWNER);
+	check('deactivation requested (still public at SESAR) -> public via IGSN', $st !== null && $st['via_igsn']);
+	check('sandbox IGSN -> not public', samples_public_status($db, 'pubpage-igsn-sandbox', $OWNER) === null);
+	check('pulled IGSN (linked, managed) -> not public', samples_public_status($db, 'pubpage-igsn-pulled', $OWNER) === null);
+	check("a colleague's IGSN (linked, read-only) -> not public", samples_public_status($db, 'pubpage-igsn-theirs', $OWNER) === null);
 }
 
 // ===========================================================================
@@ -207,6 +225,10 @@ if ($hasSesar) {
 		&& $p['sample']['latitude'] === 38.95 && $p['sample']['description'] === 'Public page fixture');
 	check('hidden: notes, custom fields, subsystem blobs (SESAR never had them)', $p['sample']['notes'] === null && $p['sample']['custom_data'] === null
 		&& $p['sample']['field_data'] === null && strpos($r['body'], 'secret notes') === false && strpos($r['body'], 'LC-pubpage-igsn') === false);
+	foreach (array('pubpage-igsn-sandbox' => 'sandbox IGSN', 'pubpage-igsn-pulled' => 'pulled IGSN', 'pubpage-igsn-theirs' => "colleague's IGSN") as $id => $what) {
+		$r = page($id);
+		check("$what: the page answers 404 to a logged-out visitor", $r['status'] === 404 && strpos($r['body'], 'Public page fixture') === false, $r['status']);
+	}
 }
 
 // ===========================================================================

@@ -19,6 +19,13 @@
  *                             SESAR / DataCite, and the SESAR record links
  *                             back to this page. The table arrives with the
  *                             IGSN feature; until then this clause is off.
+ *                             Only rows StraboSpot MINTED on PRODUCTION count
+ *                             (Jason 2026-09-27): sandbox IGSNs are test
+ *                             records, and pulled / batch-linked rows
+ *                             (origin 'linked': drafts, a colleague's IGSN,
+ *                             values that differ from SESAR's) never made
+ *                             this sample's values public. Widen on purpose,
+ *                             never by default.
  *
  *              What the public page then shows (also decided 09-27): only
  *              what is already public. Notes and custom fields only when
@@ -57,6 +64,7 @@ if (!function_exists('samples_public_status')) {
         if (samples_public_has_sesar_table($db)) {
             $igsnSql = "EXISTS (SELECT 1 FROM strabosamples.sesar_registrations g
                                  WHERE g.sample_id = k.id AND g.sample_userpkey = k.owner
+                                   AND g.origin = 'minted' AND g.environment = 'production'
                                    AND g.active AND g.state IN ('active', 'deactivation_requested'))";
         }
         $rows = $db->get_results_prepared(
