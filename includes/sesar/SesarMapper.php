@@ -295,13 +295,15 @@ class SesarMapper
 	/**
 	 * D6: PATCH body = owned fields that differ from SESAR's current record.
 	 * Never sends lists (collectors) or user-chosen fields; never clears a
-	 * SESAR value we do not hold (lat/lon cannot be cleared at SESAR anyway).
+	 * SESAR value we do not hold (lat/lon cannot be cleared at SESAR anyway):
+	 * ownedFields always carries the latitude / longitude keys, null when the
+	 * sample has no location, so a null of ours is skipped like a missing key.
 	 */
 	public static function pushPatch(array $owned, array $sesarRecord)
 	{
 		$patch = array();
 		foreach (self::PUSH_FIELDS as $f) {
-			if (!array_key_exists($f, $owned)) continue;
+			if (!array_key_exists($f, $owned) || $owned[$f] === null) continue;
 			$theirs = isset($sesarRecord[$f]) ? $sesarRecord[$f] : null;
 			if (!self::sameValue($f, $owned[$f], $theirs)) $patch[$f] = $owned[$f];
 		}

@@ -299,6 +299,9 @@ check('push patch holds only the changed fields', array_keys($patch) === array('
 check('push never sends lists or user-chosen fields', !isset($patch['collectors']) && !isset($patch['object_type']) && !isset($patch['sesar_code']));
 $after = $client->updateSample($acc, $rec['igsn'], $patch);
 check('after PATCH the patch is empty again', SesarMapper::pushPatch($o3, $after) === array(), SesarMapper::pushPatch($o3, $after));
+$noLoc = SesarMapper::ownedFields(array('id' => $sample['id'], 'name' => $sample['name']));
+$patch = SesarMapper::pushPatch($noLoc, $after);
+check('a sample without a location never clears the location SESAR holds', !array_key_exists('latitude', $patch) && !array_key_exists('longitude', $patch), $patch);
 
 // ===========================================================================
 section('SesarMapper: D5 pull proposals');
