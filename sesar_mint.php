@@ -45,6 +45,12 @@ session_write_close();   // SESAR calls can take seconds; do not hold the sessio
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
 	sesar_mint_out(405, array('ok' => false, 'error' => 'method', 'message' => 'POST only.'));
 }
+// JSON only: a form on another site cannot send this content type, so it
+// cannot act for a logged-in user (the page scripts always send it).
+$ctype = isset($_SERVER['CONTENT_TYPE']) ? strtolower(trim(explode(';', (string)$_SERVER['CONTENT_TYPE'])[0])) : '';
+if ($ctype !== 'application/json') {
+	sesar_mint_out(415, array('ok' => false, 'error' => 'content_type', 'message' => 'Bad request.'));
+}
 $input = json_decode(file_get_contents('php://input'), true);
 if (!is_array($input) || !isset($input['action']) || !is_string($input['action'])) {
 	sesar_mint_out(400, array('ok' => false, 'error' => 'invalid_json', 'message' => 'Bad request.'));

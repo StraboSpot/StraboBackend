@@ -435,6 +435,30 @@ check('plan with no samples -> 400', $r['status'] === 400 && $r['json']['error']
 $r = http('POST', '/sesar_mint.php', $pilot, array('action' => 'mint', 'sample_id' => 'sesarmint-t7', 'choices' => array()));
 check("pilot minting someone else's sample -> 404, nothing sent", $r['status'] === 404 && $r['json']['error'] === 'not_found', $r['body']);
 
+section('HTTP: a form on another site cannot act for a logged-in user (JSON content type required)');
+function httpAs($path, $sid, $type, $body) {
+	$ch = curl_init('http://localhost' . $path);
+	$h = array('Cookie: PHPSESSID=' . $sid, 'Content-Type:' . ($type === null ? '' : ' ' . $type));
+	curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_CUSTOMREQUEST => 'POST', CURLOPT_TIMEOUT => 30,
+		CURLOPT_POSTFIELDS => $body, CURLOPT_HTTPHEADER => $h));
+	$out = curl_exec($ch);
+	$code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+	curl_close($ch);
+	return array('status' => $code, 'body' => $out, 'json' => json_decode($out, true));
+}
+// What a text/plain form posts: valid JSON, with the form's "=" tucked into a value.
+$forged = '{"action":"status","sample_id":"sesarmint-t7","x":"="}';
+foreach (array('/sesar_mint.php', '/sesar_pull.php', '/sesar_push.php', '/sesar_deactivate.php', '/sesar_connect.php') as $ep) {
+	$bad = array();
+	foreach (array('text/plain', 'application/x-www-form-urlencoded', 'multipart/form-data; boundary=x', null) as $type) {
+		$r = httpAs($ep, $pilot, $type, $forged);
+		if ($r['status'] !== 415 || $r['json']['error'] !== 'content_type') $bad[] = ($type === null ? 'none' : $type) . ' -> ' . $r['status'];
+	}
+	check("$ep refuses every content type a form can send (415)", empty($bad), $bad);
+	$r = httpAs($ep, $pilot, 'application/json; charset=UTF-8', '{"action":"explode"}');
+	check("$ep still takes JSON (with a charset)", $r['status'] === 400 && $r['json']['error'] === 'unknown_action', $r['body']);
+}
+
 } finally {
 	SesarAccess::setEnvironmentForTests(null);
 	cleanup();
