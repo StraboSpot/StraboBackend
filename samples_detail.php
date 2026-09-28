@@ -169,7 +169,7 @@ if (!$notFound) {
         $params = array_keys($microStraboIds);
         $placeholders = array();
         foreach ($params as $i => $_) $placeholders[] = '$' . ($i + 1);
-        $sql = "SELECT id, strabo_id, ispublic, userpkey
+        $sql = "SELECT id, strabo_id, ispublic, userpkey, name
                   FROM micro_projectmetadata
                  WHERE strabo_id IN (" . implode(',', $placeholders) . ")";
         $rows = $db->get_results_prepared($sql, $params);
@@ -194,7 +194,8 @@ if (!$notFound) {
         foreach ($params as $i => $_) $placeholders[] = '$' . ($i + 1);
         $sql = "SELECT e.uuid AS experiment_uuid, e.pkey AS experiment_pkey,
                        e.userpkey AS experiment_userpkey,
-                       COALESCE(p.ispublic, FALSE) AS project_ispublic
+                       COALESCE(p.ispublic, FALSE) AS project_ispublic,
+                       p.name AS project_name, e.id AS experiment_human_id
                   FROM straboexp.experiment e
              LEFT JOIN straboexp.project p ON p.pkey = e.project_pkey
                  WHERE e.uuid IN (" . implode(',', $placeholders) . ")";
@@ -257,6 +258,74 @@ if (!$notFound) {
             } else {
                 $l['view_unavailable'] = 'Host StraboExperimental experiment not found.';
             }
+        }
+    }
+    unset($l);
+
+    // ---- Host project / dataset names for the cards. ----
+    // Looked up live (the link rows keep only ids, and names change).
+    // Field: walk from the spot owner's User node to the spot, so a spot
+    // moved to another dataset shows where it is now. Micro / Exp: only
+    // when the viewer can reach the host (view_href set), so a private
+    // project's name stays private.
+    $fieldPairs = array();
+    foreach ($links as $l) {
+        if ($l['subsystem'] === 'field' && ctype_digit((string)$l['reference_id'])) {
+            $fieldPairs[(int)$l['reference_userpkey'] . ',' . $l['reference_id']] = true;
+        }
+    }
+    $fieldNames = array();
+    if ($fieldPairs) {
+        try {
+            $rows = $neodb->get_results(
+                "UNWIND [[" . implode('],[', array_keys($fieldPairs)) . "]] AS pr
+                 MATCH (u:User {userpkey: pr[0]})-[:HAS_PROJECT]->(p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot {id: pr[1]})
+                 RETURN pr[0] AS upk, pr[1] AS sid,
+                        coalesce(p.desc_project_name, p.name, '') AS project_name,
+                        coalesce(d.name, '') AS dataset_name"
+            );
+            foreach ((is_array($rows) ? $rows : array()) as $r) {
+                $fieldNames[(int)$r->value('upk') . '|' . $r->value('sid')] = $r;
+            }
+        } catch (\Throwable $e) {
+            $neodb->reconnect();   // a failed query leaves the Bolt connection unusable
+        }
+    }
+    $microDatasetIds = array();
+    foreach ($links as $l) {
+        if ($l['subsystem'] === 'micro' && $l['view_href'] !== null && isset($l['reference_metadata']['dataset_id'])) {
+            $microDatasetIds[(int)$l['reference_metadata']['dataset_id']] = true;
+        }
+    }
+    $microDatasetNames = array();
+    if ($microDatasetIds) {
+        $rows = $db->get_results_prepared(
+            "SELECT id, name FROM micro_datasetmetadata WHERE id = ANY($1::int[])",
+            array('{' . implode(',', array_keys($microDatasetIds)) . '}')
+        );
+        foreach ((is_array($rows) ? $rows : array()) as $r) $microDatasetNames[(int)$r->id] = $r->name;
+    }
+    foreach ($links as &$l) {
+        $l['project_name'] = null;
+        $l['dataset_name'] = null;
+        $l['experiment_id'] = null;
+        $meta = $l['reference_metadata'] ?: array();
+        if ($l['subsystem'] === 'field') {
+            $k = (int)$l['reference_userpkey'] . '|' . $l['reference_id'];
+            if (isset($fieldNames[$k])) {
+                $l['project_name'] = (string)$fieldNames[$k]->value('project_name');
+                $l['dataset_name'] = (string)$fieldNames[$k]->value('dataset_name');
+            }
+        } elseif ($l['view_href'] === null) {
+            continue;
+        } elseif ($l['subsystem'] === 'micro') {
+            $pr = $microProjectIndex[$meta['project_strabo_id'] . '|' . (int)$l['reference_userpkey']];
+            $l['project_name'] = $pr->name;
+            $did = isset($meta['dataset_id']) ? (int)$meta['dataset_id'] : 0;
+            if (isset($microDatasetNames[$did])) $l['dataset_name'] = $microDatasetNames[$did];
+        } elseif ($l['subsystem'] === 'experimental') {
+            $l['project_name'] = $expIndex[$meta['experiment_uuid']]->project_name;
+            $l['experiment_id'] = $expIndex[$meta['experiment_uuid']]->experiment_human_id;
         }
     }
     unset($l);
@@ -2358,7 +2427,6 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
     }
 
     function renderLinkCard(link) {
-        var meta = link.reference_metadata || {};
         var subData = link.subsystem === 'field'        ? (sample.field_data || {})
                     : link.subsystem === 'micro'        ? (sample.micro_data || {})
                     :                                     (sample.experimental_data || {});
@@ -2384,9 +2452,9 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
         }
 
         var fieldsHtml = '';
-        fieldsHtml += field('Reference ID', link.reference_id);
-        if (meta.project_name)  fieldsHtml += field('Project',  meta.project_name);
-        if (meta.dataset_name)  fieldsHtml += field('Dataset',  meta.dataset_name);
+        if (link.project_name)  fieldsHtml += field('Project',    link.project_name);
+        if (link.dataset_name)  fieldsHtml += field('Dataset',    link.dataset_name);
+        if (link.experiment_id) fieldsHtml += field('Experiment', link.experiment_id);
         // Field stores material_type / inplaceness_of_sample / sample_notes,
         // Micro materialtype (same names as Field); the old keys stay as a
         // fallback.
