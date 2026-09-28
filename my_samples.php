@@ -31,6 +31,7 @@ include("prepare_connections.php");
 require_once __DIR__ . "/samplesdb/services/StraboSamplesService.php";
 require_once __DIR__ . "/samplesdb/lib/vocab.php";
 require_once __DIR__ . "/includes/sesar/SesarAccess.php";
+require_once __DIR__ . "/includes/sesar/SesarMapper.php";
 
 $svc = new StraboSamplesService($db, $neodb);
 $svc->setUserpkey($userpkey);
@@ -82,6 +83,43 @@ foreach ($samples as &$s) {
         : array('field' => 0, 'micro' => 0, 'experimental' => 0);
 }
 unset($s);
+
+// IGSN row on the cards: pilot testers only until the SESAR gate opens
+// (then drop the canUse() check). An IGSN StraboSpot manages at SESAR links
+// to its SESAR page, like the IGSN field on the Sample Overview; any other
+// value in the field shows as typed.
+$showIgsn = SesarAccess::canUse($userpkey);
+if ($showIgsn) {
+    $sesarEnv = SesarAccess::environment();
+    $regRows = $db->get_results_prepared(
+        "SELECT g.sample_id, g.sample_userpkey, g.igsn
+           FROM strabosamples.sesar_registrations g
+           JOIN strabosamples.samples s
+             ON s.id = g.sample_id AND s.userpkey = g.sample_userpkey
+          WHERE g.environment = $2 AND g.active AND g.state <> 'minting'
+            AND (s.userpkey = $1
+                 OR EXISTS (
+                      SELECT 1 FROM strabosamples.sample_collaborators c
+                       WHERE c.sample_id = s.id
+                         AND c.sample_userpkey = s.userpkey
+                         AND c.collaborator_pkey = $1
+                         AND c.accepted = TRUE
+                         AND c.removed_at IS NULL
+                    ))",
+        array($userpkey, $sesarEnv)
+    );
+    $regs = array();
+    if (is_array($regRows)) {
+        foreach ($regRows as $r) $regs[$r->sample_id . '|' . (int)$r->sample_userpkey] = $r->igsn;
+    }
+    foreach ($samples as &$s) {
+        $key = $s['id'] . '|' . (int)$s['userpkey'];
+        $norm = SesarMapper::classifyIgsn(isset($s['igsn']) ? $s['igsn'] : '')['normalized'];
+        $s['igsn_url'] = (isset($regs[$key]) && $norm !== null && strtoupper($norm) === strtoupper($regs[$key]))
+            ? SesarAccess::landingUrl($regs[$key], $sesarEnv) : null;
+    }
+    unset($s);
+}
 
 // Ownership-cue enrichment: each row gets a `relationship` of
 //   - 'mine_private'    = I own it, no accepted collaborators
@@ -438,6 +476,9 @@ include("includes/mheader.php");
     color: rgba(255, 255, 255, 0.9);
     font-weight: 600;
 }
+.ms-card-meta .ms-row a { word-break: break-all; }
+.ms-sesar-test { display: inline-block; margin-left: 0.4em; font-size: 0.78em; padding: 0 0.5em; border-radius: 4px;
+    background: rgba(240,180,60,0.18); color: #f3c97a; border: 1px solid rgba(240,180,60,0.45); }
 .ms-view-btn {
     display: inline-block;
     margin-top: 0.8em;
@@ -976,6 +1017,9 @@ include("includes/mheader.php");
     'use strict';
 
     var rawData = JSON.parse(document.getElementById('ms-data').textContent || '[]');
+    // IGSN row on the cards (pilot testers only for now, see the PHP above).
+    var SHOW_IGSN = <?php echo $showIgsn ? 'true' : 'false'; ?>;
+    var SESAR_SANDBOX = <?php echo ($showIgsn && $sesarEnv === 'sandbox') ? 'true' : 'false'; ?>;
 
     // Children map keyed by `${parent_sample_id}|${parent_userpkey}`, used
     // for the parent card's expand toggle. EVERY sample also keeps its own
@@ -1292,6 +1336,14 @@ include("includes/mheader.php");
         html += '      ' + parentChip;
         html += '      <div class="ms-row"><strong>Material:</strong> ' + highlight(vocabLabel('material', sample.display_sample_type) || '—', q) + '</div>';
         html += '      <div class="ms-row"><strong>Purpose:</strong> ' + highlight(vocabLabel('purpose', sample.display_sample_purpose) || '—', q) + '</div>';
+        if (SHOW_IGSN && sample.igsn) {
+            html += '      <div class="ms-row"><strong>IGSN:</strong> '
+                + (sample.igsn_url
+                    ? '<a href="' + escapeHtml(sample.igsn_url) + '" target="_blank" rel="noopener" title="View this IGSN at SESAR">' + highlight(sample.igsn, q) + '</a>'
+                      + (SESAR_SANDBOX ? ' <span class="ms-sesar-test" title="Registered on SESAR\'s test site; not a real IGSN">SESAR test</span>' : '')
+                    : highlight(sample.igsn, q))
+                + '</div>';
+        }
         html += '      <div class="ms-row"><strong>Updated:</strong> ' + fmtDate(sample.modified_at) + '</div>';
         html += '      <a class="ms-view-btn" href="' + escapeHtml(viewSampleHref(sample)) + '">View Sample</a>';
         html += '    </div>';
