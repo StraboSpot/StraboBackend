@@ -394,6 +394,22 @@ mk('sesarmint-t7', $A);
 $res = $mint->mintOne($A, 'sesarmint-t7', $CH);
 check('expired access token refreshed transparently', !empty($res['igsn']));
 
+// The answer AND the look-up after it were lost, then the user retries under
+// ANOTHER of their SESAR codes: the earlier record must still be found.
+$conn->withAccess($A, function ($a) use ($client) { return $client->createCode($a, 'IEFA2'); });
+mk('sesarmint-t9', $A);
+$fake->set('register_then_timeout', true);
+$fake->set('list_timeout', true);
+$e = mintErr(function () use ($mint, $A, $CH) { $mint->mintOne($A, 'sesarmint-t9', $CH); });
+$fake->set('list_timeout', false);
+check('answer and look-up both lost: row stays minting, SESAR holds one record', $e !== null && isset($e->errors['outcome'])
+	&& reg('sesarmint-t9', $A)->state === 'minting' && atSesar($fake, 'sesarmint-t9') === 1, $e ? $e->getMessage() : '');
+$res = $mint->mintOne($A, 'sesarmint-t9', array('sesar_code' => 'IEFA2') + $CH);
+$r = reg('sesarmint-t9', $A);
+check('retry under another SESAR code adopts the earlier record (never a second IGSN)', $res['adopted'] === true
+	&& atSesar($fake, 'sesarmint-t9') === 1 && strpos($res['igsn'], '10.58052/IEFAK') === 0
+	&& $r->state === 'active' && $r->igsn === $res['igsn'] && $r->sesar_code === 'IEFAK' && spineIgsn('sesarmint-t9', $A) === $res['igsn'], $res);
+
 // ===========================================================================
 section('HTTP: sesar_mint.php refusals (forged sessions, no SESAR calls)');
 function forgeSession($pkey) {

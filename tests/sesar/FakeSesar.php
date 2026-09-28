@@ -383,6 +383,8 @@ class FakeSesar implements SesarTransport
 			$rows = array();
 			foreach ($s['samples'] as $igsn => $rec) {
 				if (isset($query['external_sample_id']) && (string)$rec['external_sample_id'] !== (string)$query['external_sample_id']) continue;
+				// SESAR honors ?sesar_code= (sandbox 09-27: another code answers no rows).
+				if (isset($query['sesar_code']) && (string)(isset($rec['sesar_code']) ? $rec['sesar_code'] : '') !== (string)$query['sesar_code']) continue;
 				if (isset($query['igsn'])) {
 					$want = strtoupper((string)$query['igsn']);
 					if (strpos($want, '/') === false) $want = '10.58052/' . $want;

@@ -311,10 +311,13 @@ class SesarMint
 		}
 		$v['parent_igsn'] = $parentIgsn;
 
-		// A previous attempt got no answer: SESAR may have it already.
+		// A previous attempt got no answer: SESAR may have it already, under
+		// the SESAR code chosen THEN. Search the whole account, not the code
+		// chosen now (SESAR honors the code filter: sandbox 09-27).
 		if ($reg !== null) {
-			$found = $this->findOurRecord($userpkey, $sampleId, $choices['sesar_code']);
+			$found = $this->findOurRecord($userpkey, $sampleId, null);
 			if ($found !== null) {
+				if (!empty($found['sesar_code'])) $choices['sesar_code'] = (string)$found['sesar_code'];
 				$this->finalize($userpkey, $reg->pkey, $v, $choices, $found, null, $notes);
 				return $this->result($found['igsn'], true, array_merge(array('SESAR already had it from an earlier attempt; linked to that record.'), $notes));
 			}
@@ -425,7 +428,10 @@ class SesarMint
 		);
 	}
 
-	/** The newest of OUR records at SESAR for this sample (external_sample_id = our id), or null. */
+	/**
+	 * The newest of OUR records at SESAR for this sample (external_sample_id =
+	 * our id), or null. $code null = under any of the account's SESAR codes.
+	 */
 	private function findOurRecord($userpkey, $sampleId, $code, $igsn = null)
 	{
 		$client = $this->client;
