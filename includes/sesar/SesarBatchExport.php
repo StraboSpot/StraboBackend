@@ -21,6 +21,7 @@
  * @link       https://strabospot.org
  */
 
+require_once __DIR__ . '/SesarDb.php';
 require_once __DIR__ . '/SesarMint.php';
 require_once __DIR__ . '/SesarBatchTemplate.php';
 
@@ -185,7 +186,7 @@ class SesarBatchExport
 		$rows = $this->db->get_results_prepared(
 			"SELECT sample_id, igsn, state FROM strabosamples.sesar_registrations
 			  WHERE sample_userpkey = $1 AND environment = $2 AND active AND sample_id = ANY($3::text[])",
-			array((int)$userpkey, $this->env, self::pgTextArray($ids))
+			array((int)$userpkey, $this->env, SesarDb::pgTextArray($ids))
 		);
 		$out = array();
 		foreach ((is_array($rows) ? $rows : array()) as $r) $out[(string)$r->sample_id] = $r;
@@ -213,12 +214,5 @@ class SesarBatchExport
 	private static function entry($id, $name, $included, $reason)
 	{
 		return array('id' => (string)$id, 'name' => (string)$name, 'included' => $included, 'reason' => $reason, 'notes' => array());
-	}
-
-	private static function pgTextArray(array $vals)
-	{
-		return '{' . implode(',', array_map(function ($v) {
-			return '"' . str_replace(array('\\', '"'), array('\\\\', '\\"'), (string)$v) . '"';
-		}, $vals)) . '}';
 	}
 }

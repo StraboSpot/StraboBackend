@@ -38,6 +38,7 @@
  * @link       https://strabospot.org
  */
 
+require_once __DIR__ . '/SesarDb.php';
 require_once __DIR__ . '/SesarAccess.php';
 require_once __DIR__ . '/SesarClient.php';
 require_once __DIR__ . '/SesarConnection.php';
@@ -54,8 +55,8 @@ class SesarMint
 	const MAX_DEPTH = 25;
 	const MAX_FAMILY = 500;
 
-	/** Advisory lock namespace (first key of pg_try_advisory_lock). */
-	const LOCK_NS = 7271;
+	/** Advisory lock namespace (first key of pg_try_advisory_lock): the shared one, see SesarDb. */
+	const LOCK_NS = SesarDb::LOCK_NS;
 
 	/** D2: the SESAR record links back to the sample's page (canonical host). */
 	const PAGE_BASE = 'https://strabospot.org/samples/';
@@ -267,13 +268,13 @@ class SesarMint
 		$blockers = SesarMapper::mintBlockers($v);
 		if (!empty($blockers)) throw new SesarError(400, self::reasonText($blockers[0]));
 
-		if (!$this->lock($userpkey, $sampleId)) {
+		if (!SesarDb::lock($this->db, $userpkey, $sampleId)) {
 			throw new SesarError(409, 'This sample is already being registered. Please wait a moment and try again.', array('busy' => array('busy')));
 		}
 		try {
 			return $this->mintLocked($userpkey, $sampleId, $v, $choices, !empty($in['replace_existing']), !empty($in['expect_parent']));
 		} finally {
-			$this->unlock($userpkey, $sampleId);
+			SesarDb::unlock($this->db, $userpkey, $sampleId);
 		}
 	}
 
@@ -493,7 +494,7 @@ class SesarMint
 		$rows = $this->db->get_results_prepared(
 			"SELECT sample_id, pkey, igsn, state FROM strabosamples.sesar_registrations
 			  WHERE sample_userpkey = $1 AND environment = $2 AND active AND sample_id = ANY($3::text[])",
-			array((int)$userpkey, $this->env, self::pgTextArray($ids))
+			array((int)$userpkey, $this->env, SesarDb::pgTextArray($ids))
 		);
 		$out = array();
 		foreach ((is_array($rows) ? $rows : array()) as $r) $out[(string)$r->sample_id] = $r;
@@ -667,18 +668,6 @@ class SesarMint
 		return ($last !== '' && $first !== '') ? $last . ', ' . $first : trim($first . ' ' . $last);
 	}
 
-	private function lock($userpkey, $sampleId)
-	{
-		return $this->db->get_var_prepared(
-			"SELECT pg_try_advisory_lock($1, hashtext($2))", array(self::LOCK_NS, $userpkey . ':' . $sampleId)) === 't';
-	}
-
-	private function unlock($userpkey, $sampleId)
-	{
-		$this->db->get_var_prepared(
-			"SELECT pg_advisory_unlock($1, hashtext($2))", array(self::LOCK_NS, $userpkey . ':' . $sampleId));
-	}
-
 	/** Same-owner ancestors, nearest first (a foreign parent ends the walk: never mint others' samples). */
 	private function ancestorIds($userpkey, $id)
 	{
@@ -706,7 +695,7 @@ class SesarMint
 				"SELECT id FROM strabosamples.samples
 				  WHERE userpkey = $1 AND parent_userpkey = $1 AND parent_sample_id = ANY($2::text[])
 				  ORDER BY created_at, id",
-				array((int)$userpkey, self::pgTextArray($frontier)));
+				array((int)$userpkey, SesarDb::pgTextArray($frontier)));
 			$next = array();
 			foreach ((is_array($rows) ? $rows : array()) as $r) {
 				$cid = (string)$r->id;
@@ -742,12 +731,5 @@ class SesarMint
 			case 'bad_location': return 'Its location is not a valid latitude and longitude.';
 		}
 		return (string)$code;
-	}
-
-	private static function pgTextArray(array $vals)
-	{
-		return '{' . implode(',', array_map(function ($v) {
-			return '"' . str_replace(array('\\', '"'), array('\\\\', '\\"'), (string)$v) . '"';
-		}, $vals)) . '}';
 	}
 }

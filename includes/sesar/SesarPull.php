@@ -39,6 +39,7 @@
  * @link       https://strabospot.org
  */
 
+require_once __DIR__ . '/SesarDb.php';
 require_once __DIR__ . '/SesarAccess.php';
 require_once __DIR__ . '/SesarClient.php';
 require_once __DIR__ . '/SesarConnection.php';
@@ -120,7 +121,7 @@ class SesarPull
 		$accept = isset($in['accept']) && is_array($in['accept']) ? array_map('strval', $in['accept']) : array();
 		$seen = isset($in['seen']) && is_array($in['seen']) ? $in['seen'] : array();
 
-		if (!$this->lock($userpkey, $sampleId)) {
+		if (!SesarDb::lock($this->db, $userpkey, $sampleId)) {
 			throw new SesarError(409, 'This sample is busy with another SESAR action. Please wait a moment and try again.', array('busy' => array('busy')));
 		}
 		try {
@@ -188,7 +189,7 @@ class SesarPull
 				'notes'       => $notes,
 			);
 		} finally {
-			$this->unlock($userpkey, $sampleId);
+			SesarDb::unlock($this->db, $userpkey, $sampleId);
 		}
 	}
 
@@ -313,7 +314,7 @@ class SesarPull
 		$cls = SesarMapper::classifyIgsn($igsnInput);
 		if (!in_array($cls['kind'], array('sesar', 'doi'), true)) throw new SesarError(400, 'Not an IGSN.');
 		$igsn = $cls['normalized'];
-		if (!$this->lock($userpkey, 'igsn:' . strtoupper($igsn))) {
+		if (!SesarDb::lock($this->db, $userpkey, 'igsn:' . strtoupper($igsn))) {
 			throw new SesarError(409, 'This IGSN is already being imported. Please wait a moment and try again.', array('busy' => array('busy')));
 		}
 		try {
@@ -372,7 +373,7 @@ class SesarPull
 				'notes'         => $notes,
 			);
 		} finally {
-			$this->unlock($userpkey, 'igsn:' . strtoupper($igsn));
+			SesarDb::unlock($this->db, $userpkey, 'igsn:' . strtoupper($igsn));
 		}
 	}
 
@@ -483,7 +484,7 @@ class SesarPull
 			        (SELECT r.igsn FROM strabosamples.sesar_registrations r
 			          WHERE r.sample_id = s.id AND r.sample_userpkey = s.userpkey AND r.environment = $3 AND r.active LIMIT 1) AS reg_igsn
 			   FROM strabosamples.samples s WHERE s.userpkey = $1 AND s.id = ANY($2::text[])",
-			array($userpkey, self::pgTextArray(array_keys($byId)), $this->env)
+			array($userpkey, SesarDb::pgTextArray(array_keys($byId)), $this->env)
 		);
 		$holders = $this->holders($userpkey);
 		$out = array();
@@ -570,13 +571,6 @@ class SesarPull
 		return $this->apply($userpkey, $sampleId, array('mode' => 'review', 'accept' => array()));
 	}
 
-	private static function pgTextArray(array $vals)
-	{
-		return '{' . implode(',', array_map(function ($v) {
-			return '"' . str_replace(array('\\', '"'), array('\\\\', '\\"'), (string)$v) . '"';
-		}, $vals)) . '}';
-	}
-
 	// =======================================================================
 	// Internals
 	// =======================================================================
@@ -592,7 +586,7 @@ class SesarPull
 		$userpkey = (int)$userpkey;
 		$sampleId = (string)$sampleId;
 		if ($this->views->build($sampleId, $userpkey) === null) throw new SesarError(404, 'This is not one of your samples.');
-		if (!$this->lock($userpkey, $sampleId)) {
+		if (!SesarDb::lock($this->db, $userpkey, $sampleId)) {
 			throw new SesarError(409, 'This sample is busy with another SESAR action. Please wait a moment and try again.', array('busy' => array('busy')));
 		}
 		try {
@@ -609,7 +603,7 @@ class SesarPull
 			);
 			return array('ok' => true, 'igsn' => (string)$reg->igsn);
 		} finally {
-			$this->unlock($userpkey, $sampleId);
+			SesarDb::unlock($this->db, $userpkey, $sampleId);
 		}
 	}
 
@@ -949,18 +943,5 @@ class SesarPull
 			'Last changed at SESAR' => $pick('last_update_date'),
 		);
 		return array_filter($out, function ($v) { return $v !== null; });
-	}
-
-	private function lock($userpkey, $key)
-	{
-		// Same namespace as minting: a pull and a mint of one sample never overlap.
-		return $this->db->get_var_prepared(
-			"SELECT pg_try_advisory_lock($1, hashtext($2))", array(SesarMint::LOCK_NS, $userpkey . ':' . $key)) === 't';
-	}
-
-	private function unlock($userpkey, $key)
-	{
-		$this->db->get_var_prepared(
-			"SELECT pg_advisory_unlock($1, hashtext($2))", array(SesarMint::LOCK_NS, $userpkey . ':' . $key));
 	}
 }

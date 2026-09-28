@@ -35,6 +35,7 @@
  * @link       https://strabospot.org
  */
 
+require_once __DIR__ . '/SesarDb.php';
 require_once __DIR__ . '/SesarAccess.php';
 require_once __DIR__ . '/SesarClient.php';
 require_once __DIR__ . '/SesarConnection.php';
@@ -146,7 +147,7 @@ class SesarDeactivate
 		}
 
 		$lockKey = $reg->orphan ? 'reg:' . $reg->pkey : (string)$reg->sample_id;   // a sample shares its key with mint / pull / push
-		if (!$this->lock($userpkey, $lockKey)) {
+		if (!SesarDb::lock($this->db, $userpkey, $lockKey)) {
 			throw new SesarError(409, 'This IGSN is busy with another SESAR action. Please wait a moment and try again.', array('busy' => array('busy')));
 		}
 		try {
@@ -183,7 +184,7 @@ class SesarDeactivate
 			return array('ok' => true, 'igsn' => $igsn, 'state' => 'requested',
 				'message' => 'Deactivation of ' . $igsn . ' was requested. A SESAR curator reviews it; SESAR emails you when it is decided.');
 		} finally {
-			$this->unlock($userpkey, $lockKey);
+			SesarDb::unlock($this->db, $userpkey, $lockKey);
 		}
 	}
 
@@ -423,15 +424,4 @@ class SesarDeactivate
 	}
 
 	private static function truthy($v) { return $v === true || $v === 'true' || $v === 1 || $v === '1'; }
-
-	private function lock($userpkey, $key)
-	{
-		return $this->db->get_var_prepared("SELECT pg_try_advisory_lock($1, hashtext($2))",
-			array(SesarMint::LOCK_NS, (int)$userpkey . ':' . $key)) === 't';
-	}
-
-	private function unlock($userpkey, $key)
-	{
-		$this->db->get_var_prepared("SELECT pg_advisory_unlock($1, hashtext($2))", array(SesarMint::LOCK_NS, (int)$userpkey . ':' . $key));
-	}
 }

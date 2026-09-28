@@ -22,6 +22,7 @@
  * @link       https://strabospot.org
  */
 
+require_once __DIR__ . '/SesarDb.php';
 require_once __DIR__ . '/SesarPush.php';
 require_once __DIR__ . '/../../samplesdb/lib/vocab.php';
 
@@ -85,7 +86,7 @@ class SesarReports
 		if (is_array($ids)) {
 			$ids = array_values(array_unique(array_filter(array_map('strval', $ids), 'strlen')));
 			if (empty($ids)) throw new SesarError(400, 'Select at least one sample.');
-			$params[] = self::pgTextArray($ids);
+			$params[] = SesarDb::pgTextArray($ids);
 			$filter = ' AND s.id = ANY($3::text[])';
 		}
 		$res = $this->db->get_results_prepared(
@@ -378,12 +379,5 @@ class SesarReports
 		if ($ts === null || $ts === '') return '';
 		$t = strtotime((string)$ts);
 		return $t === false ? (string)$ts : gmdate('Y-m-d', $t);
-	}
-
-	private static function pgTextArray(array $vals)
-	{
-		return '{' . implode(',', array_map(function ($v) {
-			return '"' . str_replace(array('\\', '"'), array('\\\\', '\\"'), (string)$v) . '"';
-		}, $vals)) . '}';
 	}
 }

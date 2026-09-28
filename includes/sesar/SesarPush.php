@@ -33,6 +33,7 @@
  * @link       https://strabospot.org
  */
 
+require_once __DIR__ . '/SesarDb.php';
 require_once __DIR__ . '/SesarAccess.php';
 require_once __DIR__ . '/SesarClient.php';
 require_once __DIR__ . '/SesarConnection.php';
@@ -143,7 +144,7 @@ class SesarPush
 		$mode = (isset($in['mode']) && $in['mode'] === 'bulk') ? 'bulk' : 'review';
 		$seen = isset($in['seen']) && is_array($in['seen']) ? $in['seen'] : array();
 
-		if (!$this->lock($userpkey, $sampleId)) {
+		if (!SesarDb::lock($this->db, $userpkey, $sampleId)) {
 			throw new SesarError(409, 'This sample is busy with another SESAR action. Please wait a moment and try again.', array('busy' => array('busy')));
 		}
 		try {
@@ -222,7 +223,7 @@ class SesarPush
 				'notes'           => $notes,
 			);
 		} finally {
-			$this->unlock($userpkey, $sampleId);
+			SesarDb::unlock($this->db, $userpkey, $sampleId);
 		}
 	}
 
@@ -371,16 +372,5 @@ class SesarPush
 			return is_numeric($v) ? rtrim(rtrim(number_format((float)$v, 6, '.', ''), '0'), '.') : (string)$v;
 		}
 		return trim((string)$v);
-	}
-
-	private function lock($userpkey, $key)
-	{
-		return $this->db->get_var_prepared("SELECT pg_try_advisory_lock($1, hashtext($2))",
-			array(SesarMint::LOCK_NS, (int)$userpkey . ':' . $key)) === 't';
-	}
-
-	private function unlock($userpkey, $key)
-	{
-		$this->db->get_var_prepared("SELECT pg_advisory_unlock($1, hashtext($2))", array(SesarMint::LOCK_NS, (int)$userpkey . ':' . $key));
 	}
 }
