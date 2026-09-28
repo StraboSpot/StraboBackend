@@ -31,8 +31,8 @@
 
 class SesarAccess
 {
-	/** Soft-launch pilot users (D10): Jason, Claire. */
-	const PILOT_USERPKEYS = array(3, 7217);
+	/** Soft-launch pilot users (D10): Jason only for now; Claire (7217) joins when Jason is done testing. */
+	const PILOT_USERPKEYS = array(3);
 
 	/** ORCID redirect URI registered on the web ORCID client (exact match required by ORCID). */
 	const ORCID_REDIRECT_URI = 'https://strabospot.org/sesar_orcid_callback.php';
