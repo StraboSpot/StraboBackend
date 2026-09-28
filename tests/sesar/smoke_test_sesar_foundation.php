@@ -205,6 +205,28 @@ check("another account's private record: forbidden after ONE call, no refresh, c
 check('connection untouched by the refusal', $conn->summary($U1)['status'] === 'connected');
 
 // ===========================================================================
+section('SesarEndpoint: one answer for every endpoint');
+require_once 'includes/sesar/SesarEndpoint.php';
+$st = function ($status, $errors = array(), $pass = array()) { return SesarEndpoint::status(new SesarError($status, 'x', $errors), $pass); };
+$all = array(403, 404, 409, 410);
+check('reconnect / setup kinds -> 409', $st(401) === 409 && $st(401, array('permissions' => array('x'))) === 409 && $st(403, array('token' => array('x')), $all) === 409);
+check('SESAR refuses the action -> 403, with or without pass-through', $st(403) === 403 && $st(403, array(), $all) === 403);
+check('payload refused -> 400; no answer -> 504', $st(400) === 400 && $st(422) === 400 && $st(0) === 504);
+check('404 / 409 / 410 answered as they are only where the endpoint says so', $st(404, array(), $all) === 404 && $st(409, array(), $all) === 409
+	&& $st(410, array(), $all) === 410 && $st(404) === 502 && $st(410, array(), array(404, 409)) === 502);
+check('anything else -> 502', $st(500) === 502 && $st(503, array(), $all) === 502);
+$t = SesarEndpoint::timeout(new SesarError(504, 'Gateway Time-out', array('a' => array('b'))));
+check('no answer in time: one plain message, status and fields kept', $t->status === 504 && $t->errors === array('a' => array('b'))
+	&& strpos($t->getMessage(), 'did not answer in time') !== false);
+$keep = new SesarError(0, 'SESAR did not confirm the change. Sending again is safe: it sets the same values.');
+check('... unless the error already says what to do', SesarEndpoint::timeout($keep, 'Sending again is safe') === $keep
+	&& SesarEndpoint::timeout($keep, 'did not confirm the request') !== $keep);
+$other = new SesarError(409, 'busy');
+check('other errors pass through untouched', SesarEndpoint::timeout($other) === $other);
+$str = SesarEndpoint::reader(array('a' => 'x', 'n' => 5, 'l' => array('no'), 'b' => true));
+check('reader: scalars as strings, lists and missing keys empty', $str('a') === 'x' && $str('n') === '5' && $str('l') === '' && $str('zz') === '' && $str('b') === '1');
+
+// ===========================================================================
 section('Revoked refresh token -> needs_reconnect');
 $cur = SesarCrypto::open($db->get_var_prepared("SELECT refresh_token_enc FROM strabosamples.sesar_connections WHERE userpkey = $1", array($U1)), $KEY);
 $client->refresh($cur);   // someone else used it: now blacklisted at SESAR, our copy is stale

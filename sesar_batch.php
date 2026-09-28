@@ -20,38 +20,16 @@
  * @link       https://strabospot.org
  */
 
-include_once __DIR__ . '/includes/session_config.php';
-session_start();
-header('Cache-Control: no-store');
+require_once __DIR__ . '/includes/sesar/SesarEndpoint.php';
+$userpkey = SesarEndpoint::user();
 
-function sesar_batch_out($code, $payload)
-{
-	http_response_code($code);
-	header('Content-Type: application/json');
-	echo json_encode($payload);
-	exit;
-}
-
-if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > SESSION_IDLE_TIMEOUT)) {
-	$_SESSION['loggedin'] = 'no';
-}
-if (empty($_SESSION['loggedin']) || $_SESSION['loggedin'] !== 'yes' || empty($_SESSION['userpkey'])) {
-	sesar_batch_out(401, array('ok' => false, 'error' => 'not_authenticated', 'message' => 'Your session has ended. Please log in again.'));
-}
-$_SESSION['LAST_ACTIVITY'] = time();
-$userpkey = (int)$_SESSION['userpkey'];
-session_write_close();
-
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-	sesar_batch_out(405, array('ok' => false, 'error' => 'method', 'message' => 'POST only.'));
-}
 $action = isset($_POST['action']) && in_array($_POST['action'], array('check', 'fill'), true) ? $_POST['action'] : null;
-if ($action === null) sesar_batch_out(400, array('ok' => false, 'error' => 'unknown_action', 'message' => 'Unknown action.'));
+if ($action === null) SesarEndpoint::out(400, array('ok' => false, 'error' => 'unknown_action', 'message' => 'Unknown action.'));
 $ids = isset($_POST['ids']) ? json_decode((string)$_POST['ids'], true) : null;
 $ids = is_array($ids) ? array_values(array_filter($ids, 'is_scalar')) : array();
 if (empty($_FILES['file']) || !is_array($_FILES['file']) || (int)$_FILES['file']['error'] !== UPLOAD_ERR_OK || !is_uploaded_file($_FILES['file']['tmp_name'])) {
 	$tooBig = !empty($_FILES['file']) && in_array((int)$_FILES['file']['error'], array(UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE), true);
-	sesar_batch_out(400, array('ok' => false, 'error' => 'validation',
+	SesarEndpoint::out(400, array('ok' => false, 'error' => 'validation',
 		'message' => $tooBig ? 'The file is too large to be a SESAR template.' : 'Choose the spreadsheet SESAR\'s Batch Template Creator gave you.'));
 }
 
@@ -59,10 +37,7 @@ include_once __DIR__ . '/includes/config.inc.php';
 include __DIR__ . '/db.php';
 include __DIR__ . '/neodb.php';
 require_once __DIR__ . '/includes/sesar/SesarBatchExport.php';
-
-if (!SesarAccess::canUse($userpkey)) {
-	sesar_batch_out(403, array('ok' => false, 'error' => 'not_allowed', 'message' => 'SESAR features are not available for this account.'));
-}
+SesarEndpoint::gate($userpkey, 'SESAR features are not available for this account.', false);   // fills a file: no SESAR call
 
 $client = new SesarClient();
 $views = new SesarSampleView($db, $neodb);
@@ -75,7 +50,7 @@ try {
 	if ($action === 'check') {
 		$plan = $export->plan($userpkey, $ids, $t);
 		unset($plan['rows']);
-		sesar_batch_out(200, array('ok' => true, 'plan' => $plan));
+		SesarEndpoint::out(200, array('ok' => true, 'plan' => $plan));
 	}
 	$res = $export->fill($userpkey, $ids, $t);
 	// SESAR requires a unique file name for every batch upload.
@@ -87,5 +62,5 @@ try {
 	echo $res['bytes'];
 	exit;
 } catch (SesarError $e) {
-	sesar_batch_out($e->kind === 'validation' ? 400 : 500, array('ok' => false, 'error' => $e->kind, 'message' => $e->getMessage()));
+	SesarEndpoint::out($e->kind === 'validation' ? 400 : 500, array('ok' => false, 'error' => $e->kind, 'message' => $e->getMessage()));
 }

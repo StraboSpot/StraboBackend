@@ -17,33 +17,11 @@
  * @link       https://strabospot.org
  */
 
-include_once __DIR__ . '/includes/session_config.php';
-session_start();
-header('Cache-Control: no-store');
+require_once __DIR__ . '/includes/sesar/SesarEndpoint.php';
+$userpkey = SesarEndpoint::user();
 
-function sesar_reports_out($code, $payload)
-{
-	http_response_code($code);
-	header('Content-Type: application/json');
-	echo json_encode($payload);
-	exit;
-}
-
-if (isset($_SESSION['LAST_ACTIVITY']) && (time() - $_SESSION['LAST_ACTIVITY'] > SESSION_IDLE_TIMEOUT)) {
-	$_SESSION['loggedin'] = 'no';
-}
-if (empty($_SESSION['loggedin']) || $_SESSION['loggedin'] !== 'yes' || empty($_SESSION['userpkey'])) {
-	sesar_reports_out(401, array('ok' => false, 'error' => 'not_authenticated', 'message' => 'Your session has ended. Please log in again.'));
-}
-$_SESSION['LAST_ACTIVITY'] = time();
-$userpkey = (int)$_SESSION['userpkey'];
-session_write_close();   // live SESAR reads can take seconds
-
-if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
-	sesar_reports_out(405, array('ok' => false, 'error' => 'method', 'message' => 'POST only.'));
-}
 $report = isset($_POST['report']) && in_array($_POST['report'], array('igsns', 'account'), true) ? $_POST['report'] : null;
-if ($report === null) sesar_reports_out(400, array('ok' => false, 'error' => 'unknown_report', 'message' => 'Unknown report.'));
+if ($report === null) SesarEndpoint::out(400, array('ok' => false, 'error' => 'unknown_report', 'message' => 'Unknown report.'));
 $format = (isset($_POST['format']) && $_POST['format'] === 'csv') ? 'csv' : 'xlsx';
 $refresh = !empty($_POST['refresh']) && $_POST['refresh'] !== '0';
 $ids = null;
@@ -56,13 +34,7 @@ include_once __DIR__ . '/includes/config.inc.php';
 include __DIR__ . '/db.php';
 include __DIR__ . '/neodb.php';
 require_once __DIR__ . '/includes/sesar/SesarReports.php';
-
-if (!SesarAccess::canUse($userpkey)) {
-	sesar_reports_out(403, array('ok' => false, 'error' => 'not_allowed', 'message' => 'SESAR features are not available for this account.'));
-}
-if (!SesarAccess::isConfigured()) {
-	sesar_reports_out(503, array('ok' => false, 'error' => 'not_configured', 'message' => 'SESAR is not configured on this server yet.'));
-}
+SesarEndpoint::gate($userpkey);
 
 $client = new SesarClient();
 $conn = new SesarConnection($db, $client);
@@ -79,7 +51,7 @@ try {
 	} else {
 		$sum = $conn->summary($userpkey);
 		if (empty($sum['connected'])) {
-			sesar_reports_out(409, array('ok' => false, 'error' => 'auth', 'message' => 'Connect your SESAR account on this page first.'));
+			SesarEndpoint::out(409, array('ok' => false, 'error' => 'auth', 'message' => 'Connect your SESAR account on this page first.'));
 		}
 		$r = $reports->accountReport($userpkey);
 		$title = 'My SESAR account';
@@ -100,8 +72,5 @@ try {
 	echo $bytes;
 	exit;
 } catch (SesarError $e) {
-	$code = ($e->kind === 'validation') ? 400 : (($e->kind === 'network') ? 504 : 502);
-	if (in_array($e->kind, array('auth', 'no_permission', 'no_account'), true)) $code = 409;
-	if ($e->kind === 'forbidden') $code = 403;
-	sesar_reports_out($code, array('ok' => false, 'error' => $e->kind, 'message' => $e->getMessage()));
+	SesarEndpoint::fail($e);
 }
