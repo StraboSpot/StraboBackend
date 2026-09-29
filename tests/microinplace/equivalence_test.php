@@ -259,8 +259,15 @@ $fixtures = array();
 if ($useReal) {
 	foreach (array(787, 775, 776, 773) as $id) {
 		$zip = "/srv/app/www/straboMicroFiles/$id/project.zip";
+		if (!file_exists($zip)) continue;
 		$sid = $db->get_var_prepared("SELECT strabo_id FROM micro_projectmetadata WHERE id=$1", array($id));
-		if (!file_exists($zip) || !$sid || !zip_json_path($zip, $sid)) continue;
+		if (!$sid) {
+			// Orphaned folder (no database row on dev): the project id is the
+			// top-level folder inside the .smz.
+			$za = new ZipArchive();
+			if ($za->open($zip) === true) { $sid = explode('/', $za->getNameIndex(0))[0]; $za->close(); }
+		}
+		if (!$sid || !zip_json_path($zip, $sid)) continue;
 		$base = "$W/real_$id.zip";
 		copy($zip, $base);
 		make_variant($base, $sid, "$W/real_{$id}_v.zip", 'modify_project');
