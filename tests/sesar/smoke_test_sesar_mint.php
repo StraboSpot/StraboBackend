@@ -302,6 +302,8 @@ check('payload: name, coordinates, external id, object type, material label (cas
 $rrs = $fake->state()['related'];
 check('related resource created and linked: the sample page on strabospot.org', count($rec['related_resources']) === 1
 	&& $rrs[(string)$rec['related_resources'][0]]['uri'] === 'https://strabospot.org/samples/' . $A . '/sesarmint-ready', $rrs);
+check('link-back uri_type is "regular URL" (the only web-link type SESAR\'s sample page shows)',
+	$rrs[(string)$rec['related_resources'][0]]['uri_type'] === 'regular URL', $rrs);
 $r = reg('sesarmint-ready', $A);
 check('tracking row: active, managed, minted, code, SESAR sample_id (from the list), related resource, sent time',
 	$r !== null && $r->state === 'active' && $r->access === 'managed' && $r->origin === 'minted' && $r->igsn === $igsn && $r->sesar_code === 'IEFAK'
@@ -412,6 +414,15 @@ check('retry after a refusal reuses the existing link-back resource (found via i
 	count((array)$fake->state()['related']) === $nRR && count($rec['related_resources']) === 1
 	&& $fake->state()['related'][(string)$rec['related_resources'][0]]['label'] === 'StraboSpot sample page (sesarmint-t8)'
 	&& empty($res['notes']), $res);
+
+// A link-back made before 09-29 carries uri_type "URL" (hidden on SESAR's page): reuse heals it.
+mk('sesarmint-t10', $A);
+$oldRR = $fake->seedRelated('0000-0001-0000-0001', 'StraboSpot sample page (sesarmint-t10)',
+	'https://strabospot.org/samples/' . $A . '/sesarmint-t10', 'URL');
+$res = $mint->mintOne($A, 'sesarmint-t10', $CH);
+$rec = $fake->state()['samples'][$res['igsn']];
+check('reused pre-09-29 link-back resource gets uri_type "regular URL"',
+	$rec['related_resources'] === array($oldRR) && $fake->state()['related'][(string)$oldRR]['uri_type'] === 'regular URL', $fake->state()['related'][(string)$oldRR]);
 
 mk('sesarmint-t6', $A);
 // A separate session, like a second web request (pg_connect would reuse ours,

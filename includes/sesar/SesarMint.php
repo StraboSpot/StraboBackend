@@ -553,6 +553,10 @@ class SesarMint
 				if ($e->kind !== 'validation' || stripos($e->getMessage(), 'already exists') === false) throw $e;
 				$id = $client->findRelatedResourceByUri($access, $url, (string)$sampleId);
 				if ($id === null) throw $e;
+				// Made before 09-29 with a uri_type SESAR's page hides: fix it in passing.
+				try {
+					$client->updateRelatedResource($access, $id, array('uri_type' => SesarClient::LINK_URI_TYPE));
+				} catch (SesarError $e2) { /* still linked; the repair tool can fix it later */ }
 				return $id;
 			}
 		});

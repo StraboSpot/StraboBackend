@@ -95,6 +95,19 @@ class FakeSesar implements SesarTransport
 
 	public function state() { return json_decode(file_get_contents($this->stateFile), true); }
 
+	/** A related resource made earlier (e.g. with an old uri_type). Returns its id. */
+	public function seedRelated($orcid, $label, $uri, $uriType)
+	{
+		$id = null;
+		$this->mutate(function (&$s) use ($orcid, $label, $uri, $uriType, &$id) {
+			$s['rr_seq'] = (isset($s['rr_seq']) ? $s['rr_seq'] : 1208000) + 1;
+			$id = $s['rr_seq'];
+			$s['related'][(string)$id] = array('label' => $label, 'related_resource_type' => 'PhysicalObject',
+				'uri' => $uri, 'uri_type' => $uriType, '_owner' => $orcid);
+		});
+		return $id;
+	}
+
 	public function calls($fragment = null)
 	{
 		$c = $this->state()['calls'];
@@ -299,12 +312,25 @@ class FakeSesar implements SesarTransport
 			foreach ($b['sample_ids'] as $sid) $s['related'][$m[1]]['_samples'][] = (int)$sid;
 			return array(200, json_encode(array('data' => array('processed' => count($b['sample_ids'])))), 0);
 		}
+		if ($method === 'PATCH' && preg_match('#^related-resources/([0-9]+)/$#', $path, $m)) {
+			if (!$authed) return self::err(401, 'detail', 'Authentication credentials were not provided.');
+			if (!isset($s['related'][$m[1]])) return self::err(404, 'detail', 'Related resource not found.');
+			if ($s['related'][$m[1]]['_owner'] !== $tok['orcid']) return self::err(403, 'detail', 'Insufficient permission on this resource.');
+			$b = json_decode((string)$body, true);
+			foreach (array('label', 'description', 'uri', 'uri_type') as $f) {
+				if (array_key_exists($f, (array)$b)) $s['related'][$m[1]][$f] = $b[$f];
+			}
+			$out = $s['related'][$m[1]];
+			unset($out['_owner'], $out['_samples']);
+			return array(200, json_encode(array('data' => array('id' => (int)$m[1]) + $out)), 0);
+		}
 		if ($method === 'GET' && $path === 'related-resources/') {
 			$rows = array();
 			foreach ($s['related'] as $id => $rr) {
 				if ($rr['_owner'] !== $tok['orcid']) continue;
 				if (isset($query['search']) && stripos($rr['label'], $query['search']) === false) continue;   // labels only, like SESAR
-				$rows[] = array('id' => (int)$id, 'label' => $rr['label'], 'uri' => $rr['uri']);
+				$rows[] = array('id' => (int)$id, 'label' => $rr['label'], 'uri' => $rr['uri'],
+					'uri_type' => isset($rr['uri_type']) ? $rr['uri_type'] : null);
 			}
 			return array(200, json_encode(array('count' => count($rows), 'next' => null, 'data' => $rows)), 0);
 		}
