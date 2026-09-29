@@ -277,6 +277,8 @@ body { overflow-x: clip; overflow-y: visible; }
                     <li><strong>Import from SESAR</strong>: samples that exist at SESAR but not yet in StraboSamples. Bring them in
                         as new samples, linked to their SESAR records.</li>
                 </ul>
+                <p>New to IGSNs? The <a href="/help_igsn.php" target="_blank" rel="noopener">IGSN guide</a> walks through
+                   every step, with best practices.</p>
             </div>
 
             <div class="si-tabs" role="tablist">
