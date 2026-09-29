@@ -457,8 +457,10 @@ include("includes/mheader.php");
     gap: 1.5em;
     align-items: flex-start;
 }
+/* Width in em so the column grows with the theme's font size (15pt above
+   1680px wide); a fixed 230px squeezed the IGSN row on big screens. */
 .ms-card-meta {
-    flex: 0 0 230px;
+    flex: 0 0 13.5em;
     color: rgba(255, 255, 255, 0.9);
 }
 .ms-card-meta .ms-sample-id {
@@ -476,7 +478,9 @@ include("includes/mheader.php");
     color: rgba(255, 255, 255, 0.9);
     font-weight: 600;
 }
-.ms-card-meta .ms-row a { word-break: break-all; }
+/* Break a long link only when it cannot fit on a line of its own, so an
+   IGSN drops below its label whole instead of splitting its last character. */
+.ms-card-meta .ms-row a { overflow-wrap: anywhere; }
 .ms-sesar-test { display: inline-block; margin-left: 0.4em; font-size: 0.78em; padding: 0 0.5em; border-radius: 4px;
     background: rgba(240,180,60,0.18); color: #f3c97a; border: 1px solid rgba(240,180,60,0.45); }
 .ms-view-btn {
