@@ -17,7 +17,13 @@
  *                   next download rebuilds the key from the real data
  *                D. same through /db/projectdatasetsspots, /db/feature and
  *                   /db/datasetsinglespot
- *                E. helper unit checks (strip, clean)
+ *                E. helper unit checks (strip, clean, prune)
+ *                F. the ids work for the people who get them: /microdb/
+ *                   project reads (?owner=) and /expdb/experiment|project for
+ *                   the owner, a Field project collaborator, a sample
+ *                   collaborator; not for outsiders, disabled or removed
+ *                   collaborators; public projects open; migrated Field links
+ *                   without project_id resolve through Neo4j; bad ids refused
  *
  *              Needs the test users from tests/collaboration/setup_test_data.php.
  *
@@ -54,6 +60,12 @@ if ($ownerPkey <= 0 || $collabPkey <= 0) {
 }
 $OWNER  = "$ownerEmail:$password";
 $COLLAB = "$collabEmail:$password";
+$readonlyEmail = 'readonly@test.strabospot.org';
+$outsiderEmail = 'outsider@test.strabospot.org';
+$readonlyPkey = pkeyOf($db, $readonlyEmail);
+$outsiderPkey = pkeyOf($db, $outsiderEmail);
+$READONLY = "$readonlyEmail:$password";
+$OUTSIDER = "$outsiderEmail:$password";
 $KEY = FIELD_SAMPLE_LINKED_KEY;
 
 $stamp = time();
@@ -362,6 +374,85 @@ check("/db/feature 2xx", $r['status'] >= 200 && $r['status'] < 300);
 $js = (string)$neodb->get_var("MATCH (s:Spot {id:$sExtra, userpkey:$ownerPkey}) RETURN s.json_samples");
 check("  edit landed", strpos($js, 'EXTRA edited') !== false);
 check("  nothing stored", storedTraces($db, $neodb, $ownerPkey, $NEO_MIN, $NEO_MAX, $KEY) === array());
+
+// ------------------------------------------------------------------ F
+echo "\n=== F: following the ids on the Micro and Experimental APIs ===\n";
+$microEps = array('projectPDF', 'webProject', 'project', 'projectURL');
+function microStatuses($eps, $pid, $q, $cred) {
+    $out = array();
+    foreach ($eps as $ep) $out[$ep] = http('GET', "/microdb/$ep/" . rawurlencode($pid) . $q, null, $cred)['status'];
+    return $out;
+}
+$all = function ($st, $code) { foreach ($st as $v) if ($v !== $code) return false; return true; };
+$oq = "?owner=$ownerPkey";
+
+check("Micro: owner reads all four without ?owner", $all(microStatuses($microEps, $microStraboId, '', $OWNER), 200));
+check("Micro: owner reads with ?owner too", $all(microStatuses($microEps, $microStraboId, $oq, $OWNER), 200));
+check("Micro: Field project collaborator without ?owner = 404 (their own namespace)", $all(microStatuses($microEps, $microStraboId, '', $COLLAB), 404));
+check("Micro: Field project collaborator with ?owner = 200", $all(microStatuses($microEps, $microStraboId, $oq, $COLLAB), 200));
+$u = http('GET', "/microdb/projectURL/" . rawurlencode($microStraboId) . $oq, null, $COLLAB);
+check("Micro: projectURL for the collaborator counts this project's micrographs", isset($u['json']['micrograph_count']) && (int)$u['json']['micrograph_count'] === 0
+    && isset($u['json']['url']) && strpos($u['json']['url'], "/$microStraboId.zip") !== false);
+check("Micro: outsider with ?owner = 404", $all(microStatuses($microEps, $microStraboId, $oq, $OUTSIDER), 404));
+
+// Migrated Field links record only dataset_id: the Neo4j dataset -> project walk decides.
+$db->prepare_query("UPDATE strabosamples.sample_subsystem_links SET reference_metadata = reference_metadata - 'project_id'
+    WHERE sample_userpkey = $1 AND subsystem = 'field' AND sample_id IN ($2, $3)", array($ownerPkey, (string)$sRich, $legacyId));
+$np = (int)$db->get_var_prepared("SELECT count(*) FROM strabosamples.sample_subsystem_links WHERE sample_userpkey=$1 AND subsystem='field'
+    AND sample_id IN ($2, $3) AND reference_metadata ? 'project_id'", array($ownerPkey, (string)$sRich, $legacyId));
+check("Micro: links now lack project_id (migrated shape)", $np === 0);
+check("Micro: collaborator still reads it via the Neo4j walk", $all(microStatuses($microEps, $microStraboId, $oq, $COLLAB), 200));
+
+$db->prepare_query("UPDATE collaborators SET disabled = true WHERE strabo_project_id = $1 AND collaborator_user_pkey = $2", array((string)$projectId, $collabPkey));
+check("Micro: disabled Field collaborator = 404", $all(microStatuses($microEps, $microStraboId, $oq, $COLLAB), 404));
+$db->prepare_query("UPDATE collaborators SET disabled = false WHERE strabo_project_id = $1 AND collaborator_user_pkey = $2", array((string)$projectId, $collabPkey));
+
+// Sample-level collaboration (readonly@ is not on the Field project).
+check("Micro: readonly@ (no collaboration) = 404", $all(microStatuses($microEps, $microStraboId, $oq, $READONLY), 404));
+$db->prepare_query("INSERT INTO strabosamples.sample_collaborators (sample_id, sample_userpkey, collaborator_pkey, permission_level, uuid, accepted, accepted_at, added_by)
+    VALUES ($1, $2, $3, 'readonly', $4, true, now(), $2)", array($legacyId, $ownerPkey, $readonlyPkey, bin2hex(random_bytes(16))));
+check("Micro: accepted sample collaborator reads it", $all(microStatuses($microEps, $microStraboId, $oq, $READONLY), 200));
+$db->prepare_query("UPDATE strabosamples.sample_collaborators SET removed_at = now() WHERE sample_id = $1 AND collaborator_pkey = $2", array($legacyId, $readonlyPkey));
+check("Micro: removed sample collaborator = 404", $all(microStatuses($microEps, $microStraboId, $oq, $READONLY), 404));
+
+$db->prepare_query("UPDATE micro_projectmetadata SET ispublic = true WHERE id = $1", array($microInternal));
+check("Micro: public project readable by an outsider", $all(microStatuses($microEps, $microStraboId, $oq, $OUTSIDER), 200));
+$db->prepare_query("UPDATE micro_projectmetadata SET ispublic = false WHERE id = $1", array($microInternal));
+
+check("Micro: an id that is not an id shape is refused", $all(microStatuses($microEps, "x' OR '1'='1", '', $OWNER), 404));
+check("Micro: non-numeric ?owner refused", $all(microStatuses($microEps, $microStraboId, '?owner=abc', $COLLAB), 404));
+
+// Experimental: a second experiment in the same project holds a sample nobody else can reach.
+$r = http('POST', '/experimental/api/save_experiment.php', array('project_pkey' => $expPkey, 'experiment_id' => 'LNK2-' . $stamp,
+    'data' => array('experiment' => array('id' => 'LNK2-' . $stamp),
+        'sample' => array('id' => 'OTHER', 'name' => 'OTHER', 'description' => 'unrelated lab sample'))), null, $sid);
+check("Exp: second (unlinked) experiment saved", $r['status'] === 200 && !empty($r['json']['pkey']));
+$exp2 = !empty($r['json']['pkey']) ? (int)$r['json']['pkey'] : 0;
+$exp1 = (int)$x0['experiment_pkey'];
+
+$g = http('GET', "/expdb/experiment/$exp1", null, $OWNER);
+check("Exp: owner reads the experiment (with the sample)", $g['status'] === 200 && $g['json']['uuid'] === $x0['experiment_uuid']
+    && $g['json']['data']['sample']['strabo_id'] === $uuidSample && $g['json']['is_owner'] === true);
+$g = http('GET', "/expdb/project/$expPkey", null, $OWNER);
+check("Exp: owner's project lists both experiments", $g['status'] === 200 && count($g['json']['experiments']) === 2);
+$g = http('GET', "/expdb/experiment/$exp1", null, $COLLAB);
+check("Exp: Field project collaborator reads the linked experiment", $g['status'] === 200 && $g['json']['pkey'] === $exp1 && $g['json']['is_owner'] === false);
+$g = http('GET', "/expdb/experiment/$exp2", null, $COLLAB);
+check("Exp: ...but not the unlinked one", $g['status'] === 404);
+$g = http('GET', "/expdb/project/$expPkey", null, $COLLAB);
+check("Exp: collaborator's project view lists only the linked experiment", $g['status'] === 200
+    && count($g['json']['experiments']) === 1 && $g['json']['experiments'][0]['pkey'] === $exp1);
+check("Exp: outsider = 404 (experiment + project)", http('GET', "/expdb/experiment/$exp1", null, $OUTSIDER)['status'] === 404
+    && http('GET', "/expdb/project/$expPkey", null, $OUTSIDER)['status'] === 404);
+$db->prepare_query("UPDATE straboexp.project SET ispublic = true WHERE pkey = $1", array($expPkey));
+$g = http('GET', "/expdb/project/$expPkey", null, $OUTSIDER);
+check("Exp: public project readable by an outsider, all experiments", $g['status'] === 200 && count($g['json']['experiments']) === 2
+    && http('GET', "/expdb/experiment/$exp2", null, $OUTSIDER)['status'] === 200);
+$db->prepare_query("UPDATE straboexp.project SET ispublic = false WHERE pkey = $1", array($expPkey));
+check("Exp: bad ids = 400, write verbs refused", http('GET', '/expdb/experiment/abc', null, $OWNER)['status'] === 400
+    && http('DELETE', "/expdb/experiment/$exp1", null, $OWNER)['status'] === 400
+    && (int)$db->get_var_prepared("SELECT count(*) FROM straboexp.experiment WHERE pkey=$1", array($exp1)) === 1);
+check("Exp: no credentials = 401", http('GET', "/expdb/experiment/$exp1", null, null)['status'] === 401);
 
 // ------------------------------------------------------------------ E
 echo "\n=== E: helpers ===\n";
