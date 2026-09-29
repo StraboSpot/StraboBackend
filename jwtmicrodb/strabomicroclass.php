@@ -1667,6 +1667,17 @@ class StraboMicro
 				$data = new stdClass();
 				$data->Error = "Project already exists on server.";
 			}else{
+				// Re-upload of an existing project: rebuild it in place, keeping
+				// its micro_projectmetadata.id (MICRO_INPLACE_REBUILD, default on;
+				// define it false in config.inc.php to return to the old path).
+				$inplace = defined('MICRO_INPLACE_REBUILD') ? MICRO_INPLACE_REBUILD : true;
+				if($count > 0 && $inplace){
+					$result = $this->replaceProjectInPlace($strabo_project_id, $files, $shareKey);
+					if($result !== null){
+						return $result;
+					}
+				}
+
 				//Delete project just in case
 				$this->deleteProject($strabo_project_id);
 
@@ -1717,6 +1728,99 @@ class StraboMicro
 			$data->Error = "No project id provided.";
 		}
 
+		return $data;
+	}
+
+	/**
+	 * Replace an existing project with a new upload while keeping its
+	 * micro_projectmetadata.id (so viewer URLs and other references stay valid).
+	 *
+	 * Differences from the delete-and-recreate path in insertProject:
+	 *   - the upload is unzipped into a staging folder and validated BEFORE
+	 *     anything is deleted, so a bad file no longer destroys the project;
+	 *   - the old files stay in place until the new rows are loaded.
+	 * The database statements are the old path's (deleteProjectRows, then
+	 * loadProjectJSON) with the existing id instead of a new one. They are
+	 * NOT wrapped in a transaction: StraboSamplesService::upsertSample, called
+	 * per sample by loadProjectJSON, runs its own BEGIN/COMMIT on the same
+	 * connection, which would commit an outer transaction midway.
+	 * The request, response, and resulting rows and files are otherwise the
+	 * same as the old path (verified by tests/microinplace/).
+	 *
+	 * @return object|null result for the controller, or null if the project
+	 *                     does not exist (caller uses the old path)
+	 */
+	public function replaceProjectInPlace($strabo_project_id, $files, $shareKey){
+
+		$root = $_SERVER['DOCUMENT_ROOT']."/straboMicroFiles";
+		$pkey = $this->db->get_var("select id from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='".pg_escape_string($strabo_project_id)."'");
+		if($pkey == ""){
+			return null;
+		}
+		$pkey = (int)$pkey;
+
+		$final   = "$root/$pkey";
+		$staging = "$root/_staging_".$pkey."_".$this->getRandString();
+		$trash   = "$root/_trash_".$pkey."_".$this->getRandString();
+
+		// 1. Unzip into staging and flatten, exactly as the old path does.
+		mkdir($staging);
+		$filename = $files['tmp_name'];
+		exec("/usr/bin/unzip ".escapeshellarg($filename)." -d ".escapeshellarg($staging));
+		$inner = "$staging/$strabo_project_id";
+		if(is_dir($inner)){
+			exec("/bin/mv ".escapeshellarg($inner)."/* ".escapeshellarg($staging));
+			exec("/bin/rm -r ".escapeshellarg($inner)."/");
+		}
+
+		// 2. Validate before touching anything.
+		$json = @file_get_contents("$staging/project.json");
+		$json = utf8_encode($json);
+		$decoded = json_decode($json);
+		if(!is_object($decoded) || !isset($decoded->id) || $decoded->id == ""){
+			exec("rm -rf ".escapeshellarg($staging));
+			$data = new stdClass();
+			$data->Error = "Invalid file detectedd.";
+			return $data;
+		}
+
+		// Same sequence use as the old path, which called nextval here for the
+		// new project id.
+		$this->db->get_var("select nextval('micro_projectmetadata_id_seq')");
+
+		// 3. Delete the old rows and load the new ones under the same id.
+		$this->deleteProjectRows($strabo_project_id);
+		$data = $this->loadProjectJSON($json, $pkey, $shareKey);
+		if($data->Error != ""){
+			exec("rm -rf ".escapeshellarg($staging));
+			return $data;
+		}
+
+		// 4. Swap folders: the old files stayed in place until now.
+		if(is_dir($final)){
+			rename($final, $trash);
+		}
+		rename($staging, $final);
+
+		// 5. Remaining steps, in the same order as the old path.
+		$this->createProjectImages($json, $pkey, $strabo_project_id);
+		$this->deleteTempFiles($pkey, $strabo_project_id);
+
+		$this->db->query("update micro_projectmetadata set original_filename = '".pg_escape_string($files['name'])."' where id = $pkey");
+
+		// StraboSearch live-sync (§5.3): rebuild this project's index slice.
+		require_once __DIR__ . '/../microdb/lib/search_sync.php';
+		micro_search_sync_project($this->db, $pkey, $strabo_project_id, $this->userpkey);
+
+		copy($filename, "$final/project.zip");
+
+		if(is_dir($trash)){
+			exec("rm -rf ".escapeshellarg($trash));
+		}
+
+		$data = new stdClass();
+		$data->status = "success";
+		$data->message = "Project uploaded successfully.";
 		return $data;
 	}
 
@@ -4913,7 +5017,26 @@ class StraboMicro
 		return $projectcount;
 	}
 
+	/**
+	 * Delete a project: its database rows (deleteProjectRows) and its files.
+	 */
 	public function deleteProject($projectid) {
+		$pkey = $this->deleteProjectRows($projectid);
+		if($pkey != ""){
+			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey);
+			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey.".zip");
+		}
+	}
+
+	/**
+	 * Delete every database row of a project (samples spine, search slice,
+	 * relational tables, micro_projectmetadata row) but NOT its files.
+	 * Split out of deleteProject so replaceProjectInPlace can run it inside a
+	 * transaction and keep the files until the new upload is committed.
+	 *
+	 * @return string micro_projectmetadata.id of the deleted project, or "" if none
+	 */
+	public function deleteProjectRows($projectid) {
 
 		$pkey = $this->db->get_var("select id from micro_projectmetadata where strabo_id='$projectid' and userpkey=$this->userpkey");
 
@@ -4928,9 +5051,6 @@ class StraboMicro
 			// StraboSearch live-sync (§5.3): drop the project's index slice.
 			require_once __DIR__ . '/../microdb/lib/search_sync.php';
 			micro_search_sync_remove_project($this->db, $projectid, (int)$this->userpkey);
-
-			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey);
-			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey.".zip");
 
 			$this->db->query("delete from micro_tag where project_id = $pkey");
 			$this->db->query("delete from micro_micrograph_tag where project_id = $pkey");
@@ -6512,6 +6632,7 @@ class StraboMicro
 			
 			
 		}
+		return $pkey;
 		
 		
 
