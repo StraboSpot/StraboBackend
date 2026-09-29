@@ -84,6 +84,7 @@ $uuidSample  = 'e2e97781-aaaa-4bbb-8ccc-' . sprintf('%012d', $stamp % 1000000000
 $legacyId    = 'lgcy-97781-' . $stamp;
 $microOnlyId = 'mcro-97781-' . $stamp;
 $microStraboId = 'e2e-linked-micro-' . $stamp;
+$micrographId  = 'mg-97781-' . $stamp;
 $expProjectName = 'linked-data e2e exp ' . $stamp;
 
 function http($method, $path, $body, $userPass, $cookie = null) {
@@ -166,12 +167,10 @@ function suiteCleanup($db, $neodb, $NEO_MIN, $NEO_MAX, $ownerPkey, $extraIds, $m
     $neodb->query("MATCH (p:Project) WHERE p.id >= $NEO_MIN AND p.id <= $NEO_MAX DETACH DELETE p");
     $db->prepare_query("DELETE FROM strabosamples.samples WHERE userpkey=$1 AND (id LIKE '97781%' OR id LIKE 'e2e97781-%'
         OR id LIKE 'lgcy-97781-%' OR id LIKE 'mcro-97781-%')", array($ownerPkey));
-    foreach ((array)$db->get_results_prepared("SELECT id FROM micro_projectmetadata WHERE userpkey=$1 AND strabo_id LIKE 'e2e-linked-micro-%'", array($ownerPkey)) as $m) {
-        if (!$m) continue;
-        $db->prepare_query("DELETE FROM micro_samplemetadata WHERE dataset_id IN (SELECT id FROM micro_datasetmetadata WHERE project_id=$1)", array($m->id));
-        $db->prepare_query("DELETE FROM micro_datasetmetadata WHERE project_id=$1", array($m->id));
-        $db->prepare_query("DELETE FROM micro_projectmetadata WHERE id=$1", array($m->id));
-        exec("rm -rf " . escapeshellarg("/srv/app/www/straboMicroFiles/" . (int)$m->id));
+    // StraboMicro's own delete: micrographs hang ~20 child tables off the samples.
+    $sm = new StraboMicro($neodb, $ownerPkey, $db);
+    foreach ((array)$db->get_results_prepared("SELECT strabo_id FROM micro_projectmetadata WHERE userpkey=$1 AND strabo_id LIKE 'e2e-linked-micro-%'", array($ownerPkey)) as $m) {
+        if ($m) $sm->deleteProject($m->strabo_id);
     }
     $db->prepare_query("DELETE FROM straboexp.project WHERE userpkey=$1 AND name LIKE 'linked-data e2e exp %'", array($ownerPkey));
     $db->prepare_query("DELETE FROM collaborators WHERE project_owner_user_pkey=$1 AND strabo_project_id LIKE '97781%'", array($ownerPkey));
@@ -206,14 +205,18 @@ $microInternal = (int)$db->get_var("SELECT nextval('strabomicro.micro_projectmet
 @mkdir("/srv/app/www/straboMicroFiles/$microInternal", 0755, true);
 $sm = new StraboMicro($neodb, $ownerPkey, $db);
 $sm->setuuid(new UUID());
-$ms = function ($id, $name) {
+$ms = function ($id, $name, $micrographs = array()) {
     return (object)array('id' => $id, 'sampleID' => $name, 'label' => $name, 'latitude' => 39.5, 'longitude' => -105.5,
-        'materialType' => 'intact_rock', 'mainSamplingPurpose' => 'fabric___micro', 'sampleDescription' => "$name in thin section");
+        'materialType' => 'intact_rock', 'mainSamplingPurpose' => 'fabric___micro', 'sampleDescription' => "$name in thin section",
+        'micrographs' => $micrographs);
 };
 $sm->loadProjectJSON(json_encode(array('id' => $microStraboId, 'name' => 'Linked E2E Micro Project', 'startDate' => '2026-09-01',
     'datasets' => array(array('id' => $microStraboId . '-ds', 'name' => 'Linked E2E Micro Dataset',
-        'samples' => array($ms((string)$sRich, 'RICH'), $ms($legacyId, 'LEGACY'), $ms($microOnlyId, 'MICRO-MADE')))))),
+        'samples' => array($ms((string)$sRich, 'RICH', array(array('id' => $micrographId, 'name' => 'XZ overview'))), $ms($legacyId, 'LEGACY'), $ms($microOnlyId, 'MICRO-MADE')))))),
     $microInternal, '');
+@mkdir("/srv/app/www/straboMicroFiles/$microInternal/images", 0755, true);
+copy('/srv/app/www/includes/images/image-not-found.jpg', "/srv/app/www/straboMicroFiles/$microInternal/images/$micrographId.jpg");
+$jpgBytes = filesize("/srv/app/www/straboMicroFiles/$microInternal/images/$micrographId.jpg");
 
 $features = array(
     feat($sRich, 'RICH', $ts, array(sampleObj($sRich, 'RICH')), true),
@@ -253,7 +256,7 @@ check("  micro project + dataset: Micro's own ids + names", $k && isset($k['micr
     && $k['micro']['projects'][0]['dataset_id'] === $microStraboId . '-ds'
     && $k['micro']['projects'][0]['project_name'] === 'Linked E2E Micro Project'
     && $k['micro']['projects'][0]['dataset_name'] === 'Linked E2E Micro Dataset'
-    && $k['micro']['projects'][0]['micrograph_count'] === 0);
+    && $k['micro']['projects'][0]['micrograph_count'] === 1);
 check("  micro has projects only (no data block)", $k && array_keys($k['micro']) === array('projects'));
 $mp = $k ? $k['micro']['projects'][0]['project_id'] : '';
 $w = http('GET', '/microdb/webProject/' . rawurlencode($mp), null, $OWNER);
@@ -391,9 +394,22 @@ check("Micro: owner reads with ?owner too", $all(microStatuses($microEps, $micro
 check("Micro: Field project collaborator without ?owner = 404 (their own namespace)", $all(microStatuses($microEps, $microStraboId, '', $COLLAB), 404));
 check("Micro: Field project collaborator with ?owner = 200", $all(microStatuses($microEps, $microStraboId, $oq, $COLLAB), 200));
 $u = http('GET', "/microdb/projectURL/" . rawurlencode($microStraboId) . $oq, null, $COLLAB);
-check("Micro: projectURL for the collaborator counts this project's micrographs", isset($u['json']['micrograph_count']) && (int)$u['json']['micrograph_count'] === 0
+check("Micro: projectURL for the collaborator counts this project's micrographs", isset($u['json']['micrograph_count']) && (int)$u['json']['micrograph_count'] === 1
     && isset($u['json']['url']) && strpos($u['json']['url'], "/$microStraboId.zip") !== false);
 check("Micro: outsider with ?owner = 404", $all(microStatuses($microEps, $microStraboId, $oq, $OUTSIDER), 404));
+function imageBytes($id, $cred) {
+    $r = http('GET', '/microdb/image/' . rawurlencode($id), null, $cred);
+    return strlen($r['raw']);
+}
+$j = http('GET', '/microdb/project/' . rawurlencode($microStraboId) . $oq, null, $COLLAB);
+$imgUrl = '';
+foreach ((isset($j['json']['projectDetails']['datasets']) ? $j['json']['projectDetails']['datasets'] : array()) as $d)
+    foreach ($d['samples'] as $smp) foreach ((isset($smp['micrographs']) ? $smp['micrographs'] : array()) as $m) $imgUrl = $m['imageURL'];
+check("Micro: collaborator's project JSON carries the micrograph imageURL", substr($imgUrl, -strlen("/microdb/image/$micrographId")) === "/microdb/image/$micrographId");
+check("Micro: owner gets the micrograph image", imageBytes($micrographId, $OWNER) === $jpgBytes);
+check("Micro: collaborator gets the micrograph image", imageBytes($micrographId, $COLLAB) === $jpgBytes);
+check("Micro: outsider gets the not-found placeholder instead", imageBytes($micrographId, $OUTSIDER) !== $jpgBytes);
+check("Micro: an image id that is not an id shape gets the placeholder", imageBytes("../../includes/images/image-not-found", $OWNER) !== $jpgBytes);
 
 // Migrated Field links record only dataset_id: the Neo4j dataset -> project walk decides.
 $db->prepare_query("UPDATE strabosamples.sample_subsystem_links SET reference_metadata = reference_metadata - 'project_id'

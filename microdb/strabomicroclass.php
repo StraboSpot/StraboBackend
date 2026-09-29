@@ -409,8 +409,19 @@ class StraboMicro
 		return $out;
 	}
 
+	/**
+	 * Internal project id (the straboMicroFiles folder) holding micrograph
+	 * $image_id, when the caller may see it: their own project first, else
+	 * a public one or one holding a sample they can reach through
+	 * StraboSamples (samplesdb/lib/linked_reach.php, 2026-09-29), so the
+	 * imageURLs in a collaborator's project read resolve. Null otherwise.
+	 * The id must look like an id: it becomes part of a file path.
+	 */
 	public function getProjectFolderFromImageId($image_id){
-		$project_folder = $this->db->get_var("select proj.id from
+		$image_id = (string)$image_id;
+		if (!preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$/', $image_id)) return null;
+		$caller = (int)$this->userpkey;
+		$rows = $this->db->get_results_prepared("select proj.id, proj.userpkey, proj.ispublic from
 											micro_projectmetadata proj,
 											micro_datasetmetadata dat,
 											micro_samplemetadata samp,
@@ -419,10 +430,15 @@ class StraboMicro
 											mic.sample_id = samp.id and
 											samp.dataset_id = dat.id and
 											dat.project_id = proj.id and
-											proj.userpkey = $this->userpkey and
-											mic.strabo_id = '$image_id';");
-
-		return $project_folder;
+											mic.strabo_id = $1
+											order by (proj.userpkey = $2) desc, proj.id desc", array($image_id, $caller));
+		foreach ((is_array($rows) ? $rows : array()) as $r) {
+			if ((int)$r->userpkey === $caller) return (int)$r->id;
+			if ($r->ispublic === 't' || $r->ispublic === true) return (int)$r->id;
+			require_once __DIR__ . '/../samplesdb/lib/linked_reach.php';
+			if (linked_reach_micro_project($this->db, $this->neodb, $caller, (int)$r->id, (int)$r->userpkey)) return (int)$r->id;
+		}
+		return null;
 
 	}
 

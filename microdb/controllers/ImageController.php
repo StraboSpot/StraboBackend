@@ -20,7 +20,8 @@ class ImageController extends MyController
 
 			$project_folder = $this->sm->getProjectFolderFromImageId($image_id);
 
-			if(file_exists($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_folder."/images/".$image_id.".jpg")){
+			// Null unless the id is id-shaped and the caller may see it.
+			if($project_folder && file_exists($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_folder."/images/".$image_id.".jpg")){
 				header('Content-type: image/jpeg');
 				readfile($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_folder."/images/".$image_id.".jpg");
 				exit();
