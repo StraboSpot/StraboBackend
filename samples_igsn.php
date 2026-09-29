@@ -1011,7 +1011,7 @@ body { overflow-x: clip; overflow-y: visible; }
     // ------------------------------------------------------------------
     // Import from my SESAR account (one SESAR page at a time)
     // ------------------------------------------------------------------
-    var imp = { page: 1, pages: 1, rows: [], selected: {}, busy: false, search: '' };
+    var imp = { page: 1, pages: 1, rows: [], selected: {}, busy: false, search: '', seq: 0 };
     var impRows = document.getElementById('si-imp-rows'), impCount = document.getElementById('si-imp-count');
     var impPrev = document.getElementById('si-imp-prev'), impNext = document.getElementById('si-imp-next'), impPage = document.getElementById('si-imp-page');
     var impAll = document.getElementById('si-imp-all'), impSel = document.getElementById('si-imp-selcount'), impCreate = document.getElementById('si-imp-create');
@@ -1024,6 +1024,7 @@ body { overflow-x: clip; overflow-y: visible; }
             return;
         }
         imp.busy = true;
+        var seq = ++imp.seq;   // only the latest request may draw: a search sent while the first page loads must not be overwritten by it
         impRows.innerHTML = '<tr><td colspan="5" class="si-muted">Loading your samples from SESAR…</td></tr>';
         impPrev.hidden = impNext.hidden = true;
         fetch('/sesar_pull.php', {
@@ -1032,6 +1033,7 @@ body { overflow-x: clip; overflow-y: visible; }
         }).then(function (r) { return r.json(); }).catch(function () {
             return { ok: false, message: 'Could not reach StraboSpot. Please check your connection.' };
         }).then(function (j) {
+            if (seq !== imp.seq) return;
             imp.busy = false;
             if (!j.ok) {
                 impRows.innerHTML = '<tr><td colspan="5"><div class="si-note si-err">' + esc(j.message || 'Something went wrong.')
