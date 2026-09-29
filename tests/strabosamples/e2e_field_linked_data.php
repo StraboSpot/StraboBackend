@@ -236,22 +236,32 @@ $rich = sampleOf($by, $sRich);
 $k = isset($rich[$KEY]) ? $rich[$KEY] : null;
 check("rich numeric sample has the key", is_array($k));
 check("  id + owner", $k && $k['id'] === (string)$sRich && (int)$k['owner'] === $ownerPkey);
-check("  micro project + dataset names", $k && isset($k['micro']['projects'][0])
-    && $k['micro']['projects'][0]['project_id'] === $microInternal
+check("  micro project + dataset: Micro's own ids + names", $k && isset($k['micro']['projects'][0])
+    && $k['micro']['projects'][0]['project_id'] === $microStraboId
+    && $k['micro']['projects'][0]['dataset_id'] === $microStraboId . '-ds'
     && $k['micro']['projects'][0]['project_name'] === 'Linked E2E Micro Project'
-    && $k['micro']['projects'][0]['dataset_name'] === 'Linked E2E Micro Dataset');
-check("  micro data carries the Micro fields", $k && isset($k['micro']['data']['sampledescription'])
-    && $k['micro']['data']['sampledescription'] === 'RICH in thin section');
+    && $k['micro']['projects'][0]['dataset_name'] === 'Linked E2E Micro Dataset'
+    && $k['micro']['projects'][0]['micrograph_count'] === 0);
+check("  micro has projects only (no data block)", $k && array_keys($k['micro']) === array('projects'));
+$mp = $k ? $k['micro']['projects'][0]['project_id'] : '';
+$w = http('GET', '/microdb/webProject/' . rawurlencode($mp), null, $OWNER);
+check("  that project_id works on the Micro API (/microdb/webProject)", $w['status'] === 200 && substr($w['raw'], 0, 2) === 'PK');
 check("  no experimental part", $k && !isset($k['experimental']));
 check("  Field fields not repeated", $k && !isset($k['field']) && !isset($k['field_data']));
 
 $u = sampleOf($by, $sUuidSpot);
 $k = isset($u[$KEY]) ? $u[$KEY] : null;
 check("rich UUID sample has the key", is_array($k) && $k['id'] === $uuidSample);
-check("  experiment id + project name", $k && isset($k['experimental']['experiments'][0])
-    && $k['experimental']['experiments'][0]['experiment_id'] === 'LNK-' . $stamp
-    && $k['experimental']['experiments'][0]['project_name'] === $expProjectName
-    && $k['experimental']['experiments'][0]['project_id'] === $expPkey);
+$x0 = $k && isset($k['experimental']['experiments'][0]) ? $k['experimental']['experiments'][0] : array();
+check("  experiment: pkeys, typed ID, uuid, project name", $x0
+    && $x0['experiment_id'] === 'LNK-' . $stamp && is_int($x0['experiment_pkey'])
+    && $x0['project_pkey'] === $expPkey && $x0['project_name'] === $expProjectName
+    && preg_match('/^[0-9a-f-]{36}$/', $x0['experiment_uuid']));
+$g = http('GET', '/experimental/api/get_experiment.php?id=' . (int)($x0 ? $x0['experiment_pkey'] : 0), null, null, $sid);
+check("  experiment_pkey works on the Experimental API (get_experiment.php)", $g['status'] === 200
+    && strpos($g['raw'], $x0 ? $x0['experiment_uuid'] : 'none') !== false);
+$g = http('GET', '/experimental/api/get_project.php?id=' . $expPkey, null, null, $sid);
+check("  project_pkey works on the Experimental API (get_project.php)", $g['status'] === 200 && strpos($g['raw'], $expProjectName) !== false);
 check("  composition rows in order", $k && count($k['experimental']['composition']) === 2
     && $k['experimental']['composition'][0]['mineral'] === 'Quartz' && $k['experimental']['composition'][1]['fraction'] === '60');
 check("  parameters + documents present as lists", $k && $k['experimental']['parameters'] === array() && $k['experimental']['documents'] === array());
@@ -263,8 +273,17 @@ check("Field-only sample has no key", ($x = sampleOf($by, $sFieldOnly)) && !arra
 $stub = sampleOf($by, $sParent);
 check("parent stub untouched (id only)", $stub === array('id' => (string)$sRich));
 $leg = sampleOf($by, $sLegacy);
-check("legacy inline sample has the key with its micro data", isset($leg[$KEY]['micro']['data']['sampledescription'])
-    && $leg[$KEY]['id'] === $legacyId && $leg[$KEY]['micro']['data']['sampledescription'] === 'LEGACY in thin section');
+check("legacy inline sample has the key with its micro project", isset($leg[$KEY]['micro']['projects'][0]['project_id'])
+    && $leg[$KEY]['id'] === $legacyId && $leg[$KEY]['micro']['projects'][0]['project_id'] === $microStraboId);
+// No null or empty-string value anywhere in any key; lists always present.
+$noEmpty = function ($v) use (&$noEmpty) {
+    if ($v === null || $v === '') return false;
+    if (is_array($v)) foreach ($v as $x) if (!$noEmpty($x)) return false;
+    return true;
+};
+$allClean = true;
+foreach ($by as $f) foreach ($f['properties']['samples'] as $smp) if (isset($smp[$KEY]) && !$noEmpty($smp[$KEY])) $allClean = false;
+check("no null or empty-string values anywhere in the key", $allClean);
 $lnk = sampleOf($by, $sLinked);
 check("entry linked through strabosamples_id resolves to the linked sample", isset($lnk[$KEY]['id']) && $lnk[$KEY]['id'] === $microOnlyId
     && $lnk['strabosamples_id'] === $microOnlyId && $lnk['id'] === (string)$sLinked);
@@ -288,11 +307,11 @@ $createDeleteSql = "SELECT count(*) FROM strabosamples.sample_changelog WHERE sa
 $changelogBefore = mustCount($db->get_var_prepared($createDeleteSql, array($ownerPkey)), 'changelog before');
 $back = $fullDownload;
 $ts2 = $ts + 5000;
-$junk = array('id' => 'hijack', 'owner' => 1, 'micro' => array('data' => array('sampledescription' => 'TAMPERED')));
+$junk = array('id' => 'hijack', 'owner' => 1, 'micro' => array('projects' => array(array('project_id' => 'TAMPERED'))));
 foreach ($back['features'] as &$f) {
     $f['properties']['modified_timestamp'] = $ts2;
     foreach ($f['properties']['samples'] as &$s) {
-        if (isset($s[$KEY])) $s[$KEY]['micro']['data']['sampledescription'] = 'TAMPERED';
+        if (isset($s[$KEY]['micro'])) $s[$KEY]['micro']['projects'][0]['project_id'] = 'TAMPERED';
     }
     unset($s);
     if ((string)$f['properties']['id'] === (string)$sFieldOnly) $f['properties']['samples'][0][$KEY] = $junk;   // invented on a Field-only sample
@@ -312,8 +331,8 @@ $js = (string)$neodb->get_var("MATCH (s:Spot {id:$sParent, userpkey:$ownerPkey})
 check("stored stub is still {id} only", json_decode($js, true) === array(array('id' => (string)$sRich)));
 list($r, $by2) = download($datasetId, $OWNER);
 $k2 = sampleOf($by2, $sRich);
-check("next download rebuilds the key from real data", isset($k2[$KEY]['micro']['data']['sampledescription'])
-    && $k2[$KEY]['micro']['data']['sampledescription'] === 'RICH in thin section');
+check("next download rebuilds the key from real data", isset($k2[$KEY]['micro']['projects'][0]['project_id'])
+    && $k2[$KEY]['micro']['projects'][0]['project_id'] === $microStraboId);
 check("invented key on a Field-only sample is gone", ($x = sampleOf($by2, $sFieldOnly)) && !array_key_exists($KEY, $x));
 check("spot-level key is gone", isset($by2[(string)$sRich]) && !array_key_exists($KEY, $by2[(string)$sRich]['properties']));
 
@@ -355,6 +374,9 @@ $n = null;
 check("strip on null is a no-op", field_linked_strip_properties($n) === 0);
 check("clean drops _keys, keeps the rest", _field_linked_clean('{"_sample_json":"x","a":1}') === array('a' => 1));
 check("clean of null / empty", _field_linked_clean(null) === null && _field_linked_clean('{}') === null);
+check("prune drops null / '' / emptied objects, keeps lists", _field_linked_prune(array('a' => null, 'b' => '', 'c' => 0,
+    'd' => array('e' => null), 'composition' => array(), 'f' => array(array('g' => '', 'h' => 'x'))))
+    === array('c' => 0, 'composition' => array(), 'f' => array(array('h' => 'x'))));
 $empty = array('type' => 'FeatureCollection', 'features' => array());
 check("attach on an empty collection", field_linked_attach($db, $empty, $ownerPkey) === 0);
 

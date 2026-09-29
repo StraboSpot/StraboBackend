@@ -11,15 +11,31 @@
  *              apps' data for the sample; Field data is not repeated.
  *              Samples used only in StraboField get no key.
  *
+ *              StraboMicro sends only where the sample is used: its sample
+ *              fields are Field's sample form under other names (the old
+ *              copy-from-Field link) plus bookkeeping ids, and the Field
+ *              values win on upload, so they add nothing (Jason 2026-09-29).
+ *              Null and empty-string values are left out everywhere; lists
+ *              are always present, empty or not.
+ *
+ *              Ids are the ones each app's own API takes, so the Field app
+ *              can fetch more (Jason: that is what the app devs are after):
+ *              Micro project_id / dataset_id = the Micro strabo_id strings
+ *              (/microdb/webProject/{id}, /microdb/projectPDF/{id}; never the
+ *              internal row numbers); Experimental project_pkey /
+ *              experiment_pkey = the ?id= of experimental/api/get_project.php,
+ *              get_experiment.php and the download endpoints. experiment_id
+ *              is the ID the user types in StraboExperimental.
+ *
  *                "strabosamples_linked": {
  *                  "id": "<StraboSamples id>", "owner": <owner pkey>,
  *                  "micro": {                          (only when linked)
  *                    "projects": [ {project_id, project_name, dataset_id,
- *                                   dataset_name, micrograph_count} ],
- *                    "data": { ...the sample's StraboMicro fields... } },
+ *                                   dataset_name, micrograph_count} ] },
  *                  "experimental": {                   (only when linked)
- *                    "experiments": [ {project_id, project_name,
- *                                      experiment_id, experiment_uuid} ],
+ *                    "experiments": [ {project_pkey, project_name,
+ *                                      experiment_pkey, experiment_id,
+ *                                      experiment_uuid} ],
  *                    "data": { ...the sample's StraboExperimental fields... },
  *                    "composition": [...], "parameters": [...],
  *                    "documents": [...] } }
@@ -205,30 +221,20 @@ function _field_linked_attach($db, &$collection, $ownerPkey) {
             $expUuids[(string)$meta['experiment_uuid']] = true;
         }
     }
-    $linkedIds = array_keys($links);
-    $linkedJson = json_encode(array_map('strval', $linkedIds));
-
-    // The samples' own Micro / Experimental fields.
-    $slices = array();
-    $rows = $db->get_results_prepared(
-        "SELECT id, micro_data::text AS md, experimental_data::text AS ed
-           FROM strabosamples.samples
-          WHERE userpkey = $1 AND id IN (SELECT jsonb_array_elements_text($2::jsonb))",
-        array($ownerPkey, $linkedJson)
-    );
-    foreach ((is_array($rows) ? $rows : array()) as $r) {
-        $slices[$r->id] = array(
-            'micro'        => _field_linked_clean($r->md),
-            'experimental' => _field_linked_clean($r->ed),
-        );
-    }
-
-    // Experimental sub-arrays, for samples used in StraboExperimental.
+    // Experimental fields + sub-arrays, for samples used in StraboExperimental.
+    $expData = array();
     $sub = array('composition' => array(), 'parameters' => array(), 'documents' => array());
     $expIds = array();
     foreach ($links as $id => $l) if (!empty($l['experimental'])) $expIds[] = (string)$id;
     if ($expIds) {
         $expJson = json_encode($expIds);
+        $rows = $db->get_results_prepared(
+            "SELECT id, experimental_data::text AS ed
+               FROM strabosamples.samples
+              WHERE userpkey = $1 AND id IN (SELECT jsonb_array_elements_text($2::jsonb))",
+            array($ownerPkey, $expJson)
+        );
+        foreach ((is_array($rows) ? $rows : array()) as $r) $expData[$r->id] = _field_linked_clean($r->ed);
         $subSql = array(
             'composition' => "SELECT sample_id, mineral, other_mineral, fraction, unit, grainsize, ordering
                                 FROM strabosamples.sample_composition",
@@ -260,23 +266,24 @@ function _field_linked_attach($db, &$collection, $ownerPkey) {
     $microProjects = array();
     if ($microProjectIds) {
         $rows = $db->get_results_prepared(
-            "SELECT id, name FROM micro_projectmetadata WHERE id = ANY($1::int[])",
+            "SELECT id, strabo_id, name FROM micro_projectmetadata WHERE id = ANY($1::int[])",
             array('{' . implode(',', array_keys($microProjectIds)) . '}')
         );
-        foreach ((is_array($rows) ? $rows : array()) as $r) $microProjects[(int)$r->id] = $r->name;
+        foreach ((is_array($rows) ? $rows : array()) as $r) $microProjects[(int)$r->id] = $r;
     }
     $microDatasets = array();
     if ($microDatasetIds) {
         $rows = $db->get_results_prepared(
-            "SELECT id, name FROM micro_datasetmetadata WHERE id = ANY($1::int[])",
+            "SELECT id, strabo_id, name FROM micro_datasetmetadata WHERE id = ANY($1::int[])",
             array('{' . implode(',', array_keys($microDatasetIds)) . '}')
         );
-        foreach ((is_array($rows) ? $rows : array()) as $r) $microDatasets[(int)$r->id] = $r->name;
+        foreach ((is_array($rows) ? $rows : array()) as $r) $microDatasets[(int)$r->id] = $r;
     }
     $experiments = array();
     if ($expUuids) {
         $rows = $db->get_results_prepared(
-            "SELECT e.uuid, e.id AS experiment_id, p.pkey AS project_pkey, p.name AS project_name
+            "SELECT e.uuid, e.pkey AS experiment_pkey, e.id AS experiment_id,
+                    p.pkey AS project_pkey, p.name AS project_name
                FROM straboexp.experiment e
           LEFT JOIN straboexp.project p ON p.pkey = e.project_pkey
               WHERE e.uuid IN (SELECT jsonb_array_elements_text($1::jsonb))",
@@ -292,42 +299,44 @@ function _field_linked_attach($db, &$collection, $ownerPkey) {
         if (!empty($l['micro'])) {
             $projects = array();
             foreach ($l['micro'] as $m) {
-                $pid = ctype_digit($m['ref']) ? (int)$m['ref'] : null;
-                $did = isset($m['meta']['dataset_id']) && ctype_digit((string)$m['meta']['dataset_id']) ? (int)$m['meta']['dataset_id'] : null;
+                // Internal row numbers only find the rows; the app gets Micro's own ids.
+                $pr = ctype_digit($m['ref']) && isset($microProjects[(int)$m['ref']]) ? $microProjects[(int)$m['ref']] : null;
+                $dk = isset($m['meta']['dataset_id']) && ctype_digit((string)$m['meta']['dataset_id']) ? (int)$m['meta']['dataset_id'] : null;
+                $dr = ($dk !== null && isset($microDatasets[$dk])) ? $microDatasets[$dk] : null;
+                if ($pr === null) continue;   // project row gone: nothing the app could fetch
                 $projects[] = array(
-                    'project_id'       => $pid,
-                    'project_name'     => ($pid !== null && isset($microProjects[$pid])) ? $microProjects[$pid] : null,
-                    'dataset_id'       => $did,
-                    'dataset_name'     => ($did !== null && isset($microDatasets[$did])) ? $microDatasets[$did] : null,
+                    'project_id'       => (string)$pr->strabo_id,
+                    'project_name'     => $pr->name,
+                    'dataset_id'       => $dr ? (string)$dr->strabo_id : null,
+                    'dataset_name'     => $dr ? $dr->name : null,
                     'micrograph_count' => isset($m['meta']['micrograph_count']) ? (int)$m['meta']['micrograph_count'] : 0,
                 );
             }
-            $v['micro'] = array(
-                'projects' => $projects,
-                'data'     => isset($slices[$id]) ? $slices[$id]['micro'] : null,
-            );
+            if ($projects) $v['micro'] = array('projects' => $projects);
         }
         if (!empty($l['experimental'])) {
             $exps = array();
             foreach ($l['experimental'] as $x) {
                 $uuid = isset($x['meta']['experiment_uuid']) ? (string)$x['meta']['experiment_uuid'] : '';
                 $e = ($uuid !== '' && isset($experiments[$uuid])) ? $experiments[$uuid] : null;
+                if ($e === null) continue;   // experiment gone: nothing the app could fetch
                 $exps[] = array(
-                    'project_id'      => $e && $e->project_pkey !== null ? (int)$e->project_pkey : null,
-                    'project_name'    => $e ? $e->project_name : null,
-                    'experiment_id'   => $e ? $e->experiment_id : (isset($x['meta']['experiment_id']) ? $x['meta']['experiment_id'] : null),
-                    'experiment_uuid' => $uuid !== '' ? $uuid : null,
+                    'project_pkey'    => $e->project_pkey !== null ? (int)$e->project_pkey : null,
+                    'project_name'    => $e->project_name,
+                    'experiment_pkey' => (int)$e->experiment_pkey,
+                    'experiment_id'   => $e->experiment_id,
+                    'experiment_uuid' => $uuid,
                 );
             }
-            $v['experimental'] = array(
+            if ($exps) $v['experimental'] = array(
                 'experiments' => $exps,
-                'data'        => isset($slices[$id]) ? $slices[$id]['experimental'] : null,
+                'data'        => isset($expData[$id]) ? $expData[$id] : null,
                 'composition' => isset($sub['composition'][$id]) ? $sub['composition'][$id] : array(),
                 'parameters'  => isset($sub['parameters'][$id]) ? $sub['parameters'][$id] : array(),
                 'documents'   => isset($sub['documents'][$id]) ? $sub['documents'][$id] : array(),
             );
         }
-        $values[$id] = $v;
+        if (isset($v['micro']) || isset($v['experimental'])) $values[$id] = _field_linked_prune($v);
     }
 
     $attached = 0;
@@ -343,6 +352,29 @@ function _field_linked_attach($db, &$collection, $ownerPkey) {
         $attached++;
     }
     return $attached;
+}
+
+/**
+ * Leave out null and empty-string values, and objects left empty by that,
+ * at every level. Lists stay, even empty, so clients can always loop.
+ * @internal
+ */
+function _field_linked_prune($v) {
+    if (!is_array($v)) return $v;
+    $isList = ($v === array() || array_keys($v) === range(0, count($v) - 1));
+    $out = array();
+    foreach ($v as $k => $x) {
+        $x = _field_linked_prune($x);
+        if ($isList) { $out[] = $x; continue; }
+        if ($x === null || $x === '' || $x === array() && !_field_linked_is_list_key($k)) continue;
+        $out[$k] = $x;
+    }
+    return $out;
+}
+
+/** Keys whose value is a list and stays even when empty. @internal */
+function _field_linked_is_list_key($k) {
+    return in_array($k, array('projects', 'experiments', 'composition', 'parameters', 'documents'), true);
 }
 
 /**
