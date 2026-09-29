@@ -25,7 +25,7 @@ class ProjectURLController extends MyController
 
 			} else {
 				//get the feature from database
-				$projectinfo = $this->sm->getProjectURL($project_id);
+				$projectinfo = $this->sm->getProjectURL($project_id, isset($request->parameters['owner']) ? $request->parameters['owner'] : null);
 
 				if($projectinfo->bytes > 0){
 

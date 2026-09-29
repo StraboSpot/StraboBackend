@@ -25,7 +25,7 @@ class ProjectController extends MyController
 
 			} else {
 				//get the feature from database
-				$projectinfo = $this->sm->getProjectInfo($project_id);
+				$projectinfo = $this->sm->getProjectInfo($project_id, isset($request->parameters['owner']) ? $request->parameters['owner'] : null);
 
 				if($projectinfo->count > 0){
 
