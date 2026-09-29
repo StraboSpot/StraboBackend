@@ -326,19 +326,36 @@ class SesarClient
 	}
 
 	/**
+	 * uri_type of a web link. The API takes any string, but SESAR's sample
+	 * page lists only "DOI", "LOCAL" (uploaded files) and "regular URL"
+	 * (case-insensitive) under Linked Resources; anything else (we sent
+	 * "URL" until 09-29) is stored but never shown.
+	 */
+	const LINK_URI_TYPE = 'regular URL';
+
+	/**
 	 * A related resource (D2: link back to the sample's StraboSpot page).
 	 * Returns SESAR's id; link it at mint time via related_resources:[id].
 	 */
 	public function createRelatedResource($access, $label, $uri, $description = null)
 	{
 		$body = array('label' => (string)$label, 'related_resource_type' => 'PhysicalObject',
-			'uri' => (string)$uri, 'uri_type' => 'URL');
+			'uri' => (string)$uri, 'uri_type' => self::LINK_URI_TYPE);
 		if ($description !== null && $description !== '') $body['description'] = (string)$description;
 		$d = $this->unwrap($this->call('POST', 'related-resources/', $access, $body, 'json'));
 		if (!isset($d['id']) || !is_numeric($d['id'])) {
 			throw new SesarError(502, 'SESAR did not return an id for the related resource.');
 		}
 		return (int)$d['id'];
+	}
+
+	/**
+	 * Changes fields of one of the user's related resources (e.g. uri_type).
+	 * Returns the resource as SESAR now holds it.
+	 */
+	public function updateRelatedResource($access, $resourceId, array $patch)
+	{
+		return $this->unwrap($this->call('PATCH', 'related-resources/' . (int)$resourceId . '/', $access, $patch, 'json'));
 	}
 
 	/**
