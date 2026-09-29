@@ -25,7 +25,7 @@ class ProjectPDFController extends MyController
 
 			} else {
 				//get the feature from database
-				$data = $this->sm->getProjectPDF($project_id);
+				$data = $this->sm->getProjectPDF($project_id, isset($request->parameters['owner']) ? $request->parameters['owner'] : null);
 
 				if($data->Error != ""){
 

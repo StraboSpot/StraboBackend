@@ -25,7 +25,7 @@ class WebProjectController extends MyController
 
 			} else {
 				//get the feature from database
-				$data = $this->sm->getWebProject($project_id);
+				$data = $this->sm->getWebProject($project_id, isset($request->parameters['owner']) ? $request->parameters['owner'] : null);
 
 				if($data->Error != ""){
 
