@@ -391,7 +391,9 @@ class SesarPull
 		$page = max(1, (int)$page);
 		$q = array('scope' => 'personal', 'page' => $page, 'page_size' => self::IMPORT_PAGE);
 		$search = trim((string)$search);
-		if ($search !== '') $q['search'] = mb_substr($search, 0, 100);
+		// The sample list filters on ?q= (name or IGSN, any case); it ignores ?search=
+		// and answers the whole account (sandbox 09-28).
+		if ($search !== '') $q['q'] = mb_substr($search, 0, 100);
 		$client = $this->client;
 		$res = $this->conn->withAccess($userpkey, function ($access) use ($client, $q) { return $client->listSamples($access, $q); });
 		$holders = $this->holders($userpkey);

@@ -394,7 +394,8 @@ class FakeSesar implements SesarTransport
 					if (strpos($want, '/') === false) $want = '10.58052/' . $want;
 					if (strtoupper($igsn) !== $want) continue;
 				}
-				if (isset($query['search']) && stripos($igsn . ' ' . (isset($rec['name']) ? $rec['name'] : ''), (string)$query['search']) === false) continue;
+				// Like SESAR: ?q= matches name or IGSN; ?search= is ignored on this list.
+				if (isset($query['q']) && stripos($igsn . ' ' . (isset($rec['name']) ? $rec['name'] : ''), (string)$query['q']) === false) continue;
 				if ($authed && $rec['_owner'] !== $tok['orcid']) continue;   // scope=personal
 				if (!empty($rec['_deactivated'])) continue;
 				if (!$authed && !empty($rec['_private'])) continue;

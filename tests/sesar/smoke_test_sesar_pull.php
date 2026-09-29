@@ -403,7 +403,9 @@ for ($i = 0; $i < 55; $i++) $fake->seedSample(sprintf('10.58052/IEFAK%04d', 100 
 $pg = $pull->importPage($A, 2);
 check('paging: 50 per page, page 2 has the rest', $pg['pages'] === 2 && $pg['page'] === 2 && count($pg['rows']) === $pg['count'] - 50, array($pg['count'], count($pg['rows'])));
 $pg = $pull->importPage($A, 1, 'Kid2');
-check('search passed to SESAR', count($pg['rows']) === 1 && $pg['rows'][0]['igsn'] === '10.58052/IEFAK0011');
+check('search passed to SESAR as ?q=', count($pg['rows']) === 1 && $pg['rows'][0]['igsn'] === '10.58052/IEFAK0011');
+$pg = $pull->importPage($A, 1, 'kid2');
+check('search ignores case', count($pg['rows']) === 1);
 $fake->set('list_timeout', true);
 $e = err(function () use ($pull, $A) { $pull->importPage($A, 1); });
 check('SESAR list timeout (504) surfaces as an error, not a crash', $e !== null && $e->status === 504);
