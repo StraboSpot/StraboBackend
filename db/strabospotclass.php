@@ -670,6 +670,12 @@ class StraboSpot
 
 		$upload = json_decode($injson);
 
+		// strabosamples_linked is written by the server on download and is
+		// never stored: drop any copy the client sends back, before anything
+		// below (Neo4j, PG mirror, sample sync, changelog) can see it.
+		require_once __DIR__ . '/../samplesdb/lib/field_linked_data.php';
+		if(isset($upload->properties)) field_linked_strip_properties($upload->properties);
+
 		$featuretype=$upload->type;
 
 		$dbaction="new";
@@ -1896,9 +1902,15 @@ class StraboSpot
 
 	public function getDatasetSpots($feature_id){
 
+		// Owner of the dataset whose spots were returned (the caller, or the
+		// project owner on the collaborator path). Read by callers that add
+		// owner-keyed data to the output, e.g. the strabosamples_linked key.
+		$this->lastDatasetSpotsOwner = null;
+
 		//get the features from neo4j
 		$querystring = "match (a:Dataset)-[r:HAS_SPOT]->(s:Spot) where a.userpkey=$this->userpkey and a.id=$feature_id optional match (s)-[c:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
 		$json = $this->getFeatureCollection($querystring);
+		if($json != "") $this->lastDatasetSpotsOwner = (int)$this->userpkey;
 
 		if($json == ""){
 			
@@ -1918,6 +1930,7 @@ class StraboSpot
 	
 				$querystring = "match (a:Dataset)-[r:HAS_SPOT]->(s:Spot) where a.userpkey=$ownerpkey and a.id=$feature_id optional match (s)-[c:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
 				$json = $this->getFeatureCollection($querystring);
+				if($json != "") $this->lastDatasetSpotsOwner = (int)$ownerpkey;
 			}
 
 		}

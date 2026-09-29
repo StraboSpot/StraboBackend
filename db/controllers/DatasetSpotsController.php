@@ -22,6 +22,14 @@ class DatasetSpotsController extends MyController
 
 			$data = $this->strabo->getDatasetSpots($feature_id);
 
+			// The Field app's spot download: add the read-only
+			// strabosamples_linked key (StraboMicro / StraboExperimental data)
+			// here, not in getDatasetSpots(), which version snapshots also use.
+			if (is_array($data) && !empty($this->strabo->lastDatasetSpotsOwner)) {
+				require_once __DIR__ . '/../../samplesdb/lib/field_linked_data.php';
+				field_linked_attach($this->strabo->db, $data, $this->strabo->lastDatasetSpotsOwner);
+			}
+
 			//Log download here
 			$spotcount = count($data['features']);
 			$userpkey = $this->strabo->userpkey;
