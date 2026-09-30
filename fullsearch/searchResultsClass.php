@@ -275,6 +275,7 @@ if(1==1){
 					where
 					(
 						(strabomicro.micro_projectmetadata.ispublic = true or strabomicro.micro_projectmetadata.userpkey = $this->userpkey)
+						and (strabomicro.micro_projectmetadata.sync_format = 'legacy' or strabomicro.micro_projectmetadata.views_built_at is not null)
 					) and (
 					1 = 1
 					$this->microsearchrows

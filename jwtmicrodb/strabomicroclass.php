@@ -360,13 +360,16 @@ class StraboMicro
 
 		$projects = [];
 
+		// Synced projects appear once the microsync worker has built them.
+		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
+
 		$rows = $this->db->get_results("select
 										id,
 										strabo_id,
 										name,
 										round(extract(epoch from uploaddate)*1000) as modifiedtimestamp,
 										TO_CHAR(uploaddate, 'mm/dd/yyyy HH:MMPM TZ OF') as uploaddate
-										from micro_projectmetadata where userpkey = $this->userpkey order by id desc");
+										from micro_projectmetadata where userpkey = $this->userpkey and ".micro_sync_visible_sql()." order by id desc");
 		foreach($rows as $row){
 			$p = new stdClass();
 			$p->id = $row->strabo_id;
@@ -1661,6 +1664,16 @@ class StraboMicro
 
 		$shareKey = $this->db->get_var("select sharekey from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
 
+		// Synced projects (microsync) must not go through this rebuild: it
+		// deletes the project row, which cascades into the entity store.
+		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
+		$syncRefusal = micro_sync_upload_refusal($this->db, $this->userpkey, $strabo_project_id);
+		if($syncRefusal !== null){
+			$data = new stdClass();
+			$data->Error = $syncRefusal;
+			return $data;
+		}
+
 		if($strabo_project_id != ""){
 			if($count > 0 && $overwrite=="no"){
 				//error here
@@ -1833,6 +1846,16 @@ class StraboMicro
 		$overwrite = $post['overwrite'];
 
 		$shareKey = $this->db->get_var("select sharekey from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
+
+		// Synced projects (microsync) must not go through this rebuild: it
+		// deletes the project row, which cascades into the entity store.
+		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
+		$syncRefusal = micro_sync_upload_refusal($this->db, $this->userpkey, $strabo_project_id);
+		if($syncRefusal !== null){
+			$data = new stdClass();
+			$data->Error = $syncRefusal;
+			return $data;
+		}
 
 		if($strabo_project_id != ""){
 			if($count > 0 && $overwrite=="no"){
@@ -5044,6 +5067,13 @@ class StraboMicro
 	 * Delete a project: its database rows (deleteProjectRows) and its files.
 	 */
 	public function deleteProject($projectid) {
+
+		// Shared synced projects are managed from the app (microsync).
+		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
+		$syncRefusal = micro_sync_delete_refusal($this->db, $this->userpkey, $projectid);
+		if($syncRefusal !== null){
+			return $syncRefusal;
+		}
 		$pkey = $this->deleteProjectRows($projectid);
 		if($pkey != ""){
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey);
