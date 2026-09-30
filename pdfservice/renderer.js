@@ -4,7 +4,8 @@
  *              code, copied unchanged into vendor/ by sync-renderer.sh:
  *              projectSerializer.loadProjectJson (the app's project load,
  *              including the runtime imagePath), pdfReactExport (the PDF) and
- *              imageExport (micrograph composites with overlays and spots).
+ *              imageExport (micrograph images with overlays and spots, via
+ *              renderPdfImage, the same call the app's PDF export makes).
  *
  *              The vendored files require 'electron-log', './tileCache' and
  *              './projectFolders', which only exist inside the Electron app.
@@ -48,18 +49,6 @@ const imageExport = require('./vendor/imageExport');
 // between renders.
 sharp.cache(false);
 
-/**
- * The app's PDF composite generator (main.js generateCompositeBuffer):
- * the full micrograph export as JPEG, without sketch layers.
- */
-async function generateCompositeBuffer(projectId, micrograph, projectData, folderPaths) {
-  const rendered = await imageExport.renderMicrographExport(projectId, micrograph, projectData, folderPaths, {
-    format: 'jpeg',
-    sketchLayers: 'none',
-  });
-  return rendered.buffer;
-}
-
 function badRequest(message) {
   return Object.assign(new Error(message), { status: 400 });
 }
@@ -95,7 +84,7 @@ async function renderProjectPdf(projectId, outName) {
       projectData,
       projectData.id,
       folderPaths,
-      generateCompositeBuffer,
+      imageExport.renderPdfImage,
       null
     );
     await fs.promises.rename(tmpPath, outPath);

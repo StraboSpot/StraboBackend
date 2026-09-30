@@ -1,7 +1,7 @@
 Copied from StraboMicro2 electron/ by sync-renderer.sh. Do not edit here.
-App commit: 43d64ab [Fix] Merge associated file name collision fix into develop
-App branch: feature/collaboration
+App commit: a72f772 [Feature] PDF report micrograph images capped at 2000 px on the long side (shared imageExport.renderPdfImage; rendered at full size then shrunk, so spots and labels keep their proportions)
+App branch: feature/pdf-image-cap
 
 3ab2f944a83d61870391ca82fe8c39a531f14b6ad9687069262e8da77ca7614f  projectSerializer.js
-2fe9023f4a8e7b45c6dca793bdd1354ef457e2e8be5a4971d11293dcd8aa80e3  pdfReactExport.js
-7d11e6dbb24cb1b48121fb4abe41a4a92097581923af155abcaa7d533b3dbe6b  imageExport.js
+f9c7cf7dd37dc5e287e44c364750e3c4b5a1afac1be821a62dc2d3b7a13632bd  pdfReactExport.js
+a5a445840d9a0b2420707e5bef490fbeec4acbc81057b3bf7deacee175390b8c  imageExport.js
