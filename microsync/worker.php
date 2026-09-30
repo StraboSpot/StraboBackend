@@ -21,8 +21,14 @@
  *              the worker as, so both can replace each other's files:
  *                * * * * * sudo docker exec -u www-data strabo-php php /srv/app/www/microsync/worker.php --sweep >> /var/log/microsync_sweep.log 2>&1
  *
- *              Works whether or not MICROSYNC_ENABLED is set: it only ever
- *              touches projects the API created.
+ *              The sweep also renders project PDFs that are out of date
+ *              (pdf_dirty) for StraboMicro2-format projects, synced or not,
+ *              through the strabo-node container (microdb/lib/micro_pdf_node.php).
+ *              One sweep at a time does this; JavaFX-format projects are left
+ *              to the download path's tFPDF generator, as before.
+ *
+ *              Works whether or not MICROSYNC_ENABLED is set: builds only
+ *              ever touch projects the API created.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -47,6 +53,10 @@ include_once "./lib/MsDb.php";
 include_once "./lib/MsModel.php";
 include_once "./lib/MsStore.php";
 include_once "./lib/MsWorker.php";
+include_once "../microdb/lib/micro_pdf_node.php";
+
+// Seconds the sweep waits for one project's PDF render.
+define('MICRO_PDF_SWEEP_WAIT', 1800);
 
 $opts = getopt('', array('project:', 'now', 'sweep'));
 $db->get_var('SELECT 1');
@@ -84,9 +94,48 @@ if (isset($opts['sweep'])) {
 			$built++;
 		}
 	}
+
+	// Out-of-date PDFs (synced projects once their views are built). One
+	// sweep renders at a time; a later sweep skips this while one runs. A
+	// project whose render failed waits an hour before the sweep tries it
+	// again (downloads still try at once), so a render that always fails
+	// (a project too big for the container's memory, say) is not retried
+	// every minute.
+	$pdfs = 0;
+	if (MsWorker::tryLock($ms, 'pdfsweep', 0)) {
+		$failFile = MsWorker::dataDir() . '/pdf_failures.json';
+		$failedAt = json_decode((string)@file_get_contents($failFile), true) ?: array();
+		foreach ($ms->rows(
+			"SELECT id, userpkey FROM strabomicro.micro_projectmetadata
+			  WHERE pdf_dirty
+			    AND (sync_format IS DISTINCT FROM 'entity' OR (sync_state = 'ready' AND views_dirty_since IS NULL))
+			  ORDER BY id",
+			array()) as $r) {
+			$id = (int)$r['id'];
+			if (isset($failedAt[$id]) && $failedAt[$id] > time() - 3600) {
+				continue;
+			}
+			if (!micro_pdf_uses_node($db, $id)) {
+				continue;
+			}
+			$res = micro_pdf_render_node($db, $id, (int)$r['userpkey'], MICRO_PDF_SWEEP_WAIT);
+			if ($res === 'rendered') {
+				$pdfs++;
+				unset($failedAt[$id]);
+			} elseif ($res !== 'clean') {
+				$failedAt[$id] = time();
+				MsWorker::log("project $id: pdf $res (sweep retries in an hour)");
+			}
+		}
+		// Forget failures a day old (their projects may be gone or fixed).
+		$failedAt = array_filter($failedAt, function ($t) { return $t > time() - 86400; });
+		@file_put_contents($failFile, json_encode($failedAt));
+		MsWorker::unlock($ms, 'pdfsweep', 0);
+	}
+
 	$cleaned = MsWorker::housekeeping($ms);
-	if ($built > 0 || $cleaned > 0) {
-		MsWorker::log("sweep: built $built, removed $cleaned stale uploads");
+	if ($built > 0 || $pdfs > 0 || $cleaned > 0) {
+		MsWorker::log("sweep: built $built, rendered $pdfs pdfs, removed $cleaned stale uploads");
 	}
 	exit(0);
 }

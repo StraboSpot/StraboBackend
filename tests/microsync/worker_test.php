@@ -301,7 +301,20 @@ try {
 		 VALUES ($1, $2, $3, $4, 10, 'image', 16777216, now() - interval '8 days')",
 		array($stale, $P, $U, str_repeat('a', 64)));
 	file_put_contents("$FILES/_staging/$stale", 'partial');
-	exec('php /srv/app/www/microsync/worker.php --sweep 2>&1', $out, $rc);
+	// The sweep also renders out-of-date PDFs (pdf_node_test covers that):
+	// set other projects' dirty PDFs aside so it does not rewrite dev files.
+	$asideIds = array();
+	foreach ($db->get_results_prepared(
+		"SELECT id FROM strabomicro.micro_projectmetadata WHERE pdf_dirty AND id <> $1", array($P)) ?: array() as $r) {
+		$asideIds[] = (int)$r->id;
+	}
+	$aside = '{' . implode(',', $asideIds) . '}';
+	$db->prepare_query("UPDATE strabomicro.micro_projectmetadata SET pdf_dirty = FALSE WHERE id = ANY($1::int[])", array($aside));
+	try {
+		exec('php /srv/app/www/microsync/worker.php --sweep 2>&1', $out, $rc);
+	} finally {
+		$db->prepare_query("UPDATE strabomicro.micro_projectmetadata SET pdf_dirty = TRUE WHERE id = ANY($1::int[])", array($aside));
+	}
 	check('sweep rebuilds a dirty quiet project', $rc === 0 && $db->get_var_prepared(
 		"SELECT views_dirty_since IS NULL FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P)) === 't');
 	check('sweep removes week-old uploads and staging files', !file_exists("$FILES/_staging/$stale")

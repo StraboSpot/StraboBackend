@@ -1163,8 +1163,10 @@ class MicroProjectPDF extends tFPDF
 
 if (!function_exists('micro_regenerate_pdf_if_dirty')) {
     /**
-     * Lazily regenerate straboMicroFiles/<id>/project.pdf via MicroProjectPDF
-     * when micro_projectmetadata.pdf_dirty=TRUE, then clear the flag. Shared by
+     * Lazily regenerate straboMicroFiles/<id>/project.pdf when
+     * micro_projectmetadata.pdf_dirty=TRUE, then clear the flag: through
+     * strabo-node for StraboMicro2-format projects (micro_pdf_node.php), with
+     * MicroProjectPDF for JavaFX-format ones. Shared by
      * StraboMicro::regenerateProjectPdfIfDirty (app/REST download paths) and the
      * website PDF download endpoint (download_micro_pdf.php) so both honor
      * Samples-app spine edits. No-op when the flag is FALSE — the desktop
@@ -1182,6 +1184,17 @@ if (!function_exists('micro_regenerate_pdf_if_dirty')) {
                 array((int)$projectInternalId)
             );
             if (!$row || $row->pdf_dirty !== 't') return;
+
+            // StraboMicro2-format projects: the app's own renderer in the
+            // strabo-node container (images, overlays, spots). A slow or
+            // failed render leaves the flag set for the worker sweep and the
+            // existing PDF is served. See micro_pdf_node.php.
+            require_once __DIR__ . '/micro_pdf_node.php';
+            if (micro_pdf_uses_node($db, $projectInternalId)) {
+                micro_pdf_render_node($db, $projectInternalId, $ownerPkey, MICRO_PDF_NODE_WAIT);
+                return;
+            }
+
             $docRoot = isset($_SERVER['DOCUMENT_ROOT']) ? $_SERVER['DOCUMENT_ROOT'] : dirname(dirname(__DIR__));
             $pdfPath = "$docRoot/straboMicroFiles/$projectInternalId/project.pdf";
             $pdf = new MicroProjectPDF($db, (int)$projectInternalId, (int)$ownerPkey);
