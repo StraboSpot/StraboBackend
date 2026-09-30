@@ -1,0 +1,14 @@
+{
+  "name": "strabo-pdfservice",
+  "private": true,
+  "description": "Internal Node service (strabo-node container) that renders StraboMicro project PDFs with the desktop app's renderer",
+  "main": "server.js",
+  "engines": {
+    "node": ">=24"
+  },
+  "dependencies": {
+    "@react-pdf/renderer": "^4.3.1",
+    "react": "^19.3.0",
+    "sharp": "^0.35.4"
+  }
+}

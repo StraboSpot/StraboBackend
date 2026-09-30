@@ -1,0 +1,2 @@
+# Source of the strabo-node container (built into its image): never served over HTTP
+Require all denied
