@@ -209,6 +209,23 @@ try {
 	check('CP1252 project repaired (’ restored, not a control character)',
 		val("SELECT name FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pidK)) === 'It’s Mö', $apK['out']);
 
+	// -----------------------------------------------------------------------
+	section('C. Search sync with a duplicated micrograph (legacy data, dev #471)');
+	$sidD = $PREFIX . 'dup';
+	$sids[] = $sidD;
+	$mg = array('id' => "d{$RUN}M", 'name' => 'Twice µ', 'spots' => array());
+	$jd = json_encode(array('id' => $sidD, 'name' => 'Dup', 'datasets' => array(array('id' => "d{$RUN}D", 'name' => 'D',
+		'samples' => array(array('id' => "d{$RUN}S", 'name' => 'S', 'label' => 'S', 'micrographs' => array($mg, $mg)))))),
+		JSON_UNESCAPED_UNICODE);
+	$out = array();
+	$zip = "$W/dup.zip";
+	make_zip($jd, $sidD, $zip);
+	exec('php /srv/app/www/tests/microsync/legacy_child.php jwt upload ' . $U . ' ' . escapeshellarg($zip) . ' ' . escapeshellarg($sidD) . ' 2>&1', $out);
+	$joined = implode("\n", $out);
+	check('upload prints no search sync failure or PHP warning', strpos($joined, 'FAILED') === false && strpos($joined, 'Warning') === false, $joined);
+	check('one search row for the micrograph', val("SELECT count(*) FROM strabosearch.item_hit WHERE item_type = 'micrograph' AND item_id = $1 AND item_userpkey = $2",
+		array("d{$RUN}M", $U)) === '1');
+
 } finally {
 	foreach ($sids as $s) {
 		$pid = pid_of($db, $U, $s);
