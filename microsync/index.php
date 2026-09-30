@@ -33,6 +33,7 @@ include_once "./lib/MsProjects.php";
 include_once "./lib/MsSync.php";
 include_once "./lib/MsBlobs.php";
 include_once "./lib/MsActivity.php";
+include_once "./lib/MsWorker.php";
 
 const MICROSYNC_API_VERSION = 1;
 

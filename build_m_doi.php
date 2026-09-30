@@ -26,6 +26,10 @@ include("doi/doiOutputClass.php");
 $row = $db->get_row_prepared("SELECT * FROM micro_projectmetadata WHERE id = $1 AND userpkey = $2", array($pid, $userpkey));
 if(!$row->id)  die("Project not found.");
 
+// A synced project has nothing to publish until the microsync worker has built it.
+require_once(__DIR__ . '/microdb/lib/sync_guard.php');
+if(micro_sync_is_unbuilt($db, $pid)) die("This project is still being prepared on the server. Please try again in a few minutes.");
+
 $straboOut = new straboOutputClass($strabo,$_GET);
 
 $doiOut = new doiOutputClass($strabo, $_GET);

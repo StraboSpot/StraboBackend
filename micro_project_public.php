@@ -23,6 +23,12 @@ if($_SESSION['loggedin']=="yes"){
 
 	if($userpkey!="" && $projectid > 0 && $state!=""){
 
+		// A synced project cannot be made public before the microsync worker has built it.
+		require_once __DIR__ . '/microdb/lib/sync_guard.php';
+		if($state=="public" && micro_sync_is_unbuilt($db, $projectid)){
+			exit;
+		}
+
 		if($state=="public"){
 			$db->prepare_query("UPDATE micro_projectmetadata SET ispublic = true WHERE id=$1 AND userpkey = $2", array($projectid, $userpkey));
 		}else{

@@ -63,10 +63,15 @@ class ProjectWithoutFileController extends MyController
 
 				if($projectinfo->count > 0){
 
-					$this->sm->deleteProject($project_id);
+					$deleteRefusal = $this->sm->deleteProject($project_id);
 
-					header("Project deleted", true, 204);
-					$data['message']="Project $project_id deleted.";
+					if($deleteRefusal){
+						header("Conflict", true, 409);
+						$data["Error"] = $deleteRefusal;
+					}else{
+						header("Project deleted", true, 204);
+						$data['message']="Project $project_id deleted.";
+					}
 
 				}else{
 					//Error, feature not found

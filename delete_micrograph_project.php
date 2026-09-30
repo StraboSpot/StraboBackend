@@ -16,8 +16,9 @@ include("prepare_connections.php");
 
 $id = $_GET['project_id'];
 
-$sm->deleteProject($id);
+$refusal = $sm->deleteProject($id);
 
-header("Location:/my_micro_data");
+// A shared synced project is refused (microdb/lib/sync_guard.php).
+header($refusal ? "Location:/my_micro_data?deleteblocked=1" : "Location:/my_micro_data");
 
 ?>

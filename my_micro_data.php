@@ -13,9 +13,10 @@
 include("logincheck.php");
 include("prepare_connections.php");
 require_once(__DIR__ . '/microdb/lib/permalink.php');
+require_once(__DIR__ . '/microdb/lib/sync_guard.php');
 
 $credentials = $_SESSION['credentials'];
-$microrows = $db->get_results_prepared("SELECT id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson FROM micro_projectmetadata WHERE userpkey = $1 ORDER BY id DESC", array($userpkey));
+$microrows = $db->get_results_prepared("SELECT id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson FROM micro_projectmetadata WHERE userpkey = $1 AND " . micro_sync_visible_sql() . " ORDER BY id DESC", array($userpkey));
 $total=0;
 
 include("adminkeys.php");
@@ -79,6 +80,11 @@ include("includes/mheader.php");
 							<section id="content">
 
 <?php
+if(isset($_GET['deleteblocked'])){
+	?>
+		<div style="border:1px solid #c0392b;padding:10px 14px;margin-bottom:20px;">This project is shared with other people and cannot be deleted here. Manage it from StraboMicro.</div>
+	<?php
+}
 if(count($microrows)==0){
 	?>
 		<div style="text-align:center;margin-bottom:500px;">No Projects found.</div>

@@ -360,13 +360,16 @@ class StraboMicro
 
 		$projects = [];
 
+		// Synced projects appear once the microsync worker has built them.
+		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
+
 		$rows = $this->db->get_results("select
 										id,
 										strabo_id,
 										name,
 										round(extract(epoch from uploaddate)*1000) as modifiedtimestamp,
 										TO_CHAR(uploaddate, 'mm/dd/yyyy HH:MMPM TZ OF') as uploaddate
-										from micro_projectmetadata where userpkey = $this->userpkey order by id desc");
+										from micro_projectmetadata where userpkey = $this->userpkey and ".micro_sync_visible_sql()." order by id desc");
 		foreach($rows as $row){
 			$p = new stdClass();
 			$p->id = $row->strabo_id;
@@ -1661,6 +1664,16 @@ class StraboMicro
 
 		$shareKey = $this->db->get_var("select sharekey from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
 
+		// Synced projects (microsync) must not go through this rebuild: it
+		// deletes the project row, which cascades into the entity store.
+		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
+		$syncRefusal = micro_sync_upload_refusal($this->db, $this->userpkey, $strabo_project_id);
+		if($syncRefusal !== null){
+			$data = new stdClass();
+			$data->Error = $syncRefusal;
+			return $data;
+		}
+
 		if($strabo_project_id != ""){
 			if($count > 0 && $overwrite=="no"){
 				//error here
@@ -1833,6 +1846,16 @@ class StraboMicro
 		$overwrite = $post['overwrite'];
 
 		$shareKey = $this->db->get_var("select sharekey from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
+
+		// Synced projects (microsync) must not go through this rebuild: it
+		// deletes the project row, which cascades into the entity store.
+		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
+		$syncRefusal = micro_sync_upload_refusal($this->db, $this->userpkey, $strabo_project_id);
+		if($syncRefusal !== null){
+			$data = new stdClass();
+			$data->Error = $syncRefusal;
+			return $data;
+		}
 
 		if($strabo_project_id != ""){
 			if($count > 0 && $overwrite=="no"){
@@ -2186,7 +2209,17 @@ class StraboMicro
 		return $out;
 	}
 
-	public function loadProjectJSON($string, $project_metadata_id, $shareKey) {
+	/**
+	 * Load project.json into micro_projectmetadata and the relational tables.
+	 *
+	 * $updateExisting: the micro_projectmetadata row already exists (kept by
+	 * deleteProjectRows(..., true)); UPDATE it instead of inserting, setting
+	 * the same columns an insert would and clearing the optional ones this
+	 * JSON leaves empty, so the row ends up as an insert would have left it.
+	 * Columns the insert never sets (ispublic, uploaddate, sync columns,
+	 * dirty flags, original_filename) are left alone.
+	 */
+	public function loadProjectJSON($string, $project_metadata_id, $shareKey, $updateExisting = false) {
 
 		$micrographcount = 0;
 
@@ -2242,11 +2275,24 @@ class StraboMicro
 
 		$vars[]='keywords'; $vals[]= "to_tsvector('".$keywords."')";
 
-		$query = "insert into micro_projectmetadata (\n";
-		$query .= implode(",\n", $vars);
-		$query .= ") values (\n";
-		$query .= implode(",\n", $vals);
-		$query .= ")\n";
+		if($updateExisting){
+			$optional = ['strabo_id','name','startdate','enddate','purposeofstudy','otherteammembers','areaofinterest',
+				'instrumentsused','gpsdatum','magneticdeclination','notes','date','modifiedtimestamp','projectlocation'];
+			$sets = [];
+			foreach($vars as $i => $var){
+				if($var != 'id'){ $sets[] = "$var = ".$vals[$i]; }
+			}
+			foreach($optional as $col){
+				if(!in_array($col, $vars)){ $sets[] = "$col = NULL"; }
+			}
+			$query = "update micro_projectmetadata set\n".implode(",\n", $sets)."\nwhere id = ".(int)$project_metadata_id;
+		}else{
+			$query = "insert into micro_projectmetadata (\n";
+			$query .= implode(",\n", $vars);
+			$query .= ") values (\n";
+			$query .= implode(",\n", $vals);
+			$query .= ")\n";
+		}
 
 		$this->db->query($query);
 
@@ -5021,6 +5067,13 @@ class StraboMicro
 	 * Delete a project: its database rows (deleteProjectRows) and its files.
 	 */
 	public function deleteProject($projectid) {
+
+		// Shared synced projects are managed from the app (microsync).
+		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
+		$syncRefusal = micro_sync_delete_refusal($this->db, $this->userpkey, $projectid);
+		if($syncRefusal !== null){
+			return $syncRefusal;
+		}
 		$pkey = $this->deleteProjectRows($projectid);
 		if($pkey != ""){
 			exec("rm -rf ".$_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey);
@@ -5034,9 +5087,14 @@ class StraboMicro
 	 * Split out of deleteProject so replaceProjectInPlace can run it inside a
 	 * transaction and keep the files until the new upload is committed.
 	 *
+	 * $keepProjectRow: leave the micro_projectmetadata row itself in place
+	 * (the microsync worker rebuilds a synced project's derived rows; deleting
+	 * that row would cascade into its entity store). Pair it with
+	 * loadProjectJSON(..., true), which then updates the row.
+	 *
 	 * @return string micro_projectmetadata.id of the deleted project, or "" if none
 	 */
-	public function deleteProjectRows($projectid) {
+	public function deleteProjectRows($projectid, $keepProjectRow = false) {
 
 		$pkey = $this->db->get_var("select id from micro_projectmetadata where strabo_id='$projectid' and userpkey=$this->userpkey");
 
@@ -6625,7 +6683,7 @@ class StraboMicro
 								select id from micro_projectmetadata where userpkey=$this->userpkey and strabo_id = '$projectid'
 							);
 
-							delete from micro_projectmetadata where userpkey=$this->userpkey and strabo_id = '$projectid';
+							" . ($keepProjectRow ? "" : "delete from micro_projectmetadata where userpkey=$this->userpkey and strabo_id = '$projectid';") . "
 							
 							
 			");
