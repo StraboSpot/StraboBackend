@@ -103,6 +103,7 @@ if (isset($opts['sweep'])) {
 	// every minute.
 	$pdfs = 0;
 	if (MsWorker::tryLock($ms, 'pdfsweep', 0)) {
+		$nodeReady = micro_pdf_node_ready();
 		$failFile = MsWorker::dataDir() . '/pdf_failures.json';
 		$failedAt = json_decode((string)@file_get_contents($failFile), true) ?: array();
 		foreach ($ms->rows(
@@ -111,6 +112,10 @@ if (isset($opts['sweep'])) {
 			    AND (sync_format IS DISTINCT FROM 'entity' OR (sync_state = 'ready' AND views_dirty_since IS NULL))
 			  ORDER BY id",
 			array()) as $r) {
+			if (!$nodeReady) {
+				MsWorker::log('pdf: strabo-node not ready, out-of-date PDFs wait for a later sweep');
+				break;
+			}
 			$id = (int)$r['id'];
 			if (isset($failedAt[$id]) && $failedAt[$id] > time() - 3600) {
 				continue;

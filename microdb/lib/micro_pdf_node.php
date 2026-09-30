@@ -33,9 +33,33 @@ require_once __DIR__ . '/sample_overlay.php';
 // Seconds a download waits for a render before serving the existing PDF.
 if (!defined('MICRO_PDF_NODE_WAIT')) define('MICRO_PDF_NODE_WAIT', 45);
 
-/** Base URL of the strabo-node service on the Docker network. */
+/**
+ * Base URL of the strabo-node service on the Docker network: the
+ * STRABO_NODE_URL constant, else the environment variable of that name
+ * (tests point one CLI run at a closed port), else the default.
+ */
 function micro_pdf_node_url() {
-	return defined('STRABO_NODE_URL') ? STRABO_NODE_URL : 'http://strabo-node:3000';
+	if (defined('STRABO_NODE_URL')) return STRABO_NODE_URL;
+	$env = getenv('STRABO_NODE_URL');
+	return $env ? $env : 'http://strabo-node:3000';
+}
+
+/**
+ * True when strabo-node answers /health with "pdf": true (a build that can
+ * render). The worker sweep checks this first, so a stopped or older
+ * container does not count as a failed render for every project.
+ */
+function micro_pdf_node_ready() {
+	$ch = curl_init(micro_pdf_node_url() . '/health');
+	curl_setopt_array($ch, array(
+		CURLOPT_RETURNTRANSFER => true,
+		CURLOPT_CONNECTTIMEOUT => 2,
+		CURLOPT_TIMEOUT => 10,
+	));
+	$body = curl_exec($ch);
+	curl_close($ch);
+	$r = $body === false ? null : json_decode($body);
+	return $r && !empty($r->ok) && !empty($r->pdf);
 }
 
 function micro_pdf_files_root() {

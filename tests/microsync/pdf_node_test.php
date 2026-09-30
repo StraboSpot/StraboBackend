@@ -12,7 +12,8 @@
  *                - JavaFX project: tFPDF as before
  *                - sweep: renders dirty StraboMicro2-format projects, leaves
  *                  JavaFX ones for the download path; after a failed render
- *                  it skips that project for an hour
+ *                  it skips that project for an hour; with strabo-node
+ *                  down it renders nothing and records no failures
  *              Every file and flag touched is restored at the end, and
  *              projects that were already dirty are set aside during the
  *              sweep so it only renders the fixtures.
@@ -159,6 +160,22 @@ try {
 	check('475 (JavaFX) left for the download path', flags(475)->pdf_dirty === 't');
 	$log = (string)@file_get_contents('/srv/app/www/microsync_data/log/worker.log');
 	check('sweep logged the renders', strpos($log, 'rendered 2 pdfs') !== false);
+
+	section('sweep: strabo-node not ready');
+	setFlags(475, false, false);
+	setFlags(786, true, false);
+	@file_put_contents("$FILES/786/project.pdf", "%PDF-old");
+	$before = (string)@file_get_contents($FAILS);
+	exec('STRABO_NODE_URL=http://127.0.0.1:9 php /srv/app/www/microsync/worker.php --sweep 2>&1', $out, $code);
+	check('sweep still exits 0', $code === 0, implode("\n", $out));
+	check('project stays dirty, old PDF kept', flags(786)->pdf_dirty === 't'
+		&& @file_get_contents("$FILES/786/project.pdf") === '%PDF-old');
+	check('not recorded as a failure', (string)@file_get_contents($FAILS) === $before
+		|| !isset((json_decode((string)@file_get_contents($FAILS), true) ?: array())[786]));
+	$log = (string)@file_get_contents('/srv/app/www/microsync_data/log/worker.log');
+	check('logged that Node is not ready', strpos($log, 'strabo-node not ready') !== false);
+	exec('php /srv/app/www/microsync/worker.php --sweep 2>&1', $out, $code);
+	check('next sweep with Node up renders it', flags(786)->pdf_dirty === 'f' && producer("$FILES/786/project.pdf") === 'react-pdf');
 
 	section('sweep: a failed render waits an hour');
 	setFlags(475, false, false);

@@ -6,6 +6,7 @@
  *
  *              GET  /health  Node, sharp and @react-pdf/renderer versions;
  *                            proves the native and ESM dependencies load.
+ *                            "pdf": true once this build can render PDFs.
  *              POST /pdf     JSON {"project": <micro_projectmetadata.id>,
  *                            "out": "<file name>.pdf"}. Renders
  *                            straboMicroFiles/<id>/project.json with the
@@ -42,6 +43,8 @@ async function health() {
     vips: sharp.versions.vips,
     react: react.version,
     reactPdf: typeof reactPdf.renderToFile === 'function',
+    // Callers check this before asking for renders (older builds lack it)
+    pdf: true,
   };
 }
 
