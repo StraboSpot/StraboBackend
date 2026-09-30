@@ -219,4 +219,19 @@ class MsProjects {
 		$db->commit();
 		echo '],"blobs":' . MsHttp::encode($blobs) . ',"refs":' . MsHttp::encode($refs) . '}';
 	}
+
+	/**
+	 * GET projects/{pid}/smz: the same streamed .smz the legacy download
+	 * doors serve (MsSmz), for any active member (export, recovery).
+	 */
+	public static function smz($ctx, $pid) {
+		$p = MsStore::project($ctx->db, $pid, $ctx->me);
+		if ($p['sync_state'] !== 'ready') {
+			throw new MsHttpError(409, 'not_ready', 'The initial upload of this project has not finished');
+		}
+		$name = strtolower(str_replace(' ', '_', trim(preg_replace('/[^A-Za-z0-9\-_ ]/', '', (string)$p['name']))));
+		if (!MsSmz::send($ctx->strabodb, $pid, ($name === '' ? 'project' : $name) . '.smz')) {
+			throw new MsHttpError(404, 'not_found', 'Project not found');
+		}
+	}
 }

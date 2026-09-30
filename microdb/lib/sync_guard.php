@@ -14,6 +14,9 @@
  *                conversion code.
  *              - Legacy deletes of a synced project are allowed only while the
  *                owner is its only active member.
+ *              - Downloads: synced projects have no static project.zip; every
+ *                download door streams one (microsync/lib/MsSmz.php), and the
+ *                sizes the app shows come from micro_sync_download_bytes().
  *
  *              Design: StraboMicro2 repo, docs/specs/collaboration-phase0-design.md §4.7.
  *
@@ -74,4 +77,22 @@ function micro_sync_is_unbuilt($db, $projectId) {
 		"SELECT (sync_format = 'entity' AND views_built_at IS NULL) FROM strabomicro.micro_projectmetadata WHERE id = $1",
 		array((int)$projectId));
 	return $v === 't';
+}
+
+/**
+ * Size in bytes of the .smz a download of this project (by id) serves:
+ * the static project.zip for legacy projects, the exact length of the
+ * streamed archive for synced ones. 0 when there is nothing to download.
+ * $syncFormat: the row's sync_format when the caller already has it.
+ */
+function micro_sync_download_bytes($db, $projectId, $syncFormat = null) {
+	$fmt = $syncFormat !== null ? $syncFormat : $db->get_var_prepared(
+		"SELECT sync_format FROM strabomicro.micro_projectmetadata WHERE id = $1",
+		array((int)$projectId));
+	if ($fmt === 'entity') {
+		require_once __DIR__ . '/../../microsync/lib/MsSmz.php';
+		return MsSmz::syncedRow($db, $projectId) === null ? 0 : MsSmz::length($db, $projectId);
+	}
+	$zip = dirname(__DIR__, 2) . '/straboMicroFiles/' . (int)$projectId . '/project.zip';
+	return is_file($zip) ? filesize($zip) : 0;
 }

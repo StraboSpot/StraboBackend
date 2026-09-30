@@ -235,8 +235,11 @@ class StraboMicro
 			require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
 			micro_regenerate_files_if_dirty($this->db, (int)$id, (int)$this->userpkey);
 
+			// Synced projects have no static file: the URL is served by the
+			// streamed .smz (root .htaccess -> download_micro_file.php).
+			require_once __DIR__ . '/../microdb/lib/sync_guard.php';
 			$out->url = "/straboMicroFiles/".$id."/project.zip";
-			$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");
+			$out->bytes = micro_sync_download_bytes($this->db, $id);
 
 			$out->micrograph_count = $this->db->get_var("
 				select count(mg.id)
@@ -297,8 +300,10 @@ class StraboMicro
 		require_once __DIR__ . '/../microdb/lib/sample_overlay.php';
 		micro_regenerate_files_if_dirty($this->db, (int)$id, $ownerPkey);
 
+		// Synced projects: streamed .smz behind the same URL (see getProjectURL).
+		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
 		$out->url = "/straboMicroFiles/".$id."/project.zip";
-		$out->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip");
+		$out->bytes = micro_sync_download_bytes($this->db, $id);
 
 		return $out;
 	}
@@ -367,6 +372,7 @@ class StraboMicro
 										id,
 										strabo_id,
 										name,
+										sync_format,
 										round(extract(epoch from uploaddate)*1000) as modifiedtimestamp,
 										TO_CHAR(uploaddate, 'mm/dd/yyyy HH:MMPM TZ OF') as uploaddate
 										from micro_projectmetadata where userpkey = $this->userpkey and ".micro_sync_visible_sql()." order by id desc");
@@ -377,7 +383,7 @@ class StraboMicro
 			$p->self = "https://strabospot.org/microdb/project/".$row->strabo_id;
 			$p->modifiedtimestamp = (int)$row->modifiedtimestamp;
 			$p->uploaddate = $row->uploaddate;
-			$p->bytes = filesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$row->id."/project.zip");
+			$p->bytes = micro_sync_download_bytes($this->db, $row->id, $row->sync_format);
 
 			$projects[] = $p;
 		}

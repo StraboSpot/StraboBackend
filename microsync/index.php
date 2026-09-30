@@ -34,6 +34,7 @@ include_once "./lib/MsSync.php";
 include_once "./lib/MsBlobs.php";
 include_once "./lib/MsActivity.php";
 include_once "./lib/MsWorker.php";
+include_once "./lib/MsSmz.php";
 
 const MICROSYNC_API_VERSION = 1;
 
@@ -62,6 +63,7 @@ $routes = array(
 	array('GET',    "#^projects/$pidPattern$#",                                  array('MsProjects', 'get')),
 	array('POST',   "#^projects/$pidPattern/ready$#",                            array('MsProjects', 'ready')),
 	array('GET',    "#^projects/$pidPattern/snapshot$#",                         array('MsProjects', 'snapshot')),
+	array('GET',    "#^projects/$pidPattern/smz$#",                              array('MsProjects', 'smz')),
 	array('POST',   "#^projects/$pidPattern/push$#",                             array('MsSync', 'push')),
 	array('GET',    "#^projects/$pidPattern/changes$#",                          array('MsSync', 'changes')),
 	array('GET',    "#^projects/$pidPattern/history$#",                          array('MsSync', 'history')),
@@ -108,6 +110,7 @@ $ctx->project = null;
 
 try {
 	$ctx->db = new MsDb($db);
+	$ctx->strabodb = $db; // wrapper, for shared helpers (StraboSamples overlay)
 	foreach ($args as $i => $a) {
 		if ($i === 0) {
 			$args[$i] = (int)$a; // pid
