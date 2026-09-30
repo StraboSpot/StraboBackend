@@ -1,7 +1,7 @@
 Copied from StraboMicro2 electron/ by sync-renderer.sh. Do not edit here.
-App commit: 43d64ab [Fix] Merge associated file name collision fix into develop
-App branch: feature/collaboration
+App commit: 4e079c8 [Fix] PDF report: page numbers are fixed elements, so a nearly full page no longer pushes its number onto an extra blank page
+App branch: feature/pdf-image-cap
 
 3ab2f944a83d61870391ca82fe8c39a531f14b6ad9687069262e8da77ca7614f  projectSerializer.js
-2fe9023f4a8e7b45c6dca793bdd1354ef457e2e8be5a4971d11293dcd8aa80e3  pdfReactExport.js
-7d11e6dbb24cb1b48121fb4abe41a4a92097581923af155abcaa7d533b3dbe6b  imageExport.js
+e0111f39507ba95ad60fd851621d1d49242c0410e6832d2275a05c5b733b5226  pdfReactExport.js
+a5a445840d9a0b2420707e5bef490fbeec4acbc81057b3bf7deacee175390b8c  imageExport.js
