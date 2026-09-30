@@ -75,6 +75,22 @@ function isLegacyClean($pid, $zipMd5) {
 		&& is_file("$FILES/$pid/project.zip") && md5_file("$FILES/$pid/project.zip") === $zipMd5
 		&& !is_dir("$FILES/$pid/blobs") && !is_dir(MsConvert::archiveDir($pid)) && $markers === '0';
 }
+/** project.pdf inside a zip (root folder entry), or null. */
+function zipPdf($path) {
+	$z = new ZipArchive();
+	if ($z->open($path) !== true) return null;
+	$out = null;
+	for ($i = 0; $i < $z->numFiles; $i++) {
+		$n = $z->getNameIndex($i);
+		if (substr_count($n, '/') === 1 && substr($n, -12) === '/project.pdf') { $out = $z->getFromIndex($i); break; }
+	}
+	$z->close();
+	return $out;
+}
+function servedPdf($pid) {
+	global $HOST;
+	return http_req('GET', "$HOST/download_micro_pdf.php?project_id=$pid")['raw'];
+}
 function zipIndex($path) {
 	$z = new ZipArchive();
 	$z->open($path);
@@ -179,6 +195,14 @@ try {
 		$code = http_req('GET', "$HOST/straboMicroFiles/$u")['code'];
 		check("never served: $u", $code === 403, "HTTP $code");
 	}
+	$appPdf = zipPdf(MsConvert::archiveDir($A) . '/project.zip');
+	check('the app PDF is kept (not marked for regeneration)', $appPdf !== null
+		&& $ms->val("SELECT pdf_dirty FROM strabomicro.micro_projectmetadata WHERE id = $1", array($A)) === 'f'
+		&& md5(servedPdf($A)) === md5($appPdf));
+	$ms->q("UPDATE strabomicro.micro_projectmetadata SET pdf_dirty = true WHERE id = $1", array($A));
+	servedPdf($A); // what the first prod conversions hit: a text-only server PDF
+	check('restore-pdf puts the app PDF back', $conv->restorePdf($A) === null && md5(servedPdf($A)) === md5($appPdf)
+		&& $ms->val("SELECT pdf_dirty FROM strabomicro.micro_projectmetadata WHERE id = $1", array($A)) === 'f');
 	$again = $conv->convert($A, true);
 	check('second apply skips (already_entity)', $again['status'] === 'skipped' && $again['reason'] === 'already_entity');
 
@@ -273,6 +297,7 @@ try {
 	$p = prow($A);
 	check('still synced, same id, views built', pid_of($db, $U, $sidA) === $A && $p['sync_format'] === 'entity' && $p['built'] === 't', json_encode($p));
 	check('uploaded project.zip removed (the stream serves the store)', !is_file("$FILES/$A/project.zip"));
+	check("the upload's own PDF is served", zipPdf("$W/edit.zip") !== null && md5(servedPdf($A)) === md5(zipPdf("$W/edit.zip")));
 	$log = @file(MsConvert::archiveDir($A) . '/uploads.log');
 	$last = $log ? json_decode(end($log), true) : null;
 	check('uploads.log: replaced', is_array($last) && $last['status'] === 'replaced', json_encode($last));

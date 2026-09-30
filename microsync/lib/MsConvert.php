@@ -850,13 +850,56 @@ class MsConvert {
 			return;
 		}
 		try {
-			$result = MsWorker::build($this->strabodb, $db, $pid);
+			// The folder's project.pdf is the app's, from the upload being taken in.
+			$result = MsWorker::build($this->strabodb, $db, $pid, true);
 		} finally {
 			MsWorker::unlock($db, 'build', $pid);
 		}
 		if ($result !== 'built') {
 			$report['warnings'][] = "worker: $result (the store is kept; the sweep retries)";
 		}
+	}
+
+	/**
+	 * Put the app's project.pdf back from the pre-conversion archive (for
+	 * projects converted before builds kept it: their PDF was regenerated
+	 * server side without micrograph images). Only while nobody changed the
+	 * project since its conversion. Returns null on success or the refusal.
+	 */
+	public function restorePdf($pid) {
+		$pid = (int)$pid;
+		$row = $this->db->row(
+			"SELECT sync_format, head_seq FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pid));
+		if ($row === null || $row['sync_format'] !== 'entity') {
+			return 'not a converted project';
+		}
+		$arch = self::archiveDir($pid);
+		$j = json_decode((string)@file_get_contents("$arch/journal.json"), true);
+		if (!is_array($j) || !isset($j['headSeq']) || (int)$row['head_seq'] !== (int)$j['headSeq']) {
+			return 'no journal, or changed since conversion';
+		}
+		$z = new ZipArchive();
+		if ($z->open("$arch/project.zip") !== true) {
+			return 'archived project.zip cannot be opened';
+		}
+		$pdf = false;
+		for ($i = 0; $i < $z->numFiles; $i++) {
+			$n = $z->getNameIndex($i);
+			if (substr_count($n, '/') === 1 && substr($n, -12) === '/project.pdf') {
+				$pdf = $z->getFromIndex($i);
+				break;
+			}
+		}
+		$z->close();
+		if ($pdf === false || strncmp($pdf, '%PDF', 4) !== 0) {
+			return 'the archived zip has no project.pdf';
+		}
+		$dest = MsStore::filesRoot() . "/$pid/project.pdf";
+		if (@file_put_contents("$dest.tmp", $pdf) === false || !@rename("$dest.tmp", $dest)) {
+			return "cannot write $dest";
+		}
+		$this->db->q("UPDATE strabomicro.micro_projectmetadata SET pdf_dirty = false WHERE id = $1", array($pid));
+		return null;
 	}
 
 	/**
