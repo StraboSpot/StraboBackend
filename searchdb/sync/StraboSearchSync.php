@@ -135,8 +135,9 @@ class StraboSearchSync {
 	 * touches one row twice ("cannot affect row a second time") and the
 	 * whole chunk is lost. Every Field call site therefore accumulates its
 	 * tuples in an array keyed by identity (spot id|userpkey, image
-	 * id|userpkey); the samples/micro/exp sources are DISTINCT ON identity
-	 * at the SQL level.
+	 * id|userpkey); the samples/exp sources are DISTINCT ON identity at the
+	 * SQL level, and the micro micrograph rows are keyed by micrograph id
+	 * (legacy projects can hold one micrograph twice).
 	 */
 	private static function upsert($db, $table, $cols, $conflictCols, $tuples) {
 		if (!$tuples) return 0;
@@ -757,11 +758,16 @@ class StraboSearchSync {
 				foreach ((array)$rows as $r) {
 					$pair = microTuples($r, $vocabSeen);
 					if ($pair === null) continue;
-					$itemTuples[]  = $pair[0];
-					$imageTuples[] = $pair[1];
+					// Keyed by micrograph id: legacy projects can hold one
+					// micrograph twice (identical copies), which must collapse
+					// to ONE tuple per statement (see upsert()); first wins.
+					$mk = (string)$r->micrograph_strabo_id;
+					if (isset($itemTuples[$mk])) continue;
+					$itemTuples[$mk]  = $pair[0];
+					$imageTuples[$mk] = $pair[1];
 				}
-				$n  = self::upsertItems($db, microItemCols(), $itemTuples);
-				$n += self::upsertImages($db, microImageCols(), $imageTuples);
+				$n  = self::upsertItems($db, microItemCols(), array_values($itemTuples));
+				$n += self::upsertImages($db, microImageCols(), array_values($imageTuples));
 				$db->query("DELETE FROM strabosearch.item_hit
 					WHERE project_subsystem = 'micro' AND item_type = 'micrograph'
 					  AND project_id = '$pidEsc' AND project_userpkey = $upk

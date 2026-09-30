@@ -211,16 +211,12 @@ class MsWorker {
 
 		// Relational rows, spine, search: the legacy upload pipeline with the
 		// row kept (deleteProjectRows + loadProjectJSON in update mode).
-		// The JSON is passed as clean UTF-8 (the legacy upload path
-		// utf8_encodes it first, which garbles non-ASCII text).
 		$sm = new StraboMicro(null, $owner, $strabodb);
 		$sm->deleteProjectRows($straboId, true);
 		$result = $sm->loadProjectJSON($a['json'], $pid, $p['sharekey'], true);
 		if (is_object($result) && isset($result->Error) && $result->Error != '') {
 			return 'loadProjectJSON: ' . $result->Error;
 		}
-		// loadProjectJSON stores utf8_encode(json); store the clean text.
-		$db->q("UPDATE strabomicro.micro_projectmetadata SET projectjson = $2 WHERE id = $1", array($pid, $a['json']));
 		require_once self::webRoot() . '/microdb/lib/search_sync.php';
 		micro_search_sync_project($strabodb, $pid, $straboId, $owner);
 

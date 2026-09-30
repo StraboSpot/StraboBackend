@@ -10,6 +10,7 @@
  * @link       https://strabospot.org
  */
 
+require_once __DIR__ . '/../microdb/lib/micro_text.php';
 
 class StraboMicro
 {
@@ -1714,7 +1715,7 @@ class StraboMicro
 				exec("/bin/rm -r /srv/app/www/straboMicroFiles/$project_metadata_id/$strabo_project_id/");
 
 				$json = file_get_contents($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/project.json");
-				$json = utf8_encode($json);
+				$json = micro_json_to_utf8($json);
 
 				$data = $this->loadProjectJSON($json, $project_metadata_id, $shareKey);
 
@@ -1794,7 +1795,7 @@ class StraboMicro
 
 		// 2. Validate before touching anything.
 		$json = @file_get_contents("$staging/project.json");
-		$json = utf8_encode($json);
+		$json = micro_json_to_utf8($json);
 		$decoded = json_decode($json);
 		if(!is_object($decoded) || !isset($decoded->id) || $decoded->id == ""){
 			exec("rm -rf ".escapeshellarg($staging));
@@ -1886,7 +1887,7 @@ class StraboMicro
 				exec("/bin/rm -r /srv/app/www/straboMicroFiles/$project_metadata_id/$strabo_project_id/");
 
 				$json = file_get_contents($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id."/project.json");
-				$json = utf8_encode($json);
+				$json = micro_json_to_utf8($json);
 
 				$data = $this->loadProjectJSON($json, $project_metadata_id, $shareKey);
 
@@ -2231,6 +2232,10 @@ class StraboMicro
 
 		$userpkey = $this->userpkey;
 
+		// UTF-8 as is, legacy CP1252 converted; stored once, not re-encoded
+		// (utf8_encode here and in the upload paths garbled non-ASCII text).
+		$string = micro_json_to_utf8($string);
+
 		$thisprojectmetadata = json_decode($string);
 
 		if($thisprojectmetadata->id==""){
@@ -2243,7 +2248,7 @@ class StraboMicro
 		//Project
 		$query = "";
 		$vars = ['id','userpkey','projectjson'];
-		$vals = [$project_metadata_id, $userpkey, "'".pg_escape_string(utf8_encode($string))."'"];
+		$vals = [$project_metadata_id, $userpkey, "'".pg_escape_string($string)."'"];
 
 		if($thisprojectmetadata->id!="") {$vars[]='strabo_id'; $vals[]= "'".pg_escape_string($thisprojectmetadata->id)."'"; }
 		if($thisprojectmetadata->name!="") {$vars[]='name'; $vals[]= "'".pg_escape_string($thisprojectmetadata->name)."'"; }
