@@ -12,6 +12,7 @@
 
 include("prepare_connections.php");
 require_once(__DIR__ . "/microdb/lib/sample_overlay.php");
+require_once(__DIR__ . "/microsync/lib/MsSmz.php");
 
 $id = isset($_GET['project_id']) ? (int)$_GET['project_id'] : 0;
 
@@ -23,7 +24,22 @@ $filename = str_replace(" ", "_", $filename);
 $filename = strtolower($filename);
 $filename = $filename.".smz";
 
+// Synced projects (collaboration) have no static project.zip: stream one
+// assembled from the entity store. The root .htaccess also sends requests
+// for a missing straboMicroFiles/<id>/project.zip here, which is how the
+// app's getProjectURL / getSharedURL / share-code downloads reach it.
+if ($meta && MsSmz::syncedRow($db, $id) !== null) {
+	if (!MsSmz::send($db, $id, $filename)) {
+		http_response_code(404);
+	}
+	exit;
+}
+
 $srcZip = $_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$id."/project.zip";
+if (!is_file($srcZip)) {
+	http_response_code(404);
+	exit;
+}
 
 // Overlay the strabosamples.* spine onto the project.json inside the .smz so
 // the download reflects any Samples-app edits made after upload. Returns the

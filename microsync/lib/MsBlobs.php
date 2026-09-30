@@ -298,7 +298,24 @@ class MsBlobs {
 		}
 		set_time_limit(0);
 		$staging = MsStore::stagingPath($up['upload_id']);
-		$actual = hash_file('sha256', $staging);
+		// One read for both: SHA-256 to verify, CRC-32 cached for the
+		// streamed .smz (MsSmz::blobCrc).
+		$sha = hash_init('sha256');
+		$crc = hash_init('crc32b');
+		$fh = fopen($staging, 'rb');
+		while ($fh !== false && !feof($fh)) {
+			$chunk = fread($fh, 4194304);
+			if ($chunk === false) {
+				break;
+			}
+			hash_update($sha, $chunk);
+			hash_update($crc, $chunk);
+		}
+		if ($fh !== false) {
+			fclose($fh);
+		}
+		$actual = hash_final($sha);
+		$crcHex = hash_final($crc);
 		if ($actual !== $up['sha256']) {
 			@unlink($staging);
 			$db->q("DELETE FROM strabomicro.micro_uploads WHERE upload_id = $1", array($up['upload_id']));
@@ -318,6 +335,9 @@ class MsBlobs {
 				throw new MsHttpError(500, 'server_error', 'Blob could not be stored');
 			}
 			@unlink($staging);
+		}
+		if (!is_file("$dest.crc32")) {
+			@file_put_contents("$dest.crc32", $crcHex);
 		}
 		$db->q(
 			"INSERT INTO strabomicro.micro_blobs (project_id, sha256, size, kind, uploaded_by)
