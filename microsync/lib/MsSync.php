@@ -319,7 +319,7 @@ class MsSync {
 			self::requireLiveParent($db, $pid, $ptype, $ppid);
 		}
 
-		$body = MsModel::cleanBody($type, $id, MsHttp::prop($c, 'body'));
+		$body = MsModel::cleanBody($type, $id, MsHttp::prop($c, 'body'), $ppid);
 		if ($type === 'micrograph') {
 			self::checkNesting($db, $pid, $id, $body, $ppid);
 		}
@@ -379,6 +379,9 @@ class MsSync {
 		if ($isMove) {
 			if ($type === 'project') {
 				throw new MsInvalid('schema', 'the project entity has no parent');
+			}
+			if ($type === 'point_count') {
+				throw new MsInvalid('schema', 'a point count session belongs to its micrograph and cannot move');
 			}
 			$newType = MsHttp::prop($c, 'parentType', MsModel::$PARENT[$type]);
 			$newId = MsHttp::prop($c, 'parentId');

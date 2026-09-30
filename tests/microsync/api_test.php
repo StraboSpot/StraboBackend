@@ -246,6 +246,19 @@ try {
 		"SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id IN ('M2','P2','P3')", array($PID)) === 0);
 
 	// -----------------------------------------------------------------------
+	section('Point count sessions');
+	$r = one($PID, $OWN, array('op' => 'create', 'type' => 'point_count', 'id' => 'PC1', 'parentType' => 'micrograph', 'parentId' => 'M1',
+		'body' => array('name' => 'Point Count 1', 'gridType' => 'regular', 'points' => array(array('x' => 1, 'y' => 2)))));
+	check('point count created under a micrograph', st($r) === 'accepted', json_encode($r));
+	$mid = $db->get_var_prepared("SELECT body->>'micrographId' FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'point_count' AND entity_id = 'PC1'", array($PID));
+	check('micrographId filled in from the parent', $mid === 'M1');
+	check('micrographId mismatch -> schema', st(one($PID, $OWN, array('op' => 'create', 'type' => 'point_count', 'id' => 'PC2', 'parentType' => 'micrograph', 'parentId' => 'M1', 'body' => array('micrographId' => 'MX')))) === 'invalid/schema');
+	check('point count under a sample -> schema', st(one($PID, $OWN, array('op' => 'create', 'type' => 'point_count', 'id' => 'PC2', 'parentType' => 'sample', 'parentId' => 'S1', 'body' => new stdClass()))) === 'invalid/schema');
+	check('micrographId cannot be set by update', st(one($PID, $OWN, array('op' => 'update', 'type' => 'point_count', 'id' => 'PC1', 'baseVersion' => 1, 'fields' => array('micrographId' => 'MX')))) === 'invalid/schema');
+	check('point count cannot move', st(one($PID, $OWN, array('op' => 'update', 'type' => 'point_count', 'id' => 'PC1', 'baseVersion' => 1, 'parentId' => 'MX'))) === 'invalid/schema');
+	check('points list replaced atomically', st(one($PID, $OWN, array('op' => 'update', 'type' => 'point_count', 'id' => 'PC1', 'baseVersion' => 1, 'fields' => array('points' => array())))) === 'accepted');
+
+	// -----------------------------------------------------------------------
 	section('Push: updates and conflicts');
 	$r = one($PID, $EDT, array('op' => 'update', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 1,
 		'fields' => array('mineralogy.notes' => 'edited', 'notes' => 'hello')));
@@ -305,14 +318,14 @@ try {
 	$headBefore = (int)$db->get_var_prepared("SELECT head_seq FROM strabomicro.micro_projectmetadata WHERE id = $1", array($PID));
 	$r = push($PID, $EDT, array(array('op' => 'delete', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 3)));
 	$res = $r['body']['results'][0];
-	check('delete M1 cascades to P1, P4, PC, M3, P3a', st($res) === 'accepted' && $res['cascaded'] === 5, json_encode($res));
-	check('headSeq covers the cascaded rows', $r['body']['headSeq'] === $headBefore + 6, $headBefore . ' ' . $r['raw']);
+	check('delete M1 cascades to P1, P4, PC, PC1, M3, P3a', st($res) === 'accepted' && $res['cascaded'] === 6, json_encode($res));
+	check('headSeq covers the cascaded rows', $r['body']['headSeq'] === $headBefore + 7, $headBefore . ' ' . $r['raw']);
 	$tomb = $db->get_results_prepared("SELECT entity_id, deleted_root FROM strabomicro.micro_entities WHERE project_id = $1 AND deleted_at IS NOT NULL ORDER BY entity_id", array($PID));
-	$ok = count($tomb) === 6;
+	$ok = count($tomb) === 7;
 	foreach ((array)$tomb as $t) {
 		$ok = $ok && $t->deleted_root === 'micrograph:M1';
 	}
-	check('six tombstones, all rooted at M1', $ok);
+	check('seven tombstones, all rooted at M1', $ok);
 	$r = one($PID, $OWN, array('op' => 'update', 'type' => 'spot', 'id' => 'P1', 'baseVersion' => 2, 'fields' => array('name' => 'late')));
 	check('update deleted -> deleted with deletedBy', st($r) === 'deleted' && $r['deletedBy']['pkey'] === $users['editor']['pkey']);
 	$r = one($PID, $OWN, array('op' => 'create', 'type' => 'spot', 'id' => 'PL', 'parentType' => 'micrograph', 'parentId' => 'M1', 'body' => new stdClass()));
@@ -321,7 +334,7 @@ try {
 	check('contributor restore -> forbidden', st(one($PID, $CON, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'M1', 'cascade' => true))) === 'forbidden/editor_required');
 	check('restore nested child before its parent -> parent_deleted', st(one($PID, $EDT, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'M3'))) === 'deleted/parent_deleted');
 	$r = one($PID, $EDT, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'M1', 'cascade' => true));
-	check('cascade restore brings back all 5', st($r) === 'accepted' && $r['cascaded'] === 5 && $r['version'] === 5, json_encode($r));
+	check('cascade restore brings back all 6', st($r) === 'accepted' && $r['cascaded'] === 6 && $r['version'] === 5, json_encode($r));
 	check('restore live -> not_deleted', st(one($PID, $EDT, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'M1'))) === 'invalid/not_deleted');
 	check('project entity cannot be deleted', st(one($PID, $OWN, array('op' => 'delete', 'type' => 'project', 'id' => $SID, 'baseVersion' => 2))) === 'invalid/schema');
 

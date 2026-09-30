@@ -38,6 +38,7 @@ class MsModel {
 		'tag'        => 'project',
 		'group'      => 'project',
 		'preset'     => 'project',
+		'point_count' => 'micrograph', // point-counts/<id>.json in the app, not project.json
 	);
 
 	/**
@@ -55,6 +56,15 @@ class MsModel {
 		'tag'        => array(),
 		'group'      => array(),
 		'preset'     => array(),
+		'point_count' => array(),
+	);
+
+	/**
+	 * Body fields that mirror the entity's identity or parent and so can
+	 * never be set through a field update.
+	 */
+	public static $FIXED_FIELDS = array(
+		'point_count' => array('micrographId'),
 	);
 
 	/** Per-user fields: stay in the local project.json, dropped here. */
@@ -81,7 +91,7 @@ class MsModel {
 	 * Validate a create body: an object, no child collections, id matching
 	 * the entity id (filled in when absent). Per-user fields are dropped.
 	 */
-	public static function cleanBody($type, $id, $body) {
+	public static function cleanBody($type, $id, $body, $parentId = null) {
 		if (!is_object($body)) {
 			throw new MsInvalid('schema', 'body must be a JSON object');
 		}
@@ -97,6 +107,12 @@ class MsModel {
 			throw new MsInvalid('schema', 'body.id does not match the entity id');
 		}
 		$body->id = $id;
+		if ($type === 'point_count') {
+			if (property_exists($body, 'micrographId') && $body->micrographId !== $parentId) {
+				throw new MsInvalid('schema', 'body.micrographId does not match the parent micrograph');
+			}
+			$body->micrographId = $parentId;
+		}
 		return $body;
 	}
 
@@ -120,6 +136,9 @@ class MsModel {
 			$top = $parts[0];
 			if ($top === 'id') {
 				throw new MsInvalid('schema', 'the id field cannot be changed');
+			}
+			if (isset(self::$FIXED_FIELDS[$type]) && in_array($top, self::$FIXED_FIELDS[$type], true)) {
+				throw new MsInvalid('schema', "the $top field cannot be changed");
 			}
 			if (array_key_exists($top, self::$CHILD_KEYS[$type])) {
 				throw new MsInvalid('schema', "\"$top\" holds separate entities and cannot be set as a field");

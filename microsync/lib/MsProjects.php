@@ -178,7 +178,7 @@ class MsProjects {
 			        created_by, updated_by, " . MsDb::iso('updated_at') . " AS updated_at
 			   FROM strabomicro.micro_entities
 			  WHERE project_id = $1 AND deleted_at IS NULL
-			  ORDER BY array_position(ARRAY['project','dataset','sample','micrograph','spot','tag','group','preset']::varchar[], entity_type),
+			  ORDER BY array_position(ARRAY['project','dataset','sample','micrograph','spot','point_count','tag','group','preset']::varchar[], entity_type),
 			           created_at, entity_id",
 			array($pid));
 		$first = true;
