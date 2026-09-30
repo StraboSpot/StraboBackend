@@ -1,0 +1,7 @@
+RewriteEngine On
+
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Everything under /microsync/ goes to the front controller (lib/ included).
+RewriteCond %{REQUEST_URI} !/microsync/index\.php
+RewriteRule ^(.*)$ index.php [L,QSA]
