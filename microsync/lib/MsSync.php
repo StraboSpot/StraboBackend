@@ -5,10 +5,10 @@
  *
  *              Push (design §4.2, P0-6): one transaction per push holding a
  *              per-project advisory lock. Every change is accepted or
- *              rejected on its own, except that a create and the creates
- *              that depend on it (its children, and micrographs nested under
- *              it by parentID) stand or fall together. A create must come
- *              after the creates it depends on in the changes array.
+ *              rejected on its own; a create whose parent (or nesting
+ *              parent) was rejected in the same push is rejected too
+ *              (parent_rejected). A create must come after the creates it
+ *              depends on in the changes array.
  *
  *              Rules settled while implementing (2026-09-30):
  *              - childOrder-only updates need no baseVersion, never
@@ -22,6 +22,10 @@
  *              - A micrograph may change sample only if its own parentID
  *                (if any) is in the new sample and no live micrograph is
  *                nested under it.
+ *              - A parentID naming a micrograph that never existed in the
+ *                project is kept as-is (legacy data has such dangling
+ *                references; the app tolerates them). A deleted one is
+ *                parent_deleted.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -118,7 +122,9 @@ class MsSync {
 			 VALUES ($1, $2, $3, $4, $5::jsonb)",
 			array($pushId, $pid, $ctx->me, $clientId, MsHttp::encode($response)));
 		$db->commit();
-		// TODO(worker branch): kick the derived-view worker here (design §4.6).
+		if ($head > $p['head_seq']) {
+			MsWorker::kick($pid);
+		}
 		MsHttp::json(200, $response);
 	}
 
@@ -150,67 +156,39 @@ class MsSync {
 			array('parked' => true));
 	}
 
-	/** Apply every change; returns results in the same order. */
+	/**
+	 * Apply every change; returns results in the same order. A create whose
+	 * parent (or nesting parent) is a create in this push that was not
+	 * accepted is rejected as parent_rejected, and so on down the tree; a
+	 * parent never fails because of a child.
+	 */
 	private static function applyAll($ctx, $pid, $changes) {
-		$db = $ctx->db;
-		$n = count($changes);
-		$results = array_fill(0, $n, null);
-		$done = array();
-
-		for ($i = 0; $i < $n; $i++) {
-			if (isset($done[$i])) {
-				continue;
-			}
-			$c = $changes[$i];
-			if (MsHttp::prop($c, 'op') !== 'create') {
-				$results[$i] = self::applyOneSafely($ctx, $pid, $c);
-				$done[$i] = true;
-				continue;
-			}
-
-			// A create plus the later creates that depend on it.
-			$group = array($i);
-			$keys = array(self::changeKey($c) => true);
-			for ($j = $i + 1; $j < $n; $j++) {
-				$d = $changes[$j];
-				if (isset($done[$j]) || MsHttp::prop($d, 'op') !== 'create') {
-					continue;
-				}
-				foreach (self::createDependencies($d) as $dep) {
-					if (isset($keys[$dep])) {
-						$group[] = $j;
-						$keys[self::changeKey($d)] = true;
+		$results = array();
+		$failed = array();
+		foreach ($changes as $c) {
+			if (MsHttp::prop($c, 'op') === 'create') {
+				$cause = null;
+				foreach (self::createDependencies($c) as $dep) {
+					if (isset($failed[$dep])) {
+						$cause = $dep;
 						break;
 					}
 				}
-			}
-
-			$db->savepoint('ms_group');
-			$failed = null;
-			foreach ($group as $g) {
-				$done[$g] = true;
-				if ($failed === null) {
-					$results[$g] = self::applyOneSafely($ctx, $pid, $changes[$g]);
-					if ($results[$g]['status'] !== 'accepted') {
-						$failed = $g;
-					}
+				if ($cause !== null) {
+					$failed[self::changeKey($c)] = true;
+					$results[] = array('type' => MsHttp::prop($c, 'type'), 'id' => MsHttp::prop($c, 'id'),
+						'status' => 'invalid', 'reason' => 'parent_rejected', 'cause' => $cause,
+						'message' => "its parent $cause was not accepted");
+					continue;
 				}
-			}
-			if ($failed === null) {
-				$db->release('ms_group');
+				$r = self::applyOneSafely($ctx, $pid, $c);
+				if ($r['status'] !== 'accepted') {
+					$failed[self::changeKey($c)] = true;
+				}
+				$results[] = $r;
 				continue;
 			}
-			$db->rollbackTo('ms_group');
-			$db->release('ms_group');
-			$cause = self::changeKey($changes[$failed]);
-			foreach ($group as $g) {
-				if ($g !== $failed) {
-					$results[$g] = array(
-						'type' => MsHttp::prop($changes[$g], 'type'), 'id' => MsHttp::prop($changes[$g], 'id'),
-						'status' => 'invalid', 'reason' => 'group_rejected', 'cause' => $cause,
-						'message' => "rejected together with $cause");
-				}
-			}
+			$results[] = self::applyOneSafely($ctx, $pid, $c);
 		}
 		return $results;
 	}
@@ -503,7 +481,10 @@ class MsSync {
 		if ($type === 'micrograph') {
 			$nest = MsHttp::prop($row['body'], 'parentID');
 			if (is_string($nest) && $nest !== '') {
-				self::requireLiveParent($db, $pid, 'micrograph', $nest);
+				$par = MsStore::entity($db, $pid, 'micrograph', $nest);
+				if ($par !== null && !MsStore::isLive($par)) {
+					throw new MsParentDeleted($par);
+				}
 			}
 		}
 
@@ -596,7 +577,13 @@ class MsSync {
 		if ($nest === $id) {
 			throw new MsInvalid('cycle', 'a micrograph cannot be nested under itself');
 		}
-		$par = self::requireLiveParent($db, $pid, 'micrograph', $nest);
+		$par = MsStore::entity($db, $pid, 'micrograph', $nest);
+		if ($par === null) {
+			return; // dangling reference that never existed: preserved as in legacy data
+		}
+		if (!MsStore::isLive($par)) {
+			throw new MsParentDeleted($par);
+		}
 		if ($par['parent_id'] !== $sampleId) {
 			throw new MsInvalid('parent_other_sample', 'parentID names a micrograph in another sample');
 		}

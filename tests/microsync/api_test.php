@@ -232,18 +232,19 @@ try {
 	check('non-object change -> schema', st(one($PID, $OWN, 'hello')) === 'invalid/schema');
 
 	$r = push($PID, $OWN, array(
-		array('op' => 'create', 'type' => 'micrograph', 'id' => 'M2', 'parentType' => 'sample', 'parentId' => 'S1', 'body' => array('name' => 'M2')),
+		array('op' => 'create', 'type' => 'micrograph', 'id' => 'M2', 'parentType' => 'sample', 'parentId' => 'S1', 'body' => 'not an object'),
 		array('op' => 'create', 'type' => 'spot', 'id' => 'P2', 'parentType' => 'micrograph', 'parentId' => 'M2', 'body' => array('name' => 'ok')),
-		array('op' => 'create', 'type' => 'spot', 'id' => 'P3', 'parentType' => 'micrograph', 'parentId' => 'M2', 'body' => 'not an object'),
+		array('op' => 'create', 'type' => 'micrograph', 'id' => 'M2n', 'parentType' => 'sample', 'parentId' => 'S1', 'body' => array('name' => 'nested', 'parentID' => 'M2')),
+		array('op' => 'create', 'type' => 'spot', 'id' => 'P3', 'parentType' => 'micrograph', 'parentId' => 'M1', 'body' => 'bad'),
 		array('op' => 'create', 'type' => 'spot', 'id' => 'P4', 'parentType' => 'micrograph', 'parentId' => 'M1', 'body' => array('name' => 'independent')),
 	));
 	$res = $r['body']['results'];
-	check('create group: bad child rejects parent and siblings',
-		st($res[0]) === 'invalid/group_rejected' && st($res[1]) === 'invalid/group_rejected' && st($res[2]) === 'invalid/schema'
-		&& $res[0]['cause'] === 'spot:P3', json_encode($res));
-	check('create group: unrelated create still accepted', st($res[3]) === 'accepted');
-	check('rejected group left no rows', (int)$db->get_var_prepared(
-		"SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id IN ('M2','P2','P3')", array($PID)) === 0);
+	check('rejected create rejects its children and nested micrographs',
+		st($res[0]) === 'invalid/schema' && st($res[1]) === 'invalid/parent_rejected' && $res[1]['cause'] === 'micrograph:M2'
+		&& st($res[2]) === 'invalid/parent_rejected', json_encode($res));
+	check('a rejected child does not reject its parent or siblings', st($res[3]) === 'invalid/schema' && st($res[4]) === 'accepted');
+	check('rejected creates left no rows', (int)$db->get_var_prepared(
+		"SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id IN ('M2','P2','M2n','P3')", array($PID)) === 0);
 
 	// -----------------------------------------------------------------------
 	section('Point count sessions');
@@ -303,12 +304,13 @@ try {
 	check('self nesting -> cycle', st(one($PID, $OWN, array('op' => 'update', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 3, 'fields' => array('parentID' => 'M1')))) === 'invalid/cycle');
 	check('parentID in another sample -> parent_other_sample', st(one($PID, $OWN, array('op' => 'update', 'type' => 'micrograph', 'id' => 'M3', 'baseVersion' => 1, 'fields' => array('parentID' => 'MX')))) === 'invalid/parent_other_sample');
 	check('move micrograph with nested children -> parent_other_sample', st(one($PID, $OWN, array('op' => 'update', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 3, 'parentId' => 'S2'))) === 'invalid/parent_other_sample');
-	check('nested create in same push depends on its parent', (function () use ($PID, $OWN) {
+	check('dangling parentID (never existed) is preserved', (function () use ($PID, $OWN, $db) {
 		$r = push($PID, $OWN, array(
-			array('op' => 'create', 'type' => 'micrograph', 'id' => 'MN1', 'parentType' => 'sample', 'parentId' => 'S2', 'body' => array('name' => 'x', 'parentID' => 'MISSING')),
+			array('op' => 'create', 'type' => 'micrograph', 'id' => 'MN1', 'parentType' => 'sample', 'parentId' => 'S2', 'body' => array('name' => 'x', 'parentID' => 'NEVER-EXISTED')),
 			array('op' => 'create', 'type' => 'micrograph', 'id' => 'MN2', 'parentType' => 'sample', 'parentId' => 'S2', 'body' => array('name' => 'y', 'parentID' => 'MN1')),
 		));
-		return st($r['body']['results'][0]) === 'invalid/parent_missing' && st($r['body']['results'][1]) === 'invalid/group_rejected';
+		return st($r['body']['results'][0]) === 'accepted' && st($r['body']['results'][1]) === 'accepted'
+			&& $db->get_var_prepared("SELECT body->>'parentID' FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'MN1'", array($PID)) === 'NEVER-EXISTED';
 	})());
 	check('move a leaf micrograph to another sample', st(one($PID, $OWN, array('op' => 'update', 'type' => 'micrograph', 'id' => 'MX', 'baseVersion' => 1, 'parentId' => 'S1'))) === 'accepted');
 

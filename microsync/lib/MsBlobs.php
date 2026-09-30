@@ -441,6 +441,7 @@ class MsBlobs {
 			array('refs.' . $role), $before, $after);
 		MsStore::bumpHead($db, $pid, $seq);
 		$db->commit();
+		MsWorker::kick($pid);
 		MsHttp::json(200, array('changed' => true, 'seq' => $seq, 'headSeq' => $seq));
 	}
 }

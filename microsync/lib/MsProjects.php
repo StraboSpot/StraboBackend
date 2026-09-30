@@ -109,6 +109,7 @@ class MsProjects {
 			    SET sync_state = 'ready', views_dirty_since = COALESCE(views_dirty_since, now())
 			  WHERE id = $1",
 			array($pid));
+		MsWorker::kick($pid);
 		MsHttp::json(200, array('pid' => $pid, 'syncState' => 'ready', 'headSeq' => $p['head_seq']));
 	}
 
