@@ -37,9 +37,9 @@ set_time_limit(0);
 $_SERVER['DOCUMENT_ROOT'] = '/srv/app/www';
 require_once '/srv/app/www/includes/config.inc.php';
 require_once '/srv/app/www/db.php';
-require_once '/srv/app/www/includes/jwt/quick-jwt.php';
 require_once '/srv/app/www/microsync/lib/MsSmz.php';
 require_once '/srv/app/www/microdb/lib/sync_guard.php';
+require_once '/srv/app/www/tests/lib/microsync_client.php';
 
 $HOST = 'http://localhost';
 $BASE = "$HOST/microsync/v1";
@@ -61,85 +61,8 @@ function check($label, $cond, $detail = '') {
 }
 function section($name) { echo "\n== $name\n"; }
 
-function token($pkey) {
-	$qjt = new QuickJWT();
-	return $qjt->sign(array('iss' => JWT_ISSUER, 'aud' => JWT_AUDIENCE, 'iat' => time(), 'exp' => time() + 7200,
-		'sub' => (string)$pkey, 'email' => 'x', 'name' => 'x'), JWT_SECRET);
-}
-
-/** HTTP request; returns code, headers (lowercase keys), raw body, decoded JSON. */
-function http($method, $url, $tok = null, $body = null) {
-	$ch = curl_init($url);
-	curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
-	curl_setopt($ch, CURLOPT_CUSTOMREQUEST, $method);
-	$headers = array();
-	curl_setopt($ch, CURLOPT_HEADERFUNCTION, function ($ch, $line) use (&$headers) {
-		$p = strpos($line, ':');
-		if ($p !== false) $headers[strtolower(trim(substr($line, 0, $p)))] = trim(substr($line, $p + 1));
-		return strlen($line);
-	});
-	$h = array();
-	if ($tok !== null) $h[] = 'Authorization: Bearer ' . $tok;
-	if (is_string($body)) {
-		$h[] = 'Content-Type: application/octet-stream';
-		curl_setopt($ch, CURLOPT_POSTFIELDS, $body);
-	} elseif ($body !== null) {
-		$h[] = 'Content-Type: application/json';
-		curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($body, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
-	}
-	curl_setopt($ch, CURLOPT_HTTPHEADER, $h);
-	$raw = curl_exec($ch);
-	$code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
-	curl_close($ch);
-	return array('code' => $code, 'headers' => $headers, 'raw' => (string)$raw, 'body' => json_decode((string)$raw, true));
-}
-function api($method, $path, $tok, $body = null) {
-	global $BASE;
-	return http($method, $BASE . $path, $tok, $body);
-}
-
-function uuid() {
-	return MsHttp::uuid4();
-}
-
-function push($pid, $tok, $changes) {
-	$r = api('POST', "/projects/$pid/push", $tok, array('pushId' => uuid(), 'clientId' => 'smz-test', 'changes' => $changes));
-	$bad = array();
-	if ($r['code'] !== 200) return array(array('http' => $r['code'], 'raw' => substr($r['raw'], 0, 300)));
-	foreach ($r['body']['results'] as $res) if ($res['status'] !== 'accepted') $bad[] = $res;
-	return $bad;
-}
-
-function upload_blob($pid, $tok, $bytes, $kind) {
-	$sha = hash('sha256', $bytes);
-	$r = api('POST', "/projects/$pid/uploads", $tok, array('sha256' => $sha, 'size' => strlen($bytes), 'kind' => $kind));
-	if (!empty($r['body']['complete'])) return $sha;
-	$up = $r['body']['uploadId'];
-	for ($off = 0; $off < strlen($bytes); $off += $r['body']['chunkSize']) {
-		api('PUT', "/projects/$pid/uploads/$up?offset=$off", $tok, substr($bytes, $off, $r['body']['chunkSize']));
-	}
-	api('POST', "/projects/$pid/uploads/$up/complete", $tok);
-	return $sha;
-}
-
-function set_ref($pid, $tok, $type, $id, $role, $sha) {
-	return api('PUT', "/projects/$pid/refs", $tok, array('entityType' => $type, 'entityId' => $id, 'role' => $role, 'sha256' => $sha));
-}
-
-function build_now($pid) {
-	for ($i = 0; $i < 60; $i++) {
-		$out = array();
-		exec('php /srv/app/www/microsync/worker.php --project=' . (int)$pid . ' --now 2>/dev/null', $out);
-		$lines = array_values(array_filter(array_map('trim', $out), 'strlen'));
-		$last = count($lines) ? $lines[count($lines) - 1] : '';
-		if ($last !== 'busy') return $last;
-		sleep(1);
-	}
-	return 'busy';
-}
-
 function legacy_delete($user, $sid) {
-	exec('php /srv/app/www/tests/microsync/legacy_child.php jwt delete ' . (int)$user . ' - ' . escapeshellarg($sid) . ' 2>/dev/null');
+	legacy('jwt', 'delete', $user, '-', $sid);
 }
 
 /** A ZIP built by libzip; $entries name => [content, 'store'|'deflate']. */
@@ -209,11 +132,11 @@ try {
 	// -----------------------------------------------------------------------
 	section('Setup: a synced project with every kind of file');
 	$sid = $PREFIX . 'main';
-	$r = api('POST', '/projects', $TOK, array('straboId' => $sid, 'name' => 'Smz Test µ'));
+	$r = req('POST', '/projects', $TOK, array('straboId' => $sid, 'name' => 'Smz Test µ'));
 	$P = (int)$r['body']['pid'];
 	$pids[] = $P;
 	$sids[] = $sid;
-	$bad = push($P, $TOK, array(
+	$bad = push_all($P, $TOK, array(
 		array('op' => 'create', 'type' => 'project', 'id' => $sid, 'body' => array('name' => 'Smz Test µ')),
 		array('op' => 'create', 'type' => 'dataset', 'id' => 'zD', 'parentType' => 'project', 'parentId' => $sid, 'body' => array('name' => 'D')),
 		array('op' => 'create', 'type' => 'sample', 'id' => 'zS', 'parentType' => 'dataset', 'parentId' => 'zD',
@@ -255,42 +178,42 @@ try {
 	set_ref($P, $TOK, 'spot', 'zP1', 'associated_file:notes µ.txt', $shaAtt);
 
 	section('D1. Unfinished project (initial upload not done) is not downloadable');
-	check('static URL 404 before ready', http('GET', "$HOST/straboMicroFiles/$P/project.zip")['code'] === 404);
-	check('v1 smz 409 before ready', api('GET', "/projects/$P/smz", $TOK)['code'] === 409);
+	check('static URL 404 before ready', http_req('GET', "$HOST/straboMicroFiles/$P/project.zip")['code'] === 404);
+	check('v1 smz 409 before ready', req('GET', "/projects/$P/smz", $TOK)['code'] === 409);
 	check('size helper 0 before ready', micro_sync_download_bytes($db, $P) === 0);
 
-	api('POST', "/projects/$P/ready", $TOK);
+	req('POST', "/projects/$P/ready", $TOK);
 	check('worker built it', build_now($P) === 'built');
 	$sharekey = $db->get_var_prepared("SELECT sharekey FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P));
 
 	// -----------------------------------------------------------------------
 	section('A. Every door serves the same archive');
-	$static = http('GET', "$HOST/straboMicroFiles/$P/project.zip");
+	$static = http_req('GET', "$HOST/straboMicroFiles/$P/project.zip");
 	check('static project.zip URL -> 200 application/zip', $static['code'] === 200
 		&& strpos($static['headers']['content-type'] ?? '', 'application/zip') === 0, $static['code'] . ' ' . substr($static['raw'], 0, 200));
 	check('Content-Length exact', (int)($static['headers']['content-length'] ?? -1) === strlen($static['raw']));
 	check('no Content-Encoding', !isset($static['headers']['content-encoding']));
 	$len = strlen($static['raw']);
-	$dl = http('GET', "$HOST/download_micro_file?project_id=$P");
+	$dl = http_req('GET', "$HOST/download_micro_file?project_id=$P");
 	check('download_micro_file -> same bytes, .smz file name', $dl['code'] === 200 && $dl['raw'] === $static['raw']
 		&& strpos($dl['headers']['content-disposition'] ?? '', 'smz_test.smz') !== false, $dl['headers']['content-disposition'] ?? '');
-	$v1 = api('GET', "/projects/$P/smz", $TOK);
+	$v1 = req('GET', "/projects/$P/smz", $TOK);
 	check('v1 smz (owner) -> same bytes', $v1['code'] === 200 && $v1['raw'] === $static['raw']);
-	check('v1 smz outsider -> 404', api('GET', "/projects/$P/smz", $users['outsider']['tok'])['code'] === 404);
+	check('v1 smz outsider -> 404', req('GET', "/projects/$P/smz", $users['outsider']['tok'])['code'] === 404);
 	check('size helper = streamed length', micro_sync_download_bytes($db, $P) === $len && MsSmz::length($db, $P) === $len);
 
-	$pu = http('GET', "$HOST/jwtmicrodb/projectURL/$sid", $TOK);
+	$pu = http_req('GET', "$HOST/jwtmicrodb/projectURL/$sid", $TOK);
 	check('projectURL: static URL and exact bytes', $pu['code'] === 200 && ($pu['body']['url'] ?? '') === "/straboMicroFiles/$P/project.zip"
 		&& (int)($pu['body']['bytes'] ?? 0) === $len, $pu['raw']);
-	$su = http('GET', "$HOST/jwtmicrodb/sharedURL/$P", $TOK);
+	$su = http_req('GET', "$HOST/jwtmicrodb/sharedURL/$P", $TOK);
 	check('sharedURL: static URL and exact bytes', $su['code'] === 200 && (int)($su['body']['bytes'] ?? 0) === $len, $su['raw']);
-	$sp = http('GET', "$HOST/jwtmicrodb/sharedProject/$sharekey", $users['member']['tok']);
+	$sp = http_req('GET', "$HOST/jwtmicrodb/sharedProject/$sharekey", $users['member']['tok']);
 	check('share code -> key = project id (the app then GETs the static URL)', (string)($sp['body']['key'] ?? '') === (string)$P, $sp['raw']);
-	$mp = http('GET', "$HOST/jwtmicrodb/myProjects", $TOK);
+	$mp = http_req('GET', "$HOST/jwtmicrodb/myProjects", $TOK);
 	$mine = null;
 	foreach (($mp['body']['projects'] ?? array()) as $x) if ($x['id'] === $sid) $mine = $x;
 	check('myProjects lists it with exact bytes', $mine !== null && (int)$mine['bytes'] === $len, $mp['raw']);
-	$again = http('GET', "$HOST/straboMicroFiles/$P/project.zip");
+	$again = http_req('GET', "$HOST/straboMicroFiles/$P/project.zip");
 	check('same state -> same bytes', $again['raw'] === $static['raw']);
 
 	// -----------------------------------------------------------------------
@@ -339,7 +262,7 @@ try {
 	$spine = $db->get_var_prepared("SELECT count(*) FROM strabosamples.samples WHERE id = 'zS' AND userpkey = $1", array($U));
 	if ((int)$spine > 0) {
 		$db->prepare_query("UPDATE strabosamples.samples SET name = 'Edited in Samples' WHERE id = 'zS' AND userpkey = $1", array($U));
-		$ov = http('GET', "$HOST/straboMicroFiles/$P/project.zip");
+		$ov = http_req('GET', "$HOST/straboMicroFiles/$P/project.zip");
 		$f = save('overlay.smz', $ov['raw']);
 		list($zo) = read_archive($f);
 		$pjo = json_decode($zo[$pre . 'project.json'][0] ?? 'null', true);
@@ -366,11 +289,11 @@ try {
 	check('forced ZIP64: same contents', $z64 !== null && array_map(function ($e) { return $e[0]; }, $z64) === array_map(function ($e) { return $e[0]; }, $z));
 
 	$sid2 = $PREFIX . 'many';
-	$r = api('POST', '/projects', $TOK, array('straboId' => $sid2, 'name' => 'Many'));
+	$r = req('POST', '/projects', $TOK, array('straboId' => $sid2, 'name' => 'Many'));
 	$P2 = (int)$r['body']['pid'];
 	$pids[] = $P2;
 	$sids[] = $sid2;
-	push($P2, $TOK, array(
+	push_all($P2, $TOK, array(
 		array('op' => 'create', 'type' => 'project', 'id' => $sid2, 'body' => array('name' => 'Many')),
 		array('op' => 'create', 'type' => 'dataset', 'id' => 'mD', 'parentType' => 'project', 'parentId' => $sid2, 'body' => array('name' => 'D')),
 		array('op' => 'create', 'type' => 'sample', 'id' => 'mS', 'parentType' => 'dataset', 'parentId' => 'mD', 'body' => array('name' => 'S')),
@@ -379,9 +302,9 @@ try {
 	$manyEntries = array('metadata.json' => array('{}', 'store'));
 	for ($i = 0; $i < 70000; $i++) $manyEntries['tiles/tile_' . ($i % 300) . '_' . intdiv($i, 300) . '.webp'] = array("t$i", 'store');
 	set_ref($P2, $TOK, 'micrograph', 'mM', 'tiles', upload_blob($P2, $TOK, make_archive($manyEntries), 'tiles'));
-	api('POST', "/projects/$P2/ready", $TOK);
+	req('POST', "/projects/$P2/ready", $TOK);
 	build_now($P2);
-	$many = http('GET', "$HOST/straboMicroFiles/$P2/project.zip");
+	$many = http_req('GET', "$HOST/straboMicroFiles/$P2/project.zip");
 	check('70,001-entry project: 200, exact length', $many['code'] === 200 && (int)$many['headers']['content-length'] === strlen($many['raw']));
 	$f = save('many.smz', $many['raw']);
 	list($zm, $err) = read_archive($f);
@@ -391,15 +314,15 @@ try {
 
 	// -----------------------------------------------------------------------
 	section('D. Edges');
-	check('unknown project id -> 404', http('GET', "$HOST/straboMicroFiles/999999999/project.zip")['code'] === 404);
-	check('download_micro_file unknown id -> 404', http('GET', "$HOST/download_micro_file?project_id=999999999")['code'] === 404);
+	check('unknown project id -> 404', http_req('GET', "$HOST/straboMicroFiles/999999999/project.zip")['code'] === 404);
+	check('download_micro_file unknown id -> 404', http_req('GET', "$HOST/download_micro_file?project_id=999999999")['code'] === 404);
 	$legacy = null;
 	foreach ($db->get_results("SELECT id FROM strabomicro.micro_projectmetadata WHERE sync_format = 'legacy' ORDER BY id DESC") as $lr) {
 		if (is_file("$FILES/{$lr->id}/project.zip")) { $legacy = (int)$lr->id; break; }
 	}
 	$legacyZip = "$FILES/$legacy/project.zip";
 	if ($legacy) {
-		$lg = http('GET', "$HOST/straboMicroFiles/$legacy/project.zip");
+		$lg = http_req('GET', "$HOST/straboMicroFiles/$legacy/project.zip");
 		check("legacy project #$legacy: static project.zip served unchanged", $lg['code'] === 200 && $lg['raw'] === file_get_contents($legacyZip));
 		check("legacy project #$legacy: size helper = file size", micro_sync_download_bytes($db, $legacy) === filesize($legacyZip));
 	} else {
@@ -407,7 +330,7 @@ try {
 	}
 	$blobThumb = "$FILES/$P/blobs/$shaThumb";
 	rename($blobThumb, "$blobThumb.away");
-	$miss = http('GET', "$HOST/straboMicroFiles/$P/project.zip");
+	$miss = http_req('GET', "$HOST/straboMicroFiles/$P/project.zip");
 	rename("$blobThumb.away", $blobThumb);
 	$f = save('missing-blob.smz', $miss['raw']);
 	list($zx, $err) = read_archive($f);
@@ -417,7 +340,7 @@ try {
 	$bad = make_archive(array('../evil.txt' => array('x', 'store')));
 	$shaBad = upload_blob($P, $TOK, $bad, 'tiles');
 	set_ref($P, $TOK, 'micrograph', 'zM2', 'tiles', $shaBad);
-	$ev = http('GET', "$HOST/straboMicroFiles/$P/project.zip");
+	$ev = http_req('GET', "$HOST/straboMicroFiles/$P/project.zip");
 	$f = save('unsafe-tiles.smz', $ev['raw']);
 	list($ze, $err) = read_archive($f);
 	$names = $ze === null ? array() : array_keys($ze);
