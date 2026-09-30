@@ -7,11 +7,12 @@
  *
  *              - Lists hide synced projects until the worker has built their
  *                derived rows and files (views_built_at set).
- *              - Legacy uploads (jwtmicrodb and microdb, with or without a
- *                file) refuse synced projects: their rebuild deletes the
- *                project row, which cascades into the entity store. Accepting
- *                single-member uploads (design P0-9) arrives with the
- *                conversion code.
+ *              - Legacy uploads to synced projects: jwtmicrodb (the new app)
+ *                replaces the project in place when the owner is its only
+ *                active member (design P0-9, micro_sync_upload_plan, then
+ *                MsConvert::replace); otherwise, and always for microdb (the
+ *                retired JavaFX API), they are refused: the old rebuild
+ *                deletes the project row, which cascades into the store.
  *              - Legacy deletes of a synced project are allowed only while the
  *                owner is its only active member.
  *              - Downloads: synced projects have no static project.zip; every
@@ -52,6 +53,30 @@ function micro_sync_upload_refusal($db, $userpkey, $straboId) {
 			. 'Please update StraboMicro to upload changes to it.';
 	}
 	return null;
+}
+
+/**
+ * How a jwtmicrodb upload of $straboId by $userpkey goes: null = the legacy
+ * path (no synced project), array('id' => pid) = P0-9 replace of a synced
+ * project the uploader owns alone, string = refusal message (shared, or
+ * its initial upload not finished).
+ */
+function micro_sync_upload_plan($db, $userpkey, $straboId) {
+	$row = micro_sync_project_row($db, $userpkey, $straboId);
+	if (!$row || $row->sync_format !== 'entity') {
+		return null;
+	}
+	$state = $db->get_var_prepared(
+		"SELECT sync_state FROM strabomicro.micro_projectmetadata WHERE id = $1", array((int)$row->id));
+	$others = (int)$db->get_var_prepared(
+		"SELECT count(*) FROM strabomicro.micro_members
+		  WHERE project_id = $1 AND state = 'active' AND user_pkey <> $2",
+		array((int)$row->id, (int)$userpkey));
+	if ($state !== 'ready' || $others > 0) {
+		return 'This project is shared with other people and kept in sync by a newer version of StraboMicro. '
+			. 'Please update StraboMicro to upload changes to it.';
+	}
+	return array('id' => (int)$row->id);
 }
 
 /** Message refusing a legacy delete of a shared synced project, or null to proceed. */

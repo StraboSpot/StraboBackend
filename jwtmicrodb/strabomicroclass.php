@@ -1671,13 +1671,14 @@ class StraboMicro
 
 		$shareKey = $this->db->get_var("select sharekey from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
 
-		// Synced projects (microsync) must not go through this rebuild: it
-		// deletes the project row, which cascades into the entity store.
+		// Synced projects (microsync): a single-member one is replaced in place
+		// and taken into its store (P0-9); a shared one is refused (the old
+		// rebuild deletes the project row, which cascades into the store).
 		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
-		$syncRefusal = micro_sync_upload_refusal($this->db, $this->userpkey, $strabo_project_id);
-		if($syncRefusal !== null){
+		$syncPlan = micro_sync_upload_plan($this->db, $this->userpkey, $strabo_project_id);
+		if(is_string($syncPlan)){
 			$data = new stdClass();
-			$data->Error = $syncRefusal;
+			$data->Error = $syncPlan;
 			return $data;
 		}
 
@@ -1690,6 +1691,9 @@ class StraboMicro
 				// Re-upload of an existing project: rebuild it in place, keeping
 				// its micro_projectmetadata.id (MICRO_INPLACE_REBUILD, default on;
 				// define it false in config.inc.php to return to the old path).
+				if(is_array($syncPlan)){
+					return $this->replaceSyncedProject($strabo_project_id, $files, $shareKey, $syncPlan['id']);
+				}
 				$inplace = defined('MICRO_INPLACE_REBUILD') ? MICRO_INPLACE_REBUILD : true;
 				if($count > 0 && $inplace){
 					$result = $this->replaceProjectInPlace($strabo_project_id, $files, $shareKey);
@@ -1770,7 +1774,7 @@ class StraboMicro
 	 * @return object|null result for the controller, or null if the project
 	 *                     does not exist (caller uses the old path)
 	 */
-	public function replaceProjectInPlace($strabo_project_id, $files, $shareKey){
+	public function replaceProjectInPlace($strabo_project_id, $files, $shareKey, $synced = false){
 
 		$root = $_SERVER['DOCUMENT_ROOT']."/straboMicroFiles";
 		$pkey = $this->db->get_var("select id from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='".pg_escape_string($strabo_project_id)."'");
@@ -1809,14 +1813,19 @@ class StraboMicro
 		$this->db->get_var("select nextval('micro_projectmetadata_id_seq')");
 
 		// 3. Delete the old rows and load the new ones under the same id.
-		$this->deleteProjectRows($strabo_project_id);
-		$data = $this->loadProjectJSON($json, $pkey, $shareKey);
+		// A synced project keeps its row (deleting it cascades into the store).
+		$this->deleteProjectRows($strabo_project_id, $synced);
+		$data = $this->loadProjectJSON($json, $pkey, $shareKey, $synced);
 		if($data->Error != ""){
 			exec("rm -rf ".escapeshellarg($staging));
 			return $data;
 		}
 
-		// 4. Swap folders: the old files stayed in place until now.
+		// 4. Swap folders: the old files stayed in place until now. A synced
+		// project's blobs (change history refers to them) move across.
+		if($synced && is_dir("$final/blobs") && !is_dir("$staging/blobs")){
+			rename("$final/blobs", "$staging/blobs");
+		}
 		if(is_dir($final)){
 			rename($final, $trash);
 		}
@@ -1844,6 +1853,33 @@ class StraboMicro
 		return $data;
 	}
 
+	/**
+	 * P0-9: an old-app upload of a synced project its owner holds alone.
+	 * The in-place rebuild (row kept, blobs kept) runs under the worker's
+	 * build lock, then MsConvert::replace takes the upload into the store as
+	 * the owner's changes, or puts the project back to legacy with this
+	 * upload if it cannot. Either way the response is the legacy one.
+	 */
+	public function replaceSyncedProject($strabo_project_id, $files, $shareKey, $pkey){
+		require_once __DIR__ . '/../microsync/lib/MsConvert.php';
+		$ms = new MsDb($this->db);
+		$ms->q("SELECT pg_advisory_lock(hashtext('microsync-build'), $1)", array((int)$pkey));
+		try {
+			$data = $this->replaceProjectInPlace($strabo_project_id, $files, $shareKey, true);
+			if($data === null || (isset($data->Error) && $data->Error != "")){
+				return $data;
+			}
+			$conv = new MsConvert($this->db);
+			$r = $conv->replace($pkey);
+			if($r['status'] !== 'replaced'){
+				error_log("microsync P0-9 project $pkey fell back to legacy: {$r['reason']}: {$r['message']}");
+			}
+			return $data;
+		} finally {
+			$ms->q("SELECT pg_advisory_unlock(hashtext('microsync-build'), $1)", array((int)$pkey));
+		}
+	}
+
 	public function insertProjectWithoutFile($post){
 
 		//First, check to see if project exists
@@ -1854,13 +1890,14 @@ class StraboMicro
 
 		$shareKey = $this->db->get_var("select sharekey from micro_projectmetadata where userpkey = $this->userpkey and strabo_id='$strabo_project_id'");
 
-		// Synced projects (microsync) must not go through this rebuild: it
-		// deletes the project row, which cascades into the entity store.
+		// Synced projects (microsync): a single-member one is replaced in place
+		// and taken into its store (P0-9); a shared one is refused (the old
+		// rebuild deletes the project row, which cascades into the store).
 		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
-		$syncRefusal = micro_sync_upload_refusal($this->db, $this->userpkey, $strabo_project_id);
-		if($syncRefusal !== null){
+		$syncPlan = micro_sync_upload_plan($this->db, $this->userpkey, $strabo_project_id);
+		if(is_string($syncPlan)){
 			$data = new stdClass();
-			$data->Error = $syncRefusal;
+			$data->Error = $syncPlan;
 			return $data;
 		}
 
@@ -1870,6 +1907,13 @@ class StraboMicro
 				$data = new stdClass();
 				$data->Error = "Project already exists on server.";
 			}else{
+				if(is_array($syncPlan)){
+					$tmp = "/StraboData/bigDriveData/tempFiles/micro_".$strabo_project_id.".zip";
+					$data = $this->replaceSyncedProject($strabo_project_id, array('tmp_name' => $tmp, 'name' => ''), $shareKey, $syncPlan['id']);
+					@unlink($tmp);
+					return $data;
+				}
+
 				//Delete project just in case
 				$this->deleteProject($strabo_project_id);
 
