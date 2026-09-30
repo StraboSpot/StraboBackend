@@ -456,6 +456,22 @@ try {
 	$r = req('POST', "/projects/$PID/uploads", $EDT, array('sha256' => $sha, 'size' => strlen($big), 'kind' => 'image'));
 	check('present blob -> complete immediately', $r['code'] === 200 && $r['body']['complete'] === true);
 
+	// Empty files (an empty attachment): no chunks, stored at start.
+	$shaE = hash('sha256', '');
+	check('negative size -> 400', req('POST', "/projects/$PID/uploads", $OWN, array('sha256' => $shaE, 'size' => -1, 'kind' => 'associated_file'))['code'] === 400);
+	check('size 0 with the wrong sha256 -> 422', req('POST', "/projects/$PID/uploads", $OWN, array('sha256' => $sha, 'size' => 0, 'kind' => 'associated_file'))['code'] === 422);
+	check('viewer cannot store an empty blob', req('POST', "/projects/$PID/uploads", $VIE, array('sha256' => $shaE, 'size' => 0, 'kind' => 'associated_file'))['code'] === 403);
+	$r = req('POST', "/projects/$PID/uploads", $OWN, array('sha256' => $shaE, 'size' => 0, 'kind' => 'associated_file'));
+	check('empty blob -> complete at start, file and row stored', $r['code'] === 200 && $r['body']['complete'] === true && $r['body']['size'] === 0
+		&& is_file("$FILES/$PID/blobs/$shaE") && filesize("$FILES/$PID/blobs/$shaE") === 0
+		&& $db->get_var_prepared("SELECT size FROM strabomicro.micro_blobs WHERE project_id = $1 AND sha256 = $2", array($PID, $shaE)) === '0', $r['raw']);
+	check('empty blob again -> complete', req('POST', "/projects/$PID/uploads", $EDT, array('sha256' => $shaE, 'size' => 0, 'kind' => 'associated_file'))['body']['complete'] === true);
+	$r = req('HEAD', "/projects/$PID/blobs/$shaE", $VIE);
+	check('HEAD empty blob -> 200, length 0', $r['code'] === 200 && (int)$r['headers']['content-length'] === 0);
+	$r = req('GET', "/projects/$PID/blobs/$shaE", $VIE);
+	check('GET empty blob -> 200, empty body', $r['code'] === 200 && $r['raw'] === '' && (int)$r['headers']['content-length'] === 0);
+	check('no upload row left for the empty blob', $db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_uploads WHERE project_id = $1 AND sha256 = $2", array($PID, $shaE)) === '0');
+
 	$small = 'attachment one';
 	$shaA = hash('sha256', $small);
 	$fake = str_repeat('0', 64);
@@ -492,7 +508,8 @@ try {
 	$r = req('DELETE', "/projects/$PID/refs?entityType=spot&entityId=P1&role=" . rawurlencode('associated_file:a.txt'), $OWN);
 	check('delete ref', $r['code'] === 200 && $r['body']['changed'] === true);
 	$snap = req('GET', "/projects/$PID/snapshot", $VIE)['body'];
-	check('snapshot lists blobs and refs', count($snap['blobs']) === 3 && count($snap['refs']) === 2, json_encode($snap['refs']));
+	// 4 blobs: the big image, two attachments, the empty file.
+	check('snapshot lists blobs and refs', count($snap['blobs']) === 4 && count($snap['refs']) === 2, json_encode(array(count($snap['blobs']), $snap['refs'])));
 
 	// -----------------------------------------------------------------------
 	section('Activity and presence');

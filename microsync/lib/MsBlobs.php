@@ -135,8 +135,11 @@ class MsBlobs {
 		if (!MsHttp::isSha256($sha)) {
 			throw new MsHttpError(400, 'bad_request', 'sha256 must be 64 lowercase hex characters');
 		}
-		if (!is_int($size) || $size < 1 || $size > self::MAX_SIZE) {
-			throw new MsHttpError(400, 'bad_request', 'size must be a positive integer');
+		if (!is_int($size) || $size < 0 || $size > self::MAX_SIZE) {
+			throw new MsHttpError(400, 'bad_request', 'size must be a non-negative integer');
+		}
+		if ($size === 0 && $sha !== hash('sha256', '')) {
+			throw new MsHttpError(422, 'hash_mismatch', 'An empty blob has sha256 ' . hash('sha256', ''));
 		}
 		if (!in_array($kind, self::$KINDS, true)) {
 			throw new MsHttpError(400, 'bad_request', 'kind must be one of ' . implode(', ', self::$KINDS));
@@ -149,6 +152,25 @@ class MsBlobs {
 		$present = self::blobRow($db, $pid, $sha);
 		if ($present !== null) {
 			MsHttp::json(200, array('complete' => true, 'sha256' => $sha, 'size' => (int)$present['size'], 'kind' => $present['kind']));
+			return;
+		}
+
+		// An empty file (an empty attachment) has nothing to send in chunks:
+		// store it now and answer as for a blob that is already present.
+		if ($size === 0) {
+			$dest = MsStore::blobPath($pid, $sha);
+			if (!is_dir(dirname($dest)) && !@mkdir(dirname($dest), 0775, true) && !is_dir(dirname($dest))) {
+				throw new MsHttpError(500, 'server_error', 'Blob folder could not be created');
+			}
+			if (!is_file($dest) && @file_put_contents($dest, '') === false) {
+				throw new MsHttpError(500, 'server_error', 'Blob could not be stored');
+			}
+			@file_put_contents("$dest.crc32", hash('crc32b', ''));
+			$db->q(
+				"INSERT INTO strabomicro.micro_blobs (project_id, sha256, size, kind, uploaded_by)
+				 VALUES ($1, $2, 0, $3, $4) ON CONFLICT (project_id, sha256) DO NOTHING",
+				array($pid, $sha, $kind, $ctx->me));
+			MsHttp::json(200, array('complete' => true, 'sha256' => $sha, 'size' => 0, 'kind' => $kind));
 			return;
 		}
 

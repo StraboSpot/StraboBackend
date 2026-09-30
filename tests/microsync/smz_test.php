@@ -152,6 +152,7 @@ try {
 	$img2 = random_bytes(1000);
 	$thumb = random_bytes(700);
 	$att = "attachment µ\n";
+	$empty = '';
 	$tilesEntries = array(
 		'metadata.json' => array('{"width":256,"height":256}', 'deflate'),
 		'thumbnail.jpg' => array(random_bytes(400), 'store'),
@@ -166,6 +167,7 @@ try {
 	$shaImg2 = upload_blob($P, $TOK, $img2, 'image');
 	$shaThumb = upload_blob($P, $TOK, $thumb, 'thumbnail');
 	$shaAtt = upload_blob($P, $TOK, $att, 'associated_file');
+	$shaEmpty = upload_blob($P, $TOK, $empty, 'associated_file');
 	$shaTiles = upload_blob($P, $TOK, $tiles, 'tiles');
 	$shaAff = upload_blob($P, $TOK, $affine, 'tiles_affine');
 	check('upload completion cached the CRC next to the blob',
@@ -176,6 +178,7 @@ try {
 	set_ref($P, $TOK, 'micrograph', 'zM1', 'tiles', $shaTiles);
 	set_ref($P, $TOK, 'micrograph', 'zM2', 'tiles_affine', $shaAff);
 	set_ref($P, $TOK, 'spot', 'zP1', 'associated_file:notes µ.txt', $shaAtt);
+	set_ref($P, $TOK, 'micrograph', 'zM2', 'associated_file:empty.csv', $shaEmpty);
 
 	section('D1. Unfinished project (initial upload not done) is not downloadable');
 	check('static URL 404 before ready', http_req('GET', "$HOST/straboMicroFiles/$P/project.zip")['code'] === 404);
@@ -229,7 +232,8 @@ try {
 	check('project.json keeps non-ASCII text', ($pj['datasets'][0]['samples'][0]['name'] ?? '') === 'Quartz 10° Mezőmadaras');
 	check('images/<id>', ($z[$pre . 'images/zM1'][0] ?? null) === $img1 && ($z[$pre . 'images/zM2'][0] ?? null) === $img2);
 	check('compositeThumbnails/<id>', ($z[$pre . 'compositeThumbnails/zM1'][0] ?? null) === $thumb);
-	check('associatedFiles/<name> (non-ASCII name)', ($z[$pre . 'associatedFiles/notes µ.txt'][0] ?? null) === $att);
+	check('associatedFiles/<name> (non-ASCII name, empty file)', ($z[$pre . 'associatedFiles/notes µ.txt'][0] ?? null) === $att
+		&& isset($z[$pre . 'associatedFiles/empty.csv']) && $z[$pre . 'associatedFiles/empty.csv'][0] === '');
 	$tileOk = true;
 	foreach ($tilesEntries as $name => $e) {
 		$got = $z[$pre . "tiles/zM1/$name"] ?? null;
@@ -240,7 +244,7 @@ try {
 	check('tilesAffine/<id>/...', ($z[$pre . 'tilesAffine/zM2/metadata.json'][0] ?? null) === '{"affine":true}');
 	$pc = json_decode($z[$pre . 'point-counts/zPC1.json'][0] ?? 'null', true);
 	check('point-counts/<id>.json', is_array($pc) && $pc['name'] === 'PC' && $pc['micrographId'] === 'zM1');
-	$expectNames = array('project.json', 'images/zM1', 'images/zM2', 'compositeThumbnails/zM1',
+	$expectNames = array('project.json', 'images/zM1', 'images/zM2', 'compositeThumbnails/zM1', 'associatedFiles/empty.csv',
 		'associatedFiles/notes µ.txt', 'tilesAffine/zM2/metadata.json', 'point-counts/zPC1.json');
 	foreach (array_keys($tilesEntries) as $n) $expectNames[] = "tiles/zM1/$n";
 	$gotNames = array_map(function ($n) use ($pre) { return substr($n, strlen($pre)); }, array_keys($z));
