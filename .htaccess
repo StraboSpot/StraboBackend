@@ -1,6 +1,15 @@
 php_value memory_limit 4086M
 # No Apache "Index of" pages anywhere: data folder file names (version uuids, micro files) act as access keys
 Options -Indexes
+# StraboMicro project.json (straboMicroFiles/, microview/smzFiles/, straboMicroView/smzFiles/)
+# changes in place on every upload and sync build; without this, browsers reuse a stale copy
+# for minutes (heuristic freshness) and the web viewers miss new edits until a hard reload.
+# no-cache = revalidate each time (a 304 when unchanged). Tiles and images keep default caching.
+<IfModule mod_headers.c>
+<FilesMatch "^project\.json$">
+Header set Cache-Control "no-cache"
+</FilesMatch>
+</IfModule>
 RewriteEngine on
 # Export Builder job data (exportjobs_data/, gitignored): never served; exportjobs/download.php streams results
 RewriteRule ^exportjobs_data(/|$) - [F,L]
