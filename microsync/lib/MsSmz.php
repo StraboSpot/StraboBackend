@@ -227,6 +227,30 @@ class MsSmz {
 		return self::layout($entries, $at === null ? time() : (int)$at);
 	}
 
+	/**
+	 * Write a store-mode ZIP of files (name => path) to $dest with every
+	 * timestamp set to $mtime, so the same files always give the same
+	 * bytes (the conversion's tile archives). Returns the byte count or null.
+	 */
+	public static function writeStoreArchive($files, $mtime, $dest) {
+		ksort($files, SORT_STRING);
+		$entries = array();
+		foreach ($files as $name => $path) {
+			$size = filesize($path);
+			$entries[] = array('name' => $name, 'method' => 0, 'usize' => $size, 'csize' => $size,
+				'crc' => (int)hexdec(hash_file('crc32b', $path)), 'path' => $path, 'offset' => 0);
+		}
+		$fh = fopen($dest, 'wb');
+		if ($fh === false) {
+			return null;
+		}
+		$n = self::write(self::layout($entries, $mtime), function ($bytes) use ($fh) {
+			return fwrite($fh, $bytes) === strlen($bytes);
+		});
+		fclose($fh);
+		return $n;
+	}
+
 	private static function dataEntry($name, $data) {
 		$n = strlen($data);
 		return array('name' => $name, 'method' => 0, 'usize' => $n, 'csize' => $n,

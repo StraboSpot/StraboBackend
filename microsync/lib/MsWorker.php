@@ -113,7 +113,12 @@ class MsWorker {
 	 * the project entity is missing.
 	 */
 	public static function assemble($db, $pid, $straboId) {
-		$db->beginSnapshot();
+		// Inside the caller's transaction (the conversion checks its own
+		// uncommitted writes) read there; otherwise take a snapshot.
+		$own = !$db->inTransaction();
+		if ($own) {
+			$db->beginSnapshot();
+		}
 		$head = (int)$db->val("SELECT head_seq FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pid));
 		$rows = $db->rows(
 			"SELECT entity_type, entity_id, parent_type, parent_id, body::text AS body, child_order::text AS child_order
@@ -128,7 +133,9 @@ class MsWorker {
 			     ON e.project_id = r.project_id AND e.entity_type = r.entity_type AND e.entity_id = r.entity_id
 			  WHERE r.project_id = $1 AND e.deleted_at IS NULL",
 			array($pid));
-		$db->commit();
+		if ($own) {
+			$db->commit();
+		}
 
 		$bodies = array();
 		$orders = array();

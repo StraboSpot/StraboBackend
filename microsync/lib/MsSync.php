@@ -157,6 +157,16 @@ class MsSync {
 	}
 
 	/**
+	 * Apply changes as $ctx->me without HTTP (the conversion, MsConvert).
+	 * Caller holds the transaction and the project lock and sets
+	 * $ctx->project (id, strabo_id, role, head_seq) and $ctx->pushId.
+	 * Changes are decoded JSON objects, as a push body would carry them.
+	 */
+	public static function applyChanges($ctx, $pid, $changes) {
+		return self::applyAll($ctx, $pid, $changes);
+	}
+
+	/**
 	 * Apply every change; returns results in the same order. A create whose
 	 * parent (or nesting parent) is a create in this push that was not
 	 * accepted is rejected as parent_rejected, and so on down the tree; a
