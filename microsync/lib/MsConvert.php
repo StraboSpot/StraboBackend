@@ -89,6 +89,9 @@ class MsConvert {
 	/** Dry run of the JSON side only (dev rehearsal: most folders are prod-only). */
 	public $jsonOnly = false;
 
+	/** Tests only: callable($in) run just before the project is locked and re-checked. */
+	public $beforeLockHook = null;
+
 	/** $strabodb: the $db wrapper; $log: callable(string) for progress lines. */
 	public function __construct($strabodb, $log = null) {
 		$this->strabodb = $strabodb;
@@ -174,6 +177,9 @@ class MsConvert {
 		$report['name'] = $row['name'];
 		if ($row['sync_format'] !== 'legacy') {
 			throw new MsConvertStop('already_entity', 'already in the sync store');
+		}
+		if ($this->db->val("SELECT 1 FROM public.users WHERE pkey = $1", array((int)$row['userpkey'])) === null) {
+			throw new MsConvertStop('no_owner', 'the owner (userpkey ' . (int)$row['userpkey'] . ') is not a user');
 		}
 		$root = MsStore::filesRoot() . '/' . $pid;
 		if ($this->jsonOnly) {
@@ -525,6 +531,9 @@ class MsConvert {
 			$blobs = $this->makeBlobs($in, $report);
 		}
 
+		if ($this->beforeLockHook !== null) {
+			call_user_func($this->beforeLockHook, $in);
+		}
 		$db->begin();
 		MsStore::lockProject($db, $pid);
 		$now = $db->row(
@@ -703,6 +712,7 @@ class MsConvert {
 		}
 		$journal = array(
 			'tool' => 'microsync/tools/convert.php',
+			'headSeq' => (int)$db->val("SELECT head_seq FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pid)),
 			'convertedAt' => gmdate('Y-m-d\TH:i:s\Z'),
 			'projectId' => $pid,
 			'straboId' => $in['row']['strabo_id'],
@@ -741,6 +751,35 @@ class MsConvert {
 		}
 	}
 
+	/**
+	 * Back to legacy with the archived zip, for a converted project nobody
+	 * has changed since (one member, head_seq as journaled). Otherwise the
+	 * rollback is the streamed .smz through the legacy upload (P0-12),
+	 * which keeps later edits. Returns null on success or the refusal.
+	 */
+	public function revert($pid) {
+		$pid = (int)$pid;
+		$row = $this->db->row(
+			"SELECT sync_format, head_seq FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pid));
+		if ($row === null || $row['sync_format'] !== 'entity') {
+			return 'not a converted project';
+		}
+		$j = json_decode((string)@file_get_contents(self::archiveDir($pid) . '/journal.json'), true);
+		if (!is_array($j) || !isset($j['headSeq']) || !is_file(self::archiveDir($pid) . '/project.zip')) {
+			return 'no conversion journal and archived project.zip';
+		}
+		if ((int)$row['head_seq'] !== (int)$j['headSeq']) {
+			return 'changed since conversion; use the streamed .smz through the legacy upload instead';
+		}
+		$others = (int)$this->db->val(
+			"SELECT count(*) FROM strabomicro.micro_members WHERE project_id = $1 AND role <> 'owner'", array($pid));
+		if ($others > 0) {
+			return 'has members besides the owner';
+		}
+		$this->undo($pid, null);
+		return null;
+	}
+
 	/** Put a project back to legacy: store rows, blobs/, tile markers, archived zip. */
 	private function undo($pid, $in) {
 		$db = $this->db;
@@ -767,10 +806,10 @@ class MsConvert {
 		}
 		@unlink("$arch/journal.json");
 		@rmdir($arch);
-		if ($in !== null) {
-			foreach ($in['files'] as $f) {
-				if (isset($f['dir'])) {
-					@unlink($f['dir'] . '/.blob');
+		foreach (array('tiles', 'tilesAffine') as $folder) {
+			foreach ((array)@scandir("$root/$folder") as $mid) {
+				if ($mid !== '.' && $mid !== '..' && is_file("$root/$folder/$mid/.blob")) {
+					@unlink("$root/$folder/$mid/.blob");
 				}
 			}
 		}

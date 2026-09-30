@@ -11,6 +11,8 @@
  *
  *              Usage (as www-data inside strabo-php):
  *                php microsync/tools/convert.php [--apply] [--only=12,34] [--limit=N]
+ *              --revert --only=<ids>: back to legacy from the archived zip,
+ *              only while nobody changed the project since its conversion.
  *              --json-only: dry run of the JSON side alone (normalize, push
  *              rules, round trip), for dev where most folders are missing.
  *              Report: microsync_data/convert/report-<mode>-<time>.json
@@ -41,6 +43,7 @@ include_once "../../jwtmicrodb/strabomicroclass.php";
 include_once "../lib/MsConvert.php";
 
 $apply = false;
+$revert = false;
 $jsonOnly = false;
 $only = null;
 $limit = 0;
@@ -49,6 +52,8 @@ foreach (array_slice($argv, 1) as $a) {
 		$apply = true;
 	} elseif ($a === '--dry-run') {
 		$apply = false;
+	} elseif ($a === '--revert') {
+		$revert = true;
 	} elseif ($a === '--json-only') {
 		$jsonOnly = true;
 	} elseif (preg_match('/^--only=([0-9,]+)$/', $a, $m)) {
@@ -60,6 +65,10 @@ foreach (array_slice($argv, 1) as $a) {
 		exit(2);
 	}
 }
+if ($revert && ($apply || $jsonOnly || $only === null)) {
+	fwrite(STDERR, "--revert needs --only=<ids> and nothing else\n");
+	exit(2);
+}
 if ($apply && $jsonOnly) {
 	fwrite(STDERR, "--json-only is a dry run (no files are checked)\n");
 	exit(2);
@@ -69,6 +78,18 @@ $ms = new MsDb($db);
 if ($ms->val("SELECT pg_try_advisory_lock(hashtext('microsync-convert'), 0)") !== 't') {
 	fwrite(STDERR, "another conversion is running\n");
 	exit(1);
+}
+
+if ($revert) {
+	$conv = new MsConvert($db, function ($m) { echo "$m\n"; });
+	$fail = 0;
+	foreach ($only as $pid) {
+		$why = $conv->revert($pid);
+		echo "#$pid " . ($why === null ? 'reverted to legacy' : "NOT reverted: $why") . "\n";
+		$fail += $why === null ? 0 : 1;
+	}
+	$ms->q("SELECT pg_advisory_unlock(hashtext('microsync-convert'), 0)");
+	exit($fail ? 1 : 0);
 }
 
 $mode = $apply ? 'apply' : ($jsonOnly ? 'json-only' : 'dry-run');
