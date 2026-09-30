@@ -198,8 +198,14 @@ class MsWorker {
 	/**
 	 * Rebuild one project's derived views if it is a ready synced project.
 	 * Caller holds the build lock. Returns 'built', 'skipped' or an error text.
+	 *
+	 * $keepPdf: the folder's project.pdf came with an app upload (conversion,
+	 * P0-9) and matches this state, so it is not marked for regeneration.
+	 * The server's own PDF (MicroProjectPDF) has no micrograph images for
+	 * new-app projects, so regenerating would replace the app's PDF with a
+	 * text-only one.
 	 */
-	public static function build($strabodb, $db, $pid) {
+	public static function build($strabodb, $db, $pid, $keepPdf = false) {
 		$p = $db->row(
 			"SELECT id, strabo_id, userpkey, sharekey, sync_format, sync_state
 			   FROM strabomicro.micro_projectmetadata WHERE id = $1",
@@ -231,7 +237,8 @@ class MsWorker {
 
 		// project.json copies (+ StraboSamples overlay) through the existing
 		// hook; the PDF regenerates on its next request.
-		$db->q("UPDATE strabomicro.micro_projectmetadata SET files_dirty = true, pdf_dirty = true WHERE id = $1", array($pid));
+		$db->q("UPDATE strabomicro.micro_projectmetadata SET files_dirty = true, pdf_dirty = (pdf_dirty OR NOT $2) WHERE id = $1",
+			array($pid, $keepPdf ? 'true' : 'false'));
 		require_once self::webRoot() . '/microdb/lib/sample_overlay.php';
 		micro_regenerate_files_if_dirty($strabodb, $pid, $owner);
 

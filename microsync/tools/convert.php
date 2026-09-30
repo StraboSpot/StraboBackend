@@ -13,6 +13,8 @@
  *                php microsync/tools/convert.php [--apply] [--only=12,34] [--limit=N]
  *              --revert --only=<ids>: back to legacy from the archived zip,
  *              only while nobody changed the project since its conversion.
+ *              --restore-pdf --only=<ids>: put the app's project.pdf back from
+ *              the archive (projects converted before builds kept it).
  *              --json-only: dry run of the JSON side alone (normalize, push
  *              rules, round trip), for dev where most folders are missing.
  *              Report: microsync_data/convert/report-<mode>-<time>.json
@@ -44,6 +46,7 @@ include_once "../lib/MsConvert.php";
 
 $apply = false;
 $revert = false;
+$restorePdf = false;
 $jsonOnly = false;
 $only = null;
 $limit = 0;
@@ -54,6 +57,8 @@ foreach (array_slice($argv, 1) as $a) {
 		$apply = false;
 	} elseif ($a === '--revert') {
 		$revert = true;
+	} elseif ($a === '--restore-pdf') {
+		$restorePdf = true;
 	} elseif ($a === '--json-only') {
 		$jsonOnly = true;
 	} elseif (preg_match('/^--only=([0-9,]+)$/', $a, $m)) {
@@ -80,6 +85,21 @@ if ($ms->val("SELECT pg_try_advisory_lock(hashtext('microsync-convert'), 0)") !=
 	exit(1);
 }
 
+if ($restorePdf) {
+	if ($only === null || $apply || $revert || $jsonOnly) {
+		fwrite(STDERR, "--restore-pdf needs --only=<ids> and nothing else\n");
+		exit(2);
+	}
+	$conv = new MsConvert($db);
+	$fail = 0;
+	foreach ($only as $pid) {
+		$why = $conv->restorePdf($pid);
+		echo "#$pid " . ($why === null ? "app PDF restored from the archive" : "NOT restored: $why") . "\n";
+		$fail += $why === null ? 0 : 1;
+	}
+	$ms->q("SELECT pg_advisory_unlock(hashtext('microsync-convert'), 0)");
+	exit($fail ? 1 : 0);
+}
 if ($revert) {
 	$conv = new MsConvert($db, function ($m) { echo "$m\n"; });
 	$fail = 0;
