@@ -433,15 +433,38 @@ class MsBlobs {
 			throw new MsHttpError(403, 'forbidden', 'Contributors can change files only on entities they created',
 				array('reason' => 'contributor_not_creator'));
 		}
+		$seq = self::setRef($ctx, $pid, $row, $role, $sha);
+		if ($seq === null) {
+			$db->commit();
+			MsHttp::json(200, array('changed' => false, 'headSeq' => $p['head_seq']));
+			return;
+		}
+		MsStore::bumpHead($db, $pid, $seq);
+		$db->commit();
+		MsWorker::kick($pid);
+		MsHttp::json(200, array('changed' => true, 'seq' => $seq, 'headSeq' => $seq));
+	}
 
+	/**
+	 * Set ($sha given) or remove ($sha null) one ref of the live entity
+	 * $row and log it. Caller holds the transaction and the project lock
+	 * and has checked roles. Returns the change seq, or null when the ref
+	 * already had that value. Also used by the conversion (MsConvert).
+	 */
+	public static function setRef($ctx, $pid, $row, $role, $sha) {
+		$db = $ctx->db;
+		$type = $row['entity_type'];
+		$id = $row['entity_id'];
+		$kind = self::roleKind($role);
+		if ($kind === null) {
+			throw new MsHttpError(400, 'bad_request', 'role must be image, tiles, tiles_affine, thumbnail, or associated_file:<name>');
+		}
 		$current = $db->val(
 			"SELECT sha256 FROM strabomicro.micro_blob_refs
 			  WHERE project_id = $1 AND entity_type = $2 AND entity_id = $3 AND role = $4",
 			array($pid, $type, $id, $role));
 		if ($current === $sha) {
-			$db->commit();
-			MsHttp::json(200, array('changed' => false, 'headSeq' => $p['head_seq']));
-			return;
+			return null;
 		}
 
 		if ($sha !== null) {
@@ -479,11 +502,7 @@ class MsBlobs {
 				array($pid, $sha, $type, $id, $role));
 		}
 		$after = MsStore::state($db, $pid, $row);
-		$seq = MsStore::logChange($db, $ctx, $pid, $type, $id, 'update', $row['version'],
+		return MsStore::logChange($db, $ctx, $pid, $type, $id, 'update', $row['version'],
 			array('refs.' . $role), $before, $after);
-		MsStore::bumpHead($db, $pid, $seq);
-		$db->commit();
-		MsWorker::kick($pid);
-		MsHttp::json(200, array('changed' => true, 'seq' => $seq, 'headSeq' => $seq));
 	}
 }
