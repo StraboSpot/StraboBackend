@@ -7,6 +7,8 @@ RewriteRule ^exportjobs_data(/|$) - [F,L]
 # StraboMicro sync (microsync): partial uploads and content-addressed blobs are served only by the
 # authenticated /microsync/v1/ API (also through the microview/smzFiles symlink); worker data never
 RewriteRule ^(straboMicroFiles|microview/smzFiles)/_staging(/|$) - [F,L]
+# Pre-conversion project.zip archives and journals (microsync/tools/convert.php): never served
+RewriteRule ^(straboMicroFiles|microview/smzFiles)/_archive(/|$) - [F,L]
 RewriteRule ^(straboMicroFiles|microview/smzFiles)/[0-9]+/blobs(/|$) - [F,L]
 RewriteRule ^microsync_data(/|$) - [F,L]
 # Synced StraboMicro projects have no static project.zip; the app still asks for that URL
