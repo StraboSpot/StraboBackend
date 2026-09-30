@@ -1,7 +1,7 @@
 Copied from StraboMicro2 electron/ by sync-renderer.sh. Do not edit here.
-App commit: a72f772 [Feature] PDF report micrograph images capped at 2000 px on the long side (shared imageExport.renderPdfImage; rendered at full size then shrunk, so spots and labels keep their proportions)
+App commit: 4e079c8 [Fix] PDF report: page numbers are fixed elements, so a nearly full page no longer pushes its number onto an extra blank page
 App branch: feature/pdf-image-cap
 
 3ab2f944a83d61870391ca82fe8c39a531f14b6ad9687069262e8da77ca7614f  projectSerializer.js
-f9c7cf7dd37dc5e287e44c364750e3c4b5a1afac1be821a62dc2d3b7a13632bd  pdfReactExport.js
+e0111f39507ba95ad60fd851621d1d49242c0410e6832d2275a05c5b733b5226  pdfReactExport.js
 a5a445840d9a0b2420707e5bef490fbeec4acbc81057b3bf7deacee175390b8c  imageExport.js
