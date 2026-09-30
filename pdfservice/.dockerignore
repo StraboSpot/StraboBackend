@@ -1,3 +1,4 @@
 node_modules
 .htaccess
 .gitignore
+sync-renderer.sh

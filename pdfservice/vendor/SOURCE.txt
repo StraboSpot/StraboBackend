@@ -1,0 +1,7 @@
+Copied from StraboMicro2 electron/ by sync-renderer.sh. Do not edit here.
+App commit: 43d64ab [Fix] Merge associated file name collision fix into develop
+App branch: feature/collaboration
+
+3ab2f944a83d61870391ca82fe8c39a531f14b6ad9687069262e8da77ca7614f  projectSerializer.js
+2fe9023f4a8e7b45c6dca793bdd1354ef457e2e8be5a4971d11293dcd8aa80e3  pdfReactExport.js
+7d11e6dbb24cb1b48121fb4abe41a4a92097581923af155abcaa7d533b3dbe6b  imageExport.js
