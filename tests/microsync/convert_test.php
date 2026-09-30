@@ -15,6 +15,13 @@
  *                  archive slot taken (after commit), upload during the
  *                  conversion (before commit)
  *                - JavaFX-format zip is skipped; differing duplicates stop
+ *                - P0-9: old-app uploads of a converted single-member project
+ *                  (with a file, and the chunked no-file path) become the
+ *                  owner's changes in the store; an unchanged re-upload
+ *                  changes nothing; an upload that cannot be taken in puts
+ *                  the project back to legacy with that upload; a shared
+ *                  project is refused. Run as root (the no-file path needs
+ *                  /StraboData/bigDriveData/tempFiles, made here on dev).
  *
  *              Needs the dev fixture folders 786 (tiles + tilesAffine) and
  *              747 (point counts, attachment) in straboMicroFiles/.
@@ -174,8 +181,6 @@ try {
 	}
 	$again = $conv->convert($A, true);
 	check('second apply skips (already_entity)', $again['status'] === 'skipped' && $again['reason'] === 'already_entity');
-	$legacyUp = legacy('jwt', 'upload', $U, MsConvert::archiveDir($A) . '/project.zip', $fixtures[786]['sid']);
-	check('legacy upload to the converted project is refused (P0-9 not built yet)', pid_of($db, $U, $fixtures[786]['sid']) === $A && prow($A)['sync_format'] === 'entity', json_encode($legacyUp));
 
 	section('Revert');
 	$ms->q("UPDATE strabomicro.micro_projectmetadata SET head_seq = head_seq + 1 WHERE id = $1", array($A));
@@ -223,6 +228,138 @@ try {
 	check('attachment in the stream', $z->getFromName($fixtures[747]['sid'] . '/associatedFiles/notes é.txt') === "attachment body\n");
 	$z->close();
 	check('revert', $conv->revert($B) === null && isLegacyClean($B, $fixtures[747]['md5']));
+
+	section('P0-9: old-app upload of a converted project');
+	$ms->q("SELECT 1"); // keep the connection warm
+	$r = $conv->convert($A, true);
+	check('#A converted again', $r['status'] === 'converted', json_encode($r));
+	$sidA = $fixtures[786]['sid'];
+	$orig = MsConvert::archiveDir($A) . '/project.zip';
+	$headBefore = (int)prow($A)['head_seq'];
+
+	// The same project edited in the old app: rename, delete a spot, add a
+	// spot with an attachment, reorder micrographs, clear a field, new thumbnail.
+	copy($orig, "$W/edit.zip");
+	$z = new ZipArchive();
+	$z->open("$W/edit.zip");
+	$pj = json_decode($z->getFromName("$sidA/project.json"));
+	$mgs = $pj->datasets[0]->samples[0]->micrographs;
+	$m0 = $mgs[0];
+	$m1 = $mgs[1];
+	$m0OldName = isset($m0->name) ? $m0->name : null;
+	$m0->name = 'renamed in the old app';
+	$deletedSpot = isset($m0->spots[0]) ? $m0->spots[0]->id : (isset($m1->spots[0]) ? $m1->spots[0]->id : null);
+	foreach (array($m0, $m1) as $m) {
+		$m->spots = array_values(array_filter($m->spots, function ($sp) use ($deletedSpot) { return $sp->id !== $deletedSpot; }));
+	}
+	$newSpot = (object)array('id' => 'p09-spot-' . $RUN, 'name' => 'added offline', 'geometryType' => 'point',
+		'points' => array((object)array('X' => 10, 'Y' => 20)), 'color' => '#ff0000',
+		'associatedFiles' => array((object)array('fileName' => 'p09.txt', 'fileType' => 'Other')));
+	$m1->spots[] = $newSpot;
+	$pj->datasets[0]->samples[0]->micrographs = array($m1, $m0);
+	$cleared = null;
+	foreach (get_object_vars($m1) as $k => $v) {
+		if (is_string($v) && $v !== '' && !in_array($k, array('id', 'name', 'parentID', 'imageType'), true)) { $cleared = $k; break; }
+	}
+	if ($cleared !== null) $m1->$cleared = null;
+	$z->addFromString("$sidA/project.json", json_encode($pj, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+	$z->addFromString("$sidA/associatedFiles/p09.txt", "p09 attachment\n");
+	$z->addFromString("$sidA/compositeThumbnails/{$m0->id}", "new thumbnail bytes");
+	$z->close();
+	$oldThumbSha = $ms->val("SELECT sha256 FROM strabomicro.micro_blob_refs WHERE project_id = $1 AND entity_type = 'micrograph' AND entity_id = $2 AND role = 'thumbnail'", array($A, $m0->id));
+
+	$res = legacy('jwt', 'upload', $U, "$W/edit.zip", $sidA);
+	check('upload answers success', isset($res['status']) && $res['status'] === 'success', json_encode($res));
+	$p = prow($A);
+	check('still synced, same id, views built', pid_of($db, $U, $sidA) === $A && $p['sync_format'] === 'entity' && $p['built'] === 't', json_encode($p));
+	check('uploaded project.zip removed (the stream serves the store)', !is_file("$FILES/$A/project.zip"));
+	$log = @file(MsConvert::archiveDir($A) . '/uploads.log');
+	$last = $log ? json_decode(end($log), true) : null;
+	check('uploads.log: replaced', is_array($last) && $last['status'] === 'replaced', json_encode($last));
+	$e = function ($type, $id) use ($ms, $A) {
+		return $ms->row("SELECT body::text AS body, deleted_at, version, updated_by FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = $2 AND entity_id = $3", array($A, $type, $id));
+	};
+	$em0 = $e('micrograph', $m0->id);
+	check('rename is an update by the owner', json_decode($em0['body'])->name === 'renamed in the old app' && (int)$em0['updated_by'] === $U && (int)$em0['version'] > 1, json_encode($em0));
+	check('logged with the before value', $ms->val(
+		"SELECT before->'body'->>'name' FROM strabomicro.micro_changes WHERE project_id = $1 AND entity_type = 'micrograph' AND entity_id = $2 AND op = 'update' AND 'name' = ANY(changed_paths) ORDER BY seq DESC LIMIT 1",
+		array($A, $m0->id)) === $m0OldName, (string)$m0OldName);
+	if ($deletedSpot !== null) {
+		$ed = $e('spot', $deletedSpot);
+		check('removed spot is tombstoned (restorable)', $ed !== null && $ed['deleted_at'] !== null);
+	}
+	check('new spot created', $e('spot', $newSpot->id) !== null);
+	check('attachment ref on the new spot', $ms->val("SELECT 1 FROM strabomicro.micro_blob_refs WHERE project_id = $1 AND entity_id = $2 AND role = 'associated_file:p09.txt'", array($A, $newSpot->id)) === '1');
+	$newThumbSha = $ms->val("SELECT sha256 FROM strabomicro.micro_blob_refs WHERE project_id = $1 AND entity_type = 'micrograph' AND entity_id = $2 AND role = 'thumbnail'", array($A, $m0->id));
+	check('thumbnail ref points at the new file, old blob kept for history',
+		$newThumbSha === hash('sha256', 'new thumbnail bytes') && $oldThumbSha !== null && is_file("$FILES/$A/blobs/$oldThumbSha"));
+	$dl = http_req('GET', "$HOST/straboMicroFiles/$A/project.zip");
+	file_put_contents("$W/p09.smz", $dl['raw']);
+	$z = new ZipArchive();
+	$z->open("$W/p09.smz");
+	$sj = json_decode($z->getFromName("$sidA/project.json"));
+	$z->close();
+	$order = array_map(function ($m) { return $m->id; }, $sj->datasets[0]->samples[0]->micrographs);
+	check('stream has the new micrograph order', $order === array($m1->id, $m0->id), json_encode($order));
+	if ($cleared !== null) {
+		check("cleared field ($cleared) is gone from the stream", !isset($sj->datasets[0]->samples[0]->micrographs[0]->$cleared));
+	}
+	$headAfter = (int)prow($A)['head_seq'];
+	check('head moved', $headAfter > $headBefore);
+
+	// The same file again: nothing to change.
+	$res = legacy('jwt', 'upload', $U, "$W/edit.zip", $sidA);
+	check('unchanged re-upload: success, no new changes', isset($res['status']) && $res['status'] === 'success' && (int)prow($A)['head_seq'] === $headAfter,
+		json_encode($res) . ' head ' . prow($A)['head_seq'] . " vs $headAfter");
+
+	// The chunked path (insertProjectWithoutFile).
+	$tmpDir = '/StraboData/bigDriveData/tempFiles';
+	if (!is_dir($tmpDir)) @mkdir($tmpDir, 0777, true);
+	if (is_dir($tmpDir) && is_writable($tmpDir)) {
+		$z = new ZipArchive();
+		copy("$W/edit.zip", "$W/edit2.zip");
+		$z->open("$W/edit2.zip");
+		$pj2 = json_decode($z->getFromName("$sidA/project.json"));
+		$pj2->datasets[0]->samples[0]->micrographs[1]->name = 'renamed again (chunked upload)';
+		$z->addFromString("$sidA/project.json", json_encode($pj2, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+		$z->close();
+		$res = legacy('jwt', 'uploadnofile', $U, "$W/edit2.zip", $sidA);
+		check('chunked upload: success', isset($res['status']) && $res['status'] === 'success', json_encode($res));
+		check('chunked upload: taken into the store', json_decode($e('micrograph', $m0->id)['body'])->name === 'renamed again (chunked upload)');
+		check('chunked upload: temp file removed, no static zip', !is_file("$tmpDir/micro_$sidA.zip") && !is_file("$FILES/$A/project.zip"));
+	} else {
+		check('chunked path (needs root for /StraboData on dev)', false, 'run as root');
+	}
+
+	// A shared project is refused.
+	$db->get_var_prepared("INSERT INTO users (firstname, lastname, email, password, hash, active) VALUES ('Convert', 'Member', $1, 'x', 'x', true)", array("microsync-convert-m-$RUN@test.strabospot.org"));
+	$U2 = (int)$db->get_var_prepared("SELECT pkey FROM users WHERE email = $1", array("microsync-convert-m-$RUN@test.strabospot.org"));
+	$ms->q("INSERT INTO strabomicro.micro_members (project_id, user_pkey, role, state, invited_by, responded_at) VALUES ($1, $2, 'editor', 'active', $3, now())", array($A, $U2, $U));
+	$headShared = (int)prow($A)['head_seq'];
+	$res = legacy('jwt', 'upload', $U, $orig, $sidA);
+	check('shared project: upload refused', isset($res['Error']) && strpos($res['Error'], 'shared') !== false && (int)prow($A)['head_seq'] === $headShared, json_encode($res));
+	$ms->q("DELETE FROM strabomicro.micro_members WHERE project_id = $1 AND user_pkey = $2", array($A, $U2));
+	$db->prepare_query("DELETE FROM users WHERE pkey = $1", array($U2));
+
+	// An upload the store cannot take (differing duplicate): back to legacy WITH it.
+	copy($orig, "$W/dup.zip");
+	$z = new ZipArchive();
+	$z->open("$W/dup.zip");
+	$pj = json_decode($z->getFromName("$sidA/project.json"));
+	$dup = clone $pj->datasets[0]->samples[0]->micrographs[0];
+	$dup->name = 'differs';
+	$pj->datasets[0]->samples[0]->micrographs[] = $dup;
+	$z->addFromString("$sidA/project.json", json_encode($pj, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES));
+	$z->close();
+	$res = legacy('jwt', 'upload', $U, "$W/dup.zip", $sidA);
+	$p = prow($A);
+	check('fallback: upload still answers success', isset($res['status']) && $res['status'] === 'success', json_encode($res));
+	check('fallback: legacy, store gone, same id', pid_of($db, $U, $sidA) === $A && $p['sync_format'] === 'legacy' && (int)$p['entities'] === 0 && (int)$p['blobs'] === 0 && (int)$p['members'] === 0, json_encode($p));
+	check('fallback: the new upload is the static zip', is_file("$FILES/$A/project.zip") && md5_file("$FILES/$A/project.zip") === md5_file("$W/dup.zip") && !is_dir("$FILES/$A/blobs"));
+	check('fallback: pre-conversion archive and logs kept', is_file($orig) && is_file(MsConvert::archiveDir($A) . '/journal.json'));
+	$log = @file(MsConvert::archiveDir($A) . '/uploads.log');
+	$last = $log ? json_decode(end($log), true) : null;
+	check('uploads.log: fell_back with the reason', is_array($last) && $last['status'] === 'fell_back' && $last['reason'] === 'duplicate_differs', json_encode($last));
 
 	section('Skips and stops');
 	// A JavaFX-format zip: same project, uiImages/ added.

@@ -316,11 +316,12 @@ try {
 	$zipF = "$W/{$sid}_legacy.zip";
 	make_zip(json_encode(array('id' => $sid, 'name' => 'overwrite attempt', 'datasets' => array())), $sid, $zipF);
 	$entities = $db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1", array($P));
-	foreach (array('jwt', 'microdb') as $api) {
-		$r = legacy($api, 'upload', $U, $zipF, $sid);
-		check("$api upload of a synced project refused", isset($r['Error']) && strpos($r['Error'], 'update StraboMicro') !== false, json_encode($r));
-	}
-	check('refused uploads changed nothing', $db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1", array($P)) === $entities
+	// microdb (the retired JavaFX API) always refuses; jwtmicrodb replaces a
+	// single-member synced project in place (P0-9, tests/microsync/convert_test.php)
+	// and refuses a shared one (checked below, once a member is added).
+	$r = legacy('microdb', 'upload', $U, $zipF, $sid);
+	check("microdb upload of a synced project refused", isset($r['Error']) && strpos($r['Error'], 'update StraboMicro') !== false, json_encode($r));
+	check('refused upload changed nothing', $db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1", array($P)) === $entities
 		&& $db->get_var_prepared("SELECT sync_format FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P)) === 'entity');
 
 	$sidU = $PREFIX . 'unbuilt';
@@ -336,6 +337,9 @@ try {
 
 	$db->prepare_query("INSERT INTO strabomicro.micro_members (project_id, user_pkey, role, state, invited_by, responded_at) VALUES ($1, $2, 'editor', 'active', $3, now())",
 		array($P, $users['member']['pkey'], $U));
+	$r = legacy('jwt', 'upload', $U, $zipF, $sid);
+	check('jwt upload of a shared synced project refused', isset($r['Error']) && strpos($r['Error'], 'shared') !== false
+		&& $db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1", array($P)) === $entities, json_encode($r));
 	foreach (array('jwt', 'microdb') as $api) {
 		$r = legacy($api, 'delete', $U, '-', $sid);
 		check("$api delete of a shared synced project refused", is_string($r) && strpos($r, 'shared') !== false && pid_of($db, $U, $sid) === $P, json_encode($r));

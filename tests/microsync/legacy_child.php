@@ -5,7 +5,7 @@
  *              tests/microsync/worker_test.php can drive both legacy classes
  *              (jwtmicrodb and microdb define the same class name).
  *
- *              Usage: php legacy_child.php <jwt|microdb> <upload|delete|list> <userpkey> <zipPath|-> <straboId|->
+ *              Usage: php legacy_child.php <jwt|microdb> <upload|uploadnofile|delete|list> <userpkey> <zipPath|-> <straboId|->
  *              Prints one JSON line: {"result": ...}
  */
 
@@ -29,6 +29,12 @@ $sm->setuuid(new UUID());
 if ($action === 'upload') {
 	$result = $sm->insertProject(array('project_id' => $straboId, 'overwrite' => 'yes'),
 		array('tmp_name' => $zipPath, 'name' => basename($zipPath)));
+} elseif ($action === 'uploadnofile') {
+	// The chunked path: the app sends the file in parts first, then calls
+	// insertProjectWithoutFile, which reads it from the temp folder.
+	$tmp = '/StraboData/bigDriveData/tempFiles/micro_' . $straboId . '.zip';
+	copy($zipPath, $tmp);
+	$result = $sm->insertProjectWithoutFile(array('project_id' => $straboId, 'overwrite' => 'yes'));
 } elseif ($action === 'delete') {
 	$result = $sm->deleteProject($straboId);
 } elseif ($action === 'list') {

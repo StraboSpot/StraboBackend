@@ -92,6 +92,9 @@ class MsConvert {
 	/** Tests only: callable($in) run just before the project is locked and re-checked. */
 	public $beforeLockHook = null;
 
+	/** True while replace() runs (P0-9): the store exists and is brought up to date. */
+	private $replacing = false;
+
 	/** $strabodb: the $db wrapper; $log: callable(string) for progress lines. */
 	public function __construct($strabodb, $log = null) {
 		$this->strabodb = $strabodb;
@@ -159,6 +162,66 @@ class MsConvert {
 		return $report;
 	}
 
+	/**
+	 * P0-9: a legacy upload (old app) to a converted project whose owner is
+	 * its only active member. The caller has already rebuilt the relational
+	 * rows and the folder from the upload in place (the store's blobs/ kept)
+	 * and holds the worker's build lock. This brings the store up to date
+	 * with the upload: differences are logged as the owner's changes
+	 * (creates, updates, moves, restores, deletes, file refs), the stream is
+	 * checked against the uploaded project.zip, which is then removed (its
+	 * content is in the store), and the views are rebuilt.
+	 *
+	 * If the upload cannot be taken into the store, the project falls back
+	 * to legacy WITH the new upload (store rows removed, project.zip kept):
+	 * the upload always succeeds and nothing the user sent is lost.
+	 * Returns a report; status replaced | fell_back.
+	 */
+	public function replace($pid) {
+		$pid = (int)$pid;
+		$report = array('id' => $pid, 'status' => null, 'reason' => null, 'message' => null,
+			'warnings' => array(), 'stats' => array(), 'details' => array());
+		$started = microtime(true);
+		$in = null;
+		$this->replacing = true;
+		try {
+			$in = $this->read($pid, $report);
+			$this->checkPredicted($in, $report);
+			$this->writeStore($in, true, $report);
+			$this->finish($in, $report);
+			$report['status'] = 'replaced';
+		} catch (Exception $e) {
+			$report['status'] = 'fell_back';
+			$report['reason'] = $e instanceof MsConvertStop ? $e->reason : 'error';
+			$report['message'] = ($e instanceof MsConvertStop ? '' : get_class($e) . ': ') . $e->getMessage();
+			if ($e instanceof MsConvertStop) {
+				$report['details'] = $e->details;
+			}
+		}
+		$this->replacing = false;
+		if ($this->db->inTransaction()) {
+			$this->db->rollback();
+		}
+		if ($report['status'] !== 'replaced') {
+			$this->undo($pid, $in, true);
+		}
+		$report['stats']['seconds'] = round(microtime(true) - $started, 1);
+		self::logUpload($pid, $report);
+		return $report;
+	}
+
+	/** One line per P0-9 upload in _archive/<id>/uploads.log (small; same volume as the project). */
+	private static function logUpload($pid, $report) {
+		$dir = self::archiveDir($pid);
+		if (!is_dir($dir)) {
+			@mkdir($dir, 0775, true);
+		}
+		@file_put_contents("$dir/uploads.log", json_encode(array(
+			'at' => gmdate('Y-m-d\TH:i:s\Z'), 'status' => $report['status'], 'reason' => $report['reason'],
+			'message' => $report['message'], 'stats' => $report['stats'], 'warnings' => $report['warnings'],
+		), JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE) . "\n", FILE_APPEND);
+	}
+
 	// ------------------------------------------------------------------
 	// 1. Read and classify (no writes)
 	// ------------------------------------------------------------------
@@ -175,7 +238,11 @@ class MsConvert {
 		$report['straboId'] = $row['strabo_id'];
 		$report['owner'] = (int)$row['userpkey'];
 		$report['name'] = $row['name'];
-		if ($row['sync_format'] !== 'legacy') {
+		if ($this->replacing) {
+			if ($row['sync_format'] !== 'entity') {
+				throw new MsConvertStop('not_entity', 'not a converted project');
+			}
+		} elseif ($row['sync_format'] !== 'legacy') {
 			throw new MsConvertStop('already_entity', 'already in the sync store');
 		}
 		if ($this->db->val("SELECT 1 FROM public.users WHERE pkey = $1", array((int)$row['userpkey'])) === null) {
@@ -492,7 +559,7 @@ class MsConvert {
 					$zj = self::withoutSpine($zj);
 					$wj = self::withoutSpine($wj);
 				}
-				if (!self::same($zj, $wj)) {
+				if (!($this->replacing ? self::sameLoose($zj, $wj) : self::same($zj, $wj))) {
 					$differ[] = $rel;
 				}
 				continue;
@@ -546,19 +613,22 @@ class MsConvert {
 			$zipChanged = !is_file($in['zip']) || filesize($in['zip']) !== $in['zipStat']['size']
 				|| filemtime($in['zip']) !== $in['zipStat']['mtime'];
 		}
-		if ($now === null || $now['sync_format'] !== 'legacy' || $now['uploaddate'] !== $in['row']['uploaddate'] || $zipChanged) {
+		$format = $this->replacing ? 'entity' : 'legacy';
+		if ($now === null || $now['sync_format'] !== $format || $now['uploaddate'] !== $in['row']['uploaddate'] || $zipChanged) {
 			throw new MsConvertStop('changed', 'the project changed during conversion (new upload?); run again later');
 		}
-		$db->q(
-			"UPDATE strabomicro.micro_projectmetadata
-			    SET sync_format = 'entity', sync_state = 'initializing', head_seq = 0,
-			        views_dirty_since = NULL, views_built_at = NULL
-			  WHERE id = $1",
-			array($pid));
-		$db->q(
-			"INSERT INTO strabomicro.micro_members (project_id, user_pkey, role, state, invited_by, responded_at)
-			 VALUES ($1, $2, 'owner', 'active', $2, now())",
-			array($pid, $owner));
+		if (!$this->replacing) {
+			$db->q(
+				"UPDATE strabomicro.micro_projectmetadata
+				    SET sync_format = 'entity', sync_state = 'initializing', head_seq = 0,
+				        views_dirty_since = NULL, views_built_at = NULL
+				  WHERE id = $1",
+				array($pid));
+			$db->q(
+				"INSERT INTO strabomicro.micro_members (project_id, user_pkey, role, state, invited_by, responded_at)
+				 VALUES ($1, $2, 'owner', 'active', $2, now())",
+				array($pid, $owner));
+		}
 
 		$ctx = new stdClass();
 		$ctx->db = $db;
@@ -573,7 +643,9 @@ class MsConvert {
 			$changes[] = array('op' => 'create', 'type' => 'point_count', 'id' => $id,
 				'parentType' => 'micrograph', 'parentId' => $pc->micrographId, 'body' => $pc);
 		}
-		$results = MsSync::applyChanges($ctx, $pid, json_decode(json_encode($changes)));
+		$results = $this->replacing
+			? $this->applyReplace($ctx, $pid, $changes, $report)
+			: MsSync::applyChanges($ctx, $pid, json_decode(json_encode($changes)));
 		$bad = array();
 		foreach ($results as $r) {
 			if ($r['status'] !== 'accepted') {
@@ -601,6 +673,26 @@ class MsConvert {
 				MsBlobs::setRef($ctx, $pid, $row, $f['role'], $sha);
 			}
 			$report['stats']['refs'] = count($blobs);
+			if ($this->replacing) {
+				// Refs the upload no longer has (on live entities).
+				$want = array();
+				foreach ($in['files'] as $f) {
+					$want[$f['type'] . ':' . $f['id'] . '|' . $f['role']] = true;
+				}
+				$gone = 0;
+				foreach ($db->rows(
+					"SELECT r.entity_type, r.entity_id, r.role
+					   FROM strabomicro.micro_blob_refs r
+					   JOIN strabomicro.micro_entities e
+					     ON e.project_id = r.project_id AND e.entity_type = r.entity_type AND e.entity_id = r.entity_id
+					  WHERE r.project_id = $1 AND e.deleted_at IS NULL", array($pid)) as $r) {
+					if (!isset($want[$r['entity_type'] . ':' . $r['entity_id'] . '|' . $r['role']])) {
+						MsBlobs::setRef($ctx, $pid, MsStore::entity($db, $pid, $r['entity_type'], $r['entity_id']), $r['role'], null);
+						$gone++;
+					}
+				}
+				$report['stats']['refsRemoved'] = $gone;
+			}
 		}
 
 		$head = (int)$db->val("SELECT COALESCE(MAX(seq), 0) FROM strabomicro.micro_changes WHERE project_id = $1", array($pid));
@@ -608,12 +700,13 @@ class MsConvert {
 
 		// Round trip inside the transaction: the store gives back the input.
 		$a = MsWorker::assemble($db, $pid, $in['row']['strabo_id']);
-		if ($a === null || !self::same(json_decode($a['json']), $in['json'])) {
+		$same = $this->replacing ? 'sameLoose' : 'same';
+		if ($a === null || !self::$same(json_decode($a['json']), $in['json'])) {
 			$diff = $a === null ? 'no project entity' : self::firstDifference(json_decode($a['json'], true), json_decode(json_encode($in['json']), true));
 			throw new MsConvertStop('round_trip', 'the assembled project differs from the input', array('at' => $diff));
 		}
 		foreach ($in['pointCounts'] as $id => $pc) {
-			if (!isset($a['pointCounts'][$id]) || !self::same($a['pointCounts'][$id], $pc)) {
+			if (!isset($a['pointCounts'][$id]) || !self::$same($a['pointCounts'][$id], $pc)) {
 				throw new MsConvertStop('round_trip', "point count $id differs after the round trip");
 			}
 		}
@@ -703,6 +796,16 @@ class MsConvert {
 			throw new MsConvertStop('changed', 'project.zip changed during conversion; run again later');
 		}
 
+		if ($this->replacing) {
+			// The upload's content is in the store now; its zip would shadow the stream.
+			if (!@unlink($in['zip'])) {
+				throw new MsConvertStop('io', 'cannot remove the uploaded project.zip');
+			}
+			$db->q("UPDATE strabomicro.micro_projectmetadata SET views_dirty_since = now() WHERE id = $1", array($pid));
+			$this->buildViews($pid, $report);
+			return;
+		}
+
 		$arch = self::archiveDir($pid);
 		if (!is_dir($arch) && !@mkdir($arch, 0775, true) && !is_dir($arch)) {
 			throw new MsConvertStop('io', "cannot create $arch");
@@ -736,7 +839,12 @@ class MsConvert {
 			  WHERE id = $1",
 			array($pid));
 		$this->say("  project $pid: store ready, zip archived, building views");
+		$this->buildViews($pid, $report);
+	}
 
+	/** Rebuild the derived views now (session advisory locks nest, so a caller may hold it too). */
+	private function buildViews($pid, &$report) {
+		$db = $this->db;
 		if (!MsWorker::tryLock($db, 'build', $pid)) {
 			$report['warnings'][] = 'worker busy; the cron sweep builds the views';
 			return;
@@ -780,8 +888,12 @@ class MsConvert {
 		return null;
 	}
 
-	/** Put a project back to legacy: store rows, blobs/, tile markers, archived zip. */
-	private function undo($pid, $in) {
+	/**
+	 * Put a project back to legacy: store rows, blobs/, tile markers, and
+	 * (conversion) the archived zip back in place. $fallback (P0-9): the new
+	 * upload's project.zip stays, the archive and its logs are left alone.
+	 */
+	private function undo($pid, $in, $fallback = false) {
 		$db = $this->db;
 		if ($db->inTransaction()) {
 			$db->rollback();
@@ -801,11 +913,14 @@ class MsConvert {
 
 		$root = MsStore::filesRoot() . '/' . (int)$pid;
 		$arch = self::archiveDir($pid);
-		if (!is_file("$root/project.zip") && is_file("$arch/project.zip")) {
-			@rename("$arch/project.zip", "$root/project.zip");
+		if (!$fallback) {
+			if (!is_file("$root/project.zip") && is_file("$arch/project.zip")) {
+				@rename("$arch/project.zip", "$root/project.zip");
+			}
+			@unlink("$arch/journal.json");
+			@unlink("$arch/uploads.log");
+			@rmdir($arch);
 		}
-		@unlink("$arch/journal.json");
-		@rmdir($arch);
 		foreach (array('tiles', 'tilesAffine') as $folder) {
 			foreach ((array)@scandir("$root/$folder") as $mid) {
 				if ($mid !== '.' && $mid !== '..' && is_file("$root/$folder/$mid/.blob")) {
@@ -820,6 +935,167 @@ class MsConvert {
 		}
 		@rmdir("$root/blobs");
 		$this->say("  project $pid: undone, back to legacy");
+	}
+
+	// ------------------------------------------------------------------
+	// Replace mode (P0-9): store vs upload, as the owner's changes
+	// ------------------------------------------------------------------
+
+	/**
+	 * Bring the store to $changes (creates of the whole upload, parents
+	 * first) through the push code, one change at a time:
+	 *   1. in upload order: create what is new, restore what was deleted,
+	 *      update what differs (fields, a new parent); point counts that
+	 *      moved micrograph are deleted and created again
+	 *   2. delete what the upload no longer has (parents first; a child
+	 *      already tombstoned by its parent's cascade is fine)
+	 *   3. child order wherever it differs (children now exist)
+	 * Returns results like a push (only failures matter to the caller).
+	 */
+	private function applyReplace($ctx, $pid, $changes, &$report) {
+		$db = $ctx->db;
+		$results = array();
+		$counts = array('create' => 0, 'update' => 0, 'restore' => 0, 'delete' => 0, 'order' => 0);
+		$one = function ($c) use ($ctx, $pid, &$results, &$counts) {
+			$r = MsSync::applyChanges($ctx, $pid, array(json_decode(json_encode($c))));
+			$results[] = $r[0];
+			if ($r[0]['status'] === 'accepted') {
+				$counts[$c['op'] === 'update' && !isset($c['fields']) && !isset($c['parentId']) ? 'order' : $c['op']]++;
+			}
+			return $r[0];
+		};
+
+		$wanted = array();
+		foreach ($changes as $c) {
+			$wanted[MsModel::key($c['type'], $c['id'])] = $c;
+			$row = MsStore::entity($db, $pid, $c['type'], $c['id']);
+			$ptype = isset($c['parentType']) ? $c['parentType'] : null;
+			$ppid = isset($c['parentId']) ? $c['parentId'] : null;
+			if ($row !== null && $c['type'] === 'point_count' && $row['parent_id'] !== $ppid) {
+				if (MsStore::isLive($row)) {
+					$one(array('op' => 'delete', 'type' => 'point_count', 'id' => $c['id'], 'baseVersion' => $row['version']));
+				}
+				$results[] = array('type' => 'point_count', 'id' => $c['id'], 'status' => 'invalid', 'reason' => 'moved',
+					'message' => 'a point count session that changed micrograph cannot keep its id');
+				continue;
+			}
+			if ($row === null) {
+				$one($c);
+				continue;
+			}
+			if (!MsStore::isLive($row)) {
+				$r = $one(array('op' => 'restore', 'type' => $c['type'], 'id' => $c['id']));
+				if ($r['status'] !== 'accepted') {
+					continue;
+				}
+				$row = MsStore::entity($db, $pid, $c['type'], $c['id']);
+			}
+			$upd = array('op' => 'update', 'type' => $c['type'], 'id' => $c['id'], 'baseVersion' => $row['version']);
+			$fields = self::fieldDiff($c['type'], $row['body'], $c['body']);
+			if ($fields) {
+				$upd['fields'] = $fields;
+			}
+			if ($ptype !== null && $row['parent_id'] !== $ppid) {
+				$upd['parentType'] = $ptype;
+				$upd['parentId'] = $ppid;
+			}
+			if (isset($upd['fields']) || isset($upd['parentId'])) {
+				$one($upd);
+			}
+		}
+
+		// 2. Deletes, parents first.
+		$depth = array('dataset' => 1, 'tag' => 1, 'group' => 1, 'preset' => 1, 'sample' => 2,
+			'micrograph' => 3, 'spot' => 4, 'point_count' => 4);
+		$live = $db->rows(
+			"SELECT entity_type, entity_id, version FROM strabomicro.micro_entities
+			  WHERE project_id = $1 AND deleted_at IS NULL AND entity_type <> 'project'",
+			array($pid));
+		usort($live, function ($a, $b) use ($depth) {
+			return $depth[$a['entity_type']] - $depth[$b['entity_type']];
+		});
+		foreach ($live as $e) {
+			if (isset($wanted[MsModel::key($e['entity_type'], $e['entity_id'])])) {
+				continue;
+			}
+			$row = MsStore::entity($db, $pid, $e['entity_type'], $e['entity_id']);
+			if (!MsStore::isLive($row)) {
+				continue; // tombstoned by a parent's cascade above
+			}
+			$one(array('op' => 'delete', 'type' => $e['entity_type'], 'id' => $e['entity_id'], 'baseVersion' => $row['version']));
+		}
+
+		// 3. Child order.
+		foreach ($changes as $c) {
+			if (empty($c['childOrder'])) {
+				continue;
+			}
+			$row = MsStore::entity($db, $pid, $c['type'], $c['id']);
+			if (!MsStore::isLive($row)) {
+				continue;
+			}
+			$stored = array();
+			foreach (MsModel::$CHILD_KEYS[$c['type']] as $k => $ct) {
+				$stored[$k] = isset($row['child_order'][$k]) ? $row['child_order'][$k] : array();
+			}
+			if (json_encode($stored) !== json_encode($c['childOrder'])) {
+				$one(array('op' => 'update', 'type' => $c['type'], 'id' => $c['id'], 'childOrder' => $c['childOrder']));
+			}
+		}
+		$report['stats']['changes'] = $counts;
+		return $results;
+	}
+
+	/**
+	 * Top-level field updates turning $old into $new (dotted-path API: a
+	 * value replaces the whole field, null removes it). A null in the upload
+	 * and an absent key mean the same (the API cannot store an explicit
+	 * null through an update), so the round trip in replace mode compares
+	 * with null-valued keys dropped (sameLoose).
+	 */
+	private static function fieldDiff($type, $old, $new) {
+		$skip = array_merge(array('id'), array_keys(MsModel::$CHILD_KEYS[$type]), MsModel::perUserFields($type),
+			isset(MsModel::$FIXED_FIELDS[$type]) ? MsModel::$FIXED_FIELDS[$type] : array());
+		$o = is_object($old) ? get_object_vars($old) : array();
+		$n = is_object($new) ? get_object_vars($new) : array();
+		$fields = new stdClass();
+		$any = false;
+		foreach (array_unique(array_merge(array_keys($o), array_keys($n))) as $k) {
+			if (in_array($k, $skip, true) || !preg_match('/^[A-Za-z0-9_]+$/', (string)$k)) {
+				continue;
+			}
+			$ov = array_key_exists($k, $o) ? $o[$k] : null;
+			$nv = array_key_exists($k, $n) ? $n[$k] : null;
+			if ($ov === null && $nv === null) {
+				continue;
+			}
+			if (!self::same($ov, $nv)) {
+				$fields->$k = $nv;
+				$any = true;
+			}
+		}
+		return $any ? $fields : null;
+	}
+
+	/** same() with null-valued object keys dropped on both sides (see fieldDiff). */
+	public static function sameLoose($a, $b) {
+		return self::same(self::dropNulls($a), self::dropNulls($b));
+	}
+
+	private static function dropNulls($v) {
+		if (is_object($v)) {
+			$out = new stdClass();
+			foreach (get_object_vars($v) as $k => $x) {
+				if ($x !== null) {
+					$out->$k = self::dropNulls($x);
+				}
+			}
+			return $out;
+		}
+		if (is_array($v)) {
+			return array_map(array('MsConvert', 'dropNulls'), $v);
+		}
+		return $v;
 	}
 
 	// ------------------------------------------------------------------
