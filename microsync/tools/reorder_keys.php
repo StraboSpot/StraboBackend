@@ -29,8 +29,11 @@
  *              nothing per project, and only for rows still exactly as the
  *              tool left them.
  *              Entities that are not in the archive (created after the
- *              conversion) follow the key order of their type in the archive;
- *              keys the archive never had keep their current order, at the end.
+ *              conversion) follow the key order of their type in the archive,
+ *              or, when the archive has no entity of that type, the order of
+ *              that type in the archives of the other --only projects (all
+ *              written by the same app); keys no archive has keep their
+ *              current order, at the end.
  *              Both --apply and --revert mark the project's views dirty, so the
  *              worker rebuilds project.json and the PDF.
  *
@@ -237,13 +240,24 @@ function rk_templates($pid) {
 	return $out;
 }
 
-function rk_entity_template($tmpls, $type, $id) {
+/**
+ * Template for one entity and where it came from: 'own' (the entity is in its
+ * project's archive), 'type' (its type is), 'shared' (only another project of
+ * this run has the type), 'none'.
+ */
+function rk_entity_template($tmpls, $type, $id, $shared) {
 	$own = isset($tmpls['entities'][MsModel::key($type, $id)]) ? $tmpls['entities'][MsModel::key($type, $id)] : null;
 	$common = isset($tmpls['types'][$type]) ? $tmpls['types'][$type] : null;
-	if ($own !== null && $common !== null) {
-		return rk_merge($own, $common);
+	if ($own !== null) {
+		return array($common !== null ? rk_merge($own, $common) : $own, 'own');
 	}
-	return $own !== null ? $own : $common;
+	if ($common !== null) {
+		return array($common, 'type');
+	}
+	if (isset($shared[$type])) {
+		return array($shared[$type], 'shared');
+	}
+	return array(null, 'none');
 }
 
 /** Change-log state: the order MsStore::state writes, with the body in entity order. */
@@ -278,7 +292,7 @@ function rk_rewrite($old, $template) {
  * Every stored text this tool may touch, and the planned rewrites.
  * Rewrites: list of array(table, keyFields, column, old, new).
  */
-function rk_plan($ms, $pid, $tmpls) {
+function rk_plan($ms, $pid, $tmpls, $shared) {
 	$entities = $ms->rows(
 		"SELECT entity_type, entity_id, body::text AS body, child_order::text AS child_order
 		   FROM strabomicro.micro_entities WHERE project_id = $1 ORDER BY entity_type, entity_id",
@@ -288,15 +302,12 @@ function rk_plan($ms, $pid, $tmpls) {
 		   FROM strabomicro.micro_changes WHERE project_id = $1 ORDER BY seq",
 		array($pid));
 	$rewrites = array();
-	$stats = array('entities' => count($entities), 'entityRewrites' => 0, 'noTemplate' => 0, 'ownTemplate' => 0,
+	$stats = array('entities' => count($entities), 'entityRewrites' => 0,
+		'own' => 0, 'type' => 0, 'shared' => 0, 'none' => 0,
 		'changes' => count($changes), 'changeRewrites' => 0);
 	foreach ($entities as $e) {
-		$t = rk_entity_template($tmpls, $e['entity_type'], $e['entity_id']);
-		if ($t === null) {
-			$stats['noTemplate']++;
-		} elseif (isset($tmpls['entities'][MsModel::key($e['entity_type'], $e['entity_id'])])) {
-			$stats['ownTemplate']++;
-		}
+		list($t, $from) = rk_entity_template($tmpls, $e['entity_type'], $e['entity_id'], $shared);
+		$stats[$from]++;
 		$new = rk_rewrite($e['body'], $t);
 		if ($new !== null) {
 			$rewrites[] = array('table' => 'micro_entities', 'type' => $e['entity_type'], 'id' => $e['entity_id'],
@@ -305,7 +316,7 @@ function rk_plan($ms, $pid, $tmpls) {
 		}
 	}
 	foreach ($changes as $c) {
-		$st = rk_state_template(rk_entity_template($tmpls, $c['entity_type'], $c['entity_id']));
+		$st = rk_state_template(rk_entity_template($tmpls, $c['entity_type'], $c['entity_id'], $shared)[0]);
 		foreach (array('before', 'after') as $col) {
 			if ($c[$col] === null) {
 				continue;
@@ -435,6 +446,18 @@ for ($n = 2; file_exists("$runsRoot/$run"); $n++) {
 $dir = "$runsRoot/$run";
 echo ($apply ? 'APPLY' : 'DRY RUN') . ' --only=' . implode(',', $only) . ($apply ? "  (files: $dir)" : '') . "\n";
 
+// Type orders from every project of this run, for types a project's own
+// archive lacks (e.g. its first spots were added after the conversion).
+$shared = array();
+foreach ($only as $pid) {
+	$t = rk_templates($pid);
+	if (is_array($t)) {
+		foreach ($t['types'] as $type => $tmpl) {
+			$shared[$type] = isset($shared[$type]) ? rk_merge($shared[$type], $tmpl) : $tmpl;
+		}
+	}
+}
+
 foreach ($only as $pid) {
 	try {
 		$p = $ms->row("SELECT strabo_id, sync_format, sync_state FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pid));
@@ -455,15 +478,15 @@ foreach ($only as $pid) {
 			continue;
 		}
 
-		list($entities, $changes, $rewrites, $s) = rk_plan($ms, $pid, $tmpls);
+		list($entities, $changes, $rewrites, $s) = rk_plan($ms, $pid, $tmpls, $shared);
 		$bad = rk_same_content($ms, $rewrites);
 		if ($bad !== null) {
 			echo "#$pid STOPPED: a rewrite would change content (" . json_encode(array_diff_key($rewrites[$bad], array('old' => 1, 'new' => 1))) . "); nothing written\n";
 			$fail++;
 			continue;
 		}
-		$line = sprintf('#%d entities %d (%d with their own archive order, %d with none): %d to reorder; change-log states: %d to reorder in %d rows',
-			$pid, $s['entities'], $s['ownTemplate'], $s['noTemplate'], $s['entityRewrites'], $s['changeRewrites'], $s['changes']);
+		$line = sprintf('#%d entities %d (order from: own archive entry %d, own archive type %d, other project %d, none %d): %d to reorder; change-log states: %d to reorder in %d rows',
+			$pid, $s['entities'], $s['own'], $s['type'], $s['shared'], $s['none'], $s['entityRewrites'], $s['changeRewrites'], $s['changes']);
 		if (!$apply) {
 			echo "$line\n";
 			continue;
