@@ -13,12 +13,18 @@
 
 class MsProjects {
 
-	/** GET projects: synced projects where I am an active member. */
+	/**
+	 * GET projects: synced projects where I am an active member, each with
+	 * syncFormat. includeLegacy=1 adds my own legacy (not yet synced) rows,
+	 * one per straboId (the lowest id, as micro_sync_project_row picks), so
+	 * the app can offer sync or adoption for a local copy (v3 §3.5, 16q).
+	 */
 	public static function listMine($ctx) {
 		$db = $ctx->db;
+		$includeLegacy = MsHttp::queryInt('includeLegacy', 0, 0, 1) === 1;
 		$rows = $db->rows(
 			"SELECT p.id, p.strabo_id, COALESCE(e.body->>'name', p.name) AS name, m.role,
-			        p.head_seq, p.sync_state,
+			        p.head_seq, p.sync_format, p.sync_state,
 			        " . MsDb::iso("COALESCE((SELECT c.at FROM strabomicro.micro_changes c
 			                                 WHERE c.project_id = p.id ORDER BY c.seq DESC LIMIT 1),
 			                                p.uploaddate)") . " AS updated_at,
@@ -31,18 +37,36 @@ class MsProjects {
 			  WHERE m.user_pkey = $1 AND m.state = 'active' AND (p.sync_format = 'entity' OR p.sync_state = 'adopting')
 			  ORDER BY p.id",
 			array($ctx->me));
+		if ($includeLegacy) {
+			$legacy = $db->rows(
+				"SELECT DISTINCT ON (p.strabo_id) p.id, p.strabo_id, p.name, 'owner' AS role,
+				        0 AS head_seq, p.sync_format, p.sync_state,
+				        " . MsDb::iso('p.uploaddate') . " AS updated_at, p.userpkey AS owner_pkey
+				   FROM strabomicro.micro_projectmetadata p
+				  WHERE p.userpkey = $1 AND p.sync_format = 'legacy'
+				    -- skips the straboId once it is synced or being adopted
+				    -- (an adopting row is already listed through its membership)
+				    AND NOT EXISTS (SELECT 1 FROM strabomicro.micro_projectmetadata q
+				                     WHERE q.userpkey = $1 AND q.strabo_id = p.strabo_id
+				                       AND (q.sync_format = 'entity' OR q.sync_state = 'adopting'))
+				  ORDER BY p.strabo_id, p.id",
+				array($ctx->me));
+			$rows = array_merge($rows, $legacy);
+			usort($rows, function ($a, $b) { return (int)$a['id'] - (int)$b['id']; });
+		}
 		$owners = MsStore::users($db, array_column($rows, 'owner_pkey'), true);
 		$out = array();
 		foreach ($rows as $r) {
 			$out[] = array(
-				'pid'       => (int)$r['id'],
-				'straboId'  => $r['strabo_id'],
-				'name'      => $r['name'],
-				'role'      => $r['role'],
-				'owner'     => MsStore::user($owners, $r['owner_pkey']),
-				'headSeq'   => (int)$r['head_seq'],
-				'syncState' => $r['sync_state'],
-				'updatedAt' => $r['updated_at'],
+				'pid'        => (int)$r['id'],
+				'straboId'   => $r['strabo_id'],
+				'name'       => $r['name'],
+				'role'       => $r['role'],
+				'owner'      => MsStore::user($owners, $r['owner_pkey']),
+				'headSeq'    => (int)$r['head_seq'],
+				'syncFormat' => $r['sync_format'],
+				'syncState'  => $r['sync_state'],
+				'updatedAt'  => $r['updated_at'],
 			);
 		}
 		MsHttp::json(200, $out);

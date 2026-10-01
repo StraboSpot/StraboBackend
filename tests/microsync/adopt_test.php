@@ -106,6 +106,18 @@ try {
 	$zipBytes = filesize("$root/project.zip");
 	check('starts as plain legacy', isPlainLegacy($P, $md5));
 
+	section('List with includeLegacy');
+	$pick = function ($list) use ($P) { return array_values(array_filter($list ?: array(), function ($x) use ($P) { return $x['pid'] === $P; })); };
+	check('plain list leaves legacy rows out', count($pick(req('GET', '/projects', $TOK)['body'])) === 0);
+	$r = req('GET', '/projects?includeLegacy=1', $TOK);
+	$mine = $pick($r['body']);
+	check('includeLegacy lists it once as legacy, owner', $r['code'] === 200 && count($mine) === 1
+		&& $mine[0]['syncFormat'] === 'legacy' && $mine[0]['straboId'] === $sid && $mine[0]['role'] === 'owner'
+		&& $mine[0]['owner']['pkey'] === (int)$U && $mine[0]['headSeq'] === 0 && is_string($mine[0]['updatedAt']), json_encode($mine));
+	check('includeLegacy list is sorted by pid', array_column($r['body'], 'pid') === array_values(array_unique(array_column($r['body'], 'pid'))) && (function ($ids) { $s = $ids; sort($s); return $s === $ids; })(array_column($r['body'], 'pid')));
+	check('another user does not see it', count($pick(req('GET', '/projects?includeLegacy=1', token($O))['body'])) === 0);
+	check('includeLegacy=abc -> 400', req('GET', '/projects?includeLegacy=abc', $TOK)['code'] === 400);
+
 	section('Start');
 	$r = req('POST', '/projects', $TOK, array('straboId' => $sid, 'name' => 'x'));
 	check('POST projects -> 409 exists, legacy, ready', $r['code'] === 409 && $r['body']['pid'] === $P
@@ -124,6 +136,8 @@ try {
 	check('POST projects now says adopting', $r['code'] === 409 && $r['body']['syncState'] === 'adopting', $r['raw']);
 	$mine = array_values(array_filter((req('GET', '/projects', $TOK)['body'] ?: array()), function ($x) use ($P) { return $x['pid'] === $P; }));
 	check('listed in my sync projects as adopting', count($mine) === 1 && $mine[0]['syncState'] === 'adopting', json_encode($mine));
+	$mine = $pick(req('GET', '/projects?includeLegacy=1', $TOK)['body']);
+	check('includeLegacy lists the adopting row once', count($mine) === 1 && $mine[0]['syncState'] === 'adopting' && $mine[0]['syncFormat'] === 'legacy', json_encode($mine));
 
 	section('Legacy readers while adopting');
 	$visible = $db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_projectmetadata WHERE id = $1 AND " . micro_sync_visible_sql(), array($P));
@@ -174,6 +188,8 @@ try {
 	check('ready -> 200 adopted', $r['code'] === 200 && $r['body']['adopted'] === true && $r['body']['syncState'] === 'ready', $r['raw']);
 	$p = prow($P);
 	check('row is entity/ready, head kept', $p['sync_format'] === 'entity' && $p['sync_state'] === 'ready' && (int)$p['head_seq'] === $headBefore);
+	$mine = $pick(req('GET', '/projects?includeLegacy=1', $TOK)['body']);
+	check('includeLegacy lists the adopted row once as entity', count($mine) === 1 && $mine[0]['syncFormat'] === 'entity' && $mine[0]['syncState'] === 'ready', json_encode($mine));
 	$arch = MsAdopt::archiveDir($P);
 	$jr = json_decode((string)@file_get_contents("$arch/journal.json"), true);
 	check('zip and leftovers archived, journal lists them', !is_file("$root/project.zip") && md5_file("$arch/project.zip") === $md5
