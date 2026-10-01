@@ -140,7 +140,7 @@ class MsConvert {
 				$report['status'] = 'would_convert';
 			}
 		} catch (MsConvertStop $e) {
-			$skip = in_array($e->reason, array('already_entity', 'no_row', 'no_folder', 'no_zip', 'javafx', 'empty'), true);
+			$skip = in_array($e->reason, array('already_entity', 'adopting', 'no_row', 'no_folder', 'no_zip', 'javafx', 'empty'), true);
 			$report['status'] = $skip ? 'skipped' : 'failed';
 			$report['reason'] = $e->reason;
 			$report['message'] = $e->getMessage();
@@ -228,7 +228,7 @@ class MsConvert {
 
 	private function read($pid, &$report) {
 		$row = $this->db->row(
-			"SELECT id, strabo_id, userpkey, name, sync_format, projectjson,
+			"SELECT id, strabo_id, userpkey, name, sync_format, sync_state, projectjson,
 			        " . MsDb::iso('uploaddate') . " AS uploaddate
 			   FROM strabomicro.micro_projectmetadata WHERE id = $1",
 			array($pid));
@@ -244,6 +244,8 @@ class MsConvert {
 			}
 		} elseif ($row['sync_format'] !== 'legacy') {
 			throw new MsConvertStop('already_entity', 'already in the sync store');
+		} elseif ($row['sync_state'] === 'adopting') {
+			throw new MsConvertStop('adopting', 'being adopted by the app (P1-1)');
 		}
 		if ($this->db->val("SELECT 1 FROM public.users WHERE pkey = $1", array((int)$row['userpkey'])) === null) {
 			throw new MsConvertStop('no_owner', 'the owner (userpkey ' . (int)$row['userpkey'] . ') is not a user');
@@ -959,6 +961,14 @@ class MsConvert {
 		if (!$fallback) {
 			if (!is_file("$root/project.zip") && is_file("$arch/project.zip")) {
 				@rename("$arch/project.zip", "$root/project.zip");
+			}
+			// Adopted projects (P1-1) also archived their JavaFX leftovers.
+			$j = json_decode((string)@file_get_contents("$arch/journal.json"), true);
+			foreach ((is_array($j) && isset($j['moved']) && is_array($j['moved'])) ? $j['moved'] : array() as $name) {
+				if ($name !== 'project.zip' && is_string($name) && strpos($name, '/') === false
+					&& !file_exists("$root/$name") && file_exists("$arch/$name")) {
+					@rename("$arch/$name", "$root/$name");
+				}
 			}
 			@unlink("$arch/journal.json");
 			@unlink("$arch/uploads.log");

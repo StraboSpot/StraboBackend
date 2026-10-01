@@ -123,7 +123,7 @@ if ($only !== null) {
 	$ids = $only;
 } else {
 	$ids = array_map(function ($r) { return (int)$r['id']; }, $ms->rows(
-		"SELECT id FROM strabomicro.micro_projectmetadata WHERE sync_format = 'legacy' ORDER BY id"));
+		"SELECT id FROM strabomicro.micro_projectmetadata WHERE sync_format = 'legacy' AND sync_state <> 'adopting' ORDER BY id"));
 }
 if ($limit > 0) {
 	$ids = array_slice($ids, 0, $limit);
