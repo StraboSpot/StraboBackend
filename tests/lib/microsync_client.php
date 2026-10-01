@@ -102,6 +102,7 @@ function upload_blob($pid, $tok, $bytes, $kind) {
 	$sha = hash('sha256', $bytes);
 	$r = req('POST', "/projects/$pid/uploads", $tok, array('sha256' => $sha, 'size' => strlen($bytes), 'kind' => $kind));
 	if (!empty($r['body']['complete'])) return $sha;
+	if (empty($r['body']['uploadId']) || (int)($r['body']['chunkSize'] ?? 0) <= 0) return null; // refused: never loop
 	$up = $r['body']['uploadId'];
 	$off = 0;
 	while ($off < strlen($bytes)) {
@@ -119,8 +120,9 @@ function upload_file($pid, $tok, $path, $kind) {
 	$size = filesize($path);
 	$r = req('POST', "/projects/$pid/uploads", $tok, array('sha256' => $sha, 'size' => $size, 'kind' => $kind));
 	if (!empty($r['body']['complete'])) return $sha;
+	if (empty($r['body']['uploadId']) || (int)($r['body']['chunkSize'] ?? 0) <= 0) return null; // refused: never loop
 	$up = $r['body']['uploadId'];
-	$cs = $r['body']['chunkSize'];
+	$cs = (int)$r['body']['chunkSize'];
 	$fh = fopen($path, 'rb');
 	for ($off = (int)$r['body']['received']; $off < $size; $off += $cs) {
 		fseek($fh, $off);
