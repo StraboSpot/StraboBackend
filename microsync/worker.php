@@ -12,7 +12,8 @@
  *              --now         With --project: skip the quiet period (tests, manual runs).
  *              --sweep       Cron, every minute: rebuild every dirty ready
  *                            project that is quiet and not being built, then
- *                            housekeeping (stale uploads, presence).
+ *                            housekeeping (stale uploads, presence, adoptions
+ *                            idle for 7 days).
  *
  *              Usage:
  *                docker exec strabo-php php /srv/app/www/microsync/worker.php --sweep
@@ -53,6 +54,7 @@ include_once "./lib/MsDb.php";
 include_once "./lib/MsModel.php";
 include_once "./lib/MsStore.php";
 include_once "./lib/MsWorker.php";
+include_once "./lib/MsAdopt.php";
 include_once "../microdb/lib/micro_pdf_node.php";
 
 // Seconds the sweep waits for one project's PDF render.
@@ -139,6 +141,10 @@ if (isset($opts['sweep'])) {
 	}
 
 	$cleaned = MsWorker::housekeeping($ms);
+	// Adoptions (P1-1) with no push or upload for a week: back to plain legacy.
+	foreach (MsAdopt::expireIdle($ms) as $id) {
+		MsWorker::log("project $id: idle adoption dropped (no push or upload for " . MsAdopt::IDLE_DAYS . ' days)');
+	}
 	if ($built > 0 || $pdfs > 0 || $cleaned > 0) {
 		MsWorker::log("sweep: built $built, rendered $pdfs pdfs, removed $cleaned stale uploads");
 	}

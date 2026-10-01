@@ -37,17 +37,34 @@ function micro_sync_visible_sql($alias = '') {
 	return "({$p}sync_format = 'legacy' OR {$p}views_built_at IS NOT NULL)";
 }
 
-/** The caller's project row for a strabo_id: {id, sync_format, views_built_at}, or null. */
+/** The caller's project row for a strabo_id: {id, sync_format, sync_state, views_built_at}, or null. */
 function micro_sync_project_row($db, $userpkey, $straboId) {
 	return $db->get_row_prepared(
-		"SELECT id, sync_format, views_built_at FROM strabomicro.micro_projectmetadata
+		"SELECT id, sync_format, sync_state, views_built_at FROM strabomicro.micro_projectmetadata
 		  WHERE userpkey = $1 AND strabo_id = $2 ORDER BY id LIMIT 1",
 		array((int)$userpkey, (string)$straboId));
+}
+
+/**
+ * A legacy project the new app is adopting into the sync store (P1-1): it
+ * stays legacy for every reader until the app's upload is done, but an old
+ * app's upload now would be lost from the synced project, so it is refused.
+ */
+function micro_sync_adopting($row) {
+	return $row && $row->sync_format === 'legacy' && $row->sync_state === 'adopting';
+}
+
+function micro_sync_adopting_message() {
+	return 'This project is being set up for sync by a newer version of StraboMicro. '
+		. 'Please update StraboMicro to upload changes to it.';
 }
 
 /** Message refusing a legacy upload over a synced project, or null to proceed. */
 function micro_sync_upload_refusal($db, $userpkey, $straboId) {
 	$row = micro_sync_project_row($db, $userpkey, $straboId);
+	if (micro_sync_adopting($row)) {
+		return micro_sync_adopting_message();
+	}
 	if ($row && $row->sync_format === 'entity') {
 		return 'This project is kept in sync by a newer version of StraboMicro. '
 			. 'Please update StraboMicro to upload changes to it.';
@@ -63,6 +80,9 @@ function micro_sync_upload_refusal($db, $userpkey, $straboId) {
  */
 function micro_sync_upload_plan($db, $userpkey, $straboId) {
 	$row = micro_sync_project_row($db, $userpkey, $straboId);
+	if (micro_sync_adopting($row)) {
+		return micro_sync_adopting_message();
+	}
 	if (!$row || $row->sync_format !== 'entity') {
 		return null;
 	}

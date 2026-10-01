@@ -28,7 +28,7 @@ class MsProjects {
 			   JOIN strabomicro.micro_projectmetadata p ON p.id = m.project_id
 			   LEFT JOIN strabomicro.micro_entities e
 			          ON e.project_id = p.id AND e.entity_type = 'project' AND e.entity_id = p.strabo_id
-			  WHERE m.user_pkey = $1 AND m.state = 'active' AND p.sync_format = 'entity'
+			  WHERE m.user_pkey = $1 AND m.state = 'active' AND (p.sync_format = 'entity' OR p.sync_state = 'adopting')
 			  ORDER BY p.id",
 			array($ctx->me));
 		$owners = MsStore::users($db, array_column($rows, 'owner_pkey'), true);
@@ -51,7 +51,8 @@ class MsProjects {
 	/**
 	 * POST projects {straboId, name}: create the server copy of a local
 	 * project (sync_state initializing) with me as owner. 409 when I already
-	 * own a project with this straboId (legacy upload or synced).
+	 * own a project with this straboId (legacy upload or synced); a legacy
+	 * one then enters sync through POST projects/{pid}/adopt (P1-1).
 	 */
 	public static function create($ctx) {
 		$db = $ctx->db;
@@ -70,13 +71,13 @@ class MsProjects {
 		$db->q("SELECT pg_advisory_xact_lock(hashtext('microsync-create'), hashtext($1))",
 			array($ctx->me . ':' . $straboId));
 		$existing = $db->row(
-			"SELECT id, sync_format FROM strabomicro.micro_projectmetadata
+			"SELECT id, sync_format, sync_state FROM strabomicro.micro_projectmetadata
 			  WHERE userpkey = $1 AND strabo_id = $2 ORDER BY id LIMIT 1",
 			array($ctx->me, $straboId));
 		if ($existing !== null) {
 			$db->rollback();
 			throw new MsHttpError(409, 'exists', 'You already have a project with this id on the server',
-				array('pid' => (int)$existing['id'], 'syncFormat' => $existing['sync_format']));
+				array('pid' => (int)$existing['id'], 'syncFormat' => $existing['sync_format'], 'syncState' => $existing['sync_state']));
 		}
 		$pid = (int)$db->val(
 			"INSERT INTO strabomicro.micro_projectmetadata
@@ -103,6 +104,10 @@ class MsProjects {
 			array($pid, $p['strabo_id']));
 		if ($hasProjectEntity === null) {
 			throw new MsHttpError(409, 'no_project_entity', 'Push the project entity before marking the project ready');
+		}
+		if ($p['sync_format'] === 'legacy' && $p['sync_state'] === 'adopting') {
+			MsAdopt::finish($ctx, $pid, $p);
+			return;
 		}
 		$db->q(
 			"UPDATE strabomicro.micro_projectmetadata

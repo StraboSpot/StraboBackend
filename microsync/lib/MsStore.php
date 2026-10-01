@@ -35,7 +35,10 @@ class MsStore {
 			   LEFT JOIN strabomicro.micro_members m ON m.project_id = p.id AND m.user_pkey = $2
 			  WHERE p.id = $1",
 			array($pid, $me));
-		if ($row === null || $row['sync_format'] !== 'entity' || $row['member_state'] === null) {
+		// Adopting rows (legacy until their initial upload is done, P1-1) are open to their members too.
+		$synced = $row !== null && ($row['sync_format'] === 'entity'
+			|| ($row['sync_format'] === 'legacy' && $row['sync_state'] === 'adopting'));
+		if (!$synced || $row['member_state'] === null) {
 			throw new MsHttpError(404, 'not_found', 'Project not found');
 		}
 		if ($row['member_state'] !== 'active' && !$allowInactive) {
