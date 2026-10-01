@@ -119,7 +119,7 @@ class MsSync {
 		$response = array('headSeq' => $head, 'results' => $results);
 		$db->q(
 			"INSERT INTO strabomicro.micro_pushes (push_id, project_id, user_pkey, client_id, result)
-			 VALUES ($1, $2, $3, $4, $5::jsonb)",
+			 VALUES ($1, $2, $3, $4, $5::json)",
 			array($pushId, $pid, $ctx->me, $clientId, MsHttp::encode($response)));
 		$db->commit();
 		if ($head > $p['head_seq']) {
@@ -148,7 +148,7 @@ class MsSync {
 			throw new MsHttpError(403, 'access_removed', 'You no longer have access to this project');
 		}
 		$db->q(
-			"INSERT INTO strabomicro.micro_parked_pushes (project_id, user_pkey, payload) VALUES ($1, $2, $3::jsonb)",
+			"INSERT INTO strabomicro.micro_parked_pushes (project_id, user_pkey, payload) VALUES ($1, $2, $3::json)",
 			array($p['id'], $ctx->me, MsHttp::encode($in)));
 		$db->commit();
 		throw new MsHttpError(403, 'access_changed',
@@ -319,7 +319,7 @@ class MsSync {
 		$db->q(
 			"INSERT INTO strabomicro.micro_entities
 			   (project_id, entity_type, entity_id, parent_type, parent_id, body, child_order, version, created_by, updated_by)
-			 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7::jsonb, 1, $8, $8)",
+			 VALUES ($1, $2, $3, $4, $5, $6::json, $7::json, 1, $8, $8)",
 			array($pid, $type, $id, $ptype, $ppid, MsHttp::encode($body),
 			      empty($order) ? null : MsHttp::encode($order), $ctx->me));
 		$after = array('parentType' => $ptype, 'parentId' => $ppid, 'body' => $body,
@@ -405,7 +405,7 @@ class MsSync {
 		$version = $versioned ? $row['version'] + 1 : $row['version'];
 		$db->q(
 			"UPDATE strabomicro.micro_entities
-			    SET parent_id = $4, body = $5::jsonb, child_order = $6::jsonb, version = $7,
+			    SET parent_id = $4, body = $5::json, child_order = $6::json, version = $7,
 			        updated_by = $8, updated_at = now()
 			  WHERE project_id = $1 AND entity_type = $2 AND entity_id = $3",
 			array($pid, $type, $id, $ppid, MsHttp::encode($body),
