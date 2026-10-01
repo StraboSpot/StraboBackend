@@ -317,8 +317,26 @@ try {
 	// -----------------------------------------------------------------------
 	section('Delete and restore');
 	check('stale delete -> conflict', st(one($PID, $EDT, array('op' => 'delete', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 1))) === 'conflict');
+	// cascadeVersions: what the client knows beneath; anything changed or added since is a conflict
+	$live = array();
+	foreach ((array)$db->get_results_prepared("SELECT entity_type, entity_id, version FROM strabomicro.micro_entities WHERE project_id = $1 AND deleted_at IS NULL", array($PID)) as $e) {
+		$live[$e->entity_type . ':' . $e->entity_id] = (int)$e->version;
+	}
+	$stale = $live;
+	$stale['spot:P3a'] = $stale['spot:P3a'] - 1;
+	$r = one($PID, $EDT, array('op' => 'delete', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 3, 'cascadeVersions' => $stale));
+	check('delete with a changed entity beneath -> conflict naming it', st($r) === 'conflict' && $r['changedBeneath']['id'] === 'P3a'
+		&& $r['current']['version'] === 3, json_encode($r));
+	$missing = $live;
+	unset($missing['micrograph:M3']);
+	$r = one($PID, $EDT, array('op' => 'delete', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 3, 'cascadeVersions' => $missing));
+	check('delete with an unknown entity beneath (added since) -> conflict', st($r) === 'conflict' && $r['changedBeneath']['id'] === 'M3', json_encode($r));
+	check('cascadeVersions not an object -> invalid/schema',
+		st(one($PID, $EDT, array('op' => 'delete', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 3, 'cascadeVersions' => 'x'))) === 'invalid/schema');
+	check('nothing was deleted by the refused deletes',
+		(int)$db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1 AND deleted_at IS NOT NULL", array($PID)) === 0);
 	$headBefore = (int)$db->get_var_prepared("SELECT head_seq FROM strabomicro.micro_projectmetadata WHERE id = $1", array($PID));
-	$r = push($PID, $EDT, array(array('op' => 'delete', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 3)));
+	$r = push($PID, $EDT, array(array('op' => 'delete', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 3, 'cascadeVersions' => $live)));
 	$res = $r['body']['results'][0];
 	check('delete M1 cascades to P1, P4, PC, PC1, M3, P3a', st($res) === 'accepted' && $res['cascaded'] === 6, json_encode($res));
 	check('headSeq covers the cascaded rows', $r['body']['headSeq'] === $headBefore + 7, $headBefore . ' ' . $r['raw']);

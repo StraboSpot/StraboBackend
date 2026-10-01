@@ -17,6 +17,11 @@
  *                including micrographs nested by parentID; each gets
  *                deleted_root = the deleted entity. A Contributor may delete
  *                only when every entity in that cascade is theirs.
+ *              - A delete may carry cascadeVersions ("type:id" => version
+ *                the client knows beneath it); a live descendant missing
+ *                from it or at another version is a conflict (changedBeneath
+ *                names it), so an edit or addition beneath is never deleted
+ *                by someone who has not seen it (2026-10-01).
  *              - Restore is for Owners and Editors; cascade restores the
  *                descendants tombstoned by the same delete event.
  *              - A micrograph may change sample only if its own parentID
@@ -442,6 +447,24 @@ class MsSync {
 		}
 
 		$cascade = self::descendants($db, $pid, $type, $id, null);
+		// cascadeVersions: what the client knows beneath the entity ("type:id"
+		// => version). Something beneath changed or added since then means the
+		// client has not seen it: a conflict, so its pull asks the user instead
+		// of the delete taking it away (collaboration spec v3 §4.5)
+		$known = MsHttp::prop($c, 'cascadeVersions');
+		if ($known !== null) {
+			if (!is_object($known)) {
+				throw new MsInvalid('schema', 'cascadeVersions must be a JSON object');
+			}
+			foreach ($cascade as $d) {
+				$v = MsHttp::prop($known, MsModel::key($d['entity_type'], $d['entity_id']));
+				if ($v !== (int)$d['version']) {
+					$out = self::conflictResult($db, $type, $id, $row);
+					$out['changedBeneath'] = array('type' => $d['entity_type'], 'id' => $d['entity_id']);
+					return $out;
+				}
+			}
+		}
 		if ($ctx->project['role'] === 'contributor') {
 			foreach ($cascade as $d) {
 				if ($d['created_by'] !== $ctx->me) {
@@ -549,6 +572,11 @@ class MsSync {
 		if ($base === $row['version']) {
 			return null;
 		}
+		return self::conflictResult($db, $type, $id, $row);
+	}
+
+	/** A conflict result with the entity's current state. */
+	private static function conflictResult($db, $type, $id, $row) {
 		$users = MsStore::users($db, array($row['updated_by']));
 		return array('type' => $type, 'id' => $id, 'status' => 'conflict', 'current' => array(
 			'version'    => $row['version'],
