@@ -11,7 +11,9 @@
  *                - dry run writes nothing
  *                - apply: backup + journal files, every body back in archive
  *                  order (the extra spot in its type's order), content equal
- *                  (Postgres jsonb comparison against the backup), change-log
+ *                  (Postgres jsonb comparison against the backup), a type the
+ *                  project's own archive lacks in the order of another
+ *                  project of the run, change-log
  *                  states in MsStore::state order, views dirty, head_seq
  *                  unchanged, worker-built project.json in app order
  *                - a second apply finds nothing to do
@@ -172,6 +174,19 @@ try {
 	$nb->name = 'Created after conversion';
 	$ms->q("INSERT INTO strabomicro.micro_entities (project_id, entity_type, entity_id, parent_type, parent_id, body, created_by, updated_by)
 		VALUES ($1, 'spot', 'RKNEW', $2, $3, ($4::jsonb)::json, $5, $5)", array($A, $spot['parent_type'], $spot['parent_id'], json_encode($nb), $U));
+	// A point count in 786, whose archive has none: its order must come from 747's archive.
+	$pcKeys = array_values(array_filter(array_keys($archB), function ($k) { return strpos($k, 'point_count:') === 0; }));
+	check('786 archive has no point counts', count(array_filter(array_keys($archA), function ($k) { return strpos($k, 'point_count:') === 0; })) === 0);
+	$pcTmpl = $archB[$pcKeys[0]];
+	$pc = clone $pcTmpl;
+	$pc->id = 'RKPC';
+	$pc->micrographId = $ms->val("SELECT entity_id FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'micrograph' ORDER BY entity_id LIMIT 1", array($A));
+	$pcRow = array($A, $pc->micrographId, json_encode($pc), $U);
+	$insPc = function () use ($ms, &$pcRow) {
+		$ms->q("INSERT INTO strabomicro.micro_entities (project_id, entity_type, entity_id, parent_type, parent_id, body, created_by, updated_by)
+			VALUES ($1, 'point_count', 'RKPC', 'micrograph', $2, ($3::jsonb)::json, $4, $4)", $pcRow);
+	};
+	$insPc();
 	$scrambledA = count(orderMisses($A, $archA));
 	$scrambledB = count(orderMisses($B, $archB));
 	check('scrambled: many bodies out of archive order', $scrambledA > 3 && $scrambledB > 3, "$scrambledA / $scrambledB");
@@ -201,6 +216,9 @@ try {
 		json_encode(array_slice(array_merge(orderMisses($A, $archA), orderMisses($B, $archB)), 0, 5)));
 	$new = json_decode($ms->val("SELECT body::text FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'spot' AND entity_id = 'RKNEW'", array($A)));
 	check('entity the archive never had follows its type order', $new !== null && inArchiveOrder($new, $archA["spot:$origId"]), json_encode($new));
+	$newPc = json_decode($ms->val("SELECT body::text FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'point_count' AND entity_id = 'RKPC'", array($A)));
+	check('type missing from its own archive takes the order from another project of the run',
+		$newPc !== null && inArchiveOrder($newPc, $pcTmpl) && preg_match("/#$A entities \\d+ \\(order from: own archive entry \\d+, own archive type 1, other project 1, none 0\\)/", $out), json_encode($newPc) . "\n" . $out);
 	$same = true;
 	foreach (array($A, $B) as $pid) {
 		foreach (json_decode(file_get_contents("$dir/changed-$pid.json"), true)['rewrites'] as $w) {
@@ -233,7 +251,8 @@ try {
 	check("change-log states in MsStore::state order, bodies in app order ($checked states)", $stateOk && $checked > 0);
 	check('views marked dirty, head_seq unchanged', $ms->val("SELECT (views_dirty_since IS NOT NULL)::text FROM strabomicro.micro_projectmetadata WHERE id = $1", array($A)) === 'true'
 		&& $ms->val("SELECT head_seq FROM strabomicro.micro_projectmetadata WHERE id = $1", array($A)) === $headA);
-	$ms->q("DELETE FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'RKNEW'", array($A));
+	$pcApplied = $ms->val("SELECT body::text FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'RKPC'", array($A));
+	$ms->q("DELETE FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id IN ('RKNEW', 'RKPC')", array($A));
 	$built = build_now($A);
 	$pj = json_decode((string)@file_get_contents("$FILES/$A/project.json"));
 	$m0 = isset($pj->datasets[0]->samples[0]->micrographs[0]) ? clone $pj->datasets[0]->samples[0]->micrographs[0] : null;
@@ -245,6 +264,8 @@ try {
 	check("worker-built project.json lists micrograph fields in app order ($built)", $appOk);
 	$ms->q("INSERT INTO strabomicro.micro_entities (project_id, entity_type, entity_id, parent_type, parent_id, body, created_by, updated_by)
 		VALUES ($1, 'spot', 'RKNEW', $2, $3, $4::json, $5, $5)", array($A, $spot['parent_type'], $spot['parent_id'], json_encode($new, MsHttp::JSON_OUT), $U));
+	$ms->q("INSERT INTO strabomicro.micro_entities (project_id, entity_type, entity_id, parent_type, parent_id, body, created_by, updated_by)
+		VALUES ($1, 'point_count', 'RKPC', 'micrograph', $2, $3::json, $4, $4)", array($A, $pc->micrographId, $pcApplied, $U));
 	$applied = texts($pids);
 
 	section('Second apply');
@@ -270,7 +291,7 @@ try {
 } finally {
 	foreach ($pids as $pid) {
 		if ($pid === null) continue;
-		$ms->q("DELETE FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'RKNEW'", array($pid));
+		$ms->q("DELETE FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id IN ('RKNEW', 'RKPC')", array($pid));
 		if ($ms->val("SELECT sync_format FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pid)) === 'entity') {
 			$why = $conv->revert($pid);
 			if ($why !== null) echo "  (cleanup: revert of #$pid: $why)\n";
