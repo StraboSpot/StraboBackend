@@ -131,7 +131,7 @@ class MsStore {
 			 VALUES ($1, $2, $3, $4, $5, $6,
 			         CASE WHEN $7::jsonb IS NULL THEN NULL
 			              ELSE ARRAY(SELECT jsonb_array_elements_text($7::jsonb)) END,
-			         $8::jsonb, $9::jsonb, $10)
+			         $8::json, $9::json, $10)
 			 RETURNING seq",
 			array($pid, $ctx->pushId, $type, $id, $op, $version,
 			      $paths === null ? null : MsHttp::encode(array_values($paths)),

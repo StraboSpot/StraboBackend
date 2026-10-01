@@ -280,7 +280,7 @@ try {
 	check('childOrder-only update: no baseVersion, version unchanged', st($r) === 'accepted' && $r['version'] === 1, json_encode($r));
 	check('childOrder with unknown key -> schema', st(one($PID, $OWN, array('op' => 'update', 'type' => 'sample', 'id' => 'S1', 'childOrder' => array('spots' => array())))) === 'invalid/schema');
 	$stored = $db->get_var_prepared("SELECT child_order::text FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'sample' AND entity_id = 'S1'", array($PID));
-	check('unknown ids dropped from stored order', $stored === '{"micrographs": ["M1"]}', $stored);
+	check('unknown ids dropped from stored order', json_decode($stored, true) === array('micrographs' => array('M1')), $stored);
 
 	// -----------------------------------------------------------------------
 	section('Roles');
@@ -419,6 +419,47 @@ try {
 		array_keys($byKey['project:' . $SID]['childOrder']) === array('datasets', 'tags', 'groups', 'presets'));
 	check('per-user fields stripped', !isset($byKey['sample:S1']['body']['isExpanded']) && !isset($byKey['project:' . $SID]['body']['presetKeyBindings']));
 	check('outsider snapshot -> 404', req('GET', "/projects/$PID/snapshot", $OUT)['code'] === 404);
+
+	// -----------------------------------------------------------------------
+	section('Key order (json columns, P1-2)');
+	$koBody = json_decode('{"name":"KO1","zeta":1,"color":"red","alpha":{"yy":1,"b":2,"aaa":{"z":0,"a":1}},"list":[{"q":1,"c":2}],"id":"KO1"}');
+	$koTop = array('name', 'zeta', 'color', 'alpha', 'list', 'id');
+	$koKeys = function ($b) {
+		return array(array_keys($b), array_keys($b['alpha']), array_keys($b['alpha']['aaa']), array_keys($b['list'][0]));
+	};
+	$koWant = array($koTop, array('yy', 'b', 'aaa'), array('z', 'a'), array('q', 'c'));
+	$koPushId = uuid();
+	$koA = push($PID, $OWN, array(array('op' => 'create', 'type' => 'spot', 'id' => 'KO1', 'parentType' => 'micrograph', 'parentId' => 'M1', 'body' => $koBody)), $koPushId);
+	check('key-order spot created', st($koA['body']['results'][0]) === 'accepted', $koA['raw']);
+	$koStored = json_decode($db->get_var_prepared("SELECT body::text FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'spot' AND entity_id = 'KO1'", array($PID)), true);
+	check('stored body keeps the sent key order at every depth', $koKeys($koStored) === $koWant, json_encode($koStored));
+	$koB = push($PID, $OWN, array(array('op' => 'create', 'type' => 'spot', 'id' => 'KO1', 'parentType' => 'micrograph', 'parentId' => 'M1', 'body' => $koBody)), $koPushId);
+	check('retried pushId returns the stored result byte for byte', $koA['raw'] === $koB['raw'], $koA['raw'] . ' / ' . $koB['raw']);
+	$koSnap = array();
+	foreach (req('GET', "/projects/$PID/snapshot", $VIE)['body']['entities'] as $e) {
+		if ($e['type'] === 'spot' && $e['id'] === 'KO1') {
+			$koSnap = $e['body'];
+		}
+	}
+	check('snapshot body keeps key order', $koSnap !== array() && $koKeys($koSnap) === $koWant, json_encode($koSnap));
+	$r = one($PID, $OWN, array('op' => 'update', 'type' => 'spot', 'id' => 'KO1', 'baseVersion' => 1,
+		'fields' => array('color' => 'blue', 'newKey' => 1, 'alpha.b' => 3)));
+	check('key-order spot updated', st($r) === 'accepted', json_encode($r));
+	$koWant2 = array(array('name', 'zeta', 'color', 'alpha', 'list', 'id', 'newKey'), array('yy', 'b', 'aaa'), array('z', 'a'), array('q', 'c'));
+	$koStored = json_decode($db->get_var_prepared("SELECT body::text FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'spot' AND entity_id = 'KO1'", array($PID)), true);
+	check('update keeps positions of existing keys, appends new ones', $koKeys($koStored) === $koWant2 && $koStored['color'] === 'blue' && $koStored['alpha']['b'] === 3, json_encode($koStored));
+	$koLog = $db->get_row_prepared("SELECT before::text AS b, after::text AS a FROM strabomicro.micro_changes WHERE project_id = $1 AND entity_type = 'spot' AND entity_id = 'KO1' AND op = 'update' ORDER BY seq DESC LIMIT 1", array($PID));
+	$koBefore = json_decode($koLog->b, true);
+	$koAfter = json_decode($koLog->a, true);
+	check('change log before/after keep key order', $koKeys($koBefore['body']) === $koWant && $koKeys($koAfter['body']) === $koWant2, $koLog->b . ' / ' . $koLog->a);
+	$koPulled = null;
+	foreach (req('GET', "/projects/$PID/changes?since=0&limit=1000", $VIE)['body']['changes'] as $c) {
+		if ($c['type'] === 'spot' && $c['id'] === 'KO1') {
+			$koPulled = $c['body'];
+		}
+	}
+	check('pulled body keeps key order', $koPulled !== null && $koKeys($koPulled) === $koWant2, json_encode($koPulled));
+	check('key-order spot deleted', st(one($PID, $OWN, array('op' => 'delete', 'type' => 'spot', 'id' => 'KO1', 'baseVersion' => 2))) === 'accepted');
 
 	// -----------------------------------------------------------------------
 	section('Blobs: chunked upload');
