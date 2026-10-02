@@ -36,6 +36,7 @@ include_once "./lib/MsActivity.php";
 include_once "./lib/MsWorker.php";
 include_once "./lib/MsSmz.php";
 include_once "./lib/MsAdopt.php";
+include_once "./lib/MsMembers.php";
 
 const MICROSYNC_API_VERSION = 1;
 
@@ -57,6 +58,7 @@ if ($route === 'ping' && $method === 'GET') {
 
 // [method, pattern, handler]; pattern groups become handler arguments.
 $pidPattern = '([1-9][0-9]{0,8})';
+$userPattern = '([1-9][0-9]{0,9})';
 $uuidPattern = '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})';
 $routes = array(
 	array('GET',    '#^projects$#',                                              array('MsProjects', 'listMine')),
@@ -78,6 +80,18 @@ $routes = array(
 	array('POST',   "#^projects/$pidPattern/uploads/$uuidPattern/complete$#",    array('MsBlobs', 'complete')),
 	array('PUT',    "#^projects/$pidPattern/refs$#",                             array('MsBlobs', 'putRef')),
 	array('DELETE', "#^projects/$pidPattern/refs$#",                             array('MsBlobs', 'deleteRef')),
+	// Membership (Phase 2)
+	array('GET',    "#^projects/$pidPattern/members$#",                          array('MsMembers', 'listMembers')),
+	array('POST',   "#^projects/$pidPattern/members$#",                          array('MsMembers', 'invite')),
+	array('PATCH',  "#^projects/$pidPattern/members/$userPattern$#",             array('MsMembers', 'changeRole')),
+	array('DELETE', "#^projects/$pidPattern/members/$userPattern$#",             array('MsMembers', 'remove')),
+	array('POST',   "#^projects/$pidPattern/transfer$#",                         array('MsMembers', 'offerTransfer')),
+	array('DELETE', "#^projects/$pidPattern/transfer$#",                         array('MsMembers', 'cancelTransfer')),
+	array('POST',   "#^projects/$pidPattern/transfer/accept$#",                  array('MsMembers', 'acceptTransfer')),
+	array('POST',   "#^projects/$pidPattern/transfer/decline$#",                 array('MsMembers', 'declineTransfer')),
+	array('GET',    '#^invites$#',                                               array('MsMembers', 'myInvites')),
+	array('POST',   "#^invites/$pidPattern/accept$#",                            array('MsMembers', 'acceptInvite')),
+	array('POST',   "#^invites/$pidPattern/decline$#",                           array('MsMembers', 'declineInvite')),
 );
 
 $handler = null;
