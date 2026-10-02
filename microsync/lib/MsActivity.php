@@ -86,7 +86,7 @@ class MsActivity {
 		$hash = md5(json_encode($hashParts));
 
 		if ($p['head_seq'] <= $since && $hashIn === $hash) {
-			MsHttp::json(200, array('changed' => false));
+			MsHttp::json(200, array('changed' => false, 'role' => $p['role']));
 			return;
 		}
 
@@ -117,6 +117,7 @@ class MsActivity {
 
 		MsHttp::json(200, array(
 			'changed'      => true,
+			'role'         => $p['role'],
 			'headSeq'      => $p['head_seq'],
 			'pending'      => $pending,
 			'presence'     => $presence,

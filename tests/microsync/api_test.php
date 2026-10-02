@@ -608,7 +608,10 @@ try {
 	$pres = $r['body']['presence'];
 	check('presence shows the editor on M1', count($pres) === 1 && $pres[0]['user']['pkey'] === $users['editor']['pkey'] && $pres[0]['viewing']['id'] === 'M1', json_encode($pres));
 	$r2 = req('POST', "/projects/$PID/activity", $OWN, array('since' => $headNow, 'clientId' => 'test-client', 'presenceHash' => $r['body']['presenceHash']));
-	check('nothing new -> changed false', $r2['body'] === array('changed' => false), $r2['raw']);
+	check('nothing new -> changed false, with my role', $r2['body'] === array('changed' => false, 'role' => 'owner'), $r2['raw']);
+	$r3 = req('POST', "/projects/$PID/activity", $CON, array('since' => 0, 'clientId' => 'contrib-pc'));
+	check('activity tells each member their role (role changes reach the app)', $r3['body']['role'] === 'contributor'
+		&& $r['body']['role'] === 'owner', $r3['raw']);
 	check('bad activity body -> 400', req('POST', "/projects/$PID/activity", $OWN, array('since' => -1, 'clientId' => 'x'))['code'] === 400);
 
 	// -----------------------------------------------------------------------
