@@ -6,7 +6,9 @@
  *              invite (validation, no account, resend, re-invite, P0-14
  *              copy owner), my invitations, accept and decline, member list
  *              per role, role change, remove and leave (incl. parking of a
- *              removed member's next push), and ownership transfer.
+ *              removed member's next push), and ownership transfer (offer,
+ *              decline, withdraw; accepting is held until the StraboSamples
+ *              re-key stage).
  *
  *              Usage (MICROSYNC_ENABLED must be true in the dev config):
  *                docker exec strabo-php timeout 900 php /srv/app/www/tests/microsync/members_test.php
@@ -217,15 +219,11 @@ try {
 	check('removing the person offered ownership ends the offer', req('GET', "/projects/$PID/members", $OWN)['body']['transferTo'] === null);
 	req('POST', "/projects/$PID/transfer", $OWN, array('pkey' => $U['editor']['pkey']));
 	$r = req('POST', "/projects/$PID/transfer/accept", $EDT);
-	check('editor accepts ownership', $r['code'] === 200 && $r['body']['role'] === 'owner' && $r['body']['previousOwner'] === $U['owner']['pkey'], $r['raw']);
+	check('accepting is held: 409 transfer_unavailable', $r['code'] === 409 && $r['body']['error'] === 'transfer_unavailable', $r['raw']);
 	$list = req('GET', "/projects/$PID/members", $OWN)['body'];
-	check('previous owner is now an Editor', $list['myRole'] === 'editor' && memberOf($list, $U['owner']['pkey'])['role'] === 'editor');
-	check('new owner is the only owner', count(array_filter($list['members'], function ($m) { return $m['role'] === 'owner'; })) === 1
-		&& memberOf($list, $U['editor']['pkey'])['role'] === 'owner');
-	check('legacy owner column follows', (int)$db->get_var_prepared("SELECT userpkey FROM strabomicro.micro_projectmetadata WHERE id = $1", array($PID)) === $U['editor']['pkey']);
-	check('previous owner can no longer invite (403)', req('POST', "/projects/$PID/members", $OWN, array('email' => $U['dan']['email']))['code'] === 403);
-	check('new owner can invite', req('POST', "/projects/$PID/members", $EDT, array('email' => $U['dan']['email']))['code'] === 200);
-	check('previous owner can now leave', req('DELETE', "/projects/$PID/members/" . $U['owner']['pkey'], $OWN)['code'] === 200);
+	check('nothing changed: same owner, offer still pending', $list['myRole'] === 'owner'
+		&& memberOf($list, $U['editor']['pkey'])['role'] === 'editor' && $list['transferTo']['pkey'] === $U['editor']['pkey']);
+	check('legacy owner column unchanged', (int)$db->get_var_prepared("SELECT userpkey FROM strabomicro.micro_projectmetadata WHERE id = $1", array($PID)) === $U['owner']['pkey']);
 
 } finally {
 	cleanup();

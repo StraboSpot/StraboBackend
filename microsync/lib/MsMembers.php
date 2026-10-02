@@ -233,6 +233,14 @@ class MsMembers {
 	 * micro_projectmetadata.userpkey (the owner for legacy readers) follows.
 	 */
 	public static function acceptTransfer($ctx, $pid) {
+		// HELD (Jason, 2026-10-02): userpkey also keys StraboSamples (sample id
+		// + owner), search, permalinks and My StraboMicro Data, which need a
+		// re-key like Field's ProjectTransfer::rekeySamples. Built in a later
+		// stage; until then accepting is refused and nothing changes.
+		MsStore::project($ctx->db, $pid, $ctx->me);
+		self::pendingTransfer($ctx->db, $pid, $ctx->me); // 404 when nothing is offered to me
+		throw new MsHttpError(409, 'transfer_unavailable', 'Ownership transfer is not available yet.');
+
 		$db = $ctx->db;
 		$db->begin();
 		MsStore::lockProject($db, $pid);
