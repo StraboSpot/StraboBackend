@@ -117,11 +117,18 @@ class MsStore {
 		$db->q("SELECT pg_advisory_xact_lock(hashtext('microsync-push'), $1)", array($pid));
 	}
 
-	/** After accepted changes: move head_seq and mark derived views dirty. */
+	/**
+	 * After accepted changes (a push or a file ref): move head_seq, mark
+	 * derived views dirty, and stamp uploaddate, which the website shows
+	 * (Upload Date, "Last changed" for synced projects) and old apps read as
+	 * the server copy's modifiedtimestamp. The conversion sets head_seq
+	 * itself and keeps the uploaddate it found.
+	 */
 	public static function bumpHead($db, $pid, $seq) {
 		$db->q(
 			"UPDATE strabomicro.micro_projectmetadata
-			    SET head_seq = GREATEST(head_seq, $2), views_dirty_since = COALESCE(views_dirty_since, now())
+			    SET head_seq = GREATEST(head_seq, $2), views_dirty_since = COALESCE(views_dirty_since, now()),
+			        uploaddate = now()
 			  WHERE id = $1",
 			array($pid, $seq));
 	}
