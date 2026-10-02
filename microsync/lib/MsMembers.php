@@ -273,19 +273,11 @@ class MsMembers {
 	 */
 	public static function myInvites($ctx) {
 		$db = $ctx->db;
-		$invites = $db->rows(
-			"SELECT p.id, p.strabo_id, COALESCE(e.body->>'name', p.name) AS name, m.role, m.invited_by,
-			        " . MsDb::iso('m.invited_at') . " AS invited_at,
-			        (SELECT o.user_pkey FROM strabomicro.micro_members o
-			          WHERE o.project_id = p.id AND o.role = 'owner' AND o.state = 'active') AS owner_pkey
-			   FROM strabomicro.micro_members m
-			   JOIN strabomicro.micro_projectmetadata p ON p.id = m.project_id
-			   LEFT JOIN strabomicro.micro_entities e
-			          ON e.project_id = p.id AND e.entity_type = 'project' AND e.entity_id = p.strabo_id
-			  WHERE m.user_pkey = $1 AND m.state = 'invited'
-			    AND p.sync_format = 'entity' AND p.sync_state = 'ready'
-			  ORDER BY m.invited_at, p.id",
-			array($ctx->me));
+		$invites = array();
+		foreach (self::invitationsFor($db, $ctx->me) as $i) {
+			unset($i['token']);
+			$invites[] = $i;
+		}
 		$transfers = $db->rows(
 			"SELECT p.id, p.strabo_id, COALESCE(e.body->>'name', p.name) AS name, o.user_pkey AS owner_pkey
 			   FROM strabomicro.micro_members o
@@ -297,21 +289,7 @@ class MsMembers {
 			  WHERE o.transfer_to = $1 AND o.role = 'owner' AND o.state = 'active'
 			  ORDER BY p.id",
 			array($ctx->me));
-		$users = MsStore::users($db, array_merge(
-			array_column($invites, 'invited_by'), array_column($invites, 'owner_pkey'),
-			array_column($transfers, 'owner_pkey')), true);
-		$outInv = array();
-		foreach ($invites as $r) {
-			$outInv[] = array(
-				'pid'       => (int)$r['id'],
-				'straboId'  => $r['strabo_id'],
-				'name'      => $r['name'],
-				'role'      => $r['role'],
-				'invitedBy' => MsStore::user($users, $r['invited_by']),
-				'owner'     => MsStore::user($users, $r['owner_pkey']),
-				'invitedAt' => $r['invited_at'],
-			);
-		}
+		$users = MsStore::users($db, array_column($transfers, 'owner_pkey'), true);
 		$outTr = array();
 		foreach ($transfers as $r) {
 			$outTr[] = array(
@@ -321,7 +299,7 @@ class MsMembers {
 				'from'     => MsStore::user($users, $r['owner_pkey']),
 			);
 		}
-		MsHttp::json(200, array('invitations' => $outInv, 'transfers' => $outTr));
+		MsHttp::json(200, array('invitations' => $invites, 'transfers' => $outTr));
 	}
 
 	/**
@@ -329,38 +307,87 @@ class MsMembers {
 	 * app needs to download the project as a synced copy (17f).
 	 */
 	public static function acceptInvite($ctx, $pid) {
-		$db = $ctx->db;
-		$db->begin();
-		MsStore::lockProject($db, $pid);
-		$p = self::invitedProject($db, $pid, $ctx->me);
-		self::refuseCopyOwner($db, $p, $ctx->me, 'has_copy',
-			'You already have your own project with the same id on StraboSpot, so you cannot join this one.');
-		$db->q(
-			"UPDATE strabomicro.micro_members SET state = 'active', responded_at = now()
-			  WHERE project_id = $1 AND user_pkey = $2",
-			array($pid, $ctx->me));
-		$db->commit();
-		MsHttp::json(200, array(
-			'pid'      => $pid,
-			'straboId' => $p['strabo_id'],
-			'name'     => self::projectName($db, $p),
-			'role'     => $p['invite_role'],
-			'headSeq'  => (int)$p['head_seq'],
-		));
+		MsHttp::json(200, self::acceptInviteFor($ctx->db, $ctx->me, $pid));
 	}
 
 	/** POST invites/{pid}/decline */
 	public static function declineInvite($ctx, $pid) {
-		$db = $ctx->db;
+		self::declineInviteFor($ctx->db, $ctx->me, $pid);
+		MsHttp::json(200, array('status' => 'declined'));
+	}
+
+	/**
+	 * Accept my invitation (the API and the website, micro_invitation.php).
+	 * $token, when given, must match the invitation's token (website forms).
+	 * Throws MsHttpError.
+	 */
+	public static function acceptInviteFor($db, $me, $pid, $token = null) {
 		$db->begin();
 		MsStore::lockProject($db, $pid);
-		self::invitedProject($db, $pid, $ctx->me);
+		$p = self::invitedProject($db, $pid, $me, $token);
+		self::refuseCopyOwner($db, $p, $me, 'has_copy',
+			'You already have your own project with the same id on StraboSpot, so you cannot join this one.');
+		$db->q(
+			"UPDATE strabomicro.micro_members SET state = 'active', responded_at = now()
+			  WHERE project_id = $1 AND user_pkey = $2",
+			array($pid, $me));
+		$db->commit();
+		return array(
+			'pid'      => (int)$pid,
+			'straboId' => $p['strabo_id'],
+			'name'     => self::projectName($db, $p),
+			'role'     => $p['invite_role'],
+			'headSeq'  => (int)$p['head_seq'],
+		);
+	}
+
+	/** Decline my invitation (the API and the website). Throws MsHttpError. */
+	public static function declineInviteFor($db, $me, $pid, $token = null) {
+		$db->begin();
+		MsStore::lockProject($db, $pid);
+		$p = self::invitedProject($db, $pid, $me, $token);
 		$db->q(
 			"UPDATE strabomicro.micro_members SET state = 'declined', responded_at = now()
 			  WHERE project_id = $1 AND user_pkey = $2",
-			array($pid, $ctx->me));
+			array($pid, $me));
 		$db->commit();
-		MsHttp::json(200, array('status' => 'declined'));
+		return array('pid' => (int)$pid, 'name' => self::projectName($db, $p));
+	}
+
+	/**
+	 * My pending invitations to synced, ready projects (GET invites and the
+	 * website's My StraboMicro Data page): pid, straboId, name, role,
+	 * invitedBy, owner, invitedAt, plus the token for website forms.
+	 */
+	public static function invitationsFor($db, $me) {
+		$invites = $db->rows(
+			"SELECT p.id, p.strabo_id, COALESCE(e.body->>'name', p.name) AS name, m.role, m.invited_by, m.invite_token,
+			        " . MsDb::iso('m.invited_at') . " AS invited_at,
+			        (SELECT o.user_pkey FROM strabomicro.micro_members o
+			          WHERE o.project_id = p.id AND o.role = 'owner' AND o.state = 'active') AS owner_pkey
+			   FROM strabomicro.micro_members m
+			   JOIN strabomicro.micro_projectmetadata p ON p.id = m.project_id
+			   LEFT JOIN strabomicro.micro_entities e
+			          ON e.project_id = p.id AND e.entity_type = 'project' AND e.entity_id = p.strabo_id
+			  WHERE m.user_pkey = $1 AND m.state = 'invited'
+			    AND p.sync_format = 'entity' AND p.sync_state = 'ready'
+			  ORDER BY m.invited_at, p.id",
+			array($me));
+		$users = MsStore::users($db, array_merge(array_column($invites, 'invited_by'), array_column($invites, 'owner_pkey')), true);
+		$out = array();
+		foreach ($invites as $r) {
+			$out[] = array(
+				'pid'       => (int)$r['id'],
+				'straboId'  => $r['strabo_id'],
+				'name'      => $r['name'],
+				'role'      => $r['role'],
+				'invitedBy' => MsStore::user($users, $r['invited_by']),
+				'owner'     => MsStore::user($users, $r['owner_pkey']),
+				'invitedAt' => $r['invited_at'],
+				'token'     => $r['invite_token'],
+			);
+		}
+		return $out;
 	}
 
 	// -----------------------------------------------------------------------
@@ -421,14 +448,14 @@ class MsMembers {
 	}
 
 	/** A project with my pending invitation (404 otherwise, like any project I cannot see). */
-	private static function invitedProject($db, $pid, $me) {
+	private static function invitedProject($db, $pid, $me, $token = null) {
 		$p = $db->row(
-			"SELECT p.id, p.strabo_id, p.name, p.head_seq, m.role AS invite_role
+			"SELECT p.id, p.strabo_id, p.name, p.head_seq, m.role AS invite_role, m.invite_token
 			   FROM strabomicro.micro_projectmetadata p
 			   JOIN strabomicro.micro_members m ON m.project_id = p.id AND m.user_pkey = $2
 			  WHERE p.id = $1 AND m.state = 'invited' AND p.sync_format = 'entity' AND p.sync_state = 'ready'",
 			array($pid, $me));
-		if ($p === null) {
+		if ($p === null || ($token !== null && $p['invite_token'] !== $token)) {
 			$db->rollback();
 			throw new MsHttpError(404, 'not_found', 'No pending invitation for this project');
 		}

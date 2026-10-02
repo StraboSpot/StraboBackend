@@ -14,10 +14,21 @@ include("logincheck.php");
 include("prepare_connections.php");
 require_once(__DIR__ . '/microdb/lib/permalink.php');
 require_once(__DIR__ . '/microdb/lib/sync_guard.php');
+require_once(__DIR__ . '/microdb/lib/micro_members_web.php');
 
 $credentials = $_SESSION['credentials'];
 $microrows = $db->get_results_prepared("SELECT id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson, sync_format FROM micro_projectmetadata WHERE userpkey = $1 AND " . micro_sync_visible_sql() . " ORDER BY micro_projectmetadata.uploaddate DESC NULLS LAST, id DESC", array($userpkey));
 $total=0;
+
+// Collaboration invitations (synced projects); a problem here never hides the page
+$microInvites = array();
+try {
+	$microInvites = MsMembers::invitationsFor(micro_members_db($db), (int)$userpkey);
+} catch (Throwable $e) {
+	error_log('my_micro_data invitations: ' . $e->getMessage());
+}
+$microInviteResult = isset($_SESSION['micro_invite_result']) ? $_SESSION['micro_invite_result'] : null;
+unset($_SESSION['micro_invite_result']);
 
 include("adminkeys.php");
 
@@ -80,6 +91,58 @@ include("includes/mheader.php");
 							<section id="content">
 
 <?php
+if($microInviteResult !== null){
+	?>
+		<div style="border:1px solid <?php echo $microInviteResult['ok'] ? '#2e7d32' : '#c0392b'?>;padding:10px 14px;margin-bottom:20px;"><?php echo htmlspecialchars($microInviteResult['text'])?></div>
+	<?php
+}
+if(count($microInvites) > 0){
+	?>
+		<div>You have been invited to collaborate on the following StraboMicro projects:</div>
+		<div class="table-wrapper">
+			<table class="myDataTable">
+				<thead>
+					<tr>
+						<th>Project</th>
+						<th class="hideSmall">Role</th>
+						<th class="hideSmall">Invited by</th>
+						<th></th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+<?php
+	foreach($microInvites as $inv){
+		$by = $inv['invitedBy'] !== null ? $inv['invitedBy']['name'] . (isset($inv['invitedBy']['email']) ? ' (' . $inv['invitedBy']['email'] . ')' : '') : '';
+?>
+					<tr>
+						<td><?php echo htmlspecialchars($inv['name'])?></td>
+						<td class="hideSmall"><?php echo htmlspecialchars(micro_role_label($inv['role']))?></td>
+						<td class="hideSmall"><?php echo htmlspecialchars($by)?></td>
+						<td>
+							<form method="post" action="/micro_invitation" style="margin:0;">
+								<input type="hidden" name="pid" value="<?php echo (int)$inv['pid']?>">
+								<input type="hidden" name="token" value="<?php echo htmlspecialchars((string)$inv['token'])?>">
+								<button type="submit" name="action" value="accept" class="button primary fit small">Accept</button>
+							</form>
+						</td>
+						<td>
+							<form method="post" action="/micro_invitation" style="margin:0;">
+								<input type="hidden" name="pid" value="<?php echo (int)$inv['pid']?>">
+								<input type="hidden" name="token" value="<?php echo htmlspecialchars((string)$inv['token'])?>">
+								<button type="submit" name="action" value="decline" class="button fit small">Decline</button>
+							</form>
+						</td>
+					</tr>
+<?php
+	}
+?>
+				</tbody>
+			</table>
+		</div>
+		<div style="padding-bottom:40px;"></div>
+	<?php
+}
 if(isset($_GET['deleteblocked'])){
 	?>
 		<div style="border:1px solid #c0392b;padding:10px 14px;margin-bottom:20px;">This project is shared with other people and cannot be deleted here. Manage it from StraboMicro.</div>
@@ -160,6 +223,9 @@ if(count($microrows)==0){
 							<option value="view">View</option>
 							<option value="download">Download</option>
 							<option value="share">Share</option>
+<?php if($mr->sync_format === 'entity'){ ?>
+							<option value="collaborators">Collaborators</option>
+<?php } ?>
 							<option value="doi">Get DOI</option>
 							<option value="delete">Delete</option>
 						</select>
