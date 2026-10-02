@@ -729,7 +729,7 @@ if($_SESSION['userpkey']=="3"){
 					<a href="#" data-membership-required="0" >Search</a>
 					<div class='wsite-menu-wrap' style='display:none'>
 						<ul class='wsite-menu'>
-							<li id=''><a href='/search' ><span class='wsite-menu-title'>Search Strabo Field Data</span></a></li>
+							<li id=''><a href='/strabosearch/' ><span class='wsite-menu-title'>Search All Strabo Data</span></a></li>
 							<li id=''><a href='/publicmaps' ><span class='wsite-menu-title'>Search Public Maps</span></a></li>
 						</ul>
 					</div>
