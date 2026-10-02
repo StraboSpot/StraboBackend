@@ -141,8 +141,8 @@ include 'includes/mheader.php';
 									<p>Download logo files for your posters and presentations.</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
-									<a href="/fullsearch"><span class="icon solid alt major fa-paper-plane"></span></a>
-									<h3><a href="/fullsearch">Search</a></h3>
+									<a href="/strabosearch/"><span class="icon solid alt major fa-paper-plane"></span></a>
+									<h3><a href="/strabosearch/">Search</a></h3>
 									<p>Review public datasets in StraboField, Micro, and Experimental.</p>
 								</section>
 								<section class="col-4 col-6-medium col-12-xsmall">
