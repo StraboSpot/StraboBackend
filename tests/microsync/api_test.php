@@ -300,6 +300,16 @@ try {
 	check('contributor creates spot on owner micrograph', st(one($PID, $CON, array('op' => 'create', 'type' => 'spot', 'id' => 'PC', 'parentType' => 'micrograph', 'parentId' => 'M1', 'body' => array('name' => 'mine')))) === 'accepted');
 	check('contributor edits own spot', st(one($PID, $CON, array('op' => 'update', 'type' => 'spot', 'id' => 'PC', 'baseVersion' => 1, 'fields' => array('name' => 'mine2')))) === 'accepted');
 	check('contributor edits owner spot -> forbidden', st(one($PID, $CON, array('op' => 'update', 'type' => 'spot', 'id' => 'P1', 'baseVersion' => 1, 'fields' => array('name' => 'x')))) === 'forbidden/contributor_not_creator');
+	// Adding a child reorders the parent: a childOrder-only update is not an edit (v3 §4.3)
+	one($PID, $OWN, array('op' => 'create', 'type' => 'sample', 'id' => 'SO', 'parentType' => 'dataset', 'parentId' => 'D1', 'body' => array('label' => 'SO')));
+	one($PID, $OWN, array('op' => 'create', 'type' => 'micrograph', 'id' => 'MO', 'parentType' => 'sample', 'parentId' => 'SO', 'body' => array('name' => 'MO')));
+	one($PID, $OWN, array('op' => 'create', 'type' => 'spot', 'id' => 'PO1', 'parentType' => 'micrograph', 'parentId' => 'MO', 'body' => array('name' => 'owner spot')));
+	one($PID, $CON, array('op' => 'create', 'type' => 'spot', 'id' => 'PO2', 'parentType' => 'micrograph', 'parentId' => 'MO', 'body' => array('name' => 'contributor spot')));
+	check('contributor sends owner micrograph child order -> accepted', st(one($PID, $CON, array('op' => 'update', 'type' => 'micrograph', 'id' => 'MO', 'childOrder' => array('spots' => array('PO2', 'PO1'))))) === 'accepted');
+	check('contributor sends project child order -> accepted', st(one($PID, $CON, array('op' => 'update', 'type' => 'project', 'id' => $SID, 'childOrder' => array('datasets' => array('D1'))))) === 'accepted');
+	check('contributor child order WITH fields on owner micrograph -> forbidden', st(one($PID, $CON, array('op' => 'update', 'type' => 'micrograph', 'id' => 'MO', 'baseVersion' => 1, 'fields' => array('name' => 'x'), 'childOrder' => array('spots' => array('PO1', 'PO2'))))) === 'forbidden/contributor_not_creator');
+	check('contributor moves owner spot -> forbidden', st(one($PID, $CON, array('op' => 'update', 'type' => 'spot', 'id' => 'P1', 'baseVersion' => 1, 'parentType' => 'micrograph', 'parentId' => 'M1'))) === 'forbidden/contributor_not_creator');
+	check('viewer child order -> forbidden', st(one($PID, $VIE, array('op' => 'update', 'type' => 'micrograph', 'id' => 'MO', 'childOrder' => array('spots' => array('PO1', 'PO2'))))) === 'forbidden/viewer');
 	check('contributor edits settings -> forbidden', st(one($PID, $CON, array('op' => 'update', 'type' => 'project', 'id' => $SID, 'baseVersion' => 1, 'fields' => array('name' => 'x')))) === 'forbidden/settings');
 	check('contributor deletes owner micrograph -> forbidden', st(one($PID, $CON, array('op' => 'delete', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 3))) === 'forbidden/contributor_not_creator');
 	check('editor edits settings', st(one($PID, $EDT, array('op' => 'update', 'type' => 'project', 'id' => $SID, 'baseVersion' => 1, 'fields' => array('name' => 'Renamed')))) === 'accepted');

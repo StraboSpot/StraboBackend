@@ -12,7 +12,10 @@
  *
  *              Rules settled while implementing (2026-09-30):
  *              - childOrder-only updates need no baseVersion, never
- *                conflict, and do not bump the version (v3 §4.3).
+ *                conflict, and do not bump the version (v3 §4.3). Any
+ *                writer may send one, also a Contributor for someone
+ *                else's entity (adding a child reorders the parent).
+ *                Removed ids are kept, unknown ids dropped (filterLiveChildren).
  *              - Delete tombstones the entity and every live descendant,
  *                including micrographs nested by parentID; each gets
  *                deleted_root = the deleted entity. A Contributor may delete
@@ -342,14 +345,18 @@ class MsSync {
 		if (!MsStore::isLive($row)) {
 			return array('type' => $type, 'id' => $id) + self::deletedFields($db, $row);
 		}
-		$denied = self::writeDenied($ctx, $type, $row);
-		if ($denied !== null) {
-			return self::forbidden($type, $id, $denied);
-		}
-
 		$fields = MsHttp::prop($c, 'fields');
 		$orderIn = MsHttp::prop($c, 'childOrder');
 		$isMove = is_object($c) && (property_exists($c, 'parentId') || property_exists($c, 'parentType'));
+		// A childOrder-only update is not an edit of the entity (v3 §4.3): a
+		// Contributor adding a spot to someone else's micrograph also sends
+		// that micrograph's new child order, which must not be refused
+		if ($fields !== null || $isMove) {
+			$denied = self::writeDenied($ctx, $type, $row);
+			if ($denied !== null) {
+				return self::forbidden($type, $id, $denied);
+			}
+		}
 		if ($fields === null && $orderIn === null && !$isMove) {
 			throw new MsInvalid('schema', 'an update needs fields, childOrder, or a new parent');
 		}
