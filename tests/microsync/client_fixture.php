@@ -3,7 +3,8 @@
  * File: client_fixture.php
  * Description: Helper for the StraboMicro2 client's sync tests (dev only).
  *              Commands, each printing one JSON document:
- *                token                fixture owner's pkey and a 2-hour JWT
+ *                token [email]        pkey and a 2-hour JWT of the fixture owner,
+ *                                     or of another @test.strabospot.org user
  *                build <pid>          run the worker for a project now
  *                assembled <pid>      the project as the store assembles it
  *                                     (project.json, point counts, refs)
@@ -42,12 +43,17 @@ $cmd = isset($argv[1]) ? $argv[1] : '';
 $pid = isset($argv[2]) ? (int)$argv[2] : 0;
 
 if ($cmd === 'token') {
-	$pkey = (int)$db->get_var_prepared("SELECT pkey FROM users WHERE email = $1 AND deleted = false", array($EMAIL));
-	if ($pkey <= 0) {
-		fwrite(STDERR, "Missing fixture user $EMAIL (run tests/collaboration/setup_test_data.php)\n");
+	$email = isset($argv[2]) ? (string)$argv[2] : $EMAIL;
+	if (substr($email, -strlen('@test.strabospot.org')) !== '@test.strabospot.org') {
+		fwrite(STDERR, "Only @test.strabospot.org fixture users\n");
 		exit(2);
 	}
-	out(array('pkey' => $pkey, 'email' => $EMAIL, 'token' => token($pkey)));
+	$pkey = (int)$db->get_var_prepared("SELECT pkey FROM users WHERE email = $1 AND deleted = false", array($email));
+	if ($pkey <= 0) {
+		fwrite(STDERR, "Missing fixture user $email (run tests/collaboration/setup_test_data.php)\n");
+		exit(2);
+	}
+	out(array('pkey' => $pkey, 'email' => $email, 'token' => token($pkey)));
 } elseif ($cmd === 'build' && $pid > 0) {
 	out(array('result' => build_now($pid)));
 } elseif ($cmd === 'assembled' && $pid > 0) {
