@@ -202,6 +202,14 @@ try {
 
 	// -----------------------------------------------------------------------
 	section('Push: creates');
+	// uploaddate (website date, old apps' modifiedtimestamp) follows accepted changes
+	$oldDate = function () use ($db, $PID) {
+		$db->prepare_query("UPDATE strabomicro.micro_projectmetadata SET uploaddate = '2020-01-01' WHERE id = $1", array($PID));
+	};
+	$dateMoved = function () use ($db, $PID) {
+		return $db->get_var_prepared("SELECT uploaddate > now() - interval '1 minute' FROM strabomicro.micro_projectmetadata WHERE id = $1", array($PID)) === 't';
+	};
+	$oldDate();
 	$r = push($PID, $OWN, array(
 		array('op' => 'create', 'type' => 'project', 'id' => $SID, 'body' => array('name' => 'Sync test', 'presetKeyBindings' => array('1' => 'x'))),
 		array('op' => 'create', 'type' => 'dataset', 'id' => 'D1', 'parentType' => 'project', 'parentId' => $SID, 'body' => array('name' => 'D1')),
@@ -219,6 +227,9 @@ try {
 	check('initial tree accepted', $ok, $r['raw']);
 	$head1 = $r['body']['headSeq'];
 	check('headSeq = seq of last change', $head1 === $r['body']['results'][6]['seq']);
+	check('accepted push stamps uploaddate', $dateMoved());
+	$oldDate();
+	check('push with nothing accepted leaves uploaddate', st(one($PID, $OWN, array('op' => 'create', 'type' => 'spot', 'id' => 'PZ', 'parentType' => 'micrograph', 'parentId' => 'NOPE', 'body' => new stdClass()))) === 'invalid/parent_missing' && !$dateMoved());
 
 	check('child collection in body -> schema', st(one($PID, $OWN, array('op' => 'create', 'type' => 'micrograph', 'id' => 'MB', 'parentType' => 'sample', 'parentId' => 'S1',
 		'body' => array('spots' => array())))) === 'invalid/schema');
@@ -549,7 +560,9 @@ try {
 
 	// -----------------------------------------------------------------------
 	section('Refs');
+	$oldDate();
 	$r = req('PUT', "/projects/$PID/refs", $OWN, array('entityType' => 'micrograph', 'entityId' => 'M1', 'role' => 'image', 'sha256' => $sha));
+	check('changed file ref stamps uploaddate', $dateMoved());
 	check('set image ref -> logged change', $r['code'] === 200 && $r['body']['changed'] === true, $r['raw']);
 	$refSeq = $r['body']['seq'];
 	check('same ref again -> unchanged', req('PUT', "/projects/$PID/refs", $OWN, array('entityType' => 'micrograph', 'entityId' => 'M1', 'role' => 'image', 'sha256' => $sha))['body']['changed'] === false);

@@ -16,7 +16,7 @@ require_once(__DIR__ . '/microdb/lib/permalink.php');
 require_once(__DIR__ . '/microdb/lib/sync_guard.php');
 
 $credentials = $_SESSION['credentials'];
-$microrows = $db->get_results_prepared("SELECT id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson FROM micro_projectmetadata WHERE userpkey = $1 AND " . micro_sync_visible_sql() . " ORDER BY id DESC", array($userpkey));
+$microrows = $db->get_results_prepared("SELECT id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson, sync_format FROM micro_projectmetadata WHERE userpkey = $1 AND " . micro_sync_visible_sql() . " ORDER BY micro_projectmetadata.uploaddate DESC NULLS LAST, id DESC", array($userpkey));
 $total=0;
 
 include("adminkeys.php");
@@ -136,7 +136,7 @@ if(count($microrows)==0){
 									<h3><?php echo $mr->name?></h3>
 									<div style="margin-top:-5px" class="myDataTable">
 										<ul class="actions MyDataUL">
-											<li><h3>Upload Date: <?php echo $mr->uploaddate?></li>
+											<li><h3><?php echo $mr->sync_format === 'entity' ? 'Last Changed' : 'Upload Date'?>: <?php echo $mr->uploaddate?></li>
 											<li>
 												<span>Public? </span><label class="switch"><input type="checkbox" name="switch_<?php echo $projectid?>" id="switch_<?php echo $projectid?>" onclick="projectMicroPub(<?php echo $projectid?>)"<?php echo $checked?>><div class="slider sliderFront"></div></label>
 											</li>
