@@ -494,7 +494,7 @@ class StraboMicro
 											WHEN modifiedtimestamp ~ '^[0-9]+$' THEN modifiedtimestamp::bigint
 											ELSE (extract(epoch from modifiedtimestamp::timestamptz) * 1000)::bigint
 										END as modifiedtimestamp,
-										TO_CHAR(uploaddate, 'mm/dd/yyyy HH:MMPM TZ OF') as uploaddate
+										TO_CHAR(uploaddate, 'mm/dd/yyyy HH:MIPM TZ OF') as uploaddate
 										from micro_projectmetadata where userpkey = $this->userpkey and ".micro_sync_visible_sql()." order by micro_projectmetadata.uploaddate desc nulls last, id desc");
 		foreach($rows as $row){
 			$p = new stdClass();
