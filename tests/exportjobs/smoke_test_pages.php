@@ -267,13 +267,12 @@ $retBad = login_return_path('https://evil.example/') === null && login_return_pa
 check('login return path: same-site relative paths accepted, absolute/scheme-relative/control-char/login-loop/empty rejected', $retOk && $retBad);
 list($c, , $b) = http('GET', '/login.php?uri=' . rawurlencode('https://evil.example/'), null);
 check('GET /login.php?uri=<absolute url> renders the login form (200), no redirect', $c === 200 && strpos($b, 'submit_login') !== false, "$c");
-// HOLD 0d8555a (Jason 2026-09-02, "hide export system until ready for public testing"): the
-// menu entries and the My Field Data "Custom export…" button are commented out. FULL LAUNCH =
-// revert 0d8555a and flip these two checks back to asserting the links are present.
+// FULL LAUNCH (Jason 2026-10-02): hold 0d8555a reverted, so the menu entries and the My Field
+// Data "Custom export…" button are back.
 list($c, , $b) = http('GET', '/my_exports', $own);
-check('HOLD 0d8555a: account menu hides Export Builder + My Exports (flip at full launch)', strpos($b, '<li><a href="/export_builder">') === false && strpos($b, '<li><a href="/my_exports">') === false && strpos($b, 'my_samples">My Samples</a></li>') !== false);
+check('account menu lists Export Builder + My Exports', strpos($b, '<li><a href="/export_builder">Export Builder</a></li>') !== false && strpos($b, '<li><a href="/my_exports">My Exports</a></li>') !== false && strpos($b, 'my_samples">My Samples</a></li>') !== false);
 list($c, , $b) = http('GET', '/my_field_data', $own);
-check('HOLD 0d8555a: My Field Data toolbar has + New Project, Custom export… hidden, floating (Add Project) gone', $c === 200 && strpos($b, 'class="mfd-toolbar"') !== false && strpos($b, '/new_project" class="button primary small">+ New Project</a>') !== false && strpos($b, '/export_builder" class="button small"') === false && strpos($b, '(Add Project)') === false, "$c");
+check('My Field Data toolbar has + New Project and Custom export…, floating (Add Project) gone', $c === 200 && strpos($b, 'class="mfd-toolbar"') !== false && strpos($b, '/new_project" class="button primary small">+ New Project</a>') !== false && strpos($b, '/export_builder" class="button small"') !== false && strpos($b, '(Add Project)') === false, "$c");
 list($c, , $b) = http('GET', '/my_exports?new=' . UUID::v4(), $own);
 $me = embedded($b, 'MY_EXPORTS');
 check('My Exports renders with the shell + notice payload', $c === 200 && strpos($b, '<h2>My Exports</h2>') !== false && strpos($b, 'my_exports.js') !== false && $me && $me['notice']['kind'] === 'new', "$c");
