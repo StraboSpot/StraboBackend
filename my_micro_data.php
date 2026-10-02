@@ -16,7 +16,7 @@ require_once(__DIR__ . '/microdb/lib/permalink.php');
 require_once(__DIR__ . '/microdb/lib/sync_guard.php');
 
 $credentials = $_SESSION['credentials'];
-$microrows = $db->get_results_prepared("SELECT id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson, sync_format FROM micro_projectmetadata WHERE userpkey = $1 AND " . micro_sync_visible_sql() . " ORDER BY id DESC", array($userpkey));
+$microrows = $db->get_results_prepared("SELECT id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson, sync_format FROM micro_projectmetadata WHERE userpkey = $1 AND " . micro_sync_visible_sql() . " ORDER BY micro_projectmetadata.uploaddate DESC NULLS LAST, id DESC", array($userpkey));
 $total=0;
 
 include("adminkeys.php");

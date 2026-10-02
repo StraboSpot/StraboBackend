@@ -26,7 +26,7 @@ $projectrows = $neodb->get_results("match (p:Project {userpkey:$userpkey}) optio
 //September 21, 2021, 8:48 pm UTC +00:00
 
 require_once(__DIR__ . '/microdb/lib/sync_guard.php');
-$microrows = $db->get_results_prepared("select id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson, sync_format from micro_projectmetadata where userpkey = $1 and " . micro_sync_visible_sql() . " order by id desc", array($userpkey));
+$microrows = $db->get_results_prepared("select id, strabo_id, name, to_char(uploaddate, 'Month DD, YYYY, HH:MI:SS pm TZ') as uploaddate, ispublic, projectjson, sync_format from micro_projectmetadata where userpkey = $1 and " . micro_sync_visible_sql() . " order by micro_projectmetadata.uploaddate desc nulls last, id desc", array($userpkey));
 
 $experimentalrows = $db->get_results_prepared("select pkey, name, notes, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, ispublic from straboexp.project where userpkey = $1 order by modified_timestamp desc", array($userpkey));
 
