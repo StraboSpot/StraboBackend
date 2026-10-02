@@ -158,13 +158,12 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
   await page.waitForSelector('.me-empty');
   check('confirm clears them -> empty state with the builder link', /Build one/.test(await page.locator('.me-empty').textContent()));
   // ---- 7. M6 doors: menu, My Field Data toolbar, StraboSearch Export… ---------
-  // HOLD 0d8555a (Jason 2026-09-02): menu entries + My Field Data button are commented out
-  // until public testing. FULL LAUNCH = revert 0d8555a and flip these two checks back.
-  check('HOLD 0d8555a: account menu hides Export Builder + My Exports (flip at full launch)', await page.evaluate(() => !document.querySelector('#header a[href="/export_builder"]') && !document.querySelector('#header a[href="/my_exports"]') && !!document.querySelector('#header a[href="/my_samples"]')));
+  // FULL LAUNCH (Jason 2026-10-02): hold 0d8555a reverted, menu entries + My Field Data button back.
+  check('account menu lists Export Builder + My Exports', await page.evaluate(() => !!document.querySelector('#header a[href="/export_builder"]') && !!document.querySelector('#header a[href="/my_exports"]') && !!document.querySelector('#header a[href="/my_samples"]')));
   await page.goto(BASE + '/my_field_data', { waitUntil: 'load' });
-  check('HOLD 0d8555a: My Field Data toolbar has + New Project (primary), Custom export… hidden', await page.evaluate(() => {
+  check('My Field Data toolbar has + New Project (primary) and Custom export…', await page.evaluate(() => {
     const tb = document.querySelector('header.major + .mfd-toolbar');
-    return !!tb && tb.querySelector('a[href="/new_project"].primary') !== null && tb.querySelector('a[href="/export_builder"]') === null && !/\(Add Project\)/.test(document.body.textContent);
+    return !!tb && tb.querySelector('a[href="/new_project"].primary') !== null && tb.querySelector('a[href="/export_builder"]') !== null && !/\(Add Project\)/.test(document.body.textContent);
   }));
   // Globe browse (Jason 2026-09-02): /globe -> ?view=globe runs an empty-criteria browse;
   // that is not an export scope, so Export… stays off with a tooltip that says why.
