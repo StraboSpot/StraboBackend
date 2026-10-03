@@ -253,7 +253,7 @@ try {
 	if ($P !== null) {
 		if ($ms->val("SELECT sync_state FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P)) === 'adopting') MsAdopt::drop($ms, $P);
 		if ($ms->val("SELECT sync_format FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P)) === 'entity') $conv->revert($P);
-		legacy('jwt', 'delete', $U, '-', $sid);
+		delete_synced($db, $U, $sid);
 		$db->prepare_query("DELETE FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P));
 		if (is_dir("$FILES/$P")) exec('rm -rf ' . escapeshellarg("$FILES/$P"));
 		if (is_dir(MsAdopt::archiveDir($P))) exec('rm -rf ' . escapeshellarg(MsAdopt::archiveDir($P)));

@@ -58,8 +58,9 @@ class MsSmz {
 	public static function syncedRow($strabodb, $pid) {
 		$ms = new MsDb($strabodb);
 		$row = $ms->row(
-			"SELECT id, strabo_id, name, userpkey, sync_format, sync_state
-			   FROM strabomicro.micro_projectmetadata WHERE id = $1",
+			"SELECT p.id, p.strabo_id, p.name, p.userpkey, p.sync_format, p.sync_state
+			   FROM strabomicro.micro_projectmetadata p
+			  WHERE p.id = $1 AND NOT " . MsDelete::deletedSql('p'),
 			array((int)$pid));
 		if ($row === null || $row['sync_format'] !== 'entity' || $row['sync_state'] !== 'ready') {
 			return null;

@@ -18,6 +18,8 @@ RewriteRule ^exportjobs_data(/|$) - [F,L]
 RewriteRule ^(straboMicroFiles|microview/smzFiles)/_staging(/|$) - [F,L]
 # Pre-conversion project.zip archives and journals (microsync/tools/convert.php): never served
 RewriteRule ^(straboMicroFiles|microview/smzFiles)/_archive(/|$) - [F,L]
+# Folders of synced projects deleted by their owner (restorable 30 days, microsync/lib/MsDelete.php): never served
+RewriteRule ^(straboMicroFiles|microview/smzFiles)/_deleted(/|$) - [F,L]
 RewriteRule ^(straboMicroFiles|microview/smzFiles)/[0-9]+/blobs(/|$) - [F,L]
 RewriteRule ^microsync_data(/|$) - [F,L]
 # Synced StraboMicro projects have no static project.zip; the app still asks for that URL

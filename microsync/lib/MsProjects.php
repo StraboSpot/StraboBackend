@@ -35,6 +35,7 @@ class MsProjects {
 			   LEFT JOIN strabomicro.micro_entities e
 			          ON e.project_id = p.id AND e.entity_type = 'project' AND e.entity_id = p.strabo_id
 			  WHERE m.user_pkey = $1 AND m.state = 'active' AND (p.sync_format = 'entity' OR p.sync_state = 'adopting')
+			    AND NOT " . MsDelete::deletedSql('p') . "
 			  ORDER BY p.id",
 			array($ctx->me));
 		if ($includeLegacy) {
@@ -98,6 +99,12 @@ class MsProjects {
 			"SELECT id, sync_format, sync_state FROM strabomicro.micro_projectmetadata
 			  WHERE userpkey = $1 AND strabo_id = $2 ORDER BY id LIMIT 1",
 			array($ctx->me, $straboId));
+		$deleted = $existing === null ? null : MsDelete::tombstone($db, (int)$existing['id']);
+		if ($deleted !== null) {
+			// Deleted from StraboSpot (17ac): restore it from the website first
+			$db->rollback();
+			throw MsDelete::deletedError($db, $deleted, $ctx->me);
+		}
 		if ($existing !== null) {
 			$db->rollback();
 			throw new MsHttpError(409, 'exists', 'You already have a project with this id on the server',
@@ -115,6 +122,24 @@ class MsProjects {
 		$db->commit();
 
 		MsHttp::json(201, array('pid' => $pid, 'straboId' => $straboId, 'syncState' => 'initializing', 'headSeq' => 0));
+	}
+
+	/**
+	 * DELETE projects/{pid}: the owner deletes the project from StraboSpot
+	 * (17p, 17ac). Kept 30 days, hidden, restorable by the owner from the
+	 * website; members' copies are told on their next call (410
+	 * project_deleted). The app pushes the owner's unsynced changes first.
+	 */
+	public static function delete($ctx, $pid) {
+		$p = MsStore::project($ctx->db, $pid, $ctx->me);
+		MsStore::requireRole($p, array('owner'));
+		$t = MsDelete::softDelete($ctx->strabodb, $ctx->db, $pid, $ctx->me);
+		MsHttp::json(200, array(
+			'deleted'         => true,
+			'pid'             => (int)$pid,
+			'deletedAt'       => $t['deleted_at'],
+			'restorableUntil' => $t['restorable_until'],
+		));
 	}
 
 	/** POST projects/{pid}/ready: the initial upload has finished. Owner only. */

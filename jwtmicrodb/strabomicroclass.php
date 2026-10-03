@@ -5123,11 +5123,15 @@ class StraboMicro
 	 */
 	public function deleteProject($projectid) {
 
-		// Shared synced projects are managed from the app (microsync).
+		// Synced projects: the 30-day delete when the owner has it to
+		// themselves, refused when shared (microdb/lib/sync_guard.php, v3 17ac).
 		require_once __DIR__ . '/../microdb/lib/sync_guard.php';
-		$syncRefusal = micro_sync_delete_refusal($this->db, $this->userpkey, $projectid);
-		if($syncRefusal !== null){
-			return $syncRefusal;
+		$syncResult = micro_sync_delete($this->db, $this->userpkey, $projectid);
+		if($syncResult === true){
+			return null;
+		}
+		if($syncResult !== null){
+			return $syncResult;
 		}
 		$pkey = $this->deleteProjectRows($projectid);
 		if($pkey != ""){

@@ -297,7 +297,7 @@ try {
 			if ($why !== null) echo "  (cleanup: revert of #$pid: $why)\n";
 		}
 		$sid = $ms->val("SELECT strabo_id FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pid));
-		legacy('jwt', 'delete', $U, '-', $sid);
+		delete_synced($db, $U, $sid);
 		$db->prepare_query("DELETE FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pid));
 		if (is_dir("$FILES/$pid")) exec('rm -rf ' . escapeshellarg("$FILES/$pid"));
 		if (is_dir(MsConvert::archiveDir($pid))) exec('rm -rf ' . escapeshellarg(MsConvert::archiveDir($pid)));
