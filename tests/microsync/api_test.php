@@ -377,6 +377,23 @@ try {
 	$r = one($PID, $EDT, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'M1', 'cascade' => true));
 	check('cascade restore brings back all 6', st($r) === 'accepted' && $r['cascaded'] === 6 && $r['version'] === 5, json_encode($r));
 	check('restore live -> not_deleted', st(one($PID, $EDT, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'M1'))) === 'invalid/not_deleted');
+	// A Contributor restores what they deleted themselves and created (17w)
+	check('contributor creates a micrograph with a spot', st(one($PID, $CON, array('op' => 'create', 'type' => 'micrograph', 'id' => 'MK',
+		'parentType' => 'sample', 'parentId' => 'S1', 'body' => array('name' => 'Mine')))) === 'accepted'
+		&& st(one($PID, $CON, array('op' => 'create', 'type' => 'spot', 'id' => 'PK', 'parentType' => 'micrograph', 'parentId' => 'MK',
+			'body' => array('name' => 'Mine too')))) === 'accepted');
+	$mkV = (int)$db->get_var_prepared("SELECT version FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'MK'", array($PID));
+	check('contributor deletes it (cascade)', st(one($PID, $CON, array('op' => 'delete', 'type' => 'micrograph', 'id' => 'MK', 'baseVersion' => $mkV))) === 'accepted');
+	check('viewer cannot restore it', st(one($PID, $VIE, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'MK', 'cascade' => true))) === 'forbidden/viewer');
+	$db->prepare_query("UPDATE strabomicro.micro_entities SET created_by = $2 WHERE project_id = $1 AND entity_id = 'PK'", array($PID, $users['owner']['pkey']));
+	check('contributor: a deleted branch holding someone else\'s item -> cascade_includes_others',
+		st(one($PID, $CON, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'MK', 'cascade' => true))) === 'forbidden/cascade_includes_others');
+	$db->prepare_query("UPDATE strabomicro.micro_entities SET created_by = $2 WHERE project_id = $1 AND entity_id = 'PK'", array($PID, $users['contrib']['pkey']));
+	$r = one($PID, $CON, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'MK', 'cascade' => true));
+	check('contributor restores their own deleted branch', st($r) === 'accepted' && $r['cascaded'] === 1, json_encode($r));
+	$mkV = (int)$db->get_var_prepared("SELECT version FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'MK'", array($PID));
+	check('an editor deletes the contributor\'s micrograph', st(one($PID, $EDT, array('op' => 'delete', 'type' => 'micrograph', 'id' => 'MK', 'baseVersion' => $mkV))) === 'accepted');
+	check('contributor cannot restore what someone else deleted', st(one($PID, $CON, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'MK', 'cascade' => true))) === 'forbidden/editor_required');
 	check('project entity cannot be deleted', st(one($PID, $OWN, array('op' => 'delete', 'type' => 'project', 'id' => $SID, 'baseVersion' => 2))) === 'invalid/schema');
 
 	// -----------------------------------------------------------------------

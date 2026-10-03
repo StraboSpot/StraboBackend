@@ -545,7 +545,10 @@ class MsSync {
 		if (MsStore::isLive($row)) {
 			throw new MsInvalid('not_deleted', "this $type is not deleted");
 		}
-		if (!in_array($ctx->project['role'], array('owner', 'editor'), true)) {
+		// Contributors restore only what they deleted themselves and created (17w)
+		$mineOnly = !in_array($ctx->project['role'], array('owner', 'editor'), true);
+		if ($mineOnly && ($ctx->project['role'] !== 'contributor'
+			|| $row['created_by'] !== $ctx->me || (int)$row['deleted_by'] !== $ctx->me)) {
 			return self::forbidden($type, $id, 'editor_required');
 		}
 		if ($row['parent_type'] !== null) {
@@ -564,6 +567,13 @@ class MsSync {
 		$list = array($row);
 		if (MsHttp::prop($c, 'cascade') === true) {
 			$list = array_merge($list, self::descendants($db, $pid, $type, $id, $row['deleted_root']));
+		}
+		if ($mineOnly) {
+			foreach ($list as $e) {
+				if ($e['created_by'] === null || (int)$e['created_by'] !== $ctx->me) {
+					return self::forbidden($type, $id, 'cascade_includes_others');
+				}
+			}
 		}
 		$rootVersion = null;
 		$rootSeq = null;
