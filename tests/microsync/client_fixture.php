@@ -9,7 +9,8 @@
  *                assembled <pid>      the project as the store assembles it
  *                                     (project.json, point counts, refs)
  *                cleanup              delete every project whose straboId
- *                                     starts with mscli- (rows, files, staging)
+ *                                     starts with mscli- (rows, files, staging,
+ *                                     deleted-project tombstones)
  *              Usage: docker exec strabo-php php /srv/app/www/tests/microsync/client_fixture.php token
  *
  * @package    StraboSpot Web Site
@@ -77,11 +78,15 @@ if ($cmd === 'token') {
 		// spine) for a ready project: remove them the way the website does
 		$sm = new StraboMicro(null, (int)$r->userpkey, $db);
 		$sm->deleteProjectRows($r->strabo_id);
-		if ($p > 0 && is_dir("$FILES/$p")) {
-			exec('rm -rf ' . escapeshellarg("$FILES/$p"));
+		foreach (array("$FILES/$p", "$FILES/_deleted/$p") as $dir) {
+			if ($p > 0 && is_dir($dir)) {
+				exec('rm -rf ' . escapeshellarg($dir));
+			}
 		}
 		$n++;
 	}
+	// Projects the app deleted from StraboSpot (stage 6): their tombstones
+	$db->prepare_query("DELETE FROM strabomicro.micro_deleted_projects WHERE strabo_id LIKE $1", array($PREFIX . '%'));
 	$left = (int)$db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_projectmetadata WHERE strabo_id LIKE $1", array($PREFIX . '%'));
 	out(array('removed' => $n, 'left' => $left));
 } else {

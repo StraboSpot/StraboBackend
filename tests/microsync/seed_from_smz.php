@@ -225,7 +225,7 @@ try {
 } finally {
 	if (!$keep) {
 		if ($P > 0) {
-			legacy('jwt', 'delete', $U, '-', $sid);
+			delete_synced($db, $U, $sid);
 			$db->prepare_query("DELETE FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P));
 			if (is_dir("$FILES/$P")) exec('rm -rf ' . escapeshellarg("$FILES/$P"));
 		}

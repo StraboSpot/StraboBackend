@@ -180,9 +180,10 @@ try {
 			check("{$fx['name']}: project.json on disk = input + samples overlay",
 				canon(json_decode($fileW, true)) === canon(json_decode(json_encode($expected), true)));
 		}
-		legacy('jwt', 'delete', $U, '-', $sid);
+		delete_synced($db, $U, $sid);
+		clearstatcache();
 		$left = rows_minus(snapshot_rows($db, $U, array(), $SNAP_OPTS), $baseline);
-		check("{$fx['name']}: delete restores the baseline", $left === array() && pid_of($db, $U, $sid) === null
+		check("{$fx['name']}: delete (and purge) restores the baseline", $left === array() && pid_of($db, $U, $sid) === null
 			&& !is_dir("$FILES/$pidW"), json_encode(array_keys($left)));
 	}
 
@@ -360,15 +361,20 @@ try {
 	$db->prepare_query("UPDATE strabomicro.micro_members SET state = 'removed', removed_at = now() WHERE project_id = $1 AND user_pkey = $2",
 		array($P, $users['member']['pkey']));
 	$r = legacy('microdb', 'delete', $U, '-', $sid);
-	check('delete allowed once the owner is the only member (cascades the store)', $r === null && pid_of($db, $U, $sid) === null
+	check('delete allowed once the owner is the only member: the 30-day delete (17ac), the store stays', $r === null
+		&& pid_of($db, $U, $sid) === $P && micro_sync_is_deleted($db, $P)
+		&& $db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1", array($P)) !== '0');
+	exec('php /srv/app/www/microsync/tools/deleted.php --purge=' . (int)$P . ' --force 2>/dev/null');
+	check('the purge then cascades the store', pid_of($db, $U, $sid) === null
 		&& $db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_entities WHERE project_id = $1", array($P)) === '0');
+	$db->prepare_query("DELETE FROM strabomicro.micro_deleted_projects WHERE project_id = $1", array($P));
 
 } finally {
 	foreach ($created as $s) {
 		$pid = pid_of($db, $U, $s);
 		if ($pid) {
 			$db->prepare_query("DELETE FROM strabomicro.micro_members WHERE project_id = $1 AND user_pkey <> $2", array($pid, $U));
-			legacy('jwt', 'delete', $U, '-', $s);
+			delete_synced($db, $U, $s);
 			if (is_dir("$FILES/$pid")) exec('rm -rf ' . escapeshellarg("$FILES/$pid"));
 		}
 	}

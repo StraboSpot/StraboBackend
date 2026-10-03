@@ -383,6 +383,7 @@ class MsMembers {
 			          ON e.project_id = p.id AND e.entity_type = 'project' AND e.entity_id = p.strabo_id
 			  WHERE m.user_pkey = $1 AND m.state = 'invited'
 			    AND p.sync_format = 'entity' AND p.sync_state = 'ready'
+			    AND NOT " . MsDelete::deletedSql('p') . "
 			  ORDER BY m.invited_at, p.id",
 			array($me));
 		$users = MsStore::users($db, array_merge(array_column($invites, 'invited_by'), array_column($invites, 'owner_pkey')), true);
@@ -470,6 +471,12 @@ class MsMembers {
 		if ($p === null || ($token !== null && $p['invite_token'] !== $token)) {
 			$db->rollback();
 			throw new MsHttpError(404, 'not_found', 'No pending invitation for this project');
+		}
+		// Deleted by its owner since (17ad): the invitation waits for a restore
+		$t = MsDelete::tombstone($db, $pid);
+		if ($t !== null) {
+			$db->rollback();
+			throw MsDelete::deletedError($db, $t, $me, true);
 		}
 		return $p;
 	}

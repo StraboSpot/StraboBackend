@@ -88,6 +88,7 @@ if (isset($opts['sweep'])) {
 	foreach ($ms->rows(
 		"SELECT p.id FROM strabomicro.micro_projectmetadata p
 		  WHERE p.sync_format = 'entity' AND p.sync_state = 'ready' AND p.views_dirty_since IS NOT NULL
+		    AND NOT " . MsDelete::deletedSql('p') . "
 		    AND COALESCE((SELECT c.at FROM strabomicro.micro_changes c WHERE c.project_id = p.id ORDER BY c.seq DESC LIMIT 1),
 		                 p.views_dirty_since) < now() - make_interval(secs => $1)
 		  ORDER BY p.views_dirty_since",
@@ -109,10 +110,10 @@ if (isset($opts['sweep'])) {
 		$failFile = MsWorker::dataDir() . '/pdf_failures.json';
 		$failedAt = json_decode((string)@file_get_contents($failFile), true) ?: array();
 		foreach ($ms->rows(
-			"SELECT id, userpkey FROM strabomicro.micro_projectmetadata
-			  WHERE pdf_dirty
-			    AND (sync_format IS DISTINCT FROM 'entity' OR (sync_state = 'ready' AND views_dirty_since IS NULL))
-			  ORDER BY id",
+			"SELECT p.id, p.userpkey FROM strabomicro.micro_projectmetadata p
+			  WHERE p.pdf_dirty AND NOT " . MsDelete::deletedSql('p') . "
+			    AND (p.sync_format IS DISTINCT FROM 'entity' OR (p.sync_state = 'ready' AND p.views_dirty_since IS NULL))
+			  ORDER BY p.id",
 			array()) as $r) {
 			if (!$nodeReady) {
 				MsWorker::log('pdf: strabo-node not ready, out-of-date PDFs wait for a later sweep');
@@ -138,6 +139,16 @@ if (isset($opts['sweep'])) {
 		$failedAt = array_filter($failedAt, function ($t) { return $t > time() - 86400; });
 		@file_put_contents($failFile, json_encode($failedAt));
 		MsWorker::unlock($ms, 'pdfsweep', 0);
+	}
+
+	// Deleted projects past their 30 days (17ad): once a day
+	$purgeStamp = MsWorker::dataDir() . '/purge_last';
+	if ((int)@file_get_contents($purgeStamp) < time() - 86400 && MsWorker::tryLock($ms, 'purge', 0)) {
+		@file_put_contents($purgeStamp, (string)time());
+		foreach (MsDelete::purgeDue($db, $ms) as $id) {
+			MsWorker::log("project $id: purged (deleted " . MsDelete::KEEP_DAYS . ' days ago)');
+		}
+		MsWorker::unlock($ms, 'purge', 0);
 	}
 
 	$cleaned = MsWorker::housekeeping($ms);

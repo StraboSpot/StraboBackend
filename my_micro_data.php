@@ -30,6 +30,19 @@ try {
 $microInviteResult = isset($_SESSION['micro_invite_result']) ? $_SESSION['micro_invite_result'] : null;
 unset($_SESSION['micro_invite_result']);
 
+// Synced projects deleted from StraboSpot that can still be restored (v3 17ad)
+$microDeleted = array();
+try {
+	$microDeleted = MsDelete::restorableFor(micro_members_db($db), (int)$userpkey);
+} catch (Throwable $e) {
+	error_log('my_micro_data deleted projects: ' . $e->getMessage());
+}
+$microDeleteResult = isset($_SESSION['micro_delete_result']) ? $_SESSION['micro_delete_result'] : null;
+unset($_SESSION['micro_delete_result']);
+if (empty($_SESSION['micro_delete_token'])) {
+	$_SESSION['micro_delete_token'] = bin2hex(random_bytes(16));
+}
+
 include("adminkeys.php");
 
 $username = $_SESSION['username'];
@@ -70,6 +83,13 @@ include("includes/mheader.php");
 			case "doi":
 				window.location='/publish_doi?p='+pkey+'&t=m';
 				break;
+			case "collaborators":
+				window.location='/micro_collaborators?project_id='+pkey;
+				break;
+			case "deletesynced":
+				// Synced projects: the confirmation page names who else has it (v3 17ac)
+				window.location='/micro_delete?project_id='+pkey;
+				break;
 			case "delete":
 				if (confirm("Are you sure you want to delete project "+projectname+"?") == true) {
 					window.location='/delete_micrograph_project?project_id='+pid;
@@ -91,6 +111,11 @@ include("includes/mheader.php");
 							<section id="content">
 
 <?php
+if($microDeleteResult !== null){
+	?>
+		<div style="border:1px solid <?php echo $microDeleteResult['ok'] ? '#2e7d32' : '#c0392b'?>;padding:10px 14px;margin-bottom:20px;"><?php echo htmlspecialchars($microDeleteResult['text'])?></div>
+	<?php
+}
 if($microInviteResult !== null){
 	?>
 		<div style="border:1px solid <?php echo $microInviteResult['ok'] ? '#2e7d32' : '#c0392b'?>;padding:10px 14px;margin-bottom:20px;"><?php echo htmlspecialchars($microInviteResult['text'])?></div>
@@ -227,7 +252,7 @@ if(count($microrows)==0){
 							<option value="collaborators">Collaborators</option>
 <?php } ?>
 							<option value="doi">Get DOI</option>
-							<option value="delete">Delete</option>
+							<option value="<?php echo $mr->sync_format === 'entity' ? 'deletesynced' : 'delete'?>">Delete</option>
 						</select>
 					</td>
 					<td><?php echo $micrographcount?></td>
@@ -242,6 +267,51 @@ if(count($microrows)==0){
 
 <?php
 	}//end foreach project
+}
+
+if(count($microDeleted) > 0){
+	?>
+		<div style="padding-top:20px;"></div>
+		<header>
+			<h3>Deleted projects</h3>
+		</header>
+		<div>These synced projects were deleted from StraboSpot. Each can be restored, with its members, until the date shown; after that it is deleted for good.</div>
+		<div class="table-wrapper">
+			<table class="myDataTable">
+				<thead>
+					<tr>
+						<th>Project</th>
+						<th class="hideSmall">Deleted</th>
+						<th>Can be restored until</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+<?php
+	foreach($microDeleted as $dp){
+		$untilTs = strtotime($dp['restorable_until']);
+		$daysLeft = max(0, (int)ceil(($untilTs - time()) / 86400));
+?>
+					<tr>
+						<td><?php echo htmlspecialchars((string)$dp['name'])?></td>
+						<td class="hideSmall"><?php echo htmlspecialchars(date('F j, Y', strtotime($dp['deleted_at'])))?></td>
+						<td><?php echo htmlspecialchars(date('F j, Y', $untilTs))?> (<?php echo $daysLeft === 1 ? '1 day left' : "$daysLeft days left"?>)</td>
+						<td>
+							<form method="post" action="/micro_delete" style="margin:0;">
+								<input type="hidden" name="action" value="restore">
+								<input type="hidden" name="pid" value="<?php echo (int)$dp['project_id']?>">
+								<input type="hidden" name="token" value="<?php echo htmlspecialchars($_SESSION['micro_delete_token'])?>">
+								<button type="submit" class="button primary fit small">Restore</button>
+							</form>
+						</td>
+					</tr>
+<?php
+	}
+?>
+				</tbody>
+			</table>
+		</div>
+	<?php
 }
 ?>
 

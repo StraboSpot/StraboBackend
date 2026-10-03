@@ -164,6 +164,22 @@ function legacy($api, $action, $user, $zip, $sid) {
 	return is_array($j) ? $j['result'] : array('harness_error' => implode(' | ', array_slice($out, -3)));
 }
 
+/**
+ * Delete a test project through the legacy door (jwt). A synced project gets
+ * the 30-day delete there (v3 17ac), so it is purged at once
+ * (microsync/tools/deleted.php) and its tombstone dropped: nothing is left.
+ * Returns the legacy answer.
+ */
+function delete_synced($db, $user, $sid) {
+	$pid = pid_of($db, $user, $sid);
+	$r = legacy('jwt', 'delete', $user, '-', $sid);
+	if ($pid && $db->get_var_prepared("SELECT 1 FROM strabomicro.micro_deleted_projects WHERE project_id = $1", array($pid)) !== null) {
+		exec('php /srv/app/www/microsync/tools/deleted.php --purge=' . (int)$pid . ' --force 2>/dev/null');
+		$db->prepare_query("DELETE FROM strabomicro.micro_deleted_projects WHERE project_id = $1", array($pid));
+	}
+	return $r;
+}
+
 function pid_of($db, $user, $sid) {
 	$v = $db->get_var_prepared("SELECT id FROM strabomicro.micro_projectmetadata WHERE userpkey = $1 AND strabo_id = $2", array($user, $sid));
 	return $v === null || $v === '' ? null : (int)$v;

@@ -17,6 +17,8 @@
  * @link       https://strabospot.org
  */
 
+require_once __DIR__ . '/MsDelete.php';
+
 class MsStore {
 
 	const ROLES_WRITE = 'owner,editor,contributor';
@@ -33,11 +35,19 @@ class MsStore {
 			"SELECT p.id, p.strabo_id, p.name, p.userpkey, p.sync_format, p.sync_state, p.head_seq,
 			        " . MsDb::iso('p.views_built_at') . " AS views_built_at,
 			        m.role, m.state AS member_state, m.removed_at, m.removed_by,
-			        " . MsDb::iso('m.role_changed_at') . " AS role_changed_at
+			        " . MsDb::iso('m.role_changed_at') . " AS role_changed_at,
+			        " . MsDelete::deletedSql('p') . " AS deleted
 			   FROM strabomicro.micro_projectmetadata p
 			   LEFT JOIN strabomicro.micro_members m ON m.project_id = p.id AND m.user_pkey = $2
 			  WHERE p.id = $1",
 			array($pid, $me));
+		// Deleted by its owner (17ac): 410 to its members, also after the purge
+		if ($row === null || MsDb::bool($row['deleted'])) {
+			$t = MsDelete::tombstone($db, $pid);
+			if ($t !== null) {
+				throw MsDelete::deletedError($db, $t, $me);
+			}
+		}
 		// Adopting rows (legacy until their initial upload is done, P1-1) are open to their members too.
 		$synced = $row !== null && ($row['sync_format'] === 'entity'
 			|| ($row['sync_format'] === 'legacy' && $row['sync_state'] === 'adopting'));

@@ -89,7 +89,7 @@ class MsWorker {
 			        EXTRACT(EPOCH FROM now() - COALESCE(
 			          (SELECT c.at FROM strabomicro.micro_changes c WHERE c.project_id = p.id ORDER BY c.seq DESC LIMIT 1),
 			          p.views_dirty_since, now())) AS idle
-			   FROM strabomicro.micro_projectmetadata p WHERE p.id = $1",
+			   FROM strabomicro.micro_projectmetadata p WHERE p.id = $1 AND NOT " . MsDelete::deletedSql('p'),
 			array($pid));
 	}
 
@@ -207,8 +207,9 @@ class MsWorker {
 	 */
 	public static function build($strabodb, $db, $pid, $keepPdf = false) {
 		$p = $db->row(
-			"SELECT id, strabo_id, userpkey, sharekey, sync_format, sync_state
-			   FROM strabomicro.micro_projectmetadata WHERE id = $1",
+			"SELECT p.id, p.strabo_id, p.userpkey, p.sharekey, p.sync_format, p.sync_state
+			   FROM strabomicro.micro_projectmetadata p
+			  WHERE p.id = $1 AND NOT " . MsDelete::deletedSql('p'),
 			array($pid));
 		if ($p === null || $p['sync_format'] !== 'entity' || $p['sync_state'] !== 'ready') {
 			return 'skipped';

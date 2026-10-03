@@ -38,6 +38,7 @@ include_once "./lib/MsSmz.php";
 include_once "./lib/MsAdopt.php";
 include_once "./lib/MsMembers.php";
 include_once "./lib/MsParked.php";
+include_once "./lib/MsDelete.php";
 
 const MICROSYNC_API_VERSION = 1;
 
@@ -65,6 +66,7 @@ $routes = array(
 	array('GET',    '#^projects$#',                                              array('MsProjects', 'listMine')),
 	array('POST',   '#^projects$#',                                              array('MsProjects', 'create')),
 	array('GET',    "#^projects/$pidPattern$#",                                  array('MsProjects', 'get')),
+	array('DELETE', "#^projects/$pidPattern$#",                                  array('MsProjects', 'delete')),
 	array('POST',   "#^projects/$pidPattern/ready$#",                            array('MsProjects', 'ready')),
 	array('POST',   "#^projects/$pidPattern/adopt$#",                            array('MsAdopt', 'start')),
 	array('DELETE', "#^projects/$pidPattern/adopt$#",                            array('MsAdopt', 'cancel')),

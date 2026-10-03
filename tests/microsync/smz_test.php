@@ -62,7 +62,8 @@ function check($label, $cond, $detail = '') {
 function section($name) { echo "\n== $name\n"; }
 
 function legacy_delete($user, $sid) {
-	legacy('jwt', 'delete', $user, '-', $sid);
+	global $db;
+	delete_synced($db, $user, $sid);
 }
 
 /** A ZIP built by libzip; $entries name => [content, 'store'|'deflate']. */
