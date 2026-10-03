@@ -377,6 +377,23 @@ try {
 	$r = one($PID, $EDT, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'M1', 'cascade' => true));
 	check('cascade restore brings back all 6', st($r) === 'accepted' && $r['cascaded'] === 6 && $r['version'] === 5, json_encode($r));
 	check('restore live -> not_deleted', st(one($PID, $EDT, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'M1'))) === 'invalid/not_deleted');
+	// A Contributor restores what they deleted themselves and created (17w)
+	check('contributor creates a micrograph with a spot', st(one($PID, $CON, array('op' => 'create', 'type' => 'micrograph', 'id' => 'MK',
+		'parentType' => 'sample', 'parentId' => 'S1', 'body' => array('name' => 'Mine')))) === 'accepted'
+		&& st(one($PID, $CON, array('op' => 'create', 'type' => 'spot', 'id' => 'PK', 'parentType' => 'micrograph', 'parentId' => 'MK',
+			'body' => array('name' => 'Mine too')))) === 'accepted');
+	$mkV = (int)$db->get_var_prepared("SELECT version FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'MK'", array($PID));
+	check('contributor deletes it (cascade)', st(one($PID, $CON, array('op' => 'delete', 'type' => 'micrograph', 'id' => 'MK', 'baseVersion' => $mkV))) === 'accepted');
+	check('viewer cannot restore it', st(one($PID, $VIE, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'MK', 'cascade' => true))) === 'forbidden/viewer');
+	$db->prepare_query("UPDATE strabomicro.micro_entities SET created_by = $2 WHERE project_id = $1 AND entity_id = 'PK'", array($PID, $users['owner']['pkey']));
+	check('contributor: a deleted branch holding someone else\'s item -> cascade_includes_others',
+		st(one($PID, $CON, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'MK', 'cascade' => true))) === 'forbidden/cascade_includes_others');
+	$db->prepare_query("UPDATE strabomicro.micro_entities SET created_by = $2 WHERE project_id = $1 AND entity_id = 'PK'", array($PID, $users['contrib']['pkey']));
+	$r = one($PID, $CON, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'MK', 'cascade' => true));
+	check('contributor restores their own deleted branch', st($r) === 'accepted' && $r['cascaded'] === 1, json_encode($r));
+	$mkV = (int)$db->get_var_prepared("SELECT version FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'MK'", array($PID));
+	check('an editor deletes the contributor\'s micrograph', st(one($PID, $EDT, array('op' => 'delete', 'type' => 'micrograph', 'id' => 'MK', 'baseVersion' => $mkV))) === 'accepted');
+	check('contributor cannot restore what someone else deleted', st(one($PID, $CON, array('op' => 'restore', 'type' => 'micrograph', 'id' => 'MK', 'cascade' => true))) === 'forbidden/editor_required');
 	check('project entity cannot be deleted', st(one($PID, $OWN, array('op' => 'delete', 'type' => 'project', 'id' => $SID, 'baseVersion' => 2))) === 'invalid/schema');
 
 	// -----------------------------------------------------------------------
@@ -434,6 +451,65 @@ try {
 	}
 	check('history by user', $ok);
 	check('history bad entity -> 400', req('GET', "/projects/$PID/history?entity=nonsense", $VIE)['code'] === 400);
+
+	// Brief history for the activity panel (17v): newest first, no bookkeeping, pages back with before=
+	$tagV = (int)$db->get_var_prepared("SELECT version FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'T1'", array($PID));
+	$r = one($PID, $OWN, array('op' => 'update', 'type' => 'tag', 'id' => 'T1', 'baseVersion' => $tagV, 'fields' => array('modifiedTimestamp' => 1759500000000)));
+	$noiseSeq = (int)$db->get_var_prepared("SELECT max(seq) FROM strabomicro.micro_changes WHERE project_id = $1", array($PID));
+	check('timestamp-only update accepted (logged)', st($r) === 'accepted' && $db->get_var_prepared(
+		"SELECT array_to_string(changed_paths, ',') FROM strabomicro.micro_changes WHERE seq = $1", array($noiseSeq)) === 'modifiedTimestamp');
+	$brief = array();
+	$before = 0;
+	$pages = 0;
+	do {
+		$r = req('GET', "/projects/$PID/history?brief=1&limit=9" . ($before ? "&before=$before" : ''), $VIE);
+		$pages++;
+		foreach ($r['body']['changes'] as $c) {
+			$brief[] = $c;
+		}
+		$n = count($r['body']['changes']);
+		$before = $n ? $r['body']['changes'][$n - 1]['seq'] : 0;
+	} while ($r['body']['more'] && $pages < 100);
+	$desc = count($brief) > 0;
+	for ($i = 1; $i < count($brief); $i++) {
+		$desc = $desc && $brief[$i]['seq'] < $brief[$i - 1]['seq'];
+	}
+	check('brief history: newest first over several pages', $desc && $pages > 1, "pages $pages");
+	$isNoise = function ($c) {
+		if ($c['op'] !== 'update' || $c['changedPaths'] === null) return false;
+		$hide = array('childOrder', 'modifiedTimestamp', 'refs.tiles', 'refs.tiles_affine', 'refs.thumbnail');
+		if (in_array($c['type'], array('project', 'dataset'), true)) $hide[] = 'date';
+		return count(array_diff($c['changedPaths'], $hide)) === 0;
+	};
+	$all2 = req('GET', "/projects/$PID/changes?since=0&limit=1000", $VIE)['body']['changes'];
+	$expected = array();
+	foreach ($all2 as $c) {
+		if (!$isNoise($c)) $expected[] = $c['seq'];
+	}
+	$got = array_map(function ($c) { return $c['seq']; }, $brief);
+	sort($got);
+	check('brief history: every edit once, bookkeeping left out', $got === $expected && count($expected) < count($all2),
+		count($got) . ' vs ' . count($expected) . ' of ' . count($all2));
+	check('brief history: the timestamp-only update is not listed', !in_array($noiseSeq, $got, true));
+	$bySeq = array();
+	foreach ($brief as $c) $bySeq[$c['seq']] = $c;
+	$delP1 = array_values(array_filter($brief, function ($c) { return $c['op'] === 'delete' && $c['id'] === 'P1'; }));
+	check('brief delete row: name and parent from before, who', count($delP1) === 1 && $delP1[0]['parentType'] === 'micrograph'
+		&& $delP1[0]['parentId'] === 'M1' && $delP1[0]['user']['pkey'] === $users['editor']['pkey'] && !array_key_exists('body', $delP1[0]),
+		json_encode($delP1));
+	$moved = array_values(array_filter($brief, function ($c) { return $c['id'] === 'MX' && $c['movedFrom'] !== null; }));
+	check('brief move row: movedFrom is the old parent', count($moved) === 1 && $moved[0]['parentId'] === 'S1' && $moved[0]['movedFrom'] !== 'S1',
+		json_encode($moved));
+	$named = array_values(array_filter($brief, function ($c) { return $c['op'] === 'create' && $c['id'] === 'M1'; }));
+	check('brief create row: name from the body', count($named) === 1 && $named[0]['name'] === 'M1' && $named[0]['onBehalfOf'] === null);
+	$cid = 'brief-here-' . uuid();
+	$r = req('POST', "/projects/$PID/push", $EDT, array('pushId' => uuid(), 'clientId' => $cid, 'changes' => array(
+		array('op' => 'create', 'type' => 'tag', 'id' => 'T-here', 'parentType' => 'project', 'parentId' => $SID, 'body' => array('name' => 'Here')))));
+	$top = req('GET', "/projects/$PID/history?brief=1&limit=3&clientId=$cid", $EDT)['body']['changes'];
+	$other = req('GET', "/projects/$PID/history?brief=1&limit=3&clientId=other", $EDT)['body']['changes'];
+	$asOwner = req('GET', "/projects/$PID/history?brief=1&limit=3&clientId=$cid", $OWN)['body']['changes'];
+	check('brief: here only for my own change from that computer', $top[0]['id'] === 'T-here' && $top[0]['here'] === true
+		&& $other[0]['here'] === false && $asOwner[0]['here'] === false && $top[1]['here'] === false, json_encode(array($top[0], $other[0])));
 
 	// -----------------------------------------------------------------------
 	section('Snapshot');
@@ -608,7 +684,7 @@ try {
 	$pres = $r['body']['presence'];
 	check('presence shows the editor on M1', count($pres) === 1 && $pres[0]['user']['pkey'] === $users['editor']['pkey'] && $pres[0]['viewing']['id'] === 'M1', json_encode($pres));
 	$r2 = req('POST', "/projects/$PID/activity", $OWN, array('since' => $headNow, 'clientId' => 'test-client', 'presenceHash' => $r['body']['presenceHash']));
-	check('nothing new -> changed false, with my role', $r2['body'] === array('changed' => false, 'role' => 'owner'), $r2['raw']);
+	check('nothing new -> changed false, with my role and parked count', $r2['body'] === array('changed' => false, 'role' => 'owner', 'parkedCount' => 0), $r2['raw']);
 	$r3 = req('POST', "/projects/$PID/activity", $CON, array('since' => 0, 'clientId' => 'contrib-pc'));
 	check('activity tells each member their role (role changes reach the app)', $r3['body']['role'] === 'contributor'
 		&& $r['body']['role'] === 'owner', $r3['raw']);

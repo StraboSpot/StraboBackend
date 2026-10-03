@@ -85,8 +85,15 @@ class MsActivity {
 		}
 		$hash = md5(json_encode($hashParts));
 
+		$parked = 0;
+		if ($p['role'] === 'owner') {
+			$parked = (int)$db->val(
+				"SELECT count(*) FROM strabomicro.micro_parked_pushes WHERE project_id = $1 AND status = 'pending'",
+				array($pid));
+		}
+
 		if ($p['head_seq'] <= $since && $hashIn === $hash) {
-			MsHttp::json(200, array('changed' => false, 'role' => $p['role']));
+			MsHttp::json(200, array('changed' => false, 'role' => $p['role'], 'parkedCount' => $parked));
 			return;
 		}
 
@@ -106,13 +113,6 @@ class MsActivity {
 			foreach ($counts as $c) {
 				$pending[] = array('user' => MsStore::user($cu, $c['user_pkey']), 'count' => (int)$c['n']);
 			}
-		}
-
-		$parked = 0;
-		if ($p['role'] === 'owner') {
-			$parked = (int)$db->val(
-				"SELECT count(*) FROM strabomicro.micro_parked_pushes WHERE project_id = $1 AND status = 'pending'",
-				array($pid));
 		}
 
 		MsHttp::json(200, array(

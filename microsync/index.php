@@ -37,6 +37,7 @@ include_once "./lib/MsWorker.php";
 include_once "./lib/MsSmz.php";
 include_once "./lib/MsAdopt.php";
 include_once "./lib/MsMembers.php";
+include_once "./lib/MsParked.php";
 
 const MICROSYNC_API_VERSION = 1;
 
@@ -73,6 +74,8 @@ $routes = array(
 	array('GET',    "#^projects/$pidPattern/changes$#",                          array('MsSync', 'changes')),
 	array('GET',    "#^projects/$pidPattern/history$#",                          array('MsSync', 'history')),
 	array('POST',   "#^projects/$pidPattern/activity$#",                         array('MsActivity', 'poll')),
+	array('GET',    "#^projects/$pidPattern/parked$#",                           array('MsParked', 'listPending')),
+	array('POST',   "#^projects/$pidPattern/parked/([0-9]{1,10})/review$#",      array('MsParked', 'review')),
 	array('HEAD',   "#^projects/$pidPattern/blobs/([0-9a-f]{64})$#",             array('MsBlobs', 'head')),
 	array('GET',    "#^projects/$pidPattern/blobs/([0-9a-f]{64})$#",             array('MsBlobs', 'get')),
 	array('POST',   "#^projects/$pidPattern/uploads$#",                          array('MsBlobs', 'startUpload')),
