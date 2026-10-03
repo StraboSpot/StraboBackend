@@ -15,8 +15,9 @@
  *                deletes the project row, which cascades into the store.
  *              - Legacy deletes of a synced project the owner has to
  *                themselves are the 30-day delete (microsync/lib/MsDelete.php,
- *                v3 17ac); a shared one is refused until the website's
- *                confirmation names its members (stage 6c).
+ *                v3 17ac); a shared one is refused there (old apps,
+ *                delete_micrograph_project.php): the website deletes synced
+ *                projects through micro_delete.php, which names the members.
  *              - A deleted synced project is hidden from lists and refuses
  *                uploads until its owner restores it.
  *              - Downloads: synced projects have no static project.zip; every
@@ -48,6 +49,61 @@ function micro_sync_is_deleted($db, $projectId) {
 	return $db->get_var_prepared(
 		"SELECT 1 FROM strabomicro.micro_deleted_projects WHERE project_id = $1",
 		array((int)$projectId)) !== null;
+}
+
+/**
+ * Was a viewer or landing page asked for a project its owner deleted from
+ * StraboSpot (v3 17ad)? By row id, permalink slug, or straboId; each also
+ * after the purge, when the row is gone (the tombstone stays). A straboId
+ * synced again after the purge counts as live.
+ */
+function micro_sync_viewer_deleted($db, $projectId = 0, $slug = '', $straboId = '') {
+	if ((int)$projectId > 0 && micro_sync_is_deleted($db, (int)$projectId)) {
+		return true;
+	}
+	if ($slug !== '' && $db->get_var_prepared(
+		"SELECT 1 FROM micro_permalinks pl
+		   JOIN strabomicro.micro_deleted_projects dp ON dp.strabo_id = pl.strabo_id AND dp.owner_pkey = pl.userpkey
+		  WHERE pl.permakey = $1
+		    AND NOT EXISTS (SELECT 1 FROM micro_projectmetadata m
+		                     WHERE m.strabo_id = pl.strabo_id AND m.userpkey = pl.userpkey
+		                       AND NOT EXISTS (SELECT 1 FROM strabomicro.micro_deleted_projects d2 WHERE d2.project_id = m.id))
+		  LIMIT 1",
+		array((string)$slug)) !== null) {
+		return true;
+	}
+	if ($straboId !== '' && $db->get_var_prepared(
+		"SELECT 1 FROM strabomicro.micro_deleted_projects dp
+		  WHERE dp.strabo_id = $1
+		    AND NOT EXISTS (SELECT 1 FROM micro_projectmetadata m
+		                     WHERE m.strabo_id = dp.strabo_id
+		                       AND NOT EXISTS (SELECT 1 FROM strabomicro.micro_deleted_projects d2 WHERE d2.project_id = m.id))
+		  LIMIT 1",
+		array((string)$straboId)) !== null) {
+		return true;
+	}
+	return false;
+}
+
+/**
+ * The page a viewer or permalink shows for a deleted project (410), then
+ * exit. Self-contained (viewers live in different folders); names nothing.
+ */
+function micro_sync_deleted_page_exit() {
+	http_response_code(410);
+	header('Content-Type: text/html; charset=utf-8');
+	echo '<!DOCTYPE html><html lang="en"><head><meta charset="utf-8">'
+		. '<meta name="viewport" content="width=device-width, initial-scale=1">'
+		. '<title>Project deleted - StraboMicro</title>'
+		. '<style>body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;'
+		. 'background:#f4f4f4;color:#333;margin:0;padding:16px}main{max-width:560px;margin:80px auto;background:#fff;'
+		. 'border:1px solid #ddd;border-radius:6px;padding:28px 32px}h1{font-size:1.4em;margin:0 0 12px}'
+		. 'p{line-height:1.5;margin:0 0 12px}a{color:#c0392b}</style></head><body><main>'
+		. '<h1>This project was deleted</h1>'
+		. '<p>Its owner deleted this StraboMicro project from StraboSpot, so it can no longer be viewed here.</p>'
+		. '<p><a href="/">StraboSpot home</a></p>'
+		. '</main></body></html>';
+	exit();
 }
 
 function micro_sync_deleted_message() {
@@ -136,7 +192,7 @@ function micro_sync_upload_plan($db, $userpkey, $straboId) {
  * legacy path (not synced, delete for good), array('soft' => pid) = the
  * 30-day delete of a synced project the owner has to themselves (v3 17ac),
  * array('done' => pid) = already deleted, string = refusal (shared: the
- * website's confirmation naming its members comes with stage 6c).
+ * website deletes those through micro_delete.php, which names the members).
  */
 function micro_sync_delete_plan($db, $userpkey, $straboId) {
 	$row = micro_sync_project_row($db, $userpkey, $straboId);

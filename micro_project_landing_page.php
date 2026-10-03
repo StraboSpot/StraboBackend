@@ -25,6 +25,11 @@ require_once(__DIR__ . '/microdb/lib/permalink.php');
 
 $project_row = $db->get_row_prepared("select * from micro_projectmetadata where strabo_id=$1 and (ispublic or userpkey = $2)", array($p, $userpkey));
 $project_pkey = ($project_row && $project_row->id != "") ? $project_row->id : "";
+// Deleted by its owner (synced projects, v3 17ad): say so, also after the purge
+require_once(__DIR__ . '/microdb/lib/sync_guard.php');
+if($project_pkey != "" ? micro_sync_is_deleted($db, (int)$project_pkey) : micro_sync_viewer_deleted($db, 0, '', (string)$p)){
+	micro_sync_deleted_page_exit();
+}
 
 if($project_pkey != ""){
 	// Upload-stable permalink into the tier-agnostic front door; falls back

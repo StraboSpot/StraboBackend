@@ -20,7 +20,7 @@
  *              worker then rebuilds the search slice and StraboSamples links.
  *
  *   DELETE projects/{pid}     soft delete (owner; MsProjects::delete)
- *   Website (stage 6c) and microsync/tools/deleted.php: restore, purge.
+ *   micro_delete.php (website: confirm, restore) and microsync/tools/deleted.php (list, restore, purge).
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -78,6 +78,18 @@ class MsDelete {
 				'restorableUntil' => $t['restorable'] ? $t['restorable_until'] : null,
 				'project'         => array('pid' => (int)$t['project_id'], 'name' => $name),
 			));
+	}
+
+	/** The project's name as members see it now (the project entity's, else the row's). */
+	public static function liveName($db, $pid) {
+		$name = $db->val(
+			"SELECT COALESCE(e.body->>'name', p.name)
+			   FROM strabomicro.micro_projectmetadata p
+			   LEFT JOIN strabomicro.micro_entities e
+			          ON e.project_id = p.id AND e.entity_type = 'project' AND e.entity_id = p.strabo_id
+			  WHERE p.id = $1",
+			array((int)$pid));
+		return $name === null ? '' : (string)$name;
 	}
 
 	public static function liveFolder($pid) {

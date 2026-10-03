@@ -37,6 +37,11 @@ if($m !== ''){
 	if(!$row || $row->id == "") $row = null;
 }
 
+// Deleted by its owner (synced projects, v3 17ad): say so, also after the purge
+require_once(__DIR__ . '/microdb/lib/sync_guard.php');
+if($row !== null ? micro_sync_is_deleted($db, (int)$row->id) : micro_sync_viewer_deleted($db, $id, $m)){
+	micro_sync_deleted_page_exit();
+}
 if($row === null){
 	echo "Error! Project not found.";
 	exit();
