@@ -232,6 +232,55 @@ try {
 		"SELECT (removed_by IS NULL AND role_changed_at IS NULL AND state = 'invited')::text FROM strabomicro.micro_members
 		  WHERE project_id = $1 AND user_pkey = $2", array($PID, $U['maya']['pkey'])) === 'true');
 
+	section('Parked changes: the owner\'s review (17o, 17x-17aa)');
+	$r = req('GET', "/projects/$PID/parked", $EDT);
+	check('only the owner lists parked changes (403)', $r['code'] === 403, $r['raw']);
+	$r = req('GET', "/projects/$PID/parked", $OWN);
+	$byUser = array();
+	foreach ($r['code'] === 200 ? $r['body']['parked'] : array() as $x) $byUser[$x['user']['pkey']] = $x;
+	$pe = isset($byUser[$U['editor']['pkey']]) ? $byUser[$U['editor']['pkey']] : null;
+	$pm = isset($byUser[$U['maya']['pkey']]) ? $byUser[$U['maya']['pkey']] : null;
+	check('owner lists both: a role change (2 items) and a removal (1 item)', $pe && $pe['reason'] === 'role_changed'
+		&& $pe['role'] === 'viewer' && count($pe['changes']) === 2 && $pm && $pm['reason'] === 'removed' && count($pm['changes']) === 1
+		&& $pm['changes'][0]['id'] === 'D-maya2' && $pe['user']['name'] !== '', $r['raw']);
+	$r = req('POST', "/projects/$PID/parked/{$pe['id']}/review", $OWN, array('decisions' => array('dataset:nope' => 'accepted')));
+	check('unknown item -> 400', $r['code'] === 400, $r['raw']);
+	$r = req('POST', "/projects/$PID/parked/{$pe['id']}/review", $EDT, array('decisions' => array('dataset:D-viewer' => 'discarded')));
+	check('a member cannot review (403)', $r['code'] === 403, $r['raw']);
+	$r = req('POST', "/projects/$PID/parked/{$pe['id']}/review", $OWN, array('decisions' => array('dataset:D-viewer' => 'discarded')));
+	check('one item decided: still pending, 1 left', $r['code'] === 200 && $r['body']['status'] === 'pending' && $r['body']['left'] === 1, $r['raw']);
+	$r = req('GET', "/projects/$PID/parked", $OWN);
+	$again = array_values(array_filter($r['body']['parked'], function ($x) use ($pe) { return $x['id'] === $pe['id']; }));
+	check('the list carries what was decided', count($again) === 1 && $again[0]['decided']['dataset:D-viewer'] === 'discarded', $r['raw']);
+
+	// Accepting = the owner pushes the change as their own, on behalf of the member (17y)
+	$v = (int)$db->get_var_prepared("SELECT version FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'D-editor'", array($PID));
+	$r = req('POST', "/projects/$PID/push", $OWN, array('pushId' => uuid(), 'clientId' => 'members-test', 'changes' => array(
+		array('op' => 'update', 'type' => 'dataset', 'id' => 'D-editor', 'baseVersion' => $v, 'fields' => array('name' => 'renamed by a viewer'),
+			'onBehalfOf' => $U['editor']['pkey']))));
+	$obo = $db->get_var_prepared("SELECT on_behalf_of FROM strabomicro.micro_changes WHERE project_id = $1 AND entity_id = 'D-editor' ORDER BY seq DESC LIMIT 1", array($PID));
+	check('owner pushes the accepted change: logged on behalf of the member', $r['code'] === 200
+		&& $r['body']['results'][0]['status'] === 'accepted' && (int)$obo === $U['editor']['pkey'], $r['raw'] . " obo=$obo");
+	$hist = req('GET', "/projects/$PID/history?brief=1&limit=1", $OWN)['body']['changes'];
+	check('brief history names who it was for', $hist[0]['onBehalfOf']['pkey'] === $U['editor']['pkey'] && $hist[0]['user']['pkey'] === $U['owner']['pkey'],
+		json_encode($hist));
+	$r = req('POST', "/projects/$PID/parked/{$pe['id']}/review", $OWN, array('decisions' => array('dataset:D-editor' => 'accepted')));
+	check('all items decided: partial (one of each)', $r['code'] === 200 && $r['body']['status'] === 'partial' && $r['body']['left'] === 0, $r['raw']);
+	check('reviewed by the owner', (int)$db->get_var_prepared("SELECT reviewed_by FROM strabomicro.micro_parked_pushes WHERE id = $1", array($pe['id'])) === $U['owner']['pkey']);
+	$r = req('POST', "/projects/$PID/parked/{$pe['id']}/review", $OWN, array('decisions' => array('dataset:D-editor' => 'discarded')));
+	check('a reviewed push cannot be reviewed again (409)', $r['code'] === 409, $r['raw']);
+	$r = req('POST', "/projects/$PID/parked/{$pm['id']}/review", $OWN, array('decisions' => array('dataset:D-maya2' => 'discarded')));
+	check('removal discarded whole -> discarded', $r['code'] === 200 && $r['body']['status'] === 'discarded', $r['raw']);
+	check('nothing pending any more', count(req('GET', "/projects/$PID/parked", $OWN)['body']['parked']) === 0);
+
+	// onBehalfOf is ignored for someone who never had parked changes, and for non-owners
+	$v = (int)$db->get_var_prepared("SELECT version FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'D-editor'", array($PID));
+	req('POST', "/projects/$PID/push", $OWN, array('pushId' => uuid(), 'clientId' => 'members-test', 'changes' => array(
+		array('op' => 'update', 'type' => 'dataset', 'id' => 'D-editor', 'baseVersion' => $v, 'fields' => array('name' => 'x'),
+			'onBehalfOf' => $U['outsider']['pkey']))));
+	$obo = $db->get_var_prepared("SELECT on_behalf_of FROM strabomicro.micro_changes WHERE project_id = $1 AND entity_id = 'D-editor' ORDER BY seq DESC LIMIT 1", array($PID));
+	check('onBehalfOf someone without parked changes is ignored', $obo === null, "obo=$obo");
+
 	section('Ownership transfer');
 	check('offer to a non-member -> 400', req('POST', "/projects/$PID/transfer", $OWN, array('pkey' => $U['outsider']['pkey']))['code'] === 400);
 	check('offer to an invited person -> 400', req('POST', "/projects/$PID/transfer", $OWN, array('pkey' => $U['maya']['pkey']))['code'] === 400);

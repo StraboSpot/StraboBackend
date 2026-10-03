@@ -158,17 +158,19 @@ class MsStore {
 	public static function logChange($db, $ctx, $pid, $type, $id, $op, $version, $paths, $before, $after) {
 		return (int)$db->val(
 			"INSERT INTO strabomicro.micro_changes
-			   (project_id, push_id, entity_type, entity_id, op, version, changed_paths, before, after, user_pkey)
+			   (project_id, push_id, entity_type, entity_id, op, version, changed_paths, before, after, user_pkey, on_behalf_of)
 			 VALUES ($1, $2, $3, $4, $5, $6,
 			         CASE WHEN $7::jsonb IS NULL THEN NULL
 			              ELSE ARRAY(SELECT jsonb_array_elements_text($7::jsonb)) END,
-			         $8::json, $9::json, $10)
+			         $8::json, $9::json, $10, $11)
 			 RETURNING seq",
 			array($pid, $ctx->pushId, $type, $id, $op, $version,
 			      $paths === null ? null : MsHttp::encode(array_values($paths)),
 			      $before === null ? null : MsHttp::encode($before),
 			      $after === null ? null : MsHttp::encode($after),
-			      $ctx->me));
+			      $ctx->me,
+			      // An accepted parked change (17y), set by MsSync per change
+			      isset($ctx->onBehalfOf) ? $ctx->onBehalfOf : null));
 	}
 
 	/** pkey => {"pkey", "name"} (plus "email" when $withEmail). */

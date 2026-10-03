@@ -267,6 +267,9 @@ class MsSync {
 		$id = MsHttp::prop($c, 'id');
 		$base = array('type' => is_string($type) ? $type : null, 'id' => is_string($id) ? $id : null);
 		$db->savepoint('ms_change');
+		// The owner accepting someone's parked change (17y); ignored otherwise
+		$obo = MsHttp::prop($c, 'onBehalfOf');
+		$ctx->onBehalfOf = is_int($obo) && MsParked::mayActFor($ctx, $pid, $obo) ? $obo : null;
 		try {
 			$result = self::applyOne($ctx, $pid, $c);
 			$db->release('ms_change');
