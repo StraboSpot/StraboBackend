@@ -101,7 +101,8 @@ class MsMembers {
 			$db->q(
 				"UPDATE strabomicro.micro_members
 				    SET role = $3, state = 'invited', invited_by = $4, invited_at = now(),
-				        responded_at = NULL, removed_at = NULL, invite_token = $5
+				        responded_at = NULL, removed_at = NULL, removed_by = NULL, role_changed_at = NULL,
+				        invite_token = $5
 				  WHERE project_id = $1 AND user_pkey = $2",
 				array($pid, $who, $role, $ctx->me, $token));
 		}
@@ -139,7 +140,10 @@ class MsMembers {
 			throw new MsHttpError(409, 'owner', 'The owner role moves only through an ownership transfer');
 		}
 		$db->q(
-			"UPDATE strabomicro.micro_members SET role = $3 WHERE project_id = $1 AND user_pkey = $2",
+			"UPDATE strabomicro.micro_members
+			    SET role = $3::varchar,
+			        role_changed_at = CASE WHEN state = 'active' AND role <> $3::varchar THEN now() ELSE role_changed_at END
+			  WHERE project_id = $1 AND user_pkey = $2",
 			array($pid, $pkey, $role));
 		$db->commit();
 		$users = MsStore::users($db, array($pkey), true);
@@ -178,9 +182,9 @@ class MsMembers {
 			throw new MsHttpError(409, 'owner', 'The owner cannot be removed');
 		}
 		$db->q(
-			"UPDATE strabomicro.micro_members SET state = 'removed', removed_at = now()
+			"UPDATE strabomicro.micro_members SET state = 'removed', removed_at = now(), removed_by = $3
 			  WHERE project_id = $1 AND user_pkey = $2",
-			array($pid, $pkey));
+			array($pid, $pkey, $ctx->me));
 		// A transfer offered to this person ends with their membership
 		$db->q(
 			"UPDATE strabomicro.micro_members SET transfer_to = NULL

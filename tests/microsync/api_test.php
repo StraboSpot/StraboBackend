@@ -662,7 +662,8 @@ try {
 	check('removed member: first push parked', $r['code'] === 403 && $r['body']['error'] === 'access_changed' && $r['body']['parked'] === true, $r['raw']);
 	$r = push($PID, $CON, array(array('op' => 'update', 'type' => 'spot', 'id' => 'PC', 'baseVersion' => 2, 'fields' => array('name' => 'again'))));
 	check('removed member: later pushes refused', $r['code'] === 403 && $r['body']['error'] === 'access_removed');
-	check('removed member cannot read', req('GET', "/projects/$PID/snapshot", $CON)['code'] === 404);
+	$r = req('GET', "/projects/$PID/snapshot", $CON);
+	check('removed member cannot read (403 access_removed)', $r['code'] === 403 && $r['body']['error'] === 'access_removed', $r['raw']);
 	$r = req('POST', "/projects/$PID/activity", $OWN, array('since' => 0, 'clientId' => 'test-client'));
 	check('owner sees parkedCount 1', $r['body']['parkedCount'] === 1);
 	check('parked push changed nothing', $db->get_var_prepared(
