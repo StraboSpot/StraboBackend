@@ -807,7 +807,7 @@ class MsSync {
 		$db = $ctx->db;
 		$p = MsStore::project($db, $pid, $ctx->me);
 		if (isset($_GET['brief']) && $_GET['brief'] === '1') {
-			self::briefHistory($db, $pid, $p);
+			self::briefHistory($ctx, $pid, $p);
 			return;
 		}
 		$limit = MsHttp::queryInt('limit', 200, 1, 1000);
@@ -851,28 +851,34 @@ class MsSync {
 	 * website history list. Pages back with before=<seq of the last row>.
 	 * Each row: name (of the entity, from its body), parent (after, else
 	 * before), movedFrom (the old parent of a move), the changed paths that
-	 * are edits, who and when, and onBehalfOf (an accepted parked change, 17y).
+	 * are edits, who and when, onBehalfOf (an accepted parked change, 17y),
+	 * and here (with clientId=: my own change from that computer).
 	 */
-	private static function briefHistory($db, $pid, $p) {
+	private static function briefHistory($ctx, $pid, $p) {
+		$db = $ctx->db;
 		$limit = MsHttp::queryInt('limit', 200, 1, 500);
 		$before = MsHttp::queryInt('before', 0, 0, PHP_INT_MAX);
+		$clientId = isset($_GET['clientId']) ? substr((string)$_GET['clientId'], 0, 200) : '';
 		$noise = '{' . implode(',', self::NOISE_PATHS) . '}';
 		$noiseDated = '{' . implode(',', array_merge(self::NOISE_PATHS, array('date'))) . '}';
+		// here: my own change from this computer (the activity poll's rule), so it is in my copy already
 		$rows = $db->rows(
-			"SELECT seq, push_id, entity_type, entity_id, op, array_to_json(changed_paths)::text AS changed_paths,
-			        COALESCE(after->'body'->>'name', after->'body'->>'sampleID',
-			                 before->'body'->>'name', before->'body'->>'sampleID') AS name,
-			        COALESCE(after->>'parentType', before->>'parentType') AS parent_type,
-			        COALESCE(after->>'parentId', before->>'parentId') AS parent_id,
-			        CASE WHEN op = 'update' AND after->>'parentId' IS DISTINCT FROM before->>'parentId'
-			             THEN before->>'parentId' END AS moved_from,
-			        user_pkey, on_behalf_of, " . MsDb::iso('at') . " AS at
-			   FROM strabomicro.micro_changes
-			  WHERE project_id = $1 AND ($2::bigint = 0 OR seq < $2::bigint)
-			    AND NOT (op = 'update' AND changed_paths IS NOT NULL AND changed_paths <@
-			             (CASE WHEN entity_type IN ('project', 'dataset') THEN $3::text[] ELSE $4::text[] END))
-			  ORDER BY seq DESC LIMIT $5",
-			array($pid, $before, $noiseDated, $noise, $limit + 1));
+			"SELECT c.seq, c.push_id, c.entity_type, c.entity_id, c.op, array_to_json(c.changed_paths)::text AS changed_paths,
+			        COALESCE(c.after->'body'->>'name', c.after->'body'->>'sampleID',
+			                 c.before->'body'->>'name', c.before->'body'->>'sampleID') AS name,
+			        COALESCE(c.after->>'parentType', c.before->>'parentType') AS parent_type,
+			        COALESCE(c.after->>'parentId', c.before->>'parentId') AS parent_id,
+			        CASE WHEN c.op = 'update' AND c.after->>'parentId' IS DISTINCT FROM c.before->>'parentId'
+			             THEN c.before->>'parentId' END AS moved_from,
+			        c.user_pkey, c.on_behalf_of, " . MsDb::iso('c.at') . " AS at,
+			        (c.user_pkey = $6 AND $7 <> '' AND (c.push_id IS NULL OR COALESCE(ps.client_id, '') = $7)) AS here
+			   FROM strabomicro.micro_changes c
+			   LEFT JOIN strabomicro.micro_pushes ps ON ps.push_id = c.push_id
+			  WHERE c.project_id = $1 AND ($2::bigint = 0 OR c.seq < $2::bigint)
+			    AND NOT (c.op = 'update' AND c.changed_paths IS NOT NULL AND c.changed_paths <@
+			             (CASE WHEN c.entity_type IN ('project', 'dataset') THEN $3::text[] ELSE $4::text[] END))
+			  ORDER BY c.seq DESC LIMIT $5",
+			array($pid, $before, $noiseDated, $noise, $limit + 1, $ctx->me, $clientId));
 		$more = count($rows) > $limit;
 		if ($more) {
 			array_pop($rows);
@@ -900,6 +906,7 @@ class MsSync {
 				'user'         => MsStore::user($users, $r['user_pkey']),
 				'onBehalfOf'   => $r['on_behalf_of'] === null ? null : MsStore::user($users, $r['on_behalf_of']),
 				'at'           => $r['at'],
+				'here'         => $r['here'] === 't',
 			);
 		}
 		MsHttp::json(200, array('headSeq' => $p['head_seq'], 'more' => $more, 'changes' => $out));

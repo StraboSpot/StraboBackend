@@ -485,6 +485,14 @@ try {
 		json_encode($moved));
 	$named = array_values(array_filter($brief, function ($c) { return $c['op'] === 'create' && $c['id'] === 'M1'; }));
 	check('brief create row: name from the body', count($named) === 1 && $named[0]['name'] === 'M1' && $named[0]['onBehalfOf'] === null);
+	$cid = 'brief-here-' . uuid();
+	$r = req('POST', "/projects/$PID/push", $EDT, array('pushId' => uuid(), 'clientId' => $cid, 'changes' => array(
+		array('op' => 'create', 'type' => 'tag', 'id' => 'T-here', 'parentType' => 'project', 'parentId' => $SID, 'body' => array('name' => 'Here')))));
+	$top = req('GET', "/projects/$PID/history?brief=1&limit=3&clientId=$cid", $EDT)['body']['changes'];
+	$other = req('GET', "/projects/$PID/history?brief=1&limit=3&clientId=other", $EDT)['body']['changes'];
+	$asOwner = req('GET', "/projects/$PID/history?brief=1&limit=3&clientId=$cid", $OWN)['body']['changes'];
+	check('brief: here only for my own change from that computer', $top[0]['id'] === 'T-here' && $top[0]['here'] === true
+		&& $other[0]['here'] === false && $asOwner[0]['here'] === false && $top[1]['here'] === false, json_encode(array($top[0], $other[0])));
 
 	// -----------------------------------------------------------------------
 	section('Snapshot');
