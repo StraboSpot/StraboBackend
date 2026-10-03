@@ -435,6 +435,57 @@ try {
 	check('history by user', $ok);
 	check('history bad entity -> 400', req('GET', "/projects/$PID/history?entity=nonsense", $VIE)['code'] === 400);
 
+	// Brief history for the activity panel (17v): newest first, no bookkeeping, pages back with before=
+	$tagV = (int)$db->get_var_prepared("SELECT version FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_id = 'T1'", array($PID));
+	$r = one($PID, $OWN, array('op' => 'update', 'type' => 'tag', 'id' => 'T1', 'baseVersion' => $tagV, 'fields' => array('modifiedTimestamp' => 1759500000000)));
+	$noiseSeq = (int)$db->get_var_prepared("SELECT max(seq) FROM strabomicro.micro_changes WHERE project_id = $1", array($PID));
+	check('timestamp-only update accepted (logged)', st($r) === 'accepted' && $db->get_var_prepared(
+		"SELECT array_to_string(changed_paths, ',') FROM strabomicro.micro_changes WHERE seq = $1", array($noiseSeq)) === 'modifiedTimestamp');
+	$brief = array();
+	$before = 0;
+	$pages = 0;
+	do {
+		$r = req('GET', "/projects/$PID/history?brief=1&limit=9" . ($before ? "&before=$before" : ''), $VIE);
+		$pages++;
+		foreach ($r['body']['changes'] as $c) {
+			$brief[] = $c;
+		}
+		$n = count($r['body']['changes']);
+		$before = $n ? $r['body']['changes'][$n - 1]['seq'] : 0;
+	} while ($r['body']['more'] && $pages < 100);
+	$desc = count($brief) > 0;
+	for ($i = 1; $i < count($brief); $i++) {
+		$desc = $desc && $brief[$i]['seq'] < $brief[$i - 1]['seq'];
+	}
+	check('brief history: newest first over several pages', $desc && $pages > 1, "pages $pages");
+	$isNoise = function ($c) {
+		if ($c['op'] !== 'update' || $c['changedPaths'] === null) return false;
+		$hide = array('childOrder', 'modifiedTimestamp', 'refs.tiles', 'refs.tiles_affine', 'refs.thumbnail');
+		if (in_array($c['type'], array('project', 'dataset'), true)) $hide[] = 'date';
+		return count(array_diff($c['changedPaths'], $hide)) === 0;
+	};
+	$all2 = req('GET', "/projects/$PID/changes?since=0&limit=1000", $VIE)['body']['changes'];
+	$expected = array();
+	foreach ($all2 as $c) {
+		if (!$isNoise($c)) $expected[] = $c['seq'];
+	}
+	$got = array_map(function ($c) { return $c['seq']; }, $brief);
+	sort($got);
+	check('brief history: every edit once, bookkeeping left out', $got === $expected && count($expected) < count($all2),
+		count($got) . ' vs ' . count($expected) . ' of ' . count($all2));
+	check('brief history: the timestamp-only update is not listed', !in_array($noiseSeq, $got, true));
+	$bySeq = array();
+	foreach ($brief as $c) $bySeq[$c['seq']] = $c;
+	$delP1 = array_values(array_filter($brief, function ($c) { return $c['op'] === 'delete' && $c['id'] === 'P1'; }));
+	check('brief delete row: name and parent from before, who', count($delP1) === 1 && $delP1[0]['parentType'] === 'micrograph'
+		&& $delP1[0]['parentId'] === 'M1' && $delP1[0]['user']['pkey'] === $users['editor']['pkey'] && !array_key_exists('body', $delP1[0]),
+		json_encode($delP1));
+	$moved = array_values(array_filter($brief, function ($c) { return $c['id'] === 'MX' && $c['movedFrom'] !== null; }));
+	check('brief move row: movedFrom is the old parent', count($moved) === 1 && $moved[0]['parentId'] === 'S1' && $moved[0]['movedFrom'] !== 'S1',
+		json_encode($moved));
+	$named = array_values(array_filter($brief, function ($c) { return $c['op'] === 'create' && $c['id'] === 'M1'; }));
+	check('brief create row: name from the body', count($named) === 1 && $named[0]['name'] === 'M1' && $named[0]['onBehalfOf'] === null);
+
 	// -----------------------------------------------------------------------
 	section('Snapshot');
 	one($PID, $OWN, array('op' => 'update', 'type' => 'sample', 'id' => 'S1', 'childOrder' => array('micrographs' => array('MC', 'M1'))));

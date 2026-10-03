@@ -795,12 +795,22 @@ class MsSync {
 
 	// ------------------------------------------------------------------
 	// GET projects/{pid}/history?entity=<type>:<id> | ?since=&user=
+	//                           | ?brief=1&before=  (the activity panel, 17v)
 	// ------------------------------------------------------------------
+
+	/** Changed paths that are bookkeeping, not someone's edit (hidden in brief history). */
+	const NOISE_PATHS = array('childOrder', 'modifiedTimestamp', 'refs.tiles', 'refs.tiles_affine', 'refs.thumbnail');
+	/** Also bookkeeping on these types: the app stamps date when it saves. */
+	const NOISE_DATE_TYPES = array('project', 'dataset');
 
 	public static function history($ctx, $pid) {
 		$db = $ctx->db;
-		$limit = MsHttp::queryInt('limit', 200, 1, 1000);
 		$p = MsStore::project($db, $pid, $ctx->me);
+		if (isset($_GET['brief']) && $_GET['brief'] === '1') {
+			self::briefHistory($db, $pid, $p);
+			return;
+		}
+		$limit = MsHttp::queryInt('limit', 200, 1, 1000);
 		$where = 'project_id = $1';
 		$params = array($pid);
 		if (isset($_GET['entity']) && $_GET['entity'] !== '') {
@@ -833,6 +843,66 @@ class MsSync {
 		}
 		MsHttp::json(200, array('headSeq' => $p['head_seq'], 'more' => $more,
 			'changes' => self::formatChanges($db, $rows, true)));
+	}
+
+	/**
+	 * Newest first, without bodies, and without bookkeeping updates (child
+	 * order, timestamps, derived files): what the activity panel and the
+	 * website history list. Pages back with before=<seq of the last row>.
+	 * Each row: name (of the entity, from its body), parent (after, else
+	 * before), movedFrom (the old parent of a move), the changed paths that
+	 * are edits, who and when, and onBehalfOf (an accepted parked change, 17y).
+	 */
+	private static function briefHistory($db, $pid, $p) {
+		$limit = MsHttp::queryInt('limit', 200, 1, 500);
+		$before = MsHttp::queryInt('before', 0, 0, PHP_INT_MAX);
+		$noise = '{' . implode(',', self::NOISE_PATHS) . '}';
+		$noiseDated = '{' . implode(',', array_merge(self::NOISE_PATHS, array('date'))) . '}';
+		$rows = $db->rows(
+			"SELECT seq, push_id, entity_type, entity_id, op, array_to_json(changed_paths)::text AS changed_paths,
+			        COALESCE(after->'body'->>'name', after->'body'->>'sampleID',
+			                 before->'body'->>'name', before->'body'->>'sampleID') AS name,
+			        COALESCE(after->>'parentType', before->>'parentType') AS parent_type,
+			        COALESCE(after->>'parentId', before->>'parentId') AS parent_id,
+			        CASE WHEN op = 'update' AND after->>'parentId' IS DISTINCT FROM before->>'parentId'
+			             THEN before->>'parentId' END AS moved_from,
+			        user_pkey, on_behalf_of, " . MsDb::iso('at') . " AS at
+			   FROM strabomicro.micro_changes
+			  WHERE project_id = $1 AND ($2::bigint = 0 OR seq < $2::bigint)
+			    AND NOT (op = 'update' AND changed_paths IS NOT NULL AND changed_paths <@
+			             (CASE WHEN entity_type IN ('project', 'dataset') THEN $3::text[] ELSE $4::text[] END))
+			  ORDER BY seq DESC LIMIT $5",
+			array($pid, $before, $noiseDated, $noise, $limit + 1));
+		$more = count($rows) > $limit;
+		if ($more) {
+			array_pop($rows);
+		}
+		$users = MsStore::users($db, array_merge(array_column($rows, 'user_pkey'), array_column($rows, 'on_behalf_of')));
+		$out = array();
+		foreach ($rows as $r) {
+			$paths = $r['changed_paths'] === null ? null : json_decode($r['changed_paths'], true);
+			if (is_array($paths)) {
+				$hide = in_array($r['entity_type'], self::NOISE_DATE_TYPES, true)
+					? array_merge(self::NOISE_PATHS, array('date')) : self::NOISE_PATHS;
+				$paths = array_values(array_diff($paths, $hide));
+			}
+			$out[] = array(
+				'seq'          => (int)$r['seq'],
+				'pushId'       => $r['push_id'],
+				'type'         => $r['entity_type'],
+				'id'           => $r['entity_id'],
+				'op'           => $r['op'],
+				'name'         => $r['name'],
+				'parentType'   => $r['parent_type'],
+				'parentId'     => $r['parent_id'],
+				'movedFrom'    => $r['moved_from'],
+				'changedPaths' => $paths,
+				'user'         => MsStore::user($users, $r['user_pkey']),
+				'onBehalfOf'   => $r['on_behalf_of'] === null ? null : MsStore::user($users, $r['on_behalf_of']),
+				'at'           => $r['at'],
+			);
+		}
+		MsHttp::json(200, array('headSeq' => $p['head_seq'], 'more' => $more, 'changes' => $out));
 	}
 
 	private static function formatChanges($db, $rows, $withBefore) {
