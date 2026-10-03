@@ -23,14 +23,17 @@ class MsStore {
 
 	/**
 	 * Load a synced project and the caller's membership. 404 unless the
-	 * project uses the entity format and the caller is an active member
-	 * ($allowInactive: also return removed/downgraded rows, for parking).
+	 * project uses the entity format and the caller is an active member;
+	 * a removed member gets 403 access_removed (removedError), so the app
+	 * can tell removal from a missing project (17k). $allowInactive: also
+	 * return removed rows, for parking.
 	 */
 	public static function project($db, $pid, $me, $allowInactive = false) {
 		$row = $db->row(
 			"SELECT p.id, p.strabo_id, p.name, p.userpkey, p.sync_format, p.sync_state, p.head_seq,
 			        " . MsDb::iso('p.views_built_at') . " AS views_built_at,
-			        m.role, m.state AS member_state, m.removed_at
+			        m.role, m.state AS member_state, m.removed_at, m.removed_by,
+			        " . MsDb::iso('m.role_changed_at') . " AS role_changed_at
 			   FROM strabomicro.micro_projectmetadata p
 			   LEFT JOIN strabomicro.micro_members m ON m.project_id = p.id AND m.user_pkey = $2
 			  WHERE p.id = $1",
@@ -41,12 +44,30 @@ class MsStore {
 		if (!$synced || $row['member_state'] === null) {
 			throw new MsHttpError(404, 'not_found', 'Project not found');
 		}
+		if ($row['member_state'] === 'removed' && !$allowInactive) {
+			throw self::removedError($db, $row, $me, 'access_removed', 'You no longer have access to this project');
+		}
 		if ($row['member_state'] !== 'active' && !$allowInactive) {
 			throw new MsHttpError(404, 'not_found', 'Project not found');
 		}
 		$row['id'] = (int)$row['id'];
 		$row['head_seq'] = (int)$row['head_seq'];
 		return $row;
+	}
+
+	/**
+	 * 403 for a removed member (17k): left = they left themselves; removedBy
+	 * = who removed them (null when not recorded, removals before
+	 * microsync_phase2_access.sql).
+	 */
+	public static function removedError($db, $row, $me, $code, $message, $extra = array()) {
+		$by = $row['removed_by'] === null ? null : (int)$row['removed_by'];
+		$users = $by === null ? array() : self::users($db, array($by));
+		return new MsHttpError(403, $code, $message, $extra + array(
+			'left'      => $by === (int)$me,
+			'removedBy' => $by === null || $by === (int)$me ? null : self::user($users, $by),
+			'project'   => array('pid' => (int)$row['id'], 'name' => $row['name']),
+		));
 	}
 
 	public static function canWrite($role) {

@@ -164,7 +164,25 @@ try {
 	check('non-member -> 404', req('PATCH', "/projects/$PID/members/" . $U['outsider']['pkey'], $OWN, array('role' => 'viewer'))['code'] === 404);
 	$r = req('PATCH', "/projects/$PID/members/" . $U['editor']['pkey'], $OWN, array('role' => 'viewer'));
 	check('owner makes editor a viewer', $r['code'] === 200 && $r['body']['member']['role'] === 'viewer', $r['raw']);
-	check('viewer push is refused', push1($PID, $EDT, dataset($SID, 'D-viewer')) === 'forbidden/viewer');
+	check('role change recorded for an active member', $db->get_var_prepared(
+		"SELECT role_changed_at IS NOT NULL FROM strabomicro.micro_members WHERE project_id = $1 AND user_pkey = $2",
+		array($PID, $U['editor']['pkey'])) === 't');
+	$r = req('POST', "/projects/$PID/push", $EDT, array('pushId' => uuid(), 'clientId' => 'members-test',
+		'changes' => array(dataset($SID, 'D-viewer'), array('op' => 'update', 'type' => 'dataset', 'id' => 'D-editor',
+			'baseVersion' => 1, 'fields' => array('name' => 'renamed by a viewer')))));
+	$res = isset($r['body']['results']) ? $r['body']['results'] : array();
+	check('viewer push is refused, and parked after the downgrade (17k)', count($res) === 2
+		&& $res[0]['status'] === 'forbidden' && $res[0]['reason'] === 'viewer' && $res[0]['parked'] === true
+		&& $res[1]['status'] === 'forbidden' && $res[1]['parked'] === true, $r['raw']);
+	$parked = $db->get_var_prepared(
+		"SELECT payload::text FROM strabomicro.micro_parked_pushes WHERE project_id = $1 AND user_pkey = $2 AND status = 'pending'",
+		array($PID, $U['editor']['pkey']));
+	$pj = json_decode((string)$parked, true);
+	check('one parked push with both changes, reason role_changed', is_array($pj) && $pj['reason'] === 'role_changed'
+		&& $pj['role'] === 'viewer' && count($pj['changes']) === 2 && $pj['changes'][1]['id'] === 'D-editor', (string)$parked);
+	check('parked changes were not applied', $db->get_var_prepared(
+		"SELECT body->>'name' FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'dataset' AND entity_id = 'D-editor'",
+		array($PID)) === 'D-editor');
 	check('pending invitation role can change', req('PATCH', "/projects/$PID/members/" . $U['dan']['pkey'], $OWN, array('role' => 'editor'))['code'] === 200);
 	req('PATCH', "/projects/$PID/members/" . $U['editor']['pkey'], $OWN, array('role' => 'editor'));
 
@@ -172,12 +190,26 @@ try {
 	req('POST', "/projects/$PID/members", $OWN, array('email' => $U['maya']['email'], 'role' => 'contributor'));
 	req('POST', "/invites/$PID/accept", $MAY);
 	check('contributor can push', push1($PID, $MAY, dataset($SID, 'D-maya')) === 'accepted');
+	$r = req('POST', "/projects/$PID/push", $MAY, array('pushId' => uuid(), 'clientId' => 'members-test',
+		'changes' => array(array('op' => 'update', 'type' => 'dataset', 'id' => 'D-editor', 'baseVersion' => 1,
+			'fields' => array('name' => 'not mine')))));
+	$x = isset($r['body']['results'][0]) ? $r['body']['results'][0] : array();
+	check('role never changed: a refusal is not parked', isset($x['reason']) && $x['reason'] === 'contributor_not_creator'
+		&& !isset($x['parked']) && $db->get_var_prepared(
+			"SELECT count(*) FROM strabomicro.micro_parked_pushes WHERE project_id = $1 AND user_pkey = $2",
+			array($PID, $U['maya']['pkey'])) === '0', $r['raw']);
 	check('editor cannot remove others (403)', req('DELETE', "/projects/$PID/members/" . $U['maya']['pkey'], $EDT)['code'] === 403);
 	$r = req('DELETE', "/projects/$PID/members/" . $U['owner']['pkey'], $OWN);
 	check('owner cannot leave -> 409 owner_must_transfer', $r['code'] === 409 && $r['body']['error'] === 'owner_must_transfer', $r['raw']);
 	$r = req('DELETE', "/projects/$PID/members/" . $U['maya']['pkey'], $OWN);
 	check('owner removes the contributor', $r['code'] === 200 && $r['body']['status'] === 'removed', $r['raw']);
-	check('removed member cannot read', req('GET', "/projects/$PID", $MAY)['code'] === 404);
+	$r = req('GET', "/projects/$PID", $MAY);
+	check('removed member cannot read: 403 access_removed, removed by the owner (17k)', $r['code'] === 403
+		&& $r['body']['error'] === 'access_removed' && $r['body']['left'] === false
+		&& $r['body']['removedBy']['pkey'] === $U['owner']['pkey'] && $r['body']['removedBy']['name'] !== ''
+		&& $r['body']['project']['pid'] === $PID && $r['body']['project']['name'] === 'Members test', $r['raw']);
+	$r = req('POST', "/projects/$PID/activity", $MAY, array('since' => 0, 'clientId' => 'members-test'));
+	check('the activity poll says so too', $r['code'] === 403 && $r['body']['error'] === 'access_removed', $r['raw']);
 	check('removed member\'s next push is parked', push1($PID, $MAY, dataset($SID, 'D-maya2')) === 'http_403/access_changed');
 	check('and the one after is refused', push1($PID, $MAY, dataset($SID, 'D-maya3')) === 'http_403/access_removed');
 	check('removing again -> 404', req('DELETE', "/projects/$PID/members/" . $U['maya']['pkey'], $OWN)['code'] === 404);
@@ -190,9 +222,15 @@ try {
 	req('POST', "/invites/$PID/accept", $VIE);
 	$r = req('DELETE', "/projects/$PID/members/" . $U['viewer']['pkey'], $VIE);
 	check('a member leaves', $r['code'] === 200 && $r['body']['status'] === 'left', $r['raw']);
-	check('after leaving the project is gone for them', req('GET', "/projects/$PID", $VIE)['code'] === 404);
+	$r = req('GET', "/projects/$PID", $VIE);
+	check('after leaving: 403 access_removed, left, nobody named', $r['code'] === 403 && $r['body']['error'] === 'access_removed'
+		&& $r['body']['left'] === true && $r['body']['removedBy'] === null, $r['raw']);
+	check('an outsider still gets 404', req('GET', "/projects/$PID", $OUT)['code'] === 404);
 	$r = req('POST', "/projects/$PID/members", $OWN, array('email' => $U['maya']['email'], 'role' => 'viewer'));
 	check('a removed member can be invited again', $r['code'] === 200 && $r['body']['status'] === 'invited', $r['raw']);
+	check('re-invite after removal clears removed_by and role_changed_at', $db->get_var_prepared(
+		"SELECT (removed_by IS NULL AND role_changed_at IS NULL AND state = 'invited')::text FROM strabomicro.micro_members
+		  WHERE project_id = $1 AND user_pkey = $2", array($PID, $U['maya']['pkey'])) === 'true');
 
 	section('Ownership transfer');
 	check('offer to a non-member -> 400', req('POST', "/projects/$PID/transfer", $OWN, array('pkey' => $U['outsider']['pkey']))['code'] === 400);

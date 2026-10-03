@@ -116,6 +116,7 @@ class MsSync {
 		$ctx->pushId = $pushId;
 		$ctx->project = $p;
 		$results = self::applyAll($ctx, $pid, $changes);
+		$results = self::parkRoleRefusals($ctx, $p, $pushId, $clientId, $changes, $results);
 
 		// Cascades write more rows than they report, so read the head back
 		// (rows from rolled-back savepoints are gone; the lock is held).
@@ -153,15 +154,47 @@ class MsSync {
 			array($p['id'], $ctx->me, $p['removed_at']));
 		if ($already !== null) {
 			$db->rollback();
-			throw new MsHttpError(403, 'access_removed', 'You no longer have access to this project');
+			throw MsStore::removedError($db, $p, $ctx->me, 'access_removed', 'You no longer have access to this project');
 		}
 		$db->q(
 			"INSERT INTO strabomicro.micro_parked_pushes (project_id, user_pkey, payload) VALUES ($1, $2, $3::json)",
 			array($p['id'], $ctx->me, MsHttp::encode($in)));
 		$db->commit();
-		throw new MsHttpError(403, 'access_changed',
+		throw MsStore::removedError($db, $p, $ctx->me, 'access_changed',
 			'Your access to this project changed. Your changes were sent to the project owner for review.',
 			array('parked' => true));
+	}
+
+	/** Refusals caused by the member's role (MsSync::forbidden reasons). */
+	const ROLE_REASONS = array('viewer', 'contributor_not_creator', 'settings', 'editor_required', 'cascade_includes_others');
+
+	/**
+	 * After a role change (17k), changes the member's role refuses are parked
+	 * for the owner's review in one parked push (payload.changes), and their
+	 * results say parked: true. A member whose role never changed only gets
+	 * the refusals: the app does not offer what the role forbids, so those
+	 * come from a role change the app had not seen yet.
+	 */
+	private static function parkRoleRefusals($ctx, $p, $pushId, $clientId, $changes, $results) {
+		if ($p['role_changed_at'] === null) {
+			return $results;
+		}
+		$park = array();
+		foreach ($results as $i => $r) {
+			if ($r['status'] === 'forbidden' && in_array($r['reason'], self::ROLE_REASONS, true)) {
+				$park[] = $changes[$i];
+				$results[$i]['parked'] = true;
+			}
+		}
+		if (empty($park)) {
+			return $results;
+		}
+		$ctx->db->q(
+			"INSERT INTO strabomicro.micro_parked_pushes (project_id, user_pkey, payload) VALUES ($1, $2, $3::json)",
+			array($p['id'], $ctx->me, MsHttp::encode(array(
+				'reason' => 'role_changed', 'role' => $p['role'],
+				'pushId' => $pushId, 'clientId' => $clientId, 'changes' => $park))));
+		return $results;
 	}
 
 	/**
