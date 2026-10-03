@@ -103,9 +103,15 @@ include 'includes/mheader.php';
 		<section id="content">
 			<h3><?php echo htmlspecialchars($name)?></h3>
 <?php if (count($others) > 0) { ?>
-			<p>This project is shared. It is deleted for everyone: in StraboMicro, the copies of these
-				<?php echo count($others) === 1 ? 'person' : count($others) . ' people'?> become separate copies on their computers and no longer sync.
-				Changes they have not synced yet stay only in their copies.</p>
+<?php if (count($others) === 1) { ?>
+			<p>This project is shared with one other person, listed below. Deleting it removes it from StraboSpot for both of you.
+				In StraboMicro, their copy becomes a separate copy on their computer and no longer syncs; any changes they have
+				not synced yet stay only in that copy.</p>
+<?php } else { ?>
+			<p>This project is shared with <?php echo count($others)?> other people, listed below. Deleting it removes it from StraboSpot
+				for everyone. In StraboMicro, their copies become separate copies on their computers and no longer sync; any changes
+				they have not synced yet stay only in those copies.</p>
+<?php } ?>
 			<div class="table-wrapper">
 				<table class="myDataTable">
 					<thead>
@@ -123,7 +129,7 @@ include 'includes/mheader.php';
 				</table>
 			</div>
 <?php } else { ?>
-			<p>Copies of this project in StraboMicro on your computers become separate copies and no longer sync.</p>
+			<p>In StraboMicro, copies of this project on your computers become separate copies and no longer sync.</p>
 <?php } ?>
 <?php if ($invited > 0) { ?>
 			<p><?php echo $invited === 1 ? 'The pending invitation waits' : "The $invited pending invitations wait"?> until the project is restored.</p>
@@ -139,7 +145,7 @@ include 'includes/mheader.php';
 				<input type="text" id="micro-delete-name" name="name" autocomplete="off" style="margin-bottom:16px;"
 					oninput="document.getElementById('micro-delete-go').disabled = this.value.trim() !== <?php echo htmlspecialchars(json_encode(trim($name)), ENT_QUOTES)?>;">
 				<ul class="actions">
-					<li><button type="submit" id="micro-delete-go" class="button primary" disabled>Delete from StraboSpot</button></li>
+					<li><input type="submit" id="micro-delete-go" class="button primary" value="Delete from StraboSpot" disabled></li>
 					<li><a href="/my_micro_data" class="button">Cancel</a></li>
 				</ul>
 			</form>

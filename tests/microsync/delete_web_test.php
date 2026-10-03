@@ -145,9 +145,9 @@ try {
 	section('Confirmation page');
 	$r = page('GET', "/micro_delete?project_id=$PID", $OWNS);
 	check('owner: names the project, the shared copy, the member, the pending invitation, 30 days', $r['code'] === 200
-		&& strpos($r['body'], $NAME) !== false && strpos($r['body'], 'This project is shared') !== false
+		&& strpos($r['body'], $NAME) !== false && strpos($r['body'], 'This project is shared with one other person') !== false
 		&& strpos($r['body'], $U['editor']['email']) !== false && strpos($r['body'], 'pending invitation waits') !== false
-		&& strpos($r['body'], '30 days') !== false && strpos($r['body'], 'id="micro-delete-go" class="button primary" disabled') !== false,
+		&& strpos($r['body'], '30 days') !== false && strpos($r['body'], 'id="micro-delete-go" class="button primary" value="Delete from StraboSpot" disabled') !== false,
 		substr(strip_tags($r['body']), 0, 300));
 	$r = page('GET', "/micro_delete?project_id=$PID", $EDIT);
 	check('member: not their page (back to My StraboMicro Data)', $r['code'] === 302 && strpos($r['location'], 'my_micro_data') !== false);
