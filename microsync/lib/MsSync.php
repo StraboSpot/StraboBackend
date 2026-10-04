@@ -809,12 +809,8 @@ class MsSync {
 	// ------------------------------------------------------------------
 	// GET projects/{pid}/history?entity=<type>:<id> | ?since=&user=
 	//                           | ?brief=1&before=  (the activity panel, 17v)
+	//                             [&user=&until=&detail=1]  (website history page, 17ae)
 	// ------------------------------------------------------------------
-
-	/** Changed paths that are bookkeeping, not someone's edit (hidden in brief history). */
-	const NOISE_PATHS = array('childOrder', 'modifiedTimestamp', 'refs.tiles', 'refs.tiles_affine', 'refs.thumbnail');
-	/** Also bookkeeping on these types: the app stamps date when it saves. */
-	const NOISE_DATE_TYPES = array('project', 'dataset');
 
 	public static function history($ctx, $pid) {
 		$db = $ctx->db;
@@ -861,68 +857,48 @@ class MsSync {
 	/**
 	 * Newest first, without bodies, and without bookkeeping updates (child
 	 * order, timestamps, derived files): what the activity panel and the
-	 * website history list. Pages back with before=<seq of the last row>.
-	 * Each row: name (of the entity, from its body), parent (after, else
-	 * before), movedFrom (the old parent of a move), the changed paths that
-	 * are edits, who and when, onBehalfOf (an accepted parked change, 17y),
-	 * and here (with clientId=: my own change from that computer).
+	 * website history list (MsHistory::page). Pages back with before=<seq of
+	 * the last row>. Each row: name (of the entity, from its body), parent
+	 * (after, else before), movedFrom (the old parent of a move), the
+	 * changed paths that are edits, who and when, onBehalfOf (an accepted
+	 * parked change, 17y), and here (with clientId=: my own change from
+	 * that computer). Filters (17ae): user=<pkey> (that person's changes,
+	 * incl. ones the owner accepted), until=<ISO 8601 or unix seconds>
+	 * (changes at or before it); detail=1 adds each update's fields.
+	 * historyStart: when the log begins (sync turned on).
 	 */
 	private static function briefHistory($ctx, $pid, $p) {
-		$db = $ctx->db;
-		$limit = MsHttp::queryInt('limit', 200, 1, 500);
-		$before = MsHttp::queryInt('before', 0, 0, PHP_INT_MAX);
-		$clientId = isset($_GET['clientId']) ? substr((string)$_GET['clientId'], 0, 200) : '';
-		$noise = '{' . implode(',', self::NOISE_PATHS) . '}';
-		$noiseDated = '{' . implode(',', array_merge(self::NOISE_PATHS, array('date'))) . '}';
-		// here: my own change from this computer (the activity poll's rule), so it is in my copy already
-		$rows = $db->rows(
-			"SELECT c.seq, c.push_id, c.entity_type, c.entity_id, c.op, array_to_json(c.changed_paths)::text AS changed_paths,
-			        COALESCE(c.after->'body'->>'name', c.after->'body'->>'sampleID',
-			                 c.before->'body'->>'name', c.before->'body'->>'sampleID') AS name,
-			        COALESCE(c.after->>'parentType', c.before->>'parentType') AS parent_type,
-			        COALESCE(c.after->>'parentId', c.before->>'parentId') AS parent_id,
-			        CASE WHEN c.op = 'update' AND c.after->>'parentId' IS DISTINCT FROM c.before->>'parentId'
-			             THEN c.before->>'parentId' END AS moved_from,
-			        c.user_pkey, c.on_behalf_of, " . MsDb::iso('c.at') . " AS at,
-			        (c.user_pkey = $6 AND $7 <> '' AND (c.push_id IS NULL OR COALESCE(ps.client_id, '') = $7)) AS here
-			   FROM strabomicro.micro_changes c
-			   LEFT JOIN strabomicro.micro_pushes ps ON ps.push_id = c.push_id
-			  WHERE c.project_id = $1 AND ($2::bigint = 0 OR c.seq < $2::bigint)
-			    AND NOT (c.op = 'update' AND c.changed_paths IS NOT NULL AND c.changed_paths <@
-			             (CASE WHEN c.entity_type IN ('project', 'dataset') THEN $3::text[] ELSE $4::text[] END))
-			  ORDER BY c.seq DESC LIMIT $5",
-			array($pid, $before, $noiseDated, $noise, $limit + 1, $ctx->me, $clientId));
-		$more = count($rows) > $limit;
-		if ($more) {
-			array_pop($rows);
-		}
-		$users = MsStore::users($db, array_merge(array_column($rows, 'user_pkey'), array_column($rows, 'on_behalf_of')));
-		$out = array();
-		foreach ($rows as $r) {
-			$paths = $r['changed_paths'] === null ? null : json_decode($r['changed_paths'], true);
-			if (is_array($paths)) {
-				$hide = in_array($r['entity_type'], self::NOISE_DATE_TYPES, true)
-					? array_merge(self::NOISE_PATHS, array('date')) : self::NOISE_PATHS;
-				$paths = array_values(array_diff($paths, $hide));
+		$until = null;
+		if (isset($_GET['until']) && $_GET['until'] !== '') {
+			$until = self::parseTime((string)$_GET['until']);
+			if ($until === null) {
+				throw new MsHttpError(400, 'bad_request', 'until must be ISO 8601 or unix seconds');
 			}
-			$out[] = array(
-				'seq'          => (int)$r['seq'],
-				'pushId'       => $r['push_id'],
-				'type'         => $r['entity_type'],
-				'id'           => $r['entity_id'],
-				'op'           => $r['op'],
-				'name'         => $r['name'],
-				'parentType'   => $r['parent_type'],
-				'parentId'     => $r['parent_id'],
-				'movedFrom'    => $r['moved_from'],
-				'changedPaths' => $paths,
-				'user'         => MsStore::user($users, $r['user_pkey']),
-				'onBehalfOf'   => $r['on_behalf_of'] === null ? null : MsStore::user($users, $r['on_behalf_of']),
-				'at'           => $r['at'],
-				'here'         => $r['here'] === 't',
-			);
 		}
-		MsHttp::json(200, array('headSeq' => $p['head_seq'], 'more' => $more, 'changes' => $out));
+		$page = MsHistory::page($ctx->db, $pid, array(
+			'before'   => MsHttp::queryInt('before', 0, 0, PHP_INT_MAX),
+			'limit'    => MsHttp::queryInt('limit', 200, 1, 500),
+			'me'       => $ctx->me,
+			'clientId' => isset($_GET['clientId']) ? substr((string)$_GET['clientId'], 0, 200) : '',
+			'user'     => MsHttp::queryInt('user', 0, 0, PHP_INT_MAX),
+			'until'    => $until,
+			'detail'   => isset($_GET['detail']) && $_GET['detail'] === '1',
+		));
+		$range = MsHistory::range($ctx->db, $pid);
+		MsHttp::json(200, array('headSeq' => $p['head_seq'], 'more' => $page['more'], 'changes' => $page['changes'],
+			'historyStart' => $range === null ? null : $range['firstAt']));
+	}
+
+	/** Unix seconds from ISO 8601 or a whole number of seconds; null when unreadable. */
+	public static function parseTime($s) {
+		if (preg_match('/^\d{1,12}$/', $s)) {
+			return (int)$s;
+		}
+		if (!preg_match('/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:?\d{2})$/', $s)) {
+			return null;
+		}
+		$t = strtotime($s);
+		return $t === false ? null : $t;
 	}
 
 	private static function formatChanges($db, $rows, $withBefore) {

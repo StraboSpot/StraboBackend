@@ -278,13 +278,38 @@ class MsProjects {
 	 * GET projects/{pid}/smz: the same streamed .smz the legacy download
 	 * doors serve (MsSmz), for any active member (export, recovery).
 	 */
+	/**
+	 * GET projects/{pid}/smz: the project as a .smz. With seq=<S> (right
+	 * after change S; "before change S" is S - 1) or at=<ISO 8601 or unix
+	 * seconds>, the project as it was then, as a separate copy with a new
+	 * id named "<name> (as of <date time>)" in tz=<IANA zone> (else UTC)
+	 * (17ae). 409 before_history when that is before sync was turned on.
+	 */
 	public static function smz($ctx, $pid) {
 		$p = MsStore::project($ctx->db, $pid, $ctx->me);
 		if ($p['sync_state'] !== 'ready') {
 			throw new MsHttpError(409, 'not_ready', 'The initial upload of this project has not finished');
 		}
 		$name = strtolower(str_replace(' ', '_', trim(preg_replace('/[^A-Za-z0-9\-_ ]/', '', (string)$p['name']))));
-		if (!MsSmz::send($ctx->strabodb, $pid, ($name === '' ? 'project' : $name) . '.smz')) {
+		$name = $name === '' ? 'project' : $name;
+		$asOf = null;
+		$hasSeq = isset($_GET['seq']) && $_GET['seq'] !== '';
+		$hasAt = isset($_GET['at']) && $_GET['at'] !== '';
+		if ($hasSeq || $hasAt) {
+			$ts = null;
+			if ($hasAt) {
+				$ts = MsSync::parseTime((string)$_GET['at']);
+				if ($ts === null) {
+					throw new MsHttpError(400, 'bad_request', 'at must be ISO 8601 or unix seconds');
+				}
+			}
+			$seq = MsHistory::resolveAsOf($ctx->db, $pid, $hasSeq ? MsHttp::queryInt('seq', 0, 0, PHP_INT_MAX) : null, $ts);
+			$when = MsHistory::timeOf($ctx->db, $pid, $seq);
+			$tz = isset($_GET['tz']) ? (string)$_GET['tz'] : '';
+			$asOf = array('seq' => $seq, 'id' => MsHttp::uuid4(), 'name' => MsHistory::asOfName($p['name'], $when, $tz));
+			$name .= '_as_of_' . MsHistory::asOfStamp($when, $tz);
+		}
+		if (!MsSmz::send($ctx->strabodb, $pid, $name . '.smz', $asOf)) {
 			throw new MsHttpError(404, 'not_found', 'Project not found');
 		}
 	}

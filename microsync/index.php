@@ -29,6 +29,7 @@ if (!defined('MICROSYNC_ENABLED') || MICROSYNC_ENABLED !== true) {
 include_once "./lib/MsDb.php";
 include_once "./lib/MsModel.php";
 include_once "./lib/MsStore.php";
+include_once "./lib/MsHistory.php";
 include_once "./lib/MsProjects.php";
 include_once "./lib/MsSync.php";
 include_once "./lib/MsBlobs.php";
