@@ -123,7 +123,7 @@ class MsSync {
 		$head = (int)$db->val(
 			"SELECT COALESCE(MAX(seq), 0) FROM strabomicro.micro_changes WHERE project_id = $1", array($pid));
 		if ($head > $p['head_seq']) {
-			MsStore::bumpHead($db, $pid, $head);
+			MsStore::bumpHead($db, $pid, $head, $clientId);
 		}
 		$response = array('headSeq' => $head, 'results' => $results);
 		$db->q(
