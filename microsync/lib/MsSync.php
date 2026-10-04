@@ -139,8 +139,13 @@ class MsSync {
 
 	/**
 	 * Push from a member who is no longer active (v3 §3.2): a removed
-	 * member's first push after removal is parked for the owner; later ones
-	 * are refused. Invited/declined users have no access at all.
+	 * member's unsynced work after removal is parked for the owner, as one
+	 * parked push. Their app may send it in several pushes (batches, or an
+	 * interrupted push sent again first): while that parked push waits for
+	 * review, later pushes are added to it (a push id already in it is not
+	 * added twice; an entity already in it keeps its first change). Once the
+	 * owner reviewed it, later pushes are refused. Invited/declined users
+	 * have no access at all.
 	 */
 	private static function parkOrRefuse($ctx, $p, $in) {
 		$db = $ctx->db;
@@ -148,21 +153,57 @@ class MsSync {
 			$db->rollback();
 			throw new MsHttpError(404, 'not_found', 'Project not found');
 		}
-		$already = $db->val(
-			"SELECT 1 FROM strabomicro.micro_parked_pushes
-			  WHERE project_id = $1 AND user_pkey = $2 AND parked_at >= $3::timestamptz LIMIT 1",
+		$parkedMsg = 'Your access to this project changed. Your changes were sent to the project owner for review.';
+		$row = $db->row(
+			"SELECT id, status, payload::text AS payload FROM strabomicro.micro_parked_pushes
+			  WHERE project_id = $1 AND user_pkey = $2 AND parked_at >= $3::timestamptz
+			  ORDER BY id LIMIT 1 FOR UPDATE",
 			array($p['id'], $ctx->me, $p['removed_at']));
-		if ($already !== null) {
+		if ($row === null) {
+			$payload = $in;
+			$pushId = MsHttp::prop($in, 'pushId');
+			if (is_object($payload) && is_string($pushId)) {
+				$payload->pushIds = array($pushId);
+			}
+			$db->q(
+				"INSERT INTO strabomicro.micro_parked_pushes (project_id, user_pkey, payload) VALUES ($1, $2, $3::json)",
+				array($p['id'], $ctx->me, MsHttp::encode($payload)));
+			$db->commit();
+			throw MsStore::removedError($db, $p, $ctx->me, 'access_changed', $parkedMsg, array('parked' => true));
+		}
+		if ($row['status'] !== 'pending') {
 			$db->rollback();
 			throw MsStore::removedError($db, $p, $ctx->me, 'access_removed', 'You no longer have access to this project');
 		}
-		$db->q(
-			"INSERT INTO strabomicro.micro_parked_pushes (project_id, user_pkey, payload) VALUES ($1, $2, $3::json)",
-			array($p['id'], $ctx->me, MsHttp::encode($in)));
+		$payload = json_decode($row['payload']);
+		$ids = MsHttp::prop($payload, 'pushIds');
+		$ids = is_array($ids) ? $ids : array(MsHttp::prop($payload, 'pushId'));
+		$pushId = MsHttp::prop($in, 'pushId');
+		if (!is_string($pushId) || !in_array($pushId, $ids, true)) {
+			$changes = MsHttp::prop($payload, 'changes');
+			$changes = is_array($changes) ? $changes : array();
+			$have = array();
+			foreach ($changes as $c) {
+				$have[MsHttp::prop($c, 'type') . ':' . MsHttp::prop($c, 'id')] = true;
+			}
+			$more = MsHttp::prop($in, 'changes');
+			foreach (is_array($more) ? $more : array() as $c) {
+				$key = MsHttp::prop($c, 'type') . ':' . MsHttp::prop($c, 'id');
+				if (!isset($have[$key])) {
+					$changes[] = $c;
+					$have[$key] = true;
+				}
+			}
+			$payload->changes = $changes;
+			if (is_string($pushId)) {
+				$ids[] = $pushId;
+			}
+			$payload->pushIds = array_values(array_filter($ids, 'is_string'));
+			$db->q("UPDATE strabomicro.micro_parked_pushes SET payload = $2::json WHERE id = $1",
+				array((int)$row['id'], MsHttp::encode($payload)));
+		}
 		$db->commit();
-		throw MsStore::removedError($db, $p, $ctx->me, 'access_changed',
-			'Your access to this project changed. Your changes were sent to the project owner for review.',
-			array('parked' => true));
+		throw MsStore::removedError($db, $p, $ctx->me, 'access_changed', $parkedMsg, array('parked' => true));
 	}
 
 	/** Refusals caused by the member's role (MsSync::forbidden reasons). */

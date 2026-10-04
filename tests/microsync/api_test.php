@@ -737,7 +737,17 @@ try {
 	$r = push($PID, $CON, array(array('op' => 'update', 'type' => 'spot', 'id' => 'PC', 'baseVersion' => 2, 'fields' => array('name' => 'after removal'))));
 	check('removed member: first push parked', $r['code'] === 403 && $r['body']['error'] === 'access_changed' && $r['body']['parked'] === true, $r['raw']);
 	$r = push($PID, $CON, array(array('op' => 'update', 'type' => 'spot', 'id' => 'PC', 'baseVersion' => 2, 'fields' => array('name' => 'again'))));
-	check('removed member: later pushes refused', $r['code'] === 403 && $r['body']['error'] === 'access_removed');
+	check('removed member: a later push joins the waiting parked push', $r['code'] === 403 && $r['body']['error'] === 'access_changed', $r['raw']);
+	$pp = json_decode((string)$db->get_var_prepared("SELECT payload::text FROM strabomicro.micro_parked_pushes WHERE project_id = $1 AND user_pkey = $2",
+		array($PID, $users['contrib']['pkey'])), true);
+	check('removed member: the entity already parked keeps its first change', is_array($pp) && count($pp['changes']) === 1
+		&& $pp['changes'][0]['fields']['name'] === 'after removal' && count($pp['pushIds']) === 2, json_encode($pp));
+	$db->prepare_query("UPDATE strabomicro.micro_parked_pushes SET status = 'discarded' WHERE project_id = $1 AND user_pkey = $2",
+		array($PID, $users['contrib']['pkey']));
+	$r = push($PID, $CON, array(array('op' => 'update', 'type' => 'spot', 'id' => 'PC', 'baseVersion' => 2, 'fields' => array('name' => 'reviewed'))));
+	check('removed member: after the owner\'s review, later pushes refused', $r['code'] === 403 && $r['body']['error'] === 'access_removed', $r['raw']);
+	$db->prepare_query("UPDATE strabomicro.micro_parked_pushes SET status = 'pending' WHERE project_id = $1 AND user_pkey = $2",
+		array($PID, $users['contrib']['pkey']));
 	$r = req('GET', "/projects/$PID/snapshot", $CON);
 	check('removed member cannot read (403 access_removed)', $r['code'] === 403 && $r['body']['error'] === 'access_removed', $r['raw']);
 	$r = req('POST', "/projects/$PID/activity", $OWN, array('since' => 0, 'clientId' => 'test-client'));
