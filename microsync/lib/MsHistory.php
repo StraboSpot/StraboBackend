@@ -269,14 +269,19 @@ class MsHistory {
 
 	/**
 	 * What an update changed, per path: {path, before, after} with the
-	 * values as short text (null = absent), {path, file: true} for a file
-	 * ref, and parentId as the old and new parent ids.
+	 * values as short text (null = absent), {path, file: true, change:
+	 * added | replaced | removed} for a file ref, and parentId as the old
+	 * and new parent ids.
 	 */
 	public static function fieldChanges($paths, $before, $after) {
 		$out = array();
 		foreach ($paths as $path) {
 			if (strpos($path, 'refs.') === 0) {
-				$out[] = array('path' => $path, 'file' => true);
+				$role = substr($path, 5);
+				$had = MsHttp::prop(MsHttp::prop($before, 'refs'), $role) !== null;
+				$has = MsHttp::prop(MsHttp::prop($after, 'refs'), $role) !== null;
+				$out[] = array('path' => $path, 'file' => true,
+					'change' => $had && $has ? 'replaced' : ($has ? 'added' : 'removed'));
 			} elseif ($path === 'parentId') {
 				$out[] = array('path' => $path, 'before' => MsHttp::prop($before, 'parentId'), 'after' => MsHttp::prop($after, 'parentId'));
 			} else {

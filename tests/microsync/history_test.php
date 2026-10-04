@@ -319,7 +319,9 @@ try {
 	check('nested field: mineralogy.notes n0 -> n1', count($min) === 1
 		&& $min[0]['fields'] === array(array('path' => 'mineralogy.notes', 'before' => 'n0', 'after' => 'n1')), json_encode($min));
 	$img = array_values(array_filter($byKey($hd, 'micrograph', 'M1', 'update'), function ($c) { return $c['changedPaths'] === array('refs.image'); }));
-	check('file rows: refs.image as file', count($img) >= 1 && $img[0]['fields'] === array(array('path' => 'refs.image', 'file' => true)), json_encode($img));
+	check('file rows: image replaced, then first added', count($img) === 2
+		&& $img[0]['fields'] === array(array('path' => 'refs.image', 'file' => true, 'change' => 'replaced'))
+		&& $img[1]['fields'] === array(array('path' => 'refs.image', 'file' => true, 'change' => 'added')), json_encode($img));
 	$mv = array_values(array_filter($byKey($hd, 'micrograph', 'M1', 'update'), function ($c) { return $c['movedFrom'] === 'S1'; }));
 	check('move row: parentId S1 -> S2', count($mv) === 1 && in_array(array('path' => 'parentId', 'before' => 'S1', 'after' => 'S2'), $mv[0]['fields'], true), json_encode($mv));
 	check('create/delete rows: empty fields', $byKey($hd, 'spot', 'P1', 'delete')[0]['fields'] === array());

@@ -86,6 +86,10 @@ include("includes/mheader.php");
 			case "collaborators":
 				window.location='/micro_collaborators?project_id='+pkey;
 				break;
+			case "history":
+				// Synced projects: who changed what, and the project as of a date (v3 17ae)
+				window.location='/micro_history?project_id='+pkey;
+				break;
 			case "deletesynced":
 				// Synced projects: the confirmation page names who else has it (v3 17ac)
 				window.location='/micro_delete?project_id='+pkey;
@@ -250,6 +254,7 @@ if(count($microrows)==0){
 							<option value="share">Share</option>
 <?php if($mr->sync_format === 'entity'){ ?>
 							<option value="collaborators">Collaborators</option>
+							<option value="history">History</option>
 <?php } ?>
 							<option value="doi">Get DOI</option>
 							<option value="<?php echo $mr->sync_format === 'entity' ? 'deletesynced' : 'delete'?>">Delete</option>
