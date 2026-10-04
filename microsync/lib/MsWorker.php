@@ -33,6 +33,8 @@
  * @link       https://strabospot.org
  */
 
+require_once __DIR__ . '/MsHistory.php';
+
 class MsWorker {
 
 	/** Seconds without a new change before a project is rebuilt. */
@@ -111,8 +113,16 @@ class MsWorker {
 	 * headSeq, json (project.json text), pointCounts (id => body),
 	 * micrographs (ids), refs (role => [entityKey => sha]) or null when
 	 * the project entity is missing.
+	 *
+	 * $atSeq: the project as it was right after that change, rebuilt from
+	 * the change log (MsHistory::rowsAt; 5d, 17ae) instead of the entity
+	 * table; headSeq is then $atSeq.
 	 */
-	public static function assemble($db, $pid, $straboId) {
+	public static function assemble($db, $pid, $straboId, $atSeq = null) {
+		if ($atSeq !== null) {
+			list($rows, $refRows) = MsHistory::rowsAt($db, $pid, $atSeq);
+			return self::assembleRows($rows, $refRows, $straboId, (int)$atSeq);
+		}
 		// Inside the caller's transaction (the conversion checks its own
 		// uncommitted writes) read there; otherwise take a snapshot.
 		$own = !$db->inTransaction();
@@ -136,7 +146,15 @@ class MsWorker {
 		if ($own) {
 			$db->commit();
 		}
+		return self::assembleRows($rows, $refRows, $straboId, $head);
+	}
 
+	/**
+	 * Build the assembly from entity rows (entity_type, entity_id,
+	 * parent_type, parent_id, body and child_order as JSON text, in creation
+	 * order) and ref rows (entity_type, entity_id, role, sha256).
+	 */
+	private static function assembleRows($rows, $refRows, $straboId, $head) {
 		$bodies = array();
 		$orders = array();
 		$children = array();

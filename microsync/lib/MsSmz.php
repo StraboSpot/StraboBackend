@@ -38,6 +38,7 @@ require_once __DIR__ . '/MsDb.php';
 require_once __DIR__ . '/MsModel.php';
 require_once __DIR__ . '/MsStore.php';
 require_once __DIR__ . '/MsWorker.php';
+require_once __DIR__ . '/MsHistory.php';
 
 class MsSmz {
 
@@ -68,9 +69,9 @@ class MsSmz {
 		return $row;
 	}
 
-	/** Exact byte length of the archive a download would send now. */
-	public static function length($strabodb, $pid) {
-		$plan = self::plan($strabodb, $pid, false);
+	/** Exact byte length of the archive a download would send now ($asOf: see plan). */
+	public static function length($strabodb, $pid, $asOf = null) {
+		$plan = self::plan($strabodb, $pid, false, $asOf);
 		return $plan === null ? 0 : $plan['length'];
 	}
 
@@ -78,9 +79,9 @@ class MsSmz {
 	 * Stream the archive as the whole HTTP response. Returns false (nothing
 	 * sent) when the project cannot be assembled.
 	 */
-	public static function send($strabodb, $pid, $downloadName) {
+	public static function send($strabodb, $pid, $downloadName, $asOf = null) {
 		set_time_limit(0);
-		$plan = self::plan($strabodb, $pid, true);
+		$plan = self::plan($strabodb, $pid, true, $asOf);
 		if ($plan === null) {
 			return false;
 		}
@@ -119,8 +120,14 @@ class MsSmz {
 	 *
 	 * Entry: name, method, crc (int or null), csize, usize, and a source:
 	 *   data => string | path + offset (raw bytes of a file or archive entry).
+	 *
+	 * $asOf (download as of a date, 17ae): array(seq, id, name) builds the
+	 * project as it was right after change seq (MsHistory) as a separate
+	 * copy: project id and root folder = id (new, so the app imports it as
+	 * its own project, never over the synced copy), name = name, and no
+	 * StraboSamples overlay (the samples as they were then).
 	 */
-	public static function plan($strabodb, $pid, $withCrc) {
+	public static function plan($strabodb, $pid, $withCrc, $asOf = null) {
 		$ms = new MsDb($strabodb);
 		$row = $ms->row(
 			"SELECT strabo_id, userpkey FROM strabomicro.micro_projectmetadata
@@ -130,19 +137,24 @@ class MsSmz {
 			return null;
 		}
 		$straboId = $row['strabo_id'];
-		$a = MsWorker::assemble($ms, $pid, $straboId);
+		$a = MsWorker::assemble($ms, $pid, $straboId, $asOf === null ? null : (int)$asOf['seq']);
 		if ($a === null) {
 			return null;
 		}
-		$root = self::safeName($straboId) . '/';
+		$root = self::safeName($asOf === null ? $straboId : $asOf['id']) . '/';
 		$entries = array();
 
 		// project.json: what a legacy download serves (spine overlay applied).
 		$json = $a['json'];
 		$decoded = json_decode($json);
 		if (is_object($decoded)) {
-			require_once dirname(__DIR__, 2) . '/microdb/lib/sample_overlay.php';
-			micro_sample_overlay_apply($decoded, $strabodb, (int)$row['userpkey']);
+			if ($asOf === null) {
+				require_once dirname(__DIR__, 2) . '/microdb/lib/sample_overlay.php';
+				micro_sample_overlay_apply($decoded, $strabodb, (int)$row['userpkey']);
+			} else {
+				$decoded->id = $asOf['id'];
+				$decoded->name = $asOf['name'];
+			}
 			$json = json_encode($decoded, MsHttp::JSON_OUT | JSON_PRETTY_PRINT);
 		}
 		$entries[] = self::dataEntry($root . 'project.json', $json);
@@ -223,8 +235,9 @@ class MsSmz {
 		// Timestamps from the last change, so one project state always
 		// yields the same bytes.
 		$at = $ms->val(
-			"SELECT floor(extract(epoch FROM max(at))) FROM strabomicro.micro_changes WHERE project_id = $1",
-			array((int)$pid));
+			"SELECT floor(extract(epoch FROM max(at))) FROM strabomicro.micro_changes
+			  WHERE project_id = $1 AND ($2::bigint IS NULL OR seq <= $2::bigint)",
+			array((int)$pid, $asOf === null ? null : (int)$asOf['seq']));
 		return self::layout($entries, $at === null ? time() : (int)$at);
 	}
 
