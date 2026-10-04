@@ -211,7 +211,26 @@ try {
 	$r = req('POST', "/projects/$PID/activity", $MAY, array('since' => 0, 'clientId' => 'members-test'));
 	check('the activity poll says so too', $r['code'] === 403 && $r['body']['error'] === 'access_removed', $r['raw']);
 	check('removed member\'s next push is parked', push1($PID, $MAY, dataset($SID, 'D-maya2')) === 'http_403/access_changed');
-	check('and the one after is refused', push1($PID, $MAY, dataset($SID, 'D-maya3')) === 'http_403/access_removed');
+	// Their app may send the rest in more pushes (batches, an interrupted push
+	// sent again first): added to the same parked push while it waits
+	check('and the one after is added to it', push1($PID, $MAY, dataset($SID, 'D-maya3')) === 'http_403/access_changed');
+	$again = uuid();
+	$body = array('pushId' => $again, 'clientId' => 'members-test', 'changes' => array(dataset($SID, 'D-maya4'), dataset($SID, 'D-maya2')));
+	$r1 = req('POST', "/projects/$PID/push", $MAY, $body);
+	$r2 = req('POST', "/projects/$PID/push", $MAY, $body);
+	check('a push sent twice is added once; an entity already parked keeps its first change', $r1['code'] === 403
+		&& $r2['code'] === 403 && $r2['body']['error'] === 'access_changed' && $r2['body']['parked'] === true, $r2['raw']);
+	$mp = json_decode((string)$db->get_var_prepared(
+		"SELECT payload::text FROM strabomicro.micro_parked_pushes WHERE project_id = $1 AND user_pkey = $2", array($PID, $U['maya']['pkey'])), true);
+	check('one parked push: D-maya2, D-maya3, D-maya4, and three push ids', is_array($mp)
+		&& array_column($mp['changes'], 'id') === array('D-maya2', 'D-maya3', 'D-maya4') && count($mp['pushIds']) === 3
+		&& (int)$db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_parked_pushes WHERE project_id = $1 AND user_pkey = $2",
+			array($PID, $U['maya']['pkey'])) === 1, json_encode($mp));
+	// Once the owner reviewed it, later pushes are refused (status set here as a review would)
+	$db->prepare_query("UPDATE strabomicro.micro_parked_pushes SET status = 'discarded' WHERE project_id = $1 AND user_pkey = $2", array($PID, $U['maya']['pkey']));
+	$after = push1($PID, $MAY, dataset($SID, 'D-maya5'));
+	$db->prepare_query("UPDATE strabomicro.micro_parked_pushes SET status = 'pending' WHERE project_id = $1 AND user_pkey = $2", array($PID, $U['maya']['pkey']));
+	check('after the review, a removed member\'s push is refused', $after === 'http_403/access_removed', $after);
 	check('removing again -> 404', req('DELETE', "/projects/$PID/members/" . $U['maya']['pkey'], $OWN)['code'] === 404);
 	$r = req('DELETE', "/projects/$PID/members/" . $U['dan']['pkey'], $OWN);
 	check('owner withdraws a pending invitation', $r['code'] === 200);
@@ -240,8 +259,8 @@ try {
 	foreach ($r['code'] === 200 ? $r['body']['parked'] : array() as $x) $byUser[$x['user']['pkey']] = $x;
 	$pe = isset($byUser[$U['editor']['pkey']]) ? $byUser[$U['editor']['pkey']] : null;
 	$pm = isset($byUser[$U['maya']['pkey']]) ? $byUser[$U['maya']['pkey']] : null;
-	check('owner lists both: a role change (2 items) and a removal (1 item)', $pe && $pe['reason'] === 'role_changed'
-		&& $pe['role'] === 'viewer' && count($pe['changes']) === 2 && $pm && $pm['reason'] === 'removed' && count($pm['changes']) === 1
+	check('owner lists both: a role change (2 items) and a removal (3 items)', $pe && $pe['reason'] === 'role_changed'
+		&& $pe['role'] === 'viewer' && count($pe['changes']) === 2 && $pm && $pm['reason'] === 'removed' && count($pm['changes']) === 3
 		&& $pm['changes'][0]['id'] === 'D-maya2' && $pe['user']['name'] !== '', $r['raw']);
 	$r = req('POST', "/projects/$PID/parked/{$pe['id']}/review", $OWN, array('decisions' => array('dataset:nope' => 'accepted')));
 	check('unknown item -> 400', $r['code'] === 400, $r['raw']);
@@ -269,8 +288,10 @@ try {
 	check('reviewed by the owner', (int)$db->get_var_prepared("SELECT reviewed_by FROM strabomicro.micro_parked_pushes WHERE id = $1", array($pe['id'])) === $U['owner']['pkey']);
 	$r = req('POST', "/projects/$PID/parked/{$pe['id']}/review", $OWN, array('decisions' => array('dataset:D-editor' => 'discarded')));
 	check('a reviewed push cannot be reviewed again (409)', $r['code'] === 409, $r['raw']);
-	$r = req('POST', "/projects/$PID/parked/{$pm['id']}/review", $OWN, array('decisions' => array('dataset:D-maya2' => 'discarded')));
+	$r = req('POST', "/projects/$PID/parked/{$pm['id']}/review", $OWN, array('decisions' => array(
+		'dataset:D-maya2' => 'discarded', 'dataset:D-maya3' => 'discarded', 'dataset:D-maya4' => 'discarded')));
 	check('removal discarded whole -> discarded', $r['code'] === 200 && $r['body']['status'] === 'discarded', $r['raw']);
+
 	check('nothing pending any more', count(req('GET', "/projects/$PID/parked", $OWN)['body']['parked']) === 0);
 
 	// onBehalfOf is ignored for someone who never had parked changes, and for non-owners
