@@ -1,0 +1,2 @@
+# Source of the strabo-live container (built into its image): never served over HTTP
+Require all denied
