@@ -7,10 +7,15 @@
  *                                     or of another @test.strabospot.org user
  *                build <pid>          run the worker for a project now
  *                assembled <pid>      the project as the store assembles it
- *                                     (project.json, point counts, refs)
+ *                                     (project.json, point counts, refs);
+ *                                     mscli- projects and e2e.* owners only
  *                cleanup              delete every project whose straboId
  *                                     starts with mscli- (rows, files, staging,
  *                                     deleted-project tombstones)
+ *                wipe-e2e             the same for every project owned by an
+ *                                     e2e.*@test.strabospot.org account (the
+ *                                     app's end-to-end tests, tests/e2e), plus
+ *                                     their memberships elsewhere
  *              Usage: docker exec strabo-php php /srv/app/www/tests/microsync/client_fixture.php token
  *
  * @package    StraboSpot Web Site
@@ -34,6 +39,27 @@ require_once '/srv/app/www/jwtmicrodb/strabomicroclass.php';
 $PREFIX = 'mscli-';
 $FILES = '/srv/app/www/straboMicroFiles';
 $EMAIL = 'owner@test.strabospot.org';
+
+/** Owners whose projects the app's end-to-end tests may wipe */
+$E2E_EMAILS = 'e2e.%@test.strabospot.org';
+
+/**
+ * Remove a project completely: rows (with the worker-built legacy rows,
+ * the way the website does), files, staging uploads.
+ */
+function remove_project($db, $FILES, $r) {
+	$p = (int)$r->id;
+	foreach ((array)$db->get_results_prepared("SELECT upload_id FROM strabomicro.micro_uploads WHERE project_id = $1", array($p)) as $u) {
+		@unlink("$FILES/_staging/" . $u->upload_id);
+	}
+	$sm = new StraboMicro(null, (int)$r->userpkey, $db);
+	$sm->deleteProjectRows($r->strabo_id);
+	foreach (array("$FILES/$p", "$FILES/_deleted/$p") as $dir) {
+		if ($p > 0 && is_dir($dir)) {
+			exec('rm -rf ' . escapeshellarg($dir));
+		}
+	}
+}
 
 function out($v) {
 	echo json_encode($v, MsHttp::JSON_OUT | JSON_PRETTY_PRINT) . "\n";
@@ -59,7 +85,9 @@ if ($cmd === 'token') {
 	out(array('result' => build_now($pid)));
 } elseif ($cmd === 'assembled' && $pid > 0) {
 	$sid = $db->get_var_prepared("SELECT strabo_id FROM strabomicro.micro_projectmetadata WHERE id = $1", array($pid));
-	if (!is_string($sid) || strpos($sid, $PREFIX) !== 0) {
+	$e2eOwned = (int)$db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_projectmetadata p JOIN users u ON u.pkey = p.userpkey
+		WHERE p.id = $1 AND u.email LIKE $2", array($pid, $E2E_EMAILS)) > 0;
+	if (!is_string($sid) || (strpos($sid, $PREFIX) !== 0 && !$e2eOwned)) {
 		fwrite(STDERR, "Not a client test project: $pid\n");
 		exit(2);
 	}
@@ -70,26 +98,28 @@ if ($cmd === 'token') {
 		array($PREFIX . '%'));
 	$n = 0;
 	foreach ((array)$rows as $r) {
-		$p = (int)$r->id;
-		foreach ((array)$db->get_results_prepared("SELECT upload_id FROM strabomicro.micro_uploads WHERE project_id = $1", array($p)) as $u) {
-			@unlink("$FILES/_staging/" . $u->upload_id);
-		}
-		// The worker built legacy rows (relational tables, search slice, samples
-		// spine) for a ready project: remove them the way the website does
-		$sm = new StraboMicro(null, (int)$r->userpkey, $db);
-		$sm->deleteProjectRows($r->strabo_id);
-		foreach (array("$FILES/$p", "$FILES/_deleted/$p") as $dir) {
-			if ($p > 0 && is_dir($dir)) {
-				exec('rm -rf ' . escapeshellarg($dir));
-			}
-		}
+		remove_project($db, $FILES, $r);
 		$n++;
 	}
 	// Projects the app deleted from StraboSpot (stage 6): their tombstones
 	$db->prepare_query("DELETE FROM strabomicro.micro_deleted_projects WHERE strabo_id LIKE $1", array($PREFIX . '%'));
 	$left = (int)$db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_projectmetadata WHERE strabo_id LIKE $1", array($PREFIX . '%'));
 	out(array('removed' => $n, 'left' => $left));
+} elseif ($cmd === 'wipe-e2e') {
+	$owners = "SELECT pkey FROM users WHERE email LIKE $1";
+	$rows = $db->get_results_prepared("SELECT id, strabo_id, userpkey FROM strabomicro.micro_projectmetadata WHERE userpkey IN ($owners)",
+		array($E2E_EMAILS));
+	$n = 0;
+	foreach ((array)$rows as $r) {
+		remove_project($db, $FILES, $r);
+		$n++;
+	}
+	// Their deleted projects' tombstones, and memberships in other projects
+	$db->prepare_query("DELETE FROM strabomicro.micro_deleted_projects WHERE owner_pkey IN ($owners)", array($E2E_EMAILS));
+	$db->prepare_query("DELETE FROM strabomicro.micro_members WHERE user_pkey IN ($owners)", array($E2E_EMAILS));
+	$left = (int)$db->get_var_prepared("SELECT count(*) FROM strabomicro.micro_projectmetadata WHERE userpkey IN ($owners)", array($E2E_EMAILS));
+	out(array('removed' => $n, 'left' => $left));
 } else {
-	fwrite(STDERR, "usage: client_fixture.php token | build <pid> | assembled <pid> | cleanup\n");
+	fwrite(STDERR, "usage: client_fixture.php token | build <pid> | assembled <pid> | cleanup | wipe-e2e\n");
 	exit(1);
 }
