@@ -80,7 +80,7 @@ if ($problem === null && isset($_GET['download'])) {
 	} catch (MsHttpError $e) {
 		$_SESSION['micro_history_msg'] = $e->errorCode === 'before_history'
 			? 'That is before this project started syncing with StraboSpot, so its history does not go back that far. '
-				. 'Earlier versions are in StraboMicro (File > Version History) on the computer where it was made.'
+				. 'Earlier versions are in StraboMicro (File > View Version History...) on the computer where it was made.'
 			: $e->getMessage();
 	}
 	header('Location: ' . micro_history_url($pid, array()));
@@ -166,7 +166,7 @@ include 'includes/mheader.php';
 			<p class="mh-intro">Every change synced to StraboSpot, newest first. Click a line to see what changed.
 <?php if ($range !== null) { ?>
 				The history starts <time class="mh-time" data-style="date" datetime="<?php echo htmlspecialchars($range['firstAt'])?>"><?php echo htmlspecialchars(substr($range['firstAt'], 0, 10))?></time>,
-				when this project started syncing; earlier versions are in StraboMicro (File &gt; Version History).
+				when this project started syncing; earlier versions are in StraboMicro (File &gt; View Version History...).
 <?php } ?>
 			</p>
 
