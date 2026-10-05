@@ -140,6 +140,7 @@ class MsDelete {
 			@unlink(MsStore::stagingPath($u['upload_id']));
 		}
 		$db->q("DELETE FROM strabomicro.micro_presence WHERE project_id = $1", array($pid));
+		MsLive::members($db, $pid); // followers get project_deleted on their next check
 		$db->commit();
 
 		// Out of StraboSearch and StraboSamples (the worker puts them back on restore)

@@ -116,6 +116,9 @@ try {
 	check('invite again while pending -> 200 reinvited with the new role', $r['code'] === 200 && $r['body']['status'] === 'reinvited'
 		&& $r['body']['member']['role'] === 'editor', $r['raw']);
 	check('invited user cannot see the project yet', req('GET', "/projects/$PID", $EDT)['code'] === 404);
+	$r = req('GET', '/projects', $OWN);
+	$own = array_values(array_filter($r['body'], function ($p) use ($PID) { return $p['pid'] === $PID; }));
+	check('a pending invitation is not a member yet (members 1)', count($own) === 1 && $own[0]['members'] === 1, $r['raw']);
 	check('invited user cannot push', push1($PID, $EDT, dataset($SID, 'D-early')) === 'http_404/not_found');
 	$r = req('GET', '/invites', $EDT);
 	$inv = array_values(array_filter($r['body']['invitations'], function ($i) use ($PID) { return $i['pid'] === $PID; }));
@@ -132,6 +135,7 @@ try {
 	$r = req('GET', '/projects', $EDT);
 	$mine = array_values(array_filter($r['body'], function ($p) use ($PID) { return $p['pid'] === $PID; }));
 	check('accepted project is in GET projects as editor', count($mine) === 1 && $mine[0]['role'] === 'editor');
+	check('GET projects counts active members (owner + editor; invitations not counted)', $mine[0]['members'] === 2, $r['raw']);
 	check('editor can push', push1($PID, $EDT, dataset($SID, 'D-editor')) === 'accepted');
 	$r = req('POST', "/projects/$PID/members", $OWN, array('email' => $U['editor']['email'], 'role' => 'viewer'));
 	check('invite an active member -> 409 already_member', $r['code'] === 409 && $r['body']['error'] === 'already_member', $r['raw']);

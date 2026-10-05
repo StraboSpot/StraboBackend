@@ -18,6 +18,7 @@
  */
 
 require_once __DIR__ . '/MsDelete.php';
+require_once __DIR__ . '/MsLive.php';
 
 class MsStore {
 
@@ -153,15 +154,18 @@ class MsStore {
 	 * derived views dirty, and stamp uploaddate, which the website shows
 	 * (Upload Date, "Last changed" for synced projects) and old apps read as
 	 * the server copy's modifiedtimestamp. The conversion sets head_seq
-	 * itself and keeps the uploaddate it found.
+	 * itself and keeps the uploaddate it found. Also tells the live service
+	 * (MsLive, sent when the caller commits); $clientId is the pushing
+	 * copy's id when known.
 	 */
-	public static function bumpHead($db, $pid, $seq) {
+	public static function bumpHead($db, $pid, $seq, $clientId = null) {
 		$db->q(
 			"UPDATE strabomicro.micro_projectmetadata
 			    SET head_seq = GREATEST(head_seq, $2), views_dirty_since = COALESCE(views_dirty_since, now()),
 			        uploaddate = now()
 			  WHERE id = $1",
 			array($pid, $seq));
+		MsLive::changed($db, $pid, $seq, $clientId);
 	}
 
 	/** Append one change log row; returns its seq. */

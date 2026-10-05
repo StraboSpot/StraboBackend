@@ -145,6 +145,7 @@ class MsMembers {
 			        role_changed_at = CASE WHEN state = 'active' AND role <> $3::varchar THEN now() ELSE role_changed_at END
 			  WHERE project_id = $1 AND user_pkey = $2",
 			array($pid, $pkey, $role));
+		MsLive::members($db, $pid);
 		$db->commit();
 		$users = MsStore::users($db, array($pkey), true);
 		MsHttp::json(200, array('member' => array('user' => MsStore::user($users, $pkey), 'role' => $role, 'state' => $row['state'])));
@@ -190,6 +191,7 @@ class MsMembers {
 			"UPDATE strabomicro.micro_members SET transfer_to = NULL
 			  WHERE project_id = $1 AND role = 'owner' AND transfer_to = $2",
 			array($pid, $pkey));
+		MsLive::members($db, $pid);
 		$db->commit();
 		MsHttp::json(200, array('status' => $leaving ? 'left' : 'removed'));
 	}
@@ -260,6 +262,7 @@ class MsMembers {
 			"UPDATE strabomicro.micro_members SET role = 'owner' WHERE project_id = $1 AND user_pkey = $2",
 			array($pid, $ctx->me));
 		$db->q("UPDATE strabomicro.micro_projectmetadata SET userpkey = $2 WHERE id = $1", array($pid, $ctx->me));
+		MsLive::members($db, $pid);
 		$db->commit();
 		MsHttp::json(200, array('role' => 'owner', 'previousOwner' => $owner));
 	}
@@ -343,6 +346,7 @@ class MsMembers {
 			"UPDATE strabomicro.micro_members SET state = 'active', responded_at = now()
 			  WHERE project_id = $1 AND user_pkey = $2",
 			array($pid, $me));
+		MsLive::members($db, $pid);
 		$db->commit();
 		return array(
 			'pid'      => (int)$pid,

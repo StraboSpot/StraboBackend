@@ -118,6 +118,7 @@ class MsParked {
 			        reviewed_at = CASE WHEN $4::varchar = 'pending' THEN NULL ELSE now() END
 			  WHERE project_id = $1 AND id = $2",
 			array($pid, (int)$id, MsHttp::encode((object)$review), $status, $ctx->me));
+		MsLive::parked($db, $pid);
 		$db->commit();
 		MsHttp::json(200, array('status' => $status, 'left' => $left));
 	}

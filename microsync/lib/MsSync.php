@@ -123,7 +123,7 @@ class MsSync {
 		$head = (int)$db->val(
 			"SELECT COALESCE(MAX(seq), 0) FROM strabomicro.micro_changes WHERE project_id = $1", array($pid));
 		if ($head > $p['head_seq']) {
-			MsStore::bumpHead($db, $pid, $head);
+			MsStore::bumpHead($db, $pid, $head, $clientId);
 		}
 		$response = array('headSeq' => $head, 'results' => $results);
 		$db->q(
@@ -168,6 +168,7 @@ class MsSync {
 			$db->q(
 				"INSERT INTO strabomicro.micro_parked_pushes (project_id, user_pkey, payload) VALUES ($1, $2, $3::json)",
 				array($p['id'], $ctx->me, MsHttp::encode($payload)));
+			MsLive::parked($db, $p['id']);
 			$db->commit();
 			throw MsStore::removedError($db, $p, $ctx->me, 'access_changed', $parkedMsg, array('parked' => true));
 		}
@@ -201,6 +202,7 @@ class MsSync {
 			$payload->pushIds = array_values(array_filter($ids, 'is_string'));
 			$db->q("UPDATE strabomicro.micro_parked_pushes SET payload = $2::json WHERE id = $1",
 				array((int)$row['id'], MsHttp::encode($payload)));
+			MsLive::parked($db, $p['id']);
 		}
 		$db->commit();
 		throw MsStore::removedError($db, $p, $ctx->me, 'access_changed', $parkedMsg, array('parked' => true));
@@ -235,6 +237,7 @@ class MsSync {
 			array($p['id'], $ctx->me, MsHttp::encode(array(
 				'reason' => 'role_changed', 'role' => $p['role'],
 				'pushId' => $pushId, 'clientId' => $clientId, 'changes' => $park))));
+		MsLive::parked($ctx->db, $p['id']);
 		return $results;
 	}
 
