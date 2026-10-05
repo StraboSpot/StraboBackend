@@ -14,7 +14,11 @@
  *              fixture users, straboId prefix mscli- (client_fixture.php
  *              cleanup removes them). With LIVE_APACHE=1 it also checks the
  *              strabo-live container through the dev Apache
- *              (ws://localhost/microsync/live).
+ *              (ws://localhost/microsync/live). The last section checks who
+ *              may sync (MICROSYNC_ENABLED, MICROSYNC_ALLOW): sample configs
+ *              read by config.js and by PHP must agree, and a second copy of
+ *              the service on port 3902 runs on a temporary copy of the
+ *              config whose list the test edits while it runs.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -23,12 +27,14 @@
  * @link       https://strabospot.org
  */
 
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const crypto = require('crypto');
 const { spawn, execFileSync } = require('child_process');
 const WebSocket = require('ws');
 const pg = require('pg');
-const { load } = require('../config');
+const { load, syncAccess } = require('../config');
 
 const ROOT = path.resolve(__dirname, '..');
 const CONFIG = path.resolve(ROOT, '../includes/config.inc.php');
@@ -205,6 +211,130 @@ async function startService() {
 }
 async function health() {
   return (await fetch(`http://127.0.0.1:${PORT}/health`)).json();
+}
+
+// ---------------------------------------------------------------------------
+// Who may sync (MICROSYNC_ENABLED + MICROSYNC_ALLOW, pre-release gap 5)
+// ---------------------------------------------------------------------------
+
+const ACCESS_PORT = 3902;
+const ACCESS_URL = `ws://127.0.0.1:${ACCESS_PORT}/`;
+const ON = "define('MICROSYNC_ENABLED', true);";
+
+/** Config texts that config.js must read exactly as PHP does */
+const ACCESS_SAMPLES = [
+  ['switch off', "define('MICROSYNC_ENABLED', false);"],
+  ['no switch', '$x = 1;'],
+  ['on, no list', ON],
+  ['on, list', `${ON}\ndefine('MICROSYNC_ALLOW', array('A@x.org', " b@y.org "));`],
+  ['short array, several lines', `${ON}\ndefine("MICROSYNC_ALLOW", [\n  'a@x.org',\n  'c@z.org',\n]);`],
+  ['true in capitals', "define('MICROSYNC_ENABLED', TRUE);\ndefine('MICROSYNC_ALLOW', array('a@x.org'));"],
+  ['list commented out with //', `${ON}\n// define('MICROSYNC_ALLOW', array('a@x.org'));`],
+  ['list commented out with #', `${ON}\n# define('MICROSYNC_ALLOW', array('a@x.org'));`],
+  ['list in a block comment', `${ON}\n/* define('MICROSYNC_ALLOW', array('a@x.org')); */`],
+  ['one entry commented at a line end', `${ON}\ndefine('MICROSYNC_ALLOW', array(\n  'a@x.org', // 'old@x.org'\n  'c@z.org'\n));`],
+  ['empty list', `${ON}\ndefine('MICROSYNC_ALLOW', array());`],
+  ['a URL elsewhere in the file', `$u = 'https://strabospot.org';\n${ON}\ndefine('MICROSYNC_ALLOW', array('a@x.org'));`],
+];
+
+/** The same sample read by PHP in strabo-php: {enabled, allow: null | sorted lowercase emails} */
+function phpAccess(text) {
+  const file = path.join(__dirname, '.access_sample.php');
+  fs.writeFileSync(file, `<?php\n${text}\n`);
+  try {
+    const code = 'include "/srv/app/www/livesvc/test/.access_sample.php";'
+      + ' $a = defined("MICROSYNC_ALLOW") ? MICROSYNC_ALLOW : null; $l = null;'
+      + ' if ($a !== null) { $l = array(); if (is_array($a)) { foreach ($a as $e) { if (is_string($e)) { $l[] = strtolower(trim($e)); } } } }'
+      + ' echo json_encode(array("enabled" => defined("MICROSYNC_ENABLED") && MICROSYNC_ENABLED === true, "allow" => $l));';
+    const out = JSON.parse(execFileSync('docker', ['exec', 'strabo-php', 'php', '-r', code], { encoding: 'utf8' }));
+    return { enabled: out.enabled, allow: out.allow === null ? null : [...new Set(out.allow)].sort() };
+  } finally {
+    fs.rmSync(file, { force: true });
+  }
+}
+
+async function accessTests(U) {
+  for (const [name, text] of ACCESS_SAMPLES) {
+    const js = syncAccess(text);
+    const mine = { enabled: js.enabled, allow: js.allow === null ? null : [...js.allow].sort() };
+    const php = phpAccess(text);
+    check(`config.js reads it like PHP: ${name}`, JSON.stringify(mine) === JSON.stringify(php), { js: mine, php });
+  }
+
+  // A second service on a copy of the dev config that the test edits
+  const file = path.join(os.tmpdir(), `live-access-${process.pid}.php`);
+  const base = fs.readFileSync(CONFIG, 'utf8');
+  if (!base.includes(ON)) {
+    check('dev config has the MICROSYNC_ENABLED line', false);
+    return;
+  }
+  let stamp = Math.floor(Date.now() / 1000);
+  const write = (allow, enabled = true) => {
+    const line = allow === null ? '' : `\ndefine('MICROSYNC_ALLOW', array(${allow.map((e) => `'${e}'`).join(', ')}));`;
+    fs.writeFileSync(file, base.replace(ON, (enabled ? ON : "define('MICROSYNC_ENABLED', false);") + line));
+    stamp += 10; // a new mtime for every edit, whatever the file system's resolution
+    fs.utimesSync(file, stamp, stamp);
+  };
+  const refused = async (tok) => {
+    const c = new Client(ACCESS_URL);
+    await c.opened;
+    c.send({ t: 'auth', token: tok });
+    const closed = await c.waitClose();
+    // At login, not by the next periodic check: never 'ready'
+    return closed?.code === 4503 && closed.reason === 'sync_disabled' && c.of('ready').length === 0
+      && c.of('error').some((m) => m.error === 'sync_disabled');
+  };
+  const h2 = async () => (await fetch(`http://127.0.0.1:${ACCESS_PORT}/health`)).json();
+
+  write([U.owner.email]);
+  const svc2 = spawn(process.execPath, [path.join(ROOT, 'server.js')], {
+    env: { ...process.env, ...LIMITS, LIVE_PORT: String(ACCESS_PORT), LIVE_CONFIG: file, LIVE_RECHECK_MS: '400' },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  svc2.stdout.on('data', (d) => { svcLog += d; });
+  svc2.stderr.on('data', (d) => { svcLog += d; });
+  const mine = [];
+  try {
+    let h = null;
+    for (let i = 0; i < 100 && !h?.listening; i++) {
+      await sleep(100);
+      h = await h2().catch(() => null);
+    }
+    check('second service up; health: sync on, list of 1', h?.syncEnabled === true && h.allowList === 1, h);
+
+    const own = await authed(U.owner.tok, ACCESS_URL);
+    mine.push(own);
+    check('listed account connects', own.ready?.t === 'ready');
+    check('unlisted account is refused (4503 sync_disabled)', await refused(U.editor.tok));
+
+    write([U.owner.email, U.editor.email.toUpperCase()]);
+    const edt = await authed(U.editor.tok, ACCESS_URL);
+    mine.push(edt);
+    check('added to the list (other case): connects, no restart', edt.ready?.t === 'ready');
+
+    write([U.editor.email]);
+    const ownClosed = await own.waitClose(3000);
+    check('taken off the list: open connection closed 4503 at the next check', ownClosed?.code === 4503, ownClosed);
+    await sleep(900);
+    check('still listed: connection stays open', edt.closed === null, edt.closed);
+    check('taken off the list: a new connection is refused', await refused(U.owner.tok));
+
+    write(null);
+    h = await h2();
+    check('list removed: health says every account', h.syncEnabled === true && h.allowList === null, h);
+    const out = await authed(U.outsider.tok, ACCESS_URL);
+    mine.push(out);
+    check('list removed: any account connects', out.ready?.t === 'ready');
+
+    write(null, false);
+    check('sync switched off: open connections closed 4503', (await out.waitClose(3000))?.code === 4503 && (await edt.waitClose(3000))?.code === 4503);
+    check('sync switched off: a new connection is refused', await refused(U.owner.tok));
+    check('sync switched off: health says so', (await h2()).syncEnabled === false);
+  } finally {
+    for (const c of mine) c.close();
+    svc2.kill('SIGTERM');
+    fs.rmSync(file, { force: true });
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -477,6 +607,9 @@ async function main() {
     c = track(await authed(U.owner.tok));
     svc.kill('SIGTERM');
     check('SIGTERM closes connections with 1012', (await c.waitClose())?.code === 1012);
+
+    section('Who may sync (MICROSYNC_ENABLED, MICROSYNC_ALLOW)');
+    await accessTests(U);
   } finally {
     for (const c of open) c.close();
     if (svc && svc.exitCode === null) svc.kill('SIGTERM');

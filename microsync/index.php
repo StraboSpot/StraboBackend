@@ -6,7 +6,8 @@
  *              docs/specs/collaboration-phase0-design.md §4).
  *
  *              Off unless config.inc.php defines MICROSYNC_ENABLED as true;
- *              every request then answers 503. JSON in and out except blob
+ *              every request then answers 503. MICROSYNC_ALLOW (a list of
+ *              emails) narrows it to those accounts (lib/MsAccess.php). JSON in and out except blob
  *              bodies. Authorization: Bearer <JWT> on everything but ping.
  *              Never pre-reads the request body (chunk uploads stream it).
  *              Must run on PHP 7.3 (production).
@@ -40,6 +41,7 @@ include_once "./lib/MsAdopt.php";
 include_once "./lib/MsMembers.php";
 include_once "./lib/MsParked.php";
 include_once "./lib/MsDelete.php";
+include_once "./lib/MsAccess.php";
 
 const MICROSYNC_API_VERSION = 1;
 
@@ -134,6 +136,10 @@ $ctx->project = null;
 try {
 	$ctx->db = new MsDb($db);
 	$ctx->strabodb = $db; // wrapper, for shared helpers (StraboSamples overlay)
+	// Staged switch-on: only the accounts in MICROSYNC_ALLOW, when it is defined
+	if (!MsAccess::allowed($ctx->db, $ctx->me)) {
+		throw new MsHttpError(503, 'sync_disabled', 'StraboMicro sync is not enabled on this server');
+	}
 	foreach ($args as $i => $a) {
 		if ($i === 0) {
 			$args[$i] = (int)$a; // pid
