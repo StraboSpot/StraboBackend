@@ -4,7 +4,8 @@
  * Description: The website history page of a synced StraboMicro project
  *              (micro_history.php; collaboration v3 §12b 17ae): the
  *              history list (microsync/lib/MsHistory.php) grouped into
- *              bursts and worded like the app's Activity panel
+ *              bursts (a new item's files join its creation; the project's
+ *              first upload is one line) and worded like the app's Activity panel
  *              ("Maya added 3 spots to micrograph 'A'"), item names, the
  *              people in the history, and each change's fields as text.
  *
@@ -24,6 +25,8 @@ require_once __DIR__ . '/../../microsync/lib/MsHistory.php';
 
 /** Changes this far apart (or closer) form one burst (activityFeed.ts BURST_MS). */
 const MICRO_HISTORY_BURST_SECONDS = 600;
+/** The pushes of one first upload are at most this far apart (activityFeed.ts UPLOAD_GAP_MS). */
+const MICRO_HISTORY_UPLOAD_GAP_SECONDS = 60;
 
 function micro_history_type_label($type) {
 	$labels = array('project' => 'project', 'dataset' => 'dataset', 'sample' => 'sample', 'micrograph' => 'micrograph',
@@ -199,18 +202,123 @@ function micro_history_fold($rows) {
 	return $items;
 }
 
+/** A change of files only (refs.*), not a move */
+function micro_history_refs_only($r) {
+	if ($r['op'] !== 'update' || $r['movedFrom'] !== null || !is_array($r['changedPaths']) || count($r['changedPaths']) === 0) {
+		return false;
+	}
+	foreach ($r['changedPaths'] as $p) {
+		if (strpos($p, 'refs.') !== 0) {
+			return false;
+		}
+	}
+	return true;
+}
+
+/** Same person, so two changes may share a line */
+function micro_history_same_author($a, $b) {
+	return (int)$a['user']['pkey'] === (int)$b['user']['pkey']
+		&& ($a['onBehalfOf'] === null ? null : (int)$a['onBehalfOf']['pkey']) === ($b['onBehalfOf'] === null ? null : (int)$b['onBehalfOf']['pkey']);
+}
+
+/** The newest row an item stands for */
+function micro_history_newest($it) {
+	return isset($it['latest']) ? $it['latest'] : $it['row'];
+}
+
+/**
+ * Files of a new item join its creation (same person, up to 10 minutes
+ * later); the project's first upload (its creation and the creations after
+ * it by the same person, each at most a minute after the one before, up
+ * to the first change of another kind) becomes one item with 'upload'
+ * (type => count). Items newest first (foldUploads in activityFeed.ts).
+ */
+function micro_history_fold_uploads($items) {
+	$creates = array();
+	foreach ($items as $i => $it) {
+		if ($it['row']['op'] === 'create') {
+			$creates[micro_history_key($it['row']['type'], $it['row']['id'])] = $i;
+		}
+	}
+	$keep = array();
+	foreach ($items as $i => $it) {
+		$k = micro_history_key($it['row']['type'], $it['row']['id']);
+		if (micro_history_refs_only($it['row']) && isset($creates[$k])) {
+			$c = &$items[$creates[$k]];
+			$dt = strtotime($it['row']['at']) - strtotime($c['row']['at']);
+			if (micro_history_same_author($c['row'], $it['row']) && $dt >= 0 && $dt <= MICRO_HISTORY_BURST_SECONDS) {
+				$c['rows'] = array_merge($c['rows'], $it['rows']);
+				if ($it['row']['seq'] > micro_history_newest($c)['seq']) {
+					$c['latest'] = $it['row'];
+				}
+				unset($c);
+				continue;
+			}
+			unset($c);
+		}
+		$keep[] = $i;
+	}
+	$kept = array();
+	foreach ($keep as $i) {
+		$kept[] = $items[$i];
+	}
+
+	$start = -1;
+	foreach ($kept as $i => $it) {
+		if ($it['row']['op'] === 'create' && $it['row']['type'] === 'project') {
+			$start = $i;
+			break;
+		}
+	}
+	if ($start < 0) {
+		return $kept;
+	}
+	$end = $start;
+	while ($end > 0) {
+		$next = $kept[$end - 1]['row'];
+		$prev = $kept[$end]['row'];
+		if ($next['op'] !== 'create' || !micro_history_same_author($next, $prev)
+			|| strtotime($next['at']) - strtotime($prev['at']) > MICRO_HISTORY_UPLOAD_GAP_SECONDS) {
+			break;
+		}
+		$end--;
+	}
+	$added = array();
+	$rows = array();
+	$latest = null;
+	for ($i = $end; $i <= $start; $i++) {
+		$r = $kept[$i]['row'];
+		if ($r['type'] !== 'project') {
+			$added[$r['type']] = (isset($added[$r['type']]) ? $added[$r['type']] : 0) + 1;
+		}
+		$rows = array_merge($rows, $kept[$i]['rows']);
+		$n = micro_history_newest($kept[$i]);
+		if ($latest === null || $n['seq'] > $latest['seq']) {
+			$latest = $n;
+		}
+	}
+	$upload = array('row' => $kept[$end]['row'], 'latest' => $latest, 'contains' => array(), 'rows' => $rows, 'upload' => $added);
+	return array_merge(array_slice($kept, 0, $end), array($upload), array_slice($kept, $start + 1));
+}
+
 function micro_history_kind($r) {
 	return $r['op'] === 'update' && $r['movedFrom'] !== null ? 'move' : $r['op'];
 }
 
 function micro_history_burst_key($it) {
 	$r = $it['row'];
+	if (isset($it['upload'])) {
+		return 'upload|' . micro_history_newest($it)['seq'];
+	}
 	return implode('|', array($r['user']['pkey'], $r['onBehalfOf'] === null ? '' : $r['onBehalfOf']['pkey'],
 		micro_history_kind($r), $r['type'], micro_history_key($r['parentType'], $r['parentId'])));
 }
 
 /** The line's text after the person: "added 3 spots to micrograph 'A'" (describe). */
 function micro_history_describe($items, $names) {
+	if (isset($items[0]['upload'])) {
+		return 'put the project on StraboSpot' . micro_history_contains_label($items[0]['upload']);
+	}
 	$first = $items[0]['row'];
 	$ids = array();
 	foreach ($items as $it) {
@@ -274,10 +382,10 @@ function micro_history_describe($items, $names) {
  */
 function micro_history_groups($rows, $me, $names) {
 	$bursts = array();
-	foreach (micro_history_fold($rows) as $it) {
+	foreach (micro_history_fold_uploads(micro_history_fold($rows)) as $it) {
 		$cur = count($bursts) ? $bursts[count($bursts) - 1] : null;
 		if ($cur !== null && micro_history_burst_key($cur[0]) === micro_history_burst_key($it)
-			&& strtotime($cur[0]['row']['at']) - strtotime($it['row']['at']) <= MICRO_HISTORY_BURST_SECONDS) {
+			&& strtotime(micro_history_newest($cur[0])['at']) - strtotime(micro_history_newest($it)['at']) <= MICRO_HISTORY_BURST_SECONDS) {
 			$bursts[count($bursts) - 1][] = $it;
 		} else {
 			$bursts[] = array($it);
@@ -296,7 +404,7 @@ function micro_history_groups($rows, $me, $names) {
 			'you'        => (int)$r['user']['pkey'] === (int)$me,
 			'onBehalfOf' => $r['onBehalfOf'],
 			'text'       => micro_history_describe($b, $names),
-			'at'         => $r['at'],
+			'at'         => micro_history_newest($b[0])['at'],
 			'oldestSeq'  => $all[count($all) - 1]['seq'],
 			'rows'       => $all,
 		);
