@@ -30,6 +30,8 @@
  *                {"t":"access","pid","removed":true} no longer an active
  *                    member (removed, left, project deleted): the app runs
  *                    its normal check, which says which
+ *                {"t":"parked","pid"} parked pushes changed (the owner's
+ *                    copies count what waits for review again)
  *                {"t":"presence","pid","people":[{"conn","user","state",
  *                    "viewing","editing","since"}]} everyone following the
  *                    project, the app's own connection included (the app
@@ -382,6 +384,11 @@ function onNotice(n) {
   if (!n || typeof n !== 'object' || !Number.isInteger(n.pid)) return;
   if (n.t === 'changed' && Number.isInteger(n.seq)) {
     const msg = JSON.stringify({ t: 'changed', pid: n.pid, seq: n.seq, by: typeof n.by === 'string' ? n.by : null });
+    for (const c of followers.get(n.pid) ?? []) {
+      if (c.ws.readyState === c.ws.OPEN) c.ws.send(msg);
+    }
+  } else if (n.t === 'parked') {
+    const msg = JSON.stringify({ t: 'parked', pid: n.pid });
     for (const c of followers.get(n.pid) ?? []) {
       if (c.ws.readyState === c.ws.OPEN) c.ws.send(msg);
     }

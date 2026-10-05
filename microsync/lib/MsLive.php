@@ -18,6 +18,9 @@
  *                    membership changed (role, removal, leave, transfer,
  *                    accepted invitation, delete or restore): the service
  *                    checks its followers of N again
+ *                {"t":"parked","pid":N}
+ *                    a push was parked for the owner's review, or the
+ *                    owner reviewed one: the owner's copies count again
  *              If strabo-live is down nothing changes here: the NOTIFY has
  *              no listener and the apps poll (17ak, 17ao).
  *
@@ -41,6 +44,11 @@ class MsLive {
 	/** Membership of the project changed. */
 	public static function members($db, $pid) {
 		self::send($db, array('t' => 'members', 'pid' => (int)$pid));
+	}
+
+	/** Parked pushes of the project changed (a new or longer parked push, or a review). */
+	public static function parked($db, $pid) {
+		self::send($db, array('t' => 'parked', 'pid' => (int)$pid));
 	}
 
 	private static function send($db, $notice) {

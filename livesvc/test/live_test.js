@@ -392,6 +392,19 @@ async function main() {
     check('the removed editor gets no more changes', !edt.msgs.slice(mark.e).some((m) => m.t === 'changed'));
     edt.send({ t: 'sub', pid: PID });
     check('and cannot follow again', (await edt.wait((m) => m.t === 'nosub', 2000, mark.e))?.error === 'not_found');
+
+    section('Parked pushes (MsLive parked notices)');
+    mark = { o: own.msgs.length };
+    r = await push(PID, U.editor.tok, [dataset(SID, 'D-parked')], 'copy-E');
+    check('the removed editor\'s push is parked', r.code === 403 && r.body?.parked === true, r.raw);
+    check('the owner hears of it', (await own.wait((m) => m.t === 'parked', 2000, mark.o))?.pid === PID, own.msgs.slice(mark.o));
+    const parkedList = await req('GET', `/projects/${PID}/parked`, U.owner.tok);
+    const parkedId = parkedList.body?.parked?.[0]?.id;
+    check('owner lists it', Number.isInteger(parkedId), parkedList.raw);
+    mark = { o: own.msgs.length };
+    r = await req('POST', `/projects/${PID}/parked/${parkedId}/review`, U.owner.tok, { decisions: { 'dataset:D-parked': 'discarded' } });
+    check('owner discards it', r.code === 200, r.raw);
+    check('the review is announced too (the owner\'s other copies)', (await own.wait((m) => m.t === 'parked', 2000, mark.o)) !== null);
     mark = { v: vie.msgs.length };
     r = await req('DELETE', `/projects/${PID}/members/${U.viewer.pkey}`, U.viewer.tok);
     check('the (former) viewer leaves', r.code === 200, r.raw);
