@@ -40,11 +40,13 @@
  *              Close codes: 4400 bad message, 4401 auth failed or expired,
  *              4408 no auth in time, 4409 replaced (11th connection of an
  *              account closes the oldest), 4429 too many messages,
- *              4503 service full (global cap; the app polls), 1009 message
- *              too big, 1012 service restarting.
+ *              4503 service full (global cap; the app polls) or
+ *              sync_disabled (sync off, or the account is not in
+ *              MICROSYNC_ALLOW; checked at auth and every LIVE_RECHECK_MS),
+ *              1009 message too big, 1012 service restarting.
  *
  *              GET /health answers {ok, connections, users, projects,
- *              listening} (Docker network or 127.0.0.1 only).
+ *              listening, syncEnabled, allowList} (Docker network or 127.0.0.1 only).
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -57,7 +59,7 @@ const http = require('http');
 const crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const pg = require('pg');
-const { load } = require('./config');
+const { load, currentAccess } = require('./config');
 const jwt = require('./jwt');
 
 const CFG = load();
@@ -103,6 +105,46 @@ async function activeMembers(pid) {
 async function userExists(pkey) {
   const r = await pool.query('SELECT 1 FROM users WHERE pkey = $1', [pkey]);
   return r.rows.length > 0;
+}
+
+/** May this account sync (MICROSYNC_ENABLED + MICROSYNC_ALLOW, as PHP's MsAccess)? */
+async function syncAllowed(pkey) {
+  let a;
+  try {
+    a = currentAccess();
+  } catch (e) {
+    log('[access] config not readable:', e.message);
+    return false;
+  }
+  if (!a.enabled) return false;
+  if (a.allow === null) return true;
+  const r = await pool.query('SELECT lower(trim(email)) AS email FROM users WHERE pkey = $1 AND deleted = false', [pkey]);
+  return r.rows.length > 0 && a.allow.has(r.rows[0].email);
+}
+
+function refuseAccess(c) {
+  c.send({ t: 'error', error: 'sync_disabled', message: 'StraboMicro sync is not enabled for this account' });
+  c.close(4503, 'sync_disabled');
+}
+
+/** For /health: syncEnabled, and allowList = how many accounts MICROSYNC_ALLOW names (null: every account) */
+function accessHealth() {
+  try {
+    const a = currentAccess();
+    return { syncEnabled: a.enabled, allowList: a.allow === null ? null : a.allow.size };
+  } catch {
+    return { syncEnabled: false, allowList: 0 };
+  }
+}
+
+/** Accounts taken off MICROSYNC_ALLOW (or sync switched off) lose their connections */
+async function recheckAccess() {
+  const users = new Set([...conns.values()].map((c) => c.user).filter((u) => u !== null));
+  for (const pkey of users) {
+    if (await syncAllowed(pkey)) continue;
+    log('[access] closing connections of an account that may no longer sync:', pkey);
+    for (const c of accountConns(pkey)) refuseAccess(c);
+  }
 }
 
 async function headSeq(pid) {
@@ -228,6 +270,10 @@ async function onAuth(c, m) {
   }
   if (!(await userExists(v.pkey))) {
     c.close(4401, 'user_not_found');
+    return;
+  }
+  if (!(await syncAllowed(v.pkey))) {
+    refuseAccess(c);
     return;
   }
   if (c.ws.readyState !== c.ws.OPEN) return;
@@ -433,7 +479,7 @@ const server = http.createServer((req, res) => {
     const users = new Set([...conns.values()].map((c) => c.user).filter((u) => u !== null));
     const body = JSON.stringify({
       ok: true, node: process.version, connections: conns.size, users: users.size,
-      projects: followers.size, listening, maxConnections: CFG.maxConnections,
+      projects: followers.size, listening, maxConnections: CFG.maxConnections, ...accessHealth(),
     });
     res.writeHead(200, { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) });
     res.end(body);
@@ -532,6 +578,7 @@ const rechecker = setInterval(() => {
   for (const pid of [...followers.keys()]) {
     recheck(pid).catch((e) => log('[recheck] failed:', pid, e.message));
   }
+  recheckAccess().catch((e) => log('[access] recheck failed:', e.message));
 }, CFG.recheckMs);
 
 function shutdown(signal) {

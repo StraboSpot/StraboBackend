@@ -11,6 +11,12 @@
  *                LIVE_MAX_CONNECTIONS, LIVE_MAX_PER_ACCOUNT, LIVE_PING_MS,
  *                LIVE_AUTH_TIMEOUT_MS, LIVE_RECHECK_MS, LIVE_PRESENCE_MS
  *
+ *              Who may sync is read again whenever config.inc.php changes
+ *              (currentAccess), so editing MICROSYNC_ALLOW needs no restart:
+ *              MICROSYNC_ENABLED must be true, and MICROSYNC_ALLOW, when
+ *              defined, lists the only accounts (emails) that may connect.
+ *              Same rules as microsync/lib/MsAccess.php.
+ *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
  * @copyright  2026 StraboSpot
@@ -70,4 +76,46 @@ function load() {
   };
 }
 
-module.exports = { load, phpVar, phpDefine };
+/** The PHP text without comments, so a commented-out define does not count */
+function stripComments(text) {
+  return text
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/^\s*(\/\/|#).*$/gm, '')
+    .replace(/(^|[^:'"\\])\/\/.*$/gm, '$1'); // a // at the end of a line (not the one in https://)
+}
+
+/**
+ * Who may sync, from the text of config.inc.php: enabled = MICROSYNC_ENABLED
+ * is true; allow = null (every account) or a Set of lowercase emails from
+ * define('MICROSYNC_ALLOW', array('a@b.org', ...)) (or [...]). A
+ * MICROSYNC_ALLOW this cannot read allows nobody.
+ */
+function syncAccess(text) {
+  const t = stripComments(text);
+  const enabled = /define\(\s*(['"])MICROSYNC_ENABLED\1\s*,\s*true\s*\)/i.test(t);
+  if (!/(['"])MICROSYNC_ALLOW\1/.test(t)) return { enabled, allow: null };
+  const allow = new Set();
+  const m = t.match(/define\(\s*(['"])MICROSYNC_ALLOW\1\s*,\s*(?:array\s*\(([^)]*)\)|\[([^\]]*)\])\s*\)/i);
+  if (m) {
+    for (const q of (m[2] ?? m[3]).matchAll(/(['"])(.*?)\1/g)) allow.add(q[2].trim().toLowerCase());
+  }
+  return { enabled, allow };
+}
+
+let accessCache = null;
+
+/** syncAccess of the config file, read again when it changes; keeps the last good answer if it cannot be read */
+function currentAccess() {
+  const path = process.env.LIVE_CONFIG || '/srv/app/www/includes/config.inc.php';
+  try {
+    const st = fs.statSync(path);
+    if (!accessCache || accessCache.path !== path || accessCache.mtimeMs !== st.mtimeMs || accessCache.size !== st.size) {
+      accessCache = { path, mtimeMs: st.mtimeMs, size: st.size, ...syncAccess(fs.readFileSync(path, 'utf8')) };
+    }
+  } catch (e) {
+    if (!accessCache) throw e;
+  }
+  return accessCache;
+}
+
+module.exports = { load, phpVar, phpDefine, syncAccess, currentAccess };
