@@ -54,7 +54,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		if ($action === 'restore') {
 			$t = MsDelete::restore($msdb, $pid, $me);
 			micro_delete_done(true, '"' . $t['name'] . '" was restored. Its members see it again in StraboMicro '
-				. '(File > Open Remote Project); copies that became separate copies stay separate.');
+				. '(File > Open Remote Project). A copy you kept on your computer when it was deleted stays separate: '
+				. 'open the restored project with File > Open Remote Project to work in it. Turning sync on for the kept copy '
+				. 'would make a second project with the same name.');
 		}
 		if ($action === 'delete') {
 			$p = MsStore::project($msdb, $pid, $me);
