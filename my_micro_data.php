@@ -281,6 +281,7 @@ if(count($microDeleted) > 0){
 			<h3>Deleted projects</h3>
 		</header>
 		<div>These synced projects were deleted from StraboSpot. Each can be restored, with its members, until the date shown; after that it is deleted for good.</div>
+		<div style="margin-top:8px;"><strong>A copy you kept on your computer stays separate after a restore.</strong> It does not sync with the restored project. To work in the restored project, open it in StraboMicro with File &gt; Open Remote Project. Turning sync on for the kept copy instead makes a second, unrelated project with the same name.</div>
 		<div class="table-wrapper">
 			<table class="myDataTable">
 				<thead>
