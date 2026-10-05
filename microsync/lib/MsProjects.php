@@ -29,7 +29,9 @@ class MsProjects {
 			                                 WHERE c.project_id = p.id ORDER BY c.seq DESC LIMIT 1),
 			                                p.uploaddate)") . " AS updated_at,
 			        (SELECT o.user_pkey FROM strabomicro.micro_members o
-			          WHERE o.project_id = p.id AND o.role = 'owner' AND o.state = 'active') AS owner_pkey
+			          WHERE o.project_id = p.id AND o.role = 'owner' AND o.state = 'active') AS owner_pkey,
+			        (SELECT count(*) FROM strabomicro.micro_members c
+			          WHERE c.project_id = p.id AND c.state = 'active') AS member_count
 			   FROM strabomicro.micro_members m
 			   JOIN strabomicro.micro_projectmetadata p ON p.id = m.project_id
 			   LEFT JOIN strabomicro.micro_entities e
@@ -42,7 +44,7 @@ class MsProjects {
 			$legacy = $db->rows(
 				"SELECT DISTINCT ON (p.strabo_id) p.id, p.strabo_id, p.name, 'owner' AS role,
 				        0 AS head_seq, p.sync_format, p.sync_state,
-				        " . MsDb::iso('p.uploaddate') . " AS updated_at, p.userpkey AS owner_pkey
+				        " . MsDb::iso('p.uploaddate') . " AS updated_at, p.userpkey AS owner_pkey, 1 AS member_count
 				   FROM strabomicro.micro_projectmetadata p
 				  WHERE p.userpkey = $1 AND p.sync_format = 'legacy'
 				    -- skips the straboId once it is synced or being adopted
@@ -68,6 +70,8 @@ class MsProjects {
 				'syncFormat' => $r['sync_format'],
 				'syncState'  => $r['sync_state'],
 				'updatedAt'  => $r['updated_at'],
+				// Active members, me included: tells same-named projects apart in Open Remote Project
+				'members'    => (int)$r['member_count'],
 			);
 		}
 		MsHttp::json(200, $out);
