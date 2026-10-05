@@ -126,6 +126,8 @@ try {
 	check('editor joins', req('POST', "/invites/$PID/accept", $EDT)['code'] === 200);
 	req('POST', "/projects/$PID/members", $OWN, array('email' => $U['dan']['email'], 'role' => 'viewer'));
 	check('viewer joins', req('POST', "/invites/$PID/accept", $U['dan']['tok'])['code'] === 200);
+	// A change of another kind ends the first upload's line (the spots below are their own line)
+	check('project notes', push($PID, $OWN, array(upd($PID, 'project', $SID, array('fields' => array('notes' => 'Thin sections'))))));
 	$beforeSpots = (int)$db->get_var_prepared("SELECT max(seq) FROM strabomicro.micro_changes WHERE project_id = $1", array($PID));
 	sleep(2);
 	check('two spots, one with markup in its name', push($PID, $OWN, array(
@@ -157,15 +159,17 @@ try {
 
 	section('Lines (newest first, worded like the Activity panel)');
 	$L = lines($own['body']);
+	// M1's image, set soon after M1 was added, is part of the first upload's line
 	$expect = array(
 		"$EDITOR_NAME changed Name of sample 'S1 by editor'",
 		"You deleted micrograph 'M1' (2 spots)",
 		"You moved micrograph 'M1' to sample 'S2'",
-		"You changed Image of micrograph 'M1'",
 		"You changed Name, Shape of spot 'P1 renamed'",
 		"You added 2 spots to micrograph 'M1'",
+		"You changed the project settings (Notes)",
+		"You put the project on StraboSpot (1 dataset, 1 micrograph, 2 samples)",
 	);
-	check('the six newest lines', array_slice($L, 0, 6) === $expect, json_encode(array_slice($L, 0, 6)));
+	check('every line', $L === $expect, json_encode($L));
 	check('the editor sees the owner by name', strpos(lines($edPage['body'])[1], 'You deleted') === false
 		&& strpos(lines($edPage['body'])[0], 'You changed Name of sample') === 0, json_encode(array_slice(lines($edPage['body']), 0, 2)));
 	check('markup in names is escaped', !has($own['body'], '<b>x</b>') && has($own['body'], '&lt;b&gt;x&lt;/b&gt;'));
@@ -226,6 +230,14 @@ try {
 	check('Show Older button', preg_match('#href="(/micro_history\?project_id=' . $PID . '&amp;before=\d+)" class="button small">Show Older#', $p1['body'], $m) === 1);
 	$p2 = page(html_entity_decode($m[1]), $U['owner']['sid']);
 	check('older page has the earlier lines', in_array("You deleted micrograph 'M1' (2 spots)", lines($p2['body']), true), json_encode(lines($p2['body'])));
+
+	section("A new micrograph's image is part of adding it");
+	check('a micrograph', push($PID, $OWN, array(
+		array('op' => 'create', 'type' => 'micrograph', 'id' => 'MI', 'parentType' => 'sample', 'parentId' => 'S2', 'body' => array('name' => 'MI')))));
+	check('its image', set_ref($PID, $OWN, 'micrograph', 'MI', 'image', upload_blob($PID, $OWN, 'image MI bytes', 'image'))['code'] === 200);
+	$b = page($url, $U['owner']['sid'])['body'];
+	check("one line: added micrograph 'MI'", lines($b)[0] === "You added micrograph 'MI' to sample 'S2'", json_encode(array_slice(lines($b), 0, 2)));
+	check('the image listed in its details', has($b, 'Image: Added'));
 
 	section('Markup in a line');
 	check('a micrograph named with markup', push($PID, $OWN, array(
