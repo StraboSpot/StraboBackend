@@ -392,7 +392,7 @@ class MsBlobs {
 	public static function putRef($ctx, $pid) {
 		$in = MsHttp::readJson(65536);
 		self::changeRef($ctx, $pid, MsHttp::prop($in, 'entityType'), MsHttp::prop($in, 'entityId'),
-			MsHttp::prop($in, 'role'), MsHttp::prop($in, 'sha256'));
+			MsHttp::prop($in, 'role'), MsHttp::prop($in, 'sha256'), MsHttp::prop($in, 'clientId'));
 	}
 
 	public static function deleteRef($ctx, $pid) {
@@ -400,11 +400,20 @@ class MsBlobs {
 			isset($_GET['entityType']) ? (string)$_GET['entityType'] : null,
 			isset($_GET['entityId']) ? (string)$_GET['entityId'] : null,
 			isset($_GET['role']) ? (string)$_GET['role'] : null,
-			null);
+			null,
+			isset($_GET['clientId']) ? (string)$_GET['clientId'] : null);
 	}
 
-	/** Set ($sha given) or remove ($sha null) one ref, logged as a change. */
-	private static function changeRef($ctx, $pid, $type, $id, $role, $sha) {
+	/**
+	 * Set ($sha given) or remove ($sha null) one ref, logged as a change.
+	 * $clientId: the app installation that sent it (optional). The change
+	 * then gets a push of its own carrying that id, like a push's changes,
+	 * so "this computer's own change" means the same for refs: another
+	 * computer of the same account counts it as incoming and pulls it, and
+	 * the live notice names the sender. Without it the change has no push,
+	 * which every copy of the account takes for its own.
+	 */
+	private static function changeRef($ctx, $pid, $type, $id, $role, $sha, $clientId = null) {
 		$db = $ctx->db;
 		if (!MsModel::isType($type) || !MsModel::isId($id)) {
 			throw new MsHttpError(400, 'bad_request', 'entityType and entityId are required');
@@ -415,6 +424,9 @@ class MsBlobs {
 		}
 		if ($sha !== null && !MsHttp::isSha256($sha)) {
 			throw new MsHttpError(400, 'bad_request', 'sha256 must be 64 lowercase hex characters');
+		}
+		if ($clientId !== null && (!is_string($clientId) || $clientId === '' || strlen($clientId) > 200)) {
+			throw new MsHttpError(400, 'bad_request', 'clientId must be a string of 1 to 200 characters');
 		}
 
 		MsStore::project($db, $pid, $ctx->me);
@@ -433,13 +445,22 @@ class MsBlobs {
 			throw new MsHttpError(403, 'forbidden', 'Contributors can change files only on entities they created',
 				array('reason' => 'contributor_not_creator'));
 		}
+		if ($clientId !== null) {
+			$ctx->pushId = MsHttp::uuid4();
+		}
 		$seq = self::setRef($ctx, $pid, $row, $role, $sha);
 		if ($seq === null) {
 			$db->commit();
 			MsHttp::json(200, array('changed' => false, 'headSeq' => $p['head_seq']));
 			return;
 		}
-		MsStore::bumpHead($db, $pid, $seq);
+		if ($clientId !== null) {
+			$db->q(
+				"INSERT INTO strabomicro.micro_pushes (push_id, project_id, user_pkey, client_id, result)
+				 VALUES ($1, $2, $3, $4, $5::json)",
+				array($ctx->pushId, $pid, $ctx->me, $clientId, MsHttp::encode(array('ref' => $role, 'seq' => $seq))));
+		}
+		MsStore::bumpHead($db, $pid, $seq, $clientId);
 		$db->commit();
 		MsWorker::kick($pid);
 		MsHttp::json(200, array('changed' => true, 'seq' => $seq, 'headSeq' => $seq));
