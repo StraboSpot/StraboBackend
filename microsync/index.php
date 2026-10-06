@@ -42,6 +42,7 @@ include_once "./lib/MsMembers.php";
 include_once "./lib/MsParked.php";
 include_once "./lib/MsDelete.php";
 include_once "./lib/MsAccess.php";
+include_once "./lib/MsChat.php";
 
 const MICROSYNC_API_VERSION = 1;
 
@@ -88,6 +89,11 @@ $routes = array(
 	array('POST',   "#^projects/$pidPattern/uploads/$uuidPattern/complete$#",    array('MsBlobs', 'complete')),
 	array('PUT',    "#^projects/$pidPattern/refs$#",                             array('MsBlobs', 'putRef')),
 	array('DELETE', "#^projects/$pidPattern/refs$#",                             array('MsBlobs', 'deleteRef')),
+	// Chat (17bd-17bi)
+	array('GET',    "#^projects/$pidPattern/chat$#",                             array('MsChat', 'read')),
+	array('POST',   "#^projects/$pidPattern/chat$#",                             array('MsChat', 'send')),
+	array('POST',   "#^projects/$pidPattern/chat/read$#",                        array('MsChat', 'markRead')),
+	array('DELETE', "#^projects/$pidPattern/chat/([1-9][0-9]{0,17})$#",          array('MsChat', 'delete')),
 	// Membership (Phase 2)
 	array('GET',    "#^projects/$pidPattern/members$#",                          array('MsMembers', 'listMembers')),
 	array('POST',   "#^projects/$pidPattern/members$#",                          array('MsMembers', 'invite')),

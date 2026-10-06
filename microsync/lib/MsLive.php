@@ -21,6 +21,12 @@
  *                {"t":"parked","pid":N}
  *                    a push was parked for the owner's review, or the
  *                    owner reviewed one: the owner's copies count again
+ *                {"t":"chat","pid":N,"rev":R}
+ *                    a chat message was sent or deleted (lib/MsChat.php);
+ *                    apps fetch chat?since= their last rev
+ *                {"t":"chatread","pid":N,"user":U,"id":I}
+ *                    U read the chat up to message I; strabo-live tells
+ *                    only U's own connections (their other computers)
  *              If strabo-live is down nothing changes here: the NOTIFY has
  *              no listener and the apps poll (17ak, 17ao).
  *
@@ -49,6 +55,16 @@ class MsLive {
 	/** Parked pushes of the project changed (a new or longer parked push, or a review). */
 	public static function parked($db, $pid) {
 		self::send($db, array('t' => 'parked', 'pid' => (int)$pid));
+	}
+
+	/** A chat message was sent or deleted; $rev is its new rev. */
+	public static function chat($db, $pid, $rev) {
+		self::send($db, array('t' => 'chat', 'pid' => (int)$pid, 'rev' => (int)$rev));
+	}
+
+	/** $user read the project's chat up to message $id. */
+	public static function chatRead($db, $pid, $user, $id) {
+		self::send($db, array('t' => 'chatread', 'pid' => (int)$pid, 'user' => (int)$user, 'id' => (int)$id));
 	}
 
 	private static function send($db, $notice) {

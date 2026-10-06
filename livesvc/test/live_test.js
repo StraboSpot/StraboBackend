@@ -437,6 +437,39 @@ async function main() {
     const got = await vie.wait((m) => m.t === 'changed' && m.by === 'copy-E', 2000);
     check(`notice arrives quickly after the push answers (${Date.now() - t0} ms incl. the push)`, got !== null && Date.now() - t0 < 1500);
 
+    section('Chat (MsLive chat and chatread notices)');
+    const edt2 = track(await subscribed(U.editor.tok, PID));
+    check('editor\'s second computer follows too', edt2.subbed?.role === 'editor');
+    mark = { o: own.msgs.length, e: edt.msgs.length, e2: edt2.msgs.length, v: vie.msgs.length, x: out.msgs.length };
+    r = await req('POST', `/projects/${PID}/chat`, U.editor.tok, { clientMsgId: crypto.randomUUID(), text: 'secret words about D1' });
+    check('editor sends a chat message', r.code === 200, r.raw);
+    const sent = r.body?.message;
+    let cn = await own.wait((m) => m.t === 'chat', 2000, mark.o);
+    check('owner gets chat {pid, rev} = the message rev', cn?.pid === PID && cn.rev === sent?.rev, own.msgs.slice(mark.o));
+    check('the notice has ids only, no text', cn !== null && JSON.stringify(Object.keys(cn).sort()) === JSON.stringify(['pid', 'rev', 't'])
+      && !JSON.stringify(cn).includes('secret'), cn);
+    check('viewer gets it', (await vie.wait((m) => m.t === 'chat' && m.rev === sent?.rev, 2000, mark.v)) !== null);
+    check('the sender\'s own connections get it too', (await edt.wait((m) => m.t === 'chat', 2000, mark.e)) !== null);
+    await sleep(300);
+    check('a non-follower gets no chat notice', out.msgs.slice(mark.x).every((m) => m.t !== 'chat'));
+    mark = { v: vie.msgs.length };
+    r = await req('DELETE', `/projects/${PID}/chat/${sent?.id}`, U.editor.tok);
+    check('editor deletes it', r.code === 200, r.raw);
+    check('the deletion is announced with the new rev', (await vie.wait((m) => m.t === 'chat' && m.rev === r.body?.rev, 2000, mark.v)) !== null);
+    r = await req('POST', `/projects/${PID}/chat`, U.owner.tok, { clientMsgId: crypto.randomUUID(), text: 'owner message' });
+    const lastMsg = r.body?.message?.id;
+    await sleep(300);
+    mark = { o: own.msgs.length, e: edt.msgs.length, e2: edt2.msgs.length, v: vie.msgs.length };
+    r = await req('POST', `/projects/${PID}/chat/read`, U.editor.tok, { id: lastMsg });
+    check('editor reads up to the owner\'s message', r.code === 200 && r.body.lastRead === lastMsg, r.raw);
+    const rd = await edt2.wait((m) => m.t === 'chatread', 2000, mark.e2);
+    check('the editor\'s other computer gets chatread {pid, id}', rd?.pid === PID && rd.id === lastMsg, edt2.msgs.slice(mark.e2));
+    check('and the reading connection too', (await edt.wait((m) => m.t === 'chatread', 2000, mark.e)) !== null);
+    await sleep(300);
+    check('other accounts get no chatread', own.msgs.slice(mark.o).every((m) => m.t !== 'chatread')
+      && vie.msgs.slice(mark.v).every((m) => m.t !== 'chatread'));
+    edt2.close();
+
     if (process.env.LIVE_APACHE === '1') {
       section('Through the dev Apache to the strabo-live container');
       c = track(await authed(U.editor.tok, 'ws://localhost/microsync/live'));
@@ -594,6 +627,13 @@ async function main() {
     check('a push while the service is not listening still works', r2.code === 200 && r2.body.results[0].status === 'accepted', r2.raw);
     ch = await own.wait((m) => m.t === 'changed' && m.seq >= r2.body.headSeq, 5000, mark.o);
     check('after LISTEN is back, followers are caught up to the head', ch !== null && ch.by === null, own.msgs.slice(mark.o));
+    mark = { o: own.msgs.length };
+    await db.query(`SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE query = 'LISTEN microsync_live' AND usename = $1`, [CFG.db.user]);
+    await sleep(300);
+    const c2 = await req('POST', `/projects/${PID}/chat`, U.maya.tok, { clientMsgId: crypto.randomUUID(), text: 'while not listening' });
+    check('a chat message while the service is not listening still works', c2.code === 200, c2.raw);
+    const cc = await own.wait((m) => m.t === 'chat' && m.rev >= c2.body?.message?.rev, 5000, mark.o);
+    check('after LISTEN is back, followers are told the newest chat rev', cc !== null, own.msgs.slice(mark.o));
     check('health says listening again', (await health()).listening === true);
 
     section('Project deleted');

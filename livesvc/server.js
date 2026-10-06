@@ -32,6 +32,11 @@
  *                    its normal check, which says which
  *                {"t":"parked","pid"} parked pushes changed (the owner's
  *                    copies count what waits for review again)
+ *                {"t":"chat","pid","rev"} a chat message was sent or
+ *                    deleted; the app fetches chat?since= its last rev
+ *                {"t":"chatread","pid","id"} this account read the chat
+ *                    up to message id on another computer (sent only to
+ *                    the account's own connections)
  *                {"t":"presence","pid","people":[{"conn","user","state",
  *                    "viewing","editing","since"}]} everyone following the
  *                    project, the app's own connection included (the app
@@ -145,6 +150,12 @@ async function recheckAccess() {
     log('[access] closing connections of an account that may no longer sync:', pkey);
     for (const c of accountConns(pkey)) refuseAccess(c);
   }
+}
+
+/** Newest chat rev of the project (0 when it has no messages). */
+async function chatRev(pid) {
+  const r = await pool.query('SELECT COALESCE(max(rev), 0) AS rev FROM strabomicro.micro_chat WHERE project_id = $1', [pid]);
+  return Number(r.rows[0].rev);
 }
 
 async function headSeq(pid) {
@@ -438,6 +449,16 @@ function onNotice(n) {
     for (const c of followers.get(n.pid) ?? []) {
       if (c.ws.readyState === c.ws.OPEN) c.ws.send(msg);
     }
+  } else if (n.t === 'chat' && Number.isInteger(n.rev)) {
+    const msg = JSON.stringify({ t: 'chat', pid: n.pid, rev: n.rev });
+    for (const c of followers.get(n.pid) ?? []) {
+      if (c.ws.readyState === c.ws.OPEN) c.ws.send(msg);
+    }
+  } else if (n.t === 'chatread' && Number.isInteger(n.user) && Number.isInteger(n.id)) {
+    const msg = JSON.stringify({ t: 'chatread', pid: n.pid, id: n.id });
+    for (const c of followers.get(n.pid) ?? []) {
+      if (c.user === n.user && c.ws.readyState === c.ws.OPEN) c.ws.send(msg);
+    }
   } else if (n.t === 'members') {
     recheck(n.pid).catch((e) => log('[members] recheck failed:', n.pid, e.message));
   }
@@ -466,6 +487,8 @@ async function catchUpAll() {
   for (const pid of [...followers.keys()]) {
     const seq = await headSeq(pid);
     if (seq !== null) onNotice({ t: 'changed', pid, seq, by: null });
+    const rev = await chatRev(pid).catch(() => 0);
+    if (rev > 0) onNotice({ t: 'chat', pid, rev });
     await recheck(pid);
   }
 }
