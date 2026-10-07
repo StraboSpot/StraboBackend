@@ -172,12 +172,22 @@ $ms->q("UPDATE users SET deleted = false WHERE pkey = $1", array($upkC));
 
 $u = uuid();
 foreach (array(
-	array('POST', '/db/voicestation'), array('GET', "/db/voicebatch/$u"), array('GET', "/db/voiceaudio/$u"),
+	array('GET', '/db/voicestation'), array('POST', '/db/voicestation'), array('GET', "/db/voicebatch/$u"), array('GET', "/db/voiceaudio/$u"),
 	array('POST', "/db/voiceconfirm/$u"), array('POST', "/db/voiceretry/$u")) as $r) {
 	$x = req($r[0], $r[1], $C, array('json' => '{}'));
 	check("unlisted account: {$r[0]} {$r[1]} = 403 not_available",
 		$x['code'] === 403 && $x['json']['code'] === 'not_available' && isset($x['json']['Error']), $x['code'] . ' ' . $x['body']);
 }
+section('Access check: GET /db/voicestation (step 4 point 3)');
+$x = req('GET', '/db/voicestation', $MAYA);
+check('listed account: 200 available + limits',
+	$x['code'] === 200 && $x['json'] === array('available' => true, 'max_seconds' => VsConfig::MAX_SECONDS,
+		'max_bytes' => VsConfig::MAX_AUDIO_BYTES, 'max_photos' => VsConfig::MAX_PHOTOS), $x['code'] . ' ' . $x['body']);
+check('access check answers JSON', isset($x['headers']['content-type']) && strpos($x['headers']['content-type'], 'application/json') === 0, $x['headers']);
+$x = req('GET', "/db/voicestation/$u", $MAYA);
+check('GET /db/voicestation/{id} = 404', $x['code'] === 404, $x['code'] . ' ' . $x['body']);
+$x = req('GET', '/db/voicestation', array($MAYA[0], 'wrong-password'));
+check('access check, wrong password stops at Apache (401)', $x['code'] === 401, $x['code']);
 $x = req('GET', "/db/voicebatch/$u", array($MAYA[0], 'wrong-password'));
 check('wrong password stops at Apache (401)', $x['code'] === 401, $x['code']);
 

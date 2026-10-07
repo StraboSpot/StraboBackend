@@ -40,6 +40,20 @@ class VsService {
 		}
 	}
 
+	/**
+	 * GET /db/voicestation: the app's access check at login (step 4 point 3).
+	 * Reaching here means the gate passed; the limits let the app warn
+	 * before a recording runs past them.
+	 */
+	public function access() {
+		return array(200, array(
+			'available' => true,
+			'max_seconds' => VsConfig::MAX_SECONDS,
+			'max_bytes' => VsConfig::MAX_AUDIO_BYTES,
+			'max_photos' => VsConfig::MAX_PHOTOS,
+		));
+	}
+
 	// ---------------------------------------------------------------- upload
 
 	/**
