@@ -12,6 +12,8 @@ if($manualtype == "field"){
 	$filename = "StraboExperimental_Manual.pdf";
 }elseif($manualtype == "samples"){
 	$filename = "StraboSamples_Manual.pdf";
+}elseif($manualtype == "groupworkflows"){
+	$filename = "StraboField_Group_Workflows.pdf";
 }elseif($manualtype == "tools"){
 	$filename = "StraboTools_Manual.pdf";
 }else{
