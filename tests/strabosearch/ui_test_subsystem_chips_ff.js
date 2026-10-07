@@ -4,9 +4,11 @@
  * (All = no filter, all three on or last one off = All), the DSL's
  * top-level subsystems in each search request, the returned projects'
  * subsystems, criteria picker gating, URL round-trip + reload, Start Over,
- * keyword + chip invalidation, saved-search summaries, old shared links,
- * the phone drawer + Filters badge, and that the Export Builder (which
- * reuses builder.js) has no chip bar.
+ * a chip click with a keyword searches at once and keeps the tab + sort,
+ * saved-search summaries, old shared links, the label-line + one-row chip
+ * layout (nothing cut off, no shift when lit) from 360px to 1920px, the
+ * phone drawer + Filters badge (drawer stays open on a chip click), and
+ * that the Export Builder (which reuses builder.js) has no chip bar.
  *
  * Forges a dev PHP session for user 3 (Export Builder needs a login) and
  * deletes it afterwards. Needs `playwright` resolvable from the CWD
@@ -50,7 +52,7 @@ const enc = o => Buffer.from(JSON.stringify(o)).toString('base64').replace(/\+/g
   console.log('=== first load ===');
   await p.goto('http://localhost/strabosearch/'); await settle();
   check('chip bar shows 4 chips', (await p.$$('.ss-subsys-chip')).length === 4);
-  check('labels', JSON.stringify(await p.$$eval('.ss-subsys-chip', a => a.map(x => x.textContent))) === '["All","StraboField","StraboMicro","StraboExperimental"]');
+  check('labels', JSON.stringify(await p.$$eval('.ss-subsys-chip', a => a.map(x => x.textContent))) === '["All","Field","Micro","Experimental"]');
   check('All lit', JSON.stringify(await lit()) === '["all"]');
   check('no Strabo Subsystem criterion', !(await p.$$eval('.ss-crit-select option', a => a.map(o => o.textContent))).includes('Strabo Subsystem'));
   check('catalog has several subsystems', (subsOf() || []).length >= 2); console.log('    catalog page subsystems:', subsOf());
@@ -91,16 +93,27 @@ const enc = o => Buffer.from(JSON.stringify(o)).toString('base64').replace(/\+/g
   await p.focus('.ss-subsys-chip[data-subsystem="exp"]'); await p.keyboard.press('Enter'); await settle();
   check('Enter toggles', JSON.stringify(await lit()) === '["exp"]');
 
-  console.log('=== with a keyword: chip change invalidates results ===');
+  console.log('=== with a keyword: a chip click searches at once ===');
   await p.click('.ss-subsys-chip[data-subsystem="all"]'); await settle();
   await p.fill('.ss-row input[type="text"]', 'granite');
   await p.click('#ssSearchBtn'); await settle();
   check('keyword search ran unfiltered', lastReq && lastReq.subsystems.length === 3);
   await click('field');
-  check('results cleared, waiting for Search', await p.evaluate(() => !window.SSResults.hasResults()));
-  lastReq = null; await p.click('#ssSearchBtn'); await settle();
-  check('Search sends keyword + [field]', lastReq && JSON.stringify(lastReq.subsystems) === '["field"]' && lastReq.criteria.length === 1);
+  check('chip click sent keyword + [field] without Search', lastReq && JSON.stringify(lastReq.subsystems) === '["field"]' && lastReq.criteria.length === 1);
+  check('results showing (no Press Search prompt)', await p.evaluate(() => window.SSResults.hasResults()) && !(await p.textContent('#ssResults')).includes('Press Search'));
   check('results all field', subsOf() !== null && subsOf().every(s => s === 'field'));
+  check('URL mirrors keyword + chip', /\?q=/.test(p.url()));
+
+  console.log('=== chip click keeps tab + sort ===');
+  await p.click('.ss-subsys-chip[data-subsystem="all"]'); await settle();
+  const imgTab = await p.$('.ss-tabbar [data-tab="images"], .ss-tabbar .ss-tab:nth-child(2)');
+  if (imgTab) { await imgTab.click(); await settle(); }
+  const before = await p.evaluate(() => window.SSResults.getUrlState());
+  await click('micro');
+  const after = await p.evaluate(() => window.SSResults.getUrlState());
+  check('Images tab kept after chip click', before && before.tab === 'images' && after && after.tab === 'images');
+  check('images request sent with [micro]', lastReq && lastReq.pathway === 'images' && JSON.stringify(lastReq.subsystems) === '["micro"]');
+  await p.click('.ss-subsys-chip[data-subsystem="all"]'); await settle();
 
   console.log('=== Start Over ===');
   await p.click('.ss-start-over'); await settle();
@@ -116,6 +129,24 @@ const enc = o => Buffer.from(JSON.stringify(o)).toString('base64').replace(/\+/g
   check('[exp, field] link lights Field + Exp', JSON.stringify(await lit()) === '["field","exp"]');
   await p.goto('http://localhost/strabosearch/?q=' + enc({ dsl: { subsystems: ['field','micro','exp','samples'], criteria: [{ id: 'U1', value: 'granite' }] }, tab: 'projects', view: 'list' })); await settle();
   check('legacy 4-subsystem link -> All', JSON.stringify(await lit()) === '["all"]');
+
+  console.log('=== one-row layout, 360px to 1920px ===');
+  for (const [w, h] of [[1920, 1100], [1440, 900], [1280, 900], [1024, 800], [1023, 800], [400, 800], [360, 740]]) {
+    const q = await ctx.newPage(); await q.setViewportSize({ width: w, height: h });
+    await q.goto('http://localhost/strabosearch/'); await q.waitForLoadState('networkidle');
+    if (w < 1024) { await q.click('#ssFiltersBtn'); await q.waitForTimeout(400); }
+    const geo = () => q.$$eval('.ss-subsys-chip', a => a.map(c => ({ cut: c.scrollWidth > c.clientWidth + 1, top: Math.round(c.getBoundingClientRect().top), w: Math.round(c.getBoundingClientRect().width) })));
+    const labelAbove = await q.evaluate(() => document.querySelector('.ss-subsys-label').getBoundingClientRect().bottom <= document.querySelector('.ss-subsys-chip').getBoundingClientRect().top);
+    const g0 = await geo();
+    await q.click('.ss-subsys-chip[data-subsystem="micro"]'); await q.waitForTimeout(150);
+    await q.click('.ss-subsys-chip[data-subsystem="exp"]'); await q.waitForTimeout(150);
+    const g1 = await geo();
+    check(`${w}px: label on its own line`, labelAbove);
+    check(`${w}px: one row, nothing cut off`, new Set(g1.map(x => x.top)).size === 1 && !g0.concat(g1).some(x => x.cut));
+    check(`${w}px: lit chips keep their width`, JSON.stringify(g0.map(x => x.w)) === JSON.stringify(g1.map(x => x.w)));
+    if (w < 1024) check(`${w}px: drawer stays open on a chip click`, await q.evaluate(() => document.getElementById('ssAppFrame').classList.contains('ss-drawer-open')));
+    await q.close();
+  }
 
   console.log('=== phone width ===');
   await p.setViewportSize({ width: 400, height: 800 });

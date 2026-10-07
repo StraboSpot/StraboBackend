@@ -827,6 +827,7 @@
 		clear: clear,
 		hasResults: function () { return state !== null; },
 		getView: function () { return state ? state.view : null; },
+		getUrlState: getUrlState,
 		fieldProjectCount: fieldProjectCount,
 		abort: abortInflight
 	};

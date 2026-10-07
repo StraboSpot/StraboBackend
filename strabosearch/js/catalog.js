@@ -115,7 +115,8 @@
 		{ value: 'strat',          label: 'Strat Section' }
 	];
 
-	// label = short form (saved-search summaries); chip = the chip bar text.
+	// label = chip bar text + saved-search summaries; chip = full name
+	// (chip tooltips).
 	var SUBSYSTEMS = [
 		{ value: 'field',   label: 'Field',        chip: 'StraboField' },
 		{ value: 'micro',   label: 'Micro',        chip: 'StraboMicro' },

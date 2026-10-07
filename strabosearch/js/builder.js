@@ -14,14 +14,16 @@
  *                (double-click closes, right-click undoes a vertex),
  *                plus a "Use current view" rectangle shortcut.
  *              - Subsystem filter (PIs, 2026-10-07): a toggle chip bar
- *                above the rows (All / StraboField / StraboMicro /
- *                StraboExperimental), replacing the old U8 "Strabo
- *                Subsystem" criterion row. On/off only: every project is
+ *                above the rows (All / Field / Micro / Experimental),
+ *                replacing the old U8 "Strabo Subsystem" criterion
+ *                row. On/off only: every project is
  *                in exactly one subsystem, so StraboSamples' exclude state
  *                and Match any/all would add nothing. Serializes to the
  *                DSL's top-level `subsystems`, as U8 did. Only the search
  *                page turns it on (opts.subsystemChips); the Export
- *                Builder reuses this builder without it.
+ *                Builder reuses this builder without it. A chip click
+ *                searches at once (Jason 10-07, opts.onSubsystemChange):
+ *                no "Press Search" step for a one-click refinement.
  *
  * @package    StraboSpot Web Site — StraboSearch
  */
@@ -34,6 +36,7 @@
 	var rows = [];            // [{crit, not, value, el, valueBox, notBtn}]
 	var changeCb = function () {};
 	var searchCb = function () {};   // Enter-in-widget → run search (§6.9)
+	var subsysCb = function () {};   // chip click → re-run the search
 	var rowSeq = 0;
 	var subsystems = null;    // chip bar selection; null = All (unconstrained)
 	var subsysBar = null;     // the chip bar element (search page only)
@@ -96,9 +99,11 @@
 		bar.setAttribute('role', 'group');
 		bar.setAttribute('aria-label', 'Show projects from these subsystems');
 		bar.appendChild(el('span', 'ss-subsys-label', 'Subsystem:'));
+		var row = el('div', 'ss-subsys-chips');
+		bar.appendChild(row);
 		var chips = [{ value: 'all', label: 'All', title: 'Show projects from every subsystem' }]
 			.concat(C.SUBSYSTEMS.map(function (s) {
-				return { value: s.value, label: s.chip, title: 'Show or hide ' + s.chip + ' projects' };
+				return { value: s.value, label: s.label, title: 'Show or hide ' + s.chip + ' projects' };
 			}));
 		chips.forEach(function (c) {
 			var chip = el('span', 'ss-subsys-chip', c.label);
@@ -116,13 +121,16 @@
 					subsystems = normalizeSubsystems(cur);
 				}
 				syncSubsystemBar();
+				// Search first, then notify: the run records the new
+				// query, so the change handler sees nothing stale to clear.
+				subsysCb();
 				notifyChange();
 			}
 			chip.addEventListener('click', flip);
 			chip.addEventListener('keydown', function (ev) {
 				if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); flip(); }
 			});
-			bar.appendChild(chip);
+			row.appendChild(chip);
 		});
 		return bar;
 	}
@@ -869,6 +877,7 @@
 		container = elContainer;
 		changeCb = (opts && opts.onChange) || function () {};
 		searchCb = (opts && opts.onSearch) || function () {};
+		subsysCb = (opts && opts.onSubsystemChange) || function () {};
 
 		if (opts && opts.subsystemChips) {
 			subsysBar = buildSubsystemBar();

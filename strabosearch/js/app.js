@@ -248,7 +248,14 @@
 		window.SSBuilder.init(document.getElementById('criteriaBuilder'), {
 			onChange: updateSearchButton,
 			onSearch: function () { runSearch(); },
-			subsystemChips: true
+			subsystemChips: true,
+			// A chip click re-runs at once on the tab, sort and view on
+			// screen (Jason 10-07). auto: the phone drawer stays open, so
+			// several chips can be flipped in a row.
+			onSubsystemChange: function () {
+				var st = window.SSResults.getUrlState();
+				runSearch({ auto: true, tab: st ? st.tab : null, sort: st ? st.sort : null });
+			}
 		});
 
 		window.SSSaved.init({
