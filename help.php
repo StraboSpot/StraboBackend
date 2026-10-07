@@ -102,6 +102,16 @@ include("includes/mheader.php");
 			</div>
 		</section>
 
+		<a name="groupworkflows" style="scroll-margin-top: 100px;"></a>
+
+		<!-- StraboField Group Data Collection -->
+		<section class="micro-section">
+			<h2 style="color: #ffffff; font-size: 2em; font-weight: 300; margin-bottom: 0.5em;">StraboField Group Data Collection: Setup Options and Workflows</h2>
+			<div style="padding-left:50px;padding-bottom:30px;">
+				<div class="medHeader" style="padding-left:20px;"><a href="/manual/groupworkflows" target="_blank">StraboField Group Data Collection: Setup Options and Workflows</a></div>
+			</div>
+		</section>
+
 		<a name="micro" style="scroll-margin-top: 100px;"></a>
 		
 		<!-- StraboMicro Help -->

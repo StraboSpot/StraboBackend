@@ -23,7 +23,7 @@ if($_POST){
 		exit("No manual type provided.");
 	}
 	
-	if(!in_array($manualtype,['field','micro','micro2','experimental','samples','tools'])){
+	if(!in_array($manualtype,['field','micro','micro2','experimental','samples','groupworkflows','tools'])){
 		exit("Incorrect manual type provided.");
 	}
 	
@@ -39,6 +39,7 @@ if($_POST){
 	if($manualtype == "micro2") $showtype = "StraboMicro2";
 	if($manualtype == "experimental") $showtype = "StraboExperimental";
 	if($manualtype == "samples") $showtype = "StraboSamples";
+	if($manualtype == "groupworkflows") $showtype = "StraboField Group Workflows";
 	if($manualtype == "tools") $showtype = "StraboTools";
 
 	
@@ -153,6 +154,7 @@ if($_POST){
 			<option value="micro2">StraboMicro2</option>
 			<option value="experimental">StraboExperimental</option>
 			<option value="samples">StraboSamples</option>
+			<option value="groupworkflows">StraboField Group Workflows</option>
 			<option value="tools">StraboTools</option>
 		</select>
 	</div>
