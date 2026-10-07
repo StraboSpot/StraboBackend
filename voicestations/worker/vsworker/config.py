@@ -26,6 +26,11 @@ class Config:
     heartbeat_seconds: float
     whisper_port: int
     whisper_timeout: float
+    extract_provider: str
+    extract_model: str
+    extract_effort: str
+    extract_slots: int
+    ollama_url: str
 
 
 def load(env=os.environ):
@@ -37,9 +42,11 @@ def load(env=os.environ):
 
     kinds = tuple(k.strip() for k in env.get('VS_KINDS', 'transcribe').split(',') if k.strip())
     for k in kinds:
-        if k != 'transcribe':
-            # extraction arrives in build step 3
-            raise SystemExit(f'VS_KINDS: {k!r} is not supported by this worker yet')
+        if k not in ('transcribe', 'extract'):
+            raise SystemExit(f'VS_KINDS: {k!r} is not a job kind (transcribe, extract)')
+    provider = env.get('VS_EXTRACT_PROVIDER', 'anthropic')
+    if 'extract' in kinds and provider == 'anthropic' and not env.get('ANTHROPIC_API_KEY', '').strip():
+        raise SystemExit('VS_KINDS has extract but ANTHROPIC_API_KEY is not set')
     return Config(
         api_url=need('VS_API_URL').rstrip('/'),
         token=need('VS_TOKEN'),
@@ -56,4 +63,10 @@ def load(env=os.environ):
         heartbeat_seconds=float(env.get('VS_HEARTBEAT_SECONDS', '30')),
         whisper_port=int(env.get('VS_WHISPER_PORT', '8178')),
         whisper_timeout=float(env.get('VS_WHISPER_TIMEOUT', '900')),
+        extract_provider=provider,
+        extract_model=env.get('VS_EXTRACT_MODEL', 'claude-opus-5-5' if provider == 'anthropic' else 'qwen3:14b'),
+        extract_effort=env.get('VS_EXTRACT_EFFORT', 'high'),
+        # Ollama shares the GPU with whisper: one extraction at a time (step 3 point 1)
+        extract_slots=1 if provider == 'ollama' else int(env.get('VS_EXTRACT_SLOTS', '4')),
+        ollama_url=env.get('VS_OLLAMA_URL', 'http://host.docker.internal:11434'),
     )

@@ -52,6 +52,8 @@ def normalize(raw_text, log_lines):
     """whisper verbose_json text + its log -> (output, word_times method).
 
     output = {"text", "segments": [{start, end, text}], "words": [{w, start, end, p}]}
+    Words are whole spoken words (whisper's tokens joined), punctuation attached:
+    "bedding,", "045,". p is the lowest token probability in the word.
     word_times = "vad_remapped" (log mapping), "segment_shifted" (no mapping
     found: each segment's words shifted so the first starts at the segment
     start), or "none" (no words).
@@ -67,14 +69,24 @@ def normalize(raw_text, log_lines):
         shift = 0.0
         if not spans and words:
             shift = float(g['start']) - float(words[0]['start'])
-        for w in words:
+        for k, w in enumerate(words):
             if spans:
                 s, e = to_original(float(w['start']), spans), to_original(float(w['end']), spans)
             else:
                 s, e = float(w['start']) + shift, float(w['end']) + shift
             p = w.get('probability')
-            out_words.append({'w': w.get('word', '').strip(), 'start': r2(s), 'end': r2(max(s, e)),
-                              'p': None if p is None else round(float(p), 4)})
+            p = None if p is None else round(float(p), 4)
+            piece = w.get('word', '')
+            # whisper "words" are tokens: a new word starts with a space; anything
+            # else ("ding" after "bed", "45" after "0", ",") continues the last one
+            if out_words and k > 0 and not piece.startswith(' '):
+                last = out_words[-1]
+                last['w'] += piece
+                last['end'] = r2(max(last['end'], e))
+                if p is not None:
+                    last['p'] = p if last['p'] is None else min(last['p'], p)
+                continue
+            out_words.append({'w': piece.strip(), 'start': r2(s), 'end': r2(max(s, e)), 'p': p})
     if not out_words:
         method = 'none'
     text = ' '.join(s['text'] for s in out_segs if s['text'])

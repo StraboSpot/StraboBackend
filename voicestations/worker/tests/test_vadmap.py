@@ -47,7 +47,9 @@ class Normalize(unittest.TestCase):
         self.assertTrue(out['text'].startswith('Station one, bedding in a gray sandstone'))
         self.assertNotIn('\n', out['text'])
         self.assertEqual(len(out['segments']), 4)
-        w = {x['w']: x for x in out['words']}
+        w = {x['w'].strip(',.'): x for x in out['words']}
+        self.assertIn('bedding', w)   # whisper tokens 'bed' + 'ding' joined
+        self.assertIn('045', w)       # '0' + '45'
         # words now sit on the original timeline, next to their segments
         self.assertAlmostEqual(w['north']['start'], 17.90)
         self.assertAlmostEqual(w['Station']['start'], 1.94)
