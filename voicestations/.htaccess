@@ -1,0 +1,2 @@
+# Voice Stations server code: included by /db/ controllers, never served directly
+Require all denied
