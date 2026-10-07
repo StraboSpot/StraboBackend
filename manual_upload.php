@@ -23,7 +23,7 @@ if($_POST){
 		exit("No manual type provided.");
 	}
 	
-	if(!in_array($manualtype,['field','micro','micro2','experimental','tools'])){
+	if(!in_array($manualtype,['field','micro','micro2','experimental','samples','tools'])){
 		exit("Incorrect manual type provided.");
 	}
 	
@@ -38,11 +38,21 @@ if($_POST){
 	if($manualtype == "micro") $showtype = "StraboMicro";
 	if($manualtype == "micro2") $showtype = "StraboMicro2";
 	if($manualtype == "experimental") $showtype = "StraboExperimental";
+	if($manualtype == "samples") $showtype = "StraboSamples";
 	if($manualtype == "tools") $showtype = "StraboTools";
 
 	
+	if($pdffile['error'] != UPLOAD_ERR_OK){
+		if($pdffile['error'] == UPLOAD_ERR_INI_SIZE || $pdffile['error'] == UPLOAD_ERR_FORM_SIZE){
+			exit("Upload failed: the PDF is larger than the server allows (".ini_get('upload_max_filesize').").");
+		}
+		exit("Upload failed (error code ".(int)$pdffile['error'].").");
+	}
+
 	$tempname = $pdffile['tmp_name'];
-	move_uploaded_file($tempname, "manuals/".$manualtype.".pdf");
+	if(!move_uploaded_file($tempname, "manuals/".$manualtype.".pdf")){
+		exit("Upload failed: the manual could not be saved on the server.");
+	}
 	
 	?>
 			<!-- Main -->
@@ -142,6 +152,7 @@ if($_POST){
 			<option value="micro">StraboMicro</option>
 			<option value="micro2">StraboMicro2</option>
 			<option value="experimental">StraboExperimental</option>
+			<option value="samples">StraboSamples</option>
 			<option value="tools">StraboTools</option>
 		</select>
 	</div>
