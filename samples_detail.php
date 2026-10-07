@@ -2697,7 +2697,7 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             return;
         }
         $cmInviteBtn.disabled = true;
-        $cmInviteBtn.textContent = 'Sending&hellip;';
+        $cmInviteBtn.textContent = 'Sending\u2026';
         postCollab({
             sample_id:        sample.id,
             owner_pkey:       owner.pkey,
