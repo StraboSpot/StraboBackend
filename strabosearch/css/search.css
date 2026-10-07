@@ -164,6 +164,75 @@
 	margin-bottom: 1.5em;
 }
 
+/* Subsystem chip bar (PIs 2026-10-07): the StraboSamples Type chips
+   (my_samples.php .ms-tab / .ms-type-chip) as plain on/off toggles.
+   Label on its own line, the four chips on ONE row below that always
+   fits the rail (Jason 10-07: wrapping looked sloppy), with short labels
+   (All / Field / Micro / Experimental, Jason's pick 10-07: the full
+   Strabo names only fit cramped). The row never widens the rail (width 0
+   + min-width 100%: no intrinsic width of its own), and lit chips are
+   fill only (no check mark, so nothing shifts on a click). */
+.ss-subsys {
+	padding: 0.2em 0 0.8em;   /* the first row's dotted top border divides */
+	color: rgba(255, 255, 255, 0.7);
+}
+
+.ss-subsys-label {
+	display: block;
+	font-weight: 600;
+	margin-bottom: 0.45em;
+}
+
+.ss-subsys-chips {
+	display: flex;
+	flex-wrap: nowrap;
+	gap: 0.3em;
+	width: 0;
+	min-width: 100%;
+}
+
+.ss-subsys-chip {
+	flex: 1 1 auto;
+	min-width: 0;
+	text-align: center;
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	color: rgba(255, 255, 255, 0.85);
+	border-radius: 999px;
+	padding: 0.3em 0.6em;
+	font-size: 0.95em;
+	line-height: 1.6;
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+
+.ss-subsys-chip[data-subsystem="all"] {
+	flex: 0 0 auto;
+}
+
+.ss-subsys-chip:hover:not(.ss-on) {
+	background: rgba(255, 255, 255, 0.12);
+}
+
+.ss-subsys-chip.ss-on {
+	background: #e44c65;
+	border-color: #e44c65;
+	color: #fff;
+}
+
+.ss-subsys-chip.ss-on:hover {
+	filter: brightness(1.12);
+}
+
+.ss-subsys-chip:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 2px;
+}
+
 .ss-row {
 	display: flex;
 	flex-direction: column;
@@ -1210,7 +1279,8 @@
 	}
 
 	/* ≥44px touch targets (§6.8) */
-	.ss-chipbtn {
+	.ss-chipbtn,
+	.ss-subsys-chip {
 		min-height: 44px;
 		min-width: 44px;
 		display: inline-flex;

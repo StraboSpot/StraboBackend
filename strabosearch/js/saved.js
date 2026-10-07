@@ -211,8 +211,7 @@
 
 	function openSaveCurrent(getDsl) {
 		var dsl = getDsl();
-		if (!dsl.criteria.length &&
-			(!dsl.subsystems || dsl.subsystems.length === 4)) {
+		if (!dsl.criteria.length && C.isAllSubsystems(dsl.subsystems)) {
 			alert('Compose a search first — there is nothing to save yet.');
 			return;
 		}
