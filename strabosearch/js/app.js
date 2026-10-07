@@ -60,6 +60,7 @@
 
 	function isCatalogDefault(dsl, urlState) {
 		return !!dsl && (!dsl.criteria || dsl.criteria.length === 0)
+			&& window.SSCatalog.isAllSubsystems(dsl.subsystems)
 			&& (!urlState || ((urlState.view || 'list') === 'list'
 				&& (urlState.tab || 'projects') === 'projects' && !urlState.sort));
 	}
@@ -246,7 +247,15 @@
 
 		window.SSBuilder.init(document.getElementById('criteriaBuilder'), {
 			onChange: updateSearchButton,
-			onSearch: function () { runSearch(); }
+			onSearch: function () { runSearch(); },
+			subsystemChips: true,
+			// A chip click re-runs at once on the tab, sort and view on
+			// screen (Jason 10-07). auto: the phone drawer stays open, so
+			// several chips can be flipped in a row.
+			onSubsystemChange: function () {
+				var st = window.SSResults.getUrlState();
+				runSearch({ auto: true, tab: st ? st.tab : null, sort: st ? st.sort : null });
+			}
 		});
 
 		window.SSSaved.init({
