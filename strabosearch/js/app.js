@@ -60,6 +60,7 @@
 
 	function isCatalogDefault(dsl, urlState) {
 		return !!dsl && (!dsl.criteria || dsl.criteria.length === 0)
+			&& window.SSCatalog.isAllSubsystems(dsl.subsystems)
 			&& (!urlState || ((urlState.view || 'list') === 'list'
 				&& (urlState.tab || 'projects') === 'projects' && !urlState.sort));
 	}
@@ -246,7 +247,8 @@
 
 		window.SSBuilder.init(document.getElementById('criteriaBuilder'), {
 			onChange: updateSearchButton,
-			onSearch: function () { runSearch(); }
+			onSearch: function () { runSearch(); },
+			subsystemChips: true
 		});
 
 		window.SSSaved.init({

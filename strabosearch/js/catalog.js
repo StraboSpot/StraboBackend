@@ -13,8 +13,6 @@
  *                numrange    — paired min/max numerics (F1–F4)
  *                owner       — single-pick typeahead over users (U4)
  *                samplevocab — dual chip-selects type+purpose (U7)
- *                subsystems  — U8; serializes to the DSL's TOP-LEVEL
- *                              `subsystems` array, not a criteria row
  *                flags       — U9 has-data flag chips
  *                vocab       — chip multi-select w/ typeahead (F5..E3, I1, F11)
  *                rocktype    — hierarchical flat-indented multi-select (F7)
@@ -47,8 +45,9 @@
 			widget: 'prefixtext', placeholder: 'IGSN…' },
 		{ id: 'U7',  group: 'Universal', label: 'Sample Type / Purpose',
 			widget: 'samplevocab' },
-		{ id: 'U8',  group: 'Universal', label: 'Strabo Subsystem',
-			widget: 'subsystems', unique: true, noNot: true },
+		// U8 (Strabo Subsystem) is no longer a row: the search page's
+		// subsystem chip bar (builder.js) sets the DSL's top-level
+		// `subsystems` instead (PIs, 2026-10-07).
 		{ id: 'U9',  group: 'Universal', label: 'Has Data Type',
 			widget: 'flags' },
 		{ id: 'U10', group: 'Universal', label: 'Tag Name',
@@ -116,12 +115,20 @@
 		{ value: 'strat',          label: 'Strat Section' }
 	];
 
+	// label = short form (saved-search summaries); chip = the chip bar text.
 	var SUBSYSTEMS = [
-		{ value: 'field',   label: 'Field' },
-		{ value: 'micro',   label: 'Micro' },
-		{ value: 'exp',     label: 'Experimental' },
+		{ value: 'field',   label: 'Field',        chip: 'StraboField' },
+		{ value: 'micro',   label: 'Micro',        chip: 'StraboMicro' },
+		{ value: 'exp',     label: 'Experimental', chip: 'StraboExperimental' },
 		//{ value: 'samples', label: 'Samples' } //Let's not show this for now 20260816 JMA
 	];
+
+	/** True when a DSL subsystem list leaves nothing out of the chips
+	 *  (missing, empty, or naming every subsystem in SUBSYSTEMS). */
+	function isAllSubsystems(list) {
+		if (!Array.isArray(list) || list.length === 0) return true;
+		return SUBSYSTEMS.every(function (s) { return list.indexOf(s.value) !== -1; });
+	}
 
 	var byId = {};
 	CRITERIA.forEach(function (c) { byId[c.id] = c; });
@@ -254,8 +261,6 @@
 			case 'samplevocab':
 				return (v.sample_type && v.sample_type.length > 0) ||
 				       (v.sample_purpose && v.sample_purpose.length > 0);
-			case 'subsystems':
-				return Array.isArray(v) && v.length > 0 && v.length < SUBSYSTEMS.length;
 			case 'flags':
 			case 'vocab':
 			case 'rocktype':
@@ -267,11 +272,10 @@
 		}
 	}
 
-	/** row state → DSL criteria entry (null for inactive rows and U8). */
+	/** row state → DSL criteria entry (null for inactive rows). */
 	function rowToDsl(row) {
 		if (!isActive(row)) return null;
 		var c = byId[row.crit];
-		if (c.widget === 'subsystems') return null;   // top-level, not a row
 		var v = row.value;
 		var value;
 		switch (c.widget) {
@@ -416,8 +420,10 @@
 	/** One-line human summary of a DSL, for the saved-search list (§6.6.1). */
 	function summarizeDsl(dsl) {
 		var parts = [];
-		if (dsl.subsystems && dsl.subsystems.length && dsl.subsystems.length < 4) {
-			parts.push('subsystem=' + dsl.subsystems.join('/'));
+		if (!isAllSubsystems(dsl.subsystems)) {
+			parts.push('subsystem=' + SUBSYSTEMS.filter(function (s) {
+				return dsl.subsystems.indexOf(s.value) !== -1;
+			}).map(function (s) { return s.label; }).join('/'));
 		}
 		(dsl.criteria || []).forEach(function (e) { parts.push(criterionText(e)); });
 		return parts.join('; ') || '(no criteria)';
@@ -428,6 +434,7 @@
 		GROUP_SUBSYSTEM: GROUP_SUBSYSTEM,
 		U9_FLAGS: U9_FLAGS,
 		SUBSYSTEMS: SUBSYSTEMS,
+		isAllSubsystems: isAllSubsystems,
 		byId: byId,
 		loadVocab: loadVocab,
 		displayValue: displayValue,

@@ -164,6 +164,62 @@
 	margin-bottom: 1.5em;
 }
 
+/* Subsystem chip bar (PIs 2026-10-07): the StraboSamples Type chips
+   (my_samples.php .ms-tab / .ms-type-chip) as plain on/off toggles. */
+.ss-subsys {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	gap: 0.4em;
+	padding: 0.2em 0 0.8em;   /* the first row's dotted top border divides */
+	color: rgba(255, 255, 255, 0.7);
+}
+
+.ss-subsys-label {
+	font-weight: 600;
+	margin-right: 0.3em;
+}
+
+.ss-subsys-chip {
+	display: inline-block;
+	background: rgba(255, 255, 255, 0.06);
+	border: 1px solid rgba(255, 255, 255, 0.2);
+	color: rgba(255, 255, 255, 0.85);
+	border-radius: 999px;
+	padding: 0.25em 0.85em;
+	line-height: 1.6;
+	cursor: pointer;
+	user-select: none;
+	white-space: nowrap;
+}
+
+.ss-subsys-chip:hover:not(.ss-on) {
+	background: rgba(255, 255, 255, 0.12);
+}
+
+.ss-subsys-chip.ss-on {
+	background: #e44c65;
+	border-color: #e44c65;
+	color: #fff;
+}
+
+.ss-subsys-chip.ss-on:hover {
+	filter: brightness(1.12);
+}
+
+/* A lit subsystem chip carries a check mark; a lit All does not. */
+.ss-subsys-chip.ss-on:not([data-subsystem="all"])::before {
+	content: '\2713';
+	font-weight: 700;
+	margin-left: -0.2em;
+	margin-right: 0.35em;
+}
+
+.ss-subsys-chip:focus-visible {
+	outline: 2px solid #fff;
+	outline-offset: 2px;
+}
+
 .ss-row {
 	display: flex;
 	flex-direction: column;
@@ -1210,7 +1266,8 @@
 	}
 
 	/* ≥44px touch targets (§6.8) */
-	.ss-chipbtn {
+	.ss-chipbtn,
+	.ss-subsys-chip {
 		min-height: 44px;
 		min-width: 44px;
 		display: inline-flex;

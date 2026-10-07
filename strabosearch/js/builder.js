@@ -13,6 +13,15 @@
  *              - U2 map modal: Leaflet click-vertex polygon drawing
  *                (double-click closes, right-click undoes a vertex),
  *                plus a "Use current view" rectangle shortcut.
+ *              - Subsystem filter (PIs, 2026-10-07): a toggle chip bar
+ *                above the rows (All / StraboField / StraboMicro /
+ *                StraboExperimental), replacing the old U8 "Strabo
+ *                Subsystem" criterion row. On/off only: every project is
+ *                in exactly one subsystem, so StraboSamples' exclude state
+ *                and Match any/all would add nothing. Serializes to the
+ *                DSL's top-level `subsystems`, as U8 did. Only the search
+ *                page turns it on (opts.subsystemChips); the Export
+ *                Builder reuses this builder without it.
  *
  * @package    StraboSpot Web Site — StraboSearch
  */
@@ -26,6 +35,8 @@
 	var changeCb = function () {};
 	var searchCb = function () {};   // Enter-in-widget → run search (§6.9)
 	var rowSeq = 0;
+	var subsystems = null;    // chip bar selection; null = All (unconstrained)
+	var subsysBar = null;     // the chip bar element (search page only)
 
 	// ══════════════════════════════════════════════════════════════════
 	// helpers
@@ -50,19 +61,73 @@
 		});
 	}
 
-	/** Active subsystem set from U8 rows (null = unconstrained). */
+	/** Active subsystem set from the chip bar (null = unconstrained). */
 	function activeSubsystems() {
-		for (var i = 0; i < rows.length; i++) {
-			var r = rows[i];
-			if (r.crit === 'U8' && Array.isArray(r.value) && r.value.length > 0
-				&& r.value.length < C.SUBSYSTEMS.length) {
-				return r.value;
-			}
-		}
-		return null;
+		return subsystems;
 	}
 
-	/** §6.3.2: disable subsystem-extension options excluded by U8. */
+	/** Normalize a subsystem list: known values only, in chip order; null
+	 *  when it names none or every subsystem (both mean All). */
+	function normalizeSubsystems(list) {
+		if (C.isAllSubsystems(list)) return null;
+		var out = C.SUBSYSTEMS.map(function (s) { return s.value; })
+			.filter(function (v) { return list.indexOf(v) !== -1; });
+		return out.length ? out : null;
+	}
+
+	/** Chip bar look follows `subsystems` (All lit when null). */
+	function syncSubsystemBar() {
+		if (!subsysBar) return;
+		Array.prototype.forEach.call(subsysBar.querySelectorAll('.ss-subsys-chip'), function (chip) {
+			var v = chip.getAttribute('data-subsystem');
+			var on = v === 'all' ? subsystems === null : (subsystems !== null && subsystems.indexOf(v) !== -1);
+			chip.classList.toggle('ss-on', on);
+			chip.setAttribute('aria-pressed', on ? 'true' : 'false');
+		});
+	}
+
+	/**
+	 * The subsystem chip bar. All = no filter. A subsystem chip toggles
+	 * that subsystem in or out; turning on every subsystem, or the last
+	 * one off, goes back to All.
+	 */
+	function buildSubsystemBar() {
+		var bar = el('div', 'ss-subsys');
+		bar.setAttribute('role', 'group');
+		bar.setAttribute('aria-label', 'Show projects from these subsystems');
+		bar.appendChild(el('span', 'ss-subsys-label', 'Subsystem:'));
+		var chips = [{ value: 'all', label: 'All', title: 'Show projects from every subsystem' }]
+			.concat(C.SUBSYSTEMS.map(function (s) {
+				return { value: s.value, label: s.chip, title: 'Show or hide ' + s.chip + ' projects' };
+			}));
+		chips.forEach(function (c) {
+			var chip = el('span', 'ss-subsys-chip', c.label);
+			chip.setAttribute('role', 'button');
+			chip.setAttribute('data-subsystem', c.value);
+			chip.title = c.title;
+			chip.tabIndex = 0;
+			function flip() {
+				if (c.value === 'all') {
+					subsystems = null;
+				} else {
+					var cur = subsystems ? subsystems.slice() : [];
+					var i = cur.indexOf(c.value);
+					if (i === -1) cur.push(c.value); else cur.splice(i, 1);
+					subsystems = normalizeSubsystems(cur);
+				}
+				syncSubsystemBar();
+				notifyChange();
+			}
+			chip.addEventListener('click', flip);
+			chip.addEventListener('keydown', function (ev) {
+				if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); flip(); }
+			});
+			bar.appendChild(chip);
+		});
+		return bar;
+	}
+
+	/** §6.3.2: disable subsystem-extension options excluded by the chip bar. */
 	function updatePickerGating() {
 		var subs = activeSubsystems();
 		rows.forEach(function (r) {
@@ -74,13 +139,6 @@
 				var g = C.GROUP_SUBSYSTEM[c.group];
 				var disabled = false;
 				if (g && subs && subs.indexOf(g) === -1) disabled = true;
-				// U8 is single-use (§6.3.2 exception — two subsystem rows
-				// are contradictory, unlike repeated value criteria).
-				if (c.unique && r.crit !== opt.value) {
-					for (var i = 0; i < rows.length; i++) {
-						if (rows[i] !== r && rows[i].crit === opt.value) disabled = true;
-					}
-				}
 				opt.disabled = disabled;
 			});
 		});
@@ -99,7 +157,7 @@
 		// cleared them the moment the effective query diverged.
 		var reset = container.querySelector('.ss-start-over');
 		if (reset) {
-			var pristine = rows.length === 1 && !rows[0].crit;
+			var pristine = rows.length === 1 && !rows[0].crit && subsystems === null;
 			reset.classList.toggle('ss-disabled', pristine);
 			reset.title = pristine ? 'Nothing to clear' : '';
 		}
@@ -123,7 +181,6 @@
 			case 'owner':
 			case 'province':    return wSinglePick(row, box, c);
 			case 'samplevocab': return wSampleVocab(row, box, c);
-			case 'subsystems':  return wFixedChips(row, box, C.SUBSYSTEMS, 'Subsystems');
 			case 'flags':       return wFixedChips(row, box, C.U9_FLAGS, 'Has-data flags');
 			case 'vocab':       return c.fixed
 				? wFixedChips(row, box, c.fixed.map(function (v) { return { value: v, label: v }; }), c.label)
@@ -813,6 +870,12 @@
 		changeCb = (opts && opts.onChange) || function () {};
 		searchCb = (opts && opts.onSearch) || function () {};
 
+		if (opts && opts.subsystemChips) {
+			subsysBar = buildSubsystemBar();
+			container.appendChild(subsysBar);
+			syncSubsystemBar();
+		}
+
 		var addBar = el('div', 'ss-add-row');
 		var addBtn = el('a', 'button small', '+ And Row');
 		addBtn.href = 'javascript:void(0);';
@@ -834,6 +897,8 @@
 			if (resetBtn.classList.contains('ss-disabled')) return;
 			rows.slice().forEach(function (r) { r.el.remove(); });
 			rows = [];
+			subsystems = null;
+			syncSubsystemBar();
 			addDefaultRow(true);
 			notifyChange();
 		});
@@ -847,13 +912,15 @@
 		notifyChange();
 	}
 
+	/** Any effective filter: an active row, or the chip bar off All. */
 	function hasActiveRow() {
-		return rows.some(C.isActive);
+		return rows.some(C.isActive) || subsystems !== null;
 	}
 
-	/** Active (effective) criteria rows — the mobile Filters badge (M4). */
+	/** Active (effective) filters — the mobile Filters badge (M4). A
+	 *  subsystem selection counts as one, as the U8 row did. */
 	function activeRowCount() {
-		return rows.filter(C.isActive).length;
+		return rows.filter(C.isActive).length + (subsystems !== null ? 1 : 0);
 	}
 
 	/** Compose the full §4.4 DSL from current rows. */
@@ -875,10 +942,10 @@
 	function loadDsl(dsl) {
 		rows.slice().forEach(function (r) { r.el.remove(); });
 		rows = [];
-		if (dsl.subsystems && dsl.subsystems.length &&
-			dsl.subsystems.length < C.SUBSYSTEMS.length) {
-			addRow({ crit: 'U8', value: dsl.subsystems.slice() });
-		}
+		// Without the chip bar (Export Builder) the subsystem list is not
+		// the builder's to keep.
+		subsystems = subsysBar ? normalizeSubsystems(dsl.subsystems || []) : null;
+		syncSubsystemBar();
 		(dsl.criteria || []).forEach(function (entry) {
 			var state = C.dslToRow(entry);
 			if (state) addRow(state);
