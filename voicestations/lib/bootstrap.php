@@ -2,7 +2,8 @@
 /**
  * File: bootstrap.php
  * Description: Loads the Voice Stations server code for the /db/ Voice*
- *              controllers. MsDb is shared with /microsync/v1/.
+ *              controllers and the /voiceworker/v1/ API. MsDb is shared
+ *              with /microsync/v1/.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -16,6 +17,7 @@ require_once __DIR__ . '/VsConfig.php';
 require_once __DIR__ . '/VsHttp.php';
 require_once __DIR__ . '/VsDetails.php';
 require_once __DIR__ . '/VsService.php';
+require_once __DIR__ . '/VsWorker.php';
 
 /** Build the service for this request and check the tester gate. */
 function voicestations_service($strabo) {

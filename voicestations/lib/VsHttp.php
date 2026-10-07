@@ -47,7 +47,9 @@ class VsHttp {
 		http_response_code($status);
 		header('Content-Type: application/json');
 		header('Cache-Control: no-store');
-		echo json_encode($data, self::JSON_OUT);
+		if ($status !== 204) {
+			echo json_encode($data, self::JSON_OUT);
+		}
 		exit;
 	}
 

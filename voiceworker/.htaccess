@@ -1,0 +1,7 @@
+RewriteEngine On
+
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Everything under /voiceworker/ goes to the front controller.
+RewriteCond %{REQUEST_URI} !/voiceworker/index\.php
+RewriteRule ^(.*)$ index.php [L,QSA]

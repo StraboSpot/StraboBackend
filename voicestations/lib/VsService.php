@@ -260,7 +260,9 @@ class VsService {
 
 	/**
 	 * GET /db/voicebatch/{batch_uuid}: progress, and once done, every
-	 * station's results together (P6.6).
+	 * station's results together (P6.6). Done = complete and every station
+	 * not discarded is ready or failed. Sweeps the batch's expired worker
+	 * leases first.
 	 */
 	public function batch($batchUuid) {
 		$b = $this->db->row(
@@ -270,6 +272,8 @@ class VsService {
 		if ($b === null) {
 			throw VsHttp::notFound();
 		}
+		// no cron: a worker that died gives its stations back here too
+		VsWorker::expireLeases($this->db, (int)$b['id']);
 		$progress = $this->db->row(
 			"SELECT cardinality(b.station_uuids) AS expected,
 			        (SELECT count(*) FROM voicestations.stations s
@@ -289,7 +293,12 @@ class VsService {
 		}
 		$total = array_sum($stages);
 		$complete = MsDb::bool($b['complete']);
-		$done = $complete && $total > 0 && $stages['ready'] + $stages['failed'] === $total;
+		// discarded stations are never worked on, so they do not hold the batch open
+		$open = (int)$this->db->val(
+			"SELECT count(*) FROM voicestations.stations
+			  WHERE batch_id = $1 AND discarded_at IS NULL AND stage NOT IN ('ready', 'failed')",
+			array($b['id']));
+		$done = $complete && $total > 0 && $open === 0;
 
 		$out = array(
 			'batch_uuid' => $b['batch_uuid'],
