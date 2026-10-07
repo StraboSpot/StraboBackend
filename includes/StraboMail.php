@@ -9,8 +9,10 @@
  *              embedded inline (CID), so it shows with images blocked-by-URL
  *              clients as well.
  *
- *              Used by exportjobs/lib/ExportMailer.php (export ready / failed)
- *              and invite_collaborators.php (collaboration invitation).
+ *              Used by exportjobs/lib/ExportMailer.php (export ready / failed),
+ *              invite_collaborators.php (collaboration invitation), microsync
+ *              (StraboMicro invitations) and StraboSamplesService (sample
+ *              invitations).
  *
  *              Transport (StraboMail::transport):
  *                - explicit $opts['transport'] (smtp | file | none), else
