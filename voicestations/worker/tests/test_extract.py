@@ -235,6 +235,11 @@ class Checks(unittest.TestCase):
         p, _ = checks.process(raw([M(source_quote='strike 45 dip 95', strike=45, dip=95)]), job('strike 45 dip 95'))
         self.assertTrue(any(d['field'] == 'dip' and 'must be 0-90' in d['reason'] for d in p['dropped']))
 
+    def test_artifact_measurement_dropped(self):  # check 6
+        p, _ = checks.process(raw([M(source_quote='Thank you.', strike=45, dip=32)]), job('Strike 45, dip 32. Thank you.'))
+        self.assertEqual(p['items'], [])
+        self.assertIn('artifact', p['dropped'][0]['reason'])
+
     def test_artifact_not_a_source(self):
         p, _ = checks.process(raw(notes=[{'text': 'thanks', 'quote': 'Thank you.'}]), job('Strike 45, dip 32. Thank you.'))
         self.assertEqual(p['items'], [])
