@@ -56,6 +56,13 @@ class VsWorker {
 	const MAX_SEGMENTS     = 5000;
 	const MAX_ERROR_CHARS  = 2000;
 	const KINDS            = array('transcribe', 'extract');
+	const MAX_CONTEXT_STATIONS = 20;
+
+	/** Form + field pairs extraction may fill; their choices travel in every extract job. */
+	const VOCAB_FIELDS = array(
+		'measurement.planar_orientation' => array('feature_type', 'movement', 'facing', 'quality'),
+		'measurement.linear_orientation' => array('feature_type', 'quality'),
+	);
 
 	private $db;      // MsDb
 	private $name;    // worker name, e.g. 'gpubox'
@@ -282,15 +289,20 @@ class VsWorker {
 			   FROM voicestations.stations s
 			   JOIN voicestations.runs t ON t.id = $2
 			  WHERE s.id = $1", array($stationId, $transcriptRunId));
+		// the most recent earlier stations, oldest first (step 3 point 5: at most 20)
 		$earlier = $this->db->rows(
-			"SELECT o.station_uuid, " . MsDb::iso('o.started_at') . " AS started_at,
-			        t.output->>'text' AS text
-			   FROM voicestations.stations o
-			   JOIN voicestations.stations me ON me.id = $2
-			   JOIN voicestations.runs t ON t.id = o.current_transcript_run
-			  WHERE o.batch_id = $1 AND o.id <> me.id AND o.discarded_at IS NULL
-			    AND (o.started_at, o.id) < (me.started_at, me.id)
-			  ORDER BY o.started_at, o.id", array($batchId, $stationId));
+			"SELECT * FROM (
+			   SELECT o.station_uuid, o.started_at AS t, o.id,
+			          " . MsDb::iso('o.started_at') . " AS started_at,
+			          t.output->>'text' AS text
+			     FROM voicestations.stations o
+			     JOIN voicestations.stations me ON me.id = $2
+			     JOIN voicestations.runs t ON t.id = o.current_transcript_run
+			    WHERE o.batch_id = $1 AND o.id <> me.id AND o.discarded_at IS NULL
+			      AND (o.started_at, o.id) < (me.started_at, me.id)
+			    ORDER BY o.started_at DESC, o.id DESC
+			    LIMIT $3) x
+			  ORDER BY t, id", array($batchId, $stationId, self::MAX_CONTEXT_STATIONS));
 		$context = array();
 		foreach ($earlier as $i => $e) {
 			$context[] = array('station_uuid' => $e['station_uuid'], 'started_at' => $e['started_at'],
@@ -316,6 +328,32 @@ class VsWorker {
 				),
 			),
 			'earlier_stations' => $context,
+			'vocab' => self::vocab(),
+		);
+	}
+
+	/**
+	 * The app's own form choices (name => label) for the fields extraction
+	 * fills, from FieldVocab (synced nightly from the StraboField repo), with
+	 * a version tag: sha256 of the choices, so the worker's prompt cache and
+	 * every run record change only when the forms do (step 3 point 4).
+	 */
+	public static function vocab() {
+		require_once dirname(dirname(__DIR__)) . '/includes/fieldvocab/FieldVocab.php';
+		$map = FieldVocab::map();
+		$forms = array();
+		foreach (self::VOCAB_FIELDS as $form => $fields) {
+			foreach ($fields as $f) {
+				$choices = isset($map['forms'][$form]['fields'][$f]['choices'])
+					? $map['forms'][$form]['fields'][$f]['choices'] : array();
+				$forms[$form][$f] = (object)$choices;
+			}
+		}
+		$json = json_encode($forms, VsHttp::JSON_OUT);
+		$src = isset($map['source']['tag']) ? $map['source']['tag'] : 'unknown';
+		return array(
+			'version' => $src . '-' . substr(hash('sha256', $json), 0, 12),
+			'forms' => $forms,
 		);
 	}
 

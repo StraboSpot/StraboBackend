@@ -344,6 +344,11 @@ check('extract job: station context (new Spot, times, strike convention, best fi
 	$j['station']['target_kind'] === 'new' && $j['station']['strike_convention'] === 'rhr'
 	&& $j['station']['best_fix']['accuracy'] === 6.0 && $j['station']['audio_seconds'] === 2.97
 	&& $j['station']['tz_offset_minutes'] === -300 && $j['station']['started_at'] === iso($t0 + 100), $j['station']);
+check('extract job: the app form choices + a version tag (joint = option_13, quality names are strings)',
+	preg_match('/^.+-[0-9a-f]{12}$/', $j['vocab']['version']) === 1
+	&& $j['vocab']['forms']['measurement.planar_orientation']['feature_type']['option_13'] === 'joint'
+	&& $j['vocab']['forms']['measurement.linear_orientation']['feature_type']['mineral_align'] === 'mineral alignment'
+	&& array_key_exists('5', $j['vocab']['forms']['measurement.planar_orientation']['quality']), $j['vocab']['version']);
 $XRUN1 = $j['run_id'];
 $r = runRow($XRUN1);
 check('extract run row: transcript it reads, engine, model, prompt version', (int)$r['transcript_run_id'] === $RUN1
@@ -494,6 +499,28 @@ check('result after a discard -> 410, nothing stored, the run closed', $x['code'
 	&& $sd['current_transcript_run'] === null && $sd['leased_by'] === null && runRow($RD)['status'] === 'failed'
 	&& runRow($RD)['output'] === null, $x['body']);
 check('a discarded station is never claimed again', claim($TOK_A, array('transcribe'))['code'] === 204);
+
+// ---------------------------------------------------------------- context cap
+section('Earlier-station context: the 20 most recent, oldest first');
+$BK = uuid(); $SK = array();
+for ($i = 0; $i < 23; $i++) $SK[] = uuid();
+foreach ($SK as $i => $u) station($u, $BK, $SK, 1000 + $i * 60);
+for ($i = 0; $i < 23; $i++) {
+	$x = claim($TOK_A, array('transcribe'));
+	$k = array_search($x['json']['job']['station_uuid'], $SK, true);
+	w($TOK_A, 'POST', 'jobs/' . $SK[$k] . '/result', tResult($x['json']['job']['run_id'],
+		array('output' => array('text' => "station $k", 'segments' => array(), 'words' => array()))));
+}
+$last = null;
+for ($i = 0; $i < 30 && $last === null; $i++) {   // earlier sections may leave a station or two ahead
+	$x = claim($TOK_A, array('extract'));
+	if ($x['code'] !== 200) break;
+	if ($x['json']['job']['station_uuid'] === $SK[22]) $last = $x['json']['job'];
+	w($TOK_A, 'POST', 'jobs/' . $x['json']['job']['station_uuid'] . '/result', xResult($x['json']['job']['run_id']));
+}
+$texts = $last ? array_map(function ($e) { return $e['transcript']; }, $last['earlier_stations']) : array();
+check('23rd station sees stations 2..21 (20 of 22 earlier), in recording order',
+	count($texts) === 20 && $texts[0] === 'station 2' && $texts[19] === 'station 21', $texts);
 
 // ---------------------------------------------------------------- parallel claims
 section('Parallel claims');
