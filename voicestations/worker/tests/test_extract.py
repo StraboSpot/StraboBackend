@@ -51,6 +51,23 @@ def first(p):
     return next(i for i in p['items'] if i['kind'] == 'orientation')
 
 
+class Flat(unittest.TestCase):
+    def test_to_internal(self):
+        from vsworker.extract.schema import to_internal
+        d = to_internal({'measurements': [{'kind': 'planar', 'feature_type': 'fault', 'source_quote': 'q',
+            'numbers': [{'field': 'dip', 'value': 75, 'quote': 'q'}, {'field': 'quality', 'value': 3, 'quote': 'a 3'}],
+            'words': [{'field': 'strike_quadrant', 'value': 'N60W', 'quote': 'q'}, {'field': 'movement', 'value': 'normal', 'quote': 'normal'}],
+            'lies_on': -1, 'corrected': [], 'unresolved': [], 'doubts': []}],
+            'rock_descriptions': [{'text': 't', 'quote': 'q', 'carried_from_station': 0, 'carried_from_quote': ''},
+                                  {'text': 't', 'quote': 'q', 'carried_from_station': 2, 'carried_from_quote': 'x'}],
+            'samples': [], 'photos': [], 'notes': []})
+        m = d['measurements'][0]
+        self.assertEqual((m['dip'], m['strike'], m['strike_quadrant'], m['lies_on']), (75, None, 'N60W', None))
+        self.assertEqual(m['quality'], {'value': 3, 'quote': 'a 3'})
+        self.assertEqual(m['movement'], {'spoken': 'normal', 'quote': 'normal'})
+        self.assertEqual([r['carried_from'] for r in d['rock_descriptions']], [None, {'station': 2, 'quote': 'x'}])
+
+
 class Numbers(unittest.TestCase):
     def n(self, s):
         return set(T.numbers(T.canon_text(s)))
@@ -252,6 +269,13 @@ class Checks(unittest.TestCase):
         it = first(p)
         self.assertEqual(it['spot']['strike'], 45)
         self.assertIsNone(it['words'])
+
+    def test_duplicate_notes_merged(self):
+        t = 'Contact between dark shale and hard rock. Strike 45, dip 32.'
+        p, a = checks.process(raw(rock_descriptions=[{'text': 'x', 'quote': 'Contact between dark shale and hard rock.', 'carried_from': None}],
+                                  notes=[{'text': 'y', 'quote': 'contact between dark shale and hard rock'}]), job(t))
+        self.assertEqual(len(p['items']), 1)
+        self.assertTrue(any(e['check'] == 'duplicate' for e in a['events']))
 
     def test_proposal_is_json(self):
         p, a = checks.process(raw([M(source_quote='Strike 45, dip 32', strike=45, dip=32)]), job('Strike 45, dip 32.'))

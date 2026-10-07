@@ -130,7 +130,7 @@ class OllamaAdapter:
 
 def check_shape(data):
     """P7 check 5 for providers without enforced structured output: the
-    top-level lists and each measurement's required keys."""
+    top-level lists and each measurement's keys (flat schema v2)."""
     from .schema import MEASUREMENT
     if not isinstance(data, dict):
         return 'not an object'
@@ -145,6 +145,8 @@ def check_shape(data):
             return f'measurement {i} lacks {", ".join(miss)}'
         if m.get('kind') not in ('planar', 'linear'):
             return f'measurement {i} kind {m.get("kind")!r}'
+        if not all(isinstance(n, dict) and isinstance(n.get('value'), (int, float)) for n in m.get('numbers') or []):
+            return f'measurement {i} has a non-number value'
     return None
 
 

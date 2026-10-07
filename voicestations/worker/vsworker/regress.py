@@ -11,7 +11,8 @@ P7 checks, conversions) on stored extract jobs, scored against a blind answer ke
   out/           per station: raw reply, proposal, audit, meta; score.txt
 
 PASS (Jason, 10-07): 0 wrong numbers that survive the checks, every expected
-measurement found with the right feature type, every expected flag present.
+measurement found with the right feature type and every expected number
+(none missing), every expected flag present.
 The scorer proves itself first: a copy of the run with one number changed and
 one measurement removed must score WRONG and MISSING.
 """
@@ -45,7 +46,7 @@ def orientations(proposal):
 
 
 def score_station(name, key, proposal):
-    rows, t = [], {'expected': 0, 'found': 0, 'ft_ok': 0, 'wrong': 0, 'extra': 0,
+    rows, t = [], {'expected': 0, 'found': 0, 'ft_ok': 0, 'wrong': 0, 'missing': 0, 'extra': 0,
                    'flags_expected': 0, 'flags_ok': 0, 'extras_expected': 0, 'extras_ok': 0}
     ors = orientations(proposal)
     used, match = set(), {}
@@ -80,6 +81,7 @@ def score_station(name, key, proposal):
             got, want = sp.get(sf), e.get(ef)
             if got is None:
                 if not (ef == 'dip' and e.get('dip_may_be_null')):
+                    t['missing'] += 1
                     rows.append(f'  {name} {e["id"]} {ef} missing')
             elif got != want:
                 t['wrong'] += 1
@@ -160,15 +162,20 @@ def score(key, proposals):
 
 
 def passed(t):
-    return (t['wrong'] == 0 and t['found'] == t['expected'] and t['ft_ok'] == t['expected']
+    return (t['wrong'] == 0 and t['missing'] == 0 and t['found'] == t['expected'] and t['ft_ok'] == t['expected']
             and t['flags_ok'] == t['flags_expected'])
 
 
 def self_test(key, proposals):
     """The scorer must catch a changed number and a missing measurement."""
     p = copy.deepcopy(proposals)
-    name = next(n for n in sorted(key) if any(it.get('kind') == 'orientation' for it in p.get(n, {}).get('items', [])))
-    first = next(it for it in p[name]['items'] if it.get('kind') == 'orientation')
+
+    def has_num(it):
+        return it.get('kind') == 'orientation' and ('strike' in it['spot'] or 'trend' in it['spot'])
+    name = next((n for n in sorted(key) if any(has_num(it) for it in p.get(n, {}).get('items', []))), None)
+    if name is None:
+        return False
+    first = next(it for it in p[name]['items'] if has_num(it))
     f = 'strike' if 'strike' in first['spot'] else 'trend'
     first['spot'][f] = (first['spot'][f] + 7) % 360
     t1, _ = score(key, p)
@@ -181,7 +188,7 @@ def self_test(key, proposals):
 
 def line(t, label):
     return (f'{label:28s} found {t["found"]}/{t["expected"]}  type {t["ft_ok"]}/{t["expected"]}  '
-            f'WRONG {t["wrong"]}  extra {t["extra"]}  flags {t["flags_ok"]}/{t["flags_expected"]}  '
+            f'WRONG {t["wrong"]}  missing {t["missing"]}  extra {t["extra"]}  flags {t["flags_ok"]}/{t["flags_expected"]}  '
             f'extras {t["extras_ok"]}/{t["extras_expected"]}')
 
 
@@ -247,7 +254,7 @@ def main():
     cached = sum((m.get('cache_read_tokens') or 0) for m in meta)
     written = sum((m.get('cache_write_tokens') or 0) for m in meta)
     secs = sum((m.get('seconds') or 0) for m in meta)
-    label = f'{a.provider} {a.model or ""} {a.effort}'.strip()
+    label = f'{a.provider} {a.model or ""} {a.effort if a.provider == "anthropic" else "think"}'.strip()
     report = [line(tot, label),
               f'scorer self-test: {"OK" if st else "FAILED"}',
               f'tokens: input {cost_in} (+{cached} cache read, {written} cache write), output {cost_out}; provider time {round(secs)} s',

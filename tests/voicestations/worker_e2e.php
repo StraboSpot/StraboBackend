@@ -32,6 +32,15 @@ require_once '/srv/app/www/neodb.php';
 require_once '/srv/app/www/voicestations/lib/bootstrap.php';
 
 $KEEP = in_array('--keep', $argv, true);
+// --capture DIR: after transcription, claim each station's extraction job with
+// the test-a worker token and save it as DIR/<clip>.json (regression inputs:
+// exactly what live extraction reads). Needs the real worker on transcribe only.
+// --extract: the worker also extracts (VS_KINDS=transcribe,extract); wait for the
+// batch to be DONE and check what the app gets from GET /db/voicebatch.
+$EXTRACT = in_array('--extract', $argv, true);
+$CAPTURE = null;
+$ci = array_search('--capture', $argv, true);
+if ($ci !== false) $CAPTURE = $argv[$ci + 1];
 $CLIPS = '/srv/app/www/docs/AlternateStraboFieldIdea/TestVoiceRecordings';
 $MAYA = array('maya.chen@test.strabospot.org', 'demopass123');
 $ROOT = VsConfig::dataRoot();
@@ -112,10 +121,10 @@ try {
 	do {
 		sleep(2);
 		$left = (int)$ms->val("SELECT count(*) FROM voicestations.stations s JOIN voicestations.batches b ON b.id = s.batch_id
-		                        WHERE b.batch_uuid = $1 AND s.stage NOT IN ('transcribed', 'failed')", array($batch));
+		                        WHERE b.batch_uuid = $1 AND s.stage NOT IN (" . ($EXTRACT ? "'ready'" : "'transcribed', 'ready'") . ", 'failed')", array($batch));
 	} while ($left > 0 && time() - $start < $WAIT);
 	$elapsed = time() - $start;
-	check("all 8 transcribed within {$WAIT} s (took {$elapsed} s)", $left === 0, "$left still waiting");
+	check("all 8 " . ($EXTRACT ? 'proposed' : 'transcribed') . " within {$WAIT} s (took {$elapsed} s)", $left === 0, "$left still waiting");
 
 	echo "\n== Transcripts\n";
 	foreach ($names as $n) {
@@ -125,7 +134,7 @@ try {
 			        extract(epoch FROM r.finished_at - r.started_at) AS secs
 			   FROM voicestations.stations s LEFT JOIN voicestations.runs r ON r.id = s.current_transcript_run
 			  WHERE s.station_uuid = $1", array($ids[$n]));
-		if (!check("$n: transcribed", $r['stage'] === 'transcribed', $r)) continue;
+		if (!check("$n: transcribed", $r['stage'] === ($EXTRACT ? 'ready' : 'transcribed'), $r)) continue;
 		$o = json_decode($r['output'], true);
 		$set = json_decode($r['settings'], true);
 		$len = (float)$r['audio_seconds'];
@@ -145,6 +154,60 @@ try {
 		check("$n: key numbers heard", $heard, $o['text']);
 		echo "        {$r['worker']} {$r['model']} {$set['build']} run " . round((float)$r['secs'], 2) . " s, whisper {$set['seconds_transcribe']} s, attempts {$r['attempts']}: "
 			. substr($o['text'], 0, 110) . "\n";
+	}
+	if ($EXTRACT) {
+		echo "\n== What the app gets: GET /db/voicebatch\n";
+		$ch = curl_init("http://localhost/db/voicebatch/$batch");
+		curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_USERPWD => $MAYA[0] . ':' . $MAYA[1]));
+		$b = json_decode(curl_exec($ch), true);
+		curl_close($ch);
+		check('batch done, 8 stations with results', $b['done'] === true && count($b['stations']) === 8, $b);
+		$cost = array('in' => 0, 'out' => 0, 'cached' => 0);
+		foreach ($b['stations'] as $i => $st) {
+			$p = $st['proposal'];
+			$kinds = array_count_values(array_map(function ($it) { return $it['kind']; }, $p['items']));
+			$orient = isset($kinds['orientation']) ? $kinds['orientation'] : 0;
+			$ok = $p['format'] === 1 && $orient >= 1 && is_array($p['dropped']) && is_array($p['station_flags'])
+				&& $st['validation'] !== null && $st['transcript'] !== null;
+			foreach ($p['items'] as $it) {
+				if ($it['kind'] === 'orientation') foreach ($it['values'] as $v) {
+					if ($v['origin'] === 'spoken' && $v['words'] === null) $ok = false;  // every spoken value points at words
+				}
+			}
+			check($names[$i] . ": proposal ($orient orientations, " . count($p['items']) . ' items, ' . count($p['dropped']) . ' dropped)', $ok, $p);
+		}
+		$runs = $ms->rows("SELECT r.model, r.prompt_version, r.input_tokens, r.output_tokens, (r.settings->>'cache_read_tokens')::int AS cached,
+		                          r.settings->>'effort' AS effort, r.settings->>'vocab_version' AS vocab
+		                     FROM voicestations.runs r JOIN voicestations.stations s ON s.id = r.station_id
+		                     JOIN voicestations.batches b ON b.id = s.batch_id
+		                    WHERE b.batch_uuid = $1 AND r.kind = 'extract' AND r.status = 'done'", array($batch));
+		foreach ($runs as $r) { $cost['in'] += $r['input_tokens']; $cost['out'] += $r['output_tokens']; $cost['cached'] += $r['cached']; }
+		check('8 extract runs recorded with model, prompt v2, effort, form version', count($runs) === 8
+			&& $runs[0]['prompt_version'] === 'v2' && $runs[0]['effort'] !== null && $runs[0]['vocab'] !== null, $runs[0]);
+		printf("        %s, effort %s: input %d (+%d cached), output %d => about \$%.3f\n", $runs[0]['model'], $runs[0]['effort'],
+			$cost['in'], $cost['cached'], $cost['out'], $cost['in'] * 4e-6 + $cost['cached'] * 0.2e-6 + $cost['out'] * 20e-6);
+	}
+	if ($CAPTURE !== null) {
+		echo "\n== Capture extraction jobs into $CAPTURE\n";
+		@mkdir($CAPTURE, 0777, true);
+		$byUuid = array_flip($ids);
+		$got = 0;
+		for ($i = 0; $i < 20; $i++) {
+			$ch = curl_init('http://localhost/voiceworker/v1/claim');
+			curl_setopt_array($ch, array(CURLOPT_RETURNTRANSFER => true, CURLOPT_POST => true,
+				CURLOPT_HTTPHEADER => array('Authorization: Bearer vs-dev-test-worker-a', 'Content-Type: application/json'),
+				CURLOPT_POSTFIELDS => json_encode(array('kinds' => array('extract'),
+					'extract' => array('engine' => 'capture', 'model' => 'none', 'prompt_version' => 'capture')))));
+			$body = curl_exec($ch);
+			$code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+			curl_close($ch);
+			if ($code !== 200) break;
+			$job = json_decode($body, true)['job'];
+			$name = $byUuid[$job['station_uuid']];
+			file_put_contents("$CAPTURE/$name.json", json_encode($job, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE));
+			$got++;
+		}
+		check("captured all 8 extraction jobs", $got === 8, $got);
 	}
 } finally {
 	if ($KEEP) {

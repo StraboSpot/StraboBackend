@@ -473,8 +473,16 @@ class Builder:
             else:
                 self.log(it['ref'], 7, 'lies_on', j, 'ignored', 'no kept plane at that index')
         items += [it for i, it in enumerate(built) if it is not None and i not in nested]
-        items += self.quoted_items('rock description', raw.get('rock_descriptions'), 'r', self.note)
-        items += self.quoted_items('note', raw.get('notes'), 'n', self.note)
+        notes = self.quoted_items('rock description', raw.get('rock_descriptions'), 'r', self.note)
+        notes += self.quoted_items('note', raw.get('notes'), 'n', self.note)
+        seen = set()
+        for it in notes:  # the same words listed twice (as a rock description and a note) show once
+            k = ' '.join(t.t for t in T.canon_text(it['quote']))
+            if k in seen:
+                self.log(it['ref'], 'duplicate', 'note', it['quote'], 'merged', 'same words as an earlier note')
+                continue
+            seen.add(k)
+            items.append(it)
         items += self.quoted_items('sample', raw.get('samples'), 's', self.sample)
         items += self.quoted_items('photo', raw.get('photos'), 'p', self.photo)
 

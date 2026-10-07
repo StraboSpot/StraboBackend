@@ -8,7 +8,7 @@ from ..api import ApiError, Dropped
 from ..transcribe import Heartbeat, JobFailed
 from . import checks, prompt
 from .adapters import ProviderError, check_shape
-from .schema import PROMPT_VERSION
+from .schema import PROMPT_VERSION, to_internal
 
 
 def extract_once(job, adapter):
@@ -19,7 +19,7 @@ def extract_once(job, adapter):
     bad = check_shape(reply.data)
     if bad:
         raise ProviderError('The proposal came back malformed; it will be tried again.', True, bad)
-    proposal, audit = checks.process(reply.data, job)
+    proposal, audit = checks.process(to_internal(reply.data), job)
     return reply, proposal, audit
 
 
