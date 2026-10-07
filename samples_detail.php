@@ -2722,6 +2722,8 @@ $sdVocab['inplaceness'] = (object)$sdInplace;
             };
             $cmResults.innerHTML = (res.body.results || []).map(function(r) {
                 var label = statusMsg[r.status] || r.status;
+                if (r.emailed === true)  label += ' (email sent)';
+                if (r.emailed === false) label += ' (email could not be sent; let them know to check My Samples)';
                 return '<div class="cm-invite-result ' + escapeHtml(r.status) + '"><strong>'
                      + escapeHtml(r.email) + '</strong>: ' + escapeHtml(label) + '</div>';
             }).join('');

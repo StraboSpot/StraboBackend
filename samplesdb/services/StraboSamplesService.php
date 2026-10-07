@@ -560,6 +560,7 @@ class StraboSamplesService
         }
 
         $results = array();
+        $mailInfo = null;   // sample + inviter text for the emails, loaded on first send
         foreach ($emails as $email) {
             $email = strtolower(trim($email));
             if ($email === '') {
@@ -568,7 +569,7 @@ class StraboSamplesService
 
             // Resolve email → pkey
             $row = $this->db->get_row_prepared(
-                "SELECT pkey FROM users WHERE email=$1 AND deleted = FALSE LIMIT 1",
+                "SELECT pkey, firstname, email FROM users WHERE email=$1 AND deleted = FALSE LIMIT 1",
                 array($email)
             );
             if (!$row) {
@@ -623,6 +624,7 @@ class StraboSamplesService
                     'status'            => 're_enabled',
                     'collaborator_pkey' => $inviteePkey,
                     'uuid'              => $newUuid,
+                    'emailed'           => $this->mailInvitation($mailInfo, $sampleId, $ownerPkey, $row, $permissionLevel),
                 );
                 continue;
             }
@@ -640,10 +642,77 @@ class StraboSamplesService
                 'status'            => 'invited',
                 'collaborator_pkey' => $inviteePkey,
                 'uuid'              => $newUuid,
+                'emailed'           => $this->mailInvitation($mailInfo, $sampleId, $ownerPkey, $row, $permissionLevel),
             );
         }
 
         return array('ok' => true, 'results' => $results);
+    }
+
+    /** Access text in the invitation email, by permission_level. */
+    const INVITE_LEVEL_TEXT = array(
+        'edit'     => 'Can edit (you can change this sample\'s details)',
+        'readonly' => 'Read-only (you can view this sample)',
+    );
+
+    /**
+     * Email an invitee (the StraboMicro invitation, microsync/lib/MsMembers.php,
+     * for a sample). $info caches the sample + inviter text across one invite
+     * call. True when sent or filed (StraboMail's mail.log); false on failure.
+     * Never throws: the grant row is already written either way.
+     */
+    private function mailInvitation(&$info, $sampleId, $ownerPkey, $invitee, $permissionLevel)
+    {
+        require_once __DIR__ . '/../../includes/StraboMail.php';
+        $site = 'https://strabospot.org';
+        try {
+            if ($info === null) {
+                $s = $this->db->get_row_prepared(
+                    "SELECT name, display_sample_type FROM strabosamples.samples WHERE id=$1 AND userpkey=$2",
+                    array($sampleId, $ownerPkey)
+                );
+                $u = $this->db->get_row_prepared(
+                    "SELECT firstname, lastname, email FROM users WHERE pkey=$1",
+                    array($this->userpkey)
+                );
+                $name = $s && trim((string)$s->name) !== '' ? trim((string)$s->name) : (string)$sampleId;
+                $who = 'A StraboSpot user';
+                if ($u) {
+                    $full = trim($u->firstname . ' ' . $u->lastname);
+                    $who = ($full !== '' ? $full : 'A StraboSpot user') . ($u->email !== '' ? ' (' . $u->email . ')' : '');
+                }
+                $info = array(
+                    'name' => $name,
+                    'type' => $s ? trim((string)$s->display_sample_type) : '',
+                    'who'  => $who,
+                );
+            }
+            $facts = array('Sample' => $info['name']);
+            if ($info['type'] !== '') {
+                $facts['Type'] = $info['type'];
+            }
+            $facts['Invited by'] = $info['who'];
+            $facts['Access'] = self::INVITE_LEVEL_TEXT[$permissionLevel];
+            $first = trim((string)$invitee->firstname);
+            $m = StraboMail::render(array(
+                'title'    => 'You are invited to collaborate on a StraboSamples sample',
+                'greeting' => 'Hi ' . ($first !== '' ? $first : 'there') . ',',
+                'intro'    => array($info['who'] . ' has invited you to collaborate on the StraboSamples sample "' . $info['name'] . '".'),
+                'facts'    => $facts,
+                'button'   => array('Review the invitation', $site . '/my_samples'),
+                'after'    => array(
+                    'You can accept or decline it on your My Samples page (it appears after you log in). Nothing changes in your account until you accept.',
+                ),
+                'site_url' => $site,
+                'footer'   => 'You received this because ' . $info['who'] . ' invited the StraboSpot account ' . $invitee->email
+                    . ' to a sample. If you were not expecting it, you can decline it or simply ignore this message.',
+            ));
+            return StraboMail::send($invitee->email, $info['who'] . ' invited you to collaborate on sample "' . $info['name'] . '" in StraboSamples', $m,
+                array('to_name' => $first)) !== 'none';
+        } catch (Exception $e) {
+            error_log('strabosamples invite: mail to ' . $invitee->email . ' failed: ' . $e->getMessage());
+            return false;
+        }
     }
 
     /** Change a collaborator's permission level. Owner-only. */
