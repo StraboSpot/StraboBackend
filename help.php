@@ -148,6 +148,16 @@ include("includes/mheader.php");
 			</div>
 		</section>
 
+		<a name="samples" style="scroll-margin-top: 100px;"></a>
+
+		<!-- StraboSamples Help -->
+		<section class="micro-section">
+			<h2 style="color: #ffffff; font-size: 2em; font-weight: 300; margin-bottom: 0.5em;">StraboSamples Help</h2>
+			<div style="padding-left:50px;padding-bottom:30px;">
+				<div class="medHeader" style="padding-left:20px;"><a href="/manual/samples" target="_blank">StraboSamples User Guide</a></div>
+			</div>
+		</section>
+
 		<!-- StraboTools -->
 		<section class="micro-section">
 			<h2 style="padding-top:30px;">STRABOTOOLS</h2>
