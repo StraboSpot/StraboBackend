@@ -25,6 +25,9 @@
  *              whose tokens are below. Removes ALL of Maya's Voice Stations
  *              rows and audio. Refuses to run when other users have
  *              stations a worker could claim (they would be claimed).
+ *              STOP any real worker pointed at dev first (e.g.
+ *              docker compose -f voicestations/worker/compose.cpu.yml stop):
+ *              it would race the test for its stations.
  *
  *              Usage: docker exec strabo-php php /srv/app/www/tests/voicestations/worker_test.php
  *

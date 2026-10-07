@@ -10,7 +10,8 @@ ARG WHISPER_VERSION=v1.9.4
 FROM nvidia/cuda:12.6.3-devel-ubuntu24.04 AS build-cuda
 ARG WHISPER_VERSION
 ARG CUDA_ARCH=86
-RUN apt-get update && apt-get install -y --no-install-recommends git cmake build-essential ca-certificates \
+# Ubuntu's archive over HTTPS: plain HTTP to it timed out from gpubox's network (10-07)
+RUN sed -i 's#http://#https://#g' /etc/apt/sources.list.d/ubuntu.sources && apt-get update && apt-get install -y --no-install-recommends git cmake build-essential ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 RUN git clone --depth 1 --branch ${WHISPER_VERSION} https://github.com/ggml-org/whisper.cpp /src
 RUN cmake -S /src -B /build -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=OFF \
@@ -31,7 +32,7 @@ RUN ARM=""; [ "$(uname -m)" = "aarch64" ] && ARM="-DGGML_NATIVE=OFF -DGGML_CPU_A
 
 # ---- runtimes
 FROM nvidia/cuda:12.6.3-runtime-ubuntu24.04 AS runtime-cuda
-RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg libgomp1 ca-certificates \
+RUN sed -i 's#http://#https://#g' /etc/apt/sources.list.d/ubuntu.sources && apt-get update && apt-get install -y --no-install-recommends python3 python3-venv ffmpeg libgomp1 ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 FROM python:3.12-slim-bookworm AS runtime-cpu
