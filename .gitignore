@@ -64,3 +64,6 @@ voicestations_data
 
 # StraboField choice map, kept current by includes/fieldvocab/sync.php (no trailing slash: may be a symlink on prod)
 fieldvocab_data
+# Voice Stations worker secrets (token) and Python caches
+voicestations/worker/.env
+voicestations/worker/**/__pycache__

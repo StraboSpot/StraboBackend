@@ -1,0 +1,16 @@
+# CPU worker: prod fallback (claims after the server-side delay, 120 s) or a dev
+# run on the Mac. On prod cap it so the web containers keep their share.
+#   docker compose -f compose.cpu.yml up -d --build
+services:
+  voiceworker:
+    build: { context: ., args: { FLAVOR: cpu } }
+    image: strabo-voiceworker:cpu
+    container_name: strabo-voiceworker
+    env_file: .env
+    environment: { VS_MODEL_DIR: /models }
+    volumes: ["${VS_MODELS_HOST_DIR}:/models:ro"]
+    tmpfs: ["/tmp:size=512m,mode=1777"]
+    extra_hosts: ["host.docker.internal:host-gateway"]
+    restart: unless-stopped
+    stop_grace_period: 300s
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }

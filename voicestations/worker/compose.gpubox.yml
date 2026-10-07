@@ -1,0 +1,15 @@
+# gpubox (RTX 3060): the MAIN transcription worker (P5.7). Needs nvidia-container-toolkit.
+#   docker compose -f compose.gpubox.yml up -d --build
+services:
+  voiceworker:
+    build: { context: ., args: { FLAVOR: cuda } }
+    image: strabo-voiceworker:cuda
+    container_name: strabo-voiceworker
+    env_file: .env
+    environment: { VS_MODEL_DIR: /models }
+    volumes: ["${VS_MODELS_HOST_DIR}:/models:ro"]
+    tmpfs: ["/tmp:size=512m,mode=1777"]
+    gpus: all
+    restart: unless-stopped
+    stop_grace_period: 120s
+    logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }
