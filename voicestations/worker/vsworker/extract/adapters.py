@@ -73,7 +73,7 @@ class AnthropicAdapter:
         secs = time.time() - t0
         if msg.stop_reason == 'refusal':
             cat = getattr(getattr(msg, 'stop_details', None), 'category', None)
-            raise ProviderError('The proposal service declined this station; enter it by hand.', False, f'refusal {cat}')
+            raise ProviderError('The proposal service declined this recording; enter it by hand.', False, f'refusal {cat}')
         if msg.stop_reason == 'max_tokens':
             raise ProviderError(UNAVAILABLE, True, 'hit max_tokens')
         raw = ''.join(b.text for b in msg.content if b.type == 'text')

@@ -434,7 +434,7 @@ class Builder:
             cq = T.canon_text(cf.get('quote') or '')
             if ok and cq and T.find(cq, et) >= 0:
                 it['carried'] = {'station_uuid': earlier[n - 1].get('station_uuid'), 'text': cf['quote']}
-                self.flag(it, 'carried', f'Carried from an earlier station: "{cf["quote"]}". Keep it only if it applies here.',
+                self.flag(it, 'carried', f'Carried from an earlier recording: "{cf["quote"]}". Keep it only if it applies here.',
                           quote=cf['quote'])
             else:
                 self.log(ref, 14, 'carried_from', cf.get('quote'), 'dropped', 'not found in that earlier transcript')
@@ -489,7 +489,7 @@ class Builder:
         station_flags = []
         fix = (self.job.get('station') or {}).get('best_fix')
         if not fix:
-            station_flags.append({'code': 'no_location', 'message': 'No GPS location was recorded for this station.'})
+            station_flags.append({'code': 'no_location', 'message': 'No GPS location was recorded for this recording.'})
         elif fix.get('accuracy') is not None and fix['accuracy'] > THRESHOLDS['gps_accuracy_m']:
             station_flags.append({'code': 'gps_poor', 'message': f'Best GPS fix was +-{num_out(fix["accuracy"])} m.'})
         return {'format': 1, 'items': items, 'dropped': self.dropped, 'station_flags': station_flags}
