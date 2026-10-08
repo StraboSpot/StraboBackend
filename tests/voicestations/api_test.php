@@ -208,7 +208,8 @@ $bad = array(
 	array('existing target without Spot JSON', array('target' => array('kind' => 'existing', 'spot_id' => '123')), 'target.spot'),
 	array('started_at without time zone', array('started_at' => '2026-10-07T15:02:11'), 'started_at'),
 	array('ends before it starts', array('ended_at' => iso($t0 - 5)), 'ended_at'),
-	array('longer than 10 minutes', array('ended_at' => iso($t0 + 601)), 'ended_at'),
+	array('Record to Stop over 2 hours', array('ended_at' => iso($t0 + 7201)), 'ended_at'),
+	array('audio longer than 10 minutes', array('audio' => array('mime' => 'audio/mp4', 'seconds' => 606)), 'audio.seconds'),
 	array('tz offset not whole minutes', array('tz_offset_minutes' => 1.5), 'tz_offset_minutes'),
 	array('lat out of range', array('gps_fixes' => array(array('lat' => 91, 'lon' => 0, 'accuracy' => 1, 'time' => iso($t0)))), 'gps_fixes[0].lat'),
 	array('lon as a string', array('gps_fixes' => array(array('lat' => 1, 'lon' => '2', 'accuracy' => 1, 'time' => iso($t0)))), 'gps_fixes[0].lon'),
@@ -283,9 +284,11 @@ check("... and Maya's batch list is untouched", $ms->val("SELECT array_to_json(s
 $x = upload($MAYA, details($S1, $BATCH, $LIST, array('dataset_id' => '1')));
 check('batch sent with another dataset -> 409', $x['code'] === 409 && strpos($x['json']['Error'], 'dataset') !== false, $x['body']);
 
-$d2 = details($S2, $BATCH, $LIST, array('started_at' => iso($t0 - 600), 'ended_at' => iso($t0 - 540), 'gps_fixes' => array(), 'photos' => array()));
+// 17 minutes Record to Stop, 60 s of audio: a call paused it; the 10 minute limit is on the audio
+$d2 = details($S2, $BATCH, $LIST, array('started_at' => iso($t0 - 1560), 'ended_at' => iso($t0 - 540), 'gps_fixes' => array(), 'photos' => array(),
+	'audio' => array('mime' => 'audio/mp4', 'seconds' => 60)));
 $x = upload($MAYA, $d2);
-check('station 2 -> 201, batch complete 2 of 2', $x['code'] === 201 && $x['json']['batch']['complete'] === true && $x['json']['batch']['missing'] === array(), $x['body']);
+check('station 2 (paused by a call, 17 min wall clock) -> 201, batch complete 2 of 2', $x['code'] === 201 && $x['json']['batch']['complete'] === true && $x['json']['batch']['missing'] === array(), $x['body']);
 check('no fixes -> no best fix (the "no location" case)',
 	$ms->val("SELECT best_accuracy FROM voicestations.stations WHERE station_uuid = $1", array($S2)) === null);
 

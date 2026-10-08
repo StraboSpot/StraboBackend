@@ -27,10 +27,10 @@ class VsDetails {
 
 		$list = VsHttp::prop($d, 'batch_station_uuids');
 		if (!is_array($list) || count($list) === 0) {
-			throw VsHttp::bad('batch_station_uuids', 'A non-empty list of the batch\'s station UUIDs is required.');
+			throw VsHttp::bad('batch_station_uuids', 'A non-empty list of the batch\'s recording UUIDs is required.');
 		}
 		if (count($list) > VsConfig::MAX_BATCH_STATIONS) {
-			throw VsHttp::bad('batch_station_uuids', 'A batch may hold at most ' . VsConfig::MAX_BATCH_STATIONS . ' stations.');
+			throw VsHttp::bad('batch_station_uuids', 'A batch may hold at most ' . VsConfig::MAX_BATCH_STATIONS . ' Spots.');
 		}
 		$uuids = array();
 		foreach ($list as $u) {
@@ -41,7 +41,7 @@ class VsDetails {
 		}
 		$out['batch_station_uuids'] = array_keys($uuids);
 		if (!isset($uuids[$out['station_uuid']])) {
-			throw VsHttp::bad('batch_station_uuids', 'The list must include this station\'s UUID.');
+			throw VsHttp::bad('batch_station_uuids', 'The list must include this recording\'s UUID.');
 		}
 
 		$out['project_id'] = self::fieldId($d, 'project_id');
@@ -80,8 +80,10 @@ class VsDetails {
 		if ($end < $start) {
 			throw VsHttp::bad('ended_at', 'The recording ends before it starts.');
 		}
-		if ($end - $start > VsConfig::MAX_SECONDS) {
-			throw VsHttp::bad('ended_at', 'A station may be at most 10 minutes long.');
+		// The 10 minute limit is on the AUDIO (audio.seconds below). Record to
+		// Stop can be longer: a phone call pauses a station without ending it.
+		if ($end - $start > VsConfig::MAX_WALL_SECONDS) {
+			throw VsHttp::bad('ended_at', 'A Spot recording may span at most 2 hours from Record to Stop.');
 		}
 		$out['started_at'] = VsHttp::prop($d, 'started_at');
 		$out['ended_at'] = VsHttp::prop($d, 'ended_at');
@@ -98,7 +100,7 @@ class VsDetails {
 			throw VsHttp::bad('gps_fixes', 'gps_fixes must be a list.');
 		}
 		if (count($fixes) > VsConfig::MAX_FIXES) {
-			throw VsHttp::bad('gps_fixes', 'At most ' . VsConfig::MAX_FIXES . ' GPS fixes per station.');
+			throw VsHttp::bad('gps_fixes', 'At most ' . VsConfig::MAX_FIXES . ' GPS fixes per Spot.');
 		}
 		$best = null;
 		foreach ($fixes as $i => $f) {
@@ -136,7 +138,7 @@ class VsDetails {
 			throw VsHttp::bad('photos', 'photos must be a list.');
 		}
 		if (count($photos) > VsConfig::MAX_PHOTOS) {
-			throw VsHttp::bad('photos', 'At most ' . VsConfig::MAX_PHOTOS . ' photos per station.');
+			throw VsHttp::bad('photos', 'At most ' . VsConfig::MAX_PHOTOS . ' photos per Spot.');
 		}
 		foreach ($photos as $i => $p) {
 			$pid = VsHttp::prop($p, 'id');
@@ -166,7 +168,7 @@ class VsDetails {
 		}
 		$secs = VsHttp::prop($audio, 'seconds');
 		if ($secs !== null && (!self::num($secs) || $secs < 0 || $secs > VsConfig::MAX_SECONDS + 5)) {
-			throw VsHttp::bad('audio.seconds', 'audio.seconds must be a number of seconds up to 10 minutes.');
+			throw VsHttp::bad('audio.seconds', 'The recording is longer than 10 minutes.');
 		}
 		$out['audio_mime'] = $mime;
 		$out['audio_seconds'] = $secs;

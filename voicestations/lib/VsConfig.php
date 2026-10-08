@@ -28,7 +28,8 @@
 class VsConfig {
 
 	const MAX_AUDIO_BYTES     = 20971520;   // 20 MB (P6.4)
-	const MAX_SECONDS         = 600;        // 10 minutes per station (P6.4)
+	const MAX_SECONDS         = 600;        // 10 minutes of audio per station (P6.4)
+	const MAX_WALL_SECONDS    = 7200;       // Record to Stop incl. pauses (a call mid-station)
 	const MAX_FIXES           = 2000;
 	const MAX_PHOTOS          = 50;
 	const MAX_BATCH_STATIONS  = 500;

@@ -36,7 +36,7 @@ class VsService {
 	/** Gate every route: allowed testers only (VOICESTATIONS_ALLOW). */
 	public function requireAccess() {
 		if (!VsConfig::allowed($this->db, $this->upk)) {
-			throw new VsHttpError(403, 'not_available', 'Voice Stations is not available for this account.');
+			throw new VsHttpError(403, 'not_available', 'Strabo Voice is not available for this account.');
 		}
 	}
 
@@ -75,7 +75,7 @@ class VsService {
 		$root = VsConfig::dataRoot();
 		if (!is_dir($root . '/audio') || !is_writable($root . '/audio')) {
 			VsLog::error('audio folder missing or not writable: ' . $root . '/audio');
-			throw new VsHttpError(503, 'unavailable', 'Voice Stations cannot store audio right now. Please try again later.');
+			throw new VsHttpError(503, 'unavailable', 'Strabo Voice cannot store recordings right now. Please try again later.');
 		}
 
 		// A resend of a station this user already stored needs no Neo4j check.
@@ -119,10 +119,10 @@ class VsService {
 					"SELECT userpkey, batch_id FROM voicestations.stations WHERE station_uuid = $1",
 					array($v['station_uuid']));
 				if ((int)$old['userpkey'] !== $this->upk) {
-					throw VsHttp::conflict('This station UUID is already in use.');
+					throw VsHttp::conflict('This recording\'s UUID is already in use.');
 				}
 				if ((int)$old['batch_id'] !== (int)$batch['id']) {
-					throw VsHttp::conflict('This station was uploaded in another batch.');
+					throw VsHttp::conflict('This recording was uploaded in another batch.');
 				}
 				$status = 200;
 			} else {
@@ -152,7 +152,7 @@ class VsService {
 
 	private function checkAudio($audio) {
 		if ($audio === null || !isset($audio['error'])) {
-			throw VsHttp::bad('audio', 'The station audio file is required.');
+			throw VsHttp::bad('audio', 'The recording\'s audio file is required.');
 		}
 		if ($audio['error'] === UPLOAD_ERR_INI_SIZE || $audio['error'] === UPLOAD_ERR_FORM_SIZE) {
 			throw new VsHttpError(413, 'too_large', 'The audio is larger than 20 MB.');
@@ -501,13 +501,13 @@ class VsService {
 			}
 			if ($outcome === 'confirmed') {
 				if (count($spotIds) === 0) {
-					throw VsHttp::bad('spot_ids', 'A confirmed station names the Spot(s) the app created.');
+					throw VsHttp::bad('spot_ids', 'A confirmed recording names the Spot(s) the app created.');
 				}
 				if ($s['stage'] !== 'ready' && $s['stage'] !== 'failed') {
-					throw VsHttp::conflict('This station is still being processed.');
+					throw VsHttp::conflict('This recording is still being processed.');
 				}
 			} elseif (count($spotIds) > 0) {
-				throw VsHttp::bad('spot_ids', 'A discarded station has no Spots.');
+				throw VsHttp::bad('spot_ids', 'A discarded recording has no Spots.');
 			}
 
 			$ids = '{' . implode(',', array_map(function ($x) {
@@ -551,7 +551,7 @@ class VsService {
 			}
 			if ($a !== 'added') {
 				if (!$hasProposal) {
-					throw VsHttp::bad("record.values[$i].action", 'This station has no proposal; every value is added by hand.');
+					throw VsHttp::bad("record.values[$i].action", 'This recording has no proposal; every value is added by hand.');
 				}
 				$n['proposed']++;
 			}
@@ -613,13 +613,13 @@ class VsService {
 				throw VsHttp::notFound();
 			}
 			if ($s['stage'] !== 'failed') {
-				throw VsHttp::conflict('Only a failed station can be retried.');
+				throw VsHttp::conflict('Only a recording that failed can be retried.');
 			}
 			if ($s['confirm_id'] !== null) {
-				throw VsHttp::conflict('This station is already confirmed or discarded.');
+				throw VsHttp::conflict('This recording is already confirmed or discarded.');
 			}
 			if ($s['current_transcript_run'] === null && $s['audio_deleted_at'] !== null) {
-				throw VsHttp::conflict('This station\'s audio is gone, so it cannot be transcribed again.');
+				throw VsHttp::conflict('This recording\'s audio is gone, so it cannot be transcribed again.');
 			}
 			$stage = $s['current_transcript_run'] === null ? 'uploaded' : 'transcribed';
 			$this->db->q(
