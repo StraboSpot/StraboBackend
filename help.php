@@ -67,6 +67,7 @@ include("includes/mheader.php");
 				<div style="padding-left:30px;padding-top:5px;">
 					<ul class="medHeader">
 						<li><a href="/manual/field" target="_blank">StraboField User Guide</a></li>
+						<li><a href="/manual/groupworkflows" target="_blank">StraboField Group Data Collection: Setup Options and Workflows</a></li>
 						<li><a href="/files/helpFiles/Strabo2_Help_Guide.pdf" target="_blank">StraboField Help PDF Documentation (deprecated)</a></li>
 						<li><a href="/files/helpFiles/Sharing_Projects_Between_Devices.pdf" target="_blank">Sharing Projects Between Devices</a></li>
 						<li><a href="/files/helpFiles/Moving_StraboField_Project_Backups.pdf" target="_blank">StraboField Moving Project Backups out of StraboField</a></li>
@@ -123,6 +124,8 @@ include("includes/mheader.php");
 							<li><a href="https://youtu.be/z2hhF7SEW44" target="_blank">Samples: How to Create New, Edit, and Link to StraboField </a></li>
 							<li><a href="https://youtu.be/2G_lV9wIrlM" target="_blank">Micrographs: Reference and Associated</a></li>
 							<li><a href="https://youtu.be/mI3HuN_pjzE" target="_blank">Spots: How to Add, Edit, Merge, Split, Quick Edit, and Use Spot Presets </a></li>
+							<li><a href="https://youtu.be/GZcfm_gzkGI" target="_blank">Data: How to Add to Spots and Micrographs</a></li>
+							<li><a href="https://youtu.be/gWt8dBzJUtU" target="_blank">Groups and Tags: How to Create New and Apply</a></li>
 						</ul>
 					</div>
 				</div>
