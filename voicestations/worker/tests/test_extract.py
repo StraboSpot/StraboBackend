@@ -167,6 +167,14 @@ class Checks(unittest.TestCase):
         self.assertEqual(it['spot']['dip_direction'], 135)
         self.assertEqual(next(v for v in it['values'] if v['field'] == 'dip_direction')['origin'], 'assumed')
         self.assertIn('assumed_convention', [f['code'] for f in it['flags']])
+        # the user's setting is right-hand rule: a soft flag (a note in the app, no tap needed)
+        self.assertTrue(next(f for f in it['flags'] if f['code'] == 'assumed_convention').get('soft'))
+
+    def test_assumed_rhr_against_dip_direction_setting_is_a_real_flag(self):
+        p, _ = checks.process(raw([M(source_quote='Strike 45, dip 32', strike=45, dip=32)]), job('Strike 45, dip 32.', conv='dip_direction'))
+        f = next(f for f in first(p)['flags'] if f['code'] == 'assumed_convention')
+        self.assertNotIn('soft', f)
+        self.assertIn('your setting is dip direction', f['message'])
 
     def test_quadrant_fault_normal_side_up(self):
         t = "There's a fault here. Fault plane is north 60 west, 75 southwest. It's a normal fault."

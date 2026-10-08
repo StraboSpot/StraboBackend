@@ -318,6 +318,10 @@ class Builder:
                     self.flag(item, 'assumed_convention',
                               'No convention was said; right-hand rule was assumed' + ('' if conv == 'rhr' else ' (your setting is dip direction: check)') + '.',
                               field='dip_direction')
+                    if conv == 'rhr':
+                        # 5f (Jason 10-08): the user's own setting, so the app shows it as a
+                        # note with "Dips the other way", not a flag that waits for a tap
+                        item['flags'][-1]['soft'] = True
         if s is not None:
             item['spot']['strike'] = num_out(s)
         if dd is not None:
