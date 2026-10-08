@@ -241,9 +241,11 @@ class Builder:
                 self.log(ref, 9, c.get('field'), av, 'ignored', 'correction quote or value not found')
         for u in m.get('unresolved') or []:
             uh = self.tr.locate(u.get('quote') or '')
-            vals = ', '.join(str(num_out(x)) for x in (u.get('values') or []) if isinstance(x, (int, float)))
+            nums_u = [num_out(x) for x in (u.get('values') or []) if isinstance(x, (int, float))]
+            vals = ', '.join(str(x) for x in nums_u)
             self.flag(item, 'two_values', f'Two values were said for {u.get("field", "").replace("_", " ")} ({vals}) with no correction. Check which is right.',
                       quote=u.get('quote'), field=u.get('field'), loc=self.where(uh) if uh else None)
+            item['flags'][-1]['values'] = nums_u  # the app offers one "Use N" button per value
         for d in m.get('doubts') or []:
             dh = self.tr.locate(d.get('quote') or '')
             if dh:

@@ -125,6 +125,14 @@ class RealStation(unittest.TestCase):
 
 
 class Checks(unittest.TestCase):
+    def test_two_values_flag_lists_the_values(self):
+        t = 'Strike 32, or 23, dip 14.'
+        m = M(source_quote='Strike 32, or 23, dip 14', strike=32, dip=14,
+              unresolved=[{'field': 'strike', 'values': [32, 23], 'quote': 'Strike 32, or 23'}])
+        p, _ = checks.process(raw([m]), job(t))
+        f = next(f for f in first(p)['flags'] if f['code'] == 'two_values')
+        self.assertEqual((f['field'], f['values']), ('strike', [32, 23]))
+
     def test_quote_not_found_drops_whole_measurement(self):
         p, _ = checks.process(raw([M(source_quote='strike 99 dip 9', strike=99, dip=9)]), job('Strike 45, dip 32.'))
         self.assertEqual(p['items'], [])
