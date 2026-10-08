@@ -26,7 +26,14 @@ if($_SESSION['loggedin']=="yes"){
 	$bartext="";
 }
 
-include_once("prepare_connections.php");
+// Absolute path: a bare "prepare_connections.php" only resolves when the page's
+// working directory is the web root, so pages in subfolders (e.g. /strabosearch/)
+// silently skipped it and lost $userpkey and $db (admin + My DOIs menu entries).
+// Skipped when the page already loaded the classes itself (fullsearch/searchWorker.php
+// plain-includes strabospotclass.php, so loading it again is a fatal redeclare).
+if(!class_exists('StraboSpot', false)){
+	include_once(__DIR__ . "/../prepare_connections.php");
+}
 
 $showinstrumentmenu = false;
 if($_SESSION['userpkey']!=""){
