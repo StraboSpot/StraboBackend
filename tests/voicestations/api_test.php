@@ -307,11 +307,12 @@ $id1 = (int)$ms->val("SELECT id FROM voicestations.stations WHERE station_uuid =
 $id2 = (int)$ms->val("SELECT id FROM voicestations.stations WHERE station_uuid = $1", array($S2));
 $tr1 = $ms->val("INSERT INTO voicestations.runs (station_id, kind, status, engine, model, raw_output, output) VALUES ($1, 'transcribe', 'done', 'whisper.cpp', 'large-v3-turbo', 'raw', $2::jsonb) RETURNING id",
 	array($id1, '{"text": "strike 045 dip 30", "words": [{"w": "strike", "t0": 0.5, "t1": 0.9}], "empty": {}}'));
-$pr1 = $ms->val("INSERT INTO voicestations.runs (station_id, kind, status, engine, model, prompt_version, transcript_run_id, output, validation) VALUES ($1, 'extract', 'done', 'anthropic', 'claude-opus-5', 'v1', $2, $3::jsonb, $4::jsonb) RETURNING id",
+$pr1 = $ms->val("INSERT INTO voicestations.runs (station_id, kind, status, engine, model, prompt_version, transcript_run_id, output, validation, settings) VALUES ($1, 'extract', 'done', 'anthropic', 'claude-opus-5', 'v1', $2, $3::jsonb, $4::jsonb, '{\"vocab_version\": \"test-vocab-1\"}'::jsonb) RETURNING id",
 	array($id1, $tr1, '{"orientation_data": [{"strike": 45, "dip": 30}]}', '{"flags": []}'));
 $ms->q("UPDATE voicestations.stations SET stage = 'ready', current_transcript_run = $2, current_proposal_run = $3 WHERE id = $1", array($id1, $tr1, $pr1));
 $x = req('GET', "/db/voicebatch/$BATCH", $MAYA);
-check('one ready, one still uploaded: not done', $x['json']['done'] === false && $x['json']['stages']['ready'] === 1, $x['body']);
+check('one ready, one still uploaded: not done, no results or vocab', $x['json']['done'] === false && $x['json']['stages']['ready'] === 1
+	&& !isset($x['json']['vocab']) && !isset($x['json']['stations']), $x['body']);
 $tr2 = $ms->val("INSERT INTO voicestations.runs (station_id, kind, status, engine, model, output) VALUES ($1, 'transcribe', 'done', 'whisper.cpp', 'large-v3-turbo', '{\"text\": \"hello\"}'::jsonb) RETURNING id", array($id2));
 $ms->q("UPDATE voicestations.stations SET stage = 'failed', error_text = 'extraction failed 3 times', current_transcript_run = $2 WHERE id = $1", array($id2, $tr2));
 $x = req('GET', "/db/voicebatch/$BATCH", $MAYA);
@@ -322,6 +323,12 @@ check('ready station: transcript + proposal + validation, best fix, not confirme
 	$st[1]['stage'] === 'ready' && $st[1]['transcript']['text'] === 'strike 045 dip 30' && $st[1]['proposal']['orientation_data'][0]['strike'] === 45
 	&& $st[1]['validation'] === array('flags' => array()) && $st[1]['best_fix']['accuracy'] === 5.0 && $st[1]['confirmed'] === null
 	&& $st[1]['error'] === null, $st[1]);
+check('ready station: its proposal run id + the vocab version its extraction used',
+	$st[1]['proposal_run'] === (int)$pr1 && $st[1]['vocab_version'] === 'test-vocab-1', $st[1]);
+check('failed station: no proposal run, no vocab version', $st[0]['proposal_run'] === null && $st[0]['vocab_version'] === null);
+$vf = $x['json']['vocab']['forms']['measurement.planar_orientation'] ?? null;
+check('done batch carries the review form choices (version + planar feature_type / movement)',
+	is_string($x['json']['vocab']['version'] ?? null) && isset($vf['feature_type']['bedding'], $vf['movement']), $x['json']['vocab'] ?? null);
 check('empty JSON object survives as {}', strpos($x['body'], '"empty":{}') !== false);
 check('failed station: error shown, transcript kept, no proposal, no best fix',
 	$st[0]['stage'] === 'failed' && $st[0]['error'] === 'extraction failed 3 times' && $st[0]['transcript']['text'] === 'hello'
@@ -355,6 +362,7 @@ check('code folder never served -> 403', req('GET', '/voicestations/lib/VsServic
 // ---------------------------------------------------------------- confirm
 section('Confirm / discard');
 $conf = array('outcome' => 'confirmed', 'review_seconds' => 41.5, 'spot_ids' => array('17598700000001', '17598700000002'),
+	'proposal_run' => (int)$pr1,
 	'n_unchanged' => 99, // the phone's own count: ignored
 	'record' => array(
 		'values' => array(
@@ -372,10 +380,19 @@ foreach (array(
 	array('flag without action', array('record' => array('flags' => array(array('id' => 'f1')))), 'record.flags[0].action'),
 	array('negative review time', array('review_seconds' => -1), 'review_seconds'),
 	array('discarded with Spot ids', array('outcome' => 'discarded'), 'spot_ids'),
+	array('proposal_run not a number', array('proposal_run' => 'abc'), 'proposal_run'),
 ) as $b) {
 	$x = req('POST', "/db/voiceconfirm/$S1", $MAYA, array('json' => array_merge($conf, $b[1])));
 	check("{$b[0]} -> 400 field {$b[2]}", $x['code'] === 400 && $x['json']['field'] === $b[2], $x['body']);
 }
+$noRun = $conf; unset($noRun['proposal_run']);
+$x = req('POST', "/db/voiceconfirm/$S1", $MAYA, array('json' => $noRun));
+check('confirm without proposal_run when there is a proposal -> 400 field proposal_run',
+	$x['code'] === 400 && $x['json']['field'] === 'proposal_run', $x['body']);
+$x = req('POST', "/db/voiceconfirm/$S1", $MAYA, array('json' => array_merge($conf, array('proposal_run' => (int)$pr1 + 100000))));
+check('confirm naming an older proposal -> 409 stale_proposal, nothing stored',
+	$x['code'] === 409 && $x['json']['code'] === 'stale_proposal'
+	&& $ms->val("SELECT count(*) FROM voicestations.confirms WHERE station_id = $1", array($id1)) === '0', $x['body']);
 $x = req('POST', "/db/voiceconfirm/$S1", $MAYA, array('json' => 'not json'));
 check('body not JSON -> 400', $x['code'] === 400);
 $x = req('POST', "/db/voiceconfirm/$S1", $MAYA, array('json' => $conf));

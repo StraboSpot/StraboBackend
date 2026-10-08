@@ -325,6 +325,9 @@ class VsService {
 		);
 		if ($done) {
 			$out['stations'] = $this->stationResults($b['id']);
+			// the form choices review pickers offer (step 5 point 3); each
+			// station's vocab_version says which list its extraction used
+			$out['vocab'] = VsWorker::vocab();
 		}
 		return array(200, $out);
 	}
@@ -337,6 +340,7 @@ class VsService {
 			        s.best_lat, s.best_lon, s.best_alt, s.best_accuracy,
 			        " . MsDb::iso('s.best_fix_at') . " AS best_fix_at,
 			        t.output::text AS transcript,
+			        s.current_proposal_run, p.settings->>'vocab_version' AS vocab_version,
 			        p.output::text AS proposal, p.validation::text AS validation,
 			        c.outcome, " . MsDb::iso('c.created_at') . " AS confirmed_at
 			   FROM voicestations.stations s
@@ -362,6 +366,8 @@ class VsService {
 					'time' => $r['best_fix_at'],
 				),
 				'transcript' => $r['transcript'] === null ? null : json_decode($r['transcript']),
+				'proposal_run' => ($failed || $r['proposal'] === null) ? null : (int)$r['current_proposal_run'],
+				'vocab_version' => ($failed || $r['proposal'] === null) ? null : $r['vocab_version'],
 				'proposal' => ($failed || $r['proposal'] === null) ? null : json_decode($r['proposal']),
 				'validation' => ($failed || $r['validation'] === null) ? null : json_decode($r['validation']),
 				'confirmed' => $r['outcome'] === null ? null
@@ -451,7 +457,9 @@ class VsService {
 	 * Body: {"outcome": "confirmed" | "discarded",
 	 *        "record": {"values": [{"action": "unchanged"|"edited"|"removed"|"added", ...}],
 	 *                   "flags":  [{"action": ..., ...}]},
-	 *        "review_seconds": 41.5, "spot_ids": ["..."]}
+	 *        "review_seconds": 41.5, "spot_ids": ["..."], "proposal_run": 412}
+	 * proposal_run (from the batch reply) is required to confirm a recording
+	 * that has a proposal; a newer proposal = 409 stale_proposal.
 	 * The record's inner detail follows the proposal format (build step 3);
 	 * the server reads only the actions to compute the counts.
 	 */
@@ -484,6 +492,21 @@ class VsService {
 			}
 			$hasProposal = $s['current_proposal_run'] !== null;
 			$n = $this->countRecord($record, $hasProposal);
+
+			// the proposal the phone reviewed must still be the current one
+			// (a Retry may have made a newer one); discards need no check
+			$run = VsHttp::prop($body, 'proposal_run');
+			if ($run !== null && !is_int($run)) {
+				throw VsHttp::bad('proposal_run', 'proposal_run must be the id of the proposal reviewed.');
+			}
+			if ($outcome === 'confirmed') {
+				if ($hasProposal && $run === null) {
+					throw VsHttp::bad('proposal_run', 'A confirm names the proposal it reviewed (proposal_run).');
+				}
+				if ($run !== null && $run !== (int)$s['current_proposal_run']) {
+					throw new VsHttpError(409, 'stale_proposal', 'This recording has a newer proposal. Reload it and review again.');
+				}
+			}
 
 			$review = VsHttp::prop($body, 'review_seconds');
 			if ($review !== null && (!(is_int($review) || is_float($review)) || $review < 0)) {
