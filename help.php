@@ -124,6 +124,8 @@ include("includes/mheader.php");
 							<li><a href="https://youtu.be/z2hhF7SEW44" target="_blank">Samples: How to Create New, Edit, and Link to StraboField </a></li>
 							<li><a href="https://youtu.be/2G_lV9wIrlM" target="_blank">Micrographs: Reference and Associated</a></li>
 							<li><a href="https://youtu.be/mI3HuN_pjzE" target="_blank">Spots: How to Add, Edit, Merge, Split, Quick Edit, and Use Spot Presets </a></li>
+							<li><a href="https://youtu.be/GZcfm_gzkGI" target="_blank">Data: How to Add to Spots and Micrographs</a></li>
+							<li><a href="https://youtu.be/gWt8dBzJUtU" target="_blank">Groups and Tags: How to Create New and Apply</a></li>
 						</ul>
 					</div>
 				</div>
