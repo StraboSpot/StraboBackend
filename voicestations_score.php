@@ -59,6 +59,19 @@ function verdict($pass) {
 	if ($pass === null) return '<span class="vs-tag vs-na">not scored yet</span>';
 	return $pass ? '<span class="vs-tag vs-pass">pass</span>' : '<span class="vs-tag vs-fail">fail</span>';
 }
+/** One table row of bar results (By tester, By device). */
+function barsRow($label, $t) {
+	return '<tr><td>' . h($label) . '</td>'
+		. '<td>' . (int)$t['bar1']['wrong'] . ' ' . verdict($t['bar1']['pass']) . '</td>'
+		. '<td>' . (int)$t['bar1']['missing'] . '</td>'
+		. '<td>' . pct($t['bar2']['share']) . ' ' . verdict($t['bar2']['pass']) . '</td>'
+		. '<td>' . (int)$t['bar2']['zero_change_spots'] . ' of ' . (int)$t['bar2']['spots'] . '</td>'
+		. '<td>' . sec($t['bar3']['voice']['per_measurement']) . '</td>'
+		. '<td>' . sec($t['bar3']['voice']['recording']) . '</td>'
+		. '<td>' . sec($t['bar3']['voice']['review']) . '</td>'
+		. '<td>' . sec($t['bar3']['baseline']['per_measurement']) . ' ' . verdict($t['bar3']['pass']) . '</td>'
+		. '<td>' . (int)$t['words']['right'] . ' of ' . (int)$t['words']['of'] . '</td></tr>' . "\n";
+}
 
 // ---------------------------------------------------------------- audio
 if (isset($_GET['audio'])) {
@@ -172,19 +185,26 @@ include("includes/mheader.php");
 			<h3>By tester</h3>
 			<div class="vs-scroll"><table>
 				<tr><th>Tester</th><th>Wrong saved</th><th>Missing</th><th>Unchanged</th><th>No-change Spots</th><th>Voice per measurement</th><th>Recording</th><th>Review</th><th>StraboField per measurement</th><th>Words right</th></tr>
-<?php foreach ($res['testers'] as $upk => $t) { ?>
-				<tr><td><?php echo h($t['name'] ?: $t['email']); ?></td>
-					<td><?php echo (int)$t['bar1']['wrong']; ?> <?php echo verdict($t['bar1']['pass']); ?></td>
-					<td><?php echo (int)$t['bar1']['missing']; ?></td>
-					<td><?php echo pct($t['bar2']['share']); ?> <?php echo verdict($t['bar2']['pass']); ?></td>
-					<td><?php echo (int)$t['bar2']['zero_change_spots']; ?> of <?php echo (int)$t['bar2']['spots']; ?></td>
-					<td><?php echo sec($t['bar3']['voice']['per_measurement']); ?></td>
-					<td><?php echo sec($t['bar3']['voice']['recording']); ?></td>
-					<td><?php echo sec($t['bar3']['voice']['review']); ?></td>
-					<td><?php echo sec($t['bar3']['baseline']['per_measurement']); ?> <?php echo verdict($t['bar3']['pass']); ?></td>
-					<td><?php echo (int)$t['words']['right']; ?> of <?php echo (int)$t['words']['of']; ?></td></tr>
-<?php } ?>
+<?php foreach ($res['testers'] as $upk => $t) echo barsRow($t['name'] ?: $t['email'], $t); ?>
 			</table></div>
+
+<?php if (isset($o['by_device'])) { ?>
+			<h3>By device</h3>
+<?php if ((int)$o['by_device']['watch']['bar2']['spots'] === 0) { ?>
+			<p class="vs-dim">No watch recordings yet: every confirmed recording was made on the phone.</p>
+<?php } else { ?>
+			<div class="vs-scroll"><table>
+				<tr><th>Recorded on</th><th>Wrong saved</th><th>Missing</th><th>Unchanged</th><th>No-change Spots</th><th>Voice per measurement</th><th>Recording</th><th>Review</th><th>StraboField per measurement</th><th>Words right</th></tr>
+<?php
+	foreach (array('phone' => 'Phone', 'watch' => 'Watch') as $d => $label) echo barsRow("All testers, $label", $o['by_device'][$d]);
+	foreach ($res['testers'] as $upk => $t) {
+		if ((int)$t['by_device']['watch']['bar2']['spots'] === 0) continue;   // only testers who used a watch
+		foreach (array('phone' => 'Phone', 'watch' => 'Watch') as $d => $label) echo barsRow(($t['name'] ?: $t['email']) . ", $label", $t['by_device'][$d]);
+	}
+?>
+			</table></div>
+			<p class="vs-dim">The StraboField stopwatch time is the same for both devices.</p>
+<?php } } ?>
 			<p class="vs-dim">Unchanged by kind (all testers):
 <?php foreach ($o['bar2']['by_kind'] as $k => $v) { echo h($k) . ' ' . (int)$v['unchanged'] . ' of ' . (int)$v['of'] . '. '; } ?></p>
 
@@ -239,10 +259,10 @@ include("includes/mheader.php");
 
 			<h3>All confirmed recordings (<?php echo count($res['stations']); ?>)</h3>
 			<div class="vs-scroll"><table>
-				<tr><th>Spot</th><th>Tester</th><th>Recorded</th><th>In the key</th><th>Unchanged</th><th>Edited</th><th>Removed</th><th>Typed</th><th>Measurements</th><th>Recording</th><th>Review</th></tr>
+				<tr><th>Spot</th><th>Tester</th><th>Recorded</th><th>On</th><th>In the key</th><th>Unchanged</th><th>Edited</th><th>Removed</th><th>Typed</th><th>Measurements</th><th>Recording</th><th>Review</th></tr>
 <?php foreach ($res['stations'] as $u => $st) { ?>
 				<tr><td><?php echo spotLink($u, $st['spot_name']); ?></td><td><?php echo h(who($st['tester'])); ?></td>
-					<td><?php echo h(substr((string)$st['started_at'], 0, 16)); ?></td><td><?php echo $st['in_key'] ? 'yes' : '<span class="vs-dim">no</span>'; ?></td>
+					<td><?php echo h(substr((string)$st['started_at'], 0, 16)); ?></td><td><?php echo h(isset($st['recorded_on']) ? $st['recorded_on'] : 'phone'); ?></td><td><?php echo $st['in_key'] ? 'yes' : '<span class="vs-dim">no</span>'; ?></td>
 					<td><?php echo (int)$st['counts']['unchanged']; ?></td><td><?php echo (int)$st['counts']['edited']; ?></td><td><?php echo (int)$st['counts']['removed']; ?></td><td><?php echo (int)$st['counts']['added']; ?></td>
 					<td><?php echo (int)$st['timing']['n_measurements']; ?></td><td><?php echo show($st['timing']['recording'] === null ? null : round($st['timing']['recording'], 1)); ?> s</td><td><?php echo show($st['timing']['review']); ?> s</td></tr>
 <?php } ?>

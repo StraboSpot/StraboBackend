@@ -108,6 +108,7 @@ $tr = $ms->val("INSERT INTO voicestations.runs (station_id, kind, status, engine
 $pr = $ms->val("INSERT INTO voicestations.runs (station_id, kind, status, engine, model, output) VALUES ($1, 'extract', 'done', 'anthropic', 'claude', $2::jsonb) RETURNING id",
 	array($ids[$S1], json_encode(array('items' => array(array('ref' => 'm1', 'kind' => 'orientation'))))));
 $ms->q("UPDATE voicestations.stations SET current_transcript_run = $1, current_proposal_run = $2 WHERE id = $3", array($tr, $pr, $ids[$S1]));
+$ms->q("UPDATE voicestations.stations SET recorded_on = 'watch', watch_model = 'Watch6,2 watchOS 26.6' WHERE id = $1", array($ids[$S2]));
 $spotId = 17999000000000 + random_int(1000, 999999);
 $record = array('format' => 1, 'spots' => array(array('card' => 'A', 'spot_id' => (string)$spotId)),
 	'values' => array(array('ref' => 'm1', 'field' => 'strike', 'action' => 'unchanged', 'proposed' => 45, 'final' => 45)));
@@ -136,6 +137,9 @@ $c = $mine[$S1];
 check('confirmed: record, counts, review time, recording time, pauses, spot name',
 	$c['record']['values'][0]['final'] === 45 && $c['counts']['unchanged'] === 1 && $c['review_seconds'] === 22.5
 	&& $c['recorded_seconds'] === 31.5 && count($c['pauses']) === 1 && $c['spot_name'] === 'V-07', $c);
+check('recorded_on: NULL (older build) exported as phone; a watch recording as watch with its model',
+	$c['recorded_on'] === 'phone' && $c['watch_model'] === null
+	&& $mine[$S2]['recorded_on'] === 'watch' && $mine[$S2]['watch_model'] === 'Watch6,2 watchOS 26.6', array($c['recorded_on'], $mine[$S2]['recorded_on']));
 check('confirmed: transcript + proposal of the reviewed run',
 	$c['transcript']['text'] === 'Bedding strike 45 dip 32.' && $c['proposal']['items'][0]['ref'] === 'm1' && $c['proposal_run'] === (int)$pr);
 check('confirmed: the uploaded Spot, read back from Neo4j',

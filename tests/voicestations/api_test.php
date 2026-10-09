@@ -279,6 +279,11 @@ $bad = array(
 	array('too many photos', array('photos' => array_fill(0, 51, array('id' => '1', 'taken_at' => iso($t0)))), 'photos'),
 	array('unknown strike convention', array('strike_convention' => 'lhr'), 'strike_convention'),
 	array('audio mime not m4a', array('audio' => array('mime' => 'audio/wav', 'seconds' => 3)), 'audio.mime'),
+	array('recorded_on unknown', array('recorded_on' => 'tablet'), 'recorded_on'),
+	array('recorded_on not text', array('recorded_on' => 1), 'recorded_on'),
+	array('watch_model on a phone recording', array('recorded_on' => 'phone', 'watch_model' => 'Watch6,2 watchOS 26.6'), 'watch_model'),
+	array('watch_model without recorded_on', array('watch_model' => 'Watch6,2 watchOS 26.6'), 'watch_model'),
+	array('watch_model over 100 characters', array('recorded_on' => 'watch', 'watch_model' => str_repeat('W', 101)), 'watch_model'),
 );
 foreach ($bad as $b) {
 	$d = $b[1] === null ? '' : (is_string($b[1]) ? $b[1] : details($S1, $BATCH, $LIST, $b[1]));
@@ -316,6 +321,7 @@ check('best fix = smallest accuracy, earliest on a tie, null accuracy never',
 	(float)$r['best_lat'] === 38.96 && (float)$r['best_accuracy'] === 5.0 && (float)$r['best_alt'] === 301.0, json_encode(array($r['best_lat'], $r['best_accuracy'])));
 check('all 4 fixes, photos, details kept', count(json_decode($r['gps_fixes'])) === 4 && count(json_decode($r['photos'])) === 1
 	&& json_decode($r['details'])->device_model === 'iPhone15,2');
+check('no recorded_on (builds before the watch app) -> stored NULL, read as phone', $r['recorded_on'] === null && $r['watch_model'] === null);
 $path = "$ROOT/audio/$upkMaya/$S1.m4a";
 check('audio stored at audio/<userpkey>/<uuid>.m4a, byte identical, sha recorded',
 	$r['audio_path'] === "audio/$upkMaya/$S1.m4a" && is_file($path) && md5_file($path) === md5_file($FIX)
@@ -345,9 +351,12 @@ check('batch sent with another dataset -> 409', $x['code'] === 409 && strpos($x[
 
 // 17 minutes Record to Stop, 60 s of audio: a call paused it; the 10 minute limit is on the audio
 $d2 = details($S2, $BATCH, $LIST, array('started_at' => iso($t0 - 1560), 'ended_at' => iso($t0 - 540), 'gps_fixes' => array(), 'photos' => array(),
-	'audio' => array('mime' => 'audio/mp4', 'seconds' => 60)));
+	'audio' => array('mime' => 'audio/mp4', 'seconds' => 60), 'recorded_on' => 'watch', 'watch_model' => 'Watch6,2 watchOS 26.6'));
 $x = upload($MAYA, $d2);
 check('station 2 (paused by a call, 17 min wall clock) -> 201, batch complete 2 of 2', $x['code'] === 201 && $x['json']['batch']['complete'] === true && $x['json']['batch']['missing'] === array(), $x['body']);
+check('watch recording -> recorded_on watch + watch_model stored, device_model stays the phone',
+	$ms->row("SELECT recorded_on, watch_model, device_model FROM voicestations.stations WHERE station_uuid = $1", array($S2))
+	=== array('recorded_on' => 'watch', 'watch_model' => 'Watch6,2 watchOS 26.6', 'device_model' => 'iPhone15,2'));
 check('no fixes -> no best fix (the "no location" case)',
 	$ms->val("SELECT best_accuracy FROM voicestations.stations WHERE station_uuid = $1", array($S2)) === null);
 

@@ -161,6 +161,17 @@ class VsDetails {
 		$out['app_version'] = self::shortText($d, 'app_version');
 		$out['device_model'] = self::shortText($d, 'device_model');
 
+		// Where the audio was made (watch design W4); device_model stays the phone.
+		$on = VsHttp::prop($d, 'recorded_on');
+		if ($on !== null && !in_array($on, VsConfig::RECORDED_ON, true)) {
+			throw VsHttp::bad('recorded_on', 'recorded_on must be "phone" or "watch".');
+		}
+		$out['recorded_on'] = $on;
+		$out['watch_model'] = self::shortText($d, 'watch_model');
+		if ($out['watch_model'] !== null && $on !== 'watch') {
+			throw VsHttp::bad('watch_model', 'watch_model is only sent with a watch recording.');
+		}
+
 		$audio = VsHttp::prop($d, 'audio');
 		$mime = VsHttp::prop($audio, 'mime');
 		if (!in_array($mime, VsConfig::AUDIO_MIMES, true)) {

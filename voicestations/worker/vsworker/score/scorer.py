@@ -19,6 +19,9 @@ Bar #3 (point 5) time per measurement, medians with range, voice (recording +
   review) vs the stopwatch baseline, by tester and overall.
 Hand-off check (point 2): confirmed values vs the uploaded Spot; reported
   apart, never counted as wrong.
+By device (watch design W4): every bar again for phone-only and watch-only
+  recordings (recorded_on; missing = phone), overall and per tester. The
+  stopwatch baseline is the same for both.
 """
 
 import statistics
@@ -26,7 +29,7 @@ import statistics
 from ..extract import text as T
 from .saved import LINE_NUMS, NUMBER_FIELDS, field_kind, final, num, saved_items
 
-SCORER_VERSION = 'score-1'
+SCORER_VERSION = 'score-2'   # score-2 adds by_device
 BAR2_TARGET = 0.80
 
 
@@ -282,66 +285,78 @@ def _bar3(voice_rows, base_rows):
     return out
 
 
+DEVICES = ('phone', 'watch')
+
+
+def device(st):
+    return st.get('recorded_on') or 'phone'
+
+
 def score(export, key, key_sha256):
     """The whole trial -> results object (what the scoring page shows)."""
     recs = key.get('recordings') or {}
     confirmed = [st for st in export['stations'] if st.get('outcome') == 'confirmed']
     testers = {t['userpkey']: t for t in export.get('testers') or []}
     lists = {'wrong': [], 'missing': [], 'extra': [], 'convention': [], 'handoff': []}
-    stations, words, voice_rows = {}, {}, {}
+    stations, voice_rows = {}, {}
     for st in confirmed:
         upk = st['userpkey']
         k = recs.get(st['station_uuid'])
         saved = saved_items(st['record'], st.get('proposal'))
         entry = {'tester': upk, 'spot_name': st.get('spot_name'), 'started_at': st.get('started_at'),
-                 'in_key': k is not None, 'counts': st['counts'], 'rows': []}
+                 'recorded_on': device(st), 'in_key': k is not None, 'counts': st['counts'], 'rows': [],
+                 'words': {'right': 0, 'of': 0}}
         if k is not None:
             saved, rows, wrong, missing, extra, w = score_station(st, k)
             entry['rows'] = rows
             lists['wrong'] += wrong
             lists['missing'] += missing
             lists['extra'] += extra
-            tw = words.setdefault(upk, {'right': 0, 'of': 0})
-            tw['right'] += w['right']
-            tw['of'] += w['of']
+            entry['words'] = {'right': w['right'], 'of': w['of']}
         lists['convention'] += convention_mismatches(st, saved)
         lists['handoff'] += handoff(st, saved)
         n_meas = sum(1 for s in saved if s['kind'] in ('plane', 'line'))
         rec, rev = st.get('recorded_seconds'), st.get('review_seconds')
         entry['timing'] = {'recording': rec, 'review': rev, 'n_measurements': n_meas}
         if rec is not None and rev is not None:
-            voice_rows.setdefault(upk, []).append({'seconds': rec + rev, 'recording': rec, 'review': rev, 'n': n_meas})
+            voice_rows[st['station_uuid']] = {'seconds': rec + rev, 'recording': rec, 'review': rev, 'n': n_meas}
         stations[st['station_uuid']] = entry
 
     base_rows = {}
     for b in key.get('baseline') or []:
         base_rows.setdefault(b['tester'], []).append({'seconds': b['seconds'], 'n': b.get('n_measurements') or 0})
 
-    def bars(upks):
-        sts = [st for st in confirmed if st['userpkey'] in upks]
+    def bars(upks, dev=None):
+        sts = [st for st in confirmed if st['userpkey'] in upks and (dev is None or device(st) == dev)]
+        ids = {st['station_uuid'] for st in sts}
         scored = [s for s in sts if s['station_uuid'] in recs]
-        wrong = [w for w in lists['wrong'] if w['tester'] in upks]
-        missing = [m for m in lists['missing'] if m['tester'] in upks]
+        wrong = [w for w in lists['wrong'] if w['station'] in ids]
+        missing = [m for m in lists['missing'] if m['station'] in ids]
         values = sum(len(r['fields']) for s in scored for r in stations[s['station_uuid']]['rows'])
-        w = {'right': sum(words.get(u, {}).get('right', 0) for u in upks),
-             'of': sum(words.get(u, {}).get('of', 0) for u in upks)}
+        w = {'right': sum(stations[i]['words']['right'] for i in ids),
+             'of': sum(stations[i]['words']['of'] for i in ids)}
         return {
             'bar1': {'wrong': len(wrong), 'as_spoken': sum(1 for x in wrong if x['as_spoken']),
                      'by_origin': {o: sum(1 for x in wrong if x['origin'] == o) for o in ('proposal', 'edited', 'typed')},
                      'missing': len(missing),
-                     'extra': sum(1 for x in lists['extra'] if x['tester'] in upks),
+                     'extra': sum(1 for x in lists['extra'] if x['station'] in ids),
                      'recordings_scored': len(scored), 'values_checked': values,
                      'pass': None if not scored else len(wrong) == 0},
             'bar2': _bar2(sts),
-            'bar3': _bar3([r for u in upks for r in voice_rows.get(u, [])],
+            'bar3': _bar3([voice_rows[i] for i in sorted(ids) if i in voice_rows],
                           [r for u in upks for r in base_rows.get(u, [])]),
             'words': w,
         }
 
+    def with_devices(upks):
+        out = bars(upks)
+        out['by_device'] = {d: bars(upks, d) for d in DEVICES}
+        return out
+
     all_upks = sorted({st['userpkey'] for st in confirmed} | set(base_rows))
-    by_tester = {str(u): dict(bars({u}), email=(testers.get(u) or {}).get('email'),
+    by_tester = {str(u): dict(with_devices({u}), email=(testers.get(u) or {}).get('email'),
                               name=(testers.get(u) or {}).get('name')) for u in all_upks}
-    overall = bars(set(all_upks))
+    overall = with_devices(set(all_upks))
     b3 = [by_tester[str(u)]['bar3']['pass'] for u in all_upks]
     overall['bar3']['pass_every_tester'] = None if any(p is None for p in b3) or not b3 else all(b3)
     return {
