@@ -1,0 +1,7 @@
+whisper_vad: vad_segment_info: orig_start: 1.85, orig_end: 3.21, vad_start: 0.00, vad_end: 1.36
+whisper_vad: vad_segment_info: orig_start: 4.02, orig_end: 7.72, vad_start: 1.56, vad_end: 5.26
+whisper_vad: vad_segment_info: orig_start: 7.74, orig_end: 14.89, vad_start: 5.46, vad_end: 12.61
+whisper_vad: vad_segment_info: orig_start: 15.03, orig_end: 18.79, vad_start: 12.81, vad_end: 16.57
+whisper_vad: Created time mapping table with 11 points
+whisper_vad: Reduced audio from 333532 to 265120 samples (20.5% reduction)
+Received request: station01_clean.wav

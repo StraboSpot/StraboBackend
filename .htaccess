@@ -22,6 +22,8 @@ RewriteRule ^(straboMicroFiles|microview/smzFiles)/_archive(/|$) - [F,L]
 RewriteRule ^(straboMicroFiles|microview/smzFiles)/_deleted(/|$) - [F,L]
 RewriteRule ^(straboMicroFiles|microview/smzFiles)/[0-9]+/blobs(/|$) - [F,L]
 RewriteRule ^microsync_data(/|$) - [F,L]
+# Voice Stations audio (voicestations_data/, gitignored): never served; streamed only by the /db/ voice endpoints
+RewriteRule ^voicestations_data(/|$) - [F,L]
 # Synced StraboMicro projects have no static project.zip; the app still asks for that URL
 # (getProjectURL, getSharedURL, share codes), so a missing one is streamed by
 # download_micro_file.php (microsync/lib/MsSmz.php). Existing files are served as before.
