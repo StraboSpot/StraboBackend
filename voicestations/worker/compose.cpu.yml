@@ -2,6 +2,11 @@
 # run on the Mac. VS_CPUS in .env caps its CPUs so the web containers keep their
 # share (prod: 16 of 32, matching VS_THREADS; default 4 for the Mac).
 #   docker compose -f compose.cpu.yml up -d --build
+# version 2.4: prod runs docker-compose 1.25, which reads a file without it as
+# the old v1 format; 2.4 is the last format with a plain cpus limit. Build on
+# prod with BuildKit (COMPOSE_DOCKER_CLI_BUILD=1 DOCKER_BUILDKIT=1) or the
+# classic builder also builds the unused CUDA stages.
+version: "2.4"
 services:
   voiceworker:
     build: { context: ., args: { FLAVOR: cpu } }
@@ -11,7 +16,6 @@ services:
     environment: { VS_MODEL_DIR: /models }
     volumes: ["${VS_MODELS_HOST_DIR}:/models:ro"]
     tmpfs: ["/tmp:size=512m,mode=1777"]
-    extra_hosts: ["host.docker.internal:host-gateway"]
     cpus: ${VS_CPUS:-4}
     restart: unless-stopped
     stop_grace_period: 300s
