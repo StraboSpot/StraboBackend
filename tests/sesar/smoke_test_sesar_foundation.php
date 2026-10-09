@@ -70,7 +70,7 @@ try {
 // ===========================================================================
 section('Gate + environment (D10)');
 check('Jason (3) may use it', SesarAccess::canUse(3));
-check('Claire (7217) may not yet (Jason-only soft release)', !SesarAccess::canUse(7217));
+check('Claire (7217) may use it', SesarAccess::canUse(7217));
 check('string "3" (session value) is cast', SesarAccess::canUse('3'));
 check('fixture user may not', !SesarAccess::canUse($U1));
 check('0 / null may not', !SesarAccess::canUse(0) && !SesarAccess::canUse(null));
