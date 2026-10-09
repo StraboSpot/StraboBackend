@@ -13,6 +13,10 @@
  *                - POST /db/voiceconfirm: server-computed counts, resend,
  *                  hand entry on a failed station, discard rules
  *                - POST /db/voiceretry: back to the stage that failed
+ *                - GET/POST /db/voiceconsent (step 6): text, agreement,
+ *                  uploads refused (403 consent_required) without it
+ *                - a confirm stamps the project's "Last Uploaded"
+ *                  (Project.uploaddate); a resend or a discard does not
  *                - data and code folders never served
  *              The worker is simulated with direct SQL (runs + stages).
  *
@@ -22,7 +26,8 @@
  *              maya.chen@ and voicestations-test-b@test.strabospot.org.
  *              Creates test-b and an unlisted user; removes them and every
  *              row and file it made. Also removes ALL of Maya's Voice
- *              Stations rows and audio, so do not keep demo data under her.
+ *              Stations rows, consents and audio, so do not keep demo data
+ *              under her. Restores her project's uploaddate.
  *
  *              Usage: docker exec strabo-php php /srv/app/www/tests/voicestations/api_test.php
  *
@@ -123,6 +128,16 @@ if (!$upkMaya || !$rec) {
 }
 $PID = (string)$rec->value('pid');
 $DID = (string)$rec->value('did');
+function projectUploaddate($set = null) {
+	global $neodb, $upkMaya, $PID;
+	$m = "MATCH (u:User {userpkey: $upkMaya})-[:HAS_PROJECT]->(p:Project) WHERE p.id = $PID OR p.id = '$PID' ";
+	if ($set !== null) {
+		$neodb->query($m . "SET p.uploaddate = $set");
+	}
+	return $neodb->get_var($m . 'RETURN p.uploaddate AS d');
+}
+$UPLOADDATE0 = projectUploaddate();
+$ms->q("DELETE FROM voicestations.consents WHERE userpkey IN ($1, $2, $3)", array($upkMaya, $upkB, $upkC));
 
 $t0 = time() - 3600;
 function iso($t, $ms = 0) { return gmdate('Y-m-d\TH:i:s', $t) . sprintf('.%03dZ', $ms); }
@@ -173,7 +188,8 @@ $ms->q("UPDATE users SET deleted = false WHERE pkey = $1", array($upkC));
 $u = uuid();
 foreach (array(
 	array('GET', '/db/voicestation'), array('POST', '/db/voicestation'), array('GET', "/db/voicebatch/$u"), array('GET', "/db/voiceaudio/$u"),
-	array('POST', "/db/voiceconfirm/$u"), array('POST', "/db/voiceretry/$u")) as $r) {
+	array('POST', "/db/voiceconfirm/$u"), array('POST', "/db/voiceretry/$u"),
+	array('GET', '/db/voiceconsent'), array('POST', '/db/voiceconsent')) as $r) {
 	$x = req($r[0], $r[1], $C, array('json' => '{}'));
 	check("unlisted account: {$r[0]} {$r[1]} = 403 not_available",
 		$x['code'] === 403 && $x['json']['code'] === 'not_available' && isset($x['json']['Error']), $x['code'] . ' ' . $x['body']);
@@ -182,7 +198,8 @@ section('Access check: GET /db/voicestation (step 4 point 3)');
 $x = req('GET', '/db/voicestation', $MAYA);
 check('listed account: 200 available + limits',
 	$x['code'] === 200 && $x['json'] === array('available' => true, 'max_seconds' => VsConfig::MAX_SECONDS,
-		'max_bytes' => VsConfig::MAX_AUDIO_BYTES, 'max_photos' => VsConfig::MAX_PHOTOS), $x['code'] . ' ' . $x['body']);
+		'max_bytes' => VsConfig::MAX_AUDIO_BYTES, 'max_photos' => VsConfig::MAX_PHOTOS,
+		'consent' => array('version' => VsConfig::CONSENT_VERSION, 'accepted' => false)), $x['code'] . ' ' . $x['body']);
 check('access check answers JSON', isset($x['headers']['content-type']) && strpos($x['headers']['content-type'], 'application/json') === 0, $x['headers']);
 $x = req('GET', "/db/voicestation/$u", $MAYA);
 check('GET /db/voicestation/{id} = 404', $x['code'] === 404, $x['code'] . ' ' . $x['body']);
@@ -190,6 +207,48 @@ $x = req('GET', '/db/voicestation', array($MAYA[0], 'wrong-password'));
 check('access check, wrong password stops at Apache (401)', $x['code'] === 401, $x['code']);
 $x = req('GET', "/db/voicebatch/$u", array($MAYA[0], 'wrong-password'));
 check('wrong password stops at Apache (401)', $x['code'] === 401, $x['code']);
+
+// ---------------------------------------------------------------- consent
+section('Consent (step 6)');
+$x = req('GET', '/db/voiceconsent', $MAYA);
+check('GET: current version, not agreed yet, the full text',
+	$x['code'] === 200 && $x['json']['version'] === VsConfig::CONSENT_VERSION && $x['json']['accepted_at'] === null
+	&& $x['json']['text']['version'] === VsConfig::CONSENT_VERSION && count($x['json']['text']['sections']) === 5
+	&& strpos(json_encode($x['json']['text']), 'strabospot@gmail.com') !== false, $x['body']);
+check('GET /db/voiceconsent/{x} = 404', req('GET', '/db/voiceconsent/1', $MAYA)['code'] === 404);
+$SC = uuid();
+$x = upload($MAYA, details($SC, uuid(), array($SC)));
+check('upload before agreeing -> 403 consent_required, nothing stored',
+	$x['code'] === 403 && $x['json']['code'] === 'consent_required'
+	&& (int)$ms->val("SELECT count(*) FROM voicestations.stations WHERE station_uuid = $1", array($SC)) === 0, $x['body']);
+// agreeing to an older text does not count once the text has changed
+$ms->q("INSERT INTO voicestations.consents (userpkey, version) VALUES ($1, $2)", array($upkMaya, VsConfig::CONSENT_VERSION - 1));
+$x = upload($MAYA, details($SC, uuid(), array($SC)));
+check('agreed only to an older version: upload still 403 consent_required', $x['code'] === 403 && $x['json']['code'] === 'consent_required', $x['body']);
+check('... and the access check says not accepted', req('GET', '/db/voicestation', $MAYA)['json']['consent']['accepted'] === false);
+$ms->q("DELETE FROM voicestations.consents WHERE userpkey = $1", array($upkMaya));
+foreach (array(
+	array('no version', new stdClass(), 400, 'version'),
+	array('version as text', array('version' => '1'), 400, 'version'),
+	array('app_version too long', array('version' => VsConfig::CONSENT_VERSION, 'app_version' => str_repeat('x', 101)), 400, 'app_version'),
+	array('device_model not text', array('version' => VsConfig::CONSENT_VERSION, 'device_model' => 5), 400, 'device_model'),
+) as $b) {
+	$x = req('POST', '/db/voiceconsent', $MAYA, array('json' => $b[1]));
+	check("POST {$b[0]} -> {$b[2]} field {$b[3]}", $x['code'] === $b[2] && $x['json']['field'] === $b[3], $x['body']);
+}
+$x = req('POST', '/db/voiceconsent', $MAYA, array('json' => array('version' => VsConfig::CONSENT_VERSION + 1)));
+check('POST another version -> 409 consent_outdated', $x['code'] === 409 && $x['json']['code'] === 'consent_outdated', $x['body']);
+check('... nothing stored by the refused ones', (int)$ms->val("SELECT count(*) FROM voicestations.consents WHERE userpkey = $1", array($upkMaya)) === 0);
+$x = req('POST', '/db/voiceconsent', $MAYA, array('json' => array('version' => VsConfig::CONSENT_VERSION, 'app_version' => '0.1.0 (12, abc1234)', 'device_model' => 'iPhone13,4')));
+check('POST agree -> 201 with the time', $x['code'] === 201 && $x['json']['existing'] === false
+	&& preg_match('/^\d{4}-\d{2}-\d{2}T/', (string)$x['json']['accepted_at']), $x['body']);
+$x = req('POST', '/db/voiceconsent', $MAYA, array('json' => array('version' => VsConfig::CONSENT_VERSION)));
+check('POST again -> 200 existing, still one row, app details kept',
+	$x['code'] === 200 && $x['json']['existing'] === true
+	&& $ms->val("SELECT string_agg(app_version || ' ' || device_model, ',') FROM voicestations.consents WHERE userpkey = $1", array($upkMaya)) === '0.1.0 (12, abc1234) iPhone13,4', $x['body']);
+check('GET now has accepted_at', req('GET', '/db/voiceconsent', $MAYA)['json']['accepted_at'] !== null);
+check('access check now says accepted', req('GET', '/db/voicestation', $MAYA)['json']['consent']['accepted'] === true);
+check('test-b agrees too', req('POST', '/db/voiceconsent', $B, array('json' => array('version' => VsConfig::CONSENT_VERSION)))['code'] === 201);
 
 // ---------------------------------------------------------------- upload checks
 section('Upload: details checks (400 naming the field, nothing stored)');
@@ -395,14 +454,18 @@ check('confirm naming an older proposal -> 409 stale_proposal, nothing stored',
 	&& $ms->val("SELECT count(*) FROM voicestations.confirms WHERE station_id = $1", array($id1)) === '0', $x['body']);
 $x = req('POST', "/db/voiceconfirm/$S1", $MAYA, array('json' => 'not json'));
 check('body not JSON -> 400', $x['code'] === 400);
+projectUploaddate(1);
 $x = req('POST', "/db/voiceconfirm/$S1", $MAYA, array('json' => $conf));
+check('confirm stamps the project\'s Last Uploaded (Project.uploaddate)', (int)projectUploaddate() >= time() - 60);
 $want = array('proposed' => 4, 'unchanged' => 2, 'edited' => 1, 'removed' => 1, 'added' => 1, 'flags' => 1);
 check('confirm -> 201 with counts computed by the server', $x['code'] === 201 && $x['json']['counts'] === $want
 	&& $x['json']['spot_ids'] === $conf['spot_ids'] && $x['json']['existing'] === false, $x['body']);
 $c = $ms->row("SELECT c.*, s.confirmed_at FROM voicestations.confirms c JOIN voicestations.stations s ON s.id = c.station_id WHERE s.id = $1", array($id1));
 check('confirm row: proposal run, record kept, station confirmed_at set',
 	(int)$c['proposal_run_id'] === (int)$pr1 && json_decode($c['record'])->values[2]->to === 32 && $c['confirmed_at'] !== null && (int)$c['n_unchanged'] === 2);
+projectUploaddate(1);
 $x = req('POST', "/db/voiceconfirm/$S1", $MAYA, array('json' => array('outcome' => 'discarded')));
+check('a resend does not stamp it again', (int)projectUploaddate() === 1);
 check('resend (even a different one) -> 200 the stored record', $x['code'] === 200 && $x['json']['existing'] === true
 	&& $x['json']['outcome'] === 'confirmed' && $x['json']['counts'] === $want, $x['body']);
 $x = req('GET', "/db/voicebatch/$BATCH", $MAYA);
@@ -444,7 +507,9 @@ check('retry after confirm -> 409', req('POST', "/db/voiceretry/$S2", $MAYA)['co
 // discard while still processing (P6.7)
 $B2 = uuid(); $S4 = uuid();
 upload($MAYA, details($S4, $B2, array($S4)));
+projectUploaddate(1);
 $x = req('POST', "/db/voiceconfirm/$S4", $MAYA, array('json' => array('outcome' => 'discarded', 'review_seconds' => 3)));
+check('a discard does not stamp Last Uploaded', (int)projectUploaddate() === 1);
 check('discard a station still uploaded -> 201, discarded_at set, no Spots',
 	$x['code'] === 201 && $x['json']['outcome'] === 'discarded' && $x['json']['spot_ids'] === array()
 	&& $ms->val("SELECT discarded_at IS NOT NULL FROM voicestations.stations WHERE station_uuid = $1", array($S4)) === 't', $x['body']);
@@ -470,6 +535,10 @@ try {
 		}
 		@rmdir("$ROOT/audio/$u");
 		$ms->q("DELETE FROM voicestations.batches WHERE userpkey = $1", array($u));
+	}
+	$ms->q("DELETE FROM voicestations.consents WHERE userpkey IN ($1, $2, $3)", array($upkMaya, $upkB, $upkC));
+	if (isset($UPLOADDATE0)) {
+		projectUploaddate($UPLOADDATE0 === null ? 'null' : (int)$UPLOADDATE0);
 	}
 	$ms->q("DELETE FROM users WHERE pkey IN ($1, $2)", array($upkB, $upkC));
 	array_map('unlink', glob("$W/*"));

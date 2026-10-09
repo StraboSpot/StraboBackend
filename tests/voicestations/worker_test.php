@@ -201,6 +201,8 @@ function wipe() {
 }
 
 wipe();
+// uploads need the current consent (step 6); add it only if missing, remove only ours
+$consentAdded = (int)$ms->val("WITH ins AS (INSERT INTO voicestations.consents (userpkey, version) VALUES ($1, $2) ON CONFLICT DO NOTHING RETURNING 1) SELECT count(*) FROM ins", array($upkMaya, VsConfig::CONSENT_VERSION)) === 1;
 try {
 
 // ---------------------------------------------------------------- auth
@@ -549,6 +551,9 @@ check('4 parallel claims, 2 stations: two 200s with different stations, two 204s
 
 } finally {
 	wipe();
+	if ($consentAdded) {
+		$ms->q("DELETE FROM voicestations.consents WHERE userpkey = $1 AND version = $2", array($upkMaya, VsConfig::CONSENT_VERSION));
+	}
 }
 
 echo "\n" . (count($failures) === 0 ? 'ALL PASSED' : count($failures) . ' FAILED: ' . implode('; ', $failures)) . "\n";
