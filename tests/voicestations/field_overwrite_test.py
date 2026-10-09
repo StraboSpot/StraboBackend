@@ -5,6 +5,8 @@ older copy, while ordinary StraboField Spots still delete and replace.
 
 Run from the Mac (dev server on http://localhost, demo account maya.chen):
   python3 -I tests/voicestations/field_overwrite_test.py [--keep]
+  (prod: VS_BASE=https://strabospot.org/db VS_LOGIN=<email>:<password>; python -I ignores
+  PYTHON* variables only, so these still apply)
 Makes one scratch project per scenario and deletes them unless --keep.
 Without the guard (db/controllers/DatasetSpotsController.php) B, C and F fail.
 
@@ -16,10 +18,12 @@ modified_timestamp); ONLY if the reply has modified_on_server true, POST
 Strabo Voice upload: GET /db/datasetSpots/{d}, add its Spots (server copy
 wins), POST /db/datasetSpots/{d}.
 """
-import base64, json, sys, time, urllib.request, urllib.error
+import base64, json, os, sys, time, urllib.request, urllib.error
 
-BASE = 'http://localhost/db'
-AUTH = 'Basic ' + base64.b64encode(b'maya.chen@test.strabospot.org:demopass123').decode()
+# VS_BASE / VS_LOGIN (email:password) point it elsewhere, e.g. prod with the
+# trial review account (10-09).
+BASE = os.environ.get('VS_BASE', 'http://localhost/db')
+AUTH = 'Basic ' + base64.b64encode(os.environ.get('VS_LOGIN', 'maya.chen@test.strabospot.org:demopass123').encode()).decode()
 results = []
 
 
