@@ -467,13 +467,21 @@ class VsService {
 			VsLog::error("audio file missing for station $stationUuid: $path");
 			throw VsHttp::notFound();
 		}
+		self::sendAudio($path, $s['audio_mime']);
+	}
+
+	/**
+	 * Stream an audio file with Range support (seeking in a player), then
+	 * exit. Shared by GET /db/voiceaudio (owner) and the scoring page.
+	 */
+	public static function sendAudio($path, $mime) {
 		$size = filesize($path);
 		$start = 0;
 		$end = $size - 1;
 		$status = 200;
 		if (isset($_SERVER['HTTP_RANGE'])) {
 			if (!preg_match('/^bytes=(\d*)-(\d*)$/', trim($_SERVER['HTTP_RANGE']), $m) || ($m[1] === '' && $m[2] === '')) {
-				$this->rangeNotSatisfiable($size);
+				self::rangeNotSatisfiable($size);
 			}
 			if ($m[1] === '') {                 // last N bytes
 				$start = max(0, $size - (int)$m[2]);
@@ -484,7 +492,7 @@ class VsService {
 				}
 			}
 			if ($start > $end || $start >= $size) {
-				$this->rangeNotSatisfiable($size);
+				self::rangeNotSatisfiable($size);
 			}
 			$status = 206;
 		}
@@ -492,7 +500,7 @@ class VsService {
 			ob_end_clean();
 		}
 		http_response_code($status);
-		header('Content-Type: ' . ($s['audio_mime'] ?: 'audio/mp4'));
+		header('Content-Type: ' . ($mime ?: 'audio/mp4'));
 		header('Accept-Ranges: bytes');
 		header('Cache-Control: private, no-store');
 		header('Content-Length: ' . ($end - $start + 1));
@@ -512,7 +520,7 @@ class VsService {
 		exit;
 	}
 
-	private function rangeNotSatisfiable($size) {
+	private static function rangeNotSatisfiable($size) {
 		http_response_code(416);
 		header("Content-Range: bytes */$size");
 		exit;
