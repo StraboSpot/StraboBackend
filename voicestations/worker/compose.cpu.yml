@@ -1,5 +1,6 @@
 # CPU worker: prod fallback (claims after the server-side delay, 120 s) or a dev
-# run on the Mac. On prod cap it so the web containers keep their share.
+# run on the Mac. VS_CPUS in .env caps its CPUs so the web containers keep their
+# share (prod: 16 of 32, matching VS_THREADS; default 4 for the Mac).
 #   docker compose -f compose.cpu.yml up -d --build
 services:
   voiceworker:
@@ -11,6 +12,7 @@ services:
     volumes: ["${VS_MODELS_HOST_DIR}:/models:ro"]
     tmpfs: ["/tmp:size=512m,mode=1777"]
     extra_hosts: ["host.docker.internal:host-gateway"]
+    cpus: ${VS_CPUS:-4}
     restart: unless-stopped
     stop_grace_period: 300s
     logging: { driver: json-file, options: { max-size: 10m, max-file: "3" } }

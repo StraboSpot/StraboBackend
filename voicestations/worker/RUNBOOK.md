@@ -46,6 +46,7 @@ cp env.example .env          # then fill it in; chmod 600 .env
 | `VS_EXTRACT_SLOTS` | `4` extractions at once (default) |
 | `VS_EXTRACT_PROVIDER` | `anthropic` (default). `ollama` = the MANUAL offline switch: one extraction at a time, whisper's model unloaded around it on the GPU, `VS_EXTRACT_MODEL=qwen3:14b`. It FAILED the gate 10-07 (7 values dropped as split digits, none wrong), so use it only when Claude cannot be |
 | `VS_THREADS` | 8 on gpubox, 16 on prod (benchmarked 09-28) |
+| `VS_CPUS` | CPU worker only: container CPU cap, 16 on prod (of 32) so the web keeps its share; default 4 |
 | `VS_MODELS_HOST_DIR` | folder with `ggml-large-v3-turbo.bin` + `ggml-silero-v5.1.2.bin` |
 
 ## 3. Run it
