@@ -38,6 +38,7 @@ class VsConfig {
 	const MAX_SPOT_IDS        = 50;
 	const AUDIO_MIMES         = array('audio/mp4', 'audio/x-m4a');
 	const STRIKE_CONVENTIONS  = array('rhr', 'dip_direction');
+	const RECORDED_ON         = array('phone', 'watch');   // missing = phone (builds before the watch app)
 
 	// Consent the tester agrees to in the app (step 6). Its text is
 	// voicestations/consent/consent_v<N>.json; changing the text = a new file

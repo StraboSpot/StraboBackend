@@ -159,6 +159,7 @@ def run():
             failures.append(label)
 
     export = fixture()
+    export['stations'][1]['recorded_on'] = 'watch'   # V-02 made on the watch; the rest send nothing (= phone)
     with tempfile.TemporaryDirectory() as d:
         write_sheets(export, d)
         key, problems, sha = C.convert(d, export)
@@ -233,6 +234,27 @@ def run():
               t2['bar3']['voice']['per_measurement']['median'] == 80.0
               and t2['bar3']['baseline']['per_measurement']['median'] == 90.0, t2['bar3'])
         check('words: feature types + line on its plane', o['words']['of'] >= 4 and o['words']['right'] >= 4, o['words'])
+        p1, w1 = t1['by_device']['phone'], t1['by_device']['watch']
+        check('by device, Claire: phone V-01 3 wrong, watch V-02 2 wrong (the line l9)',
+              (p1['bar1']['wrong'], w1['bar1']['wrong']) == (3, 2) and w1['bar1']['recordings_scored'] == 1,
+              (p1['bar1'], w1['bar1']))
+        check('by device, Claire bar 3: phone 20 s, watch 30 s per measurement, same stopwatch 60 s',
+              p1['bar3']['voice']['per_measurement']['median'] == 20.0
+              and w1['bar3']['voice']['per_measurement']['median'] == 30.0
+              and w1['bar3']['baseline']['per_measurement']['median'] == 60.0, (p1['bar3'], w1['bar3']))
+        w2 = t2['by_device']['watch']
+        check('by device, Doug: no watch recordings -> nothing scored, no verdict',
+              w2['bar1']['recordings_scored'] == 0 and w2['bar1']['pass'] is None and w2['bar2']['spots'] == 0
+              and w2['bar2']['share'] is None, w2)
+        op, ow = o['by_device']['phone'], o['by_device']['watch']
+        check('by device, overall: phone + watch add up to all (wrong, Spots, values checked, words)',
+              op['bar1']['wrong'] + ow['bar1']['wrong'] == o['bar1']['wrong']
+              and op['bar2']['spots'] + ow['bar2']['spots'] == o['bar2']['spots']
+              and op['bar1']['values_checked'] + ow['bar1']['values_checked'] == o['bar1']['values_checked']
+              and op['words']['of'] + ow['words']['of'] == o['words']['of'], (op['bar1'], ow['bar1']))
+        check('station entry says where it was recorded',
+              res['stations']['00000000-0000-4000-8000-000000000002']['recorded_on'] == 'watch'
+              and res['stations']['00000000-0000-4000-8000-000000000001']['recorded_on'] == 'phone')
     # broken rows never get guessed: each lands on the problem list
     export = fixture()
     with tempfile.TemporaryDirectory() as d:

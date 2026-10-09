@@ -168,9 +168,9 @@ class VsService {
 				    started_at, ended_at, tz_offset_minutes, gps_fixes,
 				    best_lat, best_lon, best_alt, best_accuracy, best_fix_at,
 				    photos, strike_convention, app_version, device_model, details,
-				    audio_mime, audio_seconds)
+				    audio_mime, audio_seconds, recorded_on, watch_model)
 				 VALUES ($1, $2, $3, $4, $5, $6::jsonb, $7, $8, $9, $10::jsonb,
-				         $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19, $20::jsonb, $21, $22)
+				         $11, $12, $13, $14, $15, $16::jsonb, $17, $18, $19, $20::jsonb, $21, $22, $23, $24)
 				 ON CONFLICT (station_uuid) DO NOTHING
 				 RETURNING id",
 				array(
@@ -181,6 +181,7 @@ class VsService {
 					$v['best'] ? $v['best']['time'] : null,
 					$v['photos'], $v['strike_convention'], $v['app_version'], $v['device_model'],
 					json_encode($d, VsHttp::JSON_OUT), $v['audio_mime'], $v['audio_seconds'],
+					$v['recorded_on'], $v['watch_model'],
 				));
 
 			if ($row === null) {
