@@ -24,6 +24,14 @@
 include_once "../includes/config.inc.php";
 include_once "../db.php"; // at global scope: it reads config's globals; connects lazily
 require_once "../voicestations/lib/bootstrap.php";
+// Scoring reads Neo4j (uploaded Spots, Stopwatch Spots). neodb.php reads
+// config globals, so it loads here at global scope, and only for score/*.
+if (strpos((string)parse_url($_SERVER['REQUEST_URI'], PHP_URL_PATH), '/voiceworker/v1/score/') !== false) {
+	include_once "../neodb.php";
+	require_once "../db/strabospotclass.php";
+	include_once "../includes/geophp/geoPHP.inc";
+	include_once "../includes/UUID.php";
+}
 
 const VOICEWORKER_API_VERSION = 1;
 
@@ -39,6 +47,24 @@ VsHttp::run(function () use ($db) {
 
 	if ($route === 'ping' && $method === 'GET') {
 		return array(200, array('ok' => true, 'apiVersion' => VOICEWORKER_API_VERSION));
+	}
+
+	// Scoring (step 6): its own token (VOICESTATIONS_SCORER); worker tokens
+	// never reach these, the scorer token never reaches the job routes.
+	if (preg_match('#^score/(export|results)$#', $route, $sm)) {
+		$want = $sm[1] === 'export' ? 'GET' : 'POST';
+		if ($method !== $want) {
+			throw new VsHttpError(405, 'method_not_allowed', "$method is not supported here.");
+		}
+		$auth = isset($_SERVER['HTTP_AUTHORIZATION']) ? $_SERVER['HTTP_AUTHORIZATION']
+			: (isset($_SERVER['REDIRECT_HTTP_AUTHORIZATION']) ? $_SERVER['REDIRECT_HTTP_AUTHORIZATION'] : '');
+		if (!VsScore::authorized($auth, defined('VOICESTATIONS_SCORER') ? VOICESTATIONS_SCORER : null)) {
+			header('WWW-Authenticate: Bearer');
+			throw new VsHttpError(401, 'unauthorized', 'A valid scorer token is required.');
+		}
+		global $neodb;
+		$score = new VsScore($db, $neodb);
+		return $sm[1] === 'export' ? $score->export() : $score->saveResults();
 	}
 
 	$uuid = '([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})';

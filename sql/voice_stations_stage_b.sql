@@ -5,6 +5,11 @@
 -- an account without a row for the current version (403 consent_required).
 -- A tester who withdraws has every Voice Stations row removed, this one too.
 --
+-- scores: one row per scorer run (scoring page point 6d). The Python scorer
+-- does all the math and posts its results here; the scoring page only shows
+-- them. key_sha256 = the answer key (sheets + corrections log) it scored
+-- against, so runs before and after a key correction both stay visible.
+--
 -- Design: docs/AlternateStraboFieldIdea/Phase1_Plan.md, build order step 6.
 --
 -- Deploy: apply BEFORE pulling the code that references it, as postgres.
@@ -24,7 +29,15 @@ CREATE TABLE IF NOT EXISTS voicestations.consents (
   UNIQUE (userpkey, version)
 );
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON voicestations.consents TO strabodbuser;
-GRANT USAGE, SELECT ON SEQUENCE voicestations.consents_id_seq TO strabodbuser;
+CREATE TABLE IF NOT EXISTS voicestations.scores (
+  id             bigserial   PRIMARY KEY,
+  created_at     timestamptz NOT NULL DEFAULT now(),
+  scorer_version text        NOT NULL,
+  key_sha256     text        NOT NULL,
+  results        jsonb       NOT NULL
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON voicestations.consents, voicestations.scores TO strabodbuser;
+GRANT USAGE, SELECT ON SEQUENCE voicestations.consents_id_seq, voicestations.scores_id_seq TO strabodbuser;
 
 COMMIT;

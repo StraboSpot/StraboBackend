@@ -112,3 +112,24 @@ right feature type, 5/5 flags (and the scorer's self-test OK). About $0.20 per r
 10-07 results: Opus 5.5 high PASS (13/13, 0 wrong, 0 missing, flags 5/5, extras 10/10,
 ~$0.20); medium PASS (same scores, ~17% fewer output tokens); qwen3:14b (think) FAIL
 (0 wrong but 7 missing: it read "045" as 0 and the split-digit check dropped it).
+
+## Scoring the trial (step 6)
+
+The scorer runs on any machine with Python 3 (the Mac is fine), not in the worker image:
+
+```bash
+python3 -m venv ~/.venvs/vsscore && ~/.venvs/vsscore/bin/pip install -r requirements-score.txt
+export VS_SCORER_TOKEN=<plain scorer token>      # its sha256 = VOICESTATIONS_SCORER in config.inc.php
+export VS_SCORE_URL=https://strabospot.org/voiceworker/v1
+P=~/.venvs/vsscore/bin/python
+$P -m vsworker.score selftest                                    # the rules on a made-up trial
+$P -m vsworker.score export  --out export.json                   # read-only export
+$P -m vsworker.score sheets  --export export.json --out SHEETS   # one answer sheet per tester per outing
+$P -m vsworker.score convert --export export.json --sheets SHEETS   # problem list; must be empty
+$P -m vsworker.score score   --export export.json --sheets SHEETS --post [--conversions-checked]
+```
+
+Returned sheets go in the gitignored `docs/AlternateStraboFieldIdea/Trial/AnswerKeys/` and are never
+edited; a correction is a line in `corrections.csv` there (date, tester, spot, n, field, old, new,
+reason, decided_by). `--post` stores the run in `voicestations.scores`; the page
+`/voicestations_score.php` shows it (VOICESTATIONS_SCORERS only).
