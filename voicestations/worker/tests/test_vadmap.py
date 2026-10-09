@@ -63,6 +63,28 @@ class Normalize(unittest.TestCase):
         self.assertEqual(method, 'segment_shifted')
         self.assertAlmostEqual(out['words'][0]['start'], out['segments'][0]['start'])
 
+    def test_word_split_across_segments_rejoined(self):
+        # prod 10-09: "grained" came back as segment "... medium gra" + "ined with ..."
+        raw = json.dumps({'segments': [
+            {'start': 0.86, 'end': 4.5, 'text': ' It is medium gra', 'words': [
+                {'word': ' It', 'start': 0.86, 'end': 1.1, 'probability': 0.9},
+                {'word': ' is', 'start': 1.1, 'end': 1.3, 'probability': 0.9},
+                {'word': ' medium', 'start': 3.78, 'end': 4.1, 'probability': 0.99},
+                {'word': ' gra', 'start': 4.27, 'end': 4.5, 'probability': 0.89}]},
+            {'start': 4.5, 'end': 6.76, 'text': 'ined with shale.', 'words': [
+                {'word': 'ined', 'start': 4.5, 'end': 4.82, 'probability': 0.9998},
+                {'word': ' with', 'start': 4.82, 'end': 5.14, 'probability': 0.6},
+                {'word': ' shale.', 'start': 6.1, 'end': 6.76, 'probability': 0.99}]},
+            {'start': 7.52, 'end': 9.0, 'text': ' Bedding.', 'words': [
+                {'word': ' Bedding.', 'start': 7.52, 'end': 9.0, 'probability': 0.96}]}]})
+        out, _ = normalize(raw, [])
+        self.assertEqual(out['text'], 'It is medium grained with shale. Bedding.')
+        self.assertEqual([x['w'] for x in out['words']],
+                         ['It', 'is', 'medium', 'grained', 'with', 'shale.', 'Bedding.'])
+        g = out['words'][3]
+        self.assertEqual((g['start'], g['end'], g['p']), (4.27, 4.82, 0.89))
+        self.assertEqual(len(out['segments']), 3)
+
     def test_silence(self):
         out, method = normalize(json.dumps({'text': '', 'segments': []}), [])
         self.assertEqual((out, method), ({'text': '', 'segments': [], 'words': []}, 'none'))

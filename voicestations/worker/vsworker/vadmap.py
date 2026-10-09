@@ -78,8 +78,9 @@ def normalize(raw_text, log_lines):
             p = None if p is None else round(float(p), 4)
             piece = w.get('word', '')
             # whisper "words" are tokens: a new word starts with a space; anything
-            # else ("ding" after "bed", "45" after "0", ",") continues the last one
-            if out_words and k > 0 and not piece.startswith(' '):
+            # else ("ding" after "bed", "45" after "0", ",") continues the last one,
+            # also across a segment break ("gra" | "ined" = "grained")
+            if out_words and not piece.startswith(' '):
                 last = out_words[-1]
                 last['w'] += piece
                 last['end'] = r2(max(last['end'], e))
@@ -89,5 +90,12 @@ def normalize(raw_text, log_lines):
             out_words.append({'w': piece.strip(), 'start': r2(s), 'end': r2(max(s, e)), 'p': p})
     if not out_words:
         method = 'none'
-    text = ' '.join(s['text'] for s in out_segs if s['text'])
+    # Segments are joined with a space, except one that starts without a space:
+    # whisper split a word across the break, so it continues the last word
+    text = ''
+    for g, s in zip(segs, out_segs):
+        if not s['text']:
+            continue
+        joined = text and not g.get('text', '')[:1].isspace()
+        text += s['text'] if joined or not text else ' ' + s['text']
     return {'text': text, 'segments': out_segs, 'words': out_words}, method
