@@ -8,8 +8,9 @@
  * stakeholders.
  *
  * USAGE:
- *   Command line: php user_metrics.php [--format=text|json|csv] [--min-spots=N]
- *   Web browser:  Access directly (requires no authentication)
+ *   Command line only: php user_metrics.php [--format=text|json|csv] [--min-spots=N]
+ *   On prod: docker exec strabo-php php /srv/app/www/user_metrics.php --format=json
+ *   (Web requests get 403: it needed no login and ran whole-database queries on every hit.)
  *
  * OPTIONS:
  *   --format     Output format: text (default), json, or csv
@@ -46,37 +47,21 @@ $DEFAULT_MIN_SPOTS = 5;
 // INITIALIZATION
 // ============================================================================
 
-// Parse command-line arguments if running from CLI
-$isCli = (php_sapi_name() === 'cli');
+if (php_sapi_name() !== 'cli') {
+    http_response_code(403);
+    exit("CLI only.\n");
+}
+
+// Parse command-line arguments
 $outputFormat = 'text';
 $minSpots = $DEFAULT_MIN_SPOTS;
 
-if ($isCli) {
-    $options = getopt('', ['format:', 'min-spots:']);
-    if (isset($options['format'])) {
-        $outputFormat = $options['format'];
-    }
-    if (isset($options['min-spots'])) {
-        $minSpots = (int)$options['min-spots'];
-    }
-} else {
-    // Web request - check query parameters
-    if (isset($_GET['format'])) {
-        $outputFormat = $_GET['format'];
-    }
-    if (isset($_GET['min-spots'])) {
-        $minSpots = (int)$_GET['min-spots'];
-    }
-
-    // Set appropriate content type for web
-    if ($outputFormat === 'json') {
-        header('Content-Type: application/json');
-    } elseif ($outputFormat === 'csv') {
-        header('Content-Type: text/csv');
-        header('Content-Disposition: attachment; filename="strabospot_metrics.csv"');
-    } else {
-        header('Content-Type: text/plain');
-    }
+$options = getopt('', ['format:', 'min-spots:']);
+if (isset($options['format'])) {
+    $outputFormat = $options['format'];
+}
+if (isset($options['min-spots'])) {
+    $minSpots = (int)$options['min-spots'];
 }
 
 // Load database credentials and connections
