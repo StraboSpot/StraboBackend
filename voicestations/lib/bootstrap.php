@@ -18,6 +18,7 @@ require_once __DIR__ . '/VsHttp.php';
 require_once __DIR__ . '/VsDetails.php';
 require_once __DIR__ . '/VsService.php';
 require_once __DIR__ . '/VsWorker.php';
+require_once __DIR__ . '/VsScore.php';
 
 /** Build the service for this request and check the tester gate. */
 function voicestations_service($strabo) {

@@ -39,8 +39,23 @@ class VsConfig {
 	const AUDIO_MIMES         = array('audio/mp4', 'audio/x-m4a');
 	const STRIKE_CONVENTIONS  = array('rhr', 'dip_direction');
 
+	// Consent the tester agrees to in the app (step 6). Its text is
+	// voicestations/consent/consent_v<N>.json; changing the text = a new file
+	// and a bump here, and every tester is asked again.
+	const CONSENT_VERSION     = 1;
+
 	public static function dataRoot() {
 		return dirname(dirname(__DIR__)) . '/voicestations_data';
+	}
+
+	/** The current consent text (decoded JSON object). */
+	public static function consentText() {
+		$f = dirname(__DIR__) . '/consent/consent_v' . self::CONSENT_VERSION . '.json';
+		$c = json_decode((string)@file_get_contents($f));
+		if (!is_object($c) || !isset($c->version) || $c->version !== self::CONSENT_VERSION) {
+			throw new Exception('consent text missing or wrong version: ' . $f);
+		}
+		return $c;
 	}
 
 	/** May this account use Voice Stations? */

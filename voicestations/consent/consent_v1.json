@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "title": "Strabo Voice trial: what you are agreeing to",
+  "intro": "Strabo Voice is a test app. You press Record, talk through your measurements while you take them, and the app proposes the values for a Spot. You check every value before anything is saved. We are testing whether this is accurate and faster than entering Spots by hand.",
+  "sections": [
+    {
+      "heading": "What gets recorded",
+      "items": [
+        "Your voice, from Record to Stop. The microphone also picks up anything else nearby, including other people talking. Please let people around you know, or pause before a conversation you do not want recorded.",
+        "Your GPS location during each recording.",
+        "Photos you take stay on your phone until you confirm a Spot; then they go to your StraboField project like any other Spot photo."
+      ]
+    },
+    {
+      "heading": "Where it goes",
+      "items": [
+        "Audio is uploaded to StraboSpot and turned into text on StraboSpot computers. Audio is never sent to anyone else.",
+        "The text of what you said, and the Spot data, are sent to Anthropic's Claude service, which proposes the values you review. Under Anthropic's commercial terms, Anthropic may not train its models on this content, and it deletes it within 30 days, unless it is flagged for misuse or the law requires it to be kept. Terms: https://www.anthropic.com/legal/commercial-terms",
+        "Spots you confirm go into your own StraboField project, like any other Spot."
+      ]
+    },
+    {
+      "heading": "What we keep, and for how long",
+      "items": [
+        "For each recording: the audio, the text, the proposed values, what you changed when you reviewed it, how long recording and review took, and the GPS fixes.",
+        "Audio behind a Spot you confirmed is kept as the record of where that Spot came from: until the Strabo Voice project ends, or until you ask us to delete it.",
+        "Audio from a recording you discard is deleted after 30 days.",
+        "Only Jason Ash sees other people's recordings, to score the trial. Other testers see only their own."
+      ]
+    },
+    {
+      "heading": "How results are used",
+      "items": [
+        "Results are reported as numbers (how many values were right, how many you changed, how long it took), for example in grant proposals and papers. Your recordings are never published, and never shared in a dataset, unless you agree to that separately later."
+      ]
+    },
+    {
+      "heading": "Your choices",
+      "items": [
+        "Taking part is voluntary. You can stop at any time.",
+        "You can ask for all your recordings and their text to be deleted at any time by emailing strabospot@gmail.com. Spots you already confirmed stay in your StraboField project; they are yours."
+      ]
+    }
+  ],
+  "closing": "By tapping I agree, you agree to the above. If this text changes, the app asks again."
+}

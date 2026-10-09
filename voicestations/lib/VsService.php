@@ -51,6 +51,75 @@ class VsService {
 			'max_seconds' => VsConfig::MAX_SECONDS,
 			'max_bytes' => VsConfig::MAX_AUDIO_BYTES,
 			'max_photos' => VsConfig::MAX_PHOTOS,
+			'consent' => array(
+				'version' => VsConfig::CONSENT_VERSION,
+				'accepted' => $this->consentAcceptedAt() !== null,
+			),
+		));
+	}
+
+	// ---------------------------------------------------------------- consent
+
+	/** When this account agreed to the current consent text (ISO), or null. */
+	private function consentAcceptedAt() {
+		return $this->db->val(
+			"SELECT " . MsDb::iso('accepted_at') . " FROM voicestations.consents
+			  WHERE userpkey = $1 AND version = $2",
+			array($this->upk, VsConfig::CONSENT_VERSION));
+	}
+
+	/** Uploads need the current consent (step 6 consent point 2). */
+	private function requireConsent() {
+		if ($this->consentAcceptedAt() === null) {
+			throw new VsHttpError(403, 'consent_required',
+				'Read and agree to the Strabo Voice trial terms in the app before uploading recordings.');
+		}
+	}
+
+	/** GET /db/voiceconsent: the current text and whether this account agreed. */
+	public function getConsent() {
+		return array(200, array(
+			'version' => VsConfig::CONSENT_VERSION,
+			'accepted_at' => $this->consentAcceptedAt(),
+			'text' => VsConfig::consentText(),
+		));
+	}
+
+	/**
+	 * POST /db/voiceconsent {"version": N, "app_version", "device_model"}:
+	 * the tester tapped I agree. 201 new, 200 already agreed; a version that
+	 * is not the current one = 409 consent_outdated (the text changed while
+	 * the app showed the old one).
+	 */
+	public function acceptConsent() {
+		$body = VsHttp::readJson(4096);
+		$version = VsHttp::prop($body, 'version');
+		if (!is_int($version)) {
+			throw VsHttp::bad('version', 'version must be the consent version the tester read.');
+		}
+		if ($version !== VsConfig::CONSENT_VERSION) {
+			throw new VsHttpError(409, 'consent_outdated',
+				'The Strabo Voice trial terms have changed. Read them again before agreeing.');
+		}
+		$meta = array();
+		foreach (array('app_version', 'device_model') as $k) {
+			$v = VsHttp::prop($body, $k);
+			if ($v !== null && (!is_string($v) || strlen($v) > 100)) {
+				throw VsHttp::bad($k, "$k must be a short text.");
+			}
+			$meta[$k] = $v;
+		}
+		$n = $this->db->val(
+			"WITH ins AS (
+			   INSERT INTO voicestations.consents (userpkey, version, app_version, device_model)
+			   VALUES ($1, $2, $3, $4)
+			   ON CONFLICT (userpkey, version) DO NOTHING RETURNING 1)
+			 SELECT count(*) FROM ins",
+			array($this->upk, $version, $meta['app_version'], $meta['device_model']));
+		return array((int)$n === 1 ? 201 : 200, array(
+			'version' => $version,
+			'accepted_at' => $this->consentAcceptedAt(),
+			'existing' => (int)$n !== 1,
 		));
 	}
 
@@ -66,6 +135,7 @@ class VsService {
 			// PHP drops the whole body when it exceeds post_max_size
 			throw new VsHttpError(413, 'too_large', 'The upload is too large.');
 		}
+		$this->requireConsent();
 		$d = VsHttp::decodeObject(isset($_POST['details']) ? $_POST['details'] : '', 'details');
 		$v = VsDetails::check($d);
 
@@ -397,13 +467,21 @@ class VsService {
 			VsLog::error("audio file missing for station $stationUuid: $path");
 			throw VsHttp::notFound();
 		}
+		self::sendAudio($path, $s['audio_mime']);
+	}
+
+	/**
+	 * Stream an audio file with Range support (seeking in a player), then
+	 * exit. Shared by GET /db/voiceaudio (owner) and the scoring page.
+	 */
+	public static function sendAudio($path, $mime) {
 		$size = filesize($path);
 		$start = 0;
 		$end = $size - 1;
 		$status = 200;
 		if (isset($_SERVER['HTTP_RANGE'])) {
 			if (!preg_match('/^bytes=(\d*)-(\d*)$/', trim($_SERVER['HTTP_RANGE']), $m) || ($m[1] === '' && $m[2] === '')) {
-				$this->rangeNotSatisfiable($size);
+				self::rangeNotSatisfiable($size);
 			}
 			if ($m[1] === '') {                 // last N bytes
 				$start = max(0, $size - (int)$m[2]);
@@ -414,7 +492,7 @@ class VsService {
 				}
 			}
 			if ($start > $end || $start >= $size) {
-				$this->rangeNotSatisfiable($size);
+				self::rangeNotSatisfiable($size);
 			}
 			$status = 206;
 		}
@@ -422,7 +500,7 @@ class VsService {
 			ob_end_clean();
 		}
 		http_response_code($status);
-		header('Content-Type: ' . ($s['audio_mime'] ?: 'audio/mp4'));
+		header('Content-Type: ' . ($mime ?: 'audio/mp4'));
 		header('Accept-Ranges: bytes');
 		header('Cache-Control: private, no-store');
 		header('Content-Length: ' . ($end - $start + 1));
@@ -442,7 +520,7 @@ class VsService {
 		exit;
 	}
 
-	private function rangeNotSatisfiable($size) {
+	private static function rangeNotSatisfiable($size) {
 		http_response_code(416);
 		header("Content-Range: bytes */$size");
 		exit;
@@ -469,8 +547,10 @@ class VsService {
 		$this->db->begin();
 		try {
 			$s = $this->db->row(
-				"SELECT id, stage, current_proposal_run FROM voicestations.stations
-				  WHERE station_uuid = $1 AND userpkey = $2 FOR UPDATE",
+				"SELECT s.id, s.stage, s.current_proposal_run, b.project_id
+				   FROM voicestations.stations s
+				   JOIN voicestations.batches b ON b.id = s.batch_id
+				  WHERE s.station_uuid = $1 AND s.userpkey = $2 FOR UPDATE OF s",
 				array($stationUuid, $this->upk));
 			if ($s === null) {
 				throw VsHttp::notFound();
@@ -556,8 +636,34 @@ class VsService {
 			$this->db->rollback();
 			throw $e;
 		}
+		if ($outcome === 'confirmed') {
+			$this->stampProjectUpload($s['project_id']);
+		}
 		$row['existing'] = false;
 		return array(201, $row);
+	}
+
+	/**
+	 * My Field Data "Last Uploaded" reads Project.uploaddate, which only a
+	 * whole-project upload sets. The app uploads just the Voice Spots
+	 * dataset, so a new confirm stamps it (Jason 10-09). Cosmetic: a failure
+	 * is logged and never fails the confirm.
+	 */
+	private function stampProjectUpload($projectId) {
+		if (!preg_match('/^[0-9]{1,20}$/', (string)$projectId)) {
+			return;
+		}
+		try {
+			$this->neodb->query(
+				"MATCH (u:User {userpkey: {$this->upk}})-[:HAS_PROJECT]->(p:Project)
+				  WHERE p.id = $projectId OR p.id = '$projectId'
+				  SET p.uploaddate = " . time());
+		} catch (Exception $e) {
+			VsLog::error('Project.uploaddate stamp failed: ' . $e->getMessage());
+			if (method_exists($this->neodb, 'reconnect')) {
+				$this->neodb->reconnect();
+			}
+		}
 	}
 
 	/** Counts from the record's actions (never the phone's own numbers). */
