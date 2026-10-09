@@ -1957,6 +1957,20 @@ class StraboSpot
 
 	}
 
+	// Strabo Voice Spots (properties.voice_station_id) in a dataset, as
+	// spot id (string) => modified_timestamp. DatasetSpotsController uses it
+	// so a StraboField upload of an older copy of the dataset can neither
+	// delete these Spots nor replace them with an older copy (10-09).
+	public function getVoiceSpotTimestamps($dataset_id){
+		$dataset_id = (int)$dataset_id;
+		$out = array();
+		$records = $this->neodb->get_results("match (d:Dataset)-[:HAS_SPOT]->(s:Spot) where d.userpkey=$this->userpkey and d.id=$dataset_id and exists(s.voice_station_id) return s.id as id, s.modified_timestamp as mt;");
+		foreach($records as $r){
+			$out[(string)$r->value('id')] = (float)$r->value('mt');
+		}
+		return $out;
+	}
+
 	public function getDatasetSpotIds($feature_id){
 
 		//get the features from neo4j

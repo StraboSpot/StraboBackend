@@ -212,9 +212,26 @@ class DatasetSpotsController extends MyController
 						require_once __DIR__ . '/../lib/search_sync.php';
 						field_search_sync_suppress();
 
+						// Strabo Voice guard (10-09): StraboField sends a whole
+						// dataset once anything in its copy changed, and its copy
+						// can be older than the server's. A voice Spot is never
+						// replaced by an older copy and never deleted for being
+						// left out (it is kept as it is on the server).
+						$voiceSpots = $this->strabo->getVoiceSpotTimestamps($feature_id);
+						$keptVoiceSpots = array();
+
 						foreach($features as $feature){
 
 							$spotid = $feature->properties->id;
+
+							if(isset($voiceSpots[(string)$spotid])){
+								$incomingts = isset($feature->properties->modified_timestamp) ? (float)$feature->properties->modified_timestamp : 0;
+								if($incomingts < $voiceSpots[(string)$spotid]){
+									$incomingspots[] = $spotid;
+									$keptVoiceSpots[] = $spotid;
+									continue;
+								}
+							}
 
 							$this->strabo->deleteSingleSpot($spotid);
 
@@ -275,7 +292,7 @@ class DatasetSpotsController extends MyController
 						//now look on server to see if any spots need to be deleted
 						$serverspots = $this->strabo->getDatasetSpotIds($feature_id);
 						foreach($serverspots as $ss){
-							if(!in_array($ss,$incomingspots)){
+							if(!in_array($ss,$incomingspots) && !isset($voiceSpots[(string)$ss])){
 								$this->strabo->deleteSingleSpot($ss);
 							}
 						}
