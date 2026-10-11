@@ -2946,6 +2946,18 @@ class FieldTabularService
         $headers = array();
         foreach ($defs as $d) { $headers[] = $d['header']; }
 
+        // Instance kinds the template exports: a spot gets payload rows only
+        // for these, so a template with no sample columns does not write a
+        // near-empty row per sample (same for orientations, other features).
+        $kindHasCols = array('orientation' => false, 'sample' => false, 'other_features' => false);
+        foreach ($defs as $d) {
+            if ($d['kind'] === 'system' && ($d['key'] === 'orientation_type' || $d['key'] === 'orientation_role')) {
+                $kindHasCols['orientation'] = true;
+            } elseif ($d['kind'] === 'field' && isset($kindHasCols[$d['group']])) {
+                $kindHasCols[$d['group']] = true;
+            }
+        }
+
         $rows = array();
         foreach ($features as $f) {
             $props = isset($f['properties']) ? $f['properties'] : array();
@@ -3007,7 +3019,7 @@ class FieldTabularService
 
             // instance payload rows
             $payloads = array();
-            $orientList = isset($props['orientation_data']) && is_array($props['orientation_data']) ? $props['orientation_data'] : array();
+            $orientList = $kindHasCols['orientation'] && isset($props['orientation_data']) && is_array($props['orientation_data']) ? $props['orientation_data'] : array();
             foreach ($orientList as $el) {
                 $payloads[] = array('kind' => 'orientation', 'el' => $el, 'role' => 'primary');
                 if (isset($el['associated_orientation']) && is_array($el['associated_orientation'])) {
@@ -3016,11 +3028,11 @@ class FieldTabularService
                     }
                 }
             }
-            $sampleList = isset($props['samples']) && is_array($props['samples']) ? $props['samples'] : array();
+            $sampleList = $kindHasCols['sample'] && isset($props['samples']) && is_array($props['samples']) ? $props['samples'] : array();
             foreach ($sampleList as $el) {
                 $payloads[] = array('kind' => 'sample', 'el' => $el);
             }
-            $otherList = isset($props['other_features']) && is_array($props['other_features']) ? $props['other_features'] : array();
+            $otherList = $kindHasCols['other_features'] && isset($props['other_features']) && is_array($props['other_features']) ? $props['other_features'] : array();
             foreach ($otherList as $el) {
                 $payloads[] = array('kind' => 'other_features', 'el' => $el);
             }

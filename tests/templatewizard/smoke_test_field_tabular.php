@@ -414,6 +414,26 @@ try {
         && isset($roleTally['associated']) && $roleTally['associated'] === 1
         && isset($roleTally['']) && $roleTally[''] === 1);
 
+    // A template without a kind's columns writes no rows for that kind
+    // (2026-10-11: a spot-only template wrote a near-empty row per sample).
+    $noSampleCols = array(); $spotOnlyCols = array();
+    foreach ($SPEC['columns'] as $c) {
+        $grp = isset($c['group']) ? $c['group'] : '';
+        if ($grp !== 'sample') { $noSampleCols[] = $c; }
+        if ($c['kind'] === 'custom' || $grp === 'spot'
+            || ($c['kind'] === 'system' && $c['key'] === 'strabo_internal_id')) { $spotOnlyCols[] = $c; }
+    }
+    $nsSpec = $svc->validateSpec(array('spec_version' => 1, 'layout' => 'long', 'columns' => $noSampleCols));
+    $nsExport = $svc->exportLong($DS1, $nsSpec['spec']);
+    check('template without sample columns skips the sample row (4 rows, not 5)',
+        !empty($nsExport['ok']) && count($nsExport['rows']) === 4);
+    $soSpec = $svc->validateSpec(array('spec_version' => 1, 'layout' => 'long', 'columns' => $spotOnlyCols));
+    $soExport = $svc->exportLong($DS1, $soSpec['spec']);
+    $soNames = array();
+    foreach ($soExport['rows'] as $r0) { $soNames[] = $r0['name']; }
+    sort($soNames);
+    check('spot-only template writes one row per spot', !empty($soExport['ok']) && $soNames === array('SP-A', 'SP-B'));
+
     $wb2 = $svc->buildWorkbook($export, false, "smokewiz-tpl-$stamp");
     $exPath = tempnam(sys_get_temp_dir(), 'wizsmoke_') . '.xlsx';
     $tmpFiles[] = $exPath;
