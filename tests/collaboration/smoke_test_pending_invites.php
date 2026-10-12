@@ -173,6 +173,15 @@ check('unknown address reported in the banner', strpos($body, 'Not invited:') !=
 list($code, $body) = http('GET', '/my_field_data.php', $inv);
 check('invitee sees the re-invite exactly once', substr_count($body, "accept_collaboration?p=$P1&") === 1);
 
+// Emails are stored lowercase (register/login lowercase them); an address typed with capitals
+// (Jason 2026-10-12: "Claire.pe.martin@..." from an iPad) must still find the account.
+$db->prepare_query("DELETE FROM collaborators WHERE strabo_project_id = $1 AND collaborator_user_pkey = $2", array((string)$P1, $INVITEE));
+list($code, $body) = http('POST', "/invite_collaborators.php?p=$P1", $own, array('addresses' => ucfirst($emails[$INVITEE]) . "\n" . strtoupper($emails[$INVITEE]) . "\n" . strtoupper($emails[$OWNER]), 'collaborationlevel' => 'readonly'));
+check('mixed-case address invites the lowercase account once', count(rows($P1)) === 1, json_encode(rows($P1)));
+check('owner cannot invite themself in capitals', (int)$db->get_var_prepared("SELECT count(*) FROM collaborators WHERE strabo_project_id = $1 AND collaborator_user_pkey = $2", array((string)$P1, $OWNER)) === 0);
+list($code, $body) = http('GET', "/collaborate.php?p=$P1", $own);
+check('mixed-case invite not reported as unknown', strpos($body, 'no StraboSpot account with this address') === false);
+
 // ------------------------------------------------------------------ StraboMail template (unit)
 $r = StraboMail::render(array('title' => 'T <b>x</b>', 'greeting' => 'Hi A,', 'intro' => array('See https://strabospot.org/x?a=1&b=2 now'),
 	'facts' => array('Project' => '<script>alert(1)</script>', 'Link' => array('My Exports', 'https://strabospot.org/my_exports')),
