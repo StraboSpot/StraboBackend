@@ -89,9 +89,17 @@ if($_POST){
 	foreach($addresses as $address){
 		$address = trim($address);
 		if($address != "" && filter_var($address, FILTER_VALIDATE_EMAIL)){
-			if($address != $email){
-				if(!in_array($address, $foundaddresses)){
-					$collaborator_pkey = $db->get_var_prepared("SELECT pkey FROM users WHERE email=$1", array($address));
+			if(strtolower($address) != strtolower($email)){
+				if(!in_array(strtolower($address), $foundaddresses)){
+					// Case insensitive: registration and login lowercase emails, but people type
+					// "Claire.pe.martin@...". A few legacy accounts differ only by case; prefer the
+					// exact spelling, then the lowercase account (the one website login reaches).
+					$collaborator_pkey = $db->get_var_prepared("
+						SELECT pkey FROM users
+						WHERE lower(email) = lower($1) AND deleted = FALSE
+						ORDER BY (email = $1) DESC, (email = lower(email)) DESC, pkey
+						LIMIT 1
+					", array($address));
 					if($collaborator_pkey == ""){
 						$results['errors'][] = "$address: no StraboSpot account with this address (they need to register first)";
 					}else{
@@ -136,7 +144,7 @@ if($_POST){
 			}
 		}
 
-		$foundaddresses[] = $address;
+		$foundaddresses[] = strtolower($address);
 	}
 
 	// Results (invited / updated / errors) are shown once on collaborate.php
