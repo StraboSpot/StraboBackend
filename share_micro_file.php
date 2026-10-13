@@ -98,8 +98,9 @@ include 'includes/mheader.php';
 		<div id="successmessage"></div>
 
 		<div style="padding-top:30px;">
-		Due to the fact that StraboMicro project files can be quite large and difficult to share, this interface has been created to allow StraboMicro users to share project files using a small, simple code. To share this project with another user, simply copy and paste the code below and send it to the intended recipient. The recipient can then use the File -> Open Shared Project File option in the StraboMicro application to open this project.
-		<span style="color:#d61d0f; font-weight:bold;">Please be aware that this system DOES NOT allow two users to work on the same project.</span> The project file downloaded using this code is unique and not tied to the original file.
+		StraboMicro project files can be large and hard to send, so this page gives you a short code for sharing a copy of this project. Send the code below to the person you want to share it with. In the StraboMicro application, they choose File &gt; Open Shared Project... and enter the code (they need to be logged in to StraboSpot).
+		<span style="color:#d61d0f; font-weight:bold;">A share code gives the recipient their own separate copy of the project.</span> Changes either of you make afterwards stay in your own copy.
+		To work on the same project together, sync it to StraboSpot and invite collaborators: use File &gt; Collaborate... in StraboMicro 2.0.55 or later, or choose Collaborators from the project's Options... menu on the My StraboMicro Data page.
 		</div>
 
 		<div>
