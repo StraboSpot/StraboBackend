@@ -51,7 +51,16 @@ include("includes/strabovoice_style.php");
 				<li>If a phone call, Siri or an alarm interrupts, the recording pauses. The last second before the interruption may be missing, so repeat your last value after you tap <b>Resume</b>.</li>
 			</ul>
 
-			<h3>4. At a StraboField outcrop (stopwatch)</h3>
+			<h3>4. With an Apple Watch</h3>
+			<ul>
+				<li>Choose your project on the iPhone first. The watch records into the same project.</li>
+				<li>Tap <b>Record</b> on the watch. Raise the watch to your mouth to say each value, like talking to Siri, and lower your arm while you measure. Recording keeps going when the screen goes dark.</li>
+				<li>Your phone can stay in your pocket, or out of range. Recordings wait on the watch and move to the phone by themselves. Open Strabo Voice on the phone to add them to the Spot List; they upload like any other recording.</li>
+				<li>Photos still come from the phone.</li>
+				<li>Wind and loud machinery drown out the watch microphone. Turn away from the wind, or record that Spot on the phone.</li>
+			</ul>
+
+			<h3>5. At a StraboField outcrop (stopwatch)</h3>
 			<ul>
 				<li>Alternate through the day: voice at one outcrop, StraboField at the next. Use the same iPhone for both.</li>
 				<li>In StraboField, put these Spots in a dataset named <b>Stopwatch Spots</b> in the same project.</li>
@@ -59,19 +68,19 @@ include("includes/strabovoice_style.php");
 				<li>Note the time and the Spot name for your answer sheet.</li>
 			</ul>
 
-			<h3>5. Review</h3>
+			<h3>6. Review</h3>
 			<ul>
 				<li>Recordings upload by themselves whenever you have signal. Open <b>Review</b> for the project whenever it suits you, at camp or in the evening.</li>
 				<li>Check every value. Every flag needs a tap. Nothing goes into your project until you tap <b>Confirm</b>.</li>
 			</ul>
 
-			<h3>6. The same day: your answer sheet</h3>
+			<h3>7. The same day: your answer sheet</h3>
 			<ul>
 				<li>Jason emails you a spreadsheet with a row for each Voice Spot (its name and time). Fill in what your <b>notebook</b> says, one row per measurement, plus the stopwatch tab. Use your notebook only, not the app.</li>
 				<li>Email it back the same day if you can, while the outcrops are fresh.</li>
 			</ul>
 
-			<h3>7. Problems and feedback</h3>
+			<h3>8. Problems and feedback</h3>
 			<ul>
 				<li>Take a screenshot and send it from TestFlight (it offers <b>Share Beta Feedback</b>), or email <a href="mailto:strabospot@gmail.com?subject=Strabo Voice">strabospot@gmail.com</a>.</li>
 			</ul>
