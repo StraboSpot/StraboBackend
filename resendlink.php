@@ -76,7 +76,7 @@ include("includes/mheader.php");
 
 if($error!=""){
 ?>
-<div style="color:#FF2A00;"><?php echo $error?>ddd</div>
+<div style="color:#FF2A00;"><?php echo $error?></div>
 <div style="padding-top:15px;padding-bottom:15px;">If you do not immediately see the email in your inbox, please check your spam folder.</div>
 <?php
 }
