@@ -205,6 +205,7 @@ if($_POST['submit']!=""){
 		<h2 class="wsite-content-title">Success!</h2><br><br>
 		A confirmation link has been emailed to <?php echo $email?>. Please allow a few minutes for this email to arrive.<br><br>
 		Clicking on the link will activate your account.<br><br>
+		If you have not received an email, please be sure to check your spam folder.<br><br>
 		Thanks,<br><br>
 		The StraboSpot Team
 
