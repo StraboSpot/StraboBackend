@@ -12,6 +12,7 @@ Thresholds live in THRESHOLDS (decided 09-28 from dev data).
 """
 
 import math
+import re
 
 from . import text as T
 
@@ -42,6 +43,8 @@ COMPASS8 = ['n', 'ne', 'e', 'se', 's', 'sw', 'w', 'nw']
 DIR_WORDS = {'n': ['n', 'north'], 's': ['s', 'south'], 'e': ['e', 'east'], 'w': ['w', 'west'],
              'ne': ['ne', 'northeast', 'north east'], 'nw': ['nw', 'northwest', 'north west'],
              'se': ['se', 'southeast', 'south east'], 'sw': ['sw', 'southwest', 'south west']}
+# a note that only names the strike convention: the convention is already used on the measurements
+CONVENTION_ONLY = re.compile(r'^(using |with |in )?(the )?((right|left) hand rule|rhr|lhr)( convention)?$')
 QUAD_RANGE = {'NE': (0, 90), 'SE': (90, 180), 'SW': (180, 270), 'NW': (270, 360),
               'N': (315, 45), 'E': (45, 135), 'S': (135, 225), 'W': (225, 315)}
 
@@ -486,6 +489,9 @@ class Builder:
             k = ' '.join(t.t for t in T.canon_text(it['quote']))
             if k in seen:
                 self.log(it['ref'], 'duplicate', 'note', it['quote'], 'merged', 'same words as an earlier note')
+                continue
+            if CONVENTION_ONLY.match(k):
+                self.log(it['ref'], 'convention', 'note', it['quote'], 'skipped', 'only names the strike convention')
                 continue
             seen.add(k)
             items.append(it)
