@@ -377,8 +377,118 @@ test("B8. Collab project + tag omitted from upload → server tag survives (unio
     $r['code'] == 201 && findTag($g['body'], 3103) !== null,
     "HTTP {$r['code']} | T3103=" . (findTag($g['body'], 3103) ? 'yes' : 'no'));
 
+// Solo-project tag semantics follow the FIELD_SOLO_TAG_REPLACE switch in
+// config.inc.php (same file the web server loads). Default (undefined) =
+// union for every project: section B-U. Switch on = the 2026-08-16 replace
+// semantics: sections B-S and B-M.
+$soloReplace = defined('FIELD_SOLO_TAG_REPLACE') && FIELD_SOLO_TAG_REPLACE === true;
+
+if (!$soloReplace):
+
+// ===========================================================================
+// SECTION B-U: Union for projects with no collaborator rows (default)
+// One account on several devices looks solo to the server; no device's
+// upload may wipe units another device created.
+// ===========================================================================
+section("B-U. No-collaborator project tag union (default, FIELD_SOLO_TAG_REPLACE off)");
+
+$mkUnit = function ($id, $name, $spots = []) {
+    return ['id' => $id, 'name' => $name, 'type' => 'geologic_unit', 'spots' => $spots];
+};
+
+// BU1. The 2026-10-15 GSA field trip report: the phone uploads its units,
+// then the iPad uploads its own (older) project holding a different unit.
+// All units survive.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, ['tags' => []]);
+makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => [
+        $mkUnit(3201, 'Dakota sandstone', [7777777701]),
+        $mkUnit(3202, 'Morrison mudstone', [7777777702]),
+    ]]));
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => [$mkUnit(3203, 'Codell', [7777777703])]]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BU1. Phone then iPad uploads: every device's units are kept",
+    $r['code'] == 201 && findTag($g['body'], 3201) !== null
+    && findTag($g['body'], 3202) !== null && findTag($g['body'], 3203) !== null,
+    "HTTP {$r['code']} | units=" . json_encode(array_map(
+        function ($t) { return $t['name'] ?? '?'; }, $g['body']['tags'] ?? [])));
+
+// BU2. Three devices alternating (2026-08-28 Wesdome report) accumulate.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => [$mkUnit(3204, 'Basalt')]]));
+makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => [$mkUnit(3204, 'Basalt'), $mkUnit(3205, 'Gabbro')]]));
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => [$mkUnit(3204, 'Basalt'), $mkUnit(3206, 'Granite')]]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BU2. Three-device alternating uploads accumulate all units",
+    $r['code'] == 201 && findTag($g['body'], 3204) !== null
+    && findTag($g['body'], 3205) !== null && findTag($g['body'], 3206) !== null,
+    "HTTP {$r['code']} | units=" . json_encode(array_map(
+        function ($t) { return $t['name'] ?? '?'; }, $g['body']['tags'] ?? [])));
+
+// BU3. Property edits (color, name) still win; spot memberships union.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [['id' => 3207, 'name' => 'Old Unit', 'color' => 'red', 'spots' => [7777777701]]],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, [
+        'tags' => [['id' => 3207, 'name' => 'New Unit', 'color' => 'blue', 'spots' => [7777777702]]],
+    ]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+$t = findTag($g['body'], 3207);
+test("BU3. Incoming color + name win, spot memberships union",
+    $r['code'] == 201 && $t !== null
+    && ($t['color'] ?? '') === 'blue' && ($t['name'] ?? '') === 'New Unit'
+    && in_array(7777777701, $t['spots'] ?? []) && in_array(7777777702, $t['spots'] ?? []),
+    "HTTP {$r['code']} | tag=" . json_encode($t));
+
+// BU4. An explicit empty tag list (a device with no units) wipes nothing.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [$mkUnit(3208, 'Other device unit')],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => []]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BU4. Upload with tags:[] keeps server units",
+    $r['code'] == 201 && findTag($g['body'], 3208) !== null,
+    "HTTP {$r['code']} | T3208=" . (findTag($g['body'], 3208) ? 'yes' : 'WIPED'));
+
+// BU5. No tags field at all keeps server units.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [$mkUnit(3209, 'Survivor')],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BU5. Upload without a tags field keeps server units",
+    $r['code'] == 201 && findTag($g['body'], 3209) !== null,
+    "HTTP {$r['code']} | T3209=" . (findTag($g['body'], 3209) ? 'yes' : 'no'));
+
+// BU6. Known cost, pinned so a change here is deliberate: a unit deleted in
+// the app (omitted from the upload) comes back until tag tombstones exist.
+resetProject($neodb, $projectSoloId, $ownerPkey);
+seedProject($neodb, $projectSoloId, $ownerPkey, [
+    'tags' => [$mkUnit(3210, 'Kept'), $mkUnit(3211, 'Deleted in app')],
+]);
+$r = makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    projectPayload($projectSoloId, ['tags' => [$mkUnit(3210, 'Kept')]]));
+$g = fetchProject($baseUrl, $projectSoloId, $ownerEmail, $testPassword);
+test("BU6. Unit omitted from upload survives (union; tombstones later)",
+    $r['code'] == 201 && findTag($g['body'], 3210) !== null && findTag($g['body'], 3211) !== null,
+    "HTTP {$r['code']} | deleted-in-app=" . (findTag($g['body'], 3211) ? 'present' : 'gone'));
+
+else:
+
 // ===========================================================================
 // SECTION B-S: Solo-project tag snapshot semantics (no collaborator rows)
+// Runs only with FIELD_SOLO_TAG_REPLACE on.
 // ===========================================================================
 // A project nobody but the owner has ever held has exactly one writer, so the
 // uploaded tag list is the authoritative snapshot: deletions, spot-removals
@@ -577,6 +687,8 @@ test("BM4. Flag removed: solo replace semantics return (omitted tag deleted)",
 
 // B-M cleanup: no pref rows left behind.
 $db->prepare_query("delete from project_merge_prefs where strabo_project_id = $1", array((string)$projectSoloId));
+
+endif;
 
 // ===========================================================================
 // SECTION C: Per-report ownership merge

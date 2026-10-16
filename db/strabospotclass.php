@@ -3904,34 +3904,43 @@ public function getSpotName($id){
 			$out_tags = [];
 		}
 
-		// Tag semantics depend on whether anyone besides the owner has ever
-		// held this project. The union below exists to protect tags held by
-		// collaborator devices from being wiped by a stale upload; on a
-		// project with no collaborator rows the uploading device is the only
-		// writer, so its tag list is the authoritative snapshot: deletions,
-		// spot-removals and property edits (color, name) must all stick.
-		// (Restores the pre-collaboration overwrite semantics of JMA 20240913
-		// for solo projects; see docs/GeologicUnits_TagDeletion_Proposal.md.)
+		// Tags (geologic units etc.) are UNIONED with the server copy by
+		// default, for every project. One account on several devices (a
+		// phone + an iPad, or a field group sharing iPads) has no collaborator
+		// rows, so the server cannot tell it from a true solo user; replacing
+		// the list let each device's upload wipe the units the other devices
+		// created (GSA field trip report 2026-10-15, Wesdome 2026-08-28).
+		// Cost of the union: a unit deleted in the app, or a Spot removed from
+		// a unit, comes back on the next upload until tag tombstones exist
+		// (docs/GeologicUnits_TagDeletion_Proposal.md).
+		//
+		// Rollback switch: define('FIELD_SOLO_TAG_REPLACE', true) in
+		// config.inc.php restores the 2026-08-16 behavior: projects with no
+		// collaborator rows REPLACE their tag list with the upload (deletions
+		// and spot removals stick), except projects flagged for union in
+		// project_merge_prefs (admin_merge_prefs.php).
 		$tags_present = isset($injson->tags) && is_array($injson->tags);
 		$replace_tags = false;
 
-		$collabcount = (int)$this->db->get_var_prepared(
-			"select count(*) from collaborators where strabo_project_id = $1 and project_owner_user_pkey = $2",
-			array((string)$project_id, $this->userpkey));
+		$solo_replace = defined('FIELD_SOLO_TAG_REPLACE') && FIELD_SOLO_TAG_REPLACE === true;
+		$use_replace = false;
 
-		// Multi-device shared-credential groups (several iPads uploading under
-		// one account) have zero collaborator rows and so look "solo" here, but
-		// replace semantics would let each device's upload wipe tags the other
-		// devices created. project_merge_prefs (managed via admin_merge_prefs.php)
-		// flags such projects to keep the union path.
-		$force_union = false;
-		if($collabcount == 0){
-			$force_union = (int)$this->db->get_var_prepared(
-				"select count(*) from project_merge_prefs where strabo_project_id = $1 and project_owner_user_pkey = $2 and union_tags = true",
-				array((string)$project_id, $this->userpkey)) > 0;
+		if($solo_replace && $tags_present){
+			$collabcount = (int)$this->db->get_var_prepared(
+				"select count(*) from collaborators where strabo_project_id = $1 and project_owner_user_pkey = $2",
+				array((string)$project_id, $this->userpkey));
+
+			$force_union = false;
+			if($collabcount == 0){
+				$force_union = (int)$this->db->get_var_prepared(
+					"select count(*) from project_merge_prefs where strabo_project_id = $1 and project_owner_user_pkey = $2 and union_tags = true",
+					array((string)$project_id, $this->userpkey)) > 0;
+			}
+
+			$use_replace = ($collabcount == 0 && !$force_union);
 		}
 
-		if($collabcount == 0 && !$force_union && $tags_present){
+		if($use_replace){
 			// Solo project: incoming snapshot replaces the server copy.
 			// An explicit empty list means "all tags deleted" and must
 			// clear the stored copy; an ABSENT tags field (partial upload)
