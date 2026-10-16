@@ -45,6 +45,22 @@ DIR_WORDS = {'n': ['n', 'north'], 's': ['s', 'south'], 'e': ['e', 'east'], 'w': 
              'se': ['se', 'southeast', 'south east'], 'sw': ['sw', 'southwest', 'south west']}
 # a note that only names the strike convention: the convention is already used on the measurements
 CONVENTION_ONLY = re.compile(r'^(using |with |in )?(the )?((right|left) hand rule|rhr|lhr)( convention)?$')
+# the spoken lead-in before a photo caption ("I'm taking a photo of ..."): code trims it to "Photo of ...",
+# the rest of the caption stays word for word
+PHOTO_LEAD_IN = re.compile(
+    r"^\s*(?:(?:ok(?:ay)?|and|so|now)[,\s]+)*(?:(?:i['’]m|i am|i['’]ll|i will|we['’]re|we are|let me|going to|gonna)\s+)*"
+    r"(?:(?:taking|take|grabbing|grab|getting|get|snapping|snap|shooting|shoot)\s+|here['’]s\s+|here is\s+)"
+    r"(?:a|an|another|one more|one)?\s*(?:quick\s+)?(?:photo|picture|pic|shot|image)\b(?:\s+of\b)?[,\s]*", re.I)
+
+
+def photo_caption(quote):
+    m = PHOTO_LEAD_IN.match(quote)
+    rest = quote[m.end():].strip().rstrip('.').strip() if m else ''
+    if not rest:
+        return quote
+    return ('Photo of ' if re.search(r'\bof\s*$', m.group(0), re.I) else 'Photo ') + rest
+
+
 QUAD_RANGE = {'NE': (0, 90), 'SE': (90, 180), 'SW': (180, 270), 'NW': (270, 360),
               'N': (315, 45), 'E': (45, 135), 'S': (135, 225), 'W': (225, 315)}
 
@@ -462,7 +478,7 @@ class Builder:
 
     def photo(self, ref, r, q, h):
         start = (h[2] or [None])[0]
-        return {'ref': ref, 'kind': 'photo', 'caption': q, 'quote': q, 'said_at': start, 'flags': [], **self.where(h)}
+        return {'ref': ref, 'kind': 'photo', 'caption': photo_caption(q), 'quote': q, 'said_at': start, 'flags': [], **self.where(h)}
 
     # -- whole proposal
     def build(self, raw):
