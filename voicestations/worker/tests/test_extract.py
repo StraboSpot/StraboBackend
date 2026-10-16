@@ -313,6 +313,20 @@ class Checks(unittest.TestCase):
                                   notes=[{'text': 'y', 'quote': 'Not sure the right hand rule applies here.'}]), job(t))
         self.assertEqual(len([i for i in p['items'] if i['kind'] == 'note']), 1)
 
+    def test_photo_caption_lead_in_trimmed(self):
+        c = checks.photo_caption
+        self.assertEqual(c('Taking a photo of the outcrop looking east.'), 'Photo of the outcrop looking east')
+        self.assertEqual(c("I’m taking a photo of the slicken lines."), 'Photo of the slicken lines')
+        self.assertEqual(c('taking a photo looking north'), 'Photo looking north')
+        self.assertEqual(c('Okay, grabbing a quick picture of the contact.'), 'Photo of the contact')
+        self.assertEqual(c('Taking a photo.'), 'Taking a photo.')
+        self.assertEqual(c('The outcrop photo shows bedding.'), 'The outcrop photo shows bedding.')
+        t = 'Strike 45, dip 32. Taking a photo of the outcrop looking east.'
+        p, a = checks.process(raw([M(source_quote='Strike 45, dip 32', strike=45, dip=32)],
+                                  photos=[{'caption': 'x', 'quote': 'Taking a photo of the outcrop looking east.'}]), job(t))
+        ph = next(i for i in p['items'] if i['kind'] == 'photo')
+        self.assertEqual((ph['caption'], ph['quote']), ('Photo of the outcrop looking east', 'Taking a photo of the outcrop looking east.'))
+
     def test_proposal_is_json(self):
         p, a = checks.process(raw([M(source_quote='Strike 45, dip 32', strike=45, dip=32)]), job('Strike 45, dip 32.'))
         json.dumps(p), json.dumps(a)
