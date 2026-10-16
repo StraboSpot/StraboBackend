@@ -27,8 +27,10 @@
  *
  * Usage:
  *   php replay_dataset_spots.php --file=<payload.json> --dataset=<id> --userpkey=<pkey> [options]
+ *   php replay_dataset_spots.php --rawcache=<pkey> --dataset=<id> --userpkey=<pkey> [options]
  *
  * Options:
+ *   --rawcache=<pkey>     Read the payload from that rawcache row instead of --file
  *   --only=<id1,id2,...>  Restrict to these spot ids (default: all in file)
  *   --apply               Actually write (default: DRY RUN, no changes)
  *   --no-bump             Do not bump the dataset's modified_timestamp
@@ -52,16 +54,17 @@ function line($s = '') { echo $s . "\n"; }
 function fail($s) { line("ERROR: $s"); exit(1); }
 
 // ---------------------------------------------------------------- arguments
-$opts = getopt('', ['file:', 'dataset:', 'userpkey:', 'only::', 'apply', 'no-bump', 'help']);
+$opts = getopt('', ['file:', 'rawcache:', 'dataset:', 'userpkey:', 'only::', 'apply', 'no-bump', 'help']);
 
-if (isset($opts['help']) || !isset($opts['file'], $opts['dataset'], $opts['userpkey'])) {
-    line("Usage: php replay_dataset_spots.php --file=<payload.json> --dataset=<id> --userpkey=<pkey>");
+if (isset($opts['help']) || !(isset($opts['file']) || isset($opts['rawcache'])) || !isset($opts['dataset'], $opts['userpkey'])) {
+    line("Usage: php replay_dataset_spots.php (--file=<payload.json> | --rawcache=<pkey>) --dataset=<id> --userpkey=<pkey>");
     line("       [--only=id1,id2,...] [--apply] [--no-bump]");
     line("Dry run by default; pass --apply to write.");
     exit(isset($opts['help']) ? 0 : 1);
 }
 
-$file      = $opts['file'];
+$file      = $opts['file'] ?? null;
+$rawpkey   = isset($opts['rawcache']) ? (int)$opts['rawcache'] : 0;
 $datasetid = (int)$opts['dataset'];
 $userpkey  = (int)$opts['userpkey'];
 $apply     = isset($opts['apply']);
@@ -71,9 +74,13 @@ $only      = isset($opts['only']) && $opts['only'] !== false
     : null;
 
 if ($datasetid <= 0 || $userpkey <= 0) fail("--dataset and --userpkey must be positive integers.");
-if (!is_readable($file)) fail("Cannot read file: $file");
-
-$fc = json_decode(file_get_contents($file));
+if ($rawpkey > 0) {
+    $file = "rawcache row $rawpkey";
+    $fc = json_decode((string)$db->get_var_prepared("select rawdata from rawcache where pkey = $1", array($rawpkey)));
+} else {
+    if (!is_readable($file)) fail("Cannot read file: $file");
+    $fc = json_decode(file_get_contents($file));
+}
 if (!$fc || ($fc->type ?? '') !== 'FeatureCollection' || empty($fc->features)) {
     fail("File is not a FeatureCollection with features: $file");
 }
