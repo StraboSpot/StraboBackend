@@ -298,6 +298,21 @@ class Checks(unittest.TestCase):
         self.assertEqual(len(p['items']), 1)
         self.assertTrue(any(e['check'] == 'duplicate' for e in a['events']))
 
+    def test_convention_only_note_skipped(self):
+        t = 'Garnet schist, foliation strike 120, dip 60, right hand rule.'
+        p, a = checks.process(raw([M(feature_type='foliation', source_quote='foliation strike 120, dip 60', strike=120, dip=60)],
+                                  rock_descriptions=[{'text': 'x', 'quote': 'Garnet schist', 'carried_from': None}],
+                                  notes=[{'text': 'y', 'quote': 'right hand rule'}]), job(t))
+        self.assertEqual([i['text'] for i in p['items'] if i['kind'] == 'note'], ['Garnet schist'])
+        self.assertTrue(any(e['check'] == 'convention' for e in a['events']))
+        self.assertEqual(first(p)['spot']['dip_direction'], 210)
+
+    def test_note_mentioning_convention_kept(self):
+        t = 'Strike 45, dip 32. Not sure the right hand rule applies here.'
+        p, a = checks.process(raw([M(source_quote='Strike 45, dip 32', strike=45, dip=32)],
+                                  notes=[{'text': 'y', 'quote': 'Not sure the right hand rule applies here.'}]), job(t))
+        self.assertEqual(len([i for i in p['items'] if i['kind'] == 'note']), 1)
+
     def test_proposal_is_json(self):
         p, a = checks.process(raw([M(source_quote='Strike 45, dip 32', strike=45, dip=32)]), job('Strike 45, dip 32.'))
         json.dumps(p), json.dumps(a)
