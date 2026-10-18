@@ -70,8 +70,12 @@ $payload = [
 
 $newAccessToken = $qjt->sign($payload, JWT_SECRET);
 
-// Update last_used_at timestamp
-$db->prepare_query("UPDATE refresh_tokens SET last_used_at = NOW() WHERE token = $1", array($refreshToken));
+// Update last_used_at timestamp, and extend the refresh token: a session now
+// ends only after REFRESH_TOKEN_EXPIRY without a refresh, not that long after
+// the login (apps in daily use were logged out every 7 days)
+$refreshExpiresAt = date('Y-m-d H:i:s', time() + REFRESH_TOKEN_EXPIRY);
+$db->prepare_query("UPDATE refresh_tokens SET last_used_at = NOW(), expires_at = $2 WHERE token = $1",
+	array($refreshToken, $refreshExpiresAt));
 
 // Return new access token
 http_response_code(200);
