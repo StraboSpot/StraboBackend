@@ -264,9 +264,11 @@ class SesarClient
 
 	/**
 	 * This account's list row for one IGSN, or null when the IGSN is not
-	 * among the account's own samples. The detail GET lacks sample_id,
-	 * external_sample_id and last_update_date; the personal list filtered by
-	 * ?igsn= has all three (sandbox 09-27, answers in well under a second).
+	 * among the account's own samples. The personal list filtered by ?igsn=
+	 * has sample_id, external_sample_id and last_update_date (the detail GET
+	 * has them too since SESAR's 2026-10 change). ?igsn= is an exact match
+	 * on the full "10.58052/..." form since then; the old substring search
+	 * moved to ?igsn_icontains=.
 	 */
 	public function findOwnByIgsn($access, $igsn)
 	{
@@ -279,7 +281,7 @@ class SesarClient
 
 	/**
 	 * Public existence check for stored IGSN values (D3 revised): anonymous
-	 * GET samples/by-igsn/ for each normalized IGSN, several at once when the
+	 * GET samples/landing-page/ for each normalized IGSN, several at once when the
 	 * transport can. Never throws; per IGSN:
 	 *   found      published record (record = SESAR's landing payload)
 	 *   private    exists at SESAR but is not public (403)
@@ -295,7 +297,7 @@ class SesarClient
 	{
 		$reqs = array();
 		foreach (array_values(array_unique($igsns)) as $i => $igsn) {
-			$url = SesarAccess::apiBase($this->env) . 'samples/by-igsn/?' . http_build_query(array('igsn' => $igsn));
+			$url = SesarAccess::apiBase($this->env) . 'samples/landing-page/?' . http_build_query(array('igsn' => $igsn));
 			$reqs[$igsn] = array('GET', $url, array('Accept: application/json'), null);
 		}
 		if (empty($reqs)) return array();

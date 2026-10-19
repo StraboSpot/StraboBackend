@@ -20,7 +20,7 @@
  *                sesar-codes/ with the real BARE 400 field dicts; POST
  *                api-access-request/ recorded in state['access_requests'].
  *
- *              - (Phase 4) public GET samples/by-igsn/ (404 unknown, 410
+ *              - (Phase 4) public GET samples/landing-page/ (404 unknown, 410
  *                deactivated, 403 private), POST related-resources/, SESAR's
  *                integer sample_id on list rows only (the POST and detail
  *                answers lack it, as on the sandbox), unregistrable
@@ -247,7 +247,7 @@ class FakeSesar implements SesarTransport
 		}
 
 		// -- anonymous: landing-page lookup ---------------------------------------
-		if ($method === 'GET' && $path === 'samples/by-igsn/') {
+		if ($method === 'GET' && $path === 'samples/landing-page/') {
 			$igsn = isset($query['igsn']) ? (string)$query['igsn'] : '';
 			if (!isset($s['samples'][$igsn])) return array(404, json_encode(array('error' => 'Sample does not exist')), 0);
 			$rec = $s['samples'][$igsn];
