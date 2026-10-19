@@ -117,7 +117,7 @@ $fake->seedSample('10.58052/IEFAK0402', array('name' => 'Real', '_owner' => 'x')
 $fake->seedSample('10.58052/IEFAK0403', array('name' => 'Gone', '_owner' => 'x'));
 $fake->markDeactivated('10.58052/IEFAK0403');
 $fake->seedSample('10.58052/IEFAK0405', array('name' => 'Private', '_owner' => 'x', '_private' => true));
-$fake->set('fail_next', array('samples/by-igsn/' => 0));
+$fake->set('fail_next', array('samples/landing-page/' => 0));
 
 $t0 = gmdate('Y-m-d H:i:s', time() - 7200);
 mk('sesarclean-k1', $A, null);          track('sesarclean-k1', $A, '10.58052/IEFAK0601', 'linked');
@@ -155,12 +155,12 @@ section('plan (Q2 untracked, report only)');
 check('only "not found at production" on a tester\'s sample is listed', ids($plan['untracked']) === array('sesarclean-u1'), $plan['untracked']);
 check('listed with the normalized IGSN and the raw field', $plan['untracked'][0]['igsn'] === '10.58052/IEFAK0401' && $plan['untracked'][0]['field'] === '10.58052/IEFAK0401');
 check('a failed lookup is listed apart, never as not found', ids($plan['unchecked']) === array('sesarclean-u0') && $plan['unchecked'][0]['message'] !== '', $plan['unchecked']);
-$asked = array_map(function ($c) { parse_str((string)parse_url($c['url'], PHP_URL_QUERY), $q); return $q['igsn']; }, $fake->calls('by-igsn'));
-check('lookups went to PRODUCTION SESAR only', count($fake->calls('by-igsn')) > 0 && count(array_filter($fake->calls('by-igsn'), function ($c) { return strpos($c['url'], 'api.geosamples.org') !== false && strpos($c['url'], 'sandbox') === false; })) === count($fake->calls('by-igsn')),
-	array_map(function ($c) { return $c['url']; }, $fake->calls('by-igsn')));
+$asked = array_map(function ($c) { parse_str((string)parse_url($c['url'], PHP_URL_QUERY), $q); return $q['igsn']; }, $fake->calls('landing-page'));
+check('lookups went to PRODUCTION SESAR only', count($fake->calls('landing-page')) > 0 && count(array_filter($fake->calls('landing-page'), function ($c) { return strpos($c['url'], 'api.geosamples.org') !== false && strpos($c['url'], 'sandbox') === false; })) === count($fake->calls('landing-page')),
+	array_map(function ($c) { return $c['url']; }, $fake->calls('landing-page')));
 check('tracked values, junk text and non-testers are never looked up',
 	!in_array('10.58052/IEFAK0301', $asked, true) && !in_array('10.58052/IEFAK0501', $asked, true) && count($asked) === 5, $asked);
-check('no SESAR call other than by-igsn lookups', count($fake->calls()) === count($fake->calls('by-igsn')));
+check('no SESAR call other than landing-page lookups', count($fake->calls()) === count($fake->calls('landing-page')));
 
 section('plan (Q3 created from sandbox records, report only)');
 check('only a linked row written with its sample, no links, no children; one line per sample',

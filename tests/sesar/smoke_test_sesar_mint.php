@@ -178,14 +178,14 @@ check('other-prefix DOI SESAR does not know -> blocked (another registry)', $g('
 check('team-prefix DOI SESAR hosts -> blocked (found)', $g('sesarmint-doi-team') === 'blocked');
 check("another user's sample -> missing, never a row", rowOf($p, 'sesarmint-b') === null && in_array('sesarmint-b', $p['missing'], true));
 check('unknown id -> missing', in_array('sesarmint-nope', $p['missing'], true));
-check('one parallel lookup batch, only for SESAR-shaped values', count($fake->calls('samples/by-igsn/')) === 5, count($fake->calls('samples/by-igsn/')));
+check('one parallel lookup batch, only for SESAR-shaped values', count($fake->calls('samples/landing-page/')) === 5, count($fake->calls('samples/landing-page/')));
 check('choices: codes, collector from the SESAR identity, object types grouped, registrable materials only',
 	$p['choices']['codes'] === array('IEFAK') && $p['choices']['collector'] === 'User, Fake'
 	&& isset($p['choices']['object_types']['General sample types']) && in_array('Limestone', $p['choices']['materials'], true)
 	&& !in_array('Rock', $p['choices']['materials'], true), $p['choices']);
 check('environment + cap reported', $p['environment'] === 'sandbox' && $p['cap'] === 100);
 
-$fake->set('fail_next', array('samples/by-igsn/' => 0));
+$fake->set('fail_next', array('samples/landing-page/' => 0));
 $p = $mint->plan($A, array('sesarmint-unknown'));
 check('SESAR unreachable for the lookup -> blocked "could not check", never replace', rowOf($p, 'sesarmint-unknown')['group'] === 'blocked'
 	&& strpos(implode(' ', rowOf($p, 'sesarmint-unknown')['reasons']), 'Could not check') !== false);

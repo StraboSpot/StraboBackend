@@ -4,7 +4,7 @@
  * Description: Nightly check of pending SESAR deactivation requests (IGSN
  *              Phase 7, review Q1). For every registration in state
  *              'deactivation_requested' in the configured SESAR environment,
- *              an anonymous by-igsn lookup (8 in parallel); a 410 means a
+ *              an anonymous landing-page lookup (8 in parallel); a 410 means a
  *              curator approved it, so the row becomes 'deactivated' and the
  *              IGSN is removed from the sample (SesarDeactivate::markGone).
  *              Denials are only visible to the owner's signed-in read, so

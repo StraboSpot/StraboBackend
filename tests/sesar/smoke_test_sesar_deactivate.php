@@ -224,7 +224,7 @@ check('may ask again after a denial; declined date cleared', row('sesardeact-m',
 // ===========================================================================
 section('nightly sweep (approvals)');
 $fake->markDeactivated('10.58052/IEFAK0201');   // curator approved
-$fake->set('fail_next', array('samples/by-igsn/' => 500));   // night 1: the first lookup (the approved one) fails
+$fake->set('fail_next', array('samples/landing-page/' => 500));   // night 1: the first lookup (the approved one) fails
 $s = $deact->sweep($U);
 check('night 1: 3 pending checked, lookup error counted, nothing changed', $s === array('checked' => 3, 'deactivated' => 0, 'errors' => 1)
 	&& row('sesardeact-m', $A)->state === 'deactivation_requested', $s);
