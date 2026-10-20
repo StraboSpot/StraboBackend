@@ -108,6 +108,8 @@ check('fix: one validation mail to the new address with the new link', substr_co
 check('fix: page names the new address and offers the fix form again', strpos($b, "emailed to <b>$new</b>") !== false && token_in($b) === RegisterEmail::fixToken($pkey, $u->hash, 1, $jwtsecret));
 $tok1 = token_in($b);
 
+$ch = curl_init("$BASE/validate/$hash0"); curl_setopt($ch, CURLOPT_RETURNTRANSFER, true); $vb = (string)curl_exec($ch); $vc = curl_getinfo($ch, CURLINFO_HTTP_CODE); curl_close($ch);
+check('fix: the first link now shows the friendly invalid-link page and activates nothing', $vc === 200 && strpos($vb, 'Link No Longer Valid') !== false && strpos($vb, 'href="/resendlink"') !== false && user($pkey)->active === 'f', "$vc " . substr(strip_tags($vb), 0, 200));
 list($c, $b) = post('/register.php', array('fix_submit' => 'x', 'fixtoken' => $tok0, 'email' => "again-$rand@$D", 'emailconfirm' => "again-$rand@$D"));
 check('fix: the old token is spent', strpos($b, 'can no longer be changed') !== false && user($pkey)->email === $new);
 list($c, $b) = post('/register.php', array('fix_submit' => 'x', 'fixtoken' => preg_replace('/.$/', '0', $tok1) === $tok1 ? preg_replace('/.$/', '1', $tok1) : preg_replace('/.$/', '0', $tok1), 'email' => "again-$rand@$D", 'emailconfirm' => "again-$rand@$D"));
