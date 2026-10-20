@@ -74,11 +74,11 @@ check('form: the typed values come back in the fields', strpos($b, 'value="reg-'
 list($c, $b) = post('/register.php', $base + array('email' => "reg-$rand@$D", 'emailconfirm' => "REG-$rand@$D "));
 // With REGISTER_SKIP_CAPTCHA (dev) this one registers for real; zero residue removes it.
 $skip = defined('REGISTER_SKIP_CAPTCHA') && REGISTER_SKIP_CAPTCHA === true;
-check('form: matching addresses (case / spaces ignored) pass the email checks', strpos($b, "don't match") === false && strpos($b, 'Invalid Email') === false && strpos($b, $skip ? "emailed to <b>reg-$rand@$D</b>" : 'Captcha Error') !== false, substr(strip_tags($b), 0, 300));
+check('form: matching addresses (case / spaces ignored) pass the email checks', strpos($b, "don't match") === false && strpos($b, 'Invalid Email') === false && strpos($b, $skip ? "emailed to <b>reg-$rand@$D</b>" : 'check the captcha box') !== false, substr(strip_tags($b), 0, 300));
 list($c, $b) = post('/register.php', $base + array('email' => "reg-$rand@gnail.com", 'emailconfirm' => "reg-$rand@gnail.com"));
 $dnsok = checkdnsrr('gnail.com', 'MX') || checkdnsrr('gnail.com', 'A');
 if ($dnsok) {
-	check('form: gnail.com gets the "Did you mean" hint + Use button', strpos($b, "Did you mean <b>reg-$rand@gmail.com</b>?") !== false && strpos($b, 'useSuggestedEmail(&quot;reg-' . $rand . '@gmail.com&quot;)') !== false, substr(strip_tags($b), 0, 300));
+	check('form: gnail.com gets the "Did you mean" hint + Use button', strpos($b, 'Did you mean reg-' . $rand . '@<span class="regmsg-domain">gmail.com</span>?') !== false && strpos($b, 'useSuggestedEmail(&quot;reg-' . $rand . '@gmail.com&quot;)') !== false, substr(strip_tags($b), 0, 300));
 	check('form: the hint remembers the address it warned about', strpos($b, 'name="email_checked" value="reg-' . $rand . '@gnail.com"') !== false);
 	list($c, $b) = post('/register.php', $base + array('email' => "reg-$rand@gnail.com", 'emailconfirm' => "reg-$rand@gnail.com", 'email_checked' => "reg-$rand@gnail.com"));
 	check('form: submitting the same address again accepts it', strpos($b, 'Did you mean') === false, substr(strip_tags($b), 0, 300));

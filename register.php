@@ -89,9 +89,10 @@ function h($s){
 	return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8');
 }
 
-// Problems with a typed address, in the page's error format. $checked = the
-// address the user already confirmed after a "Did you mean" hint. $exceptpkey
-// = the pending account changing its own address.
+// Problems with a typed address (plain text, already escaped). Also sets
+// $suggestion when the address looks mistyped and the user has not yet kept
+// it ($checked = the address they kept after the hint); that blocks the
+// submit too. $exceptpkey = the pending account changing its own address.
 function email_errors($email, $emailconfirm, $checked, $exceptpkey = 0){
 	global $db, $suggestion;
 	$errors = array();
@@ -117,13 +118,7 @@ function email_errors($email, $emailconfirm, $checked, $exceptpkey = 0){
 		return $errors;
 	}
 	$suggestion = RegisterEmail::suggest($email);
-	if($suggestion !== null && $checked !== $email){
-		$errors[] = "Did you mean <b>".h($suggestion)."</b>? "
-			."<button type=\"button\" class=\"small\" onclick=\"useSuggestedEmail(".h(json_encode($suggestion)).")\">Use ".h($suggestion)."</button><br>"
-			."If <b>".h($email)."</b> is correct, submit again to use it.";
-	}else{
-		$suggestion = null;
-	}
+	if($suggestion === null || $checked === $email) $suggestion = null;
 	return $errors;
 }
 
@@ -144,9 +139,50 @@ function send_validation_mail($email, $firstname, $lastname, $hash){
 	}
 }
 
-function suggestion_script(){
-	// The hint prints above the form, so find the (only) email fields on the page.
-	return "<script>\nfunction useSuggestedEmail(email){\n\tdocument.querySelector('input[name=email]').value = email;\n\tdocument.querySelector('input[name=emailconfirm]').value = email;\n}\n</script>\n";
+// Error box + "Did you mean" card shown above a form.
+function messages_html($errors, $suggestion, $typed){
+	$out = "";
+	if(count($errors) > 0){
+		$out .= "<div class=\"regmsg regmsg-error\"><div class=\"regmsg-title\">Please fix the following:</div><ul>";
+		foreach($errors as $e) $out .= "<li>$e</li>";
+		$out .= "</ul></div>";
+	}
+	if($suggestion !== null){
+		$at = strrpos($suggestion, '@');
+		$out .= "<div class=\"regmsg regmsg-suggest\" id=\"regsuggest\">"
+			."<div class=\"regmsg-title\">Did you mean ".h(substr($suggestion, 0, $at + 1))."<span class=\"regmsg-domain\">".h(substr($suggestion, $at + 1))."</span>?</div>"
+			."<div class=\"regmsg-typed\">You typed ".h($typed)."</div>"
+			."<div class=\"regmsg-actions\"><input type=\"button\" class=\"primary small\" value=\"Use ".h(substr($suggestion, $at + 1))."\" onclick=\"useSuggestedEmail(".h(json_encode($suggestion)).")\">"
+			."<span>or submit the form again to keep what you typed.</span></div></div>";
+	}
+	return $out;
+}
+
+function page_assets(){
+	return <<<'HTML'
+<style>
+	.regmsg { margin: 0 0 2em 0; padding: 1em 1.25em; border-radius: 4px; border-left: 4px solid #e44c65; background: rgba(228, 76, 101, 0.08); text-align: left; }
+	.regmsg ul { margin: 0.5em 0 0 0; padding-left: 1.25em; }
+	.regmsg li { color: #ffffff; }
+	.regmsg-title { color: #ffffff; font-weight: 400; }
+	.regmsg-error .regmsg-title { color: #e44c65; }
+	.regmsg-suggest { border-left-color: #f2c94c; background: rgba(242, 201, 76, 0.08); }
+	.regmsg-domain { color: #f2c94c; font-weight: 400; }
+	.regmsg-typed { color: rgba(255, 255, 255, 0.6); font-size: 0.9em; margin-top: 0.25em; }
+	.regmsg-actions { margin-top: 1em; display: flex; flex-wrap: wrap; align-items: center; gap: 1em; }
+	.regmsg-actions span { color: rgba(255, 255, 255, 0.6); font-size: 0.9em; }
+</style>
+<script>
+// The card prints above the form, so find the (only) email fields on the page.
+function useSuggestedEmail(email){
+	document.querySelector('input[name=email]').value = email;
+	document.querySelector('input[name=emailconfirm]').value = email;
+	var card = document.getElementById('regsuggest');
+	card.innerHTML = '<div class="regmsg-title">Changed to <span class="regmsg-domain"></span>. Submit the form to continue.</div>';
+	card.querySelector('.regmsg-domain').textContent = email;
+}
+</script>
+HTML;
 }
 
 // Dev only: define('REGISTER_SKIP_CAPTCHA', true) in config.inc.php. Never set on prod.
@@ -169,8 +205,8 @@ if($_POST['fix_submit']!=""){
 		$fixemail = strtolower(trim($_POST['email']));
 		$fixemailconfirm = strtolower(trim($_POST['emailconfirm']));
 		$errors = email_errors($fixemail, $fixemailconfirm, (string)$_POST['email_checked'], $row->pkey);
-		if(count($errors) > 0){
-			$fixerror = "<div style=\"color:#FF0000;padding:10px;\">Error:<br>".implode("<br>", $errors)."</div>";
+		if(count($errors) > 0 || $suggestion !== null){
+			$fixerror = messages_html($errors, $suggestion, $fixemail);
 			$sentemail = $row->email;
 			$sentfixtoken = $_POST['fixtoken'];
 		}else{
@@ -195,14 +231,15 @@ if($_POST['submit']!=""){
 	$password = $_POST['password'];
 	$passwordconfirm = $_POST['passwordconfirm'];
 
-	if($firstname==""){$error.=$errordelim."First Name cannot be blank.";$errordelim="<br>";}
-	if($lastname==""){$error.=$errordelim."Last Name cannot be blank.";$errordelim="<br>";}
-	foreach(email_errors($email, $emailconfirm, (string)$_POST['email_checked']) as $e){$error.=$errordelim.$e;$errordelim="<br>";}
-	if($password==""){$error.=$errordelim."Password cannot be blank.";$errordelim="<br>";}
+	$errors = array();
+	if($firstname==""){$errors[] = "First Name cannot be blank.";}
+	if($lastname==""){$errors[] = "Last Name cannot be blank.";}
+	$errors = array_merge($errors, email_errors($email, $emailconfirm, (string)$_POST['email_checked']));
+	if($password==""){$errors[] = "Password cannot be blank.";}
 
 	if($password!=""){
 		if($password!=$passwordconfirm){
-			$error.=$errordelim."Passwords don't match.";$errordelim="<br>";
+			$errors[] = "Passwords don't match.";
 		}
 	}
 
@@ -241,7 +278,7 @@ if($_POST['submit']!=""){
 	$result = json_decode($result);
 
 	if(!$result->success){
-		$error.=$errordelim."Captcha Error. Please check the captcha box.";$errordelim="<br>";
+		$errors[] = "Please check the captcha box.";
 	}
 
 	}
@@ -251,7 +288,7 @@ if($_POST['submit']!=""){
 		exit();
 	}
 
-	if($error==""){
+	if(count($errors) == 0 && $suggestion === null){
 
 		//no errors, so let's put in user and send out confirmation email
 
@@ -279,7 +316,7 @@ if($_POST['submit']!=""){
 		));
 		curl_close($ch);
 	}else{
-		$error="<div style=\"color:#FF0000;padding:10px;\">Error:<br>$error</div>";
+		$error = messages_html($errors, $suggestion, $email);
 	}
 
 }
@@ -342,7 +379,7 @@ include("includes/mheader.php");
 								<div align="center"><input class="primary" type="submit" name="submit" value="Submit"></div>
 						</form>
 <?php } ?>
-						<?php echo suggestion_script()?>
+						<?php echo page_assets()?>
 
 						<div class="bottomSpacer"></div>
 
