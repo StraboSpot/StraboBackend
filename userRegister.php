@@ -175,7 +175,7 @@ if($errors==""){
 				Thanks for your interest in StraboSpot<br><br>
 				Please click on the link below to confirm your user account.<br><br>
 
-				<a href=\"http://www.strabospot.org/validate/$randstring\">https://www.strabospot.org/validate/$randstring</a><br><br>
+				<a href=\"https://strabospot.org/validate/$randstring\">https://strabospot.org/validate/$randstring</a><br><br>
 
 				Thanks,<br><br>
 				The StraboSpot Team

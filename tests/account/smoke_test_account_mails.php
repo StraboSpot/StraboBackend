@@ -46,7 +46,7 @@ list($c, $b) = post('/forgotpassword.php', array('submit_forgot_password' => 'Su
 $m = mail_since($mark);
 check('forgotpassword: page confirms the send', $c === 200 && strpos($b, 'Email sent') !== false, "$c");
 check('forgotpassword: one templated mail to the account address', substr_count($m, "To: $email") === 1 && strpos($m, 'Subject: Reset your StraboSpot password') !== false, substr($m, 0, 300));
-check('forgotpassword: greeting by first name, account fact, reset link with the hash', strpos($m, 'Hi Acct,') !== false && strpos($m, "Account: $email") !== false && strpos($m, "https://www.strabospot.org/passwdreset/$hash") !== false, substr($m, 0, 900));
+check('forgotpassword: greeting by first name, account fact, reset link with the hash', strpos($m, 'Hi Acct,') !== false && strpos($m, "Account: $email") !== false && strpos($m, "https://strabospot.org/passwdreset/$hash") !== false, substr($m, 0, 900));
 check('forgotpassword: no PHP warnings on the page', stripos($b, 'Warning:') === false && stripos($b, 'Fatal error') === false);
 
 // resend validation link
@@ -54,7 +54,7 @@ $mark = mail_len();
 list($c, $b) = post('/resendlink.php', array('submit_resend_vlink' => 'Submit', 'email' => $email));
 $m = mail_since($mark);
 check('resendlink: page confirms the send', $c === 200 && strpos($b, 'Email sent') !== false, "$c");
-check('resendlink: one templated mail with the validate link', substr_count($m, "To: $email") === 1 && strpos($m, 'Subject: Confirm your StraboSpot account') !== false && strpos($m, "https://www.strabospot.org/validate/$hash") !== false, substr($m, 0, 600));
+check('resendlink: one templated mail with the validate link', substr_count($m, "To: $email") === 1 && strpos($m, 'Subject: Confirm your StraboSpot account') !== false && strpos($m, "https://strabospot.org/validate/$hash") !== false, substr($m, 0, 600));
 
 // unknown address -> nothing
 $mark = mail_len();
@@ -63,8 +63,8 @@ list($c2, $b2) = post('/resendlink.php', array('submit_resend_vlink' => 'Submit'
 check('unknown address: both pages report not found and file no mail', strpos($b, 'not found') !== false && strpos($b2, 'not found') !== false && mail_since($mark) === '');
 
 // registration template (reCAPTCHA blocks the page; render the same message shape)
-$r = StraboMail::render(array('title' => 'Confirm your StraboSpot account', 'greeting' => 'Hi Acct,', 'facts' => array('Account' => $email), 'button' => array('Confirm my account', 'https://www.strabospot.org/validate/' . $hash)));
-check('registration message shape renders with the validate button', strpos($r['html'], 'https://www.strabospot.org/validate/' . $hash) !== false && strpos($r['html'], 'cid:' . StraboMail::LOGO_CID) !== false);
+$r = StraboMail::render(array('title' => 'Confirm your StraboSpot account', 'greeting' => 'Hi Acct,', 'facts' => array('Account' => $email), 'button' => array('Confirm my account', 'https://strabospot.org/validate/' . $hash)));
+check('registration message shape renders with the validate button', strpos($r['html'], 'https://strabospot.org/validate/' . $hash) !== false && strpos($r['html'], 'cid:' . StraboMail::LOGO_CID) !== false);
 
 $db->prepare_query("DELETE FROM users WHERE email = $1", array($email));
 check('zero residue', (int)$db->get_var_prepared("SELECT count(*) FROM users WHERE email = $1", array($email)) === 0);

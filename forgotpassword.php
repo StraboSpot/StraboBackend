@@ -39,7 +39,7 @@ include("neodb.php");
 				'greeting' => 'Hi ' . ($myrow->firstname !== '' ? $myrow->firstname : 'there') . ',',
 				'intro'    => array('We received a request to reset the password for your StraboSpot account.'),
 				'facts'    => array('Account' => $email),
-				'button'   => array('Reset my password', "https://www.strabospot.org/passwdreset/$hash"),
+				'button'   => array('Reset my password', "https://strabospot.org/passwdreset/$hash"),
 				'after'    => array('If you did not ask for a password reset, you can ignore this message; your password stays as it is.'),
 				'footer'   => 'You received this because a password reset was requested for this address at StraboSpot (https://strabospot.org).',
 			));

@@ -104,7 +104,7 @@ $mark = mail_len();
 list($c, $b) = post('/register.php', array('fix_submit' => 'x', 'fixtoken' => $tok0, 'email' => $new, 'emailconfirm' => $new));
 $u = user($pkey); $m = mail_since($mark);
 check('fix: address changed and a NEW validation hash set', $u->email === $new && $u->hash !== $hash0 && preg_match('/^[A-Za-z0-9]{21}$/', $u->hash), json_encode($u));
-check('fix: one validation mail to the new address with the new link', substr_count($m, "To: $new") === 1 && strpos($m, "https://www.strabospot.org/validate/" . $u->hash) !== false && strpos($m, "To: $old") === false, substr($m, 0, 400));
+check('fix: one validation mail to the new address with the new link', substr_count($m, "To: $new") === 1 && strpos($m, "https://strabospot.org/validate/" . $u->hash) !== false && strpos($m, "To: $old") === false, substr($m, 0, 400));
 check('fix: page names the new address and offers the fix form again', strpos($b, "emailed to <b>$new</b>") !== false && token_in($b) === RegisterEmail::fixToken($pkey, $u->hash, 1, $jwtsecret));
 $tok1 = token_in($b);
 
