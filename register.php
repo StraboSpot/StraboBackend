@@ -149,6 +149,8 @@ function suggestion_script(){
 	return "<script>\nfunction useSuggestedEmail(email){\n\tdocument.querySelector('input[name=email]').value = email;\n\tdocument.querySelector('input[name=emailconfirm]').value = email;\n}\n</script>\n";
 }
 
+// Dev only: define('REGISTER_SKIP_CAPTCHA', true) in config.inc.php. Never set on prod.
+$skipcaptcha = defined('REGISTER_SKIP_CAPTCHA') && REGISTER_SKIP_CAPTCHA === true;
 $suggestion = null;
 $sentemail = "";
 $fixexpired = false;
@@ -204,7 +206,9 @@ if($_POST['submit']!=""){
 		}
 	}
 
-	//Check Captcha from Google
+	//Check Captcha from Google (dev servers can skip it: localhost is not on the site key's domain list)
+
+	if(!$skipcaptcha){
 
 	$secret = $captchasecret;
 	$response = $_POST["g-recaptcha-response"];
@@ -238,6 +242,8 @@ if($_POST['submit']!=""){
 
 	if(!$result->success){
 		$error.=$errordelim."Captcha Error. Please check the captcha box.";$errordelim="<br>";
+	}
+
 	}
 
 	if(substr_count($email, '.') > 4){
@@ -328,7 +334,11 @@ include("includes/mheader.php");
 								<div class="padTop">Confirm Email:</td><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input type="text" name="emailconfirm" autocomplete="email" value="<?php echo h($emailconfirm)?>"></div>
 								<div class="padTop">Password:</td><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input type="password" name="password" value="<?php echo h($password)?>"></div>
 								<div class="padTop">Confirm Password:</td><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input type="password" name="passwordconfirm" value="<?php echo h($passwordconfirm)?>"></div>
+<?php if($skipcaptcha){ ?>
+								<div align="center" class="padTop" style="color:#FF0000;">reCAPTCHA is off (REGISTER_SKIP_CAPTCHA in config.inc.php, dev only).</div>
+<?php }else{ ?>
 								<div align="center" class="padTop"><div class="g-recaptcha" data-sitekey="6LdpswwUAAAAAFoitK0R2qztzQb8KT59pq1jUKEQ"></div></div></div>
+<?php } ?>
 								<div align="center"><input class="primary" type="submit" name="submit" value="Submit"></div>
 						</form>
 <?php } ?>

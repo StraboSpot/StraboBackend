@@ -72,7 +72,9 @@ check('form: mismatched Confirm Email is refused', $c === 200 && strpos($b, "Ema
 check('form: the page has the Confirm Email field', strpos($b, 'name="emailconfirm"') !== false);
 check('form: the typed values come back in the fields', strpos($b, 'value="reg-' . $rand . '-x@' . $D . '"') !== false);
 list($c, $b) = post('/register.php', $base + array('email' => "reg-$rand@$D", 'emailconfirm' => "REG-$rand@$D "));
-check('form: matching addresses (case / spaces ignored) pass the email checks', strpos($b, "don't match") === false && strpos($b, 'Invalid Email') === false && strpos($b, 'Captcha Error') !== false, substr(strip_tags($b), 0, 300));
+// With REGISTER_SKIP_CAPTCHA (dev) this one registers for real; zero residue removes it.
+$skip = defined('REGISTER_SKIP_CAPTCHA') && REGISTER_SKIP_CAPTCHA === true;
+check('form: matching addresses (case / spaces ignored) pass the email checks', strpos($b, "don't match") === false && strpos($b, 'Invalid Email') === false && strpos($b, $skip ? "emailed to <b>reg-$rand@$D</b>" : 'Captcha Error') !== false, substr(strip_tags($b), 0, 300));
 list($c, $b) = post('/register.php', $base + array('email' => "reg-$rand@gnail.com", 'emailconfirm' => "reg-$rand@gnail.com"));
 $dnsok = checkdnsrr('gnail.com', 'MX') || checkdnsrr('gnail.com', 'A');
 if ($dnsok) {
@@ -123,7 +125,7 @@ list($c, $b) = post('/register.php', array('fix_submit' => 'x', 'fixtoken' => Re
 check('fix: refused after ' . RegisterEmail::MAX_FIXES . ' changes', strpos($b, 'can no longer be changed') !== false && user($pkey)->email === $new);
 check('fix: no PHP warnings', stripos($b, 'Warning:') === false && stripos($b, 'Fatal error') === false);
 
-$db->prepare_query("DELETE FROM users WHERE pkey = $1 OR email = $2", array($pkey, $taken));
+$db->prepare_query("DELETE FROM users WHERE pkey = $1 OR email LIKE $2", array($pkey, "%-$rand@$D"));
 check('zero residue', (int)$db->get_var_prepared("SELECT count(*) FROM users WHERE email LIKE $1", array("%-$rand@$D")) === 0);
 echo "\n$pass passed, $fail failed\n";
 exit($fail ? 1 : 0);
