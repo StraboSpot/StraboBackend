@@ -77,7 +77,8 @@ function check_email_address($email)
 			$isValid = false;
 		 }
 	  }
-	  if ($isValid && !(checkdnsrr($domain,"MX") || checkdnsrr($domain,"A")))
+	  // StraboMail::FIXTURE_DOMAIN has no DNS on purpose: test suites use it, and mail to it is only filed, never sent.
+	  if ($isValid && $domain !== StraboMail::FIXTURE_DOMAIN && !(checkdnsrr($domain,"MX") || checkdnsrr($domain,"A")))
 	  {
 		 // domain not found in DNS
 		 $isValid = false;
@@ -98,6 +99,7 @@ $jsonbody = json_decode($body);
 
 include_once "./includes/config.inc.php";
 include("db.php");
+require_once __DIR__ . '/includes/StraboMail.php';
 
 $firstname=$jsonbody->first_name;
 $lastname=$jsonbody->last_name;
@@ -151,50 +153,21 @@ if($errors==""){
 	$db->prepare_query("INSERT INTO users (firstname, lastname, password, hash, email) VALUES ($1, $2, crypt($3, gen_salt('md5')), $4, $5)",
 		array($firstname, $lastname, $password, $randstring, $email));
 
-	//Now send email
-	require_once "Mail.php";
-
-	$user = $email;
-
-	$from     = "StraboSpot <strabospot@gmail.com>";
-	$subject="StraboSpot Account Validation";
-
-	$host     = "ssl://smtp.gmail.com";
-	$port     = "465";
-	$emailusername = "$straboemailaddress";  //<> give errors
-	$password = "$straboemailpassword";
-
-	$headers = array(
-		'From'    => $from,
-		'Subject' => $subject,
-		'Content-Type' => "text/html; charset=iso-8859-1"
-	);
-
-	$message= "<html><body>
-				<h2>StraboSpot</h2>
-				Thanks for your interest in StraboSpot<br><br>
-				Please click on the link below to confirm your user account.<br><br>
-
-				<a href=\"https://strabospot.org/validate/$randstring\">https://strabospot.org/validate/$randstring</a><br><br>
-
-				Thanks,<br><br>
-				The StraboSpot Team
-				<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
-				</body></html>";
-
-	$smtp = Mail::factory('smtp', array(
-		'host'     => $host,
-		'port'     => $port,
-		'auth'     => true,
-		'username' => $emailusername,
-		'password' => $password
+	//Now send email (same message as register.php)
+	$welcome = StraboMail::render(array(
+		'title'    => 'Confirm your StraboSpot account',
+		'greeting' => 'Hi ' . $firstname . ',',
+		'intro'    => array('Thanks for your interest in StraboSpot. Please confirm your email address to activate your account.'),
+		'facts'    => array('Account' => $email),
+		'button'   => array('Confirm my account', "https://strabospot.org/validate/$randstring"),
+		'after'    => array('If you did not create a StraboSpot account, you can ignore this message and nothing will happen.'),
+		'footer'   => 'You received this because this address was used to register at StraboSpot (https://strabospot.org).',
 	));
-
-	$to = $user;
-
-	$headers['To']=$user;
-
-	$mail = $smtp->send($to, $headers, $message);
+	try {
+		StraboMail::send($email, 'Confirm your StraboSpot account', $welcome, array('to_name' => trim($firstname . ' ' . $lastname)));
+	} catch (Exception $e) {
+		error_log('userRegister: validation mail to ' . $email . ' failed: ' . $e->getMessage());
+	}
 
 	$message = "A confirmation link has been emailed to $email. Please allow a few minutes for this email to arrive. Clicking on the link will verify your account at which time you may login.";
 
