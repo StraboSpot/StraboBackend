@@ -16,12 +16,39 @@ include("neodb.php");
 
 $hash = $_GET['hash'] ?? '';
 $hash = preg_replace('/[^a-zA-Z0-9]/', '', $hash);
-if($hash==""){exit("error");}
 
-$row=$db->get_row_prepared("SELECT * FROM users WHERE hash=$1", array($hash));
+$row = null;
+if($hash!=""){
+	$row=$db->get_row_prepared("SELECT * FROM users WHERE hash=$1", array($hash));
+}
 
-if($row->pkey==""){
-	exit("error");
+if(!$row || $row->pkey==""){
+	// Unknown link: mistyped, or replaced by a newer one (the address was
+	// corrected at registration, which gives the account a new link).
+	include("includes/mheader.php");
+	?>
+			<!-- Main -->
+				<div id="main" class="wrapper style1">
+					<div class="container">
+
+						<header class="major">
+							<h2>Link No Longer Valid</h2>
+						</header>
+		This confirmation link is not valid. It may have been replaced by a newer link, for example if the
+		email address was corrected after registering.<br><br>
+		If you registered for a StraboSpot account, please use the most recent confirmation email we sent,
+		or <a href="/resendlink">request a new confirmation link</a>.<br><br>
+		If your account is already active, you can <a href="/login">log in</a>.<br><br>
+		If you did not register for a StraboSpot account, you can ignore the email.<br><br>
+		Thanks,<br><br>
+		The StraboSpot Team
+						<div class="bottomSpacer"></div>
+
+					</div>
+				</div>
+	<?php
+	include("includes/mfooter.php");
+	exit();
 }else{
 	if($row->active=="t"){
 		include("includes/mheader.php");
