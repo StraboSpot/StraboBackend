@@ -94,46 +94,18 @@ class LogsController extends MyController
 			)
 		", array($pkey, $email, $notes, $appversion));
 
-		require_once "Mail.php";
-		include($_SERVER['DOCUMENT_ROOT']."/includes/config.inc.php");
-		$from     = "StraboSpot <strabospot@gmail.com>";
-		$subject="StraboMicro Error Report";
-
-		$host     = "ssl://smtp.gmail.com";
-		$port     = "465";
-		$emailusername = "$straboemailaddress";  //<> give errors
-		$password = "$straboemailpassword";
-
-		$headers = array(
-			'From'    => $from,
-			'Subject' => $subject,
-			'Content-Type' => "text/html; charset=iso-8859-1"
-		);
-
-		$message= "<html><body>
-					<h2>StraboMicro Error Report</h2>
-					A new error report has been sent by StraboMicro user $email<br><br>
-
-					$notes<br><br>
-
-					<a href=\"https://strabospot.org/microLogView?pkey=$pkey\">https://strabospot.org/microLogView?pkey=$pkey</a><br><br>
-
-					<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
-					</body></html>";
-
-		$smtp = Mail::factory('smtp', array(
-			'host'     => $host,
-			'port'     => $port,
-			'auth'     => true,
-			'username' => $emailusername,
-			'password' => $password
+		// config.inc.php is already loaded by index.php; StraboMail reads it from the globals.
+		require_once $_SERVER['DOCUMENT_ROOT']."/includes/StraboMail.php";
+		$m = StraboMail::render(array(
+			'title'  => 'StraboMicro Error Report',
+			'intro'  => array_values(array_filter(array("A new error report has been sent by StraboMicro user $email", $notes), 'strlen')),
+			'button' => array('View the report', "https://strabospot.org/microLogView?pkey=$pkey"),
 		));
-
-		$to = "jasonash@ku.edu";
-
-		$headers['To']=$to;
-
-		$mail = $smtp->send($to, $headers, $message);
+		try {
+			StraboMail::send("jasonash@ku.edu", "StraboMicro Error Report", $m);
+		} catch (Exception $e) {
+			error_log('LogsController: error report mail failed: ' . $e->getMessage());
+		}
 
 		header('Content-Type: application/json; charset=utf-8');
 		echo "{\"status\":\"success\"}";

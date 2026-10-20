@@ -18,6 +18,11 @@
  *                - explicit $opts['transport'] (smtp | file | none), else
  *                - $GLOBALS['strabo_mail_transport'] (config.inc.php), else
  *                - STRABO_MAIL_TRANSPORT env var, else smtp.
+ *              SMTP server (StraboMail::smtpSettings): $strabo_mail_smtp in
+ *              config.inc.php when set (Postmark: noreply@strabospot.org,
+ *              docs/Email_Sender_Runbook.md), else the site Gmail account
+ *              ($straboemailaddress / $straboemailpassword on smtp.gmail.com).
+ *              Removing $strabo_mail_smtp from config is the rollback.
  *              Addresses under @test.strabospot.org (the suites' fixture
  *              domain) are ALWAYS filed, never sent, so suites can drive the
  *              real Apache pages without mailing anyone. "file" appends to
@@ -203,6 +208,42 @@ class StraboMail
 	}
 
 	/**
+	 * SMTP server and sender for real sends.
+	 *
+	 * $strabo_mail_smtp (config.inc.php), all keys optional except host/user/pass/from:
+	 *   array('host' => 'smtp.postmarkapp.com', 'port' => 587, 'user' => TOKEN, 'pass' => TOKEN,
+	 *         'from' => 'noreply@strabospot.org', 'from_name' => 'StraboSpot',
+	 *         'reply_to' => 'strabospot@gmail.com',
+	 *         'headers' => array('X-PM-Message-Stream' => 'outbound'))
+	 * Without it: the site Gmail account, as before.
+	 *
+	 * @return array host, port, secure, user, pass, from, from_name, reply_to, headers
+	 */
+	public static function smtpSettings()
+	{
+		$c = isset($GLOBALS['strabo_mail_smtp']) && is_array($GLOBALS['strabo_mail_smtp']) ? $GLOBALS['strabo_mail_smtp'] : null;
+		if ($c !== null) {
+			return array(
+				'host'      => isset($c['host']) ? (string)$c['host'] : '',
+				'port'      => isset($c['port']) ? (int)$c['port'] : 587,
+				'secure'    => isset($c['secure']) ? (string)$c['secure'] : 'tls',
+				'user'      => isset($c['user']) ? (string)$c['user'] : '',
+				'pass'      => isset($c['pass']) ? (string)$c['pass'] : '',
+				'from'      => isset($c['from']) ? (string)$c['from'] : '',
+				'from_name' => isset($c['from_name']) ? (string)$c['from_name'] : 'StraboSpot',
+				'reply_to'  => isset($c['reply_to']) ? (string)$c['reply_to'] : '',
+				'headers'   => isset($c['headers']) && is_array($c['headers']) ? $c['headers'] : array(),
+			);
+		}
+		$from = isset($GLOBALS['straboemailaddress']) ? (string)$GLOBALS['straboemailaddress'] : '';
+		return array(
+			'host' => 'smtp.gmail.com', 'port' => 587, 'secure' => 'tls',
+			'user' => $from, 'pass' => isset($GLOBALS['straboemailpassword']) ? (string)$GLOBALS['straboemailpassword'] : '',
+			'from' => $from, 'from_name' => 'StraboSpot', 'reply_to' => '', 'headers' => array(),
+		);
+	}
+
+	/**
 	 * Send (or file) a rendered message.
 	 *
 	 * @param string $to        recipient address (validated)
@@ -218,32 +259,47 @@ class StraboMail
 		$transport = self::transport($to, $opts);
 		if ($transport === 'none') return 'none';
 		if ($transport === 'file') {
-			$line = '[' . date('Y-m-d H:i:s') . "] To: $to\nSubject: $subject\n" . $rendered['text'] . "\n---\n";
+			// To + Subject first: older suites parse those two lines as a pair.
+			$cfg = self::smtpSettings();
+			$line = '[' . date('Y-m-d H:i:s') . "] To: $to\nSubject: $subject\nFrom: " . $cfg['from'] . ($cfg['reply_to'] !== '' ? "\nReply-To: " . $cfg['reply_to'] : '') . "\n" . $rendered['text'] . "\n---\n";
 			file_put_contents(self::logFile(), $line, FILE_APPEND);
 			return 'file';
 		}
 
+		self::buildMailer($to, $subject, $rendered, $opts)->send();
+		return 'smtp';
+	}
+
+	/**
+	 * The PHPMailer message send() delivers, not yet sent (tests call preSend()
+	 * + getSentMIMEMessage() on it to read the exact headers).
+	 *
+	 * @throws Exception when the site mail account is not configured
+	 */
+	public static function buildMailer($to, $subject, array $rendered, array $opts = array())
+	{
 		$root = dirname(__DIR__);
 		if (!class_exists('PHPMailer\PHPMailer\PHPMailer')) {
 			require_once $root . '/includes/PHPMailer/PHPMailer/src/Exception.php';
 			require_once $root . '/includes/PHPMailer/PHPMailer/src/PHPMailer.php';
 			require_once $root . '/includes/PHPMailer/PHPMailer/src/SMTP.php';
 		}
-		$from = isset($GLOBALS['straboemailaddress']) ? $GLOBALS['straboemailaddress'] : null;
-		$pass = isset($GLOBALS['straboemailpassword']) ? $GLOBALS['straboemailpassword'] : null;
-		if (!$from || !$pass) throw new Exception('site mail account is not configured');
+		$cfg = self::smtpSettings();
+		if ($cfg['host'] === '' || $cfg['user'] === '' || $cfg['pass'] === '' || $cfg['from'] === '') throw new Exception('site mail account is not configured');
 
 		$mail = new PHPMailer\PHPMailer\PHPMailer(true);
 		$mail->isSMTP();
 		$mail->SMTPDebug = 0;
-		$mail->Host = 'smtp.gmail.com';
+		$mail->Host = $cfg['host'];
 		$mail->SMTPAuth = true;
-		$mail->SMTPSecure = 'tls';
-		$mail->Port = 587;
-		$mail->Username = $from;
-		$mail->Password = $pass;
-		$mail->From = $from;
-		$mail->FromName = 'StraboSpot';
+		$mail->SMTPSecure = $cfg['secure'];
+		$mail->Port = $cfg['port'];
+		$mail->Username = $cfg['user'];
+		$mail->Password = $cfg['pass'];
+		$mail->From = $cfg['from'];
+		$mail->FromName = $cfg['from_name'];
+		if ($cfg['reply_to'] !== '') $mail->addReplyTo($cfg['reply_to'], $cfg['from_name']);
+		foreach ($cfg['headers'] as $name => $value) $mail->addCustomHeader($name, $value);
 		$mail->addAddress($to, isset($opts['to_name']) ? (string)$opts['to_name'] : '');
 		$mail->isHTML(true);
 		$mail->CharSet = 'UTF-8';
@@ -253,7 +309,6 @@ class StraboMail
 		$mail->AltBody = $rendered['text'];
 		$logo = self::logoPath();
 		if (is_file($logo)) $mail->addEmbeddedImage($logo, self::LOGO_CID, 'strabospot.png', 'base64', 'image/png');
-		$mail->send();
-		return 'smtp';
+		return $mail;
 	}
 }
