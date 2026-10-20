@@ -84,7 +84,7 @@ if($currentemail != ""){
 				'greeting' => 'Hi there,',
 				'intro'    => array('We received a request to change the email address on a StraboSpot account to this address.'),
 				'facts'    => array('New address' => $newemail, 'Link expires' => "in $EMAIL_CHANGE_TTL_HOURS hours"),
-				'button'   => array('Confirm the change', "https://www.strabospot.org/changeemail/$token"),
+				'button'   => array('Confirm the change', "https://strabospot.org/changeemail/$token"),
 				'after'    => array('If you did not request this change, you can safely ignore this email and the account will be unchanged.'),
 				'footer'   => 'You received this because this address was entered as a new sign-in address at StraboSpot (https://strabospot.org).',
 			));

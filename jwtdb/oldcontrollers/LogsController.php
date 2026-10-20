@@ -116,7 +116,7 @@ class LogsController extends MyController
 
 					$notes<br><br>
 
-					<a href=\"https://www.strabospot.org/microLogView?pkey=$pkey\">https://www.strabospot.org/microLogView/$pkey</a><br><br>
+					<a href=\"https://strabospot.org/microLogView?pkey=$pkey\">https://strabospot.org/microLogView?pkey=$pkey</a><br><br>
 
 					<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
 					</body></html>";

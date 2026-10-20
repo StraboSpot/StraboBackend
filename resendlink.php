@@ -40,7 +40,7 @@ include("neodb.php");
 				'greeting' => 'Hi ' . ($myrow->firstname !== '' ? $myrow->firstname : 'there') . ',',
 				'intro'    => array('Here is a fresh link to confirm your StraboSpot account.'),
 				'facts'    => array('Account' => $email),
-				'button'   => array('Confirm my account', "https://www.strabospot.org/validate/$hash"),
+				'button'   => array('Confirm my account', "https://strabospot.org/validate/$hash"),
 				'after'    => array('If you did not request this link, you can ignore this message.'),
 				'footer'   => 'You received this because a new validation link was requested for this address at StraboSpot (https://strabospot.org).',
 			));

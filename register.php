@@ -128,7 +128,7 @@ function send_validation_mail($email, $firstname, $lastname, $hash){
 		'greeting' => 'Hi ' . $firstname . ',',
 		'intro'    => array('Thanks for your interest in StraboSpot. Please confirm your email address to activate your account.'),
 		'facts'    => array('Account' => $email),
-		'button'   => array('Confirm my account', "https://www.strabospot.org/validate/$hash"),
+		'button'   => array('Confirm my account', "https://strabospot.org/validate/$hash"),
 		'after'    => array('If you did not create a StraboSpot account, you can ignore this message and nothing will happen.'),
 		'footer'   => 'You received this because this address was used to register at StraboSpot (https://strabospot.org).',
 	));

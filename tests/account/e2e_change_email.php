@@ -217,7 +217,7 @@ ok(pendingCount($pkeyB, $emailDecoy)==0, "F3 no pending request for duplicate ad
 list($c, $b) = http("$BASE/change_email.php", array('sid'=>$sidB, 'post'=>array('submit'=>'Submit','newemail'=>$emailB_new,'currentpassword'=>$KNOWN_PASS)));
 ok(pendingCount($pkeyB, $emailB_new)==1, "F4 valid submit -> one pending request created");
 $mailF = mail_since($mailMark);
-ok(strpos($mailF, "To: $emailB_new")!==false && strpos($mailF, "Subject: Confirm your new StraboSpot email address")!==false && preg_match('#https://www\.strabospot\.org/changeemail/[0-9a-f]{64}#', $mailF)===1, "confirmation mail filed to the NEW address with the token link");
+ok(strpos($mailF, "To: $emailB_new")!==false && strpos($mailF, "Subject: Confirm your new StraboSpot email address")!==false && preg_match('#https://strabospot\.org/changeemail/[0-9a-f]{64}#', $mailF)===1, "confirmation mail filed to the NEW address with the token link");
 $tokRow = $db->get_row_prepared("SELECT token, expires_at > now() AS future FROM email_change_requests WHERE userpkey=$1 AND new_email=$2 AND used_at IS NULL", array($pkeyB, $emailB_new));
 ok(strlen($tokRow->token)==64 && ctype_xdigit($tokRow->token), "F4 token is 64 hex chars");
 ok($tokRow->future=='t' || $tokRow->future===true, "F4 expiry is in the future");
