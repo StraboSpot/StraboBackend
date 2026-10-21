@@ -520,7 +520,8 @@ class straboModelClass
 		$tagfound="no";
 		foreach($json_tags as $json_tag){
 			if($json_tag["name"]==$tagname){
-				//add spot to list
+				//add spot to list (a tag with no spots has no "spots" key yet)
+				if(!isset($json_tag["spots"]) || !is_array($json_tag["spots"])) $json_tag["spots"] = array();
 				array_push($json_tag["spots"],$spotid);
 				$tagfound="yes";
 			}
@@ -567,7 +568,8 @@ class straboModelClass
 		foreach($json_tags as $json_tag){
 			if($json_tag["name"]==$tagname && $json_tag["map_unit_name"]==$mapunitname && $json_tag["member_name"]==$membername ){
 				//add spot to list
-				if(!in_array($spotid, $json_tag["spots"] ?? array())){
+				if(!isset($json_tag["spots"]) || !is_array($json_tag["spots"])) $json_tag["spots"] = array();
+				if(!in_array($spotid, $json_tag["spots"])){
 					array_push($json_tag["spots"],$spotid);
 				}
 				$tagfound="yes";
