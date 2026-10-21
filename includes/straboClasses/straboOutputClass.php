@@ -140,7 +140,7 @@ class straboOutputClass
 		$orientations = json_decode($odJson);
 		if(!is_array($orientations) || count($orientations) <= 1){
 			// Single or no orientation — check for associated_orientation on the single entry
-			if(count($orientations) == 1 && isset($orientations[0]->associated_orientation) && !empty($orientations[0]->associated_orientation)){
+			if(is_array($orientations) && count($orientations) == 1 && isset($orientations[0]->associated_orientation) && !empty($orientations[0]->associated_orientation)){
 				// Has associated orientations — fall through to explosion logic
 			}else{
 				return [$spot];
@@ -1706,7 +1706,7 @@ class straboOutputClass
 				unset($lines);
 				unset($planes);
 
-				$count = count($spots);
+				$count = count($spots ?? array());
 
 				foreach($spots as $spot){
 

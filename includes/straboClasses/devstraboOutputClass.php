@@ -1750,7 +1750,7 @@ class straboOutputClass
 			$lines = "";
 			$planes = "";
 
-			$count = count($spots);
+			$count = count($spots ?? array());
 
 			foreach($spots as $spot){
 

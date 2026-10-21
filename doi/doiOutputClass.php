@@ -6310,7 +6310,7 @@ $html.='
 			unset($lines);
 			unset($planes);
 
-			$count = count($spots);
+			$count = count($spots ?? array());
 
 			foreach($spots as $spot){
 

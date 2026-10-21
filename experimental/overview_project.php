@@ -366,7 +366,7 @@ include("includes/mheader.php");
                     <?php
                     render_labeled_field('Created', $row->created_date);
                     render_labeled_field('Last Modified', $row->modified_date);
-                    render_labeled_field('Experiments', count($exp_rows));
+                    render_labeled_field('Experiments', count($exp_rows ?? array()));
                     ?>
                 </tbody></table>
 

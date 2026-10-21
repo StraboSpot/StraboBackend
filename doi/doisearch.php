@@ -68,7 +68,7 @@ $out->type = "FeatureCollection";
 $outDataset = new stdClass();
 $outDataset->name = $dataset->name;
 $outDataset->id = $u;
-$outDataset->spotcount = count($dataset->spotIds);
+$outDataset->spotcount = count($dataset->spotIds ?? array());
 
 $out->datasets[] = $outDataset;
 

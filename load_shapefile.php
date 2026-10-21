@@ -363,7 +363,7 @@ if($_POST['columnsubmit']!=""){
 	$shapefilejson = file_get_contents("ogrtemp/$randnum");
 	$shapefilejson = json_decode($shapefilejson,true);
 	$shapefilejson = $shapefilejson['features'];
-	$totalcount = count($shapefilejson);
+	$totalcount = count($shapefilejson ?? array());
 	if(file_exists("ogrtemp/$randnum")) unlink("ogrtemp/$randnum");
 
 	//check shapefilejson here
@@ -873,7 +873,7 @@ if($_POST['columnsubmit']!=""){
 
 	$json = $json['features'];
 
-	$totalcount = count($json);
+	$totalcount = count($json ?? array());
 
 	if(file_exists("ogrtemp/$randnum")){
 		unlink("ogrtemp/$randnum");

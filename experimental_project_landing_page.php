@@ -62,7 +62,7 @@ if(empty($rows)){
 	exit();
 }
 
-if(count($rows) == 1){
+if(count($rows ?? array()) == 1){
 	$pkey = $rows[0]->pkey;
 	header("Location: /experimental/view_experiment?e=".$pkey);
 	exit();

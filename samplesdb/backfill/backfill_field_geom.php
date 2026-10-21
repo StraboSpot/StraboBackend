@@ -70,11 +70,11 @@ $candidates = $db->get_results(
       WHERE s.latitude IS NULL
         AND s.longitude IS NULL"
 );
-$alreadyPopulated = $totalLinks - count($candidates);
+$alreadyPopulated = $totalLinks - count($candidates ?? array());
 
 echo "Total Field-linked sample rows:        " . fmt($totalLinks) . "\n";
 echo "Already populated (lat AND lng):       " . fmt($alreadyPopulated) . "\n";
-echo "Candidate rows (lat IS NULL):          " . fmt(count($candidates)) . "\n";
+echo "Candidate rows (lat IS NULL):          " . fmt(count($candidates ?? array())) . "\n";
 
 if (empty($candidates)) {
     echo "\nNothing to backfill. Exiting.\n";

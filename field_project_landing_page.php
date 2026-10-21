@@ -62,7 +62,7 @@ if(empty($rows)){
 	exit();
 }
 
-if(count($rows) == 1){
+if(count($rows ?? array()) == 1){
 	$dataset_id = $rows[0]->strabo_dataset_id;
 	header("Location: /StraboFieldDatasetDetail/?dataset_id=" . rawurlencode($dataset_id));
 	exit();

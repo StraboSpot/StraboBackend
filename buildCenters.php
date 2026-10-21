@@ -61,7 +61,7 @@ foreach($userRows as $userRow){
 
 			$spots = $json['features'];
 
-			$spotcount = count($spots);
+			$spotcount = count($spots ?? array());
 
 			echo "&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Dataset: $datasetname ($spotcount spots)<br>";
 			flush();

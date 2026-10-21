@@ -313,7 +313,7 @@ if(1==1){
 			$uniqid = $row->userpkey . "-" . $row->strabo_project_id;
 			if($uniqid != $currentprojectid){
 				if($currentprojectid!=""){
-					$currentproject['sample_count'] = count($projectsamples);
+					$currentproject['sample_count'] = count($projectsamples ?? array());
 					$currentproject['micrograph_count'] = $projectmicrographcount;
 					$currentproject['spot_count'] = $projectspotcount;
 					$currentproject['samples'] = $projectsamples;
@@ -363,7 +363,7 @@ if(1==1){
 		}
 
 		if($currentproject['project_id'] != ""){
-			$currentproject['sample_count'] = count($projectsamples);
+			$currentproject['sample_count'] = count($projectsamples ?? array());
 			$currentproject['micrograph_count'] = $projectmicrographcount;
 			$currentproject['spot_count'] = $projectspotcount;
 			$currentproject['samples'] = $projectsamples;
