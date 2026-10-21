@@ -198,7 +198,21 @@ class StraboSpot
 
 	public function getPublicSingleSpot($feature_id){
 
-		$querystring="MATCH (s:Spot {id:$feature_id}) optional match (s)-[b:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
+		// Only a spot in a dataset the viewer may read (public project, own, or accepted collaborator),
+		// pinned to its owner since spot ids are not unique across accounts (2026-10-21, see
+		// permittedDatasetsByOwner); anything else is "not found".
+		$feature_id = (int)$feature_id;
+		$dsids = array();
+		foreach($this->neodb->query("MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot {id:$feature_id}) WHERE d.userpkey = s.userpkey RETURN d.id AS dsid") as $record){
+			$dsids[] = (int)$record->get('dsid');
+		}
+		$spotstring = "false";
+		foreach($this->permittedDatasetsByOwner(implode(",", $dsids)) as $owner => $list){
+			$spotstring = "s.userpkey=".(int)$owner;
+			break;
+		}
+
+		$querystring="MATCH (s:Spot {id:$feature_id}) where $spotstring optional match (s)-[b:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
 
 		$records = $this->neodb->get_results($querystring);
 
@@ -5027,15 +5041,19 @@ public function getSpotName($id){
 
 	}
 
-	public function getTagsFromDatasetIds($feature_ids){
+	public function getTagsFromDatasetIds($feature_ids, $owner = null){
 
 		$feature_ids = $this->intIdList($feature_ids);
 		$tags = [];
 
 		$data = new stdClass();
 
+		// Dataset ids are not unique across accounts: only the project that owns each dataset, and
+		// when the caller knows the (access checked) owner, only that owner's datasets (2026-10-21).
+		$ownerstring = ($owner !== null && $owner !== "") ? "and d.userpkey = ".(int)$owner." " : "";
+
 		//get the feature from neo4j
-		$querystring = "MATCH (n:Project)-[HAS_DATASET]->(d:Dataset) WHERE d.id in [$feature_ids] RETURN distinct(n);";
+		$querystring = "MATCH (n:Project)-[:HAS_DATASET]->(d:Dataset) WHERE d.id in [$feature_ids] and n.userpkey = d.userpkey $ownerstring RETURN distinct(n);";
 
 		$records = $this->neodb->query($querystring);
 

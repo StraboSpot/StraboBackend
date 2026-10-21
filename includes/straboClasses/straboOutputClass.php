@@ -58,6 +58,10 @@ class straboOutputClass
 
 	public function capturing(){ return $this->captureDir !== null; }
 
+	// Owner the project tags are read for: the access checked userpkey of a single-owner export.
+	// Export Builder scope groups can span owners, so no pin there (each group is checked by ExportAccess).
+	public function tagOwner(){ return empty($this->get['scope_groups']) ? ($this->get['userpkey'] ?? null) : null; }
+
 	/** Unique target path inside the capture dir for a delivery name. */
 	private function captureTarget($name){
 		$name = preg_replace('/[^A-Za-z0-9._ -]/', '_', basename($name));
@@ -1216,7 +1220,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -1339,7 +1343,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -1496,7 +1500,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -1659,7 +1663,7 @@ class straboOutputClass
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$spots = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 			$spots = $spots['features'];
@@ -1675,7 +1679,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$spots = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 				$spots = $spots['features'];
@@ -1949,7 +1953,7 @@ class straboOutputClass
 			$randnum = rand(111111111,999999999);
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -2011,7 +2015,7 @@ class straboOutputClass
 			$randnum = rand(111111111,999999999);
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -10257,7 +10261,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -12601,7 +12605,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -12730,7 +12734,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -12843,7 +12847,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -12959,7 +12963,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -15323,7 +15327,7 @@ class straboOutputClass
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -17687,7 +17691,7 @@ class straboOutputClass
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -18422,7 +18426,7 @@ $html.='
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$json = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -19159,7 +19163,7 @@ $html.='
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -20017,7 +20021,7 @@ $html.='
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -20932,7 +20936,7 @@ $html.='
 			if($this->get['dsids']!=""){
 
 				$dsids=$this->get['dsids'];
-				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -21909,7 +21913,7 @@ $html.='
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -22869,7 +22873,7 @@ $html.='
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -23851,7 +23855,7 @@ $html.='
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -24866,7 +24870,7 @@ $html.='
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
@@ -25773,7 +25777,7 @@ $html.='
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$this->get);
 			if($polygonjson!=""){
@@ -26630,7 +26634,7 @@ QML;
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			// Get spots by geometry type
 			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$this->get);
@@ -26751,7 +26755,7 @@ QML;
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$this->get);
 			if($polygonjson!=""){
@@ -26849,7 +26853,7 @@ QML;
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$this->get);
 			if($polygonjson!=""){
@@ -27094,7 +27098,7 @@ QML;
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$this->get);
 			if($polygonjson!=""){
@@ -27197,7 +27201,7 @@ QML;
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$getvals = array();
 			$getvals['dsids'] = $dsids;
@@ -27297,7 +27301,7 @@ QML;
 		if($this->get['dsids']!=""){
 
 			$dsids=$this->get['dsids'];
-			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids);
+			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
 			$getvals = array();
 			$getvals['dsids'] = $dsids;
