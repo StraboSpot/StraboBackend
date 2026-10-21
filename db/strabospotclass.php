@@ -1433,7 +1433,7 @@ class StraboSpot
 				foreach($inferencerelationships as $ir){
 					unset($thisir);
 					foreach($ir as $key=>$value){
-						if(is_numeric($value)){$value=(real)$value;}
+						if(is_numeric($value)){$value=(float)$value;}
 						if($value!=""){
 							if(is_array($value)){$value=json_encode($value);}
 							$thisir[$key]=$value;
