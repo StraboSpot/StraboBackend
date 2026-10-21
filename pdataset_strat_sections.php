@@ -11,6 +11,7 @@
  */
 
 
+session_start(); // so the signed-in owner / collaborator can see private datasets (getPublicDatasetSpots access check, 2026-10-21)
 include("prepare_connections.php");
 
 $credentials = $_SESSION['credentials'];

@@ -15,9 +15,9 @@ include("../prepare_connections.php");
 
 
 
-$spot_id = $_GET['spot_id'];
+$spot_id = (int)($_GET['spot_id'] ?? 0); // interpolated into Cypher below: integer only
 
-if($spot_id == "") exit();
+if(!$spot_id) exit();
 
 $dataset_id = $neodb->get_var("match (d:Dataset)-[HAS_SPOT]->(s:Spot) where s.id = $spot_id return d.id limit 1");
 

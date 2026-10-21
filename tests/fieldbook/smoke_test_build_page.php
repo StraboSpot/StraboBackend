@@ -153,8 +153,19 @@ if ($cross === 'held') {
 	echo "  SKIP  locked key (flock is not shared across processes on this filesystem: $cross)\n";
 }
 
-section('failure: a dataset with no spots');
+section('unknown or not permitted dataset id');
+// 2026-10-21 export access check (docs/Export_Access_Fix.md): an id the session user may not read,
+// or that does not exist, never reaches a build; the page shows the no-data card.
 list($code, $body) = http("/fieldbook_build?userpkey=3&dsids=1", $me);
+check('unknown dataset id: no-data page, no build key', $code === 200 && strpos($body, 'id="fb-nodata"') !== false && keyOf($body) === '', modeOf($body));
+
+section('failure: a dataset with no spots');
+// one of user 3's own datasets that has no spots (dev data)
+require_once 'includes/config.inc.php';
+require_once 'neodb.php';
+$emptyDs = $neodb->get_var("MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset) WHERE d.userpkey = 3 AND p.userpkey = 3 AND NOT (d)-[:HAS_SPOT]->() RETURN d.id LIMIT 1");
+if ($emptyDs === '') { echo "SKIP: user 3 has no empty dataset on this database\n"; $emptyDs = 1; }
+list($code, $body) = http("/fieldbook_build?userpkey=3&dsids=$emptyDs", $me);
 $keyNo = keyOf($body); $keys[] = $keyNo;
 check('page for an empty dataset still renders in run mode', $code === 200 && modeOf($body) === 'run' && $keyNo !== '', $code);
 list($code, $body) = http("/fieldbook_run?k=$keyNo", $me);
@@ -164,7 +175,7 @@ list($code, $body) = http("/fieldbook_status?k=$keyNo", $me);
 check('status: failed + error', json_decode($body, true)['state'] === 'failed');
 list($code, $body) = http("/fieldbook_fetch?k=$keyNo", $me);
 check('fetch of a failed build: 404', $code === 404);
-list($code, $body, $loc) = http("/fieldbook_build?userpkey=3&dsids=1", $me);
+list($code, $body, $loc) = http("/fieldbook_build?userpkey=3&dsids=$emptyDs", $me);
 check('page after a failure: mode run (retry = reload)', $code === 200 && modeOf($body) === 'run');
 
 section('doors');

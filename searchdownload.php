@@ -21,10 +21,25 @@ $getParams = $_GET;
 if(!empty($_POST)){
 	$getParams = array_merge($getParams, $_POST);
 }
+
+// Access check (2026-10-21, docs/Export_Access_Fix.md): the dsids / userpkey in the request are
+// only a request. Keep the datasets this session may export and run as their owner, so a hand-made
+// URL cannot reach another account's private data and collaborators can export shared datasets.
+// scope_groups / all_dsids are Export Builder internals, never taken from a request.
+unset($getParams['scope_groups'], $getParams['all_dsids'], $_GET['scope_groups'], $_GET['all_dsids'], $_POST['scope_groups'], $_POST['all_dsids']);
+if(isset($getParams['dsids'])){
+	$access = $strabo->exportDatasetParams($getParams['dsids']);
+	foreach($access as $k => $v){
+		$getParams[$k] = $v;
+		if(isset($_GET[$k])) $_GET[$k] = $v;
+		if(isset($_POST[$k])) $_POST[$k] = $v;
+	}
+}
+
 $straboOut = new straboOutputClass($strabo,$getParams);
 
 $type = $_GET['type'] ?? ($_POST['type'] ?? '');
-$dsids = $_GET['dsids'] ?? ($_POST['dsids'] ?? '');
+$dsids = $getParams['dsids'] ?? '';
 
 if($type=="shapefile"){
 	$straboOut->shapefileOut();
