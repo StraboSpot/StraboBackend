@@ -210,9 +210,11 @@
 				{
 
 					// Thx. Rafael Bernal
-					$insert_query = pg_query("SELECT lastval();");
-					$insert_row = pg_fetch_row($insert_query);
-					$this->insert_id = $insert_row[0];
+					// lastval() fails when the INSERT used no sequence (explicit pkey);
+					// pg_fetch_row(false) is a TypeError on PHP 8
+					$insert_query = @pg_query("SELECT lastval();");
+					$insert_row = $insert_query ? pg_fetch_row($insert_query) : false;
+					$this->insert_id = $insert_row ? $insert_row[0] : null;
 				}
 
 				// Return number fo rows affected
