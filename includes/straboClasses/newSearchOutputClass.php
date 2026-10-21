@@ -5995,7 +5995,7 @@ function buildKMLIcon($id,$randnum,$strike,$showval,$trend){
 		imagesavealpha($trendbar, true);
 
 		// Drawing over
-		$black = imagecolorallocate($arrow, 0, 0, 0);
+		$black = imagecolorallocate($trendbar, 0, 0, 0);
 		$fontcolor = imagecolorallocate($trendbar, 255, 255, 255);//255, 176, 0
 
 		$trendbar = imagerotate($trendbar, ($trend*-1), $transparency);
