@@ -288,7 +288,7 @@ class straboModelClass
 				$selected="";
 
 				if(!in_array($name,$this->founditems) && $userdefined=="no"){
-					if(substr(substr($name,0,strlen($lookshapefilevar))==$lookshapefilevar)){
+					if(substr($name,0,strlen($lookshapefilevar))==$lookshapefilevar){
 						$selected=" selected";
 						$this->founditems[]=$name;
 						$selecteditems[]=$name;
