@@ -18,7 +18,7 @@ include("neodb.php");
 
 $userpkey=(int)$_SESSION['userpkey'];
 
-$id = $_GET['id'];
+$id = (int)$_GET['id'];
 
 $rows = $neodb->query("match (a:Dataset) where a.id=$id and a.userpkey = $userpkey return distinct(a) limit 1;");
 
@@ -37,9 +37,8 @@ if($name==""){
 
 if($_POST['submit']!=""){
 
-	foreach($_POST as $key=>$value){
-		eval("\$$key=\$value;");
-	}
+	// The one form field read below. Posted keys never become variables (2026-10-21).
+	$name = $_POST['name'] ?? "";
 
 	if($name==""){
 		include 'includes/header.php';

@@ -22757,7 +22757,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -22783,7 +22783,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -22810,7 +22810,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -23739,7 +23739,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -23765,7 +23765,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -23792,7 +23792,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -24753,7 +24753,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -24779,7 +24779,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -24806,7 +24806,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -25661,7 +25661,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -25687,7 +25687,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;
@@ -25714,7 +25714,7 @@ $html.='
 				$thisFeature->geometry = $thisgeometry;
 				$properties = [];
 				for($col = 0; $col < count($fields); $col++){
-					eval("\$properties['".$fields[$col]."'] = \$row[$col];");
+					$properties[$fields[$col]] = $row[$col];
 				}
 				$thisFeature->properties = $properties;
 				$features[] = $thisFeature;

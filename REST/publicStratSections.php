@@ -121,7 +121,7 @@ if($xmin == "" || $xmax == "" || $ymin == "" || $ymax == ""){
 						$value=json_decode($value);
 					}
 	
-					eval("\$feature->properties->$key=\$value;");
+					$feature->properties->{$key}=$value;
 				
 				}
 

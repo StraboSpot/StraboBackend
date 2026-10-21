@@ -405,7 +405,7 @@ class StraboSpot
 
 				}
 
-				eval("\$data->properties->$key=\$value;");
+				$data->properties->{$key}=$value;
 
 			}
 
@@ -491,7 +491,7 @@ class StraboSpot
 
 				}
 
-				eval("\$data['properties']['$key']=\$value;");
+				$data['properties'][$key]=$value;
 
 			}
 
@@ -577,7 +577,7 @@ class StraboSpot
 
 				}
 
-				eval("\$data['properties']['$key']=\$value;");
+				$data['properties'][$key]=$value;
 
 			}
 
@@ -658,7 +658,7 @@ class StraboSpot
 
 				}
 
-				eval("\$data['properties']['$key']=\$value;");
+				$data['properties'][$key]=$value;
 
 			}
 
@@ -1240,7 +1240,7 @@ class StraboSpot
 					foreach($body as $key=>$value){
 						if($value != ""){
 							if($key!="caption" && $key!="title"){
-								eval("\$injson['$key'] = \$value;");
+								$injson[$key] = $value;
 							}
 						}
 					}
@@ -1529,7 +1529,7 @@ class StraboSpot
 
 					if($key=="featurename"){$key="name";}
 
-					eval("\$data['$key']=\$value;");
+					$data[$key]=$value;
 
 				}
 
@@ -1753,11 +1753,10 @@ class StraboSpot
 			// Feature found, update
 			$node = $dataset;
 
-			foreach($node as $key=>$value){
-				if($key != "featureid" && $key != "self"){
-					eval("\$$key=\$value;");
-				}
-			}
+			// The existing values the update below reads. Node keys never become variables (2026-10-21).
+			$modified_timestamp = $node->modified_timestamp ?? null;
+			$id = $node->id ?? null;
+			$datecreated = $node->datecreated ?? null;
 
 			if($modified_timestamp == ""){
 				$modified_timestamp = 999;
@@ -1772,7 +1771,7 @@ class StraboSpot
 					if(is_array($value)){
 						$value = json_encode($value);
 					}
-					eval("\$injson['$key']=\$value;");
+					$injson[$key]=$value;
 				}
 			}
 
@@ -1837,7 +1836,7 @@ class StraboSpot
 					if(is_array($value)){
 						$value = json_encode($value);
 					}
-					eval("\$injson['$key']=\$value;");
+					$injson[$key]=$value;
 				}
 			}
 
@@ -3158,7 +3157,7 @@ class StraboSpot
 
 				foreach($body as $key=>$value){
 					if($value != ""){
-						eval("\$injson['$key'] = \$value;");
+						$injson[$key] = $value;
 					}
 				}
 
@@ -3577,7 +3576,7 @@ stdClass Object
 					$key != "id"
 					){
 
-					eval("\$data->$key=\$value;");
+					$data->{$key}=$value;
 
 				}
 
@@ -3594,7 +3593,7 @@ stdClass Object
 						$key != "profiletype"
 						){
 
-						eval("\$data->$key=\$value;");
+						$data->{$key}=$value;
 
 					}
 				}
@@ -3640,11 +3639,8 @@ stdClass Object
 		$this->neodb->query($querystring);
 
 		//put in profile
-		foreach($upload as $key=>$value){
-			if($key!="id" && $key!="featureid" && $key!="self"){
-				eval("\$$key=\$value;");
-			}
-		}
+		// The one upload value read below. Upload keys never become variables (2026-10-21).
+		$strabousername = $upload->strabousername ?? null;
 
 		//********************************************************************
 		//need to add some error checking here
@@ -3659,8 +3655,8 @@ stdClass Object
 				if(is_array($value)){
 					$value=json_encode($value);
 				}
-				eval("\$injson['$key']=\$value;");
-				eval("\$newupload['$key']=\$value;");
+				$injson[$key]=$value;
+				$newupload[$key]=$value;
 			}
 		}
 
