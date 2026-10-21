@@ -202,7 +202,7 @@
 			}
 
 			// Extract the column values
-			for ( $i=0; $i < count($this->last_result); $i++ )
+			for ( $i=0; $i < count($this->last_result ?? array()); $i++ )
 			{
 				$new_array[$i] = $this->get_var(null,$x,$i);
 			}
@@ -383,7 +383,7 @@
 			echo "\n\n<b>Type:</b> " . ucfirst($var_type) . "\n";
 			echo "<b>Last Query</b> [$this->num_queries]<b>:</b> ".($this->last_query?$this->last_query:"NULL")."\n";
 			echo "<b>Last Function Call:</b> " . ($this->func_call?$this->func_call:"None")."\n";
-			echo "<b>Last Rows Returned:</b> ".count($this->last_result)."\n";
+			echo "<b>Last Rows Returned:</b> ".count($this->last_result ?? array())."\n";
 			echo "</font></pre></font></blockquote></td></tr></table>".$this->donation();
 			echo "\n<hr size=1 noshade color=dddddd>";
 
