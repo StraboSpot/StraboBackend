@@ -1019,7 +1019,7 @@ if($_POST['columnsubmit']!=""){
 						$value = $smodel->fixCast($value);
 					}
 
-					eval("\$injson['properties']['$key']=\$value;");
+					$injson['properties'][$key]=$value;
 				}
 
 				/***********************************
@@ -1051,7 +1051,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$planarorientation['$key']=\$value;");
+							$planarorientation[$key]=$value;
 						}
 					}
 
@@ -1074,7 +1074,7 @@ if($_POST['columnsubmit']!=""){
 								}
 							}else{
 								$value = $smodel->fixCast($value);
-								eval("\$linearorientation['$key']=\$value;");
+								$linearorientation[$key]=$value;
 							}
 						}
 
@@ -1103,7 +1103,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$linearorientation['$key']=\$value;");
+							$linearorientation[$key]=$value;
 						}
 					}
 
@@ -1192,7 +1192,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$tabularzoneorientation['$key']=\$value;");
+							$tabularzoneorientation[$key]=$value;
 						}
 					}
 
@@ -1223,7 +1223,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$thisstruct['$key']=\$value;");
+							$thisstruct[$key]=$value;
 						}
 					}
 					$injson['properties']["_3d_structures"][]=$thisstruct;
@@ -1245,7 +1245,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$thisstruct['$key']=\$value;");
+							$thisstruct[$key]=$value;
 						}
 					}
 					$injson['properties']["_3d_structures"][]=$thisstruct;
@@ -1281,7 +1281,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$thisstruct['$key']=\$value;");
+							$thisstruct[$key]=$value;
 						}
 					}
 					$injson['properties']["_3d_structures"][]=$thisstruct;
@@ -1303,7 +1303,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$thisstruct['$key']=\$value;");
+							$thisstruct[$key]=$value;
 						}
 					}
 					$injson['properties']["_3d_structures"][]=$thisstruct;
@@ -1370,7 +1370,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$thisstruct['$key']=\$value;");
+							$thisstruct[$key]=$value;
 						}
 					}
 
@@ -1505,7 +1505,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$thisstruct['$key']=\$value;");
+							$thisstruct[$key]=$value;
 						}
 
 					}
@@ -1534,7 +1534,7 @@ if($_POST['columnsubmit']!=""){
 					$struct_vars = $smodel->get_vars("other_features");
 					foreach($struct_vars as $key=>$value){
 						$value = $smodel->fixCast($value);
-						eval("\$thisstruct['$key']=\$value;");
+						$thisstruct[$key]=$value;
 					}
 					$injson['properties']["other_features"][]=$thisstruct;
 				}
@@ -1564,7 +1564,7 @@ if($_POST['columnsubmit']!=""){
 							}
 						}else{
 							$value = $smodel->fixCast($value);
-							eval("\$thisstruct['$key']=\$value;");
+							$thisstruct[$key]=$value;
 						}
 					}
 					$injson['properties']["samples"][]=$thisstruct;
@@ -1589,7 +1589,7 @@ if($_POST['columnsubmit']!=""){
 					$struct_vars = $smodel->get_vars("tag");
 					foreach($struct_vars as $key=>$value){
 						$value = $smodel->fixCast($value);
-						eval("\$thisstruct['$key']=\$value;");
+						$thisstruct[$key]=$value;
 					}
 
 					if($putinfeature=="yes"){
