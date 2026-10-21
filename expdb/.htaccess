@@ -2,6 +2,9 @@
     RewriteEngine On
     #RewriteBase /
 
+    # The upload debug log in this folder is never served over HTTP (2026-10-21).
+    RewriteRule ^uploadLog\.txt$ - [F,L]
+
     RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
 
     RewriteCond %{REQUEST_FILENAME} !-f
