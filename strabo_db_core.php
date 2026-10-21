@@ -57,7 +57,7 @@
 		*  Constructor
 		*/
 
-		function StraboDbCore()
+		function __construct()
 		{
 		}
 

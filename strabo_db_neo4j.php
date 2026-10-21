@@ -28,7 +28,7 @@
 		*  Constructor
 		*/
 
-		function StraboDbNeo4j($neousername='', $neopassword='', $neohost='', $neoport='', $neomode='')
+		function __construct($neousername='', $neopassword='', $neohost='', $neoport='', $neomode='')
 		{
 			$this->neousername = $neousername;
 			$this->neopassword = $neopassword;

@@ -15,7 +15,7 @@ require_once __DIR__ . '/../microdb/lib/micro_text.php';
 class StraboMicro
 {
 
-	 public function StraboMicro($neodb,$userpkey,$db){
+	 public function __construct($neodb,$userpkey,$db){
 		 $this->neodb=$neodb;
 		 $this->userpkey=$userpkey;
 		 $this->db=$db;

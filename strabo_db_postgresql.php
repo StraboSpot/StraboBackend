@@ -42,7 +42,7 @@
 		*  same time as initialising the StraboDbPostgreSQL class
 		*/
 
-		function StraboDbPostgreSQL($dbuser='', $dbpassword='', $dbname='', $dbhost='localhost', $port='5432')
+		function __construct($dbuser='', $dbpassword='', $dbname='', $dbhost='localhost', $port='5432')
 		{
 			$this->dbuser = $dbuser;
 			$this->dbpassword = $dbpassword;

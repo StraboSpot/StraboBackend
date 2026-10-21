@@ -13,7 +13,7 @@
 class searchResults
 {
 
- 	public function searchResults($db,$fieldquerybuilder,$microquerybuilder,$expquerybuilder,$json,$userpkey,$searchType){
+ 	public function __construct($db,$fieldquerybuilder,$microquerybuilder,$expquerybuilder,$json,$userpkey,$searchType){
  		$this->db=$db;
  		$this->fieldquerybuilder = $fieldquerybuilder;
  		$this->microquerybuilder = $microquerybuilder;

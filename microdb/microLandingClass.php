@@ -13,7 +13,7 @@
 class MicroLanding
 {
 
-	 public function MicroLanding($json){
+	 public function __construct($json){
 		 $this->json=$json;
 		 $this->loadData($json);
 	 }

@@ -14,7 +14,7 @@
 class straboBasemapClass
 {
 
-	 public function straboBasemapClass($strabo, $image_id){
+	 public function __construct($strabo, $image_id){
 
 		$this->font = $_SERVER['DOCUMENT_ROOT']."/includes/symbology/avenirlight.ttf";
 

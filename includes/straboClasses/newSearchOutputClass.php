@@ -16,7 +16,7 @@ require_once dirname(__DIR__) . '/fieldvocab/FieldVocab.php';
 class newSearchOutputClass
 {
 
-	 public function newSearchOutputClass($strabo,$get){
+	 public function __construct($strabo,$get){
 		$this->strabo=$strabo;
 		$this->get=$get;
 		$this->querybuilder = $querybuilder;

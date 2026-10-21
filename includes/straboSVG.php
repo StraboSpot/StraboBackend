@@ -44,7 +44,7 @@
 		var $smalltickwidth = 3;
 		var $loadedPatternDirs = [];
 
-		function straboSVG($allspots,$strat_section){
+		function __construct($allspots,$strat_section){
 
 			if(count($allspots)==0){
 				echo "Strat section not found.";

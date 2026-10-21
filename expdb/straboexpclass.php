@@ -14,7 +14,7 @@
 class StraboExp
 {
 
-	 public function StraboExp($neodb,$userpkey,$db){
+	 public function __construct($neodb,$userpkey,$db){
 		 $this->neodb=$neodb;
 		 $this->userpkey=$userpkey;
 		 $this->db=$db;

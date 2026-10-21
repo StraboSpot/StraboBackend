@@ -47,7 +47,7 @@ class straboModelClass
 		'tag'                      => array('project.tags'),
 	);
 
-	 public function straboModelClass(){
+	 public function __construct(){
 
 		 $this->columns_with_other_option = array("fabric_feature_type", "fold_feature_type", "linear_orientation_feature_type", "other_3d_structure_feature_type", "planar_orientation_feature_type", "planar_orientation_movement", "rock_unit_sediment_type", "rock_unit_sedimentary_rock_type", "rock_unit_volcanic_rock_type", "rock_unit_plutonic_rock_types", "rock_unit_metamorphic_rock_types", "rock_unit_metamorphic_grade", "rock_unit_epoch", "sample_material_type", "sample_main_sampling_purpose", "tabular_zone_orientation_facing_defined_by", "tabular_zone_orientation_feature_type", "tabular_zone_orientation_intrusive_body_type", "tabular_zone_orientation_vein_fill", "tabular_zone_orientation_vein_array", "tabular_zone_orientation_fault_or_sz", "tabular_zone_orientation_movement", "tabular_zone_orientation_movement_justification", "tabular_zone_orientation_dir_indicators", "tabular_zone_orientation_enveloping_surface_geometry", "tensor_ellipsoid_type", "tensor_non_ellipsoidal_type", "tensor_ellipse_type", "trace_trace_type", "trace_trace_quality", "trace_contact_type", "trace_depositional_contact_type", "trace_intrusive_contact_type", "trace_metamorphic_contact_type", "trace_shear_sense", "trace_other_structural_zones", "trace_fold_type", "trace_fold_attitude", "trace_geomorphic_feature", "trace_antropogenic_feature", "trace_other_feature", "trace_trace_character" );
 		 $this->ignorelist = array("latitude_and_longitude","start","end");
