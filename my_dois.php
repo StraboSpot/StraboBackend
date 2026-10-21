@@ -31,7 +31,7 @@ include "includes/mheader.php";
 						</header>
 
 <?php
-if(count($rows) > 0){
+if(!empty($rows)){
 ?>
 
 	<table class="myDataTable">

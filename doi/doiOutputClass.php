@@ -873,7 +873,7 @@ class doiOutputClass
 						$spotxcoord = $spot['geometry']['coordinates'][0];
 						$spotycoord = $spot['geometry']['coordinates'][1];
 
-						if($spot['properties']['orientation_data'] != "" && count($spot['properties']['orientation_data']) > 0 ){
+						if($spot['properties']['orientation_data'] != "" && !empty($spot['properties']['orientation_data']) ){
 
 							//echo $spot['properties']['name']."<br>";
 
@@ -1238,7 +1238,7 @@ class doiOutputClass
 
 
 
-				if(count($data)==0){
+				if(empty($data)){
 				echo "no data found for dataset $id";exit();
 				}
 
@@ -1405,7 +1405,7 @@ class doiOutputClass
 
 				$spotname = $this->cleanString($spot['properties']['name']);
 
-				if(count($spot['properties']['images']) > 0){
+				if(!empty($spot['properties']['images'])){
 
 					$hasImages = true;
 
@@ -4466,7 +4466,7 @@ class doiOutputClass
 
 				$data = $this->getFixedProjectSpots($uuid);
 
-				if(count($data)==0){
+				if(empty($data)){
 				echo "no data found for dataset $id";exit();
 				}
 
@@ -5479,7 +5479,7 @@ class doiOutputClass
 			$spots = json_decode(json_encode($spots), true);
 
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				//get new randnum for ogrtemp
 				$randnum=$this->strabo->db->get_var("select nextval('file_seq')");
@@ -6284,7 +6284,7 @@ $html.='
 
 			$spots = json_decode(json_encode($spots), true);
 
-			if(count($spots)==0){
+			if(empty($spots)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -6539,7 +6539,7 @@ $html.='
 
 
 
-			if(count($polygonspots) > 0){
+			if(!empty($polygonspots)){
 
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -6555,7 +6555,7 @@ $html.='
 			}
 
 			$pointspots = $this->getFixedProjectSpots($uuid, "point");
-			if(count($pointspots) > 0){
+			if(!empty($pointspots)){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
 				$features = array();
@@ -6570,7 +6570,7 @@ $html.='
 			}
 
 			$linespots = $this->getFixedProjectSpots($uuid, "line");
-			if(count($linespots) > 0){
+			if(!empty($linespots)){
 
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -6658,7 +6658,7 @@ $html.='
 			//$polygonjson = $this->strabo->newSearchGetDatasetSpotsSearch('polygon',$this->get);
 			$polygonspots = $this->getFixedProjectSpots($uuid, "polygon");
 
-			if(count($polygonspots)>0){
+			if(!empty($polygonspots)){
 
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -6672,7 +6672,7 @@ $html.='
 			}
 
 			$pointspots = $this->getFixedProjectSpots($uuid, "point");
-			if(count($pointspots)>0){
+			if(!empty($pointspots)){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
 				$features = array();
@@ -6686,7 +6686,7 @@ $html.='
 
 			$linespots = $this->getFixedProjectSpots($uuid, "linestring");
 
-			if(count($linespots)>0){
+			if(!empty($linespots)){
 
 				$newjson = array();
 				$newjson['type']="FeatureCollection";

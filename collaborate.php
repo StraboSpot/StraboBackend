@@ -60,24 +60,24 @@ function updateCollaborationLevel(uuid){
 // One-shot result of the last "Invite Collaborators" submit (invite_collaborators.php).
 $inviteResults = $_SESSION['invite_results'] ?? null;
 unset($_SESSION['invite_results']);
-if(is_array($inviteResults) && (count($inviteResults['invited']) || count($inviteResults['updated']) || count($inviteResults['errors']))){
+if(is_array($inviteResults) && (count($inviteResults['invited']) || !empty($inviteResults['updated']) || !empty($inviteResults['errors']))){
 ?>
 						<div class="invite-results" style="margin:0 0 1.5em 0;padding:1em 1.25em;border-radius:6px;background:rgba(255,255,255,0.06);border-left:4px solid #e44c65;font-size:.95em;line-height:1.5;">
-<?php if(count($inviteResults['invited'])){ ?>
+<?php if(!empty($inviteResults['invited'])){ ?>
 							<div><strong>Invited:</strong></div>
 							<ul style="margin:0 0 .5em 1.25em;">
 <?php foreach($inviteResults['invited'] as $line){ ?>
 								<li><?php echo htmlspecialchars($line, ENT_QUOTES, 'UTF-8')?></li>
 <?php } ?>
 							</ul>
-<?php } if(count($inviteResults['updated'])){ ?>
+<?php } if(!empty($inviteResults['updated'])){ ?>
 							<div><strong>Updated:</strong></div>
 							<ul style="margin:0 0 .5em 1.25em;">
 <?php foreach($inviteResults['updated'] as $line){ ?>
 								<li><?php echo htmlspecialchars($line, ENT_QUOTES, 'UTF-8')?></li>
 <?php } ?>
 							</ul>
-<?php } if(count($inviteResults['errors'])){ ?>
+<?php } if(!empty($inviteResults['errors'])){ ?>
 							<div><strong>Not invited:</strong></div>
 							<ul style="margin:0 0 0 1.25em;">
 <?php foreach($inviteResults['errors'] as $line){ ?>
@@ -89,7 +89,7 @@ if(is_array($inviteResults) && (count($inviteResults['invited']) || count($invit
 <?php } ?>
 
 <?php
-if(count($rows) > 0){
+if(!empty($rows)){
 
 ?>
 
@@ -164,7 +164,7 @@ if($row->accepted == "t"){
 					<li><a href="invite_collaborators?p=<?php echo $project_id?>" class="button primary fit green">Invite Collaborators</a></li>
 				</ul>
 			</div>
-			<?php if(count($rows) > 0){?>
+			<?php if(!empty($rows)){?>
 			<div class="col-3 col-6-medium col-12-xsmall">
 				<ul class="actions stacked">
 					<li><a href="halt_collaboration?p=<?php echo $project_id?>" class="button primary fit" onclick="return confirm('Are you sure you want to stop collaborating on this project?\nCollaborators will no longer be able to work on this project.')">Halt Collaboration</a></li>

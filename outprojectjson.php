@@ -44,7 +44,7 @@ $project_id = $project->id;
 $project = $strabo->getProject($project_id);
 
 $datasets = $row->get("d");
-if(count($datasets)>0){
+if(!empty($datasets)){
 
 	$project->datasets = [];
 

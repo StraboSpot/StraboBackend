@@ -419,14 +419,14 @@ class CollaborationAuth {
              RETURN p.id as projectId, p.userpkey as ownerPkey, d.created_by as createdBy"
         );
 
-        if (count($records) === 0) {
+        if (empty($records)) {
             $records = $this->neodb->query(
                 "MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset {id:$datasetId})
                  RETURN p.id as projectId, p.userpkey as ownerPkey, d.created_by as createdBy"
             );
         }
 
-        if (count($records) === 0) {
+        if (empty($records)) {
             // Dataset not found or not linked to a project
             return null;
         }
@@ -457,7 +457,7 @@ class CollaborationAuth {
              RETURN p.id as projectId, p.userpkey as ownerPkey"
         );
 
-        if (count($records) === 0) {
+        if (empty($records)) {
             return null;
         }
 

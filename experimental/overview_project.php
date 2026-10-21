@@ -370,7 +370,7 @@ include("includes/mheader.php");
                     ?>
                 </tbody></table>
 
-                <?php if (count($exp_rows) > 0) { ?>
+                <?php if (!empty($exp_rows)) { ?>
                     <h3 style="margin-top:2em;border-bottom:1px solid #4b5563;padding-bottom:6px;">Experiments in this Project</h3>
                     <ol>
                     <?php foreach ($exp_rows as $idx => $exp_row) { ?>

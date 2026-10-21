@@ -103,7 +103,7 @@ class DatasetSpotsController extends MyController
 
 					}
 
-				}elseif(count($features)>0){
+				}elseif(!empty($features)){
 
 					//********************************************************************
 					// Load the feature collection and add it to dataset

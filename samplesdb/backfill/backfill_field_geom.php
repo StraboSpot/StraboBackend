@@ -76,7 +76,7 @@ echo "Total Field-linked sample rows:        " . fmt($totalLinks) . "\n";
 echo "Already populated (lat AND lng):       " . fmt($alreadyPopulated) . "\n";
 echo "Candidate rows (lat IS NULL):          " . fmt(count($candidates)) . "\n";
 
-if (count($candidates) === 0) {
+if (empty($candidates)) {
     echo "\nNothing to backfill. Exiting.\n";
     exit(0);
 }

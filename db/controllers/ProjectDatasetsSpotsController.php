@@ -79,7 +79,7 @@ class ProjectDatasetsSpotsController extends MyController
 		}
 
 		// If user has no edit permissions on any dataset, deny
-		if (count($authorizeddatasets) == 0 && count($upload['project']->datasets) > 0) {
+		if (count($authorizeddatasets) == 0 && !empty($upload['project']->datasets)) {
 			return $this->forbidden("You don't have permission to edit any datasets in this project");
 		}
 

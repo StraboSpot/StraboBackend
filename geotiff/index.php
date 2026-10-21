@@ -201,7 +201,7 @@ $userpkey = $_SESSION['userpkey'];
 
 $rows = $db->get_results_prepared("SELECT * FROM geotiffs WHERE userpkey=$1 ORDER BY uploaddate DESC", array($userpkey));
 
-if(count($rows)>0){
+if(!empty($rows)){
 ?>
 
 	<table class="myDataTable">

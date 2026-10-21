@@ -163,7 +163,7 @@ $files = is_dir($dir) ? array_values(array_diff(scandir($dir), array('.', '..'))
 covRow('files present in /dbimages on THIS host', count($files), $neoImages);
 line('  (dev hosts only carry the DB restore, not the image tree — re-run on prod for real numbers)');
 
-if (count($files) > 0) {
+if (!empty($files)) {
 	// Do local files round-trip to Neo4j nodes? (validates the filename join)
 	$sample = array_slice($files, 0, 50);
 	$hits = 0;

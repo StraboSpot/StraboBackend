@@ -137,7 +137,7 @@ class VsWorker {
 				   FROM due WHERE s.id = due.id
 				 RETURNING s.id",
 				array($batchId, self::MAX_ATTEMPTS));
-			if (count($rows) > 0) {
+			if (!empty($rows)) {
 				$ids = '{' . implode(',', array_map(function ($r) { return (int)$r['id']; }, $rows)) . '}';
 				$db->q(
 					"UPDATE voicestations.runs
@@ -172,7 +172,7 @@ class VsWorker {
 	public function claim() {
 		$body = VsHttp::readJson(65536);
 		$kinds = VsHttp::prop($body, 'kinds');
-		if (!is_array($kinds) || count($kinds) === 0) {
+		if (!is_array($kinds) || empty($kinds)) {
 			throw VsHttp::bad('kinds', 'kinds must list "transcribe" and/or "extract".');
 		}
 		$engines = array();

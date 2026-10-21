@@ -31,7 +31,7 @@ class ProjectDatasetDeleteSpotController extends MyController
 		if($projectid != ""){
 			if($upload['datasets']!=""){
 				$datasets=$upload['datasets'];
-				if(count($datasets) > 0){
+				if(!empty($datasets)){
 					if($upload['spotId']!="" && $upload['spotId'] != null){
 						$spotid=$upload['spotId'];
 					}else{
@@ -83,7 +83,7 @@ class ProjectDatasetDeleteSpotController extends MyController
 		}
 
 		// If user has no edit permissions on any dataset, deny
-		if (count($authorizeddatasets) == 0 && count($upload['datasets']) > 0) {
+		if (count($authorizeddatasets) == 0 && !empty($upload['datasets'])) {
 			return $this->forbidden("You don't have permission to edit any datasets in this project");
 		}
 

@@ -37,7 +37,7 @@ $safe_userpkey = addslashes($userpkey);
 //check for projects here
 $projectrows = $neodb->get_results("match (a:Project) where a.userpkey = $safe_userpkey optional match (a)-[b:CONTAINS]-(d:Dataset) return distinct(a),count(d) order by a.id desc;");
 
-if(count($projectrows)==0){
+if(empty($projectrows)){
 	?>
 	No Projects found. You must create a project in which to store your shapefile. Click <a href="new_project?arcid=<?php echo $arcid?>">here</a> to add project.
 	<?php

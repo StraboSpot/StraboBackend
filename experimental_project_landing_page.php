@@ -45,7 +45,7 @@ if($project_pkey == ""){
 
 $rows = $db->get_results_prepared("SELECT * FROM straboexp.experiment WHERE project_pkey = $1", array($project_pkey));
 
-if(count($rows) == 0){
+if(empty($rows)){
 	include("includes/mheader.php");
 ?>
 			<!-- Main -->

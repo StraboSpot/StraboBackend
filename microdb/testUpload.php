@@ -167,7 +167,7 @@ foreach($allMicrographs as $m){
 		}
 	}
 
-	if(count($spots) > 0){
+	if(!empty($spots)){
 
 		$shadowColor = imagecolorallocate($newImage, 25, 25, 25);
 

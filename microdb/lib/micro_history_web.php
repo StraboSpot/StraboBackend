@@ -204,7 +204,7 @@ function micro_history_fold($rows) {
 
 /** A change of files only (refs.*), not a move */
 function micro_history_refs_only($r) {
-	if ($r['op'] !== 'update' || $r['movedFrom'] !== null || !is_array($r['changedPaths']) || count($r['changedPaths']) === 0) {
+	if ($r['op'] !== 'update' || $r['movedFrom'] !== null || !is_array($r['changedPaths']) || empty($r['changedPaths'])) {
 		return false;
 	}
 	foreach ($r['changedPaths'] as $p) {

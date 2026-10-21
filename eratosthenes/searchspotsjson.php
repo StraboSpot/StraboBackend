@@ -96,7 +96,7 @@ if($_GET['env']){
 
 		
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 
 			$features = array();
 			$featurecollection=array();
@@ -223,7 +223,7 @@ if($_GET['env']){
 									unset($imagestuff);
 									$imagestuff=array();
 									$images=$spot["i"];
-									if(count($images)>0){
+									if(!empty($images)){
 										foreach($images as $i){
 											$i = (object)$i->values();
 											$imagestuff[]=$i;
@@ -332,7 +332,7 @@ echo $json;
 
 exit();
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 
 			$features = array();
 			$featurecollection=array();
@@ -502,7 +502,7 @@ if($_GET['env']){
 
 	
 
-	if(count($spots)>0){
+	if(!empty($spots)){
 
 		$features = array();
 		$featurecollection=array();
@@ -653,7 +653,7 @@ if($_GET['env']){
 
 	$spots = json_decode($response);
 
-	if(count($spots)>0){
+	if(!empty($spots)){
 
 		$features = array();
 		$featurecollection=array();
@@ -748,7 +748,7 @@ if($_GET['env']){
 
 	$spots = json_decode($response);
 
-	if(count($spots)>0){
+	if(!empty($spots)){
 
 		$features = array();
 		$featurecollection=array();

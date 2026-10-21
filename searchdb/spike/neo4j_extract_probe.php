@@ -51,7 +51,7 @@ for ($upk = 0; $upk <= $maxUser && $pulled < $TARGET; $upk++) {
 			       s.modified_timestamp AS mt
 			SKIP $skip LIMIT $PAGE
 		");
-		if (!$rows || count($rows) == 0) break;
+		if (!$rows || empty($rows)) break;
 		foreach ($rows as $r) {
 			$pulled++;
 			// Decode the blob fields exactly as a real extractor would.

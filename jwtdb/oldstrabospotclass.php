@@ -1335,7 +1335,7 @@ class StraboSpot
 						return img;
 						");
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 			foreach($rows as $row){
 				$image=$row->get("img");
 				$image=(object)$image->values();
@@ -2035,7 +2035,7 @@ class StraboSpot
 
 	public function recordsToFeatureData($records){
 
-		if(count($records)>0){
+		if(!empty($records)){
 
 			foreach($records as $record){
 				unset($res);
@@ -2046,7 +2046,7 @@ class StraboSpot
 				$s=$s->values();
 				$row[0]=(object)$s;
 				$images=$record->get("i");
-				if(count($images)>0){
+				if(!empty($images)){
 					foreach($images as $i){
 						$i=(object)$i->values();
 						$imagearray[]=$i;
@@ -2839,7 +2839,7 @@ class StraboSpot
 
 						");
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 			foreach($rows as $row){
 				$image=$row->get("img");
 				$image=(object)$image->values();
@@ -3132,7 +3132,7 @@ public function getSpotName($id){
 
 			if($incomingTags != "" || $existingTags != ""){
 				$newTags = $this->combineTags($incomingTags, $existingTags);
-				if(count($newTags) > 0){
+				if(!empty($newTags)){
 					$upload->tags = $newTags;
 				}
 
@@ -3796,7 +3796,7 @@ public function getSpotName($id){
 			//first, copy over images
 			$images = $this->getProjectImages($projectid);
 
-			if(count($images)>0){
+			if(!empty($images)){
 				foreach ($images as $image){
 					$i=$image->get("i");
 					$i=(object)$i->values();

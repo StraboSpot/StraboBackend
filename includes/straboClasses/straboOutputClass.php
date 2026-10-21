@@ -883,7 +883,7 @@ class straboOutputClass
 							$spotxcoord = $spot['original_geometry']->coordinates[0];
 							$spotycoord = $spot['original_geometry']->coordinates[1];
 
-							if($spot['properties']['orientation_data'] != "" && count($spot['properties']['orientation_data']) > 0 ){
+							if($spot['properties']['orientation_data'] != "" && !empty($spot['properties']['orientation_data']) ){
 
 								foreach($spot['properties']['orientation_data'] as $o){
 
@@ -1220,7 +1220,7 @@ class straboOutputClass
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-				if(count($data)==0){
+				if(empty($data)){
 				echo "no data found for dataset $id";exit();
 				}
 
@@ -1343,7 +1343,7 @@ class straboOutputClass
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-				if(count($data)==0){
+				if(empty($data)){
 				echo "no data found for dataset $id";exit();
 				}
 
@@ -1504,7 +1504,7 @@ class straboOutputClass
 				$outFileName = $this->fixFileName($this->strabo->getDatasetName($dsids)."_Strabo_Sample_List_".$filedate);
 				$outFileName .= ".xlsx";
 
-				if(count($data)==0){
+				if(empty($data)){
 				echo "no data found for dataset $id";exit();
 				}
 
@@ -1680,7 +1680,7 @@ class straboOutputClass
 				$spots = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 				$spots = $spots['features'];
 
-				if(count($spots)==0){
+				if(empty($spots)){
 				$this->noData("no data found for dataset $id");
 				}
 
@@ -1966,7 +1966,7 @@ class straboOutputClass
 
 				$spotname = $this->cleanString($spot['properties']['name']);
 
-				if(count($spot['properties']['images']) > 0){
+				if(!empty($spot['properties']['images'])){
 
 					$hasImages = true;
 
@@ -2028,7 +2028,7 @@ class straboOutputClass
 
 				$spotname = $this->cleanString($spot['properties']['name']);
 
-				if(count($spot['properties']['images']) > 0){
+				if(!empty($spot['properties']['images'])){
 
 					$hasImages = true;
 
@@ -2090,7 +2090,7 @@ class straboOutputClass
 
 				$spotname = $this->cleanString($spot['properties']['name']);
 
-				if(count($spot['properties']['images']) > 0){
+				if(!empty($spot['properties']['images'])){
 
 					$hasImages = true;
 
@@ -10274,7 +10274,7 @@ class straboOutputClass
 
 				//create date array to loop over
 
-				if(count($spots)>0){
+				if(!empty($spots)){
 
 					$spotdates = [];
 					$founddates = [];
@@ -12618,7 +12618,7 @@ class straboOutputClass
 
 				//create date array to loop over
 
-				if(count($spots)>0){
+				if(!empty($spots)){
 
 					$spotdates = [];
 					$founddates = [];
@@ -12747,7 +12747,7 @@ class straboOutputClass
 
 				//create date array to loop over
 
-				if(count($spots)>0){
+				if(!empty($spots)){
 
 					$spotdates = [];
 					$founddates = [];
@@ -12860,7 +12860,7 @@ class straboOutputClass
 
 				//create date array to loop over
 
-				if(count($spots)>0){
+				if(!empty($spots)){
 
 					$spotdates = [];
 					$founddates = [];
@@ -12976,7 +12976,7 @@ class straboOutputClass
 
 				//create date array to loop over
 
-				if(count($spots)>0){
+				if(!empty($spots)){
 
 					$spotdates = [];
 					$founddates = [];
@@ -15340,7 +15340,7 @@ class straboOutputClass
 
 				//create date array to loop over
 
-				if(count($spots)>0){
+				if(!empty($spots)){
 
 					$spotdates = [];
 					$founddates = [];
@@ -17693,7 +17693,7 @@ class straboOutputClass
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				$randnum=$this->strabo->db->get_var("select nextval('file_seq')");
 
@@ -18428,7 +18428,7 @@ $html.='
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				$randnum=$this->strabo->db->get_var("select nextval('file_seq')");
 
@@ -19163,7 +19163,7 @@ $html.='
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-				if(count($data)==0){
+				if(empty($data)){
 				echo "no data found for dataset $id";exit();
 				}
 
@@ -20021,7 +20021,7 @@ $html.='
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-				if(count($data)==0){
+				if(empty($data)){
 				echo "no data found for dataset $id";exit();
 				}
 
@@ -20936,7 +20936,7 @@ $html.='
 
 				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-				if(count($data)==0){
+				if(empty($data)){
 				$this->noData("no data found for dataset $id");
 				}
 
@@ -21913,7 +21913,7 @@ $html.='
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-			if(count($data)==0){
+			if(empty($data)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -22873,7 +22873,7 @@ $html.='
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-			if(count($data)==0){
+			if(empty($data)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -23855,7 +23855,7 @@ $html.='
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-			if(count($data)==0){
+			if(empty($data)){
 			$this->noData("no data found for dataset $id");
 			}
 
@@ -24870,7 +24870,7 @@ $html.='
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-			if(count($data)==0){
+			if(empty($data)){
 			echo "no data found for dataset $id";exit();
 			}
 

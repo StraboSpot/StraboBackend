@@ -46,7 +46,7 @@
 
 		function __construct($allspots,$strat_section){
 
-			if(count($allspots)==0){
+			if(empty($allspots)){
 				echo "Strat section not found.";
 				exit();
 			}

@@ -514,7 +514,7 @@ class FieldbookRenderer
 	/** Projection / symbol convention lines under a net. */
 	private function netFooter(array $fig)
 	{
-		$hasP = count($fig['planes']) > 0; $hasL = count($fig['lines']) > 0;
+		$hasP = !empty($fig['planes']); $hasL = !empty($fig['lines']);
 		$lines = array('Equal-area, lower hemisphere');
 		if ($hasP && $hasL) $lines[] = 'Filled: poles to planes. Open: lines.';
 		elseif ($hasP) $lines[] = $fig['circles'] ? 'Great circles and poles to planes' : 'Poles to planes';

@@ -907,7 +907,7 @@ class newSearchOutputClass
 
 				$data = $this->strabo->newSearchGetDatasetSpotsSearch(null, $this->get);
 
-				if(count($data)==0){
+				if(empty($data)){
 				echo "no data found for dataset $id";exit();
 				}
 
@@ -1830,7 +1830,7 @@ class newSearchOutputClass
 
 			$this->dumpVar($data);exit();
 
-			if(count($data)==0){
+			if(empty($data)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -2411,7 +2411,7 @@ class newSearchOutputClass
 			$spots = $this->strabo->newSearchGetDatasetSpotsSearch(null,$this->get);
 			$spots = $spots['features'];
 
-			if(count($spots)==0){
+			if(empty($spots)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -2600,7 +2600,7 @@ class newSearchOutputClass
 
 			//create date array to loop over
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				$spotdates = [];
 				$founddates = [];
@@ -4964,7 +4964,7 @@ class newSearchOutputClass
 
 			//create date array to loop over
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				$spotdates = [];
 				$founddates = [];
@@ -5396,7 +5396,7 @@ class newSearchOutputClass
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				require('includes/PDF_LabBook.php');
 
@@ -5676,7 +5676,7 @@ class newSearchOutputClass
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				require('includes/PDF_LabBook.php');
 
@@ -6248,7 +6248,7 @@ plunge
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				$randnum=$this->strabo->db->get_var("select nextval('file_seq')");
 
@@ -7952,7 +7952,7 @@ public function getKMLHtml($inSpots, $geoType){
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				$randnum=$this->strabo->db->get_var("select nextval('file_seq')");
 
@@ -8561,7 +8561,7 @@ public function getKMLHtml($inSpots, $geoType){
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				header('Content-disposition: attachment; filename=StraboOutput.json');
 				header('Content-type: application/json');

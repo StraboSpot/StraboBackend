@@ -604,13 +604,13 @@ class VsService {
 				}
 			}
 			if ($outcome === 'confirmed') {
-				if (count($spotIds) === 0) {
+				if (empty($spotIds)) {
 					throw VsHttp::bad('spot_ids', 'A confirmed recording names the Spot(s) the app created.');
 				}
 				if ($s['stage'] !== 'ready' && $s['stage'] !== 'failed') {
 					throw VsHttp::conflict('This recording is still being processed.');
 				}
-			} elseif (count($spotIds) > 0) {
+			} elseif (!empty($spotIds)) {
 				throw VsHttp::bad('spot_ids', 'A discarded recording has no Spots.');
 			}
 

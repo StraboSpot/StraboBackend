@@ -162,7 +162,7 @@ $userpkey = $_SESSION['userpkey'];
 
 $rows = $db->get_results_prepared("select * from jwts where user_pkey=$1 order by date desc", array($userpkey));
 
-if(count($rows)>0){
+if(!empty($rows)){
 ?>
 
 	<table class="myDataTable">

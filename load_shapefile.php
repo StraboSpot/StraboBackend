@@ -355,7 +355,7 @@ if($_POST['columnsubmit']!=""){
 
 	$error = "";
 
-	if(count($results)>0){
+	if(!empty($results)){
 		$error = implode("<br>",$results);
 	}
 
@@ -862,7 +862,7 @@ if($_POST['columnsubmit']!=""){
 
 	$error = "";
 
-	if(count($results)>0){
+	if(!empty($results)){
 		$error = implode("<br>",$results);
 	}
 
@@ -1698,7 +1698,7 @@ if($_POST['columnsubmit']!=""){
 					}
 					$thistag->spots = $goodspots;
 
-					if(count($thistag->spots) > 0){
+					if(!empty($thistag->spots)){
 						$newfixtags[] = $thistag;
 					}
 				}
@@ -1796,7 +1796,7 @@ include 'includes/mheader.php';
 $projectrows = $strabo->getMyProjects();
 $projectrows = $projectrows["projects"];
 
-if(count($projectrows)==0){
+if(empty($projectrows)){
 	?>
 	No Projects found. You must create a project in which to store your shapefile. Click <a href="new_project">here</a> to add project.
 	<?php

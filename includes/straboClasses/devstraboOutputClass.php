@@ -593,7 +593,7 @@ class straboOutputClass
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-			if(count($data)==0){
+			if(empty($data)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -1129,7 +1129,7 @@ class straboOutputClass
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-			if(count($data)==0){
+			if(empty($data)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -1724,7 +1724,7 @@ class straboOutputClass
 			$spots = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 			$spots = $spots['features'];
 
-			if(count($spots)==0){
+			if(empty($spots)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -1884,7 +1884,7 @@ class straboOutputClass
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				require('includes/PDF_LabBook.php');
 
@@ -2164,7 +2164,7 @@ class straboOutputClass
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				require('includes/PDF_LabBook.php');
 
@@ -2737,7 +2737,7 @@ plunge
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				$randnum=$this->strabo->db->get_var("select nextval('file_seq')");
 

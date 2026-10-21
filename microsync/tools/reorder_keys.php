@@ -419,7 +419,7 @@ if ($revert !== null) {
 				$fail++;
 				continue;
 			}
-			if (count($j['rewrites']) > 0) {
+			if (!empty($j['rewrites'])) {
 				rk_mark_dirty($ms, $pid);
 			}
 			$ms->commit();
@@ -524,7 +524,7 @@ foreach ($only as $pid) {
 			$fail++;
 			continue;
 		}
-		if (count($rewrites) > 0) {
+		if (!empty($rewrites)) {
 			rk_mark_dirty($ms, $pid);
 		}
 		$ms->commit();

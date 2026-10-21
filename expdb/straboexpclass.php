@@ -907,7 +907,7 @@ class StraboExp
 		foreach($frows as $frow){
 			$fpkey = $frow->pkey;
 			$arows = $this->db->get_results("select * from apprepo.apparatus where facility_pkey = $fpkey order by modified_timestamp desc");
-			if(count($arows) > 0){
+			if(!empty($arows)){
 				$f = json_decode($frow->json);
 				$f->id = $fpkey;
 				$f->created_timestamp = date("D, M j Y G:i:s T ", $f->created_timestamp);

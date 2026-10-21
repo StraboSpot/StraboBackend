@@ -989,7 +989,7 @@ class StraboMicro
 
 		$tabsHtml .= "</div>\n";
 
-		if(count($tabs) == 0){
+		if(empty($tabs)){
 			$divsHtml = "";
 			$tabsHtml = "";
 		}
@@ -2103,7 +2103,7 @@ class StraboMicro
 				}
 			}
 
-			if(count($spots) > 0){
+			if(!empty($spots)){
 
 				$shadowColor = imagecolorallocate($newImage, 25, 25, 25);
 

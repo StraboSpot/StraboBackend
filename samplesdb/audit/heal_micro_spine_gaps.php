@@ -81,7 +81,7 @@ $missing = $db->get_results("
                         WHERE s.id = sm.strabo_id AND s.userpkey = pm.userpkey)
      ORDER BY pm.userpkey, pm.id, sm.id
 ");
-if (!is_array($missing) || count($missing) === 0) {
+if (!is_array($missing) || empty($missing)) {
     echo "  CLEAN - none.\n";
 } else {
     foreach ($missing as $r) {
@@ -152,7 +152,7 @@ $zero = $db->get_results("
           OR (sm.longitude IS NULL AND (s.longitude = 0 OR (s.micro_data->>'longitude')::float = 0)) )$scopePm
      ORDER BY s.userpkey, s.id
 ");
-if (!is_array($zero) || count($zero) === 0) {
+if (!is_array($zero) || empty($zero)) {
     echo "  CLEAN - none.\n";
 } else {
     $seen = array();

@@ -214,7 +214,7 @@ function logtofile($string,$label=""){
 
 		//$spots = $neodb->get_results("CALL spatial.intersects('geom','POLYGON (($left $top, $right $top, $right $bottom, $left $bottom, $left $top))') YIELD node as s return s;");
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 
 
 			$features = array();
@@ -372,7 +372,7 @@ function logtofile($string,$label=""){
 									unset($imagestuff);
 									$imagestuff=array();
 									$images=$spot["i"];
-									if(count($images)>0){
+									if(!empty($images)){
 										foreach($images as $i){
 											$i = (object)$i->values();
 											$imagestuff[]=$i;
@@ -559,7 +559,7 @@ exit();
 
 
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 
 			$features = array();
 			$featurecollection=array();
@@ -768,7 +768,7 @@ if($_GET['env']){
 
 	//$spots = $neodb->get_results("CALL spatial.intersects('geom','POLYGON (($left $top, $right $top, $right $bottom, $left $bottom, $left $top))') YIELD node as s return s;");
 
-	if(count($spots)>0){
+	if(!empty($spots)){
 
 		$features = array();
 		$featurecollection=array();
@@ -981,7 +981,7 @@ if($_GET['env']){
 
 	$spots = json_decode($response);
 
-	if(count($spots)>0){
+	if(!empty($spots)){
 
 		$features = array();
 		$featurecollection=array();
@@ -1125,7 +1125,7 @@ if($_GET['env']){
 
 	$spots = json_decode($response);
 
-	if(count($spots)>0){
+	if(!empty($spots)){
 
 		$features = array();
 		$featurecollection=array();

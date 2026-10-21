@@ -145,7 +145,7 @@ class VsScore {
 	/** The uploaded Spots behind a confirm, by id (null = not on the server). */
 	private function spots($upk, $ids) {
 		$out = new stdClass();
-		if (!is_array($ids) || count($ids) === 0) {
+		if (!is_array($ids) || empty($ids)) {
 			return $out;
 		}
 		$strabo = new StraboSpot($this->neodb, $upk, $this->strabodb);   // (neodb, userpkey, db)

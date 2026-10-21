@@ -292,7 +292,7 @@ if(is_array($transfer_notice) && !empty($transfer_notice['text'])){
 </div>
 <?php
 }
-if(count($transfers_in) > 0){
+if(!empty($transfers_in)){
 ?>
 
 <div>The following StraboField Projects have been offered to your account:</div>
@@ -328,7 +328,7 @@ foreach($transfers_in as $t){
 
 <?php
 }
-if(count($transfers_out) > 0){
+if(!empty($transfers_out)){
 ?>
 
 <div>You have offered the following StraboField Projects to another account (nothing changes until they accept):</div>
@@ -587,7 +587,7 @@ if($collaboration_rows != ""){
 							<section id="content">
 
 <?php
-if(count($projectrows)==0){
+if(empty($projectrows)){
 	?>
 		<div style="text-align:center;margin-bottom:500px;">No projects yet.<br>Use <strong>+ New Project</strong> above to add one.</div>
 	<?php

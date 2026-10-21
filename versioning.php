@@ -103,7 +103,7 @@ if(count((array)$exprows) > 0){
 <h2>StraboField Data:</h2>
 <?php
 $projectrows = $db->get_results_prepared("select projectid from versions where userpkey=$1 group by projectid order by projectid desc", array($userpkey));
-if(count($projectrows)==0){
+if(empty($projectrows)){
 	?>
 		No Version data found.
 	<?php

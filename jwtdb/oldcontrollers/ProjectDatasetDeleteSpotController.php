@@ -31,7 +31,7 @@ class ProjectDatasetDeleteSpotController extends MyController
 		if($projectid != ""){
 			if($upload['datasets']!=""){
 				$datasets=$upload['datasets'];
-				if(count($datasets) > 0){
+				if(!empty($datasets)){
 					if($upload['spotId']!="" && $upload['spotId'] != null){
 						$spotid=$upload['spotId'];
 					}else{

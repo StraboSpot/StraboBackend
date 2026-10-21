@@ -1635,7 +1635,7 @@ class StraboSpot
 						return img;
 						");
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 			foreach($rows as $row){
 				$image=$row->get("img");
 				$image=(object)$image->values();
@@ -1888,7 +1888,7 @@ class StraboSpot
 		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id AND (n.userpkey = $this->userpkey OR (:Project {userpkey: $this->userpkey})-[:HAS_DATASET]->(n)) RETURN n, id(n) as id ORDER BY CASE WHEN n.userpkey = $this->userpkey THEN 0 ELSE 1 END;";
 		$records = $this->neodb->query($querystring);
 
-		if(count($records) > 0){
+		if(!empty($records)){
 			$record = $records[0];
 			$project = $record->get("n");
 			$properties = $project->values();
@@ -2575,7 +2575,7 @@ class StraboSpot
 
 	public function recordsToFeatureData($records){
 
-		if(count($records)>0){
+		if(!empty($records)){
 
 			foreach($records as $record){
 				unset($res);
@@ -2586,7 +2586,7 @@ class StraboSpot
 				$s=$s->values();
 				$row[0]=(object)$s;
 				$images=$record->get("i");
-				if(count($images)>0){
+				if(!empty($images)){
 					foreach($images as $i){
 						$i=(object)$i->values();
 						$imagearray[]=$i;
@@ -2598,7 +2598,7 @@ class StraboSpot
 				// property-dumping generator carries them.
 				if(method_exists($record, 'hasValue') && $record->hasValue("ctx")){
 					$ctx = $record->get("ctx");
-					if(is_array($ctx) && count($ctx) > 0){
+					if(is_array($ctx) && !empty($ctx)){
 						$c0 = $ctx[0];
 						foreach(array('proj_id','proj_name','ds_id','ds_name') as $ck){
 							$cv = is_array($c0) ? (isset($c0[$ck]) ? $c0[$ck] : null) : (is_object($c0) && isset($c0->$ck) ? $c0->$ck : null);
@@ -2907,7 +2907,7 @@ class StraboSpot
 		$featuredata = $this->neodb->getNode($querystring);
 
 		// If not found as owner, check if user has access via collaboration
-		if(empty($featuredata) || count($featuredata) == 0){
+		if(empty($featuredata) || empty($featuredata)){
 			// Find image through project hierarchy and check collaboration access
 			$querystring = "
 				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
@@ -3759,7 +3759,7 @@ stdClass Object
 
 						");
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 			foreach($rows as $row){
 				$image=$row->get("img");
 				$image=(object)$image->values();
@@ -3986,7 +3986,7 @@ public function getSpotName($id){
 
 		unset($injson->tags);
 
-		if(count($out_tags) > 0){
+		if(!empty($out_tags)){
 			$injson->tags = $out_tags;
 		}else if($replace_tags){
 			// Deleting the LAST tag must still reach storage: an empty array
@@ -4638,7 +4638,7 @@ public function getSpotName($id){
 
 			if($incomingTags != "" || $existingTags != ""){
 				$newTags = $this->combineTags($incomingTags, $existingTags);
-				if(count($newTags) > 0){
+				if(!empty($newTags)){
 					$upload->tags = $newTags;
 				}
 
@@ -5269,11 +5269,11 @@ public function getSpotName($id){
 		$dvars = $this->neodb->get_results("MATCH (d:Dataset) WHERE d.userpkey = $this->userpkey and d.id = $datasetid and NOT EXISTS ((d)--()) RETURN d, id(d) as neoid;");
 
 		// If not found, also check with the effectiveOwner's pkey (for collaborative case)
-		if(count($dvars) == 0 && $effectiveOwner != $this->userpkey){
+		if(empty($dvars) && $effectiveOwner != $this->userpkey){
 			$dvars = $this->neodb->get_results("MATCH (d:Dataset) WHERE d.userpkey = $effectiveOwner and d.id = $datasetid and NOT EXISTS ((d)--()) RETURN d, id(d) as neoid;");
 		}
 
-		if(count($dvars) > 0){
+		if(!empty($dvars)){
 			// Found orphaned dataset - link it to the project
 			$drow = $dvars[0];
 			$dvals = (object)$drow->get("d")->values();
@@ -5281,7 +5281,7 @@ public function getSpotName($id){
 
 			// Get project Neo4j ID
 			$pvars = $this->neodb->get_results("MATCH (p:Project) WHERE p.userpkey = $effectiveOwner and p.id = $projectid RETURN id(p) as neoid;");
-			if(count($pvars) > 0){
+			if(!empty($pvars)){
 				$projectneoid = (int)$pvars[0]->get("neoid");
 
 				// Create the relationship
@@ -5752,7 +5752,7 @@ public function getSpotName($id){
 			//first, copy over images
 			$images = $this->getProjectImages($projectid);
 
-			if(count($images)>0){
+			if(!empty($images)){
 				foreach ($images as $image){
 					$i=$image->get("i");
 					$i=(object)$i->values();
