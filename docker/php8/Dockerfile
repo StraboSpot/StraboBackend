@@ -71,6 +71,11 @@ RUN rm -f /var/run/apache2/apache2.pid \
 	&& a2enmod authn_dbd \
 	&& a2enmod cgi
 
+# MapServer 8 (trixie) refuses to run without a config file ("msLoadConfig(): Unable to
+# access file") and only opens mapfiles whose path matches MS_MAP_PATTERN. Used by
+# geotiff/tile.php and /cgi-bin/mapserv. /etc/mapserver.conf is the compiled-in default.
+RUN printf 'CONFIG\n  ENV\n    MS_MAP_PATTERN "^/var/www/|^/srv/app/www/"\n  END\n  MAPS\n  END\nEND\n' > /etc/mapserver.conf
+
 COPY extras/fonts/* /usr/share/fonts/truetype/
 COPY extras/mapserv/* /mapserv-work/
 COPY extras/apache.conf /etc/apache2/sites-available/000-default.conf
