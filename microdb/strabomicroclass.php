@@ -2018,6 +2018,13 @@ class StraboMicro
 			$origImage = imagecreatefrompng($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/$project_metadata_id/uiImages/".$id);
 			list($originalWidth, $originalHeight) = getimagesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/$project_metadata_id/uiImages/".$id);
 
+			if(!$origImage || !$originalWidth || !$originalHeight){
+				//unreadable uiImage: PHP 7 warned through the math and GD calls below and saved an empty jpg;
+				//PHP 8 throws (DivisionByZeroError / TypeError), so save the same empty file and move on
+				file_put_contents($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/$project_metadata_id/images/".$id.".jpg","");
+				continue;
+			}
+
 			if($originalWidth > $originalHeight){
 				$newWidth = $maxDimension;
 				$newHeight = floor($maxDimension * ($originalHeight/$originalWidth));
