@@ -15,7 +15,11 @@ $pkey = $_GET['pkey'];
 $id = $_GET['id'];
 
 $imagePath = $_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$pkey."/images/".$id.".jpg";
-$img = imagecreatefromjpeg($imagePath);
+$img = @imagecreatefromjpeg($imagePath);
+if(!$img){ //missing or unreadable file: imagejpeg(false) is a TypeError on PHP 8
+	http_response_code(404);
+	exit();
+}
 
 header('Content-type: image/jpeg');
 imagejpeg($img);
