@@ -190,6 +190,40 @@ check('pdataset_strat_sections answers signed out', $r['code'] == 200);
 $r = page("/REST/doPublicStratSectionDetail?spot_id=x%20or%201=1", null);
 check('REST strat detail with a non-numeric spot id stops cleanly', $r['code'] == 200 && trim($r['body']) === '', substr($r['body'], 0, 80));
 
+section('getPublicSingleSpot (strat_section.php)');
+function oneSpot($dsid, $owner) {
+	global $neodb;
+	return (int)$neodb->get_var("MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot) WHERE d.id = $dsid AND d.userpkey = $owner AND s.userpkey = $owner RETURN s.id ORDER BY s.id LIMIT 1");
+}
+function spotFound($pkey, $spotid) {
+	global $neodb, $db;
+	$s = new StraboSpot($neodb, $pkey, $db);
+	$j = $s->getPublicSingleSpot($spotid);
+	return is_object($j) && !isset($j->Error);
+}
+$PS = oneSpot($P, $owner);
+$US = oneSpot($U, $public['owner']);
+check('signed out: private spot not found', !spotFound(99999, $PS));
+check('signed out: public spot found', spotFound(99999, $US));
+check('owner: private spot found', spotFound($owner, $PS));
+check('collaborator: private spot found', spotFound($COLLAB, $PS));
+check('pending collaborator: private spot not found', !spotFound($PENDING, $PS));
+check('stranger: private spot not found', !spotFound($STRANGER, $PS));
+check('injection text is not a spot id', !spotFound(99999, "x}) MATCH (s:Spot) RETURN s //"));
+check('leading digits are only that spot id (int cast)', spotFound(99999, "$US}) RETURN 1 //") == spotFound(99999, $US));
+
+section('getTagsFromDatasetIds owner pin');
+function tagCount($dsids, $owner = null) {
+	global $neodb, $db;
+	$s = new StraboSpot($neodb, 99999, $db);
+	$t = $s->getTagsFromDatasetIds($dsids, $owner);
+	return is_array($t) ? count($t) : 0;
+}
+$ownTags = tagCount($P);
+check('no owner: same tags as the owner pin', tagCount($P, $owner) == $ownTags, "$ownTags vs " . tagCount($P, $owner));
+check('wrong owner: no tags', tagCount($P, $STRANGER) == 0);
+check('mixed dsids pinned to one owner: only that owner\'s project tags', tagCount("$P,$U", $public['owner']) == tagCount($U));
+
 cleanup();
 echo "\n" . (count($failures) ? count($failures) . " FAILED" : "ALL PASS") . "\n";
 exit(count($failures) ? 1 : 0);
