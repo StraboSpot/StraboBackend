@@ -102,7 +102,7 @@ class StraboExp
 		$id = pg_escape_string($app->id);
 		$description = pg_escape_string($app->description);
 		if($app->features != ""){
-			$features = pg_escape_string(implode("; ", $app->features));
+			$features = pg_escape_string(implode("; ", $app->features ?? array()));
 		}
 		$parameters = $app->parameters;
 		$documents = $app->documents;
@@ -1415,7 +1415,7 @@ note
 			$location = pg_escape_string($app->location);
 			$apparatus_id = pg_escape_string($app->id);
 			$description = pg_escape_string($app->description);
-			$features = pg_escape_string(implode("; ", $app->features));
+			$features = pg_escape_string(implode("; ", $app->features ?? array()));
 			$app_json = pg_escape_string(json_encode($app, JSON_PRETTY_PRINT));
 			$app_uuid = $this->uuid->v4();
 
@@ -1966,7 +1966,7 @@ note
 			}
 
 			$description = pg_escape_string($exp->description);
-			$features = pg_escape_string(implode("; ", $exp->features));
+			$features = pg_escape_string(implode("; ", $exp->features ?? array()));
 			$author_firstname = pg_escape_string($exp->author->firstname);
 			$author_lastname = pg_escape_string($exp->author->lastname);
 			$author_affiliation = pg_escape_string($exp->author->affiliation);
