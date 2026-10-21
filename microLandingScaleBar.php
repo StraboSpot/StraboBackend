@@ -19,6 +19,15 @@ if($pkey == "" || $id == ""){
 	echo "Not enough info provided.";exit();
 }
 
+// Access check (2026-10-21, docs/Micro_Image_Access_Fix.md): same gate as getMicroImage (numeric
+// project the viewer may read, micrograph id with no path pieces), 404 otherwise.
+include_once($_SERVER['DOCUMENT_ROOT']."/includes/config.inc.php");
+include_once($_SERVER['DOCUMENT_ROOT']."/db.php");
+include_once($_SERVER['DOCUMENT_ROOT']."/microdb/lib/landing_access.php");
+if(!micro_landing_valid_image_id($id)) micro_landing_not_found();
+if(!micro_landing_readable_row($db, $pkey, micro_landing_session_userpkey())) micro_landing_not_found();
+$pkey = (int)$pkey;
+
 function dumpVar($var){
 	echo "<pre>";
 	print_r($var);
