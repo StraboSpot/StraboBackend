@@ -497,7 +497,7 @@ if($collabcount > 0){
 											$id = $dvals["id"];
 											$featuretype = ucfirst($dvals["featuretype"]);
 											$uploaddate = date("F j, Y, g:i a T P", $dvals["datecreated"]);
-											$modified_timestamp = date("F j, Y, g:i a T", substr($dvals["modified_timestamp"],0,10));
+											$modified_timestamp = (is_numeric(substr($dvals["modified_timestamp"],0,10)) ? date("F j, Y, g:i a T", (int)substr($dvals["modified_timestamp"],0,10)) : null);
 											$name = $dvals["name"];
 											// Use created_by instead of collaboratorpkey for new collaboration model
 											$datasetCreatedBy = $dvals["created_by"] ?? $dvals["collaboratorpkey"] ?? $dvals["userpkey"];
@@ -696,7 +696,7 @@ if($collabcount > 0){
 											$id = $dvals["id"];
 											$featuretype = ucfirst($dvals["featuretype"]);
 											$uploaddate = date("F j, Y, g:i a T P", $dvals["datecreated"]);
-											$modified_timestamp = date("F j, Y, g:i a T", substr($dvals["modified_timestamp"],0,10));
+											$modified_timestamp = (is_numeric(substr($dvals["modified_timestamp"],0,10)) ? date("F j, Y, g:i a T", (int)substr($dvals["modified_timestamp"],0,10)) : null);
 											$name = $dvals["name"];
 
 											?>

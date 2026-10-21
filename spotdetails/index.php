@@ -13,7 +13,7 @@
 
 $sample_id = (int)$_GET['s'];
 
-if($sample_id=="" || !is_int($sample_id)){
+if(empty($sample_id) || !is_int($sample_id)){
 	exit();
 }
 

@@ -2608,12 +2608,12 @@ class newSearchOutputClass
 
 					$ut = substr($spot['properties']['id'], 0 ,10);
 
-					$datestring = date("l, F j, Y", $ut);
+					$datestring = (is_numeric($ut) ? date("l, F j, Y", (int)$ut) : null);
 
 					if(!in_array($datestring, $founddates)){
 						$founddates[] = $datestring;
-						$showformat = date("l, F j, Y", $ut);
-						$lookformat = date("Y-m-d", $ut);
+						$showformat = (is_numeric($ut) ? date("l, F j, Y", (int)$ut) : null);
+						$lookformat = (is_numeric($ut) ? date("Y-m-d", (int)$ut) : null);
 						$thisobj = new stdClass();
 						$thisobj->showformat = $showformat;
 						$thisobj->lookformat = $lookformat;
@@ -2662,7 +2662,7 @@ class newSearchOutputClass
 
 						$ut = substr($id, 0 ,10);
 
-						$thisspotdate = date("l, F j, Y", $ut);
+						$thisspotdate = (is_numeric($ut) ? date("l, F j, Y", (int)$ut) : null);
 
 						if($thisspotdate == $spotdate->showformat){
 
@@ -2675,12 +2675,12 @@ class newSearchOutputClass
 
 							$modified = (string) $spot['id'];
 							$modified = substr($modified,0,10);
-							$modified = date("F j, Y",$modified);
+							$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 							$pdf->valueRow("Created",$modified,15);
 
 							$modified = (string) $spot['modified_timestamp'];
 							$modified = substr($modified,0,10);
-							$modified = date("F j, Y",$modified);
+							$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 							$pdf->valueRow("Last Modified",$modified,15);
 
 							if($rawspot['geometry']->type=="Point" && $rawspot['properties']['strat_section_id']==""){
@@ -4972,12 +4972,12 @@ class newSearchOutputClass
 
 					$ut = substr($spot['properties']['id'], 0 ,10);
 
-					$datestring = date("l, F j, Y", $ut);
+					$datestring = (is_numeric($ut) ? date("l, F j, Y", (int)$ut) : null);
 
 					if(!in_array($datestring, $founddates)){
 						$founddates[] = $datestring;
-						$showformat = date("l, F j, Y", $ut);
-						$lookformat = date("Y-m-d", $ut);
+						$showformat = (is_numeric($ut) ? date("l, F j, Y", (int)$ut) : null);
+						$lookformat = (is_numeric($ut) ? date("Y-m-d", (int)$ut) : null);
 						$thisobj = new stdClass();
 						$thisobj->showformat = $showformat;
 						$thisobj->lookformat = $lookformat;
@@ -5023,7 +5023,7 @@ class newSearchOutputClass
 
 						$ut = substr($id, 0 ,10);
 
-						$thisspotdate = date("l, F j, Y", $ut);
+						$thisspotdate = (is_numeric($ut) ? date("l, F j, Y", (int)$ut) : null);
 
 						if($thisspotdate == $spotdate->showformat){
 
@@ -5036,12 +5036,12 @@ class newSearchOutputClass
 
 							$modified = (string) $spot['id'];
 							$modified = substr($modified,0,10);
-							$modified = date("F j, Y",$modified);
+							$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 							$pdf->valueRow("Created",$modified,15);
 
 							$modified = (string) $spot['modified_timestamp'];
 							$modified = substr($modified,0,10);
-							$modified = date("F j, Y",$modified);
+							$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 							$pdf->valueRow("Last Modified",$modified,15);
 
 							if($rawspot['geometry']->type=="Point"){
@@ -5418,12 +5418,12 @@ class newSearchOutputClass
 
 					$modified = (string) $spot['id'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Created",$modified);
 
 					$modified = (string) $spot['modified_timestamp'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Last Modified",$modified);
 
 					if($spot['surface_feature']){
@@ -5639,7 +5639,7 @@ class newSearchOutputClass
 								$gdimage = $this->gdThumb($filename);
 								if($gdimage){
 									$pdf->GDImage($gdimage, 15, null, 60);
-									$pdf->cell(0,2,'','',1,L);
+									$pdf->cell(0,2,'','',1,'L');
 								}
 							}
 
@@ -5698,12 +5698,12 @@ class newSearchOutputClass
 
 					$modified = (string) $spot['id'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Created",$modified);
 
 					$modified = (string) $spot['modified_timestamp'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Last Modified",$modified);
 
 					if($spot['surface_feature']){
@@ -5919,7 +5919,7 @@ class newSearchOutputClass
 								$gdimage = $this->gdThumb($filename);
 								if($gdimage){
 									$pdf->GDImage($gdimage, 15, null, 60);
-									$pdf->cell(0,2,'','',1,L);
+									$pdf->cell(0,2,'','',1,'L');
 								}
 							}
 
@@ -6356,12 +6356,12 @@ plunge
 
 						$modified = (string) $spot['id'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Created: $modified</div>\n";
 
 						$modified = (string) $spot['modified_timestamp'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Last Modified: $modified</div>\n";
 
 						if($spot['surface_feature']){
@@ -7069,12 +7069,12 @@ public function getKMLHtml($inSpots, $geoType){
 
 				$modified = (string) $spot['id'];
 				$modified = substr($modified,0,10);
-				$modified = date("c",$modified);
+				$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 				$html.="<div>Created: $modified</div>\n";
 
 				$modified = (string) $spot['modified_timestamp'];
 				$modified = substr($modified,0,10);
-				$modified = date("c",$modified);
+				$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 				$html.="<div>Last Modified: $modified</div>\n";
 
 				if($spot['surface_feature']){
@@ -7564,12 +7564,12 @@ public function getKMLHtml($inSpots, $geoType){
 
 				$modified = (string) $spot['id'];
 				$modified = substr($modified,0,10);
-				$modified = date("c",$modified);
+				$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 				$html.="<div>Created: $modified</div>\n";
 
 				$modified = (string) $spot['modified_timestamp'];
 				$modified = substr($modified,0,10);
-				$modified = date("c",$modified);
+				$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 				$html.="<div>Last Modified: $modified</div>\n";
 
 				if($spot['surface_feature']){
@@ -8023,12 +8023,12 @@ public function getKMLHtml($inSpots, $geoType){
 
 						$modified = (string) $spot['id'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Created: $modified</div>\n";
 
 						$modified = (string) $spot['modified_timestamp'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Last Modified: $modified</div>\n";
 
 						if($spot['surface_feature']){

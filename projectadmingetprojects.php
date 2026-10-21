@@ -42,7 +42,7 @@ foreach($rows as $row){
 
 	$result->id = $project->id;
 	$result->name = $project->desc_project_name;
-	$result->modified_timestamp = date("F j, Y, g:i a T P", substr($project->modified_timestamp,0,10));
+	$result->modified_timestamp = (is_numeric(substr($project->modified_timestamp,0,10)) ? date("F j, Y, g:i a T P", (int)substr($project->modified_timestamp,0,10)) : null);
 	$result->datasetcount = $datasetcount;
 
 	$results[] = $result;

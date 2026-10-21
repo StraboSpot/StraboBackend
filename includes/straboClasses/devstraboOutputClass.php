@@ -1906,12 +1906,12 @@ class straboOutputClass
 
 					$modified = (string) $spot['id'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Created",$modified);
 
 					$modified = (string) $spot['modified_timestamp'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Last Modified",$modified);
 
 					if($spot['surface_feature']){
@@ -2127,7 +2127,7 @@ class straboOutputClass
 								$gdimage = $this->gdThumb($filename);
 								if($gdimage){
 									$pdf->GDImage($gdimage, 15, null, 60);
-									$pdf->cell(0,2,'','',1,L);
+									$pdf->cell(0,2,'','',1,'L');
 								}
 							}
 
@@ -2186,12 +2186,12 @@ class straboOutputClass
 
 					$modified = (string) $spot['id'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Created",$modified);
 
 					$modified = (string) $spot['modified_timestamp'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Last Modified",$modified);
 
 					if($spot['surface_feature']){
@@ -2407,7 +2407,7 @@ class straboOutputClass
 								$gdimage = $this->gdThumb($filename);
 								if($gdimage){
 									$pdf->GDImage($gdimage, 15, null, 60);
-									$pdf->cell(0,2,'','',1,L);
+									$pdf->cell(0,2,'','',1,'L');
 								}
 							}
 
@@ -2808,12 +2808,12 @@ plunge
 
 						$modified = (string) $spot['id'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Created: $modified</div>\n";
 
 						$modified = (string) $spot['modified_timestamp'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Last Modified: $modified</div>\n";
 
 						if($spot['surface_feature']){

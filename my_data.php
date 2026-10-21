@@ -728,7 +728,7 @@ if(empty($projectrows)){
 			$id = $dvals["id"];
 			$featuretype = ucfirst($dvals["featuretype"]);
 			$uploaddate = date("F j, Y, g:i a T P", $dvals["datecreated"]);
-			$modified_timestamp = date("F j, Y, g:i a T P", substr($dvals["modified_timestamp"],0,10));
+			$modified_timestamp = (is_numeric(substr($dvals["modified_timestamp"],0,10)) ? date("F j, Y, g:i a T P", (int)substr($dvals["modified_timestamp"],0,10)) : null);
 			$name = $dvals["name"];
 
 			?>

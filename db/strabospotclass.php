@@ -688,7 +688,7 @@ class StraboSpot
 			}
 		}
 
-		if($thisid==""){
+		if(empty($thisid)){
 			foreach($properties as $key=>$value){
 				if($key=="self"){
 					$thisid = (int)end(explode("/",$value));
@@ -1179,7 +1179,7 @@ class StraboSpot
 
 				foreach($image as $key=>$value){
 					if($key!="self" && $value!=null){
-						if($key=="straboid"){$key=id;}
+						if($key=="straboid"){$key='id';}
 						if($key=="id"){
 							$injson[$key]=(int)$value;
 						}else{
@@ -3047,7 +3047,7 @@ class StraboSpot
 			$error.="No image file provided. ";
 		}
 
-		if($id==""){
+		if(empty($id)){
 			$error.="ID must be provided. ";
 		}
 
@@ -4462,7 +4462,7 @@ public function getSpotName($id){
 			}
 		}
 
-		if($thisid==""){
+		if(empty($thisid)){
 			foreach($upload as $key=>$value){
 				if($key=="self"){
 					$thisid = (int) end(explode("/",$value));

@@ -143,7 +143,7 @@ class PDF_MemImage extends tFPDF
 		//$this->SetX(0);
 		$this->SetFont('msjh','',12);
 		$this->cell(0,5,"Spot Name: $spotname",'',1,'L');
-		$this->cell(0,2,'','',1,L);
+		$this->cell(0,2,'','',1,'L');
 
 	}
 
@@ -167,7 +167,7 @@ class PDF_MemImage extends tFPDF
 		//$this->SetX(0);
 		$this->SetFont('msjh','',14);
 		$this->cell(0,5,"$datestring",'B',1,'L');
-		$this->cell(0,3,'','',1,L);
+		$this->cell(0,3,'','',1,'L');
 
 	}
 

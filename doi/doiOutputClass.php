@@ -1685,12 +1685,12 @@ class doiOutputClass
 
 		$modified = (string) $spot['id'];
 		$modified = substr($modified,0,10);
-		$modified = date("F j, Y",$modified);
+		$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 		$pdf->valueRow("Created",$modified,15 + $indent);
 
 		$modified = (string) $spot['modified_timestamp'];
 		$modified = substr($modified,0,10);
-		$modified = date("F j, Y",$modified);
+		$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 		$pdf->valueRow("Last Modified",$modified,15 + $indent);
 
 		if($rawspot['geometry']->type=="Point" && $rawspot['properties']['strat_section_id']==""){
@@ -4194,12 +4194,12 @@ class doiOutputClass
 
 				$modified = (string) $project->id;
 				$modified = substr($modified,0,10);
-				$modified = date("F j, Y",$modified);
+				$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 				$pdf->valueRow("Created",$modified,0);
 
 				$modified = (string) $project->modified_timestamp;
 				$modified = substr($modified,0,10);
-				$modified = date("F j, Y",$modified);
+				$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 				$pdf->valueRow("Last Modified",$modified,0);
 
 				//Landing Page
@@ -4226,14 +4226,14 @@ class doiOutputClass
 
 					$modified = (string) $dataset['id'];
 					$modified = substr($modified,0,10);
-					$modified = date("F j, Y",$modified);
+					$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 
 
 					$pdf->valueRow("Created",$modified,15);
 
 					$modified = (string) $dataset['modified_timestamp'];
 					$modified = substr($modified,0,10);
-					$modified = date("F j, Y",$modified);
+					$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 					$pdf->valueRow("Last Modified",$modified,15);
 					$pdf->blankRow();
 
@@ -5603,12 +5603,12 @@ class doiOutputClass
 
 						$modified = (string) $spot['id'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Created: $modified</div>\n";
 
 						$modified = (string) $spot['modified_timestamp'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Last Modified: $modified</div>\n";
 
 						if($spot['surface_feature']){
@@ -6873,12 +6873,12 @@ $html.='
 
 				$modified = (string) $spot['id'];
 				$modified = substr($modified,0,10);
-				$modified = date("c",$modified);
+				$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 				$html.="<div>Created: $modified</div>\n";
 
 				$modified = (string) $spot['modified_timestamp'];
 				$modified = substr($modified,0,10);
-				$modified = date("c",$modified);
+				$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 				$html.="<div>Last Modified: $modified</div>\n";
 
 				if($spot['surface_feature']){
@@ -7320,12 +7320,12 @@ $html.='
 
 				$modified = (string) $project->id;
 				$modified = substr($modified,0,10);
-				$modified = date("F j, Y",$modified);
+				$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 				$pdf->valueRow("Created",$modified,0);
 
 				$modified = (string) $project->modified_timestamp;
 				$modified = substr($modified,0,10);
-				$modified = date("F j, Y",$modified);
+				$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 				$pdf->valueRow("Last Modified",$modified,0);
 
 				//Landing Page
@@ -7352,14 +7352,14 @@ $html.='
 
 					$modified = (string) $dataset['id'];
 					$modified = substr($modified,0,10);
-					$modified = date("F j, Y",$modified);
+					$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 
 
 					$pdf->valueRow("Created",$modified,15);
 
 					$modified = (string) $dataset['modified_timestamp'];
 					$modified = substr($modified,0,10);
-					$modified = date("F j, Y",$modified);
+					$modified = (is_numeric($modified) ? date("F j, Y", (int)$modified) : null);
 					$pdf->valueRow("Last Modified",$modified,15);
 					$pdf->blankRow();
 
