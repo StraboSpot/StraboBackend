@@ -22458,7 +22458,7 @@ $html.='
 					//https://strabospot.org/pi/16907249300069;https://strabospot.org/pi/16874590296725
 					$foundImages = [];
 					$imagesString = "";
-					if(count($feature['properties']['images']) > 0){
+					if(!empty($feature['properties']['images'])){
 						foreach($feature['properties']['images'] as $i){
 							$foundImages[] = "https://strabospot.org/pi/".$i['id'];
 						}
@@ -23426,7 +23426,7 @@ $html.='
 					//https://strabospot.org/pi/16907249300069;https://strabospot.org/pi/16874590296725
 					$foundImages = [];
 					$imagesString = "";
-					if(count($feature['properties']['images']) > 0){
+					if(!empty($feature['properties']['images'])){
 						foreach($feature['properties']['images'] as $i){
 							$foundImages[] = "https://strabospot.org/pi/".$i['id'];
 						}
@@ -24434,7 +24434,7 @@ $html.='
 					//https://strabospot.org/pi/16907249300069;https://strabospot.org/pi/16874590296725
 					$foundImages = [];
 					$imagesString = "";
-					if(count($feature['properties']['images']) > 0){
+					if(!empty($feature['properties']['images'])){
 						foreach($feature['properties']['images'] as $i){
 							$foundImages[] = "https://strabospot.org/pi/".$i['id'];
 						}
@@ -25376,7 +25376,7 @@ $html.='
 					//https://strabospot.org/pi/16907249300069;https://strabospot.org/pi/16874590296725
 					$foundImages = [];
 					$imagesString = "";
-					if(count($feature['properties']['images']) > 0){
+					if(!empty($feature['properties']['images'])){
 						foreach($feature['properties']['images'] as $i){
 							$foundImages[] = "https://strabospot.org/pi/".$i['id'];
 						}

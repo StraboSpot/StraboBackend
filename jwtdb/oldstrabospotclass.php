@@ -241,7 +241,7 @@ class StraboSpot
 		$data = new StdClass();
 		$data->properties = new StdClass();
 
-		if(count($imagedata) > 0){
+		if(!empty($imagedata)){
 			$imagecount=0;
 			$imagestuff=array();
 			foreach($imagedata as $thisimage){
@@ -329,7 +329,7 @@ class StraboSpot
 
 	public function singleSpotJSONFromFeatureData($featuredata,$imagedata){
 
-		if(count($imagedata) > 0){
+		if(!empty($imagedata)){
 			$imagecount=0;
 			$imagestuff=array();
 			foreach($imagedata as $id){
@@ -415,7 +415,7 @@ class StraboSpot
 
 	public function singleSpotPGJSONFromFeatureData($featuredata,$imagedata){
 
-		if(count($imagedata) > 0){
+		if(!empty($imagedata)){
 			$imagecount=0;
 			$imagestuff=array();
 			foreach($imagedata as $id){
@@ -3023,7 +3023,7 @@ public function getSpotName($id){
 
 		if($upload->tools!=""){ $newproject["tools"]=json_encode($upload->tools); }
 
-		if(count($upload->description)>0){
+		if(!empty($upload->description)){
 			foreach($upload->description as $key=>$value){
 				if(is_array($value)||is_object($value)){
 					$value = json_encode($value);
@@ -3053,7 +3053,7 @@ public function getSpotName($id){
 
 		// now rock_units
 		// ************************************************************
-		if(count($upload->rock_units)>0){
+		if(!empty($upload->rock_units)){
 			$rockunits=array();
 			$runum=0;
 			foreach($upload->rock_units as $ru){
@@ -3074,7 +3074,7 @@ public function getSpotName($id){
 
 		// now tags
 		// ************************************************************
-		if(count($upload->tags)>0){
+		if(!empty($upload->tags)){
 			$tags=array();
 			$tagnum=0;
 			foreach($upload->tags as $t){
@@ -3095,7 +3095,7 @@ public function getSpotName($id){
 
 		// now relationships
 		// ************************************************************
-		if(count($upload->relationships)>0){
+		if(!empty($upload->relationships)){
 			$relationships=array();
 			$relnum=0;
 			foreach($upload->relationships as $rel){
