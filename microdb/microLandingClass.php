@@ -65,7 +65,7 @@ class MicroLanding
 	public function showBasicHeaders($json, $excludes = []){
 
 		foreach($json as $key=>$value){
-			if(!in_array(strtolower($key), $excludes)){
+			if(!in_array(strtolower($key), $excludes ?? array())){
 				$fixedLabel = $this->fixMicroHeader($key);
 				if($fixedLabel != "" && $value != ""){
 					?>
@@ -138,7 +138,8 @@ class MicroLanding
 				$origWidth = $m->width;
 				list($fileWidth, $fileHeight, $type, $attr) = getimagesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$this->pkey."/images/".$id.".jpg");
 
-				$ratio = 750 / $origWidth;
+				//micrograph width can be missing (0 on PHP 7 gave INF; PHP 8 throws DivisionByZeroError): fall back to the file's width
+				$ratio = $origWidth ? 750 / $origWidth : ($fileWidth ? 750 / $fileWidth : 1);
 
 				
 
@@ -428,7 +429,7 @@ class MicroLanding
 					foreach($json->grainInfo->grainSizeInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases);
+							$showPhases = implode(", ", $g->phases ?? array());
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -445,7 +446,7 @@ class MicroLanding
 					foreach($json->grainInfo->grainShapeInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases);
+							$showPhases = implode(", ", $g->phases ?? array());
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -462,7 +463,7 @@ class MicroLanding
 					foreach($json->grainInfo->grainOrientationInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases);
+							$showPhases = implode(", ", $g->phases ?? array());
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -491,7 +492,7 @@ class MicroLanding
 				<?php
 					$this->showBasicHeaders($f);
 					if($f->fabricDefinedBy){
-						$showPhases = implode(", ", $f->fabricDefinedBy);
+						$showPhases = implode(", ", $f->fabricDefinedBy ?? array());
 						?><div><strong>Defined By:</strong> <?php echo $showPhases?></div><?php
 					}
 
@@ -552,7 +553,7 @@ class MicroLanding
 						<?php
 							$this->showBasicHeaders($f->fabricGrainShapeInfo);
 							if($f->fabricGrainShapeInfo->phases){
-								$showPhases = implode(", ", $f->fabricGrainShapeInfo->phases);
+								$showPhases = implode(", ", $f->fabricGrainShapeInfo->phases ?? array());
 								?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 							}
 						?>
@@ -567,7 +568,7 @@ class MicroLanding
 						<?php
 							$this->showBasicHeaders($f->fabricCleavageInfo);
 							if($f->fabricCleavageInfo->geometryOfSeams){
-								$showPhases = implode(", ", $f->fabricCleavageInfo->geometryOfSeams);
+								$showPhases = implode(", ", $f->fabricCleavageInfo->geometryOfSeams ?? array());
 								?><div><strong>Geometry of Seams:</strong> <?php echo $showPhases?></div><?php
 							}
 						?>
@@ -864,7 +865,7 @@ class MicroLanding
 					$this->showBasicHeaders($f);
 					if($f->interLimbAngle){
 						?>
-						<div><strong>Inter-Limb Angle:</strong> <?php echo implode(", ", $f->interLimbAngle)?></div>
+						<div><strong>Inter-Limb Angle:</strong> <?php echo implode(", ", $f->interLimbAngle ?? array())?></div>
 						<?php
 					}
 					?>
