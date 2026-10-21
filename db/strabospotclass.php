@@ -198,7 +198,21 @@ class StraboSpot
 
 	public function getPublicSingleSpot($feature_id){
 
-		$querystring="MATCH (s:Spot {id:$feature_id}) optional match (s)-[b:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
+		// Only a spot in a dataset the viewer may read (public project, own, or accepted collaborator),
+		// pinned to its owner since spot ids are not unique across accounts (2026-10-21, see
+		// permittedDatasetsByOwner); anything else is "not found".
+		$feature_id = (int)$feature_id;
+		$dsids = array();
+		foreach($this->neodb->query("MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot {id:$feature_id}) WHERE d.userpkey = s.userpkey RETURN d.id AS dsid") as $record){
+			$dsids[] = (int)$record->get('dsid');
+		}
+		$spotstring = "false";
+		foreach($this->permittedDatasetsByOwner(implode(",", $dsids)) as $owner => $list){
+			$spotstring = "s.userpkey=".(int)$owner;
+			break;
+		}
+
+		$querystring="MATCH (s:Spot {id:$feature_id}) where $spotstring optional match (s)-[b:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
 
 		$records = $this->neodb->get_results($querystring);
 
@@ -391,7 +405,7 @@ class StraboSpot
 
 				}
 
-				eval("\$data->properties->$key=\$value;");
+				$data->properties->{$key}=$value;
 
 			}
 
@@ -477,7 +491,7 @@ class StraboSpot
 
 				}
 
-				eval("\$data['properties']['$key']=\$value;");
+				$data['properties'][$key]=$value;
 
 			}
 
@@ -563,7 +577,7 @@ class StraboSpot
 
 				}
 
-				eval("\$data['properties']['$key']=\$value;");
+				$data['properties'][$key]=$value;
 
 			}
 
@@ -644,7 +658,7 @@ class StraboSpot
 
 				}
 
-				eval("\$data['properties']['$key']=\$value;");
+				$data['properties'][$key]=$value;
 
 			}
 
@@ -1226,7 +1240,7 @@ class StraboSpot
 					foreach($body as $key=>$value){
 						if($value != ""){
 							if($key!="caption" && $key!="title"){
-								eval("\$injson['$key'] = \$value;");
+								$injson[$key] = $value;
 							}
 						}
 					}
@@ -1515,7 +1529,7 @@ class StraboSpot
 
 					if($key=="featurename"){$key="name";}
 
-					eval("\$data['$key']=\$value;");
+					$data[$key]=$value;
 
 				}
 
@@ -1739,11 +1753,10 @@ class StraboSpot
 			// Feature found, update
 			$node = $dataset;
 
-			foreach($node as $key=>$value){
-				if($key != "featureid" && $key != "self"){
-					eval("\$$key=\$value;");
-				}
-			}
+			// The existing values the update below reads. Node keys never become variables (2026-10-21).
+			$modified_timestamp = $node->modified_timestamp ?? null;
+			$id = $node->id ?? null;
+			$datecreated = $node->datecreated ?? null;
 
 			if($modified_timestamp == ""){
 				$modified_timestamp = 999;
@@ -1758,7 +1771,7 @@ class StraboSpot
 					if(is_array($value)){
 						$value = json_encode($value);
 					}
-					eval("\$injson['$key']=\$value;");
+					$injson[$key]=$value;
 				}
 			}
 
@@ -1823,7 +1836,7 @@ class StraboSpot
 					if(is_array($value)){
 						$value = json_encode($value);
 					}
-					eval("\$injson['$key']=\$value;");
+					$injson[$key]=$value;
 				}
 			}
 
@@ -1941,8 +1954,16 @@ class StraboSpot
 
 	public function getPublicDatasetSpots($feature_id){
 
+		// Only a dataset the viewer may read (public project, own, or accepted collaborator),
+		// pinned to its owner; anything else matches no spots (2026-10-21, see permittedDatasetsByOwner).
+		$datasetstring = "false";
+		foreach($this->permittedDatasetsByOwner($feature_id) as $owner => $list){
+			$datasetstring = "a.userpkey=".(int)$owner." and a.id=".(int)$list[0];
+			break;
+		}
+
 		//get the features from neo4j
-		$querystring = "match (a:Dataset)-[r:HAS_SPOT]->(s:Spot) where a.id=$feature_id optional match (s)-[c:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
+		$querystring = "match (a:Dataset)-[r:HAS_SPOT]->(s:Spot) where $datasetstring optional match (s)-[c:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
 		$json = $this->getFeatureCollection($querystring);
 		return $json;
 
@@ -2122,6 +2143,52 @@ class StraboSpot
 			if(preg_match('/^[0-9]{1,20}$/', $id)) $out[] = (int)$id;
 		}
 		return implode(",", array_values(array_unique($out)));
+	}
+
+	// Field export / download access (2026-10-21, docs/Export_Access_Fix.md). Download links
+	// carry dataset ids and a userpkey in the URL, and the exports trusted that userpkey, so any
+	// signed-in account could export another account's private dataset. This keeps the requested
+	// datasets the session user may read, with the Export Builder rules
+	// (exportjobs/lib/ExportAccess.php): own dataset, accepted collaborator on its project, or
+	// public project. Signed out (99999) = public only. Strabo ids repeat across accounts, so each
+	// dataset is resolved together with its owner.
+	// Returns array(owner userpkey => array(dataset ids)) in request order, own datasets first.
+	public function permittedDatasetsByOwner($dsids){
+		require_once __DIR__ . "/../exportjobs/lib/ExportAccess.php";
+		$ids = $this->intIdList($dsids);
+		if($ids == "") return array();
+		$me = ((int)$this->userpkey == 99999) ? 0 : (int)$this->userpkey;
+
+		$records = $this->neodb->query("MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset) WHERE d.id in [$ids] AND p.userpkey = d.userpkey RETURN d.id AS dsid, d.userpkey AS owner, p.id AS pid");
+		$allowed = array();
+		$checked = array();
+		foreach($records as $record){
+			$owner = (int)$record->get('owner');
+			$pid = (string)$record->get('pid');
+			$key = $owner."|".$pid;
+			if(!isset($checked[$key])) $checked[$key] = ExportAccess::canExport($this->db, $me, $pid, $owner);
+			if($checked[$key]) $allowed[$owner][(string)$record->get('dsid')] = true;
+		}
+
+		$out = array();
+		foreach(explode(",", $ids) as $id){
+			foreach($allowed as $owner => $set){
+				if(isset($set[$id])) $out[$owner][] = $id;
+			}
+		}
+		if($me > 0 && isset($out[$me])) $out = array($me => $out[$me]) + $out;
+		return $out;
+	}
+
+	// The dsids / userpkey pair a single-owner export runs with: the session user's own permitted
+	// datasets when any were asked for, else the first permitted owner's. Nothing permitted gives
+	// dsids "0", which matches no dataset, so each export answers with its usual no-data result and
+	// does not reveal whether the ids exist. The URL's userpkey is never used for access.
+	public function exportDatasetParams($dsids){
+		foreach($this->permittedDatasetsByOwner($dsids) as $owner => $list){
+			return array('userpkey' => (int)$owner, 'dsids' => implode(",", $list));
+		}
+		return array('userpkey' => (int)$this->userpkey, 'dsids' => "0");
 	}
 
 	public function getDatasetSpotsSearch($ingtype=null, $get){
@@ -3090,7 +3157,7 @@ class StraboSpot
 
 				foreach($body as $key=>$value){
 					if($value != ""){
-						eval("\$injson['$key'] = \$value;");
+						$injson[$key] = $value;
 					}
 				}
 
@@ -3509,7 +3576,7 @@ stdClass Object
 					$key != "id"
 					){
 
-					eval("\$data->$key=\$value;");
+					$data->{$key}=$value;
 
 				}
 
@@ -3526,7 +3593,7 @@ stdClass Object
 						$key != "profiletype"
 						){
 
-						eval("\$data->$key=\$value;");
+						$data->{$key}=$value;
 
 					}
 				}
@@ -3572,11 +3639,8 @@ stdClass Object
 		$this->neodb->query($querystring);
 
 		//put in profile
-		foreach($upload as $key=>$value){
-			if($key!="id" && $key!="featureid" && $key!="self"){
-				eval("\$$key=\$value;");
-			}
-		}
+		// The one upload value read below. Upload keys never become variables (2026-10-21).
+		$strabousername = $upload->strabousername ?? null;
 
 		//********************************************************************
 		//need to add some error checking here
@@ -3591,8 +3655,8 @@ stdClass Object
 				if(is_array($value)){
 					$value=json_encode($value);
 				}
-				eval("\$injson['$key']=\$value;");
-				eval("\$newupload['$key']=\$value;");
+				$injson[$key]=$value;
+				$newupload[$key]=$value;
 			}
 		}
 
@@ -4973,15 +5037,19 @@ public function getSpotName($id){
 
 	}
 
-	public function getTagsFromDatasetIds($feature_ids){
+	public function getTagsFromDatasetIds($feature_ids, $owner = null){
 
 		$feature_ids = $this->intIdList($feature_ids);
 		$tags = [];
 
 		$data = new stdClass();
 
+		// Dataset ids are not unique across accounts: only the project that owns each dataset, and
+		// when the caller knows the (access checked) owner, only that owner's datasets (2026-10-21).
+		$ownerstring = ($owner !== null && $owner !== "") ? "and d.userpkey = ".(int)$owner." " : "";
+
 		//get the feature from neo4j
-		$querystring = "MATCH (n:Project)-[HAS_DATASET]->(d:Dataset) WHERE d.id in [$feature_ids] RETURN distinct(n);";
+		$querystring = "MATCH (n:Project)-[:HAS_DATASET]->(d:Dataset) WHERE d.id in [$feature_ids] and n.userpkey = d.userpkey $ownerstring RETURN distinct(n);";
 
 		$records = $this->neodb->query($querystring);
 

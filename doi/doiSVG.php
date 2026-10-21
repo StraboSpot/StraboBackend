@@ -257,7 +257,7 @@
 
 		function drawXLabels($labeltype, $yoffset, $color = "#333333", $offset=0){
 			$labels=[];
-			eval("\$labelarray=\$this->xAxisLabels->$labeltype;");
+			$labelarray=$this->xAxisLabels->{$labeltype};
 			foreach($labelarray as $part){
 				$labels[]=$part->label;
 			}

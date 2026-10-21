@@ -16,9 +16,20 @@ include("prepare_connections.php");
 
 if($_POST['submit']!=""){
 
-	foreach($_POST as $key=>$value){
-		eval("\$$key=\$value;");
-	}
+	// The form fields read below. Posted keys never become variables (2026-10-21).
+	$projectname = $_POST['projectname'] ?? "";
+	$startdate = $_POST['startdate'] ?? "";
+	$enddate = $_POST['enddate'] ?? "";
+	$purposeofstudy = $_POST['purposeofstudy'] ?? "";
+	$otherteammembers = $_POST['otherteammembers'] ?? "";
+	$areaofinterest = $_POST['areaofinterest'] ?? "";
+	$spotprefixlabel = $_POST['spotprefixlabel'] ?? "";
+	$startingnumberforspots = $_POST['startingnumberforspots'] ?? "";
+	$sampleprefixlabel = $_POST['sampleprefixlabel'] ?? "";
+	$instrumentsused = $_POST['instrumentsused'] ?? "";
+	$gpsdatum = $_POST['gpsdatum'] ?? "";
+	$magneticdeclination = $_POST['magneticdeclination'] ?? "";
+	$notes = $_POST['notes'] ?? "";
 
 	//build json
 	unset($data);
