@@ -15,7 +15,12 @@ include("prepare_connections.php");
 include("includes/straboClasses/straboOutputClass.php");
 include 'includes/mheader.php';
 
-$dsids = $_GET['dsids'] ?? '';
+// Access check (2026-10-21, docs/Export_Access_Fix.md): only datasets this session may export, as their owner.
+$access = $strabo->exportDatasetParams($_GET['dsids'] ?? '');
+$_GET['dsids'] = $access['dsids'];
+$_GET['userpkey'] = $access['userpkey'];
+unset($_GET['scope_groups'], $_GET['all_dsids']);
+$dsids = $_GET['dsids'];
 
 // Scan dataset and compute auto-mappings
 $straboOut = new straboOutputClass($strabo, $_GET);

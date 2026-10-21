@@ -26,6 +26,13 @@ require_once("includes/fieldbook/FieldbookBuild.php");
 
 $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
 $params = FieldbookBuild::params($_GET);
+// Access check (2026-10-21, docs/Export_Access_Fix.md): run only on the datasets this session may
+// export, as their owner; the URL's userpkey is never trusted.
+if ($params['dsids'] !== '') {
+	$access = $strabo->exportDatasetParams($params['dsids']);
+	$params['dsids'] = $access['dsids'] === '0' ? '' : $access['dsids'];
+	$params['userpkey'] = (int)$access['userpkey'];
+}
 if (!$params['userpkey']) $params['userpkey'] = (int)$userpkey;
 $dsList = $params['dsids'] !== '' ? array_map('intval', explode(',', $params['dsids'])) : array();
 $key = ''; $mode = 'nodata'; $title = ''; $subtitle = ''; $datasets = array();
