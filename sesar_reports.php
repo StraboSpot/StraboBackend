@@ -68,7 +68,7 @@ try {
 	header('Content-Disposition: attachment; filename="' . $name . '"');
 	header('Content-Length: ' . strlen($bytes));
 	header('X-Report-Rows: ' . count($r['rows']));
-	if (!empty($r['notes'])) header('X-Report-Notes: ' . rawurlencode(implode(' ', $r['notes'])));
+	if (!empty($r['notes'])) header('X-Report-Notes: ' . rawurlencode(implode(' ', $r['notes'] ?? array())));
 	echo $bytes;
 	exit;
 } catch (SesarError $e) {

@@ -976,7 +976,7 @@ class StraboExp
 		$apparatus_id = $app->id;
 		$description = $app->description;
 		if($app->features != ""){
-			$features = implode(";;", $app->features);
+			$features = implode(";;", $app->features ?? array());
 		}
 		$parameters = $app->parameters;
 		$facility_uuid = $app->facility_uuid;

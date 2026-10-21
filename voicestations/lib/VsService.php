@@ -270,7 +270,7 @@ class VsService {
 
 	/** Create or lock the batch row; check it is this user's and dataset's. */
 	private function lockBatch($v) {
-		$list = '{' . implode(',', $v['batch_station_uuids']) . '}';
+		$list = '{' . implode(',', $v['batch_station_uuids'] ?? array()) . '}';
 		$this->db->q(
 			"INSERT INTO voicestations.batches (batch_uuid, userpkey, project_id, dataset_id, station_uuids)
 			 VALUES ($1, $2, $3, $4, $5::uuid[])

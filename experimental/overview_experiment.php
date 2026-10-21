@@ -362,7 +362,7 @@ include("includes/mheader.php");
                             render_labeled_field('Location', $app->location ?? '');
                             render_labeled_field('Description', $app->description ?? '');
                             if (!empty($app->features) && is_array($app->features)) {
-                                render_labeled_field('Features', implode(', ', $app->features));
+                                render_labeled_field('Features', implode(', ', $app->features ?? array()));
                             }
                             ?>
                         </tbody></table>

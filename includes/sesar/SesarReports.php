@@ -146,7 +146,7 @@ class SesarReports
 						$st = $this->push->statusFor($v, (object)array('pkey' => $r->reg_pkey, 'igsn' => $r->reg_igsn, 'state' => $r->reg_state,
 							'origin' => $r->reg_origin, 'access' => $r->reg_access, 'snapshot' => $r->reg_snapshot,
 							'related_resource_id' => $r->reg_rr, 'sesar_sample_id' => $r->reg_sesar_id));
-						$changedHere = $st['pushable'] ? implode(', ', $st['fields']) : '';
+						$changedHere = $st['pushable'] ? implode(', ', $st['fields'] ?? array()) : '';
 					} catch (Throwable $e) { $changedHere = ''; }
 				}
 			}
