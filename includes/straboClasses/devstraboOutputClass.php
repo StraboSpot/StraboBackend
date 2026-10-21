@@ -386,6 +386,7 @@ class straboOutputClass
 			$thumbwidth = 300;
 
 			$src = imagecreatefromjpeg("dbimages/$filename");
+			if(!$src) return null; //not a readable JPEG: GD calls on false are a TypeError on PHP 8
 			list($origwidth, $origheight) = getimagesize("dbimages/$filename");
 
 			$ratio = $origheight / $origwidth;

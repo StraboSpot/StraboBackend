@@ -678,6 +678,7 @@ class straboOutputClass
 			$thumbwidth = 300;
 
 			$src = imagecreatefromjpeg("/srv/app/www/dbimages/$filename");
+			if(!$src) return null; //not a readable JPEG: GD calls on false are a TypeError on PHP 8
 			list($origwidth, $origheight) = getimagesize("/srv/app/www/dbimages/$filename");
 
 			$ratio = $origheight / $origwidth;
@@ -761,6 +762,7 @@ class straboOutputClass
 			$thumbwidth = 900;
 
 			$src = imagecreatefromjpeg("/srv/app/www/dbimages/$filename");
+			if(!$src) return null; //not a readable JPEG: GD calls on false are a TypeError on PHP 8
 
 			$polyfillcolor = imagecolorallocatealpha($src, 129, 124, 215, 25);
 			$polylinecolor = imagecolorallocatealpha($src, 0, 0, 0, 0);

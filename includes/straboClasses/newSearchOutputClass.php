@@ -588,6 +588,7 @@ class newSearchOutputClass
 			$thumbwidth = 300;
 
 			$src = imagecreatefromjpeg("/srv/app/www/dbimages/$filename");
+			if(!$src) return null; //not a readable JPEG: GD calls on false are a TypeError on PHP 8
 			list($origwidth, $origheight) = getimagesize("/srv/app/www/dbimages/$filename");
 
 			$ratio = $origheight / $origwidth;
