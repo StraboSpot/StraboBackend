@@ -1941,8 +1941,16 @@ class StraboSpot
 
 	public function getPublicDatasetSpots($feature_id){
 
+		// Only a dataset the viewer may read (public project, own, or accepted collaborator),
+		// pinned to its owner; anything else matches no spots (2026-10-21, see permittedDatasetsByOwner).
+		$datasetstring = "false";
+		foreach($this->permittedDatasetsByOwner($feature_id) as $owner => $list){
+			$datasetstring = "a.userpkey=".(int)$owner." and a.id=".(int)$list[0];
+			break;
+		}
+
 		//get the features from neo4j
-		$querystring = "match (a:Dataset)-[r:HAS_SPOT]->(s:Spot) where a.id=$feature_id optional match (s)-[c:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
+		$querystring = "match (a:Dataset)-[r:HAS_SPOT]->(s:Spot) where $datasetstring optional match (s)-[c:HAS_IMAGE]-(i:Image) with s, collect(i) as i RETURN s,i;";
 		$json = $this->getFeatureCollection($querystring);
 		return $json;
 
@@ -2122,6 +2130,52 @@ class StraboSpot
 			if(preg_match('/^[0-9]{1,20}$/', $id)) $out[] = (int)$id;
 		}
 		return implode(",", array_values(array_unique($out)));
+	}
+
+	// Field export / download access (2026-10-21, docs/Export_Access_Fix.md). Download links
+	// carry dataset ids and a userpkey in the URL, and the exports trusted that userpkey, so any
+	// signed-in account could export another account's private dataset. This keeps the requested
+	// datasets the session user may read, with the Export Builder rules
+	// (exportjobs/lib/ExportAccess.php): own dataset, accepted collaborator on its project, or
+	// public project. Signed out (99999) = public only. Strabo ids repeat across accounts, so each
+	// dataset is resolved together with its owner.
+	// Returns array(owner userpkey => array(dataset ids)) in request order, own datasets first.
+	public function permittedDatasetsByOwner($dsids){
+		require_once __DIR__ . "/../exportjobs/lib/ExportAccess.php";
+		$ids = $this->intIdList($dsids);
+		if($ids == "") return array();
+		$me = ((int)$this->userpkey == 99999) ? 0 : (int)$this->userpkey;
+
+		$records = $this->neodb->query("MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset) WHERE d.id in [$ids] AND p.userpkey = d.userpkey RETURN d.id AS dsid, d.userpkey AS owner, p.id AS pid");
+		$allowed = array();
+		$checked = array();
+		foreach($records as $record){
+			$owner = (int)$record->get('owner');
+			$pid = (string)$record->get('pid');
+			$key = $owner."|".$pid;
+			if(!isset($checked[$key])) $checked[$key] = ExportAccess::canExport($this->db, $me, $pid, $owner);
+			if($checked[$key]) $allowed[$owner][(string)$record->get('dsid')] = true;
+		}
+
+		$out = array();
+		foreach(explode(",", $ids) as $id){
+			foreach($allowed as $owner => $set){
+				if(isset($set[$id])) $out[$owner][] = $id;
+			}
+		}
+		if($me > 0 && isset($out[$me])) $out = array($me => $out[$me]) + $out;
+		return $out;
+	}
+
+	// The dsids / userpkey pair a single-owner export runs with: the session user's own permitted
+	// datasets when any were asked for, else the first permitted owner's. Nothing permitted gives
+	// dsids "0", which matches no dataset, so each export answers with its usual no-data result and
+	// does not reveal whether the ids exist. The URL's userpkey is never used for access.
+	public function exportDatasetParams($dsids){
+		foreach($this->permittedDatasetsByOwner($dsids) as $owner => $list){
+			return array('userpkey' => (int)$owner, 'dsids' => implode(",", $list));
+		}
+		return array('userpkey' => (int)$this->userpkey, 'dsids' => "0");
 	}
 
 	public function getDatasetSpotsSearch($ingtype=null, $get){

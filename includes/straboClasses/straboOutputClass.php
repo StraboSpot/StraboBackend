@@ -27242,7 +27242,9 @@ QML;
 
 			$getvals = array();
 			$getvals['dsids'] = $dsids;
-			$getvals['userpkey'] = $this->strabo->userpkey;
+			// The dataset owner checked by searchdownload (docs/Export_Access_Fix.md), so collaborators
+			// and public-project viewers get the spots; the session user when no owner was passed.
+			$getvals['userpkey'] = !empty($this->get['userpkey']) ? (int)$this->get['userpkey'] : $this->strabo->userpkey;
 			$getvals['type'] = "doi";
 			// Export Builder capture mode: scope groups + attribution ride along (design §8).
 			if(!empty($this->get['scope_groups'])) $getvals['scope_groups'] = $this->get['scope_groups'];
