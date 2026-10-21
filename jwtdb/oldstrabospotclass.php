@@ -1193,7 +1193,7 @@ class StraboSpot
 		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id and n.userpkey = $this->userpkey RETURN n;";
 		$featuredata = $this->neodb->getNode($querystring);
 
-		$count=count($featuredata);
+		$count=count($featuredata ?? array());
 
 		if($count > 0){
 
@@ -2322,7 +2322,7 @@ class StraboSpot
 		$featuredata = $this->neodb->getNode($querystring);
 
 		$data = new stdClass();
-		$data->count = count($featuredata);
+		$data->count = count($featuredata ?? array());
 		$data->filename = $featuredata["filename"];
 		$data->origfilename = $featuredata["origfilename"];
 		$data->extension = end(explode(".",$featuredata["origfilename"]));
@@ -3820,7 +3820,7 @@ public function getSpotName($id){
 
 				$spots = $this->getDatasetSpots($d['id']);
 
-				$spotcount=$spotcount+count($spots['features']);
+				$spotcount=$spotcount+count($spots['features'] ?? array());
 
 				if($spots){
 					$datasets[$datasetnum]["versionspots"]=$spots;

@@ -85,7 +85,7 @@ class ProjectDatasetsSpotsController extends MyController
 							}
 						}
 
-						$spotcount = count($spots->features);
+						$spotcount = count($spots->features ?? array());
 						$userpkey = $this->strabo->userpkey;
 						$this->strabo->db->query("
 							insert into up_down_stats

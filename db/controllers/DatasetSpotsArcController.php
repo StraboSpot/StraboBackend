@@ -42,7 +42,7 @@ class DatasetSpotsArcController extends MyController
 			}
 
 			// Log download here (use requesting user, not effective owner)
-			$spotcount = count($data['features']);
+			$spotcount = count($data['features'] ?? array());
 			$userpkey = $originalUserpkey;
 			$this->strabo->db->query("
 				insert into up_down_stats
