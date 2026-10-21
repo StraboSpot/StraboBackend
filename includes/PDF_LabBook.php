@@ -84,11 +84,11 @@ class PDF_MemImage extends tFPDF
 	{
 		// Logo
 		if($this->type == "doi"){
-			$this->Image($_SERVER[DOCUMENT_ROOT].'/assets/files/doiprojectpdf.png',10,6,50);
+			$this->Image($_SERVER['DOCUMENT_ROOT'].'/assets/files/doiprojectpdf.png',10,6,50);
 		}elseif($this->type == "math"){
 			//$this->Image($_SERVER[DOCUMENT_ROOT].'/assets/files/doiprojectpdf.png',10,6,50);
 		}else{
-			$this->Image($_SERVER[DOCUMENT_ROOT].'/assets/files/fieldbook.png',10,6,50);
+			$this->Image($_SERVER['DOCUMENT_ROOT'].'/assets/files/fieldbook.png',10,6,50);
 		}
 		// Arial bold 15
 		//$this->SetFont('msjh','B',15);

@@ -4323,7 +4323,7 @@ class doiOutputClass
 	}
 
 	public function getProject($uuid){
-		$json = file_get_contents($_SERVER[DOCUMENT_ROOT]."/doi/doiFiles/$uuid/data.json");
+		$json = file_get_contents($_SERVER['DOCUMENT_ROOT']."/doi/doiFiles/$uuid/data.json");
 		$json = json_decode($json);
 		$project = $json->projectDb->project;
 		if($project->id != ""){
@@ -4336,7 +4336,7 @@ class doiOutputClass
 	}
 
 	public function getProjectDatasets($uuid){
-		$json = file_get_contents($_SERVER[DOCUMENT_ROOT]."/doi/doiFiles/$uuid/data.json");
+		$json = file_get_contents($_SERVER['DOCUMENT_ROOT']."/doi/doiFiles/$uuid/data.json");
 		$json = json_decode($json);
 
 		$jsondatasets = $json->projectDb->datasets;
@@ -4356,7 +4356,7 @@ class doiOutputClass
 	}
 
 	public function getDatasetSpots($uuid, $datasetid){
-		$json = file_get_contents($_SERVER[DOCUMENT_ROOT]."/doi/doiFiles/$uuid/data.json");
+		$json = file_get_contents($_SERVER['DOCUMENT_ROOT']."/doi/doiFiles/$uuid/data.json");
 		$json = json_decode($json);
 
 		$datasets = $json->projectDb->datasets;
@@ -4379,7 +4379,7 @@ class doiOutputClass
 
 	public function getFixedProjectSpots($uuid, $type=""){
 
-		$json = file_get_contents($_SERVER[DOCUMENT_ROOT]."/doi/doiFiles/$uuid/data.json");
+		$json = file_get_contents($_SERVER['DOCUMENT_ROOT']."/doi/doiFiles/$uuid/data.json");
 		$json = json_decode($json);
 		$spots = $json->spotsDb;
 
@@ -4446,7 +4446,7 @@ class doiOutputClass
 
 	public function getProjectSpots($uuid){
 
-		$json = file_get_contents($_SERVER[DOCUMENT_ROOT]."/doi/doiFiles/$uuid/data.json");
+		$json = file_get_contents($_SERVER['DOCUMENT_ROOT']."/doi/doiFiles/$uuid/data.json");
 		$json = json_decode($json);
 		$spots = $json->spotsDb;
 

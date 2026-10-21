@@ -1711,7 +1711,7 @@ class StraboMicro
 				//Next, create folder
 				mkdir($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id);
 
-				$filename = $files[tmp_name];
+				$filename = $files['tmp_name'];
 				exec("/usr/bin/unzip $filename -d /srv/app/www/straboMicroFiles/$project_metadata_id");
 
 				//now move files up one directory

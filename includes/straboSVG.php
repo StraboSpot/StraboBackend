@@ -1085,7 +1085,7 @@
 				if($returnpair=="") $returnpair = "Blank/Blank";
 
 
-				if($spot->properties[id] == "s15928527859896"){
+				if($spot->properties['id'] == "s15928527859896"){
 					$this->dumpVar($spot);
 					$this->dumpVar($returnpair);
 				}
