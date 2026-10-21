@@ -147,7 +147,7 @@ function render_experiment($json_data, $experiment_id, $project_name) {
 
     if ($exp && !empty($exp->features) && is_array($exp->features)) {
         render_section_subheader('Test Features');
-        echo '<p>' . h(implode(', ', $exp->features)) . '</p>';
+        echo '<p>' . h(implode(', ', $exp->features ?? array())) . '</p>';
     }
 
     if ($exp && !empty($exp->author)) {
@@ -221,7 +221,7 @@ function render_experiment($json_data, $experiment_id, $project_name) {
             render_labeled_field('Location', $app->location ?? '');
             render_labeled_field('Description', $app->description ?? '');
             if (!empty($app->features) && is_array($app->features)) {
-                render_labeled_field('Features', implode(', ', $app->features));
+                render_labeled_field('Features', implode(', ', $app->features ?? array()));
             }
             echo '</tbody></table>';
 
@@ -366,11 +366,11 @@ include("includes/mheader.php");
                     <?php
                     render_labeled_field('Created', $row->created_date);
                     render_labeled_field('Last Modified', $row->modified_date);
-                    render_labeled_field('Experiments', count($exp_rows));
+                    render_labeled_field('Experiments', count($exp_rows ?? array()));
                     ?>
                 </tbody></table>
 
-                <?php if (count($exp_rows) > 0) { ?>
+                <?php if (!empty($exp_rows)) { ?>
                     <h3 style="margin-top:2em;border-bottom:1px solid #4b5563;padding-bottom:6px;">Experiments in this Project</h3>
                     <ol>
                     <?php foreach ($exp_rows as $idx => $exp_row) { ?>

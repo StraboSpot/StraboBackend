@@ -101,7 +101,7 @@ foreach($ds as $d){
 	$thisds = new stdClass();
 	$thisds->id = $d->id;
 	$thisds->name = $d->name;
-	$thisds->count = count($d->spotIds);
+	$thisds->count = count($d->spotIds ?? array());
 	$thisds->owner = $ownerstring;
 	$thisds->projectname = $json->projectDb->project->description->project_name;
 	$thisds->doi = $doi;

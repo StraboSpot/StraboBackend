@@ -17,13 +17,13 @@ if(!$userpkey){
 }
 
 //Initialize Databases
-include_once $_SERVER[DOCUMENT_ROOT]."/includes/config.inc.php"; //credentials, etc
-include $_SERVER[DOCUMENT_ROOT]."/db.php"; //postgres database abstraction layer
-include $_SERVER[DOCUMENT_ROOT]."/neodb.php"; //neo4j database abstraction layer
-include $_SERVER[DOCUMENT_ROOT]."/db/strabospotclass.php"; //strabospot specific functions
-include $_SERVER[DOCUMENT_ROOT]."/microdb/strabomicroclass.php";
-include_once($_SERVER[DOCUMENT_ROOT]."/includes/geophp/geoPHP.inc"); //geospatial functions
-include_once($_SERVER[DOCUMENT_ROOT]."/includes/UUID.php"); //UUID Class
+include_once $_SERVER['DOCUMENT_ROOT']."/includes/config.inc.php"; //credentials, etc
+include $_SERVER['DOCUMENT_ROOT']."/db.php"; //postgres database abstraction layer
+include $_SERVER['DOCUMENT_ROOT']."/neodb.php"; //neo4j database abstraction layer
+include $_SERVER['DOCUMENT_ROOT']."/db/strabospotclass.php"; //strabospot specific functions
+include $_SERVER['DOCUMENT_ROOT']."/microdb/strabomicroclass.php";
+include_once($_SERVER['DOCUMENT_ROOT']."/includes/geophp/geoPHP.inc"); //geospatial functions
+include_once($_SERVER['DOCUMENT_ROOT']."/includes/UUID.php"); //UUID Class
 
 //Initialize StraboSpot class
 $strabo = new StraboSpot($neodb,$userpkey,$db);

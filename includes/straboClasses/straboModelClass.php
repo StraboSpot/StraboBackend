@@ -47,7 +47,7 @@ class straboModelClass
 		'tag'                      => array('project.tags'),
 	);
 
-	 public function straboModelClass(){
+	 public function __construct(){
 
 		 $this->columns_with_other_option = array("fabric_feature_type", "fold_feature_type", "linear_orientation_feature_type", "other_3d_structure_feature_type", "planar_orientation_feature_type", "planar_orientation_movement", "rock_unit_sediment_type", "rock_unit_sedimentary_rock_type", "rock_unit_volcanic_rock_type", "rock_unit_plutonic_rock_types", "rock_unit_metamorphic_rock_types", "rock_unit_metamorphic_grade", "rock_unit_epoch", "sample_material_type", "sample_main_sampling_purpose", "tabular_zone_orientation_facing_defined_by", "tabular_zone_orientation_feature_type", "tabular_zone_orientation_intrusive_body_type", "tabular_zone_orientation_vein_fill", "tabular_zone_orientation_vein_array", "tabular_zone_orientation_fault_or_sz", "tabular_zone_orientation_movement", "tabular_zone_orientation_movement_justification", "tabular_zone_orientation_dir_indicators", "tabular_zone_orientation_enveloping_surface_geometry", "tensor_ellipsoid_type", "tensor_non_ellipsoidal_type", "tensor_ellipse_type", "trace_trace_type", "trace_trace_quality", "trace_contact_type", "trace_depositional_contact_type", "trace_intrusive_contact_type", "trace_metamorphic_contact_type", "trace_shear_sense", "trace_other_structural_zones", "trace_fold_type", "trace_fold_attitude", "trace_geomorphic_feature", "trace_antropogenic_feature", "trace_other_feature", "trace_trace_character" );
 		 $this->ignorelist = array("latitude_and_longitude","start","end");
@@ -270,7 +270,7 @@ class straboModelClass
 
 				$selected="";
 
-				if(!in_array($name,$this->founditems) && $userdefined=="no"){
+				if(!in_array($name, $this->founditems ?? array()) && $userdefined=="no"){
 					if($lookshapefilevar==$name){
 						$selected=" selected";
 						$selecteditems[]=$name;
@@ -287,8 +287,8 @@ class straboModelClass
 
 				$selected="";
 
-				if(!in_array($name,$this->founditems) && $userdefined=="no"){
-					if(substr(substr($name,0,strlen($lookshapefilevar))==$lookshapefilevar)){
+				if(!in_array($name, $this->founditems ?? array()) && $userdefined=="no"){
+					if(substr($name,0,strlen($lookshapefilevar))==$lookshapefilevar){
 						$selected=" selected";
 						$this->founditems[]=$name;
 						$selecteditems[]=$name;
@@ -520,7 +520,8 @@ class straboModelClass
 		$tagfound="no";
 		foreach($json_tags as $json_tag){
 			if($json_tag["name"]==$tagname){
-				//add spot to list
+				//add spot to list (a tag with no spots has no "spots" key yet)
+				if(!isset($json_tag["spots"]) || !is_array($json_tag["spots"])) $json_tag["spots"] = array();
 				array_push($json_tag["spots"],$spotid);
 				$tagfound="yes";
 			}
@@ -567,6 +568,7 @@ class straboModelClass
 		foreach($json_tags as $json_tag){
 			if($json_tag["name"]==$tagname && $json_tag["map_unit_name"]==$mapunitname && $json_tag["member_name"]==$membername ){
 				//add spot to list
+				if(!isset($json_tag["spots"]) || !is_array($json_tag["spots"])) $json_tag["spots"] = array();
 				if(!in_array($spotid, $json_tag["spots"])){
 					array_push($json_tag["spots"],$spotid);
 				}
@@ -712,7 +714,7 @@ class straboModelClass
 		if (!is_array($model) || !isset($model['fields'])) return;
 
 		foreach ($model['fields'] as $f) {
-			if (in_array($f['name'], $this->ignorelist)) continue;
+			if (in_array($f['name'], $this->ignorelist ?? array())) continue;
 			$num = $this->fieldnum++;
 			$this->fields[$num] = array(
 				'group' => $f['group'], 'name' => $f['name'], 'label' => $f['label'], 'hint' => $f['hint'],

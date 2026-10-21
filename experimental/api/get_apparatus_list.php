@@ -43,7 +43,7 @@ try {
             $arows = $db->get_results_prepared("SELECT * FROM apprepo.apparatus WHERE facility_pkey = $1 ORDER BY modified_timestamp DESC", array($fpkey));
 
             // Only include facilities that have apparatuses
-            if ($arows && count($arows) > 0) {
+            if ($arows && !empty($arows)) {
                 $f = json_decode($frow->json);
                 $f->id = $fpkey;
 

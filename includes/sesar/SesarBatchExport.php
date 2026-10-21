@@ -177,7 +177,7 @@ class SesarBatchExport
 			if (strcasecmp($c, $code) === 0) return null;
 		}
 		return 'This template was made for SESAR code ' . $code . ', which is not one of the codes on your connected SESAR account ('
-			. implode(', ', $s['sesar_codes']) . '). SESAR will refuse the upload if you cannot register under ' . $code . '.';
+			. implode(', ', $s['sesar_codes'] ?? array()) . '). SESAR will refuse the upload if you cannot register under ' . $code . '.';
 	}
 
 	private function registrations(array $ids, $userpkey)

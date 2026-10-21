@@ -270,7 +270,7 @@ class VsService {
 
 	/** Create or lock the batch row; check it is this user's and dataset's. */
 	private function lockBatch($v) {
-		$list = '{' . implode(',', $v['batch_station_uuids']) . '}';
+		$list = '{' . implode(',', $v['batch_station_uuids'] ?? array()) . '}';
 		$this->db->q(
 			"INSERT INTO voicestations.batches (batch_uuid, userpkey, project_id, dataset_id, station_uuids)
 			 VALUES ($1, $2, $3, $4, $5::uuid[])
@@ -604,13 +604,13 @@ class VsService {
 				}
 			}
 			if ($outcome === 'confirmed') {
-				if (count($spotIds) === 0) {
+				if (empty($spotIds)) {
 					throw VsHttp::bad('spot_ids', 'A confirmed recording names the Spot(s) the app created.');
 				}
 				if ($s['stage'] !== 'ready' && $s['stage'] !== 'failed') {
 					throw VsHttp::conflict('This recording is still being processed.');
 				}
-			} elseif (count($spotIds) > 0) {
+			} elseif (!empty($spotIds)) {
 				throw VsHttp::bad('spot_ids', 'A discarded recording has no Spots.');
 			}
 

@@ -14,7 +14,7 @@
 class StraboSpot
 {
 
-	 public function StraboSpot($neodb,$userpkey,$db){
+	 public function __construct($neodb,$userpkey,$db){
 		 $this->neodb=$neodb;
 		 $this->userpkey=$userpkey;
 		 $this->db=$db;
@@ -332,7 +332,7 @@ class StraboSpot
 		$data = new StdClass();
 		$data->properties = new StdClass();
 
-		if(count($imagedata) > 0){
+		if(!empty($imagedata)){
 			$imagecount=0;
 			$imagestuff=array();
 			foreach($imagedata as $thisimage){
@@ -420,7 +420,7 @@ class StraboSpot
 
 	public function singleSpotJSONFromFeatureData($featuredata,$imagedata){
 
-		if(count($imagedata) > 0){
+		if(!empty($imagedata)){
 			$imagecount=0;
 			$imagestuff=array();
 			foreach($imagedata as $id){
@@ -506,7 +506,7 @@ class StraboSpot
 
 	public function baksingleSpotJSONFromFeatureDataShapefile($featuredata,$imagedata){
 
-		if(count($imagedata) > 0){
+		if(!empty($imagedata)){
 			$imagecount=0;
 			$imagestuff=array();
 			foreach($imagedata as $id){
@@ -592,7 +592,7 @@ class StraboSpot
 
 	public function singleSpotPGJSONFromFeatureData($featuredata,$imagedata){
 
-		if(count($imagedata) > 0){
+		if(!empty($imagedata)){
 			$imagecount=0;
 			$imagestuff=array();
 			foreach($imagedata as $id){
@@ -702,7 +702,7 @@ class StraboSpot
 			}
 		}
 
-		if($thisid==""){
+		if(empty($thisid)){
 			foreach($properties as $key=>$value){
 				if($key=="self"){
 					$thisid = (int)end(explode("/",$value));
@@ -1193,7 +1193,7 @@ class StraboSpot
 
 				foreach($image as $key=>$value){
 					if($key!="self" && $value!=null){
-						if($key=="straboid"){$key=id;}
+						if($key=="straboid"){$key='id';}
 						if($key=="id"){
 							$injson[$key]=(int)$value;
 						}else{
@@ -1447,7 +1447,7 @@ class StraboSpot
 				foreach($inferencerelationships as $ir){
 					unset($thisir);
 					foreach($ir as $key=>$value){
-						if(is_numeric($value)){$value=(real)$value;}
+						if(is_numeric($value)){$value=(float)$value;}
 						if($value!=""){
 							if(is_array($value)){$value=json_encode($value);}
 							$thisir[$key]=$value;
@@ -1491,7 +1491,7 @@ class StraboSpot
 		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id and n.userpkey = $this->userpkey RETURN n;";
 		$featuredata = $this->neodb->getNode($querystring);
 
-		$count=count($featuredata);
+		$count=count($featuredata ?? array());
 
 		if($count > 0){
 
@@ -1649,7 +1649,7 @@ class StraboSpot
 						return img;
 						");
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 			foreach($rows as $row){
 				$image=$row->get("img");
 				$image=(object)$image->values();
@@ -1901,7 +1901,7 @@ class StraboSpot
 		$querystring = "MATCH (n:Dataset) WHERE n.id = $feature_id AND (n.userpkey = $this->userpkey OR (:Project {userpkey: $this->userpkey})-[:HAS_DATASET]->(n)) RETURN n, id(n) as id ORDER BY CASE WHEN n.userpkey = $this->userpkey THEN 0 ELSE 1 END;";
 		$records = $this->neodb->query($querystring);
 
-		if(count($records) > 0){
+		if(!empty($records)){
 			$record = $records[0];
 			$project = $record->get("n");
 			$properties = $project->values();
@@ -2642,7 +2642,7 @@ class StraboSpot
 
 	public function recordsToFeatureData($records){
 
-		if(count($records)>0){
+		if(!empty($records)){
 
 			foreach($records as $record){
 				unset($res);
@@ -2653,7 +2653,7 @@ class StraboSpot
 				$s=$s->values();
 				$row[0]=(object)$s;
 				$images=$record->get("i");
-				if(count($images)>0){
+				if(!empty($images)){
 					foreach($images as $i){
 						$i=(object)$i->values();
 						$imagearray[]=$i;
@@ -2665,7 +2665,7 @@ class StraboSpot
 				// property-dumping generator carries them.
 				if(method_exists($record, 'hasValue') && $record->hasValue("ctx")){
 					$ctx = $record->get("ctx");
-					if(is_array($ctx) && count($ctx) > 0){
+					if(is_array($ctx) && !empty($ctx)){
 						$c0 = $ctx[0];
 						foreach(array('proj_id','proj_name','ds_id','ds_name') as $ck){
 							$cv = is_array($c0) ? (isset($c0[$ck]) ? $c0[$ck] : null) : (is_object($c0) && isset($c0->$ck) ? $c0->$ck : null);
@@ -2974,7 +2974,7 @@ class StraboSpot
 		$featuredata = $this->neodb->getNode($querystring);
 
 		// If not found as owner, check if user has access via collaboration
-		if(empty($featuredata) || count($featuredata) == 0){
+		if(empty($featuredata) || empty($featuredata)){
 			// Find image through project hierarchy and check collaboration access
 			$querystring = "
 				MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_IMAGE]->(n:Image)
@@ -3002,7 +3002,7 @@ class StraboSpot
 		}
 
 		$data = new stdClass();
-		$data->count = count($featuredata);
+		$data->count = count($featuredata ?? array());
 		$data->filename = isset($featuredata["filename"]) ? $featuredata["filename"] : "";
 		$data->origfilename = isset($featuredata["origfilename"]) ? $featuredata["origfilename"] : "";
 		$data->extension = $data->origfilename != "" ? end(explode(".", $data->origfilename)) : "";
@@ -3114,7 +3114,7 @@ class StraboSpot
 			$error.="No image file provided. ";
 		}
 
-		if($id==""){
+		if(empty($id)){
 			$error.="ID must be provided. ";
 		}
 
@@ -3823,7 +3823,7 @@ stdClass Object
 
 						");
 
-		if(count($rows)>0){
+		if(!empty($rows)){
 			foreach($rows as $row){
 				$image=$row->get("img");
 				$image=(object)$image->values();
@@ -4050,7 +4050,7 @@ public function getSpotName($id){
 
 		unset($injson->tags);
 
-		if(count($out_tags) > 0){
+		if(!empty($out_tags)){
 			$injson->tags = $out_tags;
 		}else if($replace_tags){
 			// Deleting the LAST tag must still reach storage: an empty array
@@ -4186,7 +4186,7 @@ public function getSpotName($id){
 				foreach($out_tags as $o){
 					if($o->id == $in_tag->id){
 						foreach($in_tag->spots as $sp){
-							if(!in_array($sp, $o->spots)){
+							if(!in_array($sp, $o->spots ?? array())){
 								$o->spots[] = $sp;
 							}
 						}
@@ -4526,7 +4526,7 @@ public function getSpotName($id){
 			}
 		}
 
-		if($thisid==""){
+		if(empty($thisid)){
 			foreach($upload as $key=>$value){
 				if($key=="self"){
 					$thisid = (int) end(explode("/",$value));
@@ -4593,7 +4593,7 @@ public function getSpotName($id){
 
 		if($upload->tools!=""){ $newproject["tools"]=json_encode($upload->tools); }
 
-		if(count($upload->description)>0){
+		if(!empty($upload->description)){
 			foreach($upload->description as $key=>$value){
 				if(is_array($value)||is_object($value)){
 					$value = json_encode($value);
@@ -4623,7 +4623,7 @@ public function getSpotName($id){
 
 		// now rock_units
 		// ************************************************************
-		if(count($upload->rock_units)>0){
+		if(!empty($upload->rock_units)){
 			$rockunits=array();
 			$runum=0;
 			foreach($upload->rock_units as $ru){
@@ -4644,7 +4644,7 @@ public function getSpotName($id){
 
 		// now tags
 		// ************************************************************
-		if(count($upload->tags)>0){
+		if(!empty($upload->tags)){
 			$tags=array();
 			$tagnum=0;
 			foreach($upload->tags as $t){
@@ -4665,7 +4665,7 @@ public function getSpotName($id){
 
 		// now relationships
 		// ************************************************************
-		if(count($upload->relationships)>0){
+		if(!empty($upload->relationships)){
 			$relationships=array();
 			$relnum=0;
 			foreach($upload->relationships as $rel){
@@ -4702,7 +4702,7 @@ public function getSpotName($id){
 
 			if($incomingTags != "" || $existingTags != ""){
 				$newTags = $this->combineTags($incomingTags, $existingTags);
-				if(count($newTags) > 0){
+				if(!empty($newTags)){
 					$upload->tags = $newTags;
 				}
 
@@ -5337,11 +5337,11 @@ public function getSpotName($id){
 		$dvars = $this->neodb->get_results("MATCH (d:Dataset) WHERE d.userpkey = $this->userpkey and d.id = $datasetid and NOT EXISTS ((d)--()) RETURN d, id(d) as neoid;");
 
 		// If not found, also check with the effectiveOwner's pkey (for collaborative case)
-		if(count($dvars) == 0 && $effectiveOwner != $this->userpkey){
+		if(empty($dvars) && $effectiveOwner != $this->userpkey){
 			$dvars = $this->neodb->get_results("MATCH (d:Dataset) WHERE d.userpkey = $effectiveOwner and d.id = $datasetid and NOT EXISTS ((d)--()) RETURN d, id(d) as neoid;");
 		}
 
-		if(count($dvars) > 0){
+		if(!empty($dvars)){
 			// Found orphaned dataset - link it to the project
 			$drow = $dvars[0];
 			$dvals = (object)$drow->get("d")->values();
@@ -5349,7 +5349,7 @@ public function getSpotName($id){
 
 			// Get project Neo4j ID
 			$pvars = $this->neodb->get_results("MATCH (p:Project) WHERE p.userpkey = $effectiveOwner and p.id = $projectid RETURN id(p) as neoid;");
-			if(count($pvars) > 0){
+			if(!empty($pvars)){
 				$projectneoid = (int)$pvars[0]->get("neoid");
 
 				// Create the relationship
@@ -5820,7 +5820,7 @@ public function getSpotName($id){
 			//first, copy over images
 			$images = $this->getProjectImages($projectid);
 
-			if(count($images)>0){
+			if(!empty($images)){
 				foreach ($images as $image){
 					$i=$image->get("i");
 					$i=(object)$i->values();
@@ -5836,7 +5836,7 @@ public function getSpotName($id){
 
 			$datasetnum=0;
 			$datasets = $this->getProjectDatasets($projectid);
-			$datasets = $datasets['datasets'];
+			$datasets = $datasets['datasets'] ?? array();
 
 			$datasetcount=count($datasets);
 
@@ -5844,7 +5844,7 @@ public function getSpotName($id){
 
 				$spots = $this->getDatasetSpots($d['id']);
 
-				$spotcount=$spotcount+count($spots['features']);
+				$spotcount=$spotcount+count($spots['features'] ?? array());
 
 				if($spots){
 					$datasets[$datasetnum]["versionspots"]=$spots;
@@ -6269,7 +6269,7 @@ public function getSpotName($id){
 
 					foreach($tags as $tag){
 						if($tag->type == "rosetta"){
-							if(in_array($strabo_spot_id, $tag->spots)) $hasRosetta = "true";
+							if(in_array($strabo_spot_id, $tag->spots ?? array())) $hasRosetta = "true";
 						}
 					}
 

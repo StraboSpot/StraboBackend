@@ -13,7 +13,7 @@
 class searchResults
 {
 
- 	public function searchResults($db,$fieldquerybuilder,$microquerybuilder,$expquerybuilder,$json,$userpkey,$searchType){
+ 	public function __construct($db,$fieldquerybuilder,$microquerybuilder,$expquerybuilder,$json,$userpkey,$searchType){
  		$this->db=$db;
  		$this->fieldquerybuilder = $fieldquerybuilder;
  		$this->microquerybuilder = $microquerybuilder;
@@ -313,7 +313,7 @@ if(1==1){
 			$uniqid = $row->userpkey . "-" . $row->strabo_project_id;
 			if($uniqid != $currentprojectid){
 				if($currentprojectid!=""){
-					$currentproject['sample_count'] = count($projectsamples);
+					$currentproject['sample_count'] = count($projectsamples ?? array());
 					$currentproject['micrograph_count'] = $projectmicrographcount;
 					$currentproject['spot_count'] = $projectspotcount;
 					$currentproject['samples'] = $projectsamples;
@@ -363,7 +363,7 @@ if(1==1){
 		}
 
 		if($currentproject['project_id'] != ""){
-			$currentproject['sample_count'] = count($projectsamples);
+			$currentproject['sample_count'] = count($projectsamples ?? array());
 			$currentproject['micrograph_count'] = $projectmicrographcount;
 			$currentproject['spot_count'] = $projectspotcount;
 			$currentproject['samples'] = $projectsamples;

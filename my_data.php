@@ -30,7 +30,7 @@ $microrows = $db->get_results_prepared("select id, strabo_id, name, to_char(uplo
 
 $experimentalrows = $db->get_results_prepared("select pkey, name, notes, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, ispublic from straboexp.project where userpkey = $1 order by modified_timestamp desc", array($userpkey));
 
-if(count($microrows) > 0){
+if(!empty($microrows)){
 	$strabospotprojectheader = "My StraboField Projects";
 }else{
 	$strabospotprojectheader = "My StraboField Projects";  //"My Projects";
@@ -312,14 +312,14 @@ input:checked + .slider:before {
 </script>
 
 <?php
-if(count($experimentalrows) > 0){
+if(!empty($experimentalrows)){
 ?>
 
 <a name="straboexperimental"></a><h2>My StraboExperimental Projects: <span style="font-size:16px;"><a href="experimental/add_project">(Add Project)</a></span></h2>
 <div style ="padding-left:0px;padding-top:10px;padding-bottom:20px;">
 <?php
 
-	if(count($experimentalrows)==0){
+	if(empty($experimentalrows)){
 		?>
 			No Experimental Projects found. Click <a href="experimental/add_project">here</a> to add project.
 		<?php
@@ -386,7 +386,7 @@ if(count($experimentalrows) > 0){
 			<?php
 
 			$erows = $db->get_results_prepared("select pkey, uuid, id, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, json from straboexp.experiment where project_pkey = $1 order by modified_timestamp desc", array($pkey));
-			if(count($erows) > 0){
+			if(!empty($erows)){
 				?>
 				<div class="strabotable" style="margin-left:0px;margin-top:3px;">
 					<table>
@@ -474,7 +474,7 @@ if(count($experimentalrows) > 0){
 ?>
 
 <?php
-if(count($microrows) > 0){
+if(!empty($microrows)){
 ?>
 <a name="strabomicro"></a>
 <h2>My StraboMicro Projects:</h2>
@@ -597,7 +597,7 @@ if(count($microrows) > 0){
 <div style ="padding-left:0px;padding-top:20px;">
 <?php
 
-if(count($projectrows)==0){
+if(empty($projectrows)){
 	?>
 		No Projects found. Click <a href="new_project">here</a> to add project.
 	<?php
@@ -728,7 +728,7 @@ if(count($projectrows)==0){
 			$id = $dvals["id"];
 			$featuretype = ucfirst($dvals["featuretype"]);
 			$uploaddate = date("F j, Y, g:i a T P", $dvals["datecreated"]);
-			$modified_timestamp = date("F j, Y, g:i a T P", substr($dvals["modified_timestamp"],0,10));
+			$modified_timestamp = (is_numeric(substr($dvals["modified_timestamp"],0,10)) ? date("F j, Y, g:i a T P", (int)substr($dvals["modified_timestamp"],0,10)) : null);
 			$name = $dvals["name"];
 
 			?>

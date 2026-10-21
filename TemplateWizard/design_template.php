@@ -115,7 +115,7 @@ function tw_field_hint($f)
         }
     }
     if (!empty($f['applies_to']) && is_array($f['applies_to']) && count($f['applies_to']) < 3) {
-        $bits[] = implode(' / ', $f['applies_to']) . ' only';
+        $bits[] = implode(' / ', $f['applies_to'] ?? array()) . ' only';
     }
     return implode('; ', $bits);
 }

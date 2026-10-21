@@ -104,7 +104,7 @@ li.recommended::after {
 									<?php
 										$showcount = 0;
 										$showrecords = [];
-										for($x = 1; $x < count($datas); $x++){
+										for($x = 1; $x < count($datas ?? array()); $x++){
 											$adata = $datas[$x];
 											if (!$adata->prerelease) {
 												$showcount++;

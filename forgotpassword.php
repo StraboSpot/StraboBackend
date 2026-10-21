@@ -71,7 +71,7 @@ include("includes/mheader.php");
 						</header>
 
 <?php
-if(error!=""){
+if(!empty($error)){
 ?>
 <div style="color:#FF2A00;"><?php echo $error?></div>
 <?php

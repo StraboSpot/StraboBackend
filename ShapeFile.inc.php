@@ -92,7 +92,7 @@ class ShapeFile{
 
 	public $records;
 
-	function ShapeFile($file_name,$options){
+	function __construct($file_name,$options){
 		$this->options = $options;
 
 		$this->file_name = $file_name;
@@ -191,7 +191,7 @@ class ShapeRecord{
 		13 => "RecordMultiPointZ",
 		11 => "RecordPointZ");
 
-	function ShapeRecord(&$fp, $file_name,$options){
+	function __construct(&$fp, $file_name,$options){
 		$this->fp = $fp;
 		$this->fpos = ftell($fp);
 		$this->options = $options;

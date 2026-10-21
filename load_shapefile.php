@@ -355,7 +355,7 @@ if($_POST['columnsubmit']!=""){
 
 	$error = "";
 
-	if(count($results)>0){
+	if(!empty($results)){
 		$error = implode("<br>",$results);
 	}
 
@@ -363,7 +363,7 @@ if($_POST['columnsubmit']!=""){
 	$shapefilejson = file_get_contents("ogrtemp/$randnum");
 	$shapefilejson = json_decode($shapefilejson,true);
 	$shapefilejson = $shapefilejson['features'];
-	$totalcount = count($shapefilejson);
+	$totalcount = count($shapefilejson ?? array());
 	if(file_exists("ogrtemp/$randnum")) unlink("ogrtemp/$randnum");
 
 	//check shapefilejson here
@@ -375,7 +375,7 @@ if($_POST['columnsubmit']!=""){
 			if($value!=""){
 				$strabocol = $smodel->userColumnToStraboColumn($key);
 				if($strabocol){
-					if(in_array($strabocol,$smodel->columns_with_other_option)){ //don't check columns that have "other" option
+					if(in_array($strabocol, $smodel->columns_with_other_option ?? array())){ //don't check columns that have "other" option
 					}elseif($smodel->isControlled($strabocol)){
 						if(!$newval = $smodel->fitsControlled($strabocol,$value)){
 							$vocaberror[$strabocol]=$smodel->createCVError($strabocol,$value);
@@ -862,7 +862,7 @@ if($_POST['columnsubmit']!=""){
 
 	$error = "";
 
-	if(count($results)>0){
+	if(!empty($results)){
 		$error = implode("<br>",$results);
 	}
 
@@ -873,7 +873,7 @@ if($_POST['columnsubmit']!=""){
 
 	$json = $json['features'];
 
-	$totalcount = count($json);
+	$totalcount = count($json ?? array());
 
 	if(file_exists("ogrtemp/$randnum")){
 		unlink("ogrtemp/$randnum");
@@ -1698,7 +1698,7 @@ if($_POST['columnsubmit']!=""){
 					}
 					$thistag->spots = $goodspots;
 
-					if(count($thistag->spots) > 0){
+					if(!empty($thistag->spots)){
 						$newfixtags[] = $thistag;
 					}
 				}
@@ -1796,7 +1796,7 @@ include 'includes/mheader.php';
 $projectrows = $strabo->getMyProjects();
 $projectrows = $projectrows["projects"];
 
-if(count($projectrows)==0){
+if(empty($projectrows)){
 	?>
 	No Projects found. You must create a project in which to store your shapefile. Click <a href="new_project">here</a> to add project.
 	<?php

@@ -189,7 +189,7 @@ if ($twFlash !== ''): ?>
 								<!-- Saved templates -->
 								<div class="tw-templates">
 									<h3>My templates</h3>
-<?php if (count($twTemplates)): ?>
+<?php if (!empty($twTemplates)): ?>
 									<p class="tw-hint">Download gives a blank spreadsheet to fill in by hand. Files you export already carry their template.</p>
 									<div class="table-wrapper">
 										<table class="tw-tpl-table">

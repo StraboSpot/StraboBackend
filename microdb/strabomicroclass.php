@@ -14,7 +14,7 @@
 class StraboMicro
 {
 
-	 public function StraboMicro($neodb,$userpkey,$db){
+	 public function __construct($neodb,$userpkey,$db){
 		 $this->neodb=$neodb;
 		 $this->userpkey=$userpkey;
 		 $this->db=$db;
@@ -618,7 +618,7 @@ class StraboMicro
 						foreach($json->grainInfo->grainSizeInfo as $g){
 							$this->showBasicHeaders($g);
 							if($g->phases){
-								$showPhases = implode(", ", $g->phases);
+								$showPhases = implode(", ", $g->phases ?? array());
 								?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 							}
 						}
@@ -636,7 +636,7 @@ class StraboMicro
 					foreach($json->grainInfo->grainShapeInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases);
+							$showPhases = implode(", ", $g->phases ?? array());
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -653,7 +653,7 @@ class StraboMicro
 					foreach($json->grainInfo->grainOrientationInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases);
+							$showPhases = implode(", ", $g->phases ?? array());
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -684,7 +684,7 @@ class StraboMicro
 					<?php
 						$this->showBasicHeaders($f);
 						if($f->fabricDefinedBy){
-							$showPhases = implode(", ", $f->fabricDefinedBy);
+							$showPhases = implode(", ", $f->fabricDefinedBy ?? array());
 							?><div><strong>Defined By:</strong> <?php echo $showPhases?></div><?php
 						}
 
@@ -745,7 +745,7 @@ class StraboMicro
 							<?php
 								$this->showBasicHeaders($f->fabricGrainShapeInfo);
 								if($f->fabricGrainShapeInfo->phases){
-									$showPhases = implode(", ", $f->fabricGrainShapeInfo->phases);
+									$showPhases = implode(", ", $f->fabricGrainShapeInfo->phases ?? array());
 									?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 								}
 							?>
@@ -760,7 +760,7 @@ class StraboMicro
 							<?php
 								$this->showBasicHeaders($f->fabricCleavageInfo);
 								if($f->fabricCleavageInfo->geometryOfSeams){
-									$showPhases = implode(", ", $f->fabricCleavageInfo->geometryOfSeams);
+									$showPhases = implode(", ", $f->fabricCleavageInfo->geometryOfSeams ?? array());
 									?><div><strong>Geometry of Seams:</strong> <?php echo $showPhases?></div><?php
 								}
 							?>
@@ -1032,7 +1032,7 @@ class StraboMicro
 						$this->showBasicHeaders($f);
 						if($f->interLimbAngle){
 							?>
-							<div><strong>Inter-Limb Angle:</strong> <?php echo implode(", ", $f->interLimbAngle)?></div>
+							<div><strong>Inter-Limb Angle:</strong> <?php echo implode(", ", $f->interLimbAngle ?? array())?></div>
 							<?php
 						}
 						?>
@@ -1108,7 +1108,7 @@ class StraboMicro
 
 		$tabsHtml .= "</div>\n";
 
-		if(count($tabs) == 0){
+		if(empty($tabs)){
 			$divsHtml = "";
 			$tabsHtml = "";
 		}
@@ -1215,7 +1215,7 @@ class StraboMicro
 					foreach($json->grainInfo->grainSizeInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases);
+							$showPhases = implode(", ", $g->phases ?? array());
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -1232,7 +1232,7 @@ class StraboMicro
 					foreach($json->grainInfo->grainShapeInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases);
+							$showPhases = implode(", ", $g->phases ?? array());
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -1249,7 +1249,7 @@ class StraboMicro
 					foreach($json->grainInfo->grainOrientationInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases);
+							$showPhases = implode(", ", $g->phases ?? array());
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -1278,7 +1278,7 @@ class StraboMicro
 				<?php
 					$this->showBasicHeaders($f);
 					if($f->fabricDefinedBy){
-						$showPhases = implode(", ", $f->fabricDefinedBy);
+						$showPhases = implode(", ", $f->fabricDefinedBy ?? array());
 						?><div><strong>Defined By:</strong> <?php echo $showPhases?></div><?php
 					}
 
@@ -1339,7 +1339,7 @@ class StraboMicro
 						<?php
 							$this->showBasicHeaders($f->fabricGrainShapeInfo);
 							if($f->fabricGrainShapeInfo->phases){
-								$showPhases = implode(", ", $f->fabricGrainShapeInfo->phases);
+								$showPhases = implode(", ", $f->fabricGrainShapeInfo->phases ?? array());
 								?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 							}
 						?>
@@ -1354,7 +1354,7 @@ class StraboMicro
 						<?php
 							$this->showBasicHeaders($f->fabricCleavageInfo);
 							if($f->fabricCleavageInfo->geometryOfSeams){
-								$showPhases = implode(", ", $f->fabricCleavageInfo->geometryOfSeams);
+								$showPhases = implode(", ", $f->fabricCleavageInfo->geometryOfSeams ?? array());
 								?><div><strong>Geometry of Seams:</strong> <?php echo $showPhases?></div><?php
 							}
 						?>
@@ -1608,7 +1608,7 @@ class StraboMicro
 					$this->showBasicHeaders($f);
 					if($f->interLimbAngle){
 						?>
-						<div><strong>Inter-Limb Angle:</strong> <?php echo implode(", ", $f->interLimbAngle)?></div>
+						<div><strong>Inter-Limb Angle:</strong> <?php echo implode(", ", $f->interLimbAngle ?? array())?></div>
 						<?php
 					}
 					?>
@@ -1815,7 +1815,7 @@ class StraboMicro
 				//Next, create folder
 				mkdir($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/".$project_metadata_id);
 
-				$filename = $files[tmp_name];
+				$filename = $files['tmp_name'];
 				exec("/usr/bin/unzip $filename -d /srv/app/www/straboMicroFiles/$project_metadata_id");
 
 				//now move files up one directory
@@ -2018,6 +2018,13 @@ class StraboMicro
 			$origImage = imagecreatefrompng($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/$project_metadata_id/uiImages/".$id);
 			list($originalWidth, $originalHeight) = getimagesize($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/$project_metadata_id/uiImages/".$id);
 
+			if(!$origImage || !$originalWidth || !$originalHeight){
+				//unreadable uiImage: PHP 7 warned through the math and GD calls below and saved an empty jpg;
+				//PHP 8 throws (DivisionByZeroError / TypeError), so save the same empty file and move on
+				file_put_contents($_SERVER['DOCUMENT_ROOT']."/straboMicroFiles/$project_metadata_id/images/".$id.".jpg","");
+				continue;
+			}
+
 			if($originalWidth > $originalHeight){
 				$newWidth = $maxDimension;
 				$newHeight = floor($maxDimension * ($originalHeight/$originalWidth));
@@ -2074,7 +2081,7 @@ class StraboMicro
 				}
 			}
 
-			if(count($spots) > 0){
+			if(!empty($spots)){
 
 				$shadowColor = imagecolorallocate($newImage, 25, 25, 25);
 
@@ -2601,7 +2608,7 @@ class StraboMicro
 											$query = "";
 											$vars = ['id','graininfo_id'];
 											$vals = [$grainsize_id, $graininfo_id];
-											if($thisgrainsize->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainsize->phases); }
+											if($thisgrainsize->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainsize->phases ?? array()); }
 											if($thisgrainsize->mean!=""){ $vars[]='mean'; $vals[]= $thisgrainsize->mean; }
 											if($thisgrainsize->median!=""){ $vars[]='median'; $vals[]= $thisgrainsize->median; }
 											if($thisgrainsize->mode!=""){ $vars[]='mode'; $vals[]= $thisgrainsize->mode; }
@@ -2627,7 +2634,7 @@ class StraboMicro
 											$query = "";
 											$vars = ['id','graininfo_id'];
 											$vals = [$grainshape_id, $graininfo_id];
-											if($thisgrainshape->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainshape->phases); }
+											if($thisgrainshape->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainshape->phases ?? array()); }
 											if($thisgrainshape->shape!="") {$vars[]='shape'; $vals[]= "'".pg_escape_string($thisgrainshape->shape)."'"; }
 											$query = "insert into micro_grainshape (\n";
 											$query .= implode(",\n", $vars);
@@ -2649,7 +2656,7 @@ class StraboMicro
 											$query = "";
 											$vars = ['id','graininfo_id'];
 											$vals = [$grainorientation_id, $graininfo_id];
-											if($thisgrainorientation->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainorientation->phases); }
+											if($thisgrainorientation->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainorientation->phases ?? array()); }
 											if($thisgrainorientation->meanOrientation!=""){ $vars[]='meanorientation'; $vals[]= $thisgrainorientation->meanOrientation; }
 											if($thisgrainorientation->relativeTo!="") {$vars[]='relativeto'; $vals[]= "'".pg_escape_string($thisgrainorientation->relativeTo)."'"; }
 											if($thisgrainorientation->software!="") {$vars[]='software'; $vals[]= "'".pg_escape_string($thisgrainorientation->software)."'"; }
@@ -2698,7 +2705,7 @@ class StraboMicro
 											if($thisfabric->fabricElement!="") {$vars[]='fabricelement'; $vals[]= "'".pg_escape_string($thisfabric->fabricElement)."'"; }
 											if($thisfabric->fabricCategory!="") {$vars[]='fabriccategory'; $vals[]= "'".pg_escape_string($thisfabric->fabricCategory)."'"; }
 											if($thisfabric->fabricSpacing!="") {$vars[]='fabricspacing'; $vals[]= "'".pg_escape_string($thisfabric->fabricSpacing)."'"; }
-											if($thisfabric->fabricDefinedBy!="") {$vars[]='fabricdefinedby'; $vals[]= "'".pg_escape_string(implode(", ", $thisfabric->fabricDefinedBy))."'"; }
+											if($thisfabric->fabricDefinedBy!="") {$vars[]='fabricdefinedby'; $vals[]= "'".pg_escape_string(implode(", ", $thisfabric->fabricDefinedBy ?? array()))."'"; }
 											$query = "insert into micro_fabric (\n";
 											$query .= implode(",\n", $vars);
 											$query .= ") values (\n";
@@ -2801,7 +2808,7 @@ class StraboMicro
 												if($thisfabricgrainshape->alignment!="") {$vars[]='alignment'; $vals[]= "'".pg_escape_string($thisfabricgrainshape->alignment)."'"; }
 												if($thisfabricgrainshape->shape!="") {$vars[]='shape'; $vals[]= "'".pg_escape_string($thisfabricgrainshape->shape)."'"; }
 												if($thisfabricgrainshape->notes!="") {$vars[]='notes'; $vals[]= "'".pg_escape_string($thisfabricgrainshape->notes)."'"; }
-												if($thisfabricgrainshape->phases!="") {$vars[]='phases'; $vals[]= "'".pg_escape_string(implode(", ", $thisfabricgrainshape->phases))."'"; }
+												if($thisfabricgrainshape->phases!="") {$vars[]='phases'; $vals[]= "'".pg_escape_string(implode(", ", $thisfabricgrainshape->phases ?? array()))."'"; }
 												$query = "insert into micro_fabricgrainshape (\n";
 												$query .= implode(",\n", $vars);
 												$query .= ") values (\n";
@@ -2823,7 +2830,7 @@ class StraboMicro
 												if($thisfabriccleavage->spacing!=""){ $vars[]='spacing'; $vals[]= $thisfabriccleavage->spacing; }
 												if($thisfabriccleavage->spacingUnit!="") {$vars[]='spacingunit'; $vals[]= "'".pg_escape_string($thisfabriccleavage->spacingUnit)."'"; }
 												if($thisfabriccleavage->notes!="") {$vars[]='notes'; $vals[]= "'".pg_escape_string($thisfabriccleavage->notes)."'"; }
-												if($thisfabriccleavage->geometryOfSeams!="") {$vars[]='geometryofseams'; $vals[]= "'".pg_escape_string(implode(", ", $thisfabriccleavage->geometryOfSeams))."'"; }
+												if($thisfabriccleavage->geometryOfSeams!="") {$vars[]='geometryofseams'; $vals[]= "'".pg_escape_string(implode(", ", $thisfabriccleavage->geometryOfSeams ?? array()))."'"; }
 												if($thisfabriccleavage->styloliticCleavage!=""){ $vars[]='styloliticcleavage'; $vals[]= ($thisfabriccleavage->styloliticCleavage == 1 ? 'true' : 'false'); }
 												$query = "insert into micro_fabriccleavage (\n";
 												$query .= implode(",\n", $vars);
@@ -3624,7 +3631,7 @@ class StraboMicro
 											$vars = ['id','fold_info_id'];
 											$vals = [$fold_id, $foldinfo_id];
 											if($thisfold->label!="") {$vars[]='label'; $vals[]= "'".pg_escape_string($thisfold->label)."'"; }
-											if($thisfold->interLimbAngle != ""){ $vars[]='interlimbangle'; $vals[]= implode(",", $thisfold->interLimbAngle); }
+											if($thisfold->interLimbAngle != ""){ $vars[]='interlimbangle'; $vals[]= implode(",", $thisfold->interLimbAngle ?? array()); }
 											if($thisfold->interLimbAngleOther!="") {$vars[]='interlimbangleother'; $vals[]= "'".pg_escape_string($thisfold->interLimbAngleOther)."'"; }
 											if($thisfold->closure!="") {$vars[]='closure'; $vals[]= "'".pg_escape_string($thisfold->closure)."'"; }
 											if($thisfold->closureOther!="") {$vars[]='closureother'; $vals[]= "'".pg_escape_string($thisfold->closureOther)."'"; }
@@ -3914,7 +3921,7 @@ class StraboMicro
 													$query = "";
 													$vars = ['id','graininfo_id'];
 													$vals = [$grainsize_id, $graininfo_id];
-													if($thisgrainsize->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainsize->phases); }
+													if($thisgrainsize->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainsize->phases ?? array()); }
 													if($thisgrainsize->mean!=""){ $vars[]='mean'; $vals[]= $thisgrainsize->mean; }
 													if($thisgrainsize->median!=""){ $vars[]='median'; $vals[]= $thisgrainsize->median; }
 													if($thisgrainsize->mode!=""){ $vars[]='mode'; $vals[]= $thisgrainsize->mode; }
@@ -3940,7 +3947,7 @@ class StraboMicro
 													$query = "";
 													$vars = ['id','graininfo_id'];
 													$vals = [$grainshape_id, $graininfo_id];
-													if($thisgrainshape->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainshape->phases); }
+													if($thisgrainshape->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainshape->phases ?? array()); }
 													if($thisgrainshape->shape!="") {$vars[]='shape'; $vals[]= "'".pg_escape_string($thisgrainshape->shape)."'"; }
 													$query = "insert into micro_grainshape (\n";
 													$query .= implode(",\n", $vars);
@@ -3962,7 +3969,7 @@ class StraboMicro
 													$query = "";
 													$vars = ['id','graininfo_id'];
 													$vals = [$grainorientation_id, $graininfo_id];
-													if($thisgrainorientation->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainorientation->phases); }
+													if($thisgrainorientation->phases!=""){ $vars[]='phases'; $vals[]= implode(", ", $thisgrainorientation->phases ?? array()); }
 													if($thisgrainorientation->meanOrientation!=""){ $vars[]='meanorientation'; $vals[]= $thisgrainorientation->meanOrientation; }
 													if($thisgrainorientation->relativeTo!="") {$vars[]='relativeto'; $vals[]= "'".pg_escape_string($thisgrainorientation->relativeTo)."'"; }
 													if($thisgrainorientation->software!="") {$vars[]='software'; $vals[]= "'".pg_escape_string($thisgrainorientation->software)."'"; }
@@ -4011,7 +4018,7 @@ class StraboMicro
 													if($thisfabric->fabricElement!="") {$vars[]='fabricelement'; $vals[]= "'".pg_escape_string($thisfabric->fabricElement)."'"; }
 													if($thisfabric->fabricCategory!="") {$vars[]='fabriccategory'; $vals[]= "'".pg_escape_string($thisfabric->fabricCategory)."'"; }
 													if($thisfabric->fabricSpacing!="") {$vars[]='fabricspacing'; $vals[]= "'".pg_escape_string($thisfabric->fabricSpacing)."'"; }
-													if($thisfabric->fabricDefinedBy!="") {$vars[]='fabricdefinedby'; $vals[]= implode(", ", $thisfabric->fabricDefinedBy); }
+													if($thisfabric->fabricDefinedBy!="") {$vars[]='fabricdefinedby'; $vals[]= implode(", ", $thisfabric->fabricDefinedBy ?? array()); }
 													$query = "insert into micro_fabric (\n";
 													$query .= implode(",\n", $vars);
 													$query .= ") values (\n";
@@ -4114,7 +4121,7 @@ class StraboMicro
 														if($thisfabricgrainshape->alignment!="") {$vars[]='alignment'; $vals[]= "'".pg_escape_string($thisfabricgrainshape->alignment)."'"; }
 														if($thisfabricgrainshape->shape!="") {$vars[]='shape'; $vals[]= "'".pg_escape_string($thisfabricgrainshape->shape)."'"; }
 														if($thisfabricgrainshape->notes!="") {$vars[]='notes'; $vals[]= "'".pg_escape_string($thisfabricgrainshape->notes)."'"; }
-														if($thisfabricgrainshape->phases!="") {$vars[]='phases'; $vals[]= implode(", ", $thisfabricgrainshape->phases); }
+														if($thisfabricgrainshape->phases!="") {$vars[]='phases'; $vals[]= implode(", ", $thisfabricgrainshape->phases ?? array()); }
 														$query = "insert into micro_fabricgrainshape (\n";
 														$query .= implode(",\n", $vars);
 														$query .= ") values (\n";
@@ -4136,7 +4143,7 @@ class StraboMicro
 														if($thisfabriccleavage->spacing!=""){ $vars[]='spacing'; $vals[]= $thisfabriccleavage->spacing; }
 														if($thisfabriccleavage->spacingUnit!="") {$vars[]='spacingunit'; $vals[]= "'".pg_escape_string($thisfabriccleavage->spacingUnit)."'"; }
 														if($thisfabriccleavage->notes!="") {$vars[]='notes'; $vals[]= "'".pg_escape_string($thisfabriccleavage->notes)."'"; }
-														if($thisfabriccleavage->geometryOfSeams!="") {$vars[]='geometryofseams'; $vals[]= implode(", ", $thisfabriccleavage->geometryOfSeams); }
+														if($thisfabriccleavage->geometryOfSeams!="") {$vars[]='geometryofseams'; $vals[]= implode(", ", $thisfabriccleavage->geometryOfSeams ?? array()); }
 														if($thisfabriccleavage->styloliticCleavage!=""){ $vars[]='styloliticcleavage'; $vals[]= ($thisfabriccleavage->styloliticCleavage == 1 ? 'true' : 'false'); }
 														$query = "insert into micro_fabriccleavage (\n";
 														$query .= implode(",\n", $vars);
@@ -4932,7 +4939,7 @@ class StraboMicro
 													$vars = ['id','fold_info_id'];
 													$vals = [$fold_id, $foldinfo_id];
 													if($thisfold->label!="") {$vars[]='label'; $vals[]= "'".pg_escape_string($thisfold->label)."'"; }
-													if($thisfold->interLimbAngle != ""){ $vars[]='interlimbangle'; $vals[]= implode(",", $thisfold->interLimbAngle); }
+													if($thisfold->interLimbAngle != ""){ $vars[]='interlimbangle'; $vals[]= implode(",", $thisfold->interLimbAngle ?? array()); }
 													if($thisfold->interLimbAngleOther!="") {$vars[]='interlimbangleother'; $vals[]= "'".pg_escape_string($thisfold->interLimbAngleOther)."'"; }
 													if($thisfold->closure!="") {$vars[]='closure'; $vals[]= "'".pg_escape_string($thisfold->closure)."'"; }
 													if($thisfold->closureOther!="") {$vars[]='closureother'; $vals[]= "'".pg_escape_string($thisfold->closureOther)."'"; }

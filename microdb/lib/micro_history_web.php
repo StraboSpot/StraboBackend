@@ -204,7 +204,7 @@ function micro_history_fold($rows) {
 
 /** A change of files only (refs.*), not a move */
 function micro_history_refs_only($r) {
-	if ($r['op'] !== 'update' || $r['movedFrom'] !== null || !is_array($r['changedPaths']) || count($r['changedPaths']) === 0) {
+	if ($r['op'] !== 'update' || $r['movedFrom'] !== null || !is_array($r['changedPaths']) || empty($r['changedPaths'])) {
 		return false;
 	}
 	foreach ($r['changedPaths'] as $p) {
@@ -451,7 +451,7 @@ function micro_history_details($r, $names) {
 			$out[] = array('label' => 'Location',
 				'before' => micro_history_quoted($r['parentType'], isset($names[$from]) ? $names[$from] : null),
 				'after' => micro_history_quoted($r['parentType'], isset($names[$to]) ? $names[$to] : null));
-		} elseif (in_array(explode('.', $f['path'])[0], array('geometry', 'points', 'sketchLayers'), true)) {
+		} elseif (in_array(explode('.', $f['path'] ?? array())[0], array('geometry', 'points', 'sketchLayers'), true)) {
 			// Coordinates mean nothing as text (the app says "Shape changed" too, 16y)
 			$out[] = array('label' => micro_history_field_label($f['path']), 'text' => 'Changed');
 		} else {

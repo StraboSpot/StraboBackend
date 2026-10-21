@@ -14,7 +14,7 @@
 class StraboExp
 {
 
-	 public function StraboExp($neodb,$userpkey,$db){
+	 public function __construct($neodb,$userpkey,$db){
 		 $this->neodb=$neodb;
 		 $this->userpkey=$userpkey;
 		 $this->db=$db;
@@ -102,7 +102,7 @@ class StraboExp
 		$id = pg_escape_string($app->id);
 		$description = pg_escape_string($app->description);
 		if($app->features != ""){
-			$features = pg_escape_string(implode("; ", $app->features));
+			$features = pg_escape_string(implode("; ", $app->features ?? array()));
 		}
 		$parameters = $app->parameters;
 		$documents = $app->documents;
@@ -111,7 +111,7 @@ class StraboExp
 			//need to update apparatus here
 
 			//check to see if this is a valid apparatus
-			if(!in_array($this->userpkey, $this->admin_pkeys)){
+			if(!in_array($this->userpkey, $this->admin_pkeys ?? array())){
 				$row = $this->db->get_row("select * from apprepo.apparatus where pkey = $apparatus_pkey and facility_pkey in (select facility_pkey from apprepo.facility_users where users_pkey = $this->userpkey)");
 			}else{
 				$row = $this->db->get_row("select * from apprepo.apparatus where pkey = $apparatus_pkey");
@@ -250,7 +250,7 @@ class StraboExp
 		}else{
 
 			//check to see if this is a valid facility
-			if(!in_array($this->userpkey, $this->admin_pkeys)){
+			if(!in_array($this->userpkey, $this->admin_pkeys ?? array())){
 				$row = $this->db->get_row("select * from apprepo.facility where pkey = $facility_pkey and pkey in (select facility_pkey from apprepo.facility_users where users_pkey = $this->userpkey)");
 			}else{
 				$row = $this->db->get_row("select * from apprepo.facility where pkey = $facility_pkey");
@@ -425,7 +425,7 @@ class StraboExp
 
 			//Check for admin too
 
-			if(!in_array($this->userpkey, $this->admin_pkeys)){
+			if(!in_array($this->userpkey, $this->admin_pkeys ?? array())){
 				$row = $this->db->get_row("select * from apprepo.facility where pkey = $facility_pkey and pkey in (select facility_pkey from apprepo.facility_users where users_pkey = $this->userpkey)");
 			}else{
 				$row = $this->db->get_row("select * from apprepo.facility where pkey = $facility_pkey");
@@ -685,7 +685,7 @@ class StraboExp
 
 			//Check for admin too
 
-			if(!in_array($this->userpkey, $this->admin_pkeys)){
+			if(!in_array($this->userpkey, $this->admin_pkeys ?? array())){
 				$row = $this->db->get_row("select * from straboexp.project where userpkey = $this->userpkey and pkey = $project_pkey");
 			}else{
 				$row = $this->db->get_row("select * from straboexp.project where pkey = $project_pkey");
@@ -907,7 +907,7 @@ class StraboExp
 		foreach($frows as $frow){
 			$fpkey = $frow->pkey;
 			$arows = $this->db->get_results("select * from apprepo.apparatus where facility_pkey = $fpkey order by modified_timestamp desc");
-			if(count($arows) > 0){
+			if(!empty($arows)){
 				$f = json_decode($frow->json);
 				$f->id = $fpkey;
 				$f->created_timestamp = date("D, M j Y G:i:s T ", $f->created_timestamp);
@@ -976,7 +976,7 @@ class StraboExp
 		$apparatus_id = $app->id;
 		$description = $app->description;
 		if($app->features != ""){
-			$features = implode(";;", $app->features);
+			$features = implode(";;", $app->features ?? array());
 		}
 		$parameters = $app->parameters;
 		$facility_uuid = $app->facility_uuid;
@@ -1415,7 +1415,7 @@ note
 			$location = pg_escape_string($app->location);
 			$apparatus_id = pg_escape_string($app->id);
 			$description = pg_escape_string($app->description);
-			$features = pg_escape_string(implode("; ", $app->features));
+			$features = pg_escape_string(implode("; ", $app->features ?? array()));
 			$app_json = pg_escape_string(json_encode($app, JSON_PRETTY_PRINT));
 			$app_uuid = $this->uuid->v4();
 
@@ -1966,7 +1966,7 @@ note
 			}
 
 			$description = pg_escape_string($exp->description);
-			$features = pg_escape_string(implode("; ", $exp->features));
+			$features = pg_escape_string(implode("; ", $exp->features ?? array()));
 			$author_firstname = pg_escape_string($exp->author->firstname);
 			$author_lastname = pg_escape_string($exp->author->lastname);
 			$author_affiliation = pg_escape_string($exp->author->affiliation);

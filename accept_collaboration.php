@@ -40,7 +40,7 @@ if(!$canAccept['allowed']){
 	$querystring = "MATCH (n:Project) WHERE n.id = $project_id and n.userpkey = $userpkey RETURN n;";
 	$records = $neodb->query($querystring);
 	$project_name = "this project";
-	if(count($records) > 0){
+	if(!empty($records)){
 		$record = $records[0];
 		$project = $record->get("n");
 		$properties = $project->values();

@@ -1035,7 +1035,7 @@ class UploadHandler
 		}
 		if (count($failed_versions)) {
 			$file->error = $this->get_error_message('image_resize')
-					.' ('.implode($failed_versions, ', ').')';
+					.' ('.implode(', ', $failed_versions).')';
 		}
 		// Free memory:
 		$this->destroy_image_object($file_path);
@@ -1231,9 +1231,9 @@ class UploadHandler
 		$this->header('Access-Control-Allow-Credentials: '
 			.($this->options['access_control_allow_credentials'] ? 'true' : 'false'));
 		$this->header('Access-Control-Allow-Methods: '
-			.implode(', ', $this->options['access_control_allow_methods']));
+			.implode(', ', $this->options['access_control_allow_methods'] ?? array()));
 		$this->header('Access-Control-Allow-Headers: '
-			.implode(', ', $this->options['access_control_allow_headers']));
+			.implode(', ', $this->options['access_control_allow_headers'] ?? array()));
 	}
 
 	public function generate_response($content, $print_response = true) {

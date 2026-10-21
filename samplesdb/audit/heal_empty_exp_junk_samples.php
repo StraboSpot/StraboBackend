@@ -56,7 +56,7 @@ $hits = $db->get_results("
      ORDER BY e.pkey
 ");
 
-if (!is_array($hits) || count($hits) === 0) {
+if (!is_array($hits) || empty($hits)) {
     echo "CLEAN — nothing to heal.\n";
     exit(0);
 }

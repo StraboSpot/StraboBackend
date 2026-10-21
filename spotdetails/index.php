@@ -13,7 +13,7 @@
 
 $sample_id = (int)$_GET['s'];
 
-if($sample_id=="" || !is_int($sample_id)){
+if(empty($sample_id) || !is_int($sample_id)){
 	exit();
 }
 
@@ -40,7 +40,7 @@ $geoPHP = new geoPHP;
 
 $neorow = $neodb->get_results("match (d:Dataset)-[HAS_SPOT]->(s:Spot)-[HAS_SAMPLE]->(smp:Sample) where smp.id=$sample_id return d,s limit 1;");
 
-if(count($neorow) == 0){
+if(empty($neorow)){
 	include '../includes/header.php';
 	echo "Error. Sample not found.";
 	include '../includes/footer.php';

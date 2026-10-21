@@ -80,7 +80,7 @@ if ($DIGEST) {
 
 // ---------------------------------------------------------------- 1. no eval left
 section('no eval() in first-party PHP');
-$skip = '#^/srv/app/www/(PHPExcel|includes/classes/vendor|vendor|eratosthenes/admin/vendor|includes/geophp|includes/jwt|includes/tfpdf|experimental/lib/tfpdf|tests|devexperimental|bkup|docs|node_modules|dbimages|straboMicroFiles|ziptemp|ogrtemp|svgfiles|versions|exportjobs_data|geotiff/upload|voicestations_data|arcfiles|profileimages)(/|$)|/(Parsedown|ShapeFile\.inc)\.php$#';
+$skip = '#^/srv/app/www/(PHPExcel|includes/classes/vendor|vendor|eratosthenes/admin/vendor|includes/geophp|includes/jwt|includes/tfpdf|experimental/lib/tfpdf|tests|devexperimental|bkup|docs|node_modules|dbimages|straboMicroFiles|ziptemp|ogrtemp|svgfiles|versions|exportjobs_data|geotiff/upload|voicestations_data|arcfiles|profileimages|phppgadmin)(/|$)|/(Parsedown|ShapeFile\.inc)\.php$#';
 $found = array();
 $scanned = 0;
 $it = new RecursiveIteratorIterator(new RecursiveCallbackFilterIterator(

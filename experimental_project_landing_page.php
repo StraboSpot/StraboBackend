@@ -45,7 +45,7 @@ if($project_pkey == ""){
 
 $rows = $db->get_results_prepared("SELECT * FROM straboexp.experiment WHERE project_pkey = $1", array($project_pkey));
 
-if(count($rows) == 0){
+if(empty($rows)){
 	include("includes/mheader.php");
 ?>
 			<!-- Main -->
@@ -62,7 +62,7 @@ if(count($rows) == 0){
 	exit();
 }
 
-if(count($rows) == 1){
+if(count($rows ?? array()) == 1){
 	$pkey = $rows[0]->pkey;
 	header("Location: /experimental/view_experiment?e=".$pkey);
 	exit();

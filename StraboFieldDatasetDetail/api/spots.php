@@ -70,7 +70,7 @@ $meta_rows = $neodb->get_results("
 	LIMIT 1
 ");
 
-if (!$meta_rows || count($meta_rows) === 0) {
+if (!$meta_rows || empty($meta_rows)) {
 	http_response_code(404);
 	echo json_encode(['error' => 'Dataset not found']);
 	exit;

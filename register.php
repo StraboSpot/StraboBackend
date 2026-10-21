@@ -142,7 +142,7 @@ function send_validation_mail($email, $firstname, $lastname, $hash){
 // Error box + "Did you mean" card shown above a form.
 function messages_html($errors, $suggestion, $typed){
 	$out = "";
-	if(count($errors) > 0){
+	if(!empty($errors)){
 		$out .= "<div class=\"regmsg regmsg-error\"><div class=\"regmsg-title\">Please fix the following:</div><ul>";
 		foreach($errors as $e) $out .= "<li>$e</li>";
 		$out .= "</ul></div>";
@@ -205,7 +205,7 @@ if($_POST['fix_submit']!=""){
 		$fixemail = strtolower(trim($_POST['email']));
 		$fixemailconfirm = strtolower(trim($_POST['emailconfirm']));
 		$errors = email_errors($fixemail, $fixemailconfirm, (string)$_POST['email_checked'], $row->pkey);
-		if(count($errors) > 0 || $suggestion !== null){
+		if(!empty($errors) || $suggestion !== null){
 			$fixerror = messages_html($errors, $suggestion, $fixemail);
 			$sentemail = $row->email;
 			$sentfixtoken = $_POST['fixtoken'];
@@ -288,7 +288,7 @@ if($_POST['submit']!=""){
 		exit();
 	}
 
-	if(count($errors) == 0 && $suggestion === null){
+	if(empty($errors) && $suggestion === null){
 
 		//no errors, so let's put in user and send out confirmation email
 

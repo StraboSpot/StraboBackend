@@ -28,7 +28,7 @@
 		*  Constructor
 		*/
 
-		function StraboDbNeo4j($neousername='', $neopassword='', $neohost='', $neoport='', $neomode='')
+		function __construct($neousername='', $neopassword='', $neohost='', $neoport='', $neomode='')
 		{
 			$this->neousername = $neousername;
 			$this->neopassword = $neopassword;
@@ -148,7 +148,7 @@
 
 		function get_var($querystring=''){
 			$records = $this->query($querystring);
-			$record = $records[0];
+			$record = $records[0] ?? null;
 			if($record){
 				$value = $record->value($record->keys()[0]);
 				return $value;
@@ -176,7 +176,7 @@
 		function getNode($querystring=''){
 			$result = $this->client->run("$querystring");
 			$records = $result->getRecords();
-			$record=$records[0];
+			$record=$records[0] ?? null;
 
 			if($record!=""){
 				$value = $record->value($record->keys()[0]);
@@ -194,7 +194,7 @@
 		function getRecord($querystring=''){
 			$result = $this->client->run("$querystring");
 			$records = $result->getRecords();
-			$record=$records[0];
+			$record=$records[0] ?? null;
 
 			if($record){
 				return $record;

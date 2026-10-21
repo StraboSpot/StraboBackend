@@ -168,7 +168,7 @@ try {
     $pdf->Cell(45, 5, 'Experiments:', 0, 0);
     $pdf->SetFont('DejaVu', '', 9);
     $pdf->SetTextColor(33, 37, 41);
-    $pdf->Cell(0, 5, count($exp_rows), 0, 1);
+    $pdf->Cell(0, 5, count($exp_rows ?? array()), 0, 1);
 
     $pdf->SetFont('DejaVu', 'B', 9);
     $pdf->SetTextColor(108, 117, 125);

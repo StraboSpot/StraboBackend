@@ -1542,7 +1542,7 @@ class FieldTabularService
                         $el = array('type' => self::$OTYPES[$otShort]);
                         foreach ($oPayload as $name => $raw) {
                             $def = self::fieldDef('orientation', $name);
-                            if ($def !== null && isset($def['applies_to']) && !in_array($otShort, $def['applies_to'])) {
+                            if ($def !== null && isset($def['applies_to']) && !in_array($otShort, $def['applies_to'] ?? array())) {
                                 $hardErrors[] = array('row' => $rec['n'], 'column' => 'orientation.' . $name, 'code' => 'inapplicable',
                                                       'message' => self::displayHeader('orientation', $name) . " does not apply to $otShort orientations.");
                                 $bad = true;
@@ -2663,7 +2663,7 @@ class FieldTabularService
             "MATCH (s:Spot {id: $spotId, userpkey: {$this->userpkey}})
              OPTIONAL MATCH (s)-[:HAS_IMAGE]->(i:Image)
              WITH s, collect(i) AS i RETURN s, i");
-        if (!is_array($records) || !count($records)) { return null; }
+        if (!is_array($records) || empty($records)) { return null; }
         $record = $records[0];
         $props = $record->get('s')->values();
         $images = array();
@@ -3278,7 +3278,7 @@ class FieldTabularService
             } elseif ($d['kind'] === 'system' && $d['key'] === 'orientation_role') {
                 $vocabColumns[] = array('header' => $d['header'], 'label' => 'Orientation Role',
                                         'values' => array('primary', 'associated'));
-            } elseif ($d['kind'] === 'field' && isset($d['def']['vocab']) && count($d['def']['vocab'])) {
+            } elseif ($d['kind'] === 'field' && isset($d['def']['vocab']) && !empty($d['def']['vocab'])) {
                 // orientation: every type's labels (a tabular row can pick
                 // "5 - best - accurate"); retired choices are never offered
                 $labels = array();

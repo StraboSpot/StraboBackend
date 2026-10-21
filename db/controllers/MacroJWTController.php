@@ -40,7 +40,7 @@ class MacroJWTController extends MyController
 		$continueprofile="no";
 
 		//count properties to make sure json is set
-		if(count($upload)>0){$continueprofile="yes";}
+		if(!empty($upload)){$continueprofile="yes";}
 
 		if($continueprofile=="no"){
 

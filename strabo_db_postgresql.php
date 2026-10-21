@@ -42,7 +42,7 @@
 		*  same time as initialising the StraboDbPostgreSQL class
 		*/
 
-		function StraboDbPostgreSQL($dbuser='', $dbpassword='', $dbname='', $dbhost='localhost', $port='5432')
+		function __construct($dbuser='', $dbpassword='', $dbname='', $dbhost='localhost', $port='5432')
 		{
 			$this->dbuser = $dbuser;
 			$this->dbpassword = $dbpassword;
@@ -210,9 +210,11 @@
 				{
 
 					// Thx. Rafael Bernal
-					$insert_query = pg_query("SELECT lastval();");
-					$insert_row = pg_fetch_row($insert_query);
-					$this->insert_id = $insert_row[0];
+					// lastval() fails when the INSERT used no sequence (explicit pkey);
+					// pg_fetch_row(false) is a TypeError on PHP 8
+					$insert_query = @pg_query("SELECT lastval();");
+					$insert_row = $insert_query ? pg_fetch_row($insert_query) : false;
+					$this->insert_id = $insert_row ? $insert_row[0] : null;
 				}
 
 				// Return number fo rows affected

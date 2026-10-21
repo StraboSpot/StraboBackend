@@ -88,7 +88,8 @@ function lines($body) {
 	return array_map('html_entity_decode', $m[1]);
 }
 function has($body, $text) {
-	return strpos($body, $text) !== false;
+	// PHP 8.1+ htmlspecialchars() also escapes ' as &#039; (default flags changed); same page in a browser
+	return strpos(str_replace('&#039;', "'", $body), $text) !== false;
 }
 
 $db->get_var('SELECT 1');
@@ -243,7 +244,7 @@ try {
 	check('a micrograph named with markup', push($PID, $OWN, array(
 		array('op' => 'create', 'type' => 'micrograph', 'id' => 'MX', 'parentType' => 'sample', 'parentId' => 'S1', 'body' => array('name' => '<i>y</i>')))));
 	$b = page($url, $U['owner']['sid'])['body'];
-	check('the line names it, escaped', strpos($b, "<span class=\"mh-line\">You added micrograph '&lt;i&gt;y&lt;/i&gt;' to sample 'S1 by editor'</span>") !== false
+	check('the line names it, escaped', has($b, "<span class=\"mh-line\">You added micrograph '&lt;i&gt;y&lt;/i&gt;' to sample 'S1 by editor'</span>")
 		&& strpos($b, '<i>y</i>') === false, json_encode(array_slice(lines($b), 0, 1)));
 
 	section('Removed member');

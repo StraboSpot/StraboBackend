@@ -125,7 +125,7 @@ if($microInviteResult !== null){
 		<div style="border:1px solid <?php echo $microInviteResult['ok'] ? '#2e7d32' : '#c0392b'?>;padding:10px 14px;margin-bottom:20px;"><?php echo htmlspecialchars($microInviteResult['text'])?></div>
 	<?php
 }
-if(count($microInvites) > 0){
+if(!empty($microInvites)){
 	?>
 		<div>You have been invited to collaborate on the following StraboMicro projects:</div>
 		<div class="table-wrapper">
@@ -177,7 +177,7 @@ if(isset($_GET['deleteblocked'])){
 		<div style="border:1px solid #c0392b;padding:10px 14px;margin-bottom:20px;">This project is shared with other people and cannot be deleted here. Manage it from StraboMicro.</div>
 	<?php
 }
-if(count($microrows)==0){
+if(empty($microrows)){
 	?>
 		<div style="text-align:center;margin-bottom:500px;">No Projects found.</div>
 	<?php
@@ -274,7 +274,7 @@ if(count($microrows)==0){
 	}//end foreach project
 }
 
-if(count($microDeleted) > 0){
+if(!empty($microDeleted)){
 	?>
 		<div style="padding-top:20px;"></div>
 		<header>

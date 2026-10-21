@@ -103,7 +103,7 @@ foreach ($rows as $row) {
 	if (isset($j->daq)) {
 		$pathCov['daq']++;
 		$devices = isset($j->daq->devices) && is_array($j->daq->devices) ? $j->daq->devices : array();
-		if (count($devices) > 0) $pathCov['daq devices >=1']++;
+		if (!empty($devices)) $pathCov['daq devices >=1']++;
 		$expChannels = 0;
 		foreach ($devices as $dev) {
 			if (!is_object($dev) || !isset($dev->channels) || !is_array($dev->channels)) continue;

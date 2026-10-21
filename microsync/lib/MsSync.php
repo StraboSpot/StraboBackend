@@ -80,7 +80,7 @@ class MsSync {
 		if ($clientId !== null && (!is_string($clientId) || strlen($clientId) > 200)) {
 			throw new MsHttpError(400, 'bad_request', 'clientId must be a string');
 		}
-		if (!is_array($changes) || count($changes) === 0) {
+		if (!is_array($changes) || empty($changes)) {
 			throw new MsHttpError(400, 'bad_request', 'changes must be a non-empty array');
 		}
 		if (count($changes) > self::MAX_CHANGES) {

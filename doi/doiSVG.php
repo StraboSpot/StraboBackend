@@ -44,9 +44,9 @@
 		var $smalltickwidth = 3;
 		var $loadedPatternDirs = [];
 
-		function straboSVG($allspots,$strat_section){
+		function __construct($allspots,$strat_section){
 
-			if(count($allspots)==0){
+			if(empty($allspots)){
 				echo "Strat section not found.";
 				exit();
 			}
@@ -340,7 +340,7 @@
 
 				if($origx == 0){
 					if($ylabel != round($ylabel)){
-						if(!in_array($ylabel,$this->smallticks)){
+						if(!in_array($ylabel, $this->smallticks ?? array())){
 							$this->text($ylabel, $this->yaxisoffset - 10, $texty - 1, 0, 10);
 							$this->line( $this->yaxisoffset - 3, $texty,  $this->yaxisoffset, $texty, 2);
 							$this->smallticks[] = $origy;
@@ -830,7 +830,7 @@
 
 		function loadPattern($pattern){
 
-			if(!in_array($pattern,$this->loadedPatternDirs)){
+			if(!in_array($pattern, $this->loadedPatternDirs ?? array())){
 				$this->patterns .= file_get_contents("../includes/svg/cleaned/$pattern.svg");
 				$this->loadedPatternDirs[] = $pattern;
 			}

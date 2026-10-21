@@ -232,7 +232,7 @@ class FieldExportPlugin implements ExportPlugin
 
 		// ---- README lines
 		$readme[] = 'Layout: ' . $outSpec['layout'];
-		$readme[] = 'Formats: ' . implode(', ', $outSpec['formats']) . ($outSpec['extras'] ? '; extras: ' . implode(', ', $outSpec['extras']) : '');
+		$readme[] = 'Formats: ' . implode(', ', $outSpec['formats'] ?? array()) . ($outSpec['extras'] ? '; extras: ' . implode(', ', $outSpec['extras'] ?? array()) : '');
 		if (in_array('fieldbook', $outSpec['formats'], true)) {
 			$fbo = $outSpec['fieldbook'];
 			$readme[] = 'Field book: map ' . $fbo['map'] . ', photos ' . $fbo['photos'] . ', stereonets ' . $fbo['nets'] . ', page ' . $fbo['page'];
@@ -301,7 +301,7 @@ class FieldExportPlugin implements ExportPlugin
 			 OPTIONAL MATCH (p)-[:HAS_DATASET]->(d:Dataset)
 			 RETURN p.desc_project_name AS n1, p.projectname AS n2, collect({id: toString(d.id), name: d.name}) AS ds");
 		$name = 'project ' . $sc['project_id']; $ds = array();
-		if ($rows && count($rows)) {
+		if ($rows && !empty($rows)) {
 			$r = $rows[0];
 			$n = $r->value('n1'); if ($n === null || $n === '') $n = $r->value('n2');
 			if ($n !== null && $n !== '') $name = (string)$n;

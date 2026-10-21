@@ -180,7 +180,7 @@ class ExperimentPDF extends tFPDF
         // Test Features
         if (!empty($this->experimentData->experiment->features)) {
             $this->sectionSubheader('Test Features');
-            $features = implode(', ', $this->experimentData->experiment->features);
+            $features = implode(', ', $this->experimentData->experiment->features ?? array());
             $this->SetFont('DejaVu', '', 9);
             $this->MultiCell(0, 5, $features, 0, 'L');
             $this->Ln(3);
@@ -470,7 +470,7 @@ class ExperimentPDF extends tFPDF
                 $this->SetFont('DejaVu', 'B', 9);
                 $this->Cell(45, 5, 'Features:', 0, 0);
                 $this->SetFont('DejaVu', '', 9);
-                $this->MultiCell(0, 5, implode(', ', $apparatus->features), 0, 'L');
+                $this->MultiCell(0, 5, implode(', ', $apparatus->features ?? array()), 0, 'L');
             }
 
             // Parameters

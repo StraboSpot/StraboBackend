@@ -69,7 +69,7 @@ if(!$dataset_id && $sample_id !== ''){
 	}
 
 	// 2. Legacy: the Field :Sample node (numeric local ids only).
-	if((!$sample_rows || count($sample_rows) === 0) && ctype_digit($sample_id)){
+	if((!$sample_rows || empty($sample_rows)) && ctype_digit($sample_id)){
 		$sample_rows = $neodb->get_results("
 			MATCH (d:Dataset)-[:HAS_SPOT]->(s:Spot)-[:HAS_SAMPLE]->(smp:Sample)
 			WHERE smp.id = $sample_id
@@ -77,7 +77,7 @@ if(!$dataset_id && $sample_id !== ''){
 			LIMIT 1
 		");
 	}
-	if(!$sample_rows || count($sample_rows) === 0){
+	if(!$sample_rows || empty($sample_rows)){
 		$error_message = 'Sample not found.';
 	}else{
 		$dataset_id        = (int)$sample_rows[0]->value('dataset_id');
@@ -101,7 +101,7 @@ if($error_message){
 		LIMIT 1
 	");
 
-	if(!$records || count($records) === 0){
+	if(!$records || empty($records)){
 		$error_message = 'Dataset not found.';
 	}else{
 		$row = $records[0];

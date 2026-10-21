@@ -89,7 +89,7 @@ include("header.php");
 ?>
 <h1>Gigapan Index</h1>
 <?php
-if(count($rows)==0){
+if(empty($rows)){
 ?>
 	<div>Sorry, no results match your search criteria.</div>
 <?php

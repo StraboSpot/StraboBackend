@@ -89,7 +89,7 @@ foreach ($spots as $s) {
 	}
 }
 check('fullsearch-shaped ST_Contains runs clean against spot.location', $ok,
-	count($spots) . " spots probed, $hits province hits");
+	count($spots ?? array()) . " spots probed, $hits province hits");
 
 // 8. Antimeridian sanity. Only a polar cap may legitimately have a single
 //    polygon PART spanning > 180° of longitude (its planar band build is

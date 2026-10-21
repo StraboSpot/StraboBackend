@@ -31,7 +31,7 @@ class DatasetSpotsController extends MyController
 			}
 
 			//Log download here
-			$spotcount = count($data['features']);
+			$spotcount = count($data['features'] ?? array());
 			$userpkey = $this->strabo->userpkey;
 			$this->strabo->db->query("
 				insert into up_down_stats
@@ -156,7 +156,7 @@ class DatasetSpotsController extends MyController
 
 					}
 
-				}elseif(count($features)>0){
+				}elseif(!empty($features)){
 
 					//********************************************************************
 					// Load the feature collection and add it to dataset

@@ -25,7 +25,7 @@ function generateRandomString($length = 10) {
 }
 
 $type = $_GET['type'] ?? '';
-$id = isset($_GET['id']) ? (int)$_GET['id'] : 0;
+$id = isset($_GET['id']) ? (string)$_GET['id'] : '';   // string: micrograph / spot ids are not always numeric (PHP 8 no longer matches 0 == "abc")
 $pkey = isset($_GET['pkey']) ? (int)$_GET['pkey'] : 0;
 
 $row = $db->get_row_prepared("SELECT * FROM micro_projectmetadata WHERE id = $1 AND (ispublic OR userpkey=$2)", array($pkey, $userpkey));

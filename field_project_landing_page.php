@@ -45,7 +45,7 @@ if($project_pkey == ""){
 $rows = $db->get_results_prepared("SELECT strabo_dataset_id, dataset_name, (SELECT count(*) FROM spot WHERE dataset_pkey = d.dataset_pkey) as spotcount FROM dataset d WHERE project_pkey = $1",
 	array($project_pkey));
 
-if(count($rows) == 0){
+if(empty($rows)){
 	include("includes/mheader.php");
 ?>
 			<!-- Main -->
@@ -62,7 +62,7 @@ if(count($rows) == 0){
 	exit();
 }
 
-if(count($rows) == 1){
+if(count($rows ?? array()) == 1){
 	$dataset_id = $rows[0]->strabo_dataset_id;
 	header("Location: /StraboFieldDatasetDetail/?dataset_id=" . rawurlencode($dataset_id));
 	exit();

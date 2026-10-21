@@ -249,7 +249,7 @@ include("includes/mheader.php");
 										<select name="template_pkey">
 											<option value="">Template: auto-detect (embedded or by header)</option>
 											<option value="<?php echo FieldTabularService::BASIC_TEMPLATE_ID; ?>">Basic layout (built-in)</option>
-											<?php if (count($templates)): ?>
+											<?php if (!empty($templates)): ?>
 											<optgroup label="My templates">
 												<?php foreach ($templates as $t): ?>
 												<option value="<?php echo (int)$t->pkey; ?>"><?php echo htmlspecialchars($t->name); ?></option>

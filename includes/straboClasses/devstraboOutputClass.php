@@ -14,7 +14,7 @@
 class straboOutputClass
 {
 
-	 public function straboOutputClass($strabo,$get){
+	 public function __construct($strabo,$get){
 		$this->strabo=$strabo;
 		$this->get=$get;
 	 }
@@ -386,6 +386,7 @@ class straboOutputClass
 			$thumbwidth = 300;
 
 			$src = imagecreatefromjpeg("dbimages/$filename");
+			if(!$src) return null; //not a readable JPEG: GD calls on false are a TypeError on PHP 8
 			list($origwidth, $origheight) = getimagesize("dbimages/$filename");
 
 			$ratio = $origheight / $origwidth;
@@ -593,7 +594,7 @@ class straboOutputClass
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-			if(count($data)==0){
+			if(empty($data)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -1129,7 +1130,7 @@ class straboOutputClass
 
 			$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 
-			if(count($data)==0){
+			if(empty($data)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -1724,7 +1725,7 @@ class straboOutputClass
 			$spots = $this->strabo->getDatasetSpotsSearch(null,$this->get);
 			$spots = $spots['features'];
 
-			if(count($spots)==0){
+			if(empty($spots)){
 			echo "no data found for dataset $id";exit();
 			}
 
@@ -1750,7 +1751,7 @@ class straboOutputClass
 			$lines = "";
 			$planes = "";
 
-			$count = count($spots);
+			$count = count($spots ?? array());
 
 			foreach($spots as $spot){
 
@@ -1884,7 +1885,7 @@ class straboOutputClass
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				require('includes/PDF_LabBook.php');
 
@@ -1906,12 +1907,12 @@ class straboOutputClass
 
 					$modified = (string) $spot['id'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Created",$modified);
 
 					$modified = (string) $spot['modified_timestamp'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Last Modified",$modified);
 
 					if($spot['surface_feature']){
@@ -2127,7 +2128,7 @@ class straboOutputClass
 								$gdimage = $this->gdThumb($filename);
 								if($gdimage){
 									$pdf->GDImage($gdimage, 15, null, 60);
-									$pdf->cell(0,2,'','',1,L);
+									$pdf->cell(0,2,'','',1,'L');
 								}
 							}
 
@@ -2164,7 +2165,7 @@ class straboOutputClass
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				require('includes/PDF_LabBook.php');
 
@@ -2186,12 +2187,12 @@ class straboOutputClass
 
 					$modified = (string) $spot['id'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Created",$modified);
 
 					$modified = (string) $spot['modified_timestamp'];
 					$modified = substr($modified,0,10);
-					$modified = date("c",$modified);
+					$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 					$pdf->valueRow("Last Modified",$modified);
 
 					if($spot['surface_feature']){
@@ -2407,7 +2408,7 @@ class straboOutputClass
 								$gdimage = $this->gdThumb($filename);
 								if($gdimage){
 									$pdf->GDImage($gdimage, 15, null, 60);
-									$pdf->cell(0,2,'','',1,L);
+									$pdf->cell(0,2,'','',1,'L');
 								}
 							}
 
@@ -2483,7 +2484,7 @@ function buildKMLIcon($id,$randnum,$strike,$showval,$trend){
 		imagesavealpha($trendbar, true);
 
 		// Drawing over
-		$black = imagecolorallocate($arrow, 0, 0, 0);
+		$black = imagecolorallocate($trendbar, 0, 0, 0);
 		$fontcolor = imagecolorallocate($trendbar, 255, 255, 255);//255, 176, 0
 
 		$trendbar = imagerotate($trendbar, ($trend*-1), $transparency);
@@ -2737,7 +2738,7 @@ plunge
 
 			$spots = $json['features'];
 
-			if(count($spots)>0){
+			if(!empty($spots)){
 
 				$randnum=$this->strabo->db->get_var("select nextval('file_seq')");
 
@@ -2808,12 +2809,12 @@ plunge
 
 						$modified = (string) $spot['id'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Created: $modified</div>\n";
 
 						$modified = (string) $spot['modified_timestamp'];
 						$modified = substr($modified,0,10);
-						$modified = date("c",$modified);
+						$modified = (is_numeric($modified) ? date("c", (int)$modified) : null);
 						$html.="<div>Last Modified: $modified</div>\n";
 
 						if($spot['surface_feature']){

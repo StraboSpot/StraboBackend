@@ -17,8 +17,8 @@ $projectid = isset($_GET['p']) ? (int)$_GET['p'] : 0;
 if($projectid == 0) die("No project provided.");
 
 $type = "field";
-if($_GET[t]=="m") $type = "micro";
-if($_GET[t]=="e") $type = "experimental";
+if($_GET['t']=="m") $type = "micro";
+if($_GET['t']=="e") $type = "experimental";
 
 if($type == "field"){
 

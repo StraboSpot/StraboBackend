@@ -26,7 +26,7 @@ class VsDetails {
 		$out['batch_uuid'] = self::uuid($d, 'batch_uuid');
 
 		$list = VsHttp::prop($d, 'batch_station_uuids');
-		if (!is_array($list) || count($list) === 0) {
+		if (!is_array($list) || empty($list)) {
 			throw VsHttp::bad('batch_station_uuids', 'A non-empty list of the batch\'s recording UUIDs is required.');
 		}
 		if (count($list) > VsConfig::MAX_BATCH_STATIONS) {

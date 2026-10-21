@@ -256,7 +256,7 @@ if($dsids == ""){
 
 	$spotrows = $db->get_results($spotsquery);
 
-	$spotcount = count($spotrows);
+	$spotcount = count($spotrows ?? array());
 
 	$left = 999999;
 	$right = -999999;

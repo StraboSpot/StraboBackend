@@ -1160,7 +1160,7 @@ if (in_array('sanity', $ONLY, true)) {
 		"    AND (:User)-[:HAS_PROJECT]->(q) " .
 		"WITH p, count(DISTINCT u) AS nu, count(DISTINCT q) AS nq " .
 		"WHERE nu > 0 AND nq = 0 RETURN count(p) AS n", $failed);
-	if ($rows !== null && count($rows)) {
+	if ($rows !== null && !empty($rows)) {
 		$n = (int)$rows[0]->get('n');
 		if ($n > 0) {
 			detailLine($printed, "ownerless Field projects (healable, unsearchable): $n — run heal_ownerless_projects.php");

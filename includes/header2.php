@@ -32,7 +32,7 @@ if($_SESSION['userpkey']!=""){
 		", array($_SESSION['userpkey']));
 
 
-		if(in_array($userpkey, $admin_pkeys) || $instcount > 0){
+		if(in_array($userpkey, $admin_pkeys ?? array()) || $instcount > 0){
 			$showinstrumentmenu = true;
 		}
 	}
@@ -40,7 +40,7 @@ if($_SESSION['userpkey']!=""){
 
 $showadminmenu = false;
 if($_SESSION['userpkey']!=""){
-	if(in_array($userpkey, $admin_pkeys)){
+	if(in_array($userpkey, $admin_pkeys ?? array())){
 		$showadminmenu = true;
 	}
 }

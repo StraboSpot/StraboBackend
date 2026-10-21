@@ -118,7 +118,7 @@ include("includes/mheader.php");
 							<section id="content">
 
 <?php
-if(count($experimentalrows)==0){
+if(empty($experimentalrows)){
 	?>
 		<div style="text-align:center;margin-bottom:500px;">No Projects found.<br>Click <a href="/experimental/add_project">here</a> to add project.</div>
 	<?php
@@ -170,7 +170,7 @@ if(count($experimentalrows)==0){
 
 								<?php
 								$erows = $db->get_results_prepared("SELECT pkey, uuid, id, to_char(modified_timestamp, 'Month DD, YYYY, HH:MI:SS pm TZ') as timestamp, json FROM straboexp.experiment WHERE project_pkey = $1 ORDER BY modified_timestamp DESC", array($pkey));
-								if(count($erows) > 0){
+								if(!empty($erows)){
 								?>
 									<div class="table-wrapper">
 										<table class="myDataTable">

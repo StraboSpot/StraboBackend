@@ -158,7 +158,7 @@ include 'includes/mheader.php';
 			<?php } ?>
 
 			<!-- Filament & Detectors -->
-			<?php if ($irow->filamenttype || ($detectors && count($detectors) > 0)) { ?>
+			<?php if ($irow->filamenttype || ($detectors && !empty($detectors))) { ?>
 			<div class="view-section">
 				<h3 class="view-section-title">Filament &amp; Detectors</h3>
 				<?php if ($irow->filamenttype) { ?>
@@ -169,7 +169,7 @@ include 'includes/mheader.php';
 					</div>
 				</div>
 				<?php } ?>
-				<?php if ($detectors && count($detectors) > 0) { ?>
+				<?php if ($detectors && !empty($detectors)) { ?>
 				<table class="instrument-table">
 					<thead>
 						<tr>

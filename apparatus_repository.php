@@ -166,7 +166,7 @@ order by institute_name
 											to_char(last_modified, 'Mon DD, YYYY') as last_modified
 									from exp_apparatus where institute_pkey = $1 order by name", array($irow->institute_pkey));
 
-		if(count($arows) > 0){
+		if(!empty($arows)){
 
 		?>
 			<div class="strabotable" style="margin-left:0px;margin-bottom:10px;">
