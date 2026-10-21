@@ -1542,7 +1542,7 @@ class FieldTabularService
                         $el = array('type' => self::$OTYPES[$otShort]);
                         foreach ($oPayload as $name => $raw) {
                             $def = self::fieldDef('orientation', $name);
-                            if ($def !== null && isset($def['applies_to']) && !in_array($otShort, $def['applies_to'])) {
+                            if ($def !== null && isset($def['applies_to']) && !in_array($otShort, $def['applies_to'] ?? array())) {
                                 $hardErrors[] = array('row' => $rec['n'], 'column' => 'orientation.' . $name, 'code' => 'inapplicable',
                                                       'message' => self::displayHeader('orientation', $name) . " does not apply to $otShort orientations.");
                                 $bad = true;

@@ -4122,7 +4122,7 @@ public function getSpotName($id){
 				foreach($out_tags as $o){
 					if($o->id == $in_tag->id){
 						foreach($in_tag->spots as $sp){
-							if(!in_array($sp, $o->spots)){
+							if(!in_array($sp, $o->spots ?? array())){
 								$o->spots[] = $sp;
 							}
 						}
@@ -6201,7 +6201,7 @@ public function getSpotName($id){
 
 					foreach($tags as $tag){
 						if($tag->type == "rosetta"){
-							if(in_array($strabo_spot_id, $tag->spots)) $hasRosetta = "true";
+							if(in_array($strabo_spot_id, $tag->spots ?? array())) $hasRosetta = "true";
 						}
 					}
 

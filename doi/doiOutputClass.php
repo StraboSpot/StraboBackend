@@ -1656,7 +1656,7 @@ class doiOutputClass
 		$outcolor = "";
 
 		foreach($tags as $tag){
-			if(in_array($id, $tag->spots)){
+			if(in_array($id, $tag->spots ?? array())){
 				$outcolor = $tag->color;
 			}
 		}
@@ -5367,7 +5367,7 @@ class doiOutputClass
 									foreach($this->alltags as $tag){
 										if($tagid == $tag->id){
 
-											if(in_array($spotid, $tag->spots)){
+											if(in_array($spotid, $tag->spots ?? array())){
 												$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,$colnum),"X");
 											}
 

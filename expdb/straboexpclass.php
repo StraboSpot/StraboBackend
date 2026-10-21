@@ -111,7 +111,7 @@ class StraboExp
 			//need to update apparatus here
 
 			//check to see if this is a valid apparatus
-			if(!in_array($this->userpkey, $this->admin_pkeys)){
+			if(!in_array($this->userpkey, $this->admin_pkeys ?? array())){
 				$row = $this->db->get_row("select * from apprepo.apparatus where pkey = $apparatus_pkey and facility_pkey in (select facility_pkey from apprepo.facility_users where users_pkey = $this->userpkey)");
 			}else{
 				$row = $this->db->get_row("select * from apprepo.apparatus where pkey = $apparatus_pkey");
@@ -250,7 +250,7 @@ class StraboExp
 		}else{
 
 			//check to see if this is a valid facility
-			if(!in_array($this->userpkey, $this->admin_pkeys)){
+			if(!in_array($this->userpkey, $this->admin_pkeys ?? array())){
 				$row = $this->db->get_row("select * from apprepo.facility where pkey = $facility_pkey and pkey in (select facility_pkey from apprepo.facility_users where users_pkey = $this->userpkey)");
 			}else{
 				$row = $this->db->get_row("select * from apprepo.facility where pkey = $facility_pkey");
@@ -425,7 +425,7 @@ class StraboExp
 
 			//Check for admin too
 
-			if(!in_array($this->userpkey, $this->admin_pkeys)){
+			if(!in_array($this->userpkey, $this->admin_pkeys ?? array())){
 				$row = $this->db->get_row("select * from apprepo.facility where pkey = $facility_pkey and pkey in (select facility_pkey from apprepo.facility_users where users_pkey = $this->userpkey)");
 			}else{
 				$row = $this->db->get_row("select * from apprepo.facility where pkey = $facility_pkey");
@@ -685,7 +685,7 @@ class StraboExp
 
 			//Check for admin too
 
-			if(!in_array($this->userpkey, $this->admin_pkeys)){
+			if(!in_array($this->userpkey, $this->admin_pkeys ?? array())){
 				$row = $this->db->get_row("select * from straboexp.project where userpkey = $this->userpkey and pkey = $project_pkey");
 			}else{
 				$row = $this->db->get_row("select * from straboexp.project where pkey = $project_pkey");

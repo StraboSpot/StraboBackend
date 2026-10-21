@@ -2476,7 +2476,7 @@ class straboOutputClass
 		$outcolor = "";
 
 		foreach($tags as $tag){
-			if(in_array($id, $tag->spots)){
+			if(in_array($id, $tag->spots ?? array())){
 				$outcolor = $tag->color;
 			}
 		}
@@ -19936,7 +19936,7 @@ $html.='
 									foreach($this->alltags as $tag){
 										if($tagid == $tag->id){
 
-											if(in_array($spotid, $tag->spots)){
+											if(in_array($spotid, $tag->spots ?? array())){
 												$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,$colnum),"X");
 											}
 
@@ -20851,7 +20851,7 @@ $html.='
 									foreach($this->alltags as $tag){
 										if($tagid == $tag->id){
 
-											if(in_array($spotid, $tag->spots)){
+											if(in_array($spotid, $tag->spots ?? array())){
 												$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,$colnum),"X");
 											}
 
@@ -21828,7 +21828,7 @@ $html.='
 									foreach($this->alltags as $tag){
 										if($tagid == $tag->id){
 
-											if(in_array($spotid, $tag->spots)){
+											if(in_array($spotid, $tag->spots ?? array())){
 												$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,$colnum),"X");
 											}
 
@@ -22707,7 +22707,7 @@ $html.='
 									foreach($this->alltags as $tag){
 										if($tagid == $tag->id){
 
-											if(in_array($spotid, $tag->spots)){
+											if(in_array($spotid, $tag->spots ?? array())){
 												$this->addHolding($rownum,$colnum,"X");
 											}
 
@@ -23650,7 +23650,7 @@ $html.='
 						foreach($this->alltags as $tag){
 
 							if($tag->type == "geologic_unit"){
-								if(in_array($spotid, $tag->spots)){
+								if(in_array($spotid, $tag->spots ?? array())){
 									$this->addHolding($rownum,$colnum,$tag->name);
 									$colnum++;
 								}
@@ -23689,7 +23689,7 @@ $html.='
 									foreach($this->alltags as $tag){
 										if($tagid == $tag->id){
 
-											if(in_array($spotid, $tag->spots)){
+											if(in_array($spotid, $tag->spots ?? array())){
 												$this->addHolding($rownum,$colnum,"X");
 											}
 
@@ -23885,7 +23885,7 @@ $html.='
 
 				foreach($this->alltags as $tag){
 					if($tag->type == "geologic_unit"){
-						if(in_array($spotid, $tag->spots)){
+						if(in_array($spotid, $tag->spots ?? array())){
 							$tagcounts[$spotid]++;
 						}
 					}
@@ -24664,7 +24664,7 @@ $html.='
 						foreach($this->alltags as $tag){
 
 							if($tag->type == "geologic_unit"){
-								if(in_array($spotid, $tag->spots)){
+								if(in_array($spotid, $tag->spots ?? array())){
 									$this->addHolding($rownum,$colnum,$tag->name);
 									$colnum++;
 								}
@@ -24703,7 +24703,7 @@ $html.='
 									foreach($this->alltags as $tag){
 										if($tagid == $tag->id){
 
-											if(in_array($spotid, $tag->spots)){
+											if(in_array($spotid, $tag->spots ?? array())){
 												$this->addHolding($rownum,$colnum,"X");
 											}
 
@@ -25611,7 +25611,7 @@ $html.='
 									foreach($this->alltags as $tag){
 										if($tagid == $tag->id){
 
-											if(in_array($spotid, $tag->spots)){
+											if(in_array($spotid, $tag->spots ?? array())){
 												$this->addHolding($rownum,$colnum,"X");
 											}
 
@@ -27265,7 +27265,7 @@ QML;
 				//Add tags here if they exist
 				foreach($this->alltags as $tag){
 					$thistag = clone $tag;
-					if(in_array($spotid, $thistag->spots)){
+					if(in_array($spotid, $thistag->spots ?? array())){
 						unset($thistag->spots);
 						$tags[] = $thistag;
 					}
@@ -27319,7 +27319,7 @@ QML;
 				//Add tags here if they exist
 				foreach($this->alltags as $tag){
 					$thistag = clone $tag;
-					if(in_array($spotid, $thistag->spots)){
+					if(in_array($spotid, $thistag->spots ?? array())){
 						unset($thistag->spots);
 						$tags[] = $thistag;
 					}
@@ -27576,7 +27576,7 @@ QML;
 			if(isset($this->alltags) && !empty($this->alltags)){
 				$spotId = $props['id'] ?? '';
 				foreach($this->alltags as $tag){
-					if(isset($tag['spots']) && in_array($spotId, $tag['spots'])){
+					if(isset($tag['spots']) && in_array($spotId, $tag['spots'] ?? array())){
 						$props['tags'][] = $tag;
 					}
 				}

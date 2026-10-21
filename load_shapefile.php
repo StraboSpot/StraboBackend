@@ -375,7 +375,7 @@ if($_POST['columnsubmit']!=""){
 			if($value!=""){
 				$strabocol = $smodel->userColumnToStraboColumn($key);
 				if($strabocol){
-					if(in_array($strabocol,$smodel->columns_with_other_option)){ //don't check columns that have "other" option
+					if(in_array($strabocol, $smodel->columns_with_other_option ?? array())){ //don't check columns that have "other" option
 					}elseif($smodel->isControlled($strabocol)){
 						if(!$newval = $smodel->fitsControlled($strabocol,$value)){
 							$vocaberror[$strabocol]=$smodel->createCVError($strabocol,$value);

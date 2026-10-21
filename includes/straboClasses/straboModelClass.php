@@ -270,7 +270,7 @@ class straboModelClass
 
 				$selected="";
 
-				if(!in_array($name,$this->founditems) && $userdefined=="no"){
+				if(!in_array($name, $this->founditems ?? array()) && $userdefined=="no"){
 					if($lookshapefilevar==$name){
 						$selected=" selected";
 						$selecteditems[]=$name;
@@ -287,7 +287,7 @@ class straboModelClass
 
 				$selected="";
 
-				if(!in_array($name,$this->founditems) && $userdefined=="no"){
+				if(!in_array($name, $this->founditems ?? array()) && $userdefined=="no"){
 					if(substr($name,0,strlen($lookshapefilevar))==$lookshapefilevar){
 						$selected=" selected";
 						$this->founditems[]=$name;
@@ -567,7 +567,7 @@ class straboModelClass
 		foreach($json_tags as $json_tag){
 			if($json_tag["name"]==$tagname && $json_tag["map_unit_name"]==$mapunitname && $json_tag["member_name"]==$membername ){
 				//add spot to list
-				if(!in_array($spotid, $json_tag["spots"])){
+				if(!in_array($spotid, $json_tag["spots"] ?? array())){
 					array_push($json_tag["spots"],$spotid);
 				}
 				$tagfound="yes";
@@ -712,7 +712,7 @@ class straboModelClass
 		if (!is_array($model) || !isset($model['fields'])) return;
 
 		foreach ($model['fields'] as $f) {
-			if (in_array($f['name'], $this->ignorelist)) continue;
+			if (in_array($f['name'], $this->ignorelist ?? array())) continue;
 			$num = $this->fieldnum++;
 			$this->fields[$num] = array(
 				'group' => $f['group'], 'name' => $f['name'], 'label' => $f['label'], 'hint' => $f['hint'],
