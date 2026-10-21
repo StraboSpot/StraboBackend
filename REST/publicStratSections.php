@@ -95,6 +95,7 @@ if($xmin == "" || $xmax == "" || $ymin == "" || $ymax == ""){
 			//$db->dumpVar($row->strabo_dataset_id);exit();
 			
 			$feature = new stdClass();
+			$feature->properties = new stdClass();
 			$feature->properties->id = $row->spot_pkey;
 			$feature->properties->detail_url = "https://strabospot.org/REST/publicStratSectionDetail/".$row->strabo_spot_id;
 			$feature->properties->view_url = "https://strabospot.org/strat_section?id=".$row->strabo_spot_id."&did=".$row->strabo_dataset_id;
@@ -117,11 +118,11 @@ if($xmin == "" || $xmax == "" || $ymin == "" || $ymax == ""){
 				
 				if($key != "strat_section_id" && $key != "display_lithology_patterns" && $key != "images"){
 				
-					if(is_array(json_decode($value)) || is_object(json_decode($value))){
+					if(is_string($value) && (is_array(json_decode($value)) || is_object(json_decode($value)))){
 						$value=json_decode($value);
 					}
 	
-					eval("\$feature->properties->$key=\$value;");
+					$feature->properties->{$key} = $value;
 				
 				}
 
