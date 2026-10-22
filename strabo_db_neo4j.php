@@ -107,6 +107,10 @@
 				$returnstring="";
 				$json=json_decode($json,true);
 				foreach($json as $key=>$value){
+					//keys come from uploaded JSON: backtick-quote them (a backtick inside doubles) so a key
+					//is always one property name and can never add Cypher of its own
+					$key="`".str_replace("`","``",(string)$key)."`";
+
 					if(is_string($value)){
 						$value=addslashes($value);
 					}
