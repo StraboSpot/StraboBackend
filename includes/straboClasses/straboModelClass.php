@@ -225,6 +225,47 @@ class straboModelClass
 		return false;
 	}
 
+	/*
+		Column names of StraboSpot's own exports (straboOutputClass::fixSpot): a group prefix
+		plus the field name ("po_strike", "ru_rock_type", "spot_name", "cust_<custom field>").
+		Returns array(group, field), array("custom", field) for custom fields, array(null, null)
+		for second and later instances ("po_2_strike": one of each per spot on import), or null
+		for any other column name (also when the group has no such field).
+	*/
+	public function exportColumnTarget($column){
+		$column = strtolower(trim($column));
+		if($column == "spot_name") return array("spot", "name");
+		$prefixes = array(
+			"po_" => "planar_orientation",
+			"lo_" => "linear_orientation",
+			"to_" => "tabular_zone_orientation",
+			"fab_" => "fabric",
+			"fold_" => "fold",
+			"tns_" => "tensor",
+			"_3d_" => "other_3d_structure",
+			"samp_" => "sample",
+			"of_" => "other_features",
+			"tr_" => "trace",
+			"ru_" => "rock_unit",
+			"cust_" => "custom",
+		);
+		foreach($prefixes as $prefix=>$group){
+			if(strpos($column, $prefix) === 0 && strlen($column) > strlen($prefix)){
+				$field = substr($column, strlen($prefix));
+				if($group == "custom") return array($group, $field);
+				$numbered = preg_match('/^[0-9]+_(.+)$/', $field, $m);
+				if($numbered) $field = $m[1];
+				// only when the group has that field: other files' columns ("fold_type") keep the plain guess
+				foreach($this->getGroupItems($group) as $item){
+					if(strtolower($item["name"]) == $field){
+						return $numbered ? array(null, null) : array($group, $field);
+					}
+				}
+			}
+		}
+		return null;
+	}
+
 	public function getSelectRows($var,$shapefilevar){
 
 		$select="";
@@ -268,6 +309,25 @@ class straboModelClass
 
 		}else{
 
+			// A column of a StraboSpot export matches only the field of its own group
+			$target = $this->exportColumnTarget($shapefilevar);
+			if($target !== null){
+				foreach($items as $item){
+					$label = $item["label"];
+					if($item["hint"]!="")$label.=" : ".$item["hint"];
+					$name = $item["name"];
+
+					$selected="";
+					if($target[0]==$var && $target[1]==strtolower($name) && !in_array("$var/$name", $this->foundexportitems ?? array())){
+						$selected=" selected";
+						$this->foundexportitems[]="$var/$name";
+					}
+
+					$select.="<option value=\"".$var."_$name\"$selected>$label</option>\n";
+				}
+				return $select;
+			}
+
 			foreach($items as $item){
 				$label = $item["label"];
 				if($item["hint"]!="")$label.=" : ".$item["hint"];
@@ -285,6 +345,13 @@ class straboModelClass
 
 			}
 
+			// Name-starts-with guesses only when no field has exactly this name: "spot_radius"
+			// also selected Spot Radius Units, and the browser shows the last selected option
+			$exactexists = false;
+			foreach($this->fields as $field){
+				if($field["name"] == $lookshapefilevar) $exactexists = true;
+			}
+
 			foreach($items as $item){
 				$label = $item["label"];
 				if($item["hint"]!="")$label.=" : ".$item["hint"];
@@ -292,7 +359,7 @@ class straboModelClass
 
 				$selected="";
 
-				if(!in_array($name, $this->founditems ?? array()) && $userdefined=="no"){
+				if(!$exactexists && !in_array($name, $this->founditems ?? array()) && $userdefined=="no"){
 					if(substr($name,0,strlen($lookshapefilevar))==$lookshapefilevar){
 						$selected=" selected";
 						$this->founditems[]=$name;
@@ -661,7 +728,19 @@ class straboModelClass
 		$select="";
 		$select.="<select name=\"".$varname."_select\">\n";
 		$select.="<option value=\"\">Select...</option>\n";
-		$select.="<option value=\"sfcustom_$varname\">Custom Column</option>\n";
+		// "cust_<name>" columns of StraboSpot exports go back to custom field <name>
+		$customname = $varname;
+		$target = $this->exportColumnTarget($varname);
+		if($target !== null && $target[0] == "custom"){
+			$customname = substr(trim($varname), 5);
+		}
+		$customselected = "";
+		if($this->usercolumns){
+			if($this->isUserColumnSelected("sfcustom_$customname",$varname)) $customselected = " selected";
+		}elseif($customname !== $varname){
+			$customselected = " selected";
+		}
+		$select.="<option value=\"sfcustom_$customname\"$customselected>Custom Column</option>\n";
 
 		$select.="<optgroup label=\"Spot:\">\n";
 		$select.=$this->getSelectRows("spot",$varname);
