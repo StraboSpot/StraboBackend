@@ -62,7 +62,8 @@ function check_file($what, $gpkg, array $wantLayers, array $wantSpots, $scope, $
 
 	$contents = array();
 	foreach (gpkg_rows($gpkg, 'SELECT table_name, data_type FROM gpkg_contents') as $r) $contents[$r['table_name']] = $r['data_type'];
-	$want = array('strabo_export' => 'attributes', 'strabo_spots' => 'attributes');
+	// layer_styles registered too: otherwise GDAL (and so QGIS) hides it once the file has attribute tables
+	$want = array('strabo_export' => 'attributes', 'strabo_spots' => 'attributes', 'layer_styles' => 'attributes');
 	foreach ($wantLayers as $l) $want[$l] = 'features';
 	ksort($want); ksort($contents);
 	check("$what: tables " . implode(', ', array_keys($want)), $contents === $want, json_encode($contents));
@@ -143,6 +144,7 @@ try {
 	section('Project export (/searchdownload?type=gpkg&projectid=)');
 	list($st, $f) = download_gpkg('type=gpkg&projectid=' . GF_PROJECT);
 	check('project export HTTP 200', $st === 200, "HTTP $st");
+	if (getenv('RT_KEEP') && $f) copy($f, getenv('RT_KEEP') . '/project_export.gpkg');   // e.g. to open it in QGIS
 	$both = array(GF_DS_A, GF_DS_B); sort($both);
 	check_file('project', $f, array('points', 'orientation_symbols', 'lines', 'polygons'), $spotsA + $spotsB, 'project', implode(',', $both));
 

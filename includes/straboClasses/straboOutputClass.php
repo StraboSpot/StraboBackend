@@ -26628,6 +26628,13 @@ QML;
 
 		exec("ogrinfo " . escapeshellarg($gpkgPath) . " -sql " . escapeshellarg($createSql) . " 2>&1");
 
+		// Register it in gpkg_contents (as QGIS does when it saves a style). GDAL lists unregistered
+		// tables only while the file has no registered attribute tables; the round trip tables
+		// (strabo_export, strabo_spots) are registered, so QGIS would not find the styles otherwise.
+		$registerSql = "INSERT OR IGNORE INTO gpkg_contents (table_name, data_type, identifier, description, last_change) "
+			. "VALUES ('layer_styles', 'attributes', 'layer_styles', '', strftime('%Y-%m-%dT%H:%M:%fZ','now'))";
+		exec("ogrinfo " . escapeshellarg($gpkgPath) . " -sql " . escapeshellarg($registerSql) . " 2>&1");
+
 		// Insert style for each layer
 		foreach($layers as $layerName => $layerType){
 
