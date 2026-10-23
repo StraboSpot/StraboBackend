@@ -105,31 +105,26 @@ if($userpkey!=""){
 				$mydir = "/srv/app/www/ziptemp/$randnum";
 				mkdir($mydir);
 
-				$newfilename = $mydir."/".$filename;
+				// read the zip from PHP's upload temp file; it never goes into the served folder
+				$newfilename = $tempname;
 
-				copy($tempname, "$newfilename");
-
-				$linuxfilename=escapeshellcmd($newfilename);
-
-				//unzip file
-				exec("/usr/bin/unzip $linuxfilename -d /srv/app/www/ziptemp/$randnum/");
-				exec("/bin/chmod -R 777 /srv/app/www/ziptemp/$randnum/");
-
-				//delete macosx stuff
-				exec("/usr/bin/find /srv/app/www/ziptemp/$randnum/ -name '__MACOSX' -exec rm -rf {} \;",$foo);
-
-				//rename all files here, replacing spaces
-				$files = scandir("/srv/app/www/ziptemp/$randnum/");
-				foreach($files as $file){
-					if(is_file("/srv/app/www/ziptemp/$randnum/$file")){
-						$extension = pathinfo("/srv/app/www/ziptemp/$randnum/$file",  PATHINFO_EXTENSION);
-						if($extension != "zip"){
-							if (strpos($file, ' ') !== false) {
-								$newfilename = str_replace(" ", "_", $file);
-								rename("/srv/app/www/ziptemp/$randnum/$file", "/srv/app/www/ziptemp/$randnum/$newfilename");
-							}
-						}
+				//unzip GeoTIFF parts only (the folder is served), flattened to safe names
+				$za = new ZipArchive();
+				if($za->open($newfilename) === true){
+					for($i = 0; $i < $za->numFiles; $i++){
+						$zname = $za->getNameIndex($i);
+						if($zname === false || substr($zname, -1) === "/" || preg_match('#(^|/)__MACOSX/#', $zname)) continue;
+						$zbase = preg_replace('/[^A-Za-z0-9_.\-]/', '_', basename($zname));
+						if($zbase === "" || $zbase[0] === ".") continue;
+						if(!in_array(strtolower(pathinfo($zbase, PATHINFO_EXTENSION)), array("tif","tiff","tfw","tifw","ovr"))) continue;
+						$zin = $za->getStream($zname);
+						if(!$zin) continue;
+						$zout = fopen("$mydir/$zbase", "wb");
+						stream_copy_to_stream($zin, $zout);
+						fclose($zout);
+						fclose($zin);
 					}
+					$za->close();
 				}
 
 				//find tif file and gdal_translate
@@ -148,7 +143,7 @@ if($userpkey!=""){
 
 				if($foundtiff != ""){
 					//translate here /usr/bin/gdal_translate
-					exec("gdal_translate -of Gtiff $foundtiff /srv/app/www/ziptemp/$randnum/out.tif",$foo);
+					exec("gdal_translate -of Gtiff ".escapeshellarg($foundtiff)." ".escapeshellarg("/srv/app/www/ziptemp/$randnum/out.tif"),$foo);
 
 					$tempname = "/srv/app/www/ziptemp/$randnum/out.tif";
 				}else{
@@ -163,7 +158,7 @@ if($userpkey!=""){
 				doLog("tempname: $tempname"); //good to here
 
 				//set tempname above if zip upload to somewhere in /srv/app/www/ziptemp
-				exec("/usr/bin/gdalinfo -stats -json $tempname",$gdalinfo);
+				exec("/usr/bin/gdalinfo -stats -json ".escapeshellarg($tempname),$gdalinfo);
 				$gdalinfo = implode("\n", $gdalinfo);
 				$gdalinfo = json_decode($gdalinfo);
 
@@ -182,7 +177,7 @@ if($userpkey!=""){
 
 					//Move file
 
-					exec("mv $tempname /srv/app/www/geotiff/upload/files/".$hash.".tif");
+					exec("mv ".escapeshellarg($tempname)." ".escapeshellarg("/srv/app/www/geotiff/upload/files/".$hash.".tif"));
 
 					doLog("tempname: $tempname "."files/".$hash.".tif");
 

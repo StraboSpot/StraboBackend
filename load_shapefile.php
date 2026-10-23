@@ -26,6 +26,49 @@ include("includes/datamodel.php");
 
 include("prepare_connections.php");
 
+function shapefileStopPage($message){
+	include 'includes/mheader.php';
+	echo "<div id=\"main\" class=\"wrapper style1\"><div class=\"container\"><header class=\"major\"><h2>Load Shapefile</h2></header>";
+	echo "<div style=\"color:#e44c65;\">".htmlspecialchars($message)."</div>";
+	echo "<div style=\"padding-top:20px;\"><a href=\"load_shapefile\">Start again</a></div><div class=\"bottomSpacer\"></div></div></div>";
+	include 'includes/mfooter.php';
+	exit();
+}
+
+// Every step posts back the project, and after the upload the work folder and the
+// .shp path(s): check them here so the steps below only see checked values.
+if(($_POST['projectid'] ?? "") !== ""){
+	if(!preg_match('/^[0-9]+$/', $_POST['projectid']) || $strabo->straboIDToID($_POST['projectid'], "Project") == ""){
+		shapefileStopPage("Project not found.");
+	}
+}
+if(($_POST['randnum'] ?? "") !== ""){
+	$checkedrandnum = shapefileWorkDir($_POST['randnum']);
+	if(!$checkedrandnum){
+		shapefileStopPage("This upload was not found. Please upload the file again.");
+	}
+	$_POST['randnum'] = (string)$checkedrandnum;
+	foreach($_POST as $key=>$value){
+		if($key === "shapefilename" || preg_match('/^shapefilename[0-9]+$/', $key)){
+			if($value !== "" && shapefileCheckPath($value, $checkedrandnum) === ""){
+				shapefileStopPage("Shapefile not found in this upload.");
+			}
+		}
+	}
+	if(($_POST['shapefilearray'] ?? "") !== ""){
+		foreach(explode("***", $_POST['shapefilearray']) as $value){
+			if($value !== "" && shapefileCheckPath($value, $checkedrandnum) === ""){
+				shapefileStopPage("Shapefile not found in this upload.");
+			}
+		}
+	}
+}elseif(($_POST['shapefilename'] ?? "") !== "" || ($_POST['shapefilearray'] ?? "") !== "" || ($_POST['shapefilename0'] ?? "") !== ""){
+	shapefileStopPage("This upload was not found. Please upload the file again.");
+}
+if(isset($_POST['epsg'])){
+	$_POST['epsg'] = preg_match('/^[0-9]+$/', $_POST['epsg']) ? $_POST['epsg'] : "";
+}
+
 function mytime(){
 	$string = microtime();
 	$parts=explode(" ",$string);
@@ -37,17 +80,6 @@ function getid(){
 	$string = time();
 	$newtime = $string.rand(1111,9999);
 	return (int)$newtime;
-}
-
-function get_zip_originalsize($filename) {
-	$size = 0;
-	$resource = zip_open($filename);
-	while ($dir_resource = zip_read($resource)) {
-		$size += zip_entry_filesize($dir_resource);
-	}
-	zip_close($resource);
-
-	return $size;
 }
 
 function validateplanartype($intype){
@@ -122,42 +154,34 @@ if($_POST['submitfile']!="" || $_POST['submitarc']!=""){
 
 		$projectid=$_POST['projectid'];
 
-		$randnum=$db->get_var("select nextval('file_seq')");
+		$randnum=(int)$db->get_var("select nextval('file_seq')");
 
 		if($_POST['submitfile']!=""){
-			$filename=str_replace(" ","_",$_FILES['zipfile']['name']);
 			$tempname=$_FILES['zipfile']['tmp_name'];
-			$orig_filename=str_replace(" ","_",$_FILES['zipfile']['name']);
 		}elseif($_POST['arcid']!=""){
 			$arcid = $_POST['arcid'];
 
-			if($arcid==""){echo "arcid \"$arcid\" not found.";exit();}
-			$filename = str_replace(" ","_",$frow->name);
-			$tempname = "arcfiles/".$frow->pkey;
-			$orig_filename = str_replace(" ","_",$frow->name);
+			if($arcid==""){echo "arcid not found.";exit();}
+			$tempname = "arcfiles/".(int)$frow->pkey;
 		}
 
 		mkdir("ziptemp/$randnum");
+		shapefileRememberWorkDir($randnum);
 
-		$mydir="ziptemp/$randnum";
-
-		$newfilename="ziptemp/$randnum"."/".$filename;
-
-		copy ( $tempname , "$newfilename" );
-
-		$linuxfilename=str_replace(" ","\ ",$newfilename);
-		$linuxfilename=str_replace("(","\(",$linuxfilename);
-		$linuxfilename=str_replace(")","\)",$linuxfilename);
-
-		$linuxfilename=escapeshellcmd($newfilename);
+		// The zip itself stays outside the served work folder; only shapefile parts are extracted into it.
+		$newfilename = $tempname;
 
 	}
 
 	if($error==""){
 
-		$size = get_zip_originalsize("$newfilename");
+		$size = shapefileZipSize($newfilename);
 
-		if($size > 20000000){
+		if($size === false){
+
+			$error.=$errordelim."Zip file could not be read.";$errordelim="<br>";
+
+		}elseif($size > 20000000){
 
 			$error.=$errordelim."Zip file is too large. (".number_format($size)." bytes uncompressed)";$errordelim="<br>";
 
@@ -166,41 +190,17 @@ if($_POST['submitfile']!="" || $_POST['submitarc']!=""){
 
 	if($error==""){
 
-		//unzip file
-		exec("/usr/bin/unzip $linuxfilename -d ziptemp/$randnum/");
-		exec("/bin/chmod -R 777 ziptemp/$randnum/");
-
-		//delete macosx stuff
-		exec("/usr/bin/find ziptemp/$randnum/ -name '__MACOSX' -exec rm -rf {} \;",$foo);
-
-		//rename all files here, replacing spaces
-		$files = scandir("ziptemp/$randnum/");
-		foreach($files as $file){
-			if(is_file("ziptemp/$randnum/$file")){
-				$extension = pathinfo("ziptemp/$randnum/$file",  PATHINFO_EXTENSION);
-				if($extension != "zip"){
-					if (strpos($file, ' ') !== false) {
-						$newfilename = str_replace(" ", "_", $file);
-						rename("ziptemp/$randnum/$file", "ziptemp/$randnum/$newfilename");
-					}
-				}
-			}elseif(is_dir("ziptemp/$randnum/$file") && $file!="." && $file !=".."){
-
-				$newfilename = str_replace(" ", "_", $file);
-				rename("ziptemp/$randnum/$file", "ziptemp/$randnum/$newfilename");
-
-			}
+		//unzip shapefile parts only
+		$ziperror = shapefileExtractZip($newfilename, "ziptemp/$randnum");
+		if($ziperror != ""){
+			$error.=$errordelim.$ziperror;$errordelim="<br>";
 		}
 
 	}
 
 	if($error==""){
 
-		$shapefiles=array();
-
-		//get a list of samples here
-
-		exec("/usr/bin/find ziptemp/$randnum/ -name '*.shp'",$shapefiles);
+		$shapefiles = shapefileFindShp("ziptemp/$randnum");
 
 		if(count($shapefiles)==0){
 
@@ -211,11 +211,7 @@ if($_POST['submitfile']!="" || $_POST['submitarc']!=""){
 
 	if($error==""){
 
-		$dbs=array();
-
-		//get a list of samples here
-
-		exec("/usr/bin/find ziptemp/$randnum/ -name '*.dbf'",$dbs);
+		$dbs = glob("ziptemp/$randnum/{,*/,*/*/,*/*/*/}*.[dD][bB][fF]", GLOB_BRACE);
 
 		if(count($dbs)==0){
 
@@ -226,11 +222,7 @@ if($_POST['submitfile']!="" || $_POST['submitarc']!=""){
 
 	if($error==""){
 
-		$prjs=array();
-
-		//get a list of samples here
-
-		exec("/usr/bin/find ziptemp/$randnum/ -name '*.prj'",$prjs);
+		$prjs = glob("ziptemp/$randnum/{,*/,*/*/,*/*/*/}*.[pP][rR][jJ]", GLOB_BRACE);
 
 		if(count($prjs)==0){
 
@@ -305,9 +297,9 @@ if($_POST['submitfile']!="" || $_POST['submitarc']!=""){
 			?>
 			</table><br>
 
-			<input type="hidden" name="randnum" value="<?php echo $randnum?>">
-			<input type="hidden" name="projectid" value="<?php echo $projectid?>">
-			<input type="hidden" name="arcid" value="<?php echo $arcid?>">
+			<input type="hidden" name="randnum" value="<?php echo htmlspecialchars((string)$randnum, ENT_QUOTES)?>">
+			<input type="hidden" name="projectid" value="<?php echo htmlspecialchars((string)$projectid, ENT_QUOTES)?>">
+			<input type="hidden" name="arcid" value="<?php echo htmlspecialchars((string)$arcid, ENT_QUOTES)?>">
 
 			<input class="primary" type="submit" name="indsubmit" value="Submit">
 
@@ -351,7 +343,7 @@ if($_POST['columnsubmit']!=""){
 		unlink("ogrtemp/$randnum");
 	}
 
-	exec("ogr2ogr -f GeoJSON ogrtemp/$randnum \"$shapefilename\" 2>&1",$results);
+	exec("ogr2ogr -f GeoJSON ".escapeshellarg("ogrtemp/$randnum")." ".escapeshellarg($shapefilename)." 2>&1",$results);
 
 	$error = "";
 
@@ -480,10 +472,10 @@ if($_POST['indsubmit']!="" || $putinone=="yes" || ($vocaberror!="" && $_POST['co
 	if(file_exists($prjfilename)){
 
 		//now we have a custom python script instead of calling a web service
-		exec("/srv/app/www/prj2epsg.py \"$prjfilename\"",$epsg);
+		exec("/srv/app/www/prj2epsg.py ".escapeshellarg($prjfilename),$epsg);
 		$epsg=$epsg[0];
 
-		exec("/srv/app/www/prj2wkt.py \"$prjfilename\"", $wkt);
+		exec("/srv/app/www/prj2wkt.py ".escapeshellarg($prjfilename), $wkt);
 		$wkt = $wkt[0];
 
 /*
@@ -681,7 +673,7 @@ wkt: GEOGCS["GCS_WGS_1984",DATUM["WGS_1984",SPHEROID["WGS_84",6378137.0,298.2572
 		<form name="columnform" method="POST" onsubmit="return formvalidate();">
 
 		Dataset Name: <input type="text" name="datasetname" value="<?php echo $shpname?>"><br>
-		Spot Name Prefix: (optional) <input type="text" name="spotnameprefix" value="<?php echo $spotnameprefix?>" size="10">
+		Spot Name Prefix: (optional) <input type="text" name="spotnameprefix" value="<?php echo htmlspecialchars((string)$spotnameprefix, ENT_QUOTES)?>" size="10">
 		<br><br>
 
 		<p>
@@ -732,15 +724,15 @@ wkt: GEOGCS["GCS_WGS_1984",DATUM["WGS_1984",SPHEROID["WGS_84",6378137.0,298.2572
 		<div style="padding-top:20px;" align="center">
 			<input class="primary" type="submit" name="columnsubmit" value="Submit">
 		</div>
-		<input type="hidden" name="shapefilename" value ="<?php echo $shapefilename?>">
-		<input type="hidden" name="randnum" value ="<?php echo $randnum?>">
-		<input type="hidden" name="projectid" value ="<?php echo $projectid?>">
-		<input type="hidden" name="arcid" value ="<?php echo $arcid?>">
-		<input type="hidden" name="featuretype" value ="<?php echo $featuretype?>">
-		<input type="hidden" name="filecolumns" value ="<?php echo $filecolumns?>">
-		<input type="hidden" name="epsg" value ="<?php echo $epsg?>">
+		<input type="hidden" name="shapefilename" value ="<?php echo htmlspecialchars((string)$shapefilename, ENT_QUOTES)?>">
+		<input type="hidden" name="randnum" value ="<?php echo htmlspecialchars((string)$randnum, ENT_QUOTES)?>">
+		<input type="hidden" name="projectid" value ="<?php echo htmlspecialchars((string)$projectid, ENT_QUOTES)?>">
+		<input type="hidden" name="arcid" value ="<?php echo htmlspecialchars((string)$arcid, ENT_QUOTES)?>">
+		<input type="hidden" name="featuretype" value ="<?php echo htmlspecialchars((string)$featuretype, ENT_QUOTES)?>">
+		<input type="hidden" name="filecolumns" value ="<?php echo htmlspecialchars((string)$filecolumns, ENT_QUOTES)?>">
+		<input type="hidden" name="epsg" value ="<?php echo htmlspecialchars((string)$epsg, ENT_QUOTES)?>">
 		<input type="hidden" name="fixedcolumns" value="">
-		<input type="hidden" name="shapefilearray" value="<?php echo $shapefilearray?>">
+		<input type="hidden" name="shapefilearray" value="<?php echo htmlspecialchars((string)$shapefilearray, ENT_QUOTES)?>">
 		</form>
 					<div class="bottomSpacer"></div>
 
@@ -856,9 +848,7 @@ if($_POST['columnsubmit']!=""){
 		unlink("ogrtemp/$randnum");
 	}
 
-	$workshapefilename = str_replace(" ", "\\ ", $shapefilename);
-
-	exec("ogr2ogr -f GeoJSON ogrtemp/$randnum \"$workshapefilename\" 2>&1",$results);
+	exec("ogr2ogr -f GeoJSON ".escapeshellarg("ogrtemp/$randnum")." ".escapeshellarg($shapefilename)." 2>&1",$results);
 
 	$error = "";
 
@@ -1751,7 +1741,7 @@ if($_POST['columnsubmit']!=""){
 
 		$showname = basename($sfname);
 
-		$newhtml="<form method=\"POST\"><input type=\"hidden\" name=\"shapefilearray\" value=\"$shapefilearray\"><input type=\"hidden\" name=\"randnum\" value=\"$randnum\"><input type=\"hidden\" name=\"projectid\" value=\"$projectid\"><input type=\"hidden\" name=\"arcid\" value=\"$arcid\"><input type=\"hidden\" name=\"featuretype\" value=\"$featuretype\"><input type=\"hidden\" name=\"filecolumns\" value=\"$filecolumns\"><input type=\"hidden\" name=\"fixedcolumns\" value=\"$fixedcolumns\"><input type=\"hidden\" name=\"epsg\" value=\"$epsg\"><input type=\"hidden\" name=\"userpkey\" value=\"$userpkey\"><input type=\"hidden\" name=\"datasetname\" value=\"$datasetname\"><input type=\"hidden\" name=\"spotnameprefix\" value=\"$spotnameprefix\"><input type=\"submit\" name=\"indsubmit\" value=\"Continue to load $showname\"></form>";
+		$newhtml="<form method=\"POST\"><input type=\"hidden\" name=\"shapefilearray\" value=\"".htmlspecialchars((string)$shapefilearray, ENT_QUOTES)."\"><input type=\"hidden\" name=\"randnum\" value=\"".htmlspecialchars((string)$randnum, ENT_QUOTES)."\"><input type=\"hidden\" name=\"projectid\" value=\"".htmlspecialchars((string)$projectid, ENT_QUOTES)."\"><input type=\"hidden\" name=\"arcid\" value=\"".htmlspecialchars((string)$arcid, ENT_QUOTES)."\"><input type=\"hidden\" name=\"featuretype\" value=\"".htmlspecialchars((string)$featuretype, ENT_QUOTES)."\"><input type=\"hidden\" name=\"filecolumns\" value=\"".htmlspecialchars((string)$filecolumns, ENT_QUOTES)."\"><input type=\"hidden\" name=\"fixedcolumns\" value=\"".htmlspecialchars((string)$fixedcolumns, ENT_QUOTES)."\"><input type=\"hidden\" name=\"epsg\" value=\"".htmlspecialchars((string)$epsg, ENT_QUOTES)."\"><input type=\"hidden\" name=\"userpkey\" value=\"".htmlspecialchars((string)$userpkey, ENT_QUOTES)."\"><input type=\"hidden\" name=\"datasetname\" value=\"".htmlspecialchars((string)$datasetname, ENT_QUOTES)."\"><input type=\"hidden\" name=\"spotnameprefix\" value=\"".htmlspecialchars((string)$spotnameprefix, ENT_QUOTES)."\"><input type=\"submit\" name=\"indsubmit\" value=\"Continue to load ".htmlspecialchars((string)$showname, ENT_QUOTES)."\"></form>";
 
 	}else{
 
