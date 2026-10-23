@@ -18,12 +18,15 @@ define('GEOPACKAGE_MAX_BYTES', 50000000);
 function geopackageQuery($path, $sql){
 	exec("ogr2ogr -f CSV /vsistdout/ ".escapeshellarg($path)." -sql ".escapeshellarg($sql)." 2>/dev/null", $lines, $rc);
 	if($rc != 0 || count($lines) == 0) return false;
+	// GDAL 3.2 ends a one-column header with a comma ("n,"): drop empty trailing header
+	// fields and fit each row to the header
 	$header = str_getcsv(array_shift($lines));
+	while(count($header) > 0 && end($header) === "") array_pop($header);
 	$rows = array();
 	foreach($lines as $line){
 		if($line === "") continue;
-		$row = str_getcsv($line);
-		if(count($row) == count($header)) $rows[] = array_combine($header, $row);
+		$row = array_slice(array_pad(str_getcsv($line), count($header), ""), 0, count($header));
+		$rows[] = array_combine($header, $row);
 	}
 	return $rows;
 }

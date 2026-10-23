@@ -106,6 +106,14 @@ try {
 	check("A: attribute table not listed", strpos($html, "notes_table") === false);
 	check("A: UTM coordinate system shown", strpos($html, "EPSG:32613") !== false);
 	check("A: empty layer unchecked", (bool)preg_match('/value="empty_layer"\s*>/', $html));
+	// Features column: the cell after the geometry type
+	$counts = array();
+	if (preg_match_all('/<td>([a-z_]+)<\/td>\s*<td>[A-Z]*<\/td>\s*<td>([0-9,]+)<\/td>/', $html, $cm, PREG_SET_ORDER)) {
+		foreach ($cm as $c) $counts[$c[1]] = $c[2];
+	}
+	note("feature counts: " . json_encode($counts));
+	check("A: feature counts shown (mixed 3, utm 2, empty 0)", $counts === array('empty_layer' => '0', 'mixed_features' => '3', 'utm_points' => '2'));
+	check("A: layers with features checked", (bool)preg_match('/value="utm_points"\s*checked/', $html) && (bool)preg_match('/value="mixed_features"\s*checked/', $html));
 
 	// ---------------------------------------------------------------------
 	echo "\n=== B. two layers ===\n";
