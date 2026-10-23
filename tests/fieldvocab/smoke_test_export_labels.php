@@ -269,27 +269,31 @@ try {
 			$gl = null; $gr = null;
 			foreach (export_files($labDir) as $f) if (preg_match('/\.gpkg$/i', $f)) $gl = $f;
 			foreach (export_files($rawDir) as $f) if (preg_match('/\.gpkg$/i', $f)) $gr = $f;
+			// The points layer has one feature per spot; its style draws each orientation of
+			// symbol_orientations with the orientation rules as "enabled" expressions
+			// (generateSpotOrientationQml). Each distinct rule runs on the expanded list (json_each).
 			$counts = function ($gpkg) {
-				$o = array(); exec('ogrinfo -ro -q -sql ' . escapeshellarg("SELECT f_table_name, styleQML FROM layer_styles") . ' ' . escapeshellarg($gpkg) . ' 2>/dev/null', $o);
+				$o = array(); exec('ogrinfo -ro -q -sql ' . escapeshellarg("SELECT styleQML FROM layer_styles WHERE f_table_name = 'points'") . ' ' . escapeshellarg($gpkg) . ' 2>/dev/null', $o);
 				$txt = implode("\n", $o); $res = array();
-				foreach (array('points', 'orientation_symbols', 'lines', 'polygons') as $layer) {
-					if (!preg_match('/f_table_name \(String\) = ' . $layer . '\s+styleQML \(String\) = (.*?)(?=\n\s*OGRFeature|\z)/s', $txt, $m)) continue;
-					preg_match_all('/<rule key="\{([^}]+)\}" filter="([^"]*)"/', $m[1], $rules, PREG_SET_ORDER);
-					foreach ($rules as $r) {
-						$flt = html_entity_decode($r[2], ENT_QUOTES | ENT_XML1, 'UTF-8');
-						$c = array(); exec('ogrinfo -ro -q -dialect SQLite -sql ' . escapeshellarg("SELECT COUNT(*) AS n FROM $layer WHERE $flt") . ' ' . escapeshellarg($gpkg) . ' 2>/dev/null', $c);
-						$n = preg_match('/n \(Integer\) = (\d+)/', implode("\n", $c), $mm) ? (int)$mm[1] : -1;
-						$res["$layer:{$r[1]}"] = array($n, $flt);
-					}
+				preg_match_all('/<Option name="enabled" type="Map">\s*<Option value="true" name="active" type="bool"\/>\s*<Option value="([^"]*)" name="expression"/', $txt, $m);
+				$part = 'map_get(array_get(from_json("symbol_orientations"), @geometry_part_num - 1), ';
+				$i = 0;
+				foreach (array_unique($m[1]) as $raw) {
+					$flt = html_entity_decode($raw, ENT_QUOTES | ENT_XML1, 'UTF-8');
+					$flt = preg_replace('/^coalesce\(\((.*)\), false\)$/s', '$1', $flt);
+					$flt = preg_replace('/' . preg_quote($part, '/') . "'([a-z_]+)'\\)/", "json_extract(j.value, '\$.\$1')", $flt);
+					$c = array(); exec('ogrinfo -ro -q -dialect SQLite -sql ' . escapeshellarg("SELECT COUNT(*) AS n FROM points, json_each(points.symbol_orientations) AS j WHERE $flt") . ' ' . escapeshellarg($gpkg) . ' 2>/dev/null', $c);
+					$n = preg_match('/n \(Integer\) = (\d+)/', implode("\n", $c), $mm) ? (int)$mm[1] : -1;
+					$res['rule ' . $i++] = array($n, $flt);
 				}
 				return $res;
 			};
 			$cl = $gl ? $counts($gl) : array(); $cr = $gr ? $counts($gr) : array();
 			$diff = array(); $total = 0;
 			foreach ($cr as $k => $v) { $total += max(0, $v[0]); if (!isset($cl[$k]) || $cl[$k][0] !== $v[0]) $diff[] = "$k raw {$v[0]} vs labeled " . (isset($cl[$k]) ? $cl[$k][0] : 'missing') . " [{$cl[$k][1]}]"; }
-			check('GeoPackage: ' . count($cr) . ' QML rules found, each selects the same features in both files (D1)', count($cr) >= 10 && !$diff && $total > 0, implode(' | ', $diff) . " (rules " . count($cr) . ", matched $total)");
+			check('GeoPackage: ' . count($cr) . ' orientation rules found, each selects the same orientations in both files (D1)', count($cr) >= 10 && !$diff && $total > 0, implode(' | ', $diff) . " (rules " . count($cr) . ", matched $total)");
 			$lq = ''; foreach ($cl as $k => $v) $lq .= $v[1] . "\n";
-			check('GeoPackage: QML filters are written with labels (shear zone, not shear_zone)', strpos($lq, "'shear zone'") !== false && strpos($lq, "'shear_zone'") === false);
+			check('GeoPackage: orientation rules are written with labels (shear zone, not shear_zone)', strpos($lq, "'shear zone'") !== false && strpos($lq, "'shear_zone'") === false);
 		}
 	}
 

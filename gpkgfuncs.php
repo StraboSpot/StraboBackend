@@ -48,14 +48,9 @@ function geopackageLayers($path){
 	if(!geopackageIsSqlite($path)) return false;
 	$rows = geopackageQuery($path, "SELECT c.table_name AS name, g.geometry_type_name AS geometrytype, c.srs_id AS srsid, s.organization AS org, s.organization_coordsys_id AS code FROM gpkg_contents c LEFT JOIN gpkg_geometry_columns g ON g.table_name = c.table_name LEFT JOIN gpkg_spatial_ref_sys s ON s.srs_id = c.srs_id WHERE c.data_type = 'features' ORDER BY c.table_name");
 	if($rows === false) return false;
-	// A StraboSpot export (it has the strabo_export table): orientation_symbols is one feature per
-	// orientation for display, the same spots as its points layer, so it is not offered for import
-	$straboExport = geopackageQuery($path, "SELECT COUNT(*) AS n FROM gpkg_contents WHERE table_name = 'strabo_export'");
-	$isStraboExport = $straboExport && (int)$straboExport[0]['n'] > 0;
 	$layers = array();
 	foreach($rows as $row){
 		$name = $row['name'];
-		if($isStraboExport && $name == 'orientation_symbols') continue;
 		$count = geopackageQuery($path, "SELECT COUNT(*) AS n FROM \"".str_replace('"', '""', $name)."\"");
 		$layers[$name] = array(
 			'geometrytype' => $row['geometrytype'],

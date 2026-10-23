@@ -4,13 +4,15 @@
  * Description: GeoPackage round trip, phase 1 (export side), docs/GeoPackage/GeoPackage_RoundTrip_Design.md
  *              sections 3 and 4. Downloads the golden fixture through /searchdownload (owner session)
  *              as a project export and as a dataset export and checks:
- *                - layers: points (one feature per spot), orientation_symbols (one per orientation,
- *                  oriented spots only), lines, polygons; attribute tables strabo_export, strabo_spots
+ *                - layers: points, lines, polygons (one feature per spot); attribute tables
+ *                  strabo_export, strabo_spots, layer_styles
+ *                - symbol_orientations on points: the spot's orientations in order (associated first)
  *                - strabo_id on every feature, proj_/ds_ columns
  *                - strabo_export (scope, project, datasets, owner) and strabo_spots (one row per spot,
  *                  layer, timestamp, original_geojson = the layer's geometry, editable = 0 for image
  *                  basemap and strat section spots)
- *                - styles: points plain, orientation_symbols rule based, strabo_id read-only everywhere
+ *                - styles: points = the per-spot orientation style (GeometryGenerator, one copy per
+ *                  orientation, every rule as an "enabled" expression), strabo_id read-only everywhere
  *                - no file for a request without a session; another account's project id gives no data
  *
  *              Uses the golden fixture of tests/fieldvocab (needs the test users from
@@ -83,12 +85,18 @@ function check_file($what, $gpkg, array $wantLayers, array $wantSpots, $scope, $
 	$noDs = array(); foreach ($all as $id => $f) if ((string)($f['properties']['ds_id'] ?? '') === '' || (string)($f['properties']['proj_id'] ?? '') !== (string)GF_PROJECT) $noDs[] = $id;
 	check("$what: every feature has ds_id / ds_name / proj_id", !$noDs, implode(',', $noDs));
 
-	// orientation symbols: the structure spot's five orientations (one associated), nothing else
-	$sym = array(); foreach (layer_features($gpkg, 'orientation_symbols') as $f) $sym[] = (string)$f['properties']['strabo_id'];
+	// symbol_orientations: the structure spot's five orientations (the associated lineation first, as
+	// explodeOrientations orders them), null on every other point
 	$S = gf_spots();
-	if (in_array('orientation_symbols', $wantLayers)) {
-		check("$what: orientation_symbols = 5 features of GF structure", count($sym) === 5 && count(array_unique($sym)) === 1 && $sym[0] === (string)$S['structure'], json_encode($sym));
-	}
+	$so = array(); foreach (layer_features($gpkg, 'points') as $f) $so[(string)$f['properties']['strabo_id']] = $f['properties']['symbol_orientations'] ?? null;
+	$st = $so[(string)$S['structure']] ?? null;
+	if (is_string($st)) $st = json_decode($st, true);   // GDAL's GeoJSON output may already give the JSON as a list
+	check("$what: GF structure symbol_orientations = lineation 210/20, planar 120/35, 40/80, 45/82, tabular 300/60",
+		is_array($st) && count($st) === 5 && ($st[0]['lo_trend'] ?? null) === 210 && ($st[0]['lo_plunge'] ?? null) === 20
+		&& ($st[1]['po_strike'] ?? null) === 120 && ($st[1]['po_dip'] ?? null) === 35 && ($st[2]['po_strike'] ?? null) === 40
+		&& ($st[3]['po_dip'] ?? null) === 82 && ($st[4]['to_strike'] ?? null) === 300 && is_string($st[1]['po_feature_type'] ?? null), json_encode($st));
+	$other = array(); foreach ($so as $id => $v) if ((string)$id !== (string)$S['structure'] && $v !== null) $other[] = $id;
+	check("$what: symbol_orientations null on points without orientations", !$other, implode(',', $other));
 
 	// strabo_export
 	$ex = gpkg_rows($gpkg, 'SELECT * FROM strabo_export');
@@ -117,10 +125,11 @@ function check_file($what, $gpkg, array $wantLayers, array $wantSpots, $scope, $
 
 	// styles
 	$styles = array(); foreach (gpkg_rows($gpkg, 'SELECT f_table_name, styleQML FROM layer_styles') as $r) $styles[$r['f_table_name']] = $r['styleQML'];
-	check("$what: points style is the plain single symbol", isset($styles['points']) && strpos($styles['points'], 'type="singleSymbol"') !== false && strpos($styles['points'], '<Option value="circle" name="name"') !== false);
-	if (in_array('orientation_symbols', $wantLayers)) {
-		check("$what: orientation_symbols style is the rule based orientation style", isset($styles['orientation_symbols']) && substr_count($styles['orientation_symbols'], '<rule key=') >= 10);
-	}
+	$ps = $styles['points'] ?? '';
+	check("$what: points style draws every orientation from symbol_orientations (generator + rules as enabled expressions)",
+		strpos($ps, 'type="singleSymbol"') !== false && strpos($ps, 'class="GeometryGenerator"') !== false && strpos($ps, '@geometry_part_num') !== false
+		&& substr_count($ps, 'name="enabled" type="Map"') >= 19 && strpos($ps, '<rule ') === false, 'enabled: ' . substr_count($ps, 'name="enabled" type="Map"'));
+	check("$what: points label lists the dips from symbol_orientations, placed from the point", preg_match('/fieldName="array_to_string\(array_filter\(array_foreach\(coalesce\(from_json\(&quot;symbol_orientations&quot;\)/', $ps) === 1 && preg_match('/<placement [^>]*offsetType="0"/', $ps) === 1);
 	$noRo = array(); foreach ($wantLayers as $l) if (!isset($styles[$l]) || strpos($styles[$l], '<field name="strabo_id" editable="0"/>') === false) $noRo[] = $l;
 	check("$what: strabo_id read-only in every layer style", !$noRo, implode(',', $noRo));
 }
@@ -146,23 +155,17 @@ try {
 	check('project export HTTP 200', $st === 200, "HTTP $st");
 	if (getenv('RT_KEEP') && $f) copy($f, getenv('RT_KEEP') . '/project_export.gpkg');   // e.g. to open it in QGIS
 	$both = array(GF_DS_A, GF_DS_B); sort($both);
-	check_file('project', $f, array('points', 'orientation_symbols', 'lines', 'polygons'), $spotsA + $spotsB, 'project', implode(',', $both));
+	check_file('project', $f, array('points', 'lines', 'polygons'), $spotsA + $spotsB, 'project', implode(',', $both));
 
 	section('Dataset export (/searchdownload?type=gpkg&dsids=)');
 	list($st, $f) = download_gpkg('type=gpkg&dsids=' . GF_DS_A);
 	check('dataset export HTTP 200', $st === 200, "HTTP $st");
-	check_file('dataset A', $f, array('points', 'orientation_symbols', 'lines'), $spotsA, 'dataset', (string)GF_DS_A);
+	check_file('dataset A', $f, array('points', 'lines'), $spotsA, 'dataset', (string)GF_DS_A);
 
 	section('Load GeoPackage layer list (gpkgfuncs.php geopackageLayers)');
 	require_once '/srv/app/www/gpkgfuncs.php';
 	$names = $f ? array_keys(geopackageLayers($f)) : array();
-	check('a StraboSpot export lists points + lines, not orientation_symbols', $names === array('lines', 'points'), json_encode($names));
-	$plain = "$TMP/no_manifest.gpkg";
-	copy($f, $plain);
-	exec('ogrinfo ' . escapeshellarg($plain) . ' -sql ' . escapeshellarg('DROP TABLE strabo_export') . ' 2>&1');
-	exec('ogrinfo ' . escapeshellarg($plain) . ' -sql ' . escapeshellarg("DELETE FROM gpkg_contents WHERE table_name = 'strabo_export'") . ' 2>&1');
-	$names = array_keys(geopackageLayers($plain));
-	check('the same file without strabo_export still lists orientation_symbols (other files unchanged)', $names === array('lines', 'orientation_symbols', 'points'), json_encode($names));
+	check('a StraboSpot dataset export lists exactly its feature layers (points, lines)', $names === array('lines', 'points'), json_encode($names));
 
 	section('Access');
 	list($st, $f) = download_gpkg('type=gpkg&projectid=' . GF_PROJECT, 'none');
