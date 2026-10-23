@@ -69,7 +69,8 @@ RUN rm -f /var/run/apache2/apache2.pid \
 	&& a2enmod proxy_http \
 	&& a2enmod proxy_wstunnel \
 	&& a2enmod authn_dbd \
-	&& a2enmod cgi
+	&& a2enmod cgi \
+	&& a2enmod macro
 
 # MapServer 8 (trixie) refuses to run without a config file ("msLoadConfig(): Unable to
 # access file") and only opens mapfiles whose path matches MS_MAP_PATTERN. Used by
@@ -79,5 +80,7 @@ RUN printf 'CONFIG\n  ENV\n    MS_MAP_PATTERN "^/var/www/|^/srv/app/www/"\n  END
 COPY extras/fonts/* /usr/share/fonts/truetype/
 COPY extras/mapserv/* /mapserv-work/
 COPY extras/apache.conf /etc/apache2/sites-available/000-default.conf
+# No scripts and no .htaccess in the upload / data folders (see the file)
+COPY www/docker/php8/datadirs.conf /etc/apache2/conf-enabled/strabo-datadirs.conf
 
 CMD ["/usr/sbin/apache2ctl", "-D", "FOREGROUND"]
