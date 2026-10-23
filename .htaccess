@@ -11,6 +11,8 @@ Header set Cache-Control "no-cache"
 </FilesMatch>
 </IfModule>
 RewriteEngine on
+# Old copies of the site code (prod: bkup -> /StraboData/bigDriveData/bkup/): never served or run
+RewriteRule ^bkup(/|$) - [F,L]
 # Export Builder job data (exportjobs_data/, gitignored): never served; exportjobs/download.php streams results
 RewriteRule ^exportjobs_data(/|$) - [F,L]
 # StraboMicro sync (microsync): partial uploads and content-addressed blobs are served only by the
