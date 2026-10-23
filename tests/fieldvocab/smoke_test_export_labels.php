@@ -57,7 +57,15 @@ function is_translation($raw, $lab) {
 	// "(1:phanerozoic)(2:mesozoic)" style lists
 	if (preg_match('/\(\d+:/', $raw)) {
 		$rp = preg_split('/(\(\d+:|\))/', $raw, -1, PREG_SPLIT_DELIM_CAPTURE); $lp = preg_split('/(\(\d+:|\))/', $lab, -1, PREG_SPLIT_DELIM_CAPTURE);
-		if (count($rp) === count($lp)) { foreach ($rp as $i => $p) if (!is_translation($p, $lp[$i])) return false; return true; }
+		// GDAL 3.2 joins the list items with a bare comma: "(2:crescentic_fra,oblique_gouge)"
+		$item = function ($a, $b) {
+			if (is_translation($a, $b)) return true;
+			$ai = explode(',', $a); $bi = explode(',', $b);
+			if (count($ai) < 2 || count($ai) !== count($bi)) return false;
+			foreach ($ai as $i => $x) if (!is_translation($x, $bi[$i])) return false;
+			return true;
+		};
+		if (count($rp) === count($lp)) { foreach ($rp as $i => $p) if (!$item($p, $lp[$i])) return false; return true; }
 	}
 	$idx = all_labels();
 	if (isset($idx[$raw][$lab])) return true;
@@ -235,8 +243,8 @@ try {
 	$exports = array(
 		array('xlsOut', $both, 'Excel', array('joint', 'fragmented rock', 'basaltic-andesite')),
 		array('expandedShapefileOut', $both, 'expanded shapefile', array('joint', 'fragmented rock')),
-		array('shapefileOut', (string)GF_DS_A, 'legacy shapefile (dataset A)', array('joint')),
-		array('gpkgOut', $both, 'GeoPackage', array('joint')),
+		array('shapefileOut', (string)GF_DS_A, 'legacy shapefile (dataset A)', array('joint', 'fragmented rock')),
+		array('gpkgOut', $both, 'GeoPackage', array('joint', 'fragmented rock')),
 		array('xlsSampleList', (string)GF_DS_A, 'sample list', array('fragmented rock', 'fabric / microstructure', '5 - definitely in place')),
 		array('geologicUnitsOut', $both, 'geologic units', array('alkali feldspar granite', 'Phanerozoic', 'greenschist facies')),
 	);
@@ -301,8 +309,7 @@ try {
 		list($st, $bytes) = http('GET', "/doi/doisearchdownload.php?type=$type&u=$DOI_UUID", null, 'none');
 		file_put_contents("$d/out." . ($type === 'xls' ? 'xlsx' : 'zip'), $bytes);
 		$cells = all_cells(tables_of($d));
-		// samples never reach the DOI shapefile (fixSpot buildSamples bug, audit §9.2): orientations only there
-		$want = $type === 'xls' ? array('joint', 'fragmented rock') : array('joint'); $miss = array();
+		$want = array('joint', 'fragmented rock'); $miss = array();
 		foreach ($want as $l) { $hit = false; foreach ($cells as $c) if (strpos($c, $l) !== false) $hit = true; if (!$hit) $miss[] = $l; }
 		$leak = array();
 		foreach (array('option_13', 'fragmented_roc', 'basaltic_andes', 'fabric___micro') as $r) foreach ($cells as $c) if ($c === $r || strpos($c, "$r, ") === 0 || strpos($c, ", $r") !== false) { $leak[] = $r; break; }
