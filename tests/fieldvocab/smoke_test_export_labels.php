@@ -205,6 +205,7 @@ function compare_in_place($raw, $lab) {
 	$changed = 0; $bad = array();
 	foreach ($raw as $t => $rows) {
 		if (substr($t, -strlen(':layer_styles')) === ':layer_styles') continue;   // the QML: its filters are checked rule by rule (D1)
+		if (substr($t, -strlen(':strabo_export')) === ':strabo_export') continue;   // round trip manifest: exported_at differs between the two runs, no labels in it
 		$lrows = $lab[$t];
 		if (count($rows) !== count($lrows)) return array(false, "$t: " . count($rows) . ' rows vs ' . count($lrows), 0);
 		$rk = array_keys($rows); $lk = array_keys($lrows);
@@ -271,7 +272,7 @@ try {
 			$counts = function ($gpkg) {
 				$o = array(); exec('ogrinfo -ro -q -sql ' . escapeshellarg("SELECT f_table_name, styleQML FROM layer_styles") . ' ' . escapeshellarg($gpkg) . ' 2>/dev/null', $o);
 				$txt = implode("\n", $o); $res = array();
-				foreach (array('points', 'lines', 'polygons') as $layer) {
+				foreach (array('points', 'orientation_symbols', 'lines', 'polygons') as $layer) {
 					if (!preg_match('/f_table_name \(String\) = ' . $layer . '\s+styleQML \(String\) = (.*?)(?=\n\s*OGRFeature|\z)/s', $txt, $m)) continue;
 					preg_match_all('/<rule key="\{([^}]+)\}" filter="([^"]*)"/', $m[1], $rules, PREG_SET_ORDER);
 					foreach ($rules as $r) {

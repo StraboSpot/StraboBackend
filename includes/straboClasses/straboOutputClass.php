@@ -26492,7 +26492,22 @@ QML;
 	 */
 	private function generateSimpleQml($geometryType){
 
-		if($geometryType == 'line'){
+		if($geometryType == 'plainpoint'){
+			// GeoPackage points layer (one feature per spot): the "Plain point" symbol of the
+			// orientation style; the orientation symbols are their own layer
+			$symbol = $this->qmlSymbol('0', $this->qmlMarkerLayer('circle', '2.5', ['outlineWidth' => '0']));
+			$qml = <<<QML
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis simplifyDrawingHints="0" version="3.28.11-Firenze" styleCategories="AllStyleCategories" labelsEnabled="0">
+  <renderer-v2 type="singleSymbol" symbollevels="0" forceraster="0" enableorderby="0">
+    <symbols>
+$symbol    </symbols>
+    <rotation/>
+    <sizescale/>
+  </renderer-v2>
+</qgis>
+QML;
+		}elseif($geometryType == 'line'){
 			$qml = <<<QML
 <!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
 <qgis simplifyDrawingHints="1" version="3.28.11-Firenze" styleCategories="AllStyleCategories" labelsEnabled="0">
@@ -26624,6 +26639,9 @@ QML;
 				$styleName = 'StraboSpot Default';
 			}
 
+			// strabo_id ties a feature to its spot for the round trip: read-only in the QGIS form
+			$qml = str_replace('</qgis>', "  <editable>\n    <field name=\"strabo_id\" editable=\"0\"/>\n  </editable>\n</qgis>", $qml);
+
 			// Write SQL to temp file to avoid shell argument length limits
 			$escapedQml = str_replace("'", "''", $qml);
 			$insertSql = "INSERT INTO layer_styles (f_table_name, f_geometry_column, styleName, styleQML, useAsDefault, description) "
@@ -26638,9 +26656,17 @@ QML;
 	}
 
 	/**
-	 * Export dataset as GeoPackage (.gpkg) format.
+	 * Export dataset(s) or a whole project as GeoPackage (.gpkg) format.
 	 * GeoPackage is an OGC standard based on SQLite that supports
 	 * multiple geometry types and embedded QGIS styles.
+	 *
+	 * Round trip layout (docs/GeoPackage/GeoPackage_RoundTrip_Design.md, section 3):
+	 *   points               one feature per spot (the layer edited in QGIS)
+	 *   orientation_symbols  one feature per orientation, display only (today's symbols)
+	 *   lines, polygons      one feature per spot
+	 * Every feature carries strabo_id (the spot id) plus proj_/ds_ columns, and the file holds
+	 * two attribute tables (strabo_export, strabo_spots) that let a later upload update the
+	 * original spots. Those tables are written only when the export covers one project of one owner.
 	 */
 	public function gpkgOut(){
 
@@ -26649,46 +26675,58 @@ QML;
 			$dsids=$this->get['dsids'];
 			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
+			// proj_id / proj_name / ds_id / ds_name on every feature (the spot's dataset for the manifest)
+			$get = $this->get;
+			$get['attribution'] = 1;
+
+			$manifestSpots = array();
+
 			// Get spots by geometry type
-			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$this->get);
+			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$get);
 			if($polygonjson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
 				$features = array();
 				foreach($polygonjson['features'] as $spot){
-					$spot = $this->fixSpot($spot, true);
-					$features[]=$spot;
+					$features[]=$this->gpkgFeature($spot, 'polygons', $manifestSpots);
 				}
 				$newjson['features']=$features;
 				$polygonjson = json_encode($newjson,JSON_PRETTY_PRINT);
 			}
 
-			$pointjson = $this->strabo->getDatasetSpotsSearch('point',$this->get);
+			$pointjson = $this->strabo->getDatasetSpotsSearch('point',$get);
+			$symboljson = "";
 			if($pointjson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
 				$features = array();
+				$symbols = array();
 				foreach($pointjson['features'] as $spot){
-					$spot = $this->fixSpot($spot, true);
-					// Explode multi-orientation spots into separate features
-					// (one per orientation, same geometry) for correct symbol rendering
-					$exploded = $this->explodeOrientations($spot);
-					foreach($exploded as $f){
-						$features[] = $f;
+					$spot = $this->gpkgFeature($spot, 'points', $manifestSpots);
+					$features[] = $spot;
+					// Orientation symbols: one feature per orientation (same geometry), each with that
+					// orientation in the primary po/lo/to columns, for correct symbol rendering
+					$od = json_decode((string)($spot['properties']['orientation_data'] ?? ''));
+					if(is_array($od) && count($od)){
+						foreach($this->explodeOrientations($spot) as $f){
+							$symbols[] = $f;
+						}
 					}
 				}
 				$newjson['features']=$features;
 				$pointjson = json_encode($newjson,JSON_PRETTY_PRINT);
+				if(count($symbols)){
+					$symboljson = json_encode(array('type' => 'FeatureCollection', 'features' => $symbols), JSON_PRETTY_PRINT);
+				}
 			}
 
-			$linejson = $this->strabo->getDatasetSpotsSearch('line',$this->get);
+			$linejson = $this->strabo->getDatasetSpotsSearch('line',$get);
 			if($linejson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
 				$features = array();
 				foreach($linejson['features'] as $spot){
-					$spot = $this->fixSpot($spot, true);
-					$features[]=$spot;
+					$features[]=$this->gpkgFeature($spot, 'lines', $manifestSpots);
 				}
 				$newjson['features']=$features;
 				$linejson = json_encode($newjson,JSON_PRETTY_PRINT);
@@ -26710,8 +26748,15 @@ QML;
 					file_put_contents("ogrtemp/$randnum/point.json", $pointjson);
 					exec("ogr2ogr -f GPKG -nlt POINT -nln points -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/point.json 2>&1");
 					unlink("ogrtemp/$randnum/point.json");
-					$layers['points'] = 'point';
+					$layers['points'] = 'plainpoint';
 					$firstLayer = false;
+				}
+
+				if($symboljson!=""){
+					file_put_contents("ogrtemp/$randnum/symbol.json", $symboljson);
+					exec("ogr2ogr -f GPKG -append -nlt POINT -nln orientation_symbols -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/symbol.json 2>&1");
+					unlink("ogrtemp/$randnum/symbol.json");
+					$layers['orientation_symbols'] = 'point';
 				}
 
 				if($linejson!=""){
@@ -26731,14 +26776,24 @@ QML;
 					$layers['polygons'] = 'polygon';
 				}
 
+				// Round trip manifest (strabo_export + strabo_spots)
+				$project = null;
+				if(file_exists($gpkgFile)){
+					$project = $this->writeGpkgManifest($gpkgFile, "ogrtemp/$randnum", $manifestSpots);
+				}
+
 				// Inject QGIS styles
 				if(file_exists($gpkgFile)){
 					$this->injectGpkgStyles($gpkgFile, $layers);
 				}
 
-				// Get dataset name for filename
-				$dsname = $this->strabo->getDatasetName($dsids);
-				$fixedname = $this->fixFileName($dsname);
+				// File name: the project for a project export, else the dataset
+				if($project !== null && $project['scope'] == 'project'){
+					$fixedname = $this->fixFileName($project['name']);
+				}else{
+					$dsname = $this->strabo->getDatasetName($dsids);
+					$fixedname = $this->fixFileName($dsname);
+				}
 				if($fixedname == ""){
 					$fixedname = "strabo_export";
 				}
@@ -26752,6 +26807,7 @@ QML;
 
 					// Clean up temp files
 					unlink($gpkgFile);
+					foreach(glob("ogrtemp/$randnum/*") ?: array() as $leftover){ unlink($leftover); }
 					rmdir("ogrtemp/$randnum");
 				}
 
@@ -26761,6 +26817,114 @@ QML;
 
 		}
 
+	}
+
+	/**
+	 * One GeoPackage feature from a spot: fixSpot() plus strabo_id as the first column, and the
+	 * spot's manifest row (strabo_spots) collected in $manifestSpots.
+	 */
+	private function gpkgFeature($spot, $layer, &$manifestSpots){
+
+		$props = $spot['properties'];
+		$id = (string)$props['id'];
+
+		// Spots drawn on an image basemap export the parent spot's location, spots in a strat
+		// section export section coordinates: neither is the spot's real geometry, so a round trip
+		// never writes it (design 3.4).
+		$editable = 1;
+		if(!empty($props['image_basemap']) || !empty($props['strat_section_id'])){
+			$editable = 0;
+		}
+
+		$manifestSpots[$id] = array(
+			'spot_id' => $id,
+			'dataset_id' => isset($props['ds_id']) ? (string)$props['ds_id'] : "",
+			'layer' => $layer,
+			'modified_timestamp' => isset($props['modified_timestamp']) ? (string)$props['modified_timestamp'] : "",
+			'editable' => $editable,
+		);
+
+		$spot = $this->fixSpot($spot, true);
+		$spot['properties'] = array('strabo_id' => $id) + $spot['properties'];
+
+		return $spot;
+	}
+
+	/**
+	 * Write the round trip manifest into the GeoPackage: strabo_export (one row: what was exported,
+	 * by whom, when) and strabo_spots (one row per exported spot, with its geometry as read back
+	 * from the file). Only when the export covers one project of one owner; returns that project
+	 * (id, name, scope) or null when no manifest was written.
+	 */
+	private function writeGpkgManifest($gpkgFile, $workdir, $manifestSpots){
+
+		if(!count($manifestSpots)) return null;
+
+		// One owner: a merged Export Builder export across owners gets no manifest
+		$groups = (!empty($this->get['scope_groups']) && is_array($this->get['scope_groups'])) ? $this->get['scope_groups'] : null;
+		if($groups !== null && count($groups) != 1) return null;
+		$owner = $groups !== null ? (int)$groups[0]['userpkey'] : (int)$this->get['userpkey'];
+		$dsids = $this->strabo->intIdList($groups !== null ? implode(",", (array)$groups[0]['dsids']) : $this->get['dsids']);
+		if($owner <= 0 || $dsids == "") return null;
+
+		// One project
+		$rows = $this->strabo->neodb->get_results("MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset) WHERE d.id IN [$dsids] AND d.userpkey = $owner AND p.userpkey = $owner RETURN DISTINCT p.id AS pid, p.desc_project_name AS pname");
+		if(!is_array($rows) || count($rows) != 1) return null;
+		$pid = (string)$rows[0]->get('pid');
+		$pname = (string)$rows[0]->get('pname');
+
+		// Scope: a whole project (searchdownload's project export), a selection of spots (Export
+		// Builder), or datasets
+		if(isset($this->get['spot_ids']) || ($groups !== null && isset($groups[0]['spot_ids']) && $groups[0]['spot_ids'] !== null)){
+			$scope = 'selection';
+		}elseif(($this->get['export_scope'] ?? '') == 'project'){
+			$scope = 'project';
+		}else{
+			$scope = 'dataset';
+		}
+
+		// Each spot's geometry as GDAL reads it back from this file (what a later upload is
+		// compared with, read the same way)
+		foreach(array('points', 'lines', 'polygons') as $layer){
+			$json = shell_exec("ogr2ogr -f GeoJSON /vsistdout/ " . escapeshellarg($gpkgFile) . " " . escapeshellarg($layer) . " -select strabo_id 2>/dev/null");
+			$fc = json_decode((string)$json, true);
+			foreach(isset($fc['features']) ? $fc['features'] : array() as $f){
+				$sid = (string)($f['properties']['strabo_id'] ?? '');
+				if(isset($manifestSpots[$sid]) && $manifestSpots[$sid]['layer'] == $layer){
+					$manifestSpots[$sid]['original_geojson'] = json_encode($f['geometry']);
+				}
+			}
+		}
+
+		$exportedBy = isset($_SESSION['userpkey']) ? (int)$_SESSION['userpkey'] : (int)$this->strabo->userpkey;
+		$export = array(
+			'format_version' => 1,
+			'server' => isset($_SERVER['HTTP_HOST']) ? (string)$_SERVER['HTTP_HOST'] : "",
+			'scope' => $scope,
+			'project_id' => $pid,
+			'project_name' => $pname,
+			'dataset_ids' => $dsids,
+			'owner_userpkey' => $owner,
+			'exported_by' => $exportedBy,
+			'exported_at' => time(),
+		);
+
+		$tables = array(
+			'strabo_export' => array($export),
+			'strabo_spots' => array_values($manifestSpots),
+		);
+		foreach($tables as $table => $records){
+			$features = array();
+			foreach($records as $r){
+				if($table == 'strabo_spots' && !isset($r['original_geojson'])) $r['original_geojson'] = "";
+				$features[] = array('type' => 'Feature', 'geometry' => null, 'properties' => $r);
+			}
+			file_put_contents("$workdir/$table.json", json_encode(array('type' => 'FeatureCollection', 'features' => $features)));
+			exec("ogr2ogr -f GPKG -append -nlt NONE -nln $table " . escapeshellarg($gpkgFile) . " " . escapeshellarg("$workdir/$table.json") . " 2>&1");
+			unlink("$workdir/$table.json");
+		}
+
+		return array('id' => $pid, 'name' => $pname, 'scope' => $scope);
 	}
 
 	public function shapefileOut(){

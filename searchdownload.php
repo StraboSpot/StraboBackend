@@ -27,7 +27,13 @@ if(!empty($_POST)){
 // URL cannot reach another account's private data and collaborators can export shared datasets.
 // scope_groups / all_dsids are Export Builder internals, never taken from a request.
 unset($getParams['scope_groups'], $getParams['all_dsids'], $_GET['scope_groups'], $_GET['all_dsids'], $_POST['scope_groups'], $_POST['all_dsids']);
-if(isset($getParams['dsids'])){
+unset($getParams['export_scope']);
+// GeoPackage of a whole project (My Field Data project menu): the project's datasets, checked the
+// same way, and the manifest records the project scope (docs/GeoPackage/GeoPackage_RoundTrip_Design.md 3.1)
+if(($getParams['type'] ?? '') == 'gpkg' && isset($getParams['projectid']) && !isset($getParams['dsids'])){
+	$getParams = array_merge($getParams, $strabo->exportProjectParams($getParams['projectid']));
+	$getParams['export_scope'] = 'project';
+}elseif(isset($getParams['dsids'])){
 	$access = $strabo->exportDatasetParams($getParams['dsids']);
 	foreach($access as $k => $v){
 		$getParams[$k] = $v;

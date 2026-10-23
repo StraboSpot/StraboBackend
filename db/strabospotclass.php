@@ -2191,6 +2191,30 @@ class StraboSpot
 		return array('userpkey' => (int)$this->userpkey, 'dsids' => "0");
 	}
 
+	// The same pair for a whole project (GeoPackage project export): every dataset of the project,
+	// run as its owner. Project ids are not unique across accounts, so each owner's project is checked
+	// with ExportAccess like the datasets above, the session user's own first. Nothing permitted gives
+	// dsids "0" (same no-data answer).
+	public function exportProjectParams($projectid){
+		require_once __DIR__ . "/../exportjobs/lib/ExportAccess.php";
+		$pid = preg_match('/^[0-9]+$/', (string)$projectid) ? (string)$projectid : "";
+		$none = array('userpkey' => (int)$this->userpkey, 'dsids' => "0");
+		if($pid == "") return $none;
+		$me = ((int)$this->userpkey == 99999) ? 0 : (int)$this->userpkey;
+
+		$byOwner = array();
+		foreach($this->neodb->query("MATCH (p:Project {id: $pid})-[:HAS_DATASET]->(d:Dataset) WHERE p.userpkey = d.userpkey RETURN p.userpkey AS owner, d.id AS dsid ORDER BY d.id") as $record){
+			$byOwner[(int)$record->get('owner')][] = (string)$record->get('dsid');
+		}
+		if($me > 0 && isset($byOwner[$me])) $byOwner = array($me => $byOwner[$me]) + $byOwner;
+		foreach($byOwner as $owner => $list){
+			if(ExportAccess::canExport($this->db, $me, $pid, $owner)){
+				return array('userpkey' => (int)$owner, 'dsids' => implode(",", $list));
+			}
+		}
+		return $none;
+	}
+
 	public function getDatasetSpotsSearch($ingtype=null, $get){
 
 		// dsids and userpkey come straight from request parameters and are interpolated into
