@@ -11,8 +11,8 @@
  *                   session, another user's project, a zip with scripts (only the .gpkg is
  *                   extracted), a text file named .gpkg, a zip with two GeoPackages
  *                D. round trip: Strabo's own GeoPackage export of the imported points, loaded
- *                   back (export columns mapped by hand), gives the same names, locations,
- *                   strikes and dips
+ *                   back with the form's own column guesses, gives the same names, locations,
+ *                   strikes, dips and custom field
  *
  *              Uses owner@test.strabospot.org (setup_test_data.php) and a forged session.
  *              Hermetic: '96671'-prefixed projects, removed at the end.
@@ -46,6 +46,19 @@ $marker = "/tmp/gpkge2e_pwned_$stamp";
 @mkdir($workDir, 0777, true);
 
 function ogr($args) { return shell_exec("ogr2ogr $args 2>&1"); }
+
+// Default choice of each column's select on a column page: "col:strabocol;..."
+function defaultMapping($html) {
+	$pairs = array();
+	if (!preg_match('/var columns = \[(.*?)\];/s', $html, $m)) return "";
+	foreach (json_decode("[" . $m[1] . "]", true) ?: array() as $col) {
+		if (preg_match('/<select name="' . preg_quote($col, '/') . '_select">(.*?)<\/select>/s', $html, $sm)
+		    && preg_match('/<option value="([^"]+)" selected>/', $sm[1], $om)) {
+			$pairs[] = "$col:" . $om[1];
+		}
+	}
+	return implode(";", $pairs);
+}
 
 function datasetsOf($projId) {
 	global $neodb;
@@ -192,9 +205,13 @@ try {
 	$r3 = viGrab($html, 'randnum');
 	$viRandnums[] = $r3;
 	check("D: export has one feature layer (column page shown directly)", viGrab($html, 'layer') === 'points');
-	// Strabo's export prefixes its columns (spot_name, po_strike, cust_...); the form does
-	// not guess those yet, so map them as a user would.
-	$mapping = "spot_name:spot_name;po_strike:planar_orientation_strike;po_dip:planar_orientation_dip;cust_a_b:sfcustom_a_b;notes:spot_notes";
+	// The form recognizes the export's prefixed columns (spot_name, po_strike, cust_...):
+	// accept its guesses as they are.
+	$mapping = defaultMapping($html);
+	note("default mapping: $mapping");
+	foreach (array("spot_name:spot_name", "po_strike:planar_orientation_strike", "po_dip:planar_orientation_dip", "cust_a_b:sfcustom_a_b", "notes:spot_notes") as $want) {
+		check("D: export column guessed: $want", strpos(";$mapping;", ";$want;") !== false);
+	}
 	$out = viPost($sid, $URL, array('columnsubmit' => 'Submit', 'randnum' => $r3, 'projectid' => $rtProj, 'gpkgname' => 'export.gpkg',
 	                                'layer' => 'points', 'layerqueue' => '[]', 'datasetname' => 'Round trip', 'spotnameprefix' => '', 'fixedcolumns' => $mapping));
 	check("D: re-import completes", strpos($out, "GeoPackage Load Complete") !== false);
@@ -213,6 +230,9 @@ try {
 	note("original:  " . implode(" | ", $summary($utm)));
 	note("roundtrip: " . implode(" | ", $summary($back)));
 	check("D: names, locations, strikes and dips survive the round trip", count($back) == 2 && $summary($back) === $summary($utm));
+	$customs = array();
+	foreach ($back as $f) $customs[$f['properties']['name'] ?? ''] = $f['properties']['custom_fields']['a_b'] ?? null;
+	check("D: custom field keeps its name (cust_a_b -> a_b)", ($customs['Station One'] ?? null) === 'colon');
 
 } catch (Throwable $e) {
 	check("exception: " . $e->getMessage() . " line " . $e->getLine(), false);
