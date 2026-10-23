@@ -155,7 +155,17 @@ class doiOutputClass
 				}
 			}
 
-			if($type=="other"){
+			if($type=="fault"){
+				$this->fault_num++;
+				if($this->fault_num==1){
+					$prefix="flt_";
+				}else{
+					$prefix="flt_".$this->fault_num."_";
+				}
+			}
+
+			// "other", and any type without its own prefix (never the "foo" placeholder)
+			if($type=="other" || $prefix=="foo"){
 				$this->other_num++;
 				if($this->other_num==1){
 					$prefix="_3d_";
@@ -175,7 +185,7 @@ class doiOutputClass
 			}
 		}
 
-		return $newstructures;
+		return $this->newstructures;
 
 	}
 
@@ -196,11 +206,11 @@ class doiOutputClass
 
 			$prefix = "foo";
 
-			$sample_num++;
-			if($sample_num==1){
+			$this->sample_num++;
+			if($this->sample_num==1){
 				$prefix="samp_";
 			}else{
-				$prefix="samp_".$sample_num."_";
+				$prefix="samp_".$this->sample_num."_";
 			}
 
 
@@ -214,7 +224,7 @@ class doiOutputClass
 			}
 		}
 
-		return $newsamples;
+		return $this->newsamples;
 
 	}
 
@@ -235,11 +245,11 @@ class doiOutputClass
 
 			$prefix = "foo";
 
-			$tephra_num++;
-			if($tephra_num==1){
+			$this->tephra_num++;
+			if($this->tephra_num==1){
 				$prefix="tephra_";
 			}else{
-				$prefix="tephra_".$tephra_num."_";
+				$prefix="tephra_".$this->tephra_num."_";
 			}
 
 
@@ -285,6 +295,7 @@ class doiOutputClass
 		$this->fold_num = 0;
 		$this->tensor_num = 0;
 		$this->other_num = 0;
+		$this->fault_num = 0;
 
 		$returnstructures = $this->buildStructures($structures);
 
@@ -296,24 +307,24 @@ class doiOutputClass
 
 		foreach($otherfeatures as $of){
 
-			$otherfeature_num++;
-			if($otherfeature_num==1){
+			$this->otherfeature_num++;
+			if($this->otherfeature_num==1){
 				$prefix="of_";
 			}else{
-				$prefix="of_".$otherfeature_num."_";
+				$prefix="of_".$this->otherfeature_num."_";
 			}
 
 			foreach($of as $key=>$value){
 
 				if($key != "id"){
 
-					$newotherfeatures[$prefix.$key]=$value;
+					$this->newotherfeatures[$prefix.$key]=$value;
 
 				}
 			}
 		}
 
-		return $newotherfeatures;
+		return $this->newotherfeatures;
 
 	}
 
@@ -6571,7 +6582,7 @@ $html.='
 				$pointjson = json_encode($newjson,JSON_PRETTY_PRINT);
 			}
 
-			$linespots = $this->getFixedProjectSpots($uuid, "line");
+			$linespots = $this->getFixedProjectSpots($uuid, "linestring");
 			if(!empty($linespots)){
 
 				$newjson = array();
