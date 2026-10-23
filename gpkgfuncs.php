@@ -77,7 +77,8 @@ function geopackageReadOptions($layerinfo){
 /*
 	Column names go into the mapping form and into "col:strabocol;..." strings, so characters
 	other than letters, digits, space, _ . ( ) - become "_" (renamed in the features too).
-	Returns array(features, columns) with columns in first-seen order.
+	List values (JSON fields) become "a, b". Returns array(features, columns), columns in
+	first-seen order.
 */
 function geopackageSafeColumns($features){
 	$map = array();
@@ -100,6 +101,13 @@ function geopackageSafeColumns($features){
 	foreach($features as $i=>$f){
 		$props = array();
 		foreach(($f['properties'] ?? array()) as $key=>$value){
+			// JSON list fields (multi-select values such as ["Proterozoic"]): one value per field on import
+			if(is_array($value)){
+				$value = implode(", ", array_map(function($v){ return is_scalar($v) ? (string)$v : json_encode($v); }, $value));
+			}elseif(is_string($value) && preg_match('/^\(([0-9]+):(.*)\)$/s', $value, $m) && count(explode(",", $m[2])) == (int)$m[1]){
+				// the same lists as written by older GDAL: "(2:Proterozoic,Archean)"
+				$value = implode(", ", explode(",", $m[2]));
+			}
 			$props[$map[$key]] = $value;
 		}
 		$features[$i]['properties'] = $props;

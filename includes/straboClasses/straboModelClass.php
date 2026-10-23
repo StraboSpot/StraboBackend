@@ -345,6 +345,13 @@ class straboModelClass
 
 			}
 
+			// Name-starts-with guesses only when no field has exactly this name: "spot_radius"
+			// also selected Spot Radius Units, and the browser shows the last selected option
+			$exactexists = false;
+			foreach($this->fields as $field){
+				if($field["name"] == $lookshapefilevar) $exactexists = true;
+			}
+
 			foreach($items as $item){
 				$label = $item["label"];
 				if($item["hint"]!="")$label.=" : ".$item["hint"];
@@ -352,7 +359,7 @@ class straboModelClass
 
 				$selected="";
 
-				if(!in_array($name, $this->founditems ?? array()) && $userdefined=="no"){
+				if(!$exactexists && !in_array($name, $this->founditems ?? array()) && $userdefined=="no"){
 					if(substr($name,0,strlen($lookshapefilevar))==$lookshapefilevar){
 						$selected=" selected";
 						$this->founditems[]=$name;

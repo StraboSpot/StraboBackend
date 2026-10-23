@@ -74,9 +74,9 @@ try {
 	// Fixture GeoPackage
 	// ---------------------------------------------------------------------
 	file_put_contents("$workDir/pts.geojson", json_encode(array('type' => 'FeatureCollection', 'features' => array(
-		array('type' => 'Feature', 'properties' => array('name' => 'Station One', 'strike' => 120, 'dip' => 45, 'a:b' => 'colon', 'Strike (deg)' => 7, 'notes' => 'ünïcödé'),
+		array('type' => 'Feature', 'properties' => array('name' => 'Station One', 'strike' => 120, 'dip' => 45, 'a:b' => 'colon', 'Strike (deg)' => 7, 'notes' => 'ünïcödé', 'eons' => array('Proterozoic'), 'spot_radius' => 3),
 		      'geometry' => array('type' => 'Point', 'coordinates' => array(500000, 4300000, 1500))),
-		array('type' => 'Feature', 'properties' => array('name' => 'Station Two', 'strike' => 200, 'dip' => 30, 'a:b' => 'x', 'Strike (deg)' => 8, 'notes' => null),
+		array('type' => 'Feature', 'properties' => array('name' => 'Station Two', 'strike' => 200, 'dip' => 30, 'a:b' => 'x', 'Strike (deg)' => 8, 'notes' => null, 'eons' => array('Proterozoic', 'Archean'), 'spot_radius' => 5),
 		      'geometry' => array('type' => 'Point', 'coordinates' => array(501000, 4301000, 1510)))))));
 	file_put_contents("$workDir/mixed.geojson", json_encode(array('type' => 'FeatureCollection', 'features' => array(
 		array('type' => 'Feature', 'properties' => array('label' => 'a point'), 'geometry' => array('type' => 'Point', 'coordinates' => array(-105.1, 39.1))),
@@ -134,9 +134,18 @@ try {
 	$cols = json_decode("[" . ($m[1] ?? "") . "]", true) ?: array();
 	note("columns: " . implode(", ", $cols));
 	check("B: unsafe column names renamed (a:b -> a_b, kept Strike (deg))", in_array("a_b", $cols, true) && in_array("Strike (deg)", $cols, true) && !in_array("a:b", $cols, true));
+	$a = strpos($page, '<select name="spot_radius_select">');
+	$sel = $a === false ? "" : substr($page, $a, strpos($page, '</select>', $a) - $a);
+	check("B: spot_radius guessed as Spot Radius only", strpos($sel, 'value="spot_spot_radius" selected>') !== false && strpos($sel, 'value="spot_spot_radius_units" selected>') === false);
+	$bad = viPost($sid, $URL, array('columnsubmit' => 'Submit', 'randnum' => $randnum, 'projectid' => $projId, 'gpkgname' => 'test.gpkg',
+	                                'layer' => 'utm_points', 'layerqueue' => '[]', 'datasetname' => 'UTM points', 'spotnameprefix' => '',
+	                                'fixedcolumns' => 'spot_radius:spot_spot_radius_units;eons:rock_unit_eon'));
+	$errpos = strpos($bad, 'Error!');
+	check("B: vocabulary error shown inside the page, below the title", $errpos !== false && $errpos > strpos($bad, 'Define Columns for GeoPackage') && strpos($bad, 'fcf0ef') === false);
+	check("B: list values reported as text, not Array", strpos($bad, '(Array)') === false && strpos($bad, 'Proterozoic, Archean') !== false);
 	$out = viPost($sid, $URL, array('columnsubmit' => 'Submit', 'randnum' => $randnum, 'projectid' => $projId, 'gpkgname' => 'test.gpkg',
 	                                'layer' => 'utm_points', 'layerqueue' => '[]', 'datasetname' => 'UTM points', 'spotnameprefix' => '',
-	                                'fixedcolumns' => 'name:spot_name;strike:planar_orientation_strike;dip:planar_orientation_dip;a_b:sfcustom_a_b;notes:spot_notes'));
+	                                'fixedcolumns' => 'name:spot_name;strike:planar_orientation_strike;dip:planar_orientation_dip;a_b:sfcustom_a_b;notes:spot_notes;eons:sfcustom_eons;spot_radius:spot_spot_radius'));
 	check("B: second layer imported, link back to My Field Data", strpos($out, "GeoPackage Load Complete") !== false && strpos($out, "my_field_data") !== false);
 
 	$ds = datasetsOf($projId);
@@ -153,6 +162,7 @@ try {
 	check("B: UTM point reprojected to WGS84", $one && abs($one['geometry']['coordinates'][0] + 105.0) < 1e-6 && abs($one['geometry']['coordinates'][1] - 38.8488182) < 1e-6);
 	check("B: strike/dip stored", $one && ($one['properties']['orientation_data'][0]['strike'] ?? null) == 120 && ($one['properties']['orientation_data'][0]['dip'] ?? null) == 45);
 	check("B: custom + unicode notes stored", $one && ($one['properties']['custom_fields']['a_b'] ?? null) === 'colon' && ($one['properties']['notes'] ?? null) === 'ünïcödé');
+	check("B: list value stored as text, spot radius stored", $one && ($one['properties']['custom_fields']['eons'] ?? null) === 'Proterozoic' && ($one['properties']['spot_radius'] ?? null) == 3);
 	$dsnode = $neodb->getNode("MATCH (d:Dataset {id:" . (int)$ds['UTM points'] . "}) RETURN d");
 	check("B: dataset records GeoPackage + layer", ($dsnode['datasettype'] ?? '') === 'geopackage' && ($dsnode['layer'] ?? '') === 'utm_points' && ($dsnode['geopackage'] ?? '') === 'test.gpkg');
 

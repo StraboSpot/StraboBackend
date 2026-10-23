@@ -122,29 +122,6 @@ function vectorImportColumnsPage($smodel, $columns, $o){
 
 	$vocaberror=$o['vocaberror'];
 
-	if($vocaberror!=""){
-		?>
-
-		<fieldset style="border: 1px solid red; background-color:#fcf0ef; padding: 8px; padding-bottom:0px; margin: 8px 0">
-			<legend style="color:red;"><strong>Error!</strong></legend>
-			<div><?php echo $vocaberror?></div>
-			<br>
-		</fieldset>
-
-		<br>
-
-		<?php
-		/*
-		<form action="">
-			<input type="submit" value="Continue" />
-		</form>
-
-		include 'includes/footer.php';
-		exit();
-		*/
-	}
-
-
 	?>
 
 		<!-- Main -->
@@ -154,6 +131,17 @@ function vectorImportColumnsPage($smodel, $columns, $o){
 					<header class="major">
 						<h2>Define Columns for <?php echo $o['kind']?>:<br><?php echo htmlspecialchars((string)$o['showname'], ENT_QUOTES)?></h2>
 					</header>
+
+	<?php
+	if($vocaberror!=""){
+	?>
+	<div style="border:1px solid #e44c65; border-radius:4px; padding:12px 16px; margin-bottom:24px;">
+		<div style="color:#e44c65; font-weight:bold; padding-bottom:8px;">Error!</div>
+		<div><?php echo $vocaberror?></div>
+	</div>
+	<?php
+	}
+	?>
 
 	<form name="columnform" method="POST" onsubmit="return formvalidate();">
 
