@@ -63,9 +63,14 @@ class straboModelClass
 		echo "</pre>";
 	}
 
+	// Unix time + 4 random digits, never the same twice in one request: an import loop asks
+	// for many ids per second, and a repeated spot id made insertSpot overwrite the earlier spot.
 	function getId(){
-		$string = time();
-		$newtime = $string.rand(1111,9999);
+		static $issued = array();
+		do{
+			$newtime = time().rand(1111,9999);
+		}while(isset($issued[$newtime]));
+		$issued[$newtime] = true;
 		return (int)$newtime;
 	}
 
