@@ -129,7 +129,7 @@ function check_file($what, $gpkg, array $wantLayers, array $wantSpots, $scope, $
 	check("$what: points style draws every orientation from symbol_orientations (generator + rules as enabled expressions)",
 		strpos($ps, 'type="singleSymbol"') !== false && strpos($ps, 'class="GeometryGenerator"') !== false && strpos($ps, '@geometry_part_num') !== false
 		&& substr_count($ps, 'name="enabled" type="Map"') >= 19 && strpos($ps, '<rule ') === false, 'enabled: ' . substr_count($ps, 'name="enabled" type="Map"'));
-	check("$what: points label lists the dips from symbol_orientations, placed from the point", preg_match('/fieldName="array_to_string\(array_filter\(array_foreach\(coalesce\(from_json\(&quot;symbol_orientations&quot;\)/', $ps) === 1 && preg_match('/<placement [^>]*offsetType="0"/', $ps) === 1);
+	check("$what: points label = first three dips from symbol_orientations + count of the rest, placed from the point", strpos($ps, "with_variable('dips'") !== false && strpos($ps, 'array_slice(@dips, 0, 2)') !== false && strpos($ps, "' (+'") !== false && preg_match('/<placement [^>]*offsetType="0"/', $ps) === 1);
 	$noRo = array(); foreach ($wantLayers as $l) if (!isset($styles[$l]) || strpos($styles[$l], '<field name="strabo_id" editable="0"/>') === false) $noRo[] = $l;
 	check("$what: strabo_id read-only in every layer style", !$noRo, implode(',', $noRo));
 }

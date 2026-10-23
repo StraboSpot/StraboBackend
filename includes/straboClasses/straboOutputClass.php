@@ -26587,10 +26587,11 @@ QML;
 		$renderer->appendChild($doc->createElement('sizescale'));
 		$old->parentNode->replaceChild($renderer, $old);
 
-		// One label per spot: the dip (or plunge) of each orientation, in order; orientations without
-		// one (tabular zones) are left out, as before
+		// One label per spot: the first three dips (or plunges) in order, then how many more ("82, 83, 79 (+4)",
+		// Jason 10-23); orientations without one (tabular zones) are left out, as before
+		$dips = "array_filter(array_foreach(coalesce(from_json(\"symbol_orientations\"), array()), coalesce(map_get(@element, 'po_dip'), map_get(@element, 'lo_plunge'))), @element IS NOT NULL)";
 		foreach($xp->query('/qgis/labeling/settings/text-style') as $ts){
-			$ts->setAttribute('fieldName', "array_to_string(array_filter(array_foreach(coalesce(from_json(\"symbol_orientations\"), array()), coalesce(map_get(@element, 'po_dip'), map_get(@element, 'lo_plunge'))), @element IS NOT NULL), ', ')");
+			$ts->setAttribute('fieldName', "with_variable('dips', $dips, array_to_string(array_slice(@dips, 0, 2), ', ') || if(array_length(@dips) > 3, ' (+' || to_string(array_length(@dips) - 3) || ')', ''))");
 		}
 		// Placed around the point, 4 mm out: the cartographic placement measures from the symbol's
 		// outline, which a GeometryGenerator symbol does not give it (no label is placed at all)
