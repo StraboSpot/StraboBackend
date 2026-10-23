@@ -13,6 +13,11 @@ Header set Cache-Control "no-cache"
 RewriteEngine on
 # Old copies of the site code (prod: bkup -> /StraboData/bigDriveData/bkup/): never served or run
 RewriteRule ^bkup(/|$) - [F,L]
+# Upload work folders are numbered by a sequence: uploaded shapefile / GeoPackage / GeoTIFF files
+# must not be downloadable by others. Only the StraboImages.zip downloads are fetched from ziptemp.
+RewriteCond %{REQUEST_URI} !\.zip$ [NC]
+RewriteRule ^ziptemp/ - [F,L]
+RewriteRule ^ogrtemp(/|$) - [F,L]
 # Export Builder job data (exportjobs_data/, gitignored): never served; exportjobs/download.php streams results
 RewriteRule ^exportjobs_data(/|$) - [F,L]
 # StraboMicro sync (microsync): partial uploads and content-addressed blobs are served only by the
