@@ -67,6 +67,20 @@ document.addEventListener('DOMContentLoaded', function() {
 			columns.splice(firstOrient, 0, { kind: 'system', key: 'orientation_type', header: 'orientation_type',
 				label: cfg.systemMeta.orientation_type.label, section: 'system', hint: cfg.systemMeta.orientation_type.hint });
 		}
+		// the layer label rides along with any tephra column (the server
+		// adds it too): it is how an update finds each layer again
+		if (!has('field:tephra.label')) {
+			let firstTephra = -1;
+			for (let i = 0; i < columns.length; i++) {
+				if (columns[i].kind === 'field' && columns[i].group === 'tephra') { firstTephra = i; break; }
+			}
+			const tg = cfg.catalog.filter(function(g) { return g.key === 'tephra'; })[0];
+			const lf = tg ? tg.fields.filter(function(f) { return f.name === 'label'; })[0] : null;
+			if (firstTephra >= 0 && lf) {
+				columns.splice(firstTephra, 0, { kind: 'field', group: 'tephra', name: 'label', header: lf.header,
+					label: lf.label, section: 'tephra', hint: lf.hint });
+			}
+		}
 	}
 
 	function buildSpec() {

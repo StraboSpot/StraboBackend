@@ -89,6 +89,7 @@
 .tw-chip-trace          { background: #ffe0a3; color: #7f6000; }
 .tw-chip-other_features { background: #d9c2e9; color: #4a235a; }
 .tw-chip-sample         { background: #b7deda; color: #145a54; }
+.tw-chip-tephra         { background: #e6d3c3; color: #5b3a29; }
 .tw-chip-custom         { background: #ededed; color: #555555; }
 .tw-col.tw-sec-system         { border-left-color: #cfcfcf; }
 .tw-col.tw-sec-spot           { border-left-color: #bdd7ee; }
@@ -97,6 +98,7 @@
 .tw-col.tw-sec-trace          { border-left-color: #ffe0a3; }
 .tw-col.tw-sec-other_features { border-left-color: #d9c2e9; }
 .tw-col.tw-sec-sample         { border-left-color: #b7deda; }
+.tw-col.tw-sec-tephra         { border-left-color: #e6d3c3; }
 .tw-col.tw-sec-custom         { border-left-color: #ededed; }
 
 /* catalog */
@@ -132,6 +134,7 @@
 .tw-preview .tw-sec-trace          { background: #ffe0a3; color: #7f6000; }
 .tw-preview .tw-sec-other_features { background: #d9c2e9; color: #4a235a; }
 .tw-preview .tw-sec-sample         { background: #b7deda; color: #145a54; }
+.tw-preview .tw-sec-tephra         { background: #e6d3c3; color: #5b3a29; }
 .tw-preview .tw-sec-custom         { background: #ededed; color: #555555; }
 
 /* phones: arrows do the reordering, catalog scrolls with the page */

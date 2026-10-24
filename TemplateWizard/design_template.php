@@ -58,6 +58,8 @@ if ($spec === null) {
         'trace'          => array(),   // first 5 from the form
         'other_features' => array('label', 'name', 'type', 'description'),
         'sample'         => array('sample_id_name', 'label', 'sample_type', 'material_type', 'main_sampling_purpose', 'sample_description'),
+        'tephra'         => array('layer_order', 'label', 'layer_type', 'layer_color', 'thickness_units', 'thickness_typical',
+                                  'grainsize_bottom', 'grainsize_top', 'layer_description'),
     );
     $cols = array(
         array('kind' => 'system', 'key' => 'strabo_internal_id'),

@@ -175,6 +175,20 @@ $geoUnitFields = array_values(tw_survey_fields(tw_load_json("$base/forms/geologi
 $traceFields   = array_values(tw_survey_fields(tw_load_json("$base/forms/trace.json")));
 $sampleFields  = array_values(tw_survey_fields(tw_load_json("$base/forms/sample.json")));
 
+// Tephra layers: the two app forms (basic, additional) form one element.
+// layer_order is derived, not stored: the element's position in the spot's
+// tephra list, which the app reorders by drag (1 = first in the list).
+$tephraFields = array(
+	array('name' => 'layer_order', 'label' => 'Layer Order', 'type' => 'integer', 'derived' => true,
+		'constraint' => array('min' => 1),
+		'hint' => "Position in the spot's layer list (1 = first); sets the order on import"),
+);
+foreach (array('forms/tephra-basic.json', 'forms/tephra-additional.json') as $file) {
+	foreach (tw_survey_fields(tw_load_json("$base/$file")) as $field) {
+		$tephraFields[] = $field;
+	}
+}
+
 $otherFeatureFields = array(
 	array('name' => 'label', 'label' => 'Feature Label', 'type' => 'text'),
 	array('name' => 'name', 'label' => 'Feature Name', 'type' => 'text'),
@@ -228,6 +242,12 @@ $catalog = array(
 			'multi'  => true,
 			'target' => 'samples',
 			'fields' => $sampleFields,
+		),
+		'tephra' => array(
+			'label'  => 'Tephra',
+			'multi'  => true,
+			'target' => 'tephra',
+			'fields' => $tephraFields,
 		),
 	),
 );

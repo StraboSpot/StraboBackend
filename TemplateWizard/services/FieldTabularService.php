@@ -24,6 +24,11 @@
  *                  groups are left untouched (round-trip == all-noop).
  *                  Samples merge by sample_id_name to preserve uncovered
  *                  element fields + ids (spine identity).
+ *                - Tephra layers (Matt Loewen, AVO, 2026-10-24): one row per
+ *                  layer, list order = the app's layer order. Layers merge by
+ *                  label (always in the template, like orientation_type);
+ *                  layer_order is derived (position, 1 = first), never stored,
+ *                  and on import sorts the layers when the column is present.
  *                - Geometry: creates are Points from lat/lng; every spot
  *                  exports (non-points show centroid + locked geometry_type);
  *                  lat/lng edits on non-point / pixel-basemap spots hard-error.
@@ -129,6 +134,14 @@ class FieldTabularService
     );
 
     /**
+     * Groups whose fields come from several app forms: each field takes its
+     * list from the first form in the set that knows it.
+     */
+    protected static $VOCAB_FORM_SETS = array(
+        'tephra' => array('tephra.basic', 'tephra.additional'),
+    );
+
+    /**
      * Field choice translation Phase 6 (docs/edine_bug/TRANSLATION_SURFACE_AUDIT.md
      * §6): the field list, types, constraints and hints stay as built from
      * catalog.json; the choice lists come from the synced app form map
@@ -144,6 +157,20 @@ class FieldTabularService
     {
         require_once __DIR__ . '/../../includes/fieldvocab/FieldVocab.php';
         foreach ($cat['groups'] as $g => &$group) {
+            if (isset(self::$VOCAB_FORM_SETS[$g])) {
+                foreach ($group['fields'] as &$f) {
+                    if (!isset($f['vocab'])) { continue; }
+                    $list = null;
+                    foreach (self::$VOCAB_FORM_SETS[$g] as $fk) {
+                        $list = self::mapVocab($fk, $f['name']);
+                        if ($list !== null) { break; }
+                    }
+                    $f['vocab'] = ($list !== null) ? $list : self::trimVocab($f['vocab']);
+                    $f['labels_safe'] = self::labelsSafe($f['vocab']);
+                }
+                unset($f);
+                continue;
+            }
             if (!isset(self::$VOCAB_FORMS[$g])) { continue; }
             $forms = self::$VOCAB_FORMS[$g];
             foreach ($group['fields'] as &$f) {
@@ -319,6 +346,7 @@ class FieldTabularService
             'trace'          => array('label' => $label('trace', 'Trace'),              'fill' => 'FFFFE0A3', 'font' => 'FF7F6000'),
             'other_features' => array('label' => $label('other_features', 'Other Features'), 'fill' => 'FFD9C2E9', 'font' => 'FF4A235A'),
             'sample'         => array('label' => $label('sample', 'Samples'),           'fill' => 'FFB7DEDA', 'font' => 'FF145A54'),
+            'tephra'         => array('label' => $label('tephra', 'Tephra'),            'fill' => 'FFE6D3C3', 'font' => 'FF5B3A29'),
             'custom'         => array('label' => 'Custom',                               'fill' => 'FFEDEDED', 'font' => 'FF555555'),
         );
     }
@@ -387,7 +415,7 @@ class FieldTabularService
     {
         if (self::$headerIndex !== null) { return self::$headerIndex; }
         $cat = self::catalog();
-        $priority = array('spot', 'orientation', 'geologic_unit', 'trace', 'other_features', 'sample');
+        $priority = array('spot', 'orientation', 'geologic_unit', 'trace', 'other_features', 'sample', 'tephra');
         $claims = array();  // bare name => first-priority group
         foreach ($priority as $g) {
             if (!isset($cat['groups'][$g])) { continue; }
@@ -493,6 +521,7 @@ class FieldTabularService
         $seen = array();
         $out  = array();
         $hasOrient = false; $hasOType = false;
+        $hasTephra = false; $hasTephraLabel = false;
         foreach ($spec['columns'] as $col) {
             if (!is_array($col) || !isset($col['kind'])) {
                 return array('ok' => false, 'message' => 'Malformed column entry.');
@@ -510,6 +539,10 @@ class FieldTabularService
                     return array('ok' => false, 'message' => "Unknown catalog field '{$col['group']}.{$col['name']}'.");
                 }
                 if ($col['group'] === 'orientation') { $hasOrient = true; }
+                if ($col['group'] === 'tephra') {
+                    $hasTephra = true;
+                    if ($col['name'] === 'label') { $hasTephraLabel = true; }
+                }
                 $sig = 'field:' . $col['group'] . '.' . $col['name'];
                 $entry = array('kind' => 'field', 'group' => $col['group'], 'name' => $col['name']);
                 if (isset($col['header']) && trim((string)$col['header']) !== '') {
@@ -552,6 +585,17 @@ class FieldTabularService
             array_splice($out, $insertAt, 0, array(
                 array('kind' => 'system', 'key' => 'orientation_type'),
             ));
+        }
+        if ($hasTephra && !$hasTephraLabel) {
+            // The layer label is how an update finds each layer again (fields
+            // outside the template survive), so it rides along with any
+            // tephra column, placed before the first one.
+            foreach ($out as $i => $c) {
+                if ($c['kind'] === 'field' && $c['group'] === 'tephra') {
+                    array_splice($out, $i, 0, array(array('kind' => 'field', 'group' => 'tephra', 'name' => 'label')));
+                    break;
+                }
+            }
         }
         return array('ok' => true, 'spec' => array(
             'spec_version' => self::SPEC_VERSION,
@@ -1259,7 +1303,7 @@ class FieldTabularService
 
         $planRows = array();
         $counts = array('create' => 0, 'update' => 0, 'noop' => 0,
-                        'orientations' => 0, 'samples' => 0, 'other_features' => 0);
+                        'orientations' => 0, 'samples' => 0, 'other_features' => 0, 'tephra' => 0);
 
         foreach ($order as $key) {
             $g = $groups[$key];
@@ -1308,6 +1352,7 @@ class FieldTabularService
             $counts['orientations']   += count($res['orientations']);
             $counts['samples']        += count($res['samples']);
             $counts['other_features'] += count($res['other_features']);
+            $counts['tephra']         += count($res['tephra']);
 
             if (!$isUpdate) {
                 if (!array_key_exists('name', $res['spot_set']) || $res['spot_set']['name'] === null) {
@@ -1325,7 +1370,8 @@ class FieldTabularService
                     'name' => $res['spot_set']['name'],
                     'set' => $res['spot_set'], 'geo_unit' => $res['geo_unit'], 'trace' => $res['trace'],
                     'orientations' => $res['orientations'], 'samples' => $res['samples'],
-                    'other_features' => $res['other_features'], 'custom' => $res['custom'],
+                    'other_features' => $res['other_features'], 'tephra' => $res['tephra'],
+                    'custom' => $res['custom'],
                     'lat' => $res['lat'], 'lng' => $res['lng'], 'wkt' => $res['wkt'],
                 );
                 $counts['create']++;
@@ -1506,14 +1552,16 @@ class FieldTabularService
         }
 
         // ---- instances ----
-        $orientations = array(); $samples = array(); $others = array();
-        $orientCols = array(); $sampleCols = array(); $otherCols = array();
+        $orientations = array(); $samples = array(); $others = array(); $tephras = array();
+        $orientCols = array(); $sampleCols = array(); $otherCols = array(); $tephraCols = array();
         foreach ($fieldsPresent as $gf => $_) {
             list($grp, ) = explode('.', $gf, 2);
             if ($grp === 'orientation')      { $orientCols[] = $gf; }
             elseif ($grp === 'sample')       { $sampleCols[] = $gf; }
             elseif ($grp === 'other_features') { $otherCols[] = $gf; }
+            elseif ($grp === 'tephra')       { $tephraCols[] = $gf; }
         }
+        $tephraOrders = array();   // parallel to $tephras: layer_order int | null
 
         $lastPrimary = null;
         foreach ($g['rows'] as $rec) {
@@ -1603,6 +1651,70 @@ class FieldTabularService
             if (!empty($fPayload)) {
                 $others[] = $fPayload;
             }
+
+            // tephra layer payload? (layer_order alone still makes a layer:
+            // an export writes it on every layer row, even an empty layer)
+            $tPayload = array();
+            foreach ($tephraCols as $gf) {
+                if (isset($rec['values'][$gf]) && $rec['values'][$gf] !== null) {
+                    $tPayload[substr($gf, strlen('tephra.'))] = $rec['values'][$gf];
+                }
+            }
+            if (!empty($tPayload)) {
+                $order = null;
+                if (isset($tPayload['layer_order'])) {
+                    $raw = $tPayload['layer_order'];
+                    unset($tPayload['layer_order']);
+                    $num = $this->parseNumeric($raw);
+                    if ($num === null || $num < 1 || floor($num) != $num) {
+                        $hardErrors[] = array('row' => $rec['n'], 'column' => 'tephra.layer_order', 'code' => 'bad_layer_order',
+                                              'message' => "Layer Order must be a whole number of 1 or more (got '$raw').");
+                        $bad = true;
+                    } else {
+                        $order = (int)$num;
+                    }
+                }
+                $el = array();
+                foreach ($tPayload as $name => $raw) {
+                    $def = self::fieldDef('tephra', $name);
+                    $val = $this->typeAndVocab($raw, 'tephra', $name, $def, null, $isUpdate, $cur,
+                                               $vocabRes, $softVocab, $hardErrors, $rec['n'], $bad);
+                    if ($val === array()) { continue; }
+                    $el[$name] = $val;
+                }
+                foreach ($this->pendingCompanions as $pc) { $el[$pc['name']] = $pc['value']; }
+                $this->pendingCompanions = array();
+                $tephras[] = $el;
+                $tephraOrders[] = array('order' => $order, 'n' => $rec['n']);
+            }
+        }
+
+        // ---- tephra layer order: all or none, no repeats; sorts the list ----
+        $spotLabel = ($g['name'] !== null) ? $g['name'] : $g['id'];
+        $numbered = 0; $byOrder = array();
+        foreach ($tephraOrders as $to) {
+            if ($to['order'] === null) { continue; }
+            $numbered++;
+            if (isset($byOrder[$to['order']])) {
+                $hardErrors[] = array('row' => $to['n'], 'column' => 'tephra.layer_order', 'code' => 'duplicate_layer_order',
+                                      'message' => "Spot '$spotLabel' has two layers with Layer Order {$to['order']} (rows {$byOrder[$to['order']]} and {$to['n']}).");
+                $bad = true;
+            }
+            $byOrder[$to['order']] = $to['n'];
+        }
+        if ($numbered > 0 && $numbered < count($tephraOrders)) {
+            $hardErrors[] = array('row' => $g['rows'][0]['n'], 'column' => 'tephra.layer_order', 'code' => 'partial_layer_order',
+                                  'message' => "Some layers of spot '$spotLabel' have a Layer Order and some do not. Number every layer of the spot, or leave the column blank for all of them to keep the row order.");
+            $bad = true;
+        }
+        if ($numbered > 0 && !$bad) {
+            $keys = array_keys($tephras);
+            usort($keys, function ($a, $b) use ($tephraOrders) {
+                return $tephraOrders[$a]['order'] - $tephraOrders[$b]['order'];
+            });
+            $sorted = array();
+            foreach ($keys as $k) { $sorted[] = $tephras[$k]; }
+            $tephras = $sorted;
         }
 
         // ---- custom columns: contradiction rule like spot fields ----
@@ -1639,6 +1751,7 @@ class FieldTabularService
             'orientations'   => $orientations,
             'samples'        => $samples,
             'other_features' => $others,
+            'tephra'         => $tephras,
             'custom'         => $custom,
             'lat'            => $lat,
             'lng'            => $lng,
@@ -1844,7 +1957,7 @@ class FieldTabularService
             return false;
         }
         $listKey = ($group === 'orientation') ? 'orientation_data'
-                 : (($group === 'sample') ? 'samples' : 'other_features');
+                 : (($group === 'sample') ? 'samples' : (($group === 'tephra') ? 'tephra' : 'other_features'));
         $list = $cur['groups'][$listKey];
         if (!is_array($list)) { return false; }
         foreach ($list as $el) {
@@ -1937,7 +2050,7 @@ class FieldTabularService
     protected function nodeToCurrent($props)
     {
         $groups = array();
-        foreach (array('orientation_data', 'samples', 'other_features', 'geologic_unit', 'trace', 'custom_fields') as $k) {
+        foreach (array('orientation_data', 'samples', 'other_features', 'tephra', 'geologic_unit', 'trace', 'custom_fields') as $k) {
             $rawv = isset($props['json_' . $k]) ? $props['json_' . $k] : (isset($props[$k]) ? $props[$k] : null);
             $decoded = null;
             if ($rawv !== null && $rawv !== '') {
@@ -1990,7 +2103,7 @@ class FieldTabularService
      * {changed: bool, overlay: {...}} — overlay is what commit applies:
      *   set:      spot scalar field => value|null(clear)
      *   geo_unit / trace: field => value|null  (merged into the object)
-     *   groups:   orientation_data|samples|other_features => full new list
+     *   groups:   orientation_data|samples|other_features|tephra => full new list
      *             (only present when the group is being replaced/cleared)
      *   custom:   header => value|null
      *   geom:     {lat, lng} when the point moved
@@ -2031,12 +2144,17 @@ class FieldTabularService
         }
 
         // ---- multi-instance groups: projection compare ----
-        $orientFields = $sampleFields = $otherFields = array();
+        $orientFields = $sampleFields = $otherFields = $tephraFields = array();
+        $tephraPresent = false;
         foreach ($fieldsPresent as $gf => $_) {
             list($grp, $name) = explode('.', $gf, 2);
             if ($grp === 'orientation') { $orientFields[] = $name; }
             elseif ($grp === 'sample') { $sampleFields[] = $name; }
             elseif ($grp === 'other_features') { $otherFields[] = $name; }
+            elseif ($grp === 'tephra') {
+                $tephraPresent = true;
+                if ($name !== 'layer_order') { $tephraFields[] = $name; }   // derived, not stored
+            }
         }
 
         if (!empty($orientFields)) {
@@ -2074,6 +2192,21 @@ class FieldTabularService
             $curProj  = $this->projectElements($curList, $otherFields, 'other_features');
             if ($fileProj !== $curProj) {
                 $overlay['groups']['other_features'] = $res['other_features'];
+                $changed = true;
+            }
+        }
+
+        // Tephra: the projection keeps list order, so a reorder is a change.
+        if ($tephraPresent) {
+            $curList = is_array($cur['groups']['tephra']) ? $cur['groups']['tephra'] : array();
+            $fileProj = $this->projectElements($res['tephra'], $tephraFields, 'tephra');
+            $curProj  = $this->projectElements($curList, $tephraFields, 'tephra');
+            if ($fileProj !== $curProj) {
+                if (empty($res['tephra']) && !empty($curList)) {
+                    $warnings[] = array('row' => $n0, 'column' => 'tephra',
+                                        'message' => 'Removes all ' . count($curList) . ' tephra layers from this spot.');
+                }
+                $overlay['groups']['tephra'] = $this->mergeTephra($res['tephra'], $curList, $tephraFields);
                 $changed = true;
             }
         }
@@ -2233,6 +2366,50 @@ class FieldTabularService
             }
         }
         return $out;
+    }
+
+    /**
+     * Replacement tephra list in the file's order. A file layer whose label
+     * matches a current layer (case-insensitive, first unused match) keeps
+     * that layer's id and its fields outside the template; covered fields
+     * left blank are cleared. Unmatched layers are new and get a UUID, the
+     * app's id style for tephra.
+     */
+    protected function mergeTephra(array $fileLayers, array $curList, array $coveredFields)
+    {
+        $curByLabel = array();
+        foreach ($curList as $el) {
+            $el = (array)$el;
+            if (isset($el['label']) && $el['label'] !== '') {
+                $curByLabel[mb_strtolower((string)$el['label'])][] = $el;
+            }
+        }
+        $out = array();
+        foreach ($fileLayers as $fl) {
+            $key = isset($fl['label']) ? mb_strtolower((string)$fl['label']) : null;
+            if ($key !== null && !empty($curByLabel[$key])) {
+                $base = array_shift($curByLabel[$key]);
+                foreach ($coveredFields as $f) {
+                    if (array_key_exists($f, $fl)) { $base[$f] = $fl[$f]; }
+                    else { unset($base[$f]); }
+                }
+                if (!isset($base['id']) || $base['id'] === '') { $base['id'] = $this->mintUuid(); }
+                $out[] = $base;
+            } else {
+                $fl['id'] = $this->mintUuid();
+                $out[] = $fl;
+            }
+        }
+        return $out;
+    }
+
+    /** Random (v4) UUID, as the app gives tephra layers. */
+    protected function mintUuid()
+    {
+        $b = random_bytes(16);
+        $b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
+        $b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
+        return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
     }
 
     /** Centroid coords of any WKT geometry (a Point is its own centroid). */
@@ -2795,6 +2972,9 @@ class FieldTabularService
         if (!empty($row['other_features'])) {
             $p['other_features'] = $this->mintInstanceIds($row['other_features']);
         }
+        if (!empty($row['tephra'])) {
+            $p['tephra'] = $this->mergeTephra($row['tephra'], array(), array());
+        }
         $custom = array();
         foreach ($row['custom'] as $k => $v) {
             if ($v !== null) { $custom[$k] = $v; }
@@ -2948,8 +3128,9 @@ class FieldTabularService
 
         // Instance kinds the template exports: a spot gets payload rows only
         // for these, so a template with no sample columns does not write a
-        // near-empty row per sample (same for orientations, other features).
-        $kindHasCols = array('orientation' => false, 'sample' => false, 'other_features' => false);
+        // near-empty row per sample (same for orientations, other features,
+        // tephra layers).
+        $kindHasCols = array('orientation' => false, 'sample' => false, 'other_features' => false, 'tephra' => false);
         foreach ($defs as $d) {
             if ($d['kind'] === 'system' && ($d['key'] === 'orientation_type' || $d['key'] === 'orientation_role')) {
                 $kindHasCols['orientation'] = true;
@@ -3036,6 +3217,10 @@ class FieldTabularService
             foreach ($otherList as $el) {
                 $payloads[] = array('kind' => 'other_features', 'el' => $el);
             }
+            $tephraList = $kindHasCols['tephra'] && isset($props['tephra']) && is_array($props['tephra']) ? array_values($props['tephra']) : array();
+            foreach ($tephraList as $i => $el) {
+                $payloads[] = array('kind' => 'tephra', 'el' => $el, 'order' => $i + 1);
+            }
 
             $emit = max(1, count($payloads));
             for ($i = 0; $i < $emit; $i++) {
@@ -3088,7 +3273,12 @@ class FieldTabularService
                         if ($d['kind'] !== 'field') { continue; }
                         if (($pl['kind'] === 'orientation' && $d['group'] === 'orientation')
                             || ($pl['kind'] === 'sample' && $d['group'] === 'sample')
-                            || ($pl['kind'] === 'other_features' && $d['group'] === 'other_features')) {
+                            || ($pl['kind'] === 'other_features' && $d['group'] === 'other_features')
+                            || ($pl['kind'] === 'tephra' && $d['group'] === 'tephra')) {
+                            if ($pl['kind'] === 'tephra' && $d['name'] === 'layer_order') {
+                                $row[$d['header']] = (string)$pl['order'];
+                                continue;
+                            }
                             $row[$d['header']] = isset($el[$d['name']]) ? $this->exportCell($el[$d['name']], $d['def'], $elOt) : '';
                         }
                     }

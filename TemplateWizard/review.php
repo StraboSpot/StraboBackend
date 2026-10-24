@@ -341,6 +341,9 @@ include("includes/mheader.php");
 									<span class="tw-chip tw-chip-noop"><?php echo (int)$plan['counts']['noop']; ?> unchanged</span>
 									<span class="tw-chip"><?php echo (int)$plan['counts']['orientations']; ?> orientation<?php echo $plan['counts']['orientations'] === 1 ? '' : 's'; ?></span>
 									<span class="tw-chip"><?php echo (int)$plan['counts']['samples']; ?> sample<?php echo $plan['counts']['samples'] === 1 ? '' : 's'; ?></span>
+									<?php $tl = isset($plan['counts']['tephra']) ? (int)$plan['counts']['tephra'] : 0; if ($tl > 0): ?>
+									<span class="tw-chip"><?php echo $tl; ?> tephra layer<?php echo $tl === 1 ? '' : 's'; ?></span>
+									<?php endif; ?>
 								</p>
 								<?php if (!empty($plan['target']['as_new'])): ?>
 								<p class="tw-hint"><strong>Import as new spots</strong> is on: every spot in this file will be created in the target dataset, and the ids in the file are used only to group rows. Nothing existing is updated. The new spots contain only the columns in this file: images, tags and any field the file does not carry are not copied.</p>
