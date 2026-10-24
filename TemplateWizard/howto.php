@@ -30,6 +30,8 @@ $twsvc->setUserpkey($userpkey);
 //  6 orientation_type    7 orientation_role
 //  8 feature_type  9 strike  10 dip  11 trend  12 plunge  13 quality
 // 14 sample_id_name  15 main_sampling_purpose  16 sample_description
+// 17 layer_order  18 tephra_label  19 layer_type  20 layer_color
+// 21 thickness_units  22 thickness_typical
 // ---------------------------------------------------------------------------
 function tw_howto_spec($twsvc)
 {
@@ -51,12 +53,18 @@ function tw_howto_spec($twsvc)
         array('kind' => 'field', 'group' => 'sample', 'name' => 'sample_id_name'),
         array('kind' => 'field', 'group' => 'sample', 'name' => 'main_sampling_purpose'),
         array('kind' => 'field', 'group' => 'sample', 'name' => 'sample_description'),
+        array('kind' => 'field', 'group' => 'tephra', 'name' => 'layer_order'),
+        array('kind' => 'field', 'group' => 'tephra', 'name' => 'label'),
+        array('kind' => 'field', 'group' => 'tephra', 'name' => 'layer_type'),
+        array('kind' => 'field', 'group' => 'tephra', 'name' => 'layer_color'),
+        array('kind' => 'field', 'group' => 'tephra', 'name' => 'thickness_units'),
+        array('kind' => 'field', 'group' => 'tephra', 'name' => 'thickness_typical'),
     )));
     return $v['spec'];
 }
 
 /**
- * The permutation blocks. Every row is a full 17-cell line of the example
+ * The permutation blocks. Every row is a full 23-cell line of the example
  * file; 'show' lists the column indices the page table displays for that
  * block (the downloadable workbook always carries all columns).
  */
@@ -70,7 +78,7 @@ function tw_howto_blocks()
                        . '(Ids only come from files the wizard exported; never type one by hand.)',
             'show'    => array(0, 1, 2, 3, 4, 5),
             'rows'    => array(
-                array('', 'Outcrop 1', '38.9581', '-95.2478', '2026-07-01', 'Roadcut on K-10; massive limestone.', '', '', '', '', '', '', '', '', '', '', ''),
+                array('', 'Outcrop 1', '38.9581', '-95.2478', '2026-07-01', 'Roadcut on K-10; massive limestone.', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', ''),
             ),
         ),
         array(
@@ -80,7 +88,7 @@ function tw_howto_blocks()
                        . '<code>orientation_type</code> (<code>planar</code> / <code>linear</code> / <code>tabular_zone</code>).',
             'show'    => array(1, 6, 8, 9, 10, 13),
             'rows'    => array(
-                array('', 'Outcrop 2', '38.9612', '-95.2431', '2026-07-01', 'Bedding attitude on the quarry wall.', 'planar', '', 'bedding', '245', '32', '', '', '5', '', '', ''),
+                array('', 'Outcrop 2', '38.9612', '-95.2431', '2026-07-01', 'Bedding attitude on the quarry wall.', 'planar', '', 'bedding', '245', '32', '', '', '5', '', '', '', '', '', '', '', '', ''),
             ),
         ),
         array(
@@ -94,9 +102,9 @@ function tw_howto_blocks()
                        . '(&ldquo;joint&rdquo;) or the stored value &mdash; either works.',
             'show'    => array(1, 2, 3, 6, 8, 9, 10, 11, 12, 13),
             'rows'    => array(
-                array('', 'Outcrop 3', '38.9640', '-95.2389', '2026-07-02', 'Fractured sandstone bench.', 'planar', '', 'bedding', '118', '24', '', '', '4', '', '', ''),
-                array('', 'Outcrop 3', '', '', '', '', 'planar', '', 'joint', '200', '85', '', '', '3', '', '', ''),
-                array('', 'Outcrop 3', '', '', '', '', 'linear', '', 'intersection', '', '', '37', '12', '4', '', '', ''),
+                array('', 'Outcrop 3', '38.9640', '-95.2389', '2026-07-02', 'Fractured sandstone bench.', 'planar', '', 'bedding', '118', '24', '', '', '4', '', '', '', '', '', '', '', '', ''),
+                array('', 'Outcrop 3', '', '', '', '', 'planar', '', 'joint', '200', '85', '', '', '3', '', '', '', '', '', '', '', '', ''),
+                array('', 'Outcrop 3', '', '', '', '', 'linear', '', 'intersection', '', '', '37', '12', '4', '', '', '', '', '', '', '', '', ''),
             ),
         ),
         array(
@@ -108,8 +116,8 @@ function tw_howto_blocks()
                        . 'order matters, so keep each associated row directly under its plane. Rows without a role count as primary.',
             'show'    => array(1, 6, 7, 8, 9, 10, 11, 12),
             'rows'    => array(
-                array('', 'Outcrop 4', '38.9688', '-95.2340', '2026-07-02', 'Gneiss with strong stretching fabric.', 'planar', 'primary', 'foliation', '152', '68', '', '', '5', '', '', ''),
-                array('', 'Outcrop 4', '', '', '', '', 'linear', 'associated', 'stretching', '', '', '160', '45', '5', '', '', ''),
+                array('', 'Outcrop 4', '38.9688', '-95.2340', '2026-07-02', 'Gneiss with strong stretching fabric.', 'planar', 'primary', 'foliation', '152', '68', '', '', '5', '', '', '', '', '', '', '', '', ''),
+                array('', 'Outcrop 4', '', '', '', '', 'linear', 'associated', 'stretching', '', '', '160', '45', '5', '', '', '', '', '', '', '', '', ''),
             ),
         ),
         array(
@@ -119,8 +127,24 @@ function tw_howto_blocks()
                        . 'The same one-row-per-instance rule applies as for orientations.',
             'show'    => array(1, 6, 8, 9, 10, 14, 15, 16),
             'rows'    => array(
-                array('', 'Outcrop 5', '38.9715', '-95.2302', '2026-07-03', 'Limestone ledge with thin ash bed.', 'planar', '', 'bedding', '300', '15', '', '', '4', 'KU-26-001', 'petrology', 'Fresh limestone hand sample.'),
-                array('', 'Outcrop 5', '', '', '', '', '', '', '', '', '', '', '', '', 'KU-26-002', 'geochronology', 'Ash bed; zircon separation.'),
+                array('', 'Outcrop 5', '38.9715', '-95.2302', '2026-07-03', 'Limestone ledge with thin ash bed.', 'planar', '', 'bedding', '300', '15', '', '', '4', 'KU-26-001', 'petrology', 'Fresh limestone hand sample.', '', '', '', '', '', ''),
+                array('', 'Outcrop 5', '', '', '', '', '', '', '', '', '', '', '', '', 'KU-26-002', 'geochronology', 'Ash bed; zircon separation.', '', '', '', '', '', ''),
+            ),
+        ),
+        array(
+            'title'   => '6. Tephra layers: one row per layer, in order',
+            'explain' => 'Tephra layers work like samples: any row with tephra cells adds one layer to the spot, so a '
+                       . 'described section is one spot with a row per layer. <code>layer_order</code> sets the sequence '
+                       . '(1 = first in the spot&rsquo;s layer list, the order the app shows and lets you drag), so sorting '
+                       . 'the sheet cannot scramble a section. Number every layer of a spot, or leave the column blank for all '
+                       . 'of them and the row order is used. Exports fill it in for you. The layer label '
+                       . '(<code>tephra_label</code>) comes with any tephra column: when you upload an edited export, it is how '
+                       . 'each row finds its layer again, so keep the labels unique within a spot.',
+            'show'    => array(1, 17, 18, 19, 20, 21, 22),
+            'rows'    => array(
+                array('', 'Ash Site 6', '38.9742', '-95.2265', '2026-07-03', 'Stream cut through a tephra sequence.', '', '', '', '', '', '', '', '', '', '', '', '1', 'Ash Site 6-1', 'pyroclastic flow', 'pink gray', 'cm', '40'),
+                array('', 'Ash Site 6', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '2', 'Ash Site 6-2', 'soil', 'dark brown', 'cm', '15'),
+                array('', 'Ash Site 6', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '', '3', 'Ash Site 6-3', 'tephra fall', 'white', 'cm', '2.5'),
             ),
         ),
     );
@@ -261,6 +285,7 @@ include("includes/mheader.php");
 									<li><strong>New spots</strong> need a name, latitude and longitude, and a blank id. <strong>Updates</strong> (files you exported, then edited) carry the spot&rsquo;s id on every row &mdash; leave that column alone and the wizard matches rows to existing spots.</li>
 									<li><strong>Copying spots into another project or dataset</strong> (a file exported from a different dataset, or from another account, say a student&rsquo;s): tick <em>Import as new spots</em> on the import screen. Every spot in the file is then created in the target as a new spot and the ids only group a spot&rsquo;s rows, so several students&rsquo; exports can even be pasted into one file. Leave it off and a file only imports back into the dataset it came from.</li>
 									<li><strong>Update versus copy.</strong> Uploading a file back into the dataset it came from <em>updates</em> those spots: the wizard reads each spot in full, changes only the columns in your file, and keeps everything else (orientations, samples, images, tags, fields your template does not include). Importing as new spots <em>copies</em>: each new spot holds only what the spreadsheet holds. A spot-only template makes bare spots; images and tags never travel in a spreadsheet at all. Export with the Basic layout, or a template that carries the sections you need, before copying.</li>
+									<li><strong>Tephra layers keep their order</strong> through <code>layer_order</code> (1, 2, 3&hellip; per spot): all of a spot&rsquo;s layers numbered or none, no number used twice. Changing the numbers in an exported file and uploading it back reorders the layers. Layers are matched by their label, so an edited export changes only the columns in your file and keeps every other layer field; a row with a label the spot does not have yet adds a new layer.</li>
 									<li><strong>Vocabulary cells</strong> show the words the StraboField app shows (<em>joint</em>, <em>5 - excellent</em>), and accept that label or the stored value, case-insensitive. Anything unrecognized isn&rsquo;t rejected outright: the review screen lets you map it, keep it as free text, or fix it in the file.</li>
 									<li><strong>Lines and polygons.</strong> Latitude and longitude are always the spot&rsquo;s centroid, so on their own they only ever create a Point. Exports of a dataset with line or polygon spots add <code>geometry_type</code> and <code>geometry_wkt</code> (the full shape, e.g. <code>POLYGON ((lng lat, lng lat, &hellip;))</code>); a new spot with a <code>geometry_wkt</code> cell takes that shape, and its coordinates are derived from it. An existing spot&rsquo;s shape cannot be edited from a spreadsheet: a changed <code>geometry_wkt</code> on an id row is reported at review and ignored, and a changed coordinate on a line or polygon spot is an error (a Point spot can still be moved by its coordinates). You can also type WKT into that column to create a line or polygon spot by hand.</li>
 									<li><strong>The id column is locked</strong> in Excel and LibreOffice. Some spreadsheet apps (Apple Numbers among them) ignore protection entirely &mdash; don&rsquo;t type in <code>strabo_internal_id</code> there. The wizard re-validates every id at review regardless, so a stray edit is caught before anything imports.</li>
@@ -268,9 +293,9 @@ include("includes/mheader.php");
 								</ul>
 
 								<p style="font-size: 0.9em;">The example file downloads with the same locked columns and dropdown
-									validation as any wizard template &mdash; you can even import it as-is into a scratch dataset to
-									watch the review screen group the rows: 5 new spots, 6 orientations (one carrying an associated
-									lineation), 2 samples.</p>
+									validation as any wizard template. You can even import it as-is into a scratch dataset to
+									watch the review screen group the rows: 6 new spots, 6 orientations (one carrying an associated
+									lineation), 2 samples, 3 tephra layers.</p>
 
 								<hr />
 
