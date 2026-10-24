@@ -309,18 +309,29 @@ function gpkgRoundTripHidden($fields){
 
 /*
 	After the upload of a StraboSpot export: update the original project, or load the file as new
-	data (today's flow). When the original cannot be updated, the page says why and only offers
-	the normal import (design 5).
+	data (today's flow) into the project chosen in $projectselect (a <select name="projectid">).
+	When the original cannot be updated, the page says why and only offers the normal import
+	(design 5).
 */
-function gpkgRoundTripChoicePage($target, $pickedprojectid, $pickedprojectname, $hidden){
+function gpkgRoundTripChoicePage($target, $projectselect, $hidden){
 	$pname = htmlspecialchars($target['projectname']);
 	?>
+	<script type="text/javascript">
+		function rtvalidate(){
+			var update = document.getElementById("rtupdate");
+			if((!update || !update.checked) && document.getElementById("projectid").value == ""){
+				alert("Choose the project to load the GeoPackage into.");
+				return false;
+			}
+			return true;
+		}
+	</script>
 	<div id="main" class="wrapper style1">
 		<div class="container">
 			<header class="major">
 				<h2>Load GeoPackage</h2>
 			</header>
-			<form method="POST">
+			<form method="POST" onsubmit="return rtvalidate();">
 			<?php echo gpkgRoundTripHidden($hidden); ?>
 			<?php if($target['ok']){ ?>
 				<p>This GeoPackage was exported from the StraboSpot project <b><?php echo $pname?></b>.</p>
@@ -329,21 +340,20 @@ function gpkgRoundTripChoicePage($target, $pickedprojectid, $pickedprojectname, 
 					<label for="rtupdate"><b>Update the original project "<?php echo $pname?>"</b> (recommended)<br>
 					Geometry changes only: spots you moved or reshaped get their new geometry, features you drew become new spots.
 					Names, notes and other attributes edited in the GeoPackage are not read.
-					<?php if((string)$pickedprojectid !== (string)$target['projectid']){ ?>
-						<br>The project picked on the first page (<?php echo htmlspecialchars($pickedprojectname)?>) is not used for this choice.
-					<?php } ?>
 					</label>
 				</div>
 				<div style="padding-bottom:20px;">
 					<input type="radio" id="rtnew" name="rtpath" value="new">
-					<label for="rtnew"><b>Load as new data</b> into <?php echo htmlspecialchars($pickedprojectname)?><br>
-					Every layer becomes a new dataset, as with any other GeoPackage.</label>
+					<label for="rtnew"><b>Load as new data</b><br>
+					Every layer becomes a new dataset, as with any other GeoPackage, in this project:</label>
+					<div style="padding-top:5px;" onclick="document.getElementById('rtnew').checked = true;"><?php echo $projectselect?></div>
 				</div>
 				<input class="primary" type="submit" name="rtsubmit" value="Continue">
 			<?php }else{ ?>
 				<p>This GeoPackage was exported from StraboSpot, but the original project cannot be updated:<br>
 				<span style="color:#e44c65;"><?php echo htmlspecialchars($target['reason'])?></span></p>
-				<p>You can load it as new data into <?php echo htmlspecialchars($pickedprojectname)?>.</p>
+				<p>You can load it as new data (every layer becomes a new dataset) into this project:</p>
+				<div style="padding-bottom:20px;"><?php echo $projectselect?></div>
 				<input type="hidden" name="rtpath" value="new">
 				<input class="primary" type="submit" name="rtsubmit" value="Load as new data">
 			<?php } ?>

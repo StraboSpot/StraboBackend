@@ -35,6 +35,29 @@ function geopackageStopPage($message){
 	exit();
 }
 
+// <select name="projectid"> of the user's projects, $selected preselected
+function geopackageProjectSelect($strabo, $selected){
+	$projectrows = $strabo->getMyProjects()["projects"] ?? array();
+	$html = "<select name=\"projectid\" id=\"projectid\"><option value=\"\">Select...</option>";
+	foreach($projectrows as $pr){
+		$html .= "<option value=\"".htmlspecialchars((string)$pr["id"], ENT_QUOTES)."\"".((string)$pr["id"] === (string)$selected ? " selected" : "").">".htmlspecialchars((string)$pr["name"])."</option>";
+	}
+	return $html."</select>";
+}
+
+// An upload loaded as new data without a project picked on the first page: ask for it, keep the upload
+function geopackageProjectPage($strabo, $randnum, $gpkgname, $message = ""){
+	include 'includes/mheader.php';
+	echo "<div id=\"main\" class=\"wrapper style1\"><div class=\"container\"><header class=\"major\"><h2>Load GeoPackage</h2></header>";
+	if($message !== "") echo "<div style=\"color:#e44c65;\">".htmlspecialchars($message)."</div><br>";
+	echo "<form method=\"POST\"><h3>Project to load ".htmlspecialchars($gpkgname)." into:</h3>".geopackageProjectSelect($strabo, "");
+	echo "<input type=\"hidden\" name=\"randnum\" value=\"".(int)$randnum."\"><input type=\"hidden\" name=\"gpkgname\" value=\"".htmlspecialchars($gpkgname, ENT_QUOTES)."\"><input type=\"hidden\" name=\"rtpath\" value=\"new\">";
+	echo "<br><input class=\"primary\" type=\"submit\" name=\"rtsubmit\" value=\"Continue\"></form>";
+	echo "<div style=\"padding-top:20px;\"><a href=\"load_geopackage\">Start again</a></div><div class=\"bottomSpacer\"></div></div></div>";
+	include 'includes/mfooter.php';
+	exit();
+}
+
 // The layer's features in WGS84 with safe column names: array(features, columns).
 function geopackageLayerFeatures($randnum, $gpkgpath, $layer, $layerinfo){
 	$options = geopackageReadOptions($layerinfo);
@@ -89,9 +112,8 @@ if(($_POST['submitfile'] ?? "") != ""){
 	$filename = $_FILES['gpkgfile']['name'] ?? "";
 	$extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 
-	if($projectid == ""){
-		$error.=$errordelim."Project must be selected.";$errordelim="<br>";
-	}elseif(($_FILES['gpkgfile']['error'] ?? 1) != 0){
+	// The project is only needed to load the file as new data: asked later when missing
+	if(($_FILES['gpkgfile']['error'] ?? 1) != 0){
 		$error.=$errordelim."File upload failed.";$errordelim="<br>";
 	}elseif($extension != "gpkg" && $extension != "zip"){
 		$error.=$errordelim."Wrong file type detected. File must be a GeoPackage (.gpkg) or a zip file holding one.";$errordelim="<br>";
@@ -134,10 +156,11 @@ if(($_POST['submitfile'] ?? "") != ""){
 		if($rtexport !== null){
 			$target = gpkgRoundTripTarget($neodb, $db, $userpkey, $rtexport);
 			include 'includes/mheader.php';
-			gpkgRoundTripChoicePage($target, $projectid, (string)$neodb->get_var("MATCH (p:Project {id: ".(int)$projectid."}) WHERE p.userpkey = ".(int)$userpkey." RETURN p.desc_project_name"), array('randnum' => $randnum, 'projectid' => $projectid, 'gpkgname' => $gpkgname));
+			gpkgRoundTripChoicePage($target, geopackageProjectSelect($strabo, $projectid), array('randnum' => $randnum, 'gpkgname' => $gpkgname));
 			include 'includes/mfooter.php';
 			exit();
 		}
+		if($projectid == "") geopackageProjectPage($strabo, $randnum, $gpkgname);
 		$startlayers = true;
 	}
 
@@ -153,10 +176,11 @@ if(($_POST['rtsubmit'] ?? "") != "" && $layers){
 		}
 		$result = gpkgRoundTripClassify($neodb, $db, $randnum, $gpkgpath, $layers, $target);
 		include 'includes/mheader.php';
-		gpkgRoundTripPreviewPage($target, $result, array('randnum' => $randnum, 'projectid' => $projectid, 'gpkgname' => $gpkgname));
+		gpkgRoundTripPreviewPage($target, $result, array('randnum' => $randnum, 'gpkgname' => $gpkgname) + ($projectid !== "" ? array('projectid' => $projectid) : array()));
 		include 'includes/mfooter.php';
 		exit();
 	}
+	if($projectid == "") geopackageProjectPage($strabo, $randnum, $gpkgname, ($_POST['rtpath'] ?? "") == "new" && isset($_POST['projectid']) ? "Project must be selected." : "");
 	$startlayers = true;
 }
 
@@ -381,11 +405,6 @@ if(empty($projectrows)){
 	function formvalidate(){
 		var errors='';
 
-		var e = document.getElementById("projectid");
-		var projectid = e.options[e.selectedIndex].value;
-
-		if(projectid=="" || projectid==null){errors=errors+'Project must be selected.\n';}
-
 		if(document.forms["uploadform"]["gpkgfile"].value=="" || document.forms["uploadform"]["gpkgfile"].value==null){errors=errors+'GeoPackage must be provided.\n';}
 
 		if(errors!="" && errors!=null){
@@ -418,16 +437,10 @@ if(empty($projectrows)){
 		<h3>Project:</h3>
 	</div>
 	<div class="col-12">
-		<select name="projectid" id="projectid">
-			<option value="">Select...
-			<?php
-			foreach($projectrows as $pr){
-			?>
-			<option value="<?php echo $pr["id"]?>"><?php echo $pr["name"]?>
-			<?php
-			}
-			?>
-		</select>
+		<?php echo geopackageProjectSelect($strabo, "")?>
+	</div>
+	<div class="col-12">
+		Not needed to update a project from a GeoPackage you downloaded from StraboSpot (you are asked after the upload).
 	</div>
 	<div class="col-12">
 		<h3>GeoPackage (.gpkg, or a .zip holding one):</h3>

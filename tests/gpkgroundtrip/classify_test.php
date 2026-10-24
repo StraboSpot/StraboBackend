@@ -269,6 +269,29 @@ try {
 
 	$html = post(array('submitfile' => 'Submit', 'projectid' => GF_PROJECT), $plain);
 	check('a GeoPackage without strabo_export: today\'s layer list directly', strpos($html, 'Select Layer(s)') !== false && strpos($html, 'rtpath') === false);
+
+	section('load_geopackage.php without a project on the first page');
+	$html = post(array('submitfile' => 'Submit'), $edited);
+	$rn = randnum_of($html);
+	check('export, no project: choice page, project picker under "load as new data", nothing preselected', $rn !== '' && strpos($html, 'value="update" checked') !== false
+		&& strpos($html, '<select name="projectid"') !== false && strpos($html, 'value="' . GF_PROJECT . '" selected') === false);
+	$html = post(array('rtsubmit' => 'Continue', 'rtpath' => 'update', 'randnum' => $rn, 'projectid' => '', 'gpkgname' => 'edited.gpkg'));
+	check('export, no project: update preview works', strpos($html, '2 updated,') !== false);
+	check('preview: "load as new data instead" carries no empty project', strpos($html, 'name="projectid"') === false);
+	$html = post(array('rtsubmit' => 'Continue', 'rtpath' => 'new', 'randnum' => $rn, 'projectid' => '', 'gpkgname' => 'edited.gpkg'));
+	check('export, "load as new data" without a project: asked for it, upload kept', strpos($html, 'Project must be selected.') !== false && randnum_of($html) === $rn && strpos($html, 'Select Layer(s)') === false);
+	$html = post(array('rtsubmit' => 'Continue', 'rtpath' => 'new', 'randnum' => $rn, 'projectid' => GF_PROJECT, 'gpkgname' => 'edited.gpkg'));
+	check('export, project chosen: today\'s layer list', strpos($html, 'Select Layer(s)') !== false);
+	$html = post(array('submitfile' => 'Submit', 'projectid' => GF_PROJECT), $edited);
+	check('export, project picked on the first page: preselected under "load as new data"', strpos($html, 'value="' . GF_PROJECT . '" selected') !== false);
+
+	$html = post(array('submitfile' => 'Submit'), $plain);
+	$rn = randnum_of($html);
+	check('plain GeoPackage, no project: project page (no error yet), upload kept', $rn !== '' && strpos($html, 'Project to load') !== false && strpos($html, 'Project must be selected') === false && strpos($html, 'Select Layer(s)') === false);
+	$html = post(array('rtsubmit' => 'Continue', 'rtpath' => 'new', 'randnum' => $rn, 'projectid' => GF_PROJECT, 'gpkgname' => 'plain.gpkg'));
+	check('plain GeoPackage, project chosen: today\'s layer list', strpos($html, 'Select Layer(s)') !== false && strpos($html, 'value="' . GF_PROJECT . '"') !== false);
+	$html = post(array('rtsubmit' => 'Continue', 'rtpath' => 'new', 'randnum' => $rn, 'projectid' => '1', 'gpkgname' => 'plain.gpkg'));
+	check('a project of another user: refused', strpos($html, 'Project not found.') !== false);
 } catch (Throwable $e) {
 	check('uncaught: ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine(), false);
 } finally {
