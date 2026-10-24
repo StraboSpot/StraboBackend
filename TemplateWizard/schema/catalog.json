@@ -1,6 +1,6 @@
 {
     "catalog_version": 1,
-    "generated": "2026-07-03T22:09:56+00:00",
+    "generated": "2026-10-24T22:21:09+00:00",
     "sources": {
         "schema": "strabofield_spot.schema.json (title: StraboField Spot, generated from StraboField app forms Apr 2026)",
         "forms": [
@@ -9,6 +9,8 @@
             "planar-orientation.json",
             "sample.json",
             "tabular-zone-orientation.json",
+            "tephra-additional.json",
+            "tephra-basic.json",
             "trace.json"
         ]
     },
@@ -6090,6 +6092,477 @@
                 {
                     "name": "sample_notes",
                     "label": "Sample Notes",
+                    "type": "text"
+                }
+            ]
+        },
+        "tephra": {
+            "label": "Tephra",
+            "multi": true,
+            "target": "tephra",
+            "fields": [
+                {
+                    "name": "layer_order",
+                    "label": "Layer Order",
+                    "type": "integer",
+                    "derived": true,
+                    "constraint": {
+                        "min": 1
+                    },
+                    "hint": "Position in the spot's layer list (1 = first); sets the order on import"
+                },
+                {
+                    "name": "label",
+                    "label": "Layer Label",
+                    "type": "text"
+                },
+                {
+                    "name": "layer_type",
+                    "label": "Layer Type",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "tephra_fall",
+                            "label": "tephra fall"
+                        },
+                        {
+                            "value": "pyroclastic_density_current",
+                            "label": "pyroclastic density current"
+                        },
+                        {
+                            "value": "pyroclastic_surge",
+                            "label": "pyroclastic surge"
+                        },
+                        {
+                            "value": "pyroclastic_flow",
+                            "label": "pyroclastic flow"
+                        },
+                        {
+                            "value": "sediment",
+                            "label": "sediment"
+                        },
+                        {
+                            "value": "soil",
+                            "label": "soil"
+                        },
+                        {
+                            "value": "peat",
+                            "label": "peat"
+                        },
+                        {
+                            "value": "lacustrine",
+                            "label": "lacustrine"
+                        },
+                        {
+                            "value": "fluvial",
+                            "label": "fluvial"
+                        },
+                        {
+                            "value": "eolian",
+                            "label": "eolian"
+                        },
+                        {
+                            "value": "diamict",
+                            "label": "diamict"
+                        },
+                        {
+                            "value": "mass_wasting",
+                            "label": "mass wasting"
+                        },
+                        {
+                            "value": "debris_flow",
+                            "label": "debris flow"
+                        },
+                        {
+                            "value": "lahar",
+                            "label": "lahar"
+                        },
+                        {
+                            "value": "landslide",
+                            "label": "landslide"
+                        },
+                        {
+                            "value": "hyperconcentrated_flow",
+                            "label": "hyperconcentrated flow"
+                        },
+                        {
+                            "value": "debris_avalanche",
+                            "label": "debris avalanche"
+                        },
+                        {
+                            "value": "lava",
+                            "label": "lava"
+                        },
+                        {
+                            "value": "intrusion",
+                            "label": "intrusion"
+                        },
+                        {
+                            "value": "ice",
+                            "label": "ice"
+                        },
+                        {
+                            "value": "snow",
+                            "label": "snow"
+                        },
+                        {
+                            "value": "dirty_snow",
+                            "label": "dirty snow"
+                        },
+                        {
+                            "value": "package",
+                            "label": "undifferentiated or undescribed"
+                        },
+                        {
+                            "value": "other",
+                            "label": "other"
+                        }
+                    ]
+                },
+                {
+                    "name": "layer_color",
+                    "label": "Layer Color",
+                    "type": "text"
+                },
+                {
+                    "name": "thickness_units",
+                    "label": "Thickness Units",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "mm",
+                            "label": "mm"
+                        },
+                        {
+                            "value": "cm",
+                            "label": "cm"
+                        },
+                        {
+                            "value": "m",
+                            "label": "m"
+                        }
+                    ]
+                },
+                {
+                    "name": "thickness_typical",
+                    "label": "Typical Thickness",
+                    "type": "decimal"
+                },
+                {
+                    "name": "thickness_minimum",
+                    "label": "Minimum Thickness",
+                    "type": "decimal"
+                },
+                {
+                    "name": "thickness_maximum",
+                    "label": "Maximum Thickness",
+                    "type": "decimal"
+                },
+                {
+                    "name": "grainsize_bottom",
+                    "label": "Bottom Grainsize",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "clay",
+                            "label": "clay  (<1/256 mm)"
+                        },
+                        {
+                            "value": "silt",
+                            "label": "silt (1/256-1/16 mm)"
+                        },
+                        {
+                            "value": "very_fine_ash_sand",
+                            "label": "very fine ash/sand (<1/8 mm)"
+                        },
+                        {
+                            "value": "fine_ash_sand",
+                            "label": "fine ash/sand (1/8-1/4 mm)"
+                        },
+                        {
+                            "value": "medium_ash_sand",
+                            "label": "medium ash/sand (1/4-1/2 mm)"
+                        },
+                        {
+                            "value": "coarse_ash_sand",
+                            "label": "coarse ash/sand (1/2-1 mm)"
+                        },
+                        {
+                            "value": "very_coarse_ash_sand",
+                            "label": "very coarse ash/sand (1-2 mm)"
+                        },
+                        {
+                            "value": "fine_lapilli_granule",
+                            "label": "fine lapilli / granule (2-4 mm)"
+                        },
+                        {
+                            "value": "medium_lapilli_pebble",
+                            "label": "medium lapilli /  pebble (4-16 mm)"
+                        },
+                        {
+                            "value": "coarse_lapilli_cobble",
+                            "label": "coarse lapilli / cobble (1.6-6.4 cm)"
+                        },
+                        {
+                            "value": "block_bomb_boulder",
+                            "label": "block-bomb / boulder (>6.4 cm)"
+                        }
+                    ]
+                },
+                {
+                    "name": "grainsize_top",
+                    "label": "Top Grainsize",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "clay",
+                            "label": "clay  (<1/256 mm)"
+                        },
+                        {
+                            "value": "silt",
+                            "label": "silt (1/256-1/16 mm)"
+                        },
+                        {
+                            "value": "very_fine_ash_sand",
+                            "label": "very fine ash/sand (<1/8 mm)"
+                        },
+                        {
+                            "value": "fine_ash_sand",
+                            "label": "fine ash/sand (1/8-1/4 mm)"
+                        },
+                        {
+                            "value": "medium_ash_sand",
+                            "label": "medium ash/sand (1/4-1/2 mm)"
+                        },
+                        {
+                            "value": "coarse_ash_sand",
+                            "label": "coarse ash/sand (1/2-1 mm)"
+                        },
+                        {
+                            "value": "very_coarse_ash_sand",
+                            "label": "very coarse ash/sand (1-2 mm)"
+                        },
+                        {
+                            "value": "fine_lapilli_granule",
+                            "label": "fine lapilli / granule (2-4 mm)"
+                        },
+                        {
+                            "value": "medium_lapilli_pebble",
+                            "label": "medium lapilli /  pebble (4-16 mm)"
+                        },
+                        {
+                            "value": "coarse_lapilli_cobble",
+                            "label": "coarse lapilli / cobble (1.6-6.4 cm)"
+                        },
+                        {
+                            "value": "block_bomb_boulder",
+                            "label": "block-bomb / boulder (>6.4 cm)"
+                        }
+                    ]
+                },
+                {
+                    "name": "grading",
+                    "label": "Grading",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "none_or_massive",
+                            "label": "None or massive"
+                        },
+                        {
+                            "value": "normal",
+                            "label": "Normal"
+                        },
+                        {
+                            "value": "reverse",
+                            "label": "Reverse"
+                        },
+                        {
+                            "value": "normal_top_reverse_bottom",
+                            "label": "Normal top, reverse bottom"
+                        },
+                        {
+                            "value": "reverse_top_normal_bottom",
+                            "label": "Reverse top, normal bottom"
+                        },
+                        {
+                            "value": "complex",
+                            "label": "Complex"
+                        },
+                        {
+                            "value": "density_grading",
+                            "label": "Density grading"
+                        }
+                    ]
+                },
+                {
+                    "name": "layer_sorting",
+                    "label": "Sorting",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "very_well_sorted",
+                            "label": "very well sorted"
+                        },
+                        {
+                            "value": "well_sorted",
+                            "label": "well sorted"
+                        },
+                        {
+                            "value": "poorly_sorted",
+                            "label": "poorly sorted"
+                        },
+                        {
+                            "value": "very_poorly_sorted",
+                            "label": "very poorly sorted"
+                        },
+                        {
+                            "value": "unsorted",
+                            "label": "unsorted"
+                        }
+                    ]
+                },
+                {
+                    "name": "bottom_contact",
+                    "label": "Bottom Contact",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "sharp",
+                            "label": "sharp"
+                        },
+                        {
+                            "value": "gradational",
+                            "label": "gradational"
+                        },
+                        {
+                            "value": "reworked",
+                            "label": "reworked"
+                        },
+                        {
+                            "value": "erosional",
+                            "label": "erosional"
+                        },
+                        {
+                            "value": "bioturbated",
+                            "label": "bioturbated"
+                        },
+                        {
+                            "value": "cross_bedded",
+                            "label": "cross-bedded"
+                        },
+                        {
+                            "value": "planar_parallel",
+                            "label": "planar parallel"
+                        }
+                    ]
+                },
+                {
+                    "name": "top_contact",
+                    "label": "Top Contact",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "sharp",
+                            "label": "sharp"
+                        },
+                        {
+                            "value": "gradational",
+                            "label": "gradational"
+                        },
+                        {
+                            "value": "reworked",
+                            "label": "reworked"
+                        },
+                        {
+                            "value": "erosional",
+                            "label": "erosional"
+                        },
+                        {
+                            "value": "bioturbated",
+                            "label": "bioturbated"
+                        },
+                        {
+                            "value": "cross_bedded",
+                            "label": "cross-bedded"
+                        },
+                        {
+                            "value": "planar_parallel",
+                            "label": "planar parallel"
+                        }
+                    ]
+                },
+                {
+                    "name": "grain_support",
+                    "label": "Grain Support",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "matrix",
+                            "label": "matrix"
+                        },
+                        {
+                            "value": "clast",
+                            "label": "clast"
+                        }
+                    ]
+                },
+                {
+                    "name": "grain_angularity",
+                    "label": "Grain Angularity",
+                    "type": "select_multiple",
+                    "vocab": [
+                        {
+                            "value": "angular",
+                            "label": "angular"
+                        },
+                        {
+                            "value": "subangular",
+                            "label": "subangular"
+                        },
+                        {
+                            "value": "subround",
+                            "label": "subround"
+                        },
+                        {
+                            "value": "round",
+                            "label": "round"
+                        }
+                    ]
+                },
+                {
+                    "name": "tephra_concentration",
+                    "label": "Tephra Concentration",
+                    "type": "select_one",
+                    "vocab": [
+                        {
+                            "value": "discrete",
+                            "label": "discrete"
+                        },
+                        {
+                            "value": "disseminated",
+                            "label": "disseminated"
+                        },
+                        {
+                            "value": "cryptotephra",
+                            "label": "cryptotephra"
+                        }
+                    ]
+                },
+                {
+                    "name": "layer_description",
+                    "label": "Layer Description",
+                    "type": "text",
+                    "hint": "Componentry, clast size measurements, mineralogy, etc."
+                },
+                {
+                    "name": "possible_source_volcano",
+                    "label": "Possible Source Volcano(es)",
+                    "type": "text"
+                },
+                {
+                    "name": "tephra_name",
+                    "label": "Tephra Name",
                     "type": "text"
                 }
             ]

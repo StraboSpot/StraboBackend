@@ -122,7 +122,7 @@ try {
     echo "=== 1. catalog / spec / headers ===\n";
     // ------------------------------------------------------------------
     $cat = FieldTabularService::catalog();
-    check('catalog has 6 groups', count($cat['groups']) === 6);
+    check('catalog has 7 groups (tephra since 2026-10-24)', count($cat['groups']) === 7);
     check('orientation strike constraint 0-360',
         FieldTabularService::fieldDef('orientation', 'strike') !== null
         && FieldTabularService::fieldDef('orientation', 'strike')['constraint']['max'] === 360);

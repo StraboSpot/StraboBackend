@@ -30,6 +30,7 @@
  *                   PHPExcel -> upload -> Neo4j + spine asserts -> export == noop
  *               12. Exported XLSX edited (cell edits + new row) -> updates + create
  *               13. How-to example workbook imports as its page documents
+ *                   (incl. the tephra block: 3 layers in Layer Order)
  *               (11 also: a form label typed in Excel ("joint") lands as the
  *                app name option_13 and exports back as "joint")
  *               (11 also: same id-less file twice -> name-collision Heads up;
@@ -834,7 +835,7 @@ try {
         && json_decode($p1['custom_fields'], true)['Field Book Page'] === 'p. 12');
 
     // ------------------------------------------------------------------
-    echo "\n=== 13. the how-to example file imports as documented (5 spots, 6 orientations, 2 samples) ===\n";
+    echo "\n=== 13. the how-to example file imports as documented (6 spots, 6 orientations, 2 samples, 3 tephra layers) ===\n";
     // ------------------------------------------------------------------
     $r = httpGet('/TemplateWizard/howto.php?demo=xlsx', $sidOwner);
     check('how-to example workbook downloads', $r['status'] === 200 && substr($r['body'], 0, 4) === "PK\x03\x04");
@@ -843,20 +844,20 @@ try {
     file_put_contents($demoPath, $r['body']);
     $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', $demoPath, 'StraboSpot_HowTo_Example.xlsx');
     $demoToken = extractToken($r['body']);
-    check('example uploads: embedded template recognized, 9 data rows',
-        $demoToken !== null && strpos($r['body'], 'embedded template recognized') !== false && strpos($r['body'], '9 data rows') !== false);
+    check('example uploads: embedded template recognized, 12 data rows',
+        $demoToken !== null && strpos($r['body'], 'embedded template recognized') !== false && strpos($r['body'], '12 data rows') !== false);
     $demoTargetNew = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'new', 'dataset_name' => "e2ewiz HOWTO $stamp");
     $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $demoToken), $demoTargetNew));
-    check('example plans clean with no vocabulary decisions: 5 new spots',
-        strpos($r['body'], '5 new spots') !== false && strpos($r['body'], 'Confirm &amp; Import') !== false
+    check('example plans clean with no vocabulary decisions: 6 new spots, 3 tephra layers',
+        strpos($r['body'], '6 new spots') !== false && strpos($r['body'], '3 tephra layers') !== false && strpos($r['body'], 'Confirm &amp; Import') !== false
         && strpos($r['body'], 'Unrecognized vocabulary') === false);
     $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'confirm', 'token' => $demoToken), $demoTargetNew));
     check('example imports', strpos($r['body'], 'Import complete') !== false);
     preg_match('/New dataset created \(id (\d+)\)/', $r['body'], $m);
     $DS3 = isset($m[1]) ? (int)$m[1] : 0;
     $datasetIds[] = $DS3;
-    $recs = $neodb->get_results("MATCH (d:Dataset {id: $DS3, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN s.id AS id, s.name AS name, s.json_orientation_data AS od, s.json_samples AS sm");
-    $nSpots = 0; $nOrient = 0; $nAssoc = 0; $nSamples = 0;
+    $recs = $neodb->get_results("MATCH (d:Dataset {id: $DS3, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN s.id AS id, s.name AS name, s.json_orientation_data AS od, s.json_samples AS sm, s.tephra AS tp");
+    $nSpots = 0; $nOrient = 0; $nAssoc = 0; $nSamples = 0; $tephraLabels = array();
     foreach ((array)$recs as $rec) {
         $nSpots++; $spotIds[] = (int)$rec->value('id');
         $od = json_decode((string)$rec->value('od'), true);
@@ -866,9 +867,13 @@ try {
         }
         $sm = json_decode((string)$rec->value('sm'), true);
         if (is_array($sm)) { $nSamples += count($sm); }
+        $tp = json_decode((string)$rec->value('tp'), true);
+        if (is_array($tp)) { foreach ($tp as $t) { $tephraLabels[] = $t['label'] . '/' . $t['layer_type']; } }
     }
-    check("example landed as documented: 5 spots / 6 orientations / 1 associated / 2 samples (got $nSpots / $nOrient / $nAssoc / $nSamples)",
-        $nSpots === 5 && $nOrient === 6 && $nAssoc === 1 && $nSamples === 2);
+    check("example landed as documented: 6 spots / 6 orientations / 1 associated / 2 samples (got $nSpots / $nOrient / $nAssoc / $nSamples)",
+        $nSpots === 6 && $nOrient === 6 && $nAssoc === 1 && $nSamples === 2);
+    check('example tephra layers landed in order with stored names (Ash Site 6-1 pyroclastic_flow .. 6-3 tephra_fall)',
+        $tephraLabels === array('Ash Site 6-1/pyroclastic_flow', 'Ash Site 6-2/soil', 'Ash Site 6-3/tephra_fall'));
 
 } finally {
     echo "\n=== cleanup ===\n";

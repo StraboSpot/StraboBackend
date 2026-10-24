@@ -177,6 +177,10 @@ if ($twFlash !== ''): ?>
 												<input type="checkbox" id="section_sample" name="selected_sections[]" value="sample">
 												<label for="section_sample">Samples</label>
 											</div>
+											<div class="col-4 col-6-medium col-12-small">
+												<input type="checkbox" id="section_tephra" name="selected_sections[]" value="tephra">
+												<label for="section_tephra">Tephra layers</label>
+											</div>
 										</div>
 										<ul class="actions" style="margin-top: 1.25em;">
 											<li><input type="submit" value="Open the designer" class="primary" /></li>

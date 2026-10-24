@@ -55,6 +55,16 @@ The following sections can be included in templates:
 **Sample Data**:
 - Sample Type, Sample Size, Sample Color
 
+**Tephra layers** (2026-10-24, for Matt Loewen, AVO):
+- All fields of the app's two tephra forms (basic + additional), one row per layer
+- Layer Order (layer_order): derived, never stored. Export writes each layer's
+  position in the spot's list (1 = first); import sorts the layers by it when
+  the column is filled (all of a spot's layers or none, no repeats), else keeps
+  the row order
+- The layer label (tephra_label) always comes with any tephra column: updates
+  match layers by label, so fields outside the template and layer ids survive
+- Test: tests/templatewizard/tephra_test.php
+
 ## Dependencies
 
 - StraboSpot standard header/footer includes
