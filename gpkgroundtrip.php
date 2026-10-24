@@ -704,7 +704,8 @@ function gpkgRoundTripApply($neodb, $db, $userpkey, $export, $target, $result, $
 		$dsid = (int)$dsid;
 		$neodb->query("MATCH (d:Dataset {id: $dsid}) WHERE d.userpkey = $owner SET d.modified_timestamp = $now");
 	}
-	$neodb->query("MATCH (p:Project {id: $pid}) WHERE p.userpkey = $owner SET p.modified_timestamp = $now");
+	// uploaddate (seconds) is My Field Data's "Last Uploaded" and its project order
+	$neodb->query("MATCH (p:Project {id: $pid}) WHERE p.userpkey = $owner SET p.modified_timestamp = $now, p.uploaddate = ".time());
 
 	// Centers, the Postgres mirror, search, sample locations (as after an import)
 	$strabo->setProjectCenter($pid, $owner);

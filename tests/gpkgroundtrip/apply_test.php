@@ -13,7 +13,8 @@
  *                - new spots: names "<prefix>N", a ds_id of the project's dataset honoured (a copy keeps
  *                  its original's ds_id, so it lands in that dataset), the rest in a new dataset
  *                  (created_by the user, linked to the project)
- *                - dataset and project modified_timestamp bumped; a version of the project saved first,
+ *                - dataset and project modified_timestamp and the project's uploaddate ("Last Uploaded")
+ *                  bumped; a version of the project saved first,
  *                  holding the old geometry
  *                - the upload is removed (no second Apply); a fresh export of the project reads back
  *                  unchanged against the server
@@ -175,6 +176,8 @@ try {
 	}
 	$pmt = (int)$neodb->get_var("MATCH (p:Project {id: " . GF_PROJECT . "}) WHERE p.userpkey = $OWNER RETURN p.modified_timestamp");
 	check('project modified_timestamp bumped', $pmt >= $t0 && $pmt <= $t1, (string)$pmt);
+	$pud = (int)$neodb->get_var("MATCH (p:Project {id: " . GF_PROJECT . "}) WHERE p.userpkey = $OWNER RETURN p.uploaddate");
+	check('project uploaddate (My Field Data "Last Uploaded", seconds) = now', $pud >= intdiv($t0, 1000) && $pud <= intdiv($t1, 1000) + 1, (string)$pud);
 	$v = array_values(array_filter($db->get_results_prepared("SELECT uuid, spotcount FROM versions WHERE projectid = $1 AND userpkey = $2", array((string)GF_PROJECT, $OWNER)) ?: array(), function ($r) use ($versionsBefore) { return !in_array($r->uuid, $versionsBefore, true); }));
 	check('one version of the project saved by Apply', count($v) === 1, json_encode($v));
 	$versionCount = count($versionsBefore) + 1;
