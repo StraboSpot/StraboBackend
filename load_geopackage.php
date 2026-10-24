@@ -20,6 +20,7 @@ $starttime=time();
 
 include("shapefuncs.php");
 include("gpkgfuncs.php");
+include("gpkgroundtrip.php");
 include("vector_import.php");
 include("includes/datamodel.php");
 
@@ -29,6 +30,29 @@ function geopackageStopPage($message){
 	include 'includes/mheader.php';
 	echo "<div id=\"main\" class=\"wrapper style1\"><div class=\"container\"><header class=\"major\"><h2>Load GeoPackage</h2></header>";
 	echo "<div style=\"color:#e44c65;\">".htmlspecialchars($message)."</div>";
+	echo "<div style=\"padding-top:20px;\"><a href=\"load_geopackage\">Start again</a></div><div class=\"bottomSpacer\"></div></div></div>";
+	include 'includes/mfooter.php';
+	exit();
+}
+
+// <select name="projectid"> of the user's projects, $selected preselected
+function geopackageProjectSelect($strabo, $selected){
+	$projectrows = $strabo->getMyProjects()["projects"] ?? array();
+	$html = "<select name=\"projectid\" id=\"projectid\"><option value=\"\">Select...</option>";
+	foreach($projectrows as $pr){
+		$html .= "<option value=\"".htmlspecialchars((string)$pr["id"], ENT_QUOTES)."\"".((string)$pr["id"] === (string)$selected ? " selected" : "").">".htmlspecialchars((string)$pr["name"])."</option>";
+	}
+	return $html."</select>";
+}
+
+// An upload loaded as new data without a project picked on the first page: ask for it, keep the upload
+function geopackageProjectPage($strabo, $randnum, $gpkgname, $message = ""){
+	include 'includes/mheader.php';
+	echo "<div id=\"main\" class=\"wrapper style1\"><div class=\"container\"><header class=\"major\"><h2>Load GeoPackage</h2></header>";
+	if($message !== "") echo "<div style=\"color:#e44c65;\">".htmlspecialchars($message)."</div><br>";
+	echo "<form method=\"POST\"><h3>Project to load ".htmlspecialchars($gpkgname)." into:</h3>".geopackageProjectSelect($strabo, "");
+	echo "<input type=\"hidden\" name=\"randnum\" value=\"".(int)$randnum."\"><input type=\"hidden\" name=\"gpkgname\" value=\"".htmlspecialchars($gpkgname, ENT_QUOTES)."\"><input type=\"hidden\" name=\"rtpath\" value=\"new\">";
+	echo "<br><input class=\"primary\" type=\"submit\" name=\"rtsubmit\" value=\"Continue\"></form>";
 	echo "<div style=\"padding-top:20px;\"><a href=\"load_geopackage\">Start again</a></div><div class=\"bottomSpacer\"></div></div></div>";
 	include 'includes/mfooter.php';
 	exit();
@@ -88,9 +112,8 @@ if(($_POST['submitfile'] ?? "") != ""){
 	$filename = $_FILES['gpkgfile']['name'] ?? "";
 	$extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 
-	if($projectid == ""){
-		$error.=$errordelim."Project must be selected.";$errordelim="<br>";
-	}elseif(($_FILES['gpkgfile']['error'] ?? 1) != 0){
+	// The project is asked after the upload (only needed to load the file as new data)
+	if(($_FILES['gpkgfile']['error'] ?? 1) != 0){
 		$error.=$errordelim."File upload failed.";$errordelim="<br>";
 	}elseif($extension != "gpkg" && $extension != "zip"){
 		$error.=$errordelim."Wrong file type detected. File must be a GeoPackage (.gpkg) or a zip file holding one.";$errordelim="<br>";
@@ -128,94 +151,141 @@ if(($_POST['submitfile'] ?? "") != ""){
 	}
 
 	if($error==""){
-
-		if(count($layers) > 1){
-
-			// Several layers: choose which ones to load (one dataset each)
+		// A StraboSpot GeoPackage export: update the original project or load as new data (round trip, design 5)
+		$rtexport = gpkgRoundTripManifest($gpkgpath);
+		if($rtexport !== null){
+			$target = gpkgRoundTripTarget($neodb, $db, $userpkey, $rtexport);
 			include 'includes/mheader.php';
-			?>
-
-			<script type="text/javascript">
-
-				function formvalidate(){
-					var go='no';
-
-					for (var i = 0; i < document.layerform.elements.length; i++ ) {
-						if (document.layerform.elements[i].type == 'checkbox') {
-							if (document.layerform.elements[i].checked == true) {
-								go='yes';
-							}
-						}
-					}
-
-					if(go=='no'){
-						alert("You must check at least one layer.");
-						return false;
-					}else{
-						return true;
-					}
-				}
-
-			</script>
-
-			<!-- Main -->
-				<div id="main" class="wrapper style1">
-					<div class="container">
-
-						<header class="major">
-							<h2>Select Layer(s)</h2>
-						</header>
-
-			The following layers were found in <?php echo htmlspecialchars($gpkgname)?>.<br>
-			Each layer you choose is loaded into its own dataset:<br><br>
-
-			<form name="layerform" method="POST" onsubmit="return formvalidate();">
-
-			<table>
-				<thead>
-					<tr><th></th><th>Layer</th><th>Geometry</th><th>Features</th><th>Coordinate System</th></tr>
-				</thead>
-			<?php
-			$ln=0;
-			foreach($layers as $name=>$info){
-			?>
-				<tr>
-					<td><input type="checkbox" id="layer<?php echo $ln?>" name="layer<?php echo $ln?>" value="<?php echo htmlspecialchars($name, ENT_QUOTES)?>" <?php echo $info['count'] > 0 ? 'checked="true"' : ''?>><label for="layer<?php echo $ln?>"></label></td>
-					<td><?php echo htmlspecialchars($name)?></td>
-					<td><?php echo htmlspecialchars((string)$info['geometrytype'])?></td>
-					<td><?php echo number_format($info['count'])?></td>
-					<td><?php echo $info['srs'] != "" ? htmlspecialchars($info['srs']) : ($info['srsid'] == -1 ? "none" : "undefined (taken as WGS84)")?></td>
-				</tr>
-			<?php
-				$ln++;
-			}
-			?>
-			</table><br>
-
-			<input type="hidden" name="randnum" value="<?php echo $randnum?>">
-			<input type="hidden" name="projectid" value="<?php echo htmlspecialchars($projectid, ENT_QUOTES)?>">
-			<input type="hidden" name="gpkgname" value="<?php echo htmlspecialchars($gpkgname, ENT_QUOTES)?>">
-
-			<input class="primary" type="submit" name="indsubmit" value="Submit">
-
-			</form>
-
-					<div class="bottomSpacer"></div>
-
-					</div>
-				</div>
-
-			<?php
+			gpkgRoundTripChoicePage($target, geopackageProjectSelect($strabo, $projectid), array('randnum' => $randnum, 'gpkgname' => $gpkgname));
 			include 'includes/mfooter.php';
 			exit();
-
-		}else{
-			$putinone="yes";
-			$_POST['layer'] = array_key_first($layers);
 		}
+		if($projectid == "") geopackageProjectPage($strabo, $randnum, $gpkgname);
+		$startlayers = true;
 	}
 
 }//end if submit
+
+// After the round trip choice page: the update preview, or today's flow from the layer list
+if(($_POST['rtsubmit'] ?? "") != "" && $layers){
+	if(($_POST['rtpath'] ?? "") == "update" || ($_POST['rtpath'] ?? "") == "apply"){
+		// Access and the classification are checked again on Apply: a change on the server since
+		// the preview becomes a conflict instead of being overwritten (design 6.6)
+		$rtexport = gpkgRoundTripManifest($gpkgpath);
+		$target = $rtexport !== null ? gpkgRoundTripTarget($neodb, $db, $userpkey, $rtexport) : null;
+		if($target === null || !$target['ok']){
+			geopackageStopPage($target === null ? "This GeoPackage has no StraboSpot export data." : $target['reason']);
+		}
+		$result = gpkgRoundTripClassify($neodb, $db, $randnum, $gpkgpath, $layers, $target);
+		if($_POST['rtpath'] == "apply"){
+			$out = gpkgRoundTripApply($neodb, $db, $userpkey, $rtexport, $target, $result, $_POST);
+			// Applied: the upload is removed, so a reload cannot apply it twice
+			if($out['version'] !== ""){
+				@unlink($gpkgpath);
+				@rmdir("ziptemp/$randnum");
+			}
+			include 'includes/mheader.php';
+			gpkgRoundTripResultPage($target, $out, $target['context']->permissionLevel === 'owner');
+			include 'includes/mfooter.php';
+			exit();
+		}
+		$datasets = gpkgRoundTripDatasets($neodb, $db, $target);
+		include 'includes/mheader.php';
+		gpkgRoundTripPreviewPage($target, $result, $datasets, gpkgRoundTripDefaultDataset($rtexport, $datasets), array('randnum' => $randnum, 'gpkgname' => $gpkgname) + ($projectid !== "" ? array('projectid' => $projectid) : array()));
+		include 'includes/mfooter.php';
+		exit();
+	}
+	if($projectid == "") geopackageProjectPage($strabo, $randnum, $gpkgname, ($_POST['rtpath'] ?? "") == "new" && isset($_POST['projectid']) ? "Project must be selected." : "");
+	$startlayers = true;
+}
+
+if($startlayers ?? false){
+
+	if(count($layers) > 1){
+
+		// Several layers: choose which ones to load (one dataset each)
+		include 'includes/mheader.php';
+		?>
+
+		<script type="text/javascript">
+
+			function formvalidate(){
+				var go='no';
+
+				for (var i = 0; i < document.layerform.elements.length; i++ ) {
+					if (document.layerform.elements[i].type == 'checkbox') {
+						if (document.layerform.elements[i].checked == true) {
+							go='yes';
+						}
+					}
+				}
+
+				if(go=='no'){
+					alert("You must check at least one layer.");
+					return false;
+				}else{
+					return true;
+				}
+			}
+
+		</script>
+
+		<!-- Main -->
+			<div id="main" class="wrapper style1">
+				<div class="container">
+
+					<header class="major">
+						<h2>Select Layer(s)</h2>
+					</header>
+
+		The following layers were found in <?php echo htmlspecialchars($gpkgname)?>.<br>
+		Each layer you choose is loaded into its own dataset:<br><br>
+
+		<form name="layerform" method="POST" onsubmit="return formvalidate();">
+
+		<table>
+			<thead>
+				<tr><th></th><th>Layer</th><th>Geometry</th><th>Features</th><th>Coordinate System</th></tr>
+			</thead>
+		<?php
+		$ln=0;
+		foreach($layers as $name=>$info){
+		?>
+			<tr>
+				<td><input type="checkbox" id="layer<?php echo $ln?>" name="layer<?php echo $ln?>" value="<?php echo htmlspecialchars($name, ENT_QUOTES)?>" <?php echo $info['count'] > 0 ? 'checked="true"' : ''?>><label for="layer<?php echo $ln?>"></label></td>
+				<td><?php echo htmlspecialchars($name)?></td>
+				<td><?php echo htmlspecialchars((string)$info['geometrytype'])?></td>
+				<td><?php echo number_format($info['count'])?></td>
+				<td><?php echo $info['srs'] != "" ? htmlspecialchars($info['srs']) : ($info['srsid'] == -1 ? "none" : "undefined (taken as WGS84)")?></td>
+			</tr>
+		<?php
+			$ln++;
+		}
+		?>
+		</table><br>
+
+		<input type="hidden" name="randnum" value="<?php echo $randnum?>">
+		<input type="hidden" name="projectid" value="<?php echo htmlspecialchars($projectid, ENT_QUOTES)?>">
+		<input type="hidden" name="gpkgname" value="<?php echo htmlspecialchars($gpkgname, ENT_QUOTES)?>">
+
+		<input class="primary" type="submit" name="indsubmit" value="Submit">
+
+		</form>
+
+				<div class="bottomSpacer"></div>
+
+				</div>
+			</div>
+
+		<?php
+		include 'includes/mfooter.php';
+		exit();
+
+	}else{
+		$putinone="yes";
+		$_POST['layer'] = array_key_first($layers);
+	}
+}
 
 //check columns here for errors
 
@@ -350,11 +420,6 @@ if(empty($projectrows)){
 	function formvalidate(){
 		var errors='';
 
-		var e = document.getElementById("projectid");
-		var projectid = e.options[e.selectedIndex].value;
-
-		if(projectid=="" || projectid==null){errors=errors+'Project must be selected.\n';}
-
 		if(document.forms["uploadform"]["gpkgfile"].value=="" || document.forms["uploadform"]["gpkgfile"].value==null){errors=errors+'GeoPackage must be provided.\n';}
 
 		if(errors!="" && errors!=null){
@@ -384,28 +449,14 @@ if(empty($projectrows)){
 
 <div class="row gtr-uniform gtr-50">
 	<div class="col-12">
-		<h3>Project:</h3>
-	</div>
-	<div class="col-12">
-		<select name="projectid" id="projectid">
-			<option value="">Select...
-			<?php
-			foreach($projectrows as $pr){
-			?>
-			<option value="<?php echo $pr["id"]?>"><?php echo $pr["name"]?>
-			<?php
-			}
-			?>
-		</select>
-	</div>
-	<div class="col-12">
 		<h3>GeoPackage (.gpkg, or a .zip holding one):</h3>
 	</div>
 	<div class="col-12">
 		<input type="text" id="filename" placeholder="Choose File..." onclick="doClickFile();" readonly>
 	</div>
 	<div class="col-12">
-		Each feature layer is loaded into its own dataset. Any coordinate system is accepted; locations are stored in WGS84.
+		Each feature layer is loaded into its own dataset; you choose the project after the upload. A GeoPackage downloaded
+		from StraboSpot can instead update its original project. Any coordinate system is accepted; locations are stored in WGS84.
 	</div>
 	<div class="col-12">
 		<ul class="actions">

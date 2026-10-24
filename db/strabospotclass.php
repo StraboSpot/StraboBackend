@@ -2895,6 +2895,31 @@ class StraboSpot
 
 	}
 
+	/**
+	 * Replace a spot's geometry and nothing else (GeoPackage round trip, docs/GeoPackage/
+	 * GeoPackage_RoundTrip_Design.md 7.3): wkt and origwkt, the legacy bbox when the spot has one,
+	 * and modified_timestamp, so a StraboField upload of an older copy does not overwrite it.
+	 * insertSpot is not used: its update path rebuilds every relationship of the spot from the
+	 * incoming JSON. The geometry type must not change (geometrytype / gtype are kept).
+	 * Runs as $this->userpkey (the project owner). Returns true when the spot was written.
+	 */
+	public function updateSpotGeometry($spotid, $geometry, $timestamp){
+		$spotid = (int)$spotid;
+		try {
+			$g = geoPHP::load(json_encode($geometry), "json");
+		} catch (Exception $e) {
+			return false;
+		}
+		if(!$g || $spotid <= 0) return false;
+		$wkt = $g->out('wkt');
+		if(!preg_match('/^[A-Z]+ ?\([0-9eE+\-., ()]+\)$/', $wkt)) return false;
+		$b = $g->getBBox();
+		$bbox = "[".(float)$b['minx'].",".(float)$b['miny'].",".(float)$b['maxx'].",".(float)$b['maxy']."]";
+		$timestamp = (int)$timestamp;
+		$count = $this->neodb->get_var("MATCH (s:Spot {id: $spotid}) WHERE s.userpkey = $this->userpkey SET s.wkt = '$wkt', s.origwkt = '$wkt', s.modified_timestamp = $timestamp, s.bbox = CASE WHEN exists(s.bbox) THEN $bbox ELSE null END RETURN count(s)");
+		return (int)$count > 0;
+	}
+
 	public function addSpotToDataset($datasetid,$to,$relationshiptype="HAS_SPOT"){
 
 		$spotstarttime = microtime(true);
