@@ -168,15 +168,30 @@ if(($_POST['submitfile'] ?? "") != ""){
 
 // After the round trip choice page: the update preview, or today's flow from the layer list
 if(($_POST['rtsubmit'] ?? "") != "" && $layers){
-	if(($_POST['rtpath'] ?? "") == "update"){
+	if(($_POST['rtpath'] ?? "") == "update" || ($_POST['rtpath'] ?? "") == "apply"){
+		// Access and the classification are checked again on Apply: a change on the server since
+		// the preview becomes a conflict instead of being overwritten (design 6.6)
 		$rtexport = gpkgRoundTripManifest($gpkgpath);
 		$target = $rtexport !== null ? gpkgRoundTripTarget($neodb, $db, $userpkey, $rtexport) : null;
 		if($target === null || !$target['ok']){
 			geopackageStopPage($target === null ? "This GeoPackage has no StraboSpot export data." : $target['reason']);
 		}
 		$result = gpkgRoundTripClassify($neodb, $db, $randnum, $gpkgpath, $layers, $target);
+		if($_POST['rtpath'] == "apply"){
+			$out = gpkgRoundTripApply($neodb, $db, $userpkey, $rtexport, $target, $result, $_POST);
+			// Applied: the upload is removed, so a reload cannot apply it twice
+			if($out['version'] !== ""){
+				@unlink($gpkgpath);
+				@rmdir("ziptemp/$randnum");
+			}
+			include 'includes/mheader.php';
+			gpkgRoundTripResultPage($target, $out, $target['context']->permissionLevel === 'owner');
+			include 'includes/mfooter.php';
+			exit();
+		}
+		$datasets = gpkgRoundTripDatasets($neodb, $db, $target);
 		include 'includes/mheader.php';
-		gpkgRoundTripPreviewPage($target, $result, array('randnum' => $randnum, 'gpkgname' => $gpkgname) + ($projectid !== "" ? array('projectid' => $projectid) : array()));
+		gpkgRoundTripPreviewPage($target, $result, $datasets, gpkgRoundTripDefaultDataset($rtexport, $datasets), array('randnum' => $randnum, 'gpkgname' => $gpkgname) + ($projectid !== "" ? array('projectid' => $projectid) : array()));
 		include 'includes/mfooter.php';
 		exit();
 	}

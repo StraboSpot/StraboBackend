@@ -23,115 +23,12 @@
 
 $SID_PREFIX = 'fvgpkgrt';
 require_once __DIR__ . '/../fieldvocab/fixture_lib.php';
-require_once '/srv/app/www/gpkgfuncs.php';
-require_once '/srv/app/www/vector_import.php';
-require_once '/srv/app/www/gpkgroundtrip.php';
+require_once __DIR__ . '/rt_lib.php';
 
 $TMP = sys_get_temp_dir() . '/gpkgrt2_' . getmypid();
 $RANDNUM = 900000000 + getmypid();   // ogrtemp/<n> scratch file of vectorImportReadFeatures
 $_SERVER['HTTP_HOST'] = 'localhost';   // the export below is made through http://localhost
 const RT_BASEMAP_SPOT = 977910000108;
-
-/** Features (properties + geometry) of one layer, as GDAL reads them. */
-function layer_features($gpkg, $layer) {
-	$fc = json_decode((string)shell_exec('ogr2ogr -f GeoJSON /vsistdout/ ' . escapeshellarg($gpkg) . ' ' . escapeshellarg($layer) . ' 2>/dev/null'), true);
-	return isset($fc['features']) ? $fc['features'] : array();
-}
-
-/**
- * A copy of $src with its layers passed through $edit($layer, $features) (return the features to
- * keep; extra layers come back under other keys), written in $srs, with the manifest tables copied
- * (strabo_export replaced by $export when given, left out when $export === false).
- */
-function rebuild($src, $dst, $edit, $export = null, $srs = 'EPSG:4326', $types = array()) {
-	global $TMP;
-	@unlink($dst);
-	$out = array();
-	foreach (array('points', 'lines', 'polygons') as $layer) {
-		$r = $edit($layer, layer_features($src, $layer));
-		foreach ($r as $k => $v) { if (is_int($k)) $out[$layer][] = $v; else $out[$k] = $v; }
-		if (!isset($out[$layer])) $out[$layer] = array();
-	}
-	$first = true;
-	foreach ($out as $layer => $features) {
-		if (!count($features)) continue;
-		$nlt = $types[$layer] ?? array('points' => 'POINT', 'lines' => 'LINESTRING', 'polygons' => 'POLYGON')[$layer] ?? 'GEOMETRY';
-		file_put_contents("$TMP/layer.json", json_encode(array('type' => 'FeatureCollection', 'features' => $features)));
-		exec('ogr2ogr -f GPKG ' . ($first ? '' : '-update ') . "-nlt $nlt -nln " . escapeshellarg($layer) . ' -s_srs EPSG:4326 -t_srs ' . escapeshellarg($srs) . ' ' . escapeshellarg($dst) . ' ' . escapeshellarg("$TMP/layer.json") . ' 2>&1');
-		$first = false;
-	}
-	exec('ogr2ogr -update -nlt NONE ' . escapeshellarg($dst) . ' ' . escapeshellarg($src) . ' strabo_spots 2>&1');
-	if ($export === null) {
-		exec('ogr2ogr -update -nlt NONE ' . escapeshellarg($dst) . ' ' . escapeshellarg($src) . ' strabo_export 2>&1');
-	} elseif ($export !== false) {
-		file_put_contents("$TMP/export.json", json_encode(array('type' => 'FeatureCollection', 'features' => array(array('type' => 'Feature', 'geometry' => null, 'properties' => $export)))));
-		exec('ogr2ogr -update -nlt NONE -nln strabo_export ' . escapeshellarg($dst) . ' ' . escapeshellarg("$TMP/export.json") . ' 2>&1');
-	}
-	return $dst;
-}
-
-/** Move every position of a geometry by $dx, $dy degrees (only the first vertex when $first). */
-function shift($g, $dx, $dy, $first = false) {
-	$done = false;
-	$walk = function ($c) use (&$walk, $dx, $dy, $first, &$done) {
-		if (!is_array($c[0])) {
-			if ($first && $done) return $c;
-			$done = true;
-			return array($c[0] + $dx, $c[1] + $dy);
-		}
-		return array_map($walk, $c);
-	};
-	$g['coordinates'] = $walk($g['coordinates']);
-	return $g;
-}
-
-function sid($f) { return (string)($f['properties']['strabo_id'] ?? ''); }
-
-function classify($gpkg) {
-	global $neodb, $db, $OWNER, $RANDNUM;
-	$export = gpkgRoundTripManifest($gpkg);
-	$target = gpkgRoundTripTarget($neodb, $db, $OWNER, $export);
-	if (!$target['ok']) return array('target' => $target);
-	return gpkgRoundTripClassify($neodb, $db, $RANDNUM, $gpkg, geopackageLayers($gpkg), $target);
-}
-
-/** Spot ids per category (sorted), new / refused / notread as counts. */
-function summary($r) {
-	$s = array();
-	foreach (array('update', 'unchanged', 'conflict', 'duplicate', 'locked', 'noaccess', 'gone', 'missing') as $k) {
-		$ids = array_map(function ($e) { return (string)$e['id']; }, $r[$k] ?? array());
-		sort($ids);
-		$s[$k] = $ids;
-	}
-	foreach (array('new', 'refused', 'notread') as $k) $s[$k] = count($r[$k] ?? array());
-	return $s;
-}
-
-function post($fields, $file = null) {
-	global $SID;
-	$out = tempnam(sys_get_temp_dir(), 'rt_');
-	$cmd = 'curl -s -o ' . escapeshellarg($out) . ' -H ' . escapeshellarg("Cookie: PHPSESSID=$SID") . ' ';
-	foreach ($fields as $k => $v) $cmd .= ($file ? '-F ' : '--data-urlencode ') . escapeshellarg("$k=$v") . ' ';
-	if ($file) $cmd .= '-F ' . escapeshellarg("gpkgfile=@$file;filename=edited.gpkg;type=application/geopackage+sqlite3") . ' ';
-	shell_exec($cmd . escapeshellarg('http://localhost/load_geopackage.php'));
-	$html = (string)file_get_contents($out);
-	@unlink($out);
-	return $html;
-}
-
-function randnum_of($html) { return preg_match('/name="randnum" value="([0-9]+)"/', $html, $m) ? $m[1] : ''; }
-
-/** Every fixture spot's stored properties (to prove the preview writes nothing). */
-function spot_snapshot() {
-	global $neodb, $OWNER;
-	$snap = array();
-	foreach ($neodb->get_results("MATCH (s:Spot) WHERE s.userpkey = $OWNER AND s.id >= " . GF_MIN . " AND s.id <= " . GF_MAX . " RETURN s ORDER BY s.id") ?: array() as $r) {
-		$p = $r->get('s')->values();
-		ksort($p);
-		$snap[] = json_encode($p);
-	}
-	return $snap;
-}
 
 echo "GeoPackage round trip phase 2: manifest, target, classification, choice + preview pages\n";
 gf_cleanup();
@@ -255,7 +152,8 @@ try {
 	$html = post(array('rtsubmit' => 'Continue', 'rtpath' => 'update', 'randnum' => $rn, 'projectid' => GF_PROJECT, 'gpkgname' => 'edited.gpkg'));
 	// sedbase (deleted in the file) was removed from the project above: gone, so not listed as deleted
 	check('update: preview with the counts', strpos($html, '2 updated, 2 unchanged, 2 new, 1 to decide, 2 not updated</b>') !== false, substr(trim(preg_replace('/\s+/', ' ', strip_tags($html))), 0, 600));
-	check('update: preview names the moved spots, no Apply yet', strpos($html, 'GF') !== false && stripos($html, 'name="apply"') === false);
+	check('update: preview names the moved spots, Apply button, a choice for the conflict', strpos($html, 'GF') !== false && strpos($html, 'value="Apply changes"') !== false
+		&& strpos($html, 'name="c[' . $S['legacy'] . ']" value="server"') !== false && strpos($html, 'name="c[' . $S['legacy'] . ']" value="file"') !== false);
 	$html = post(array('rtsubmit' => 'Load as new data instead', 'rtpath' => 'new', 'randnum' => $rn, 'projectid' => GF_PROJECT, 'gpkgname' => 'edited.gpkg'));
 	check('load as new data: today\'s layer list (4 feature layers)', strpos($html, 'Select Layer(s)') !== false && substr_count($html, 'type="checkbox"') === 4);
 	check('nothing written: every fixture spot unchanged in Neo4j', spot_snapshot() === $before);
