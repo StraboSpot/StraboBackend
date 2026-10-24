@@ -11,8 +11,8 @@
  *                   session, another user's project, a zip with scripts (only the .gpkg is
  *                   extracted), a text file named .gpkg, a zip with two GeoPackages
  *                D. round trip: Strabo's own GeoPackage export of the imported points, loaded
- *                   back with the form's own column guesses, gives the same names, locations,
- *                   strikes, dips and custom field
+ *                   back as new data (round trip choice page) with the form's own column guesses,
+ *                   gives the same names, locations, strikes, dips and custom field
  *
  *              Uses owner@test.strabospot.org (setup_test_data.php) and a forged session.
  *              Hermetic: '96671'-prefixed projects, removed at the end.
@@ -222,6 +222,9 @@ try {
 	$html = viPostFile($sid, $URL, array('submitfile' => 'Submit', 'projectid' => $rtProj), 'gpkgfile', $export, 'export.gpkg', 'application/geopackage+sqlite3');
 	$r3 = viGrab($html, 'randnum');
 	$viRandnums[] = $r3;
+	// A StraboSpot export asks first: update the original project or load as new data (round trip, phase 2)
+	check("D: export: round trip choice page", strpos($html, 'name="rtpath" value="new"') !== false);
+	$html = viPost($sid, $URL, array('rtsubmit' => 'Continue', 'rtpath' => 'new', 'randnum' => $r3, 'projectid' => $rtProj, 'gpkgname' => 'export.gpkg'));
 	check("D: export has one feature layer (column page shown directly)", viGrab($html, 'layer') === 'points');
 	// The form recognizes the export's prefixed columns (spot_name, po_strike, cust_...):
 	// accept its guesses as they are.

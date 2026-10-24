@@ -20,6 +20,7 @@ $starttime=time();
 
 include("shapefuncs.php");
 include("gpkgfuncs.php");
+include("gpkgroundtrip.php");
 include("vector_import.php");
 include("includes/datamodel.php");
 
@@ -128,94 +129,124 @@ if(($_POST['submitfile'] ?? "") != ""){
 	}
 
 	if($error==""){
-
-		if(count($layers) > 1){
-
-			// Several layers: choose which ones to load (one dataset each)
+		// A StraboSpot GeoPackage export: update the original project or load as new data (round trip, design 5)
+		$rtexport = gpkgRoundTripManifest($gpkgpath);
+		if($rtexport !== null){
+			$target = gpkgRoundTripTarget($neodb, $db, $userpkey, $rtexport);
 			include 'includes/mheader.php';
-			?>
-
-			<script type="text/javascript">
-
-				function formvalidate(){
-					var go='no';
-
-					for (var i = 0; i < document.layerform.elements.length; i++ ) {
-						if (document.layerform.elements[i].type == 'checkbox') {
-							if (document.layerform.elements[i].checked == true) {
-								go='yes';
-							}
-						}
-					}
-
-					if(go=='no'){
-						alert("You must check at least one layer.");
-						return false;
-					}else{
-						return true;
-					}
-				}
-
-			</script>
-
-			<!-- Main -->
-				<div id="main" class="wrapper style1">
-					<div class="container">
-
-						<header class="major">
-							<h2>Select Layer(s)</h2>
-						</header>
-
-			The following layers were found in <?php echo htmlspecialchars($gpkgname)?>.<br>
-			Each layer you choose is loaded into its own dataset:<br><br>
-
-			<form name="layerform" method="POST" onsubmit="return formvalidate();">
-
-			<table>
-				<thead>
-					<tr><th></th><th>Layer</th><th>Geometry</th><th>Features</th><th>Coordinate System</th></tr>
-				</thead>
-			<?php
-			$ln=0;
-			foreach($layers as $name=>$info){
-			?>
-				<tr>
-					<td><input type="checkbox" id="layer<?php echo $ln?>" name="layer<?php echo $ln?>" value="<?php echo htmlspecialchars($name, ENT_QUOTES)?>" <?php echo $info['count'] > 0 ? 'checked="true"' : ''?>><label for="layer<?php echo $ln?>"></label></td>
-					<td><?php echo htmlspecialchars($name)?></td>
-					<td><?php echo htmlspecialchars((string)$info['geometrytype'])?></td>
-					<td><?php echo number_format($info['count'])?></td>
-					<td><?php echo $info['srs'] != "" ? htmlspecialchars($info['srs']) : ($info['srsid'] == -1 ? "none" : "undefined (taken as WGS84)")?></td>
-				</tr>
-			<?php
-				$ln++;
-			}
-			?>
-			</table><br>
-
-			<input type="hidden" name="randnum" value="<?php echo $randnum?>">
-			<input type="hidden" name="projectid" value="<?php echo htmlspecialchars($projectid, ENT_QUOTES)?>">
-			<input type="hidden" name="gpkgname" value="<?php echo htmlspecialchars($gpkgname, ENT_QUOTES)?>">
-
-			<input class="primary" type="submit" name="indsubmit" value="Submit">
-
-			</form>
-
-					<div class="bottomSpacer"></div>
-
-					</div>
-				</div>
-
-			<?php
+			gpkgRoundTripChoicePage($target, $projectid, (string)$neodb->get_var("MATCH (p:Project {id: ".(int)$projectid."}) WHERE p.userpkey = ".(int)$userpkey." RETURN p.desc_project_name"), array('randnum' => $randnum, 'projectid' => $projectid, 'gpkgname' => $gpkgname));
 			include 'includes/mfooter.php';
 			exit();
-
-		}else{
-			$putinone="yes";
-			$_POST['layer'] = array_key_first($layers);
 		}
+		$startlayers = true;
 	}
 
 }//end if submit
+
+// After the round trip choice page: the update preview, or today's flow from the layer list
+if(($_POST['rtsubmit'] ?? "") != "" && $layers){
+	if(($_POST['rtpath'] ?? "") == "update"){
+		$rtexport = gpkgRoundTripManifest($gpkgpath);
+		$target = $rtexport !== null ? gpkgRoundTripTarget($neodb, $db, $userpkey, $rtexport) : null;
+		if($target === null || !$target['ok']){
+			geopackageStopPage($target === null ? "This GeoPackage has no StraboSpot export data." : $target['reason']);
+		}
+		$result = gpkgRoundTripClassify($neodb, $db, $randnum, $gpkgpath, $layers, $target);
+		include 'includes/mheader.php';
+		gpkgRoundTripPreviewPage($target, $result, array('randnum' => $randnum, 'projectid' => $projectid, 'gpkgname' => $gpkgname));
+		include 'includes/mfooter.php';
+		exit();
+	}
+	$startlayers = true;
+}
+
+if($startlayers ?? false){
+
+	if(count($layers) > 1){
+
+		// Several layers: choose which ones to load (one dataset each)
+		include 'includes/mheader.php';
+		?>
+
+		<script type="text/javascript">
+
+			function formvalidate(){
+				var go='no';
+
+				for (var i = 0; i < document.layerform.elements.length; i++ ) {
+					if (document.layerform.elements[i].type == 'checkbox') {
+						if (document.layerform.elements[i].checked == true) {
+							go='yes';
+						}
+					}
+				}
+
+				if(go=='no'){
+					alert("You must check at least one layer.");
+					return false;
+				}else{
+					return true;
+				}
+			}
+
+		</script>
+
+		<!-- Main -->
+			<div id="main" class="wrapper style1">
+				<div class="container">
+
+					<header class="major">
+						<h2>Select Layer(s)</h2>
+					</header>
+
+		The following layers were found in <?php echo htmlspecialchars($gpkgname)?>.<br>
+		Each layer you choose is loaded into its own dataset:<br><br>
+
+		<form name="layerform" method="POST" onsubmit="return formvalidate();">
+
+		<table>
+			<thead>
+				<tr><th></th><th>Layer</th><th>Geometry</th><th>Features</th><th>Coordinate System</th></tr>
+			</thead>
+		<?php
+		$ln=0;
+		foreach($layers as $name=>$info){
+		?>
+			<tr>
+				<td><input type="checkbox" id="layer<?php echo $ln?>" name="layer<?php echo $ln?>" value="<?php echo htmlspecialchars($name, ENT_QUOTES)?>" <?php echo $info['count'] > 0 ? 'checked="true"' : ''?>><label for="layer<?php echo $ln?>"></label></td>
+				<td><?php echo htmlspecialchars($name)?></td>
+				<td><?php echo htmlspecialchars((string)$info['geometrytype'])?></td>
+				<td><?php echo number_format($info['count'])?></td>
+				<td><?php echo $info['srs'] != "" ? htmlspecialchars($info['srs']) : ($info['srsid'] == -1 ? "none" : "undefined (taken as WGS84)")?></td>
+			</tr>
+		<?php
+			$ln++;
+		}
+		?>
+		</table><br>
+
+		<input type="hidden" name="randnum" value="<?php echo $randnum?>">
+		<input type="hidden" name="projectid" value="<?php echo htmlspecialchars($projectid, ENT_QUOTES)?>">
+		<input type="hidden" name="gpkgname" value="<?php echo htmlspecialchars($gpkgname, ENT_QUOTES)?>">
+
+		<input class="primary" type="submit" name="indsubmit" value="Submit">
+
+		</form>
+
+				<div class="bottomSpacer"></div>
+
+				</div>
+			</div>
+
+		<?php
+		include 'includes/mfooter.php';
+		exit();
+
+	}else{
+		$putinone="yes";
+		$_POST['layer'] = array_key_first($layers);
+	}
+}
 
 //check columns here for errors
 
