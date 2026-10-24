@@ -87,7 +87,7 @@ $description = trim($input->description ?? '');
 // Features as semicolon-separated string
 $features = '';
 if (!empty($input->features) && is_array($input->features)) {
-    $features = implode('; ', $input->features ?? array());
+    $features = implode('; ', (array)($input->features ?? array()));
 }
 
 // Check if updating existing apparatus

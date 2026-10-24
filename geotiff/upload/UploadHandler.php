@@ -1231,9 +1231,9 @@ class UploadHandler
 		$this->header('Access-Control-Allow-Credentials: '
 			.($this->options['access_control_allow_credentials'] ? 'true' : 'false'));
 		$this->header('Access-Control-Allow-Methods: '
-			.implode(', ', $this->options['access_control_allow_methods'] ?? array()));
+			.implode(', ', (array)($this->options['access_control_allow_methods'] ?? array())));
 		$this->header('Access-Control-Allow-Headers: '
-			.implode(', ', $this->options['access_control_allow_headers'] ?? array()));
+			.implode(', ', (array)($this->options['access_control_allow_headers'] ?? array())));
 	}
 
 	public function generate_response($content, $print_response = true) {

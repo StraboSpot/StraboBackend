@@ -232,7 +232,7 @@ class FieldExportPlugin implements ExportPlugin
 
 		// ---- README lines
 		$readme[] = 'Layout: ' . $outSpec['layout'];
-		$readme[] = 'Formats: ' . implode(', ', $outSpec['formats'] ?? array()) . ($outSpec['extras'] ? '; extras: ' . implode(', ', $outSpec['extras'] ?? array()) : '');
+		$readme[] = 'Formats: ' . implode(', ', (array)($outSpec['formats'] ?? array())) . ($outSpec['extras'] ? '; extras: ' . implode(', ', (array)($outSpec['extras'] ?? array())) : '');
 		if (in_array('fieldbook', $outSpec['formats'], true)) {
 			$fbo = $outSpec['fieldbook'];
 			$readme[] = 'Field book: map ' . $fbo['map'] . ', photos ' . $fbo['photos'] . ', stereonets ' . $fbo['nets'] . ', page ' . $fbo['page'];

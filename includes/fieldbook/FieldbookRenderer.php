@@ -744,7 +744,7 @@ class FieldbookRenderer
 				$pdf->SetX($x0 + 3);
 				$pdf->SetFont($pdf->head, 'I', 8);
 				$pdf->SetTextColor(90, 90, 90);
-				$pdf->MultiCell($w - 3, self::LHS, 'On: ' . implode('; ', $it['on'] ?? array()), 0, 'L');
+				$pdf->MultiCell($w - 3, self::LHS, 'On: ' . implode('; ', (array)($it['on'] ?? array())), 0, 'L');
 				$pdf->SetTextColor(0, 0, 0);
 			}
 			if ($it['rows']) $this->kvRows($it['rows'], $x0 + 3, $w - 3);
@@ -881,7 +881,7 @@ class FieldbookRenderer
 			$pdf->SetFont($pdf->head, 'B', 8.5);
 			$pdf->Cell(14, self::LHS, 'Tags', 0, 0, 'L');
 			$pdf->SetFont($pdf->body, '', 8.5);
-			$pdf->MultiCell($w - 14, self::LHS, implode(', ', $memo['tags'] ?? array()), 0, 'L');
+			$pdf->MultiCell($w - 14, self::LHS, implode(', ', (array)($memo['tags'] ?? array())), 0, 'L');
 		}
 		if ($memo['rows']) $this->kvRows($memo['rows'], $x0, $w);
 		if ($memo['images']) $this->photoBlock(array('id' => 'memo-' . $memo['id'], 'name' => 'Memo: ' . $memo['subject'], 'images' => $memo['images']), $x0, $w, 0);

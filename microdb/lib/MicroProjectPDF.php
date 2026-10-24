@@ -1117,7 +1117,7 @@ class MicroProjectPDF extends tFPDF
         if (!empty($spot->tags)) {
             $this->SetFont('DejaVu', 'B', self::FS_BODY);
             $this->setColor(self::C_PRIMARY, 'text');
-            $this->MultiCell(0, 5, 'Tags: ' . implode(', ', $spot->tags ?? array()), 0, 'L');
+            $this->MultiCell(0, 5, 'Tags: ' . implode(', ', (array)($spot->tags ?? array())), 0, 'L');
         }
 
         $this->endCard();
