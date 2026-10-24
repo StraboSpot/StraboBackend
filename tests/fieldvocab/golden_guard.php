@@ -64,7 +64,7 @@ $GOLDEN = __DIR__ . '/golden';
 /* ------------------------------------------------------------- canonical */
 
 $VOLATILE = array('backupFileName', 'uploaddate', 'datecreated', 'created_at', 'modified_at', 'last_synced',
-	'selectedDatasetId', 'item_hit_pkey', 'image_hit_pkey', 'uuid');
+	'selectedDatasetId', 'item_hit_pkey', 'image_hit_pkey', 'uuid', 'date_value');   // date_value: search index upload date
 $SORT_SCALARS = array('activeDatasetsIds', 'dataset_ids');
 
 function canon_walk($v, $key = null) {
@@ -89,6 +89,10 @@ function canon_walk($v, $key = null) {
 	}
 	if ((is_int($v) || (is_string($v) && ctype_digit($v))) && (string)$v === (string)$OWNER) return '<OWNER>';
 	if (is_string($v) && strpos($v, $OWNER . '-') === 0) return '<OWNER>-' . substr($v, strlen($OWNER . '-'));
+	// WKT coordinates to 10 decimals: GEOS on PHP 8.4 / prod prints full precision (-105.11375000000001), older GEOS -105.11375
+	if (is_string($v) && preg_match('/^(MULTI)?(POINT|LINESTRING|POLYGON) ?\(/', $v)) {
+		return preg_replace_callback('/-?\d+\.\d+/', function ($m) { return (string)round((float)$m[0], 10); }, $v);
+	}
 	return $v;
 }
 
@@ -219,7 +223,7 @@ try {
 	// overlay on its own (overlay_check).
 	list($st, $tx) = http('GET', '/StraboFieldDatasetDetail/api/spots.php?dataset_id=' . GF_DS_A, null, 'none');
 	overlay_capture('js_datasetdetail_spots_a', $st, $tx);
-	list($st, $tx) = http('GET', '/stratSectionDetail/getData.php?spot_id=' . $S['sedbase'], null, 'none');
+	list($st, $tx) = http('GET', '/stratSectionDetail/getData.php?spot_id=' . $S['sedbase'], null, 'session');   // private fixture: owner only since the 10-21 export access fix
 	overlay_capture('js_stratsection', $st, $tx);
 	list($st, $tx) = http('GET', '/doi/geoJSON.php?datasetid=' . GF_DS_A, null, 'none');                          capture('js_doi_geojson_a', $st === 200 ? canon_text($tx) : null, "HTTP $st");
 	$doiDir = "/srv/app/www/doi/doiFiles/$DOI_UUID";
