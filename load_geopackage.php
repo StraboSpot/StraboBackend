@@ -112,7 +112,7 @@ if(($_POST['submitfile'] ?? "") != ""){
 	$filename = $_FILES['gpkgfile']['name'] ?? "";
 	$extension = strtolower(pathinfo($filename, PATHINFO_EXTENSION));
 
-	// The project is only needed to load the file as new data: asked later when missing
+	// The project is asked after the upload (only needed to load the file as new data)
 	if(($_FILES['gpkgfile']['error'] ?? 1) != 0){
 		$error.=$errordelim."File upload failed.";$errordelim="<br>";
 	}elseif($extension != "gpkg" && $extension != "zip"){
@@ -434,22 +434,14 @@ if(empty($projectrows)){
 
 <div class="row gtr-uniform gtr-50">
 	<div class="col-12">
-		<h3>Project:</h3>
-	</div>
-	<div class="col-12">
-		<?php echo geopackageProjectSelect($strabo, "")?>
-	</div>
-	<div class="col-12">
-		Not needed to update a project from a GeoPackage you downloaded from StraboSpot (you are asked after the upload).
-	</div>
-	<div class="col-12">
 		<h3>GeoPackage (.gpkg, or a .zip holding one):</h3>
 	</div>
 	<div class="col-12">
 		<input type="text" id="filename" placeholder="Choose File..." onclick="doClickFile();" readonly>
 	</div>
 	<div class="col-12">
-		Each feature layer is loaded into its own dataset. Any coordinate system is accepted; locations are stored in WGS84.
+		Each feature layer is loaded into its own dataset; you choose the project after the upload. A GeoPackage downloaded
+		from StraboSpot can instead update its original project. Any coordinate system is accepted; locations are stored in WGS84.
 	</div>
 	<div class="col-12">
 		<ul class="actions">

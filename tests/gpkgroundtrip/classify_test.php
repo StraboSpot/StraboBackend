@@ -270,7 +270,9 @@ try {
 	$html = post(array('submitfile' => 'Submit', 'projectid' => GF_PROJECT), $plain);
 	check('a GeoPackage without strabo_export: today\'s layer list directly', strpos($html, 'Select Layer(s)') !== false && strpos($html, 'rtpath') === false);
 
-	section('load_geopackage.php without a project on the first page');
+	section('load_geopackage.php: the project is asked after the upload');
+	list($st, $page) = http('GET', '/load_geopackage.php', null, 'session');
+	check('upload page: file only, no project picker', $st === 200 && strpos($page, 'name="gpkgfile"') !== false && strpos($page, 'name="projectid"') === false, "HTTP $st");
 	$html = post(array('submitfile' => 'Submit'), $edited);
 	$rn = randnum_of($html);
 	check('export, no project: choice page, project picker under "load as new data", nothing preselected', $rn !== '' && strpos($html, 'value="update" checked') !== false
@@ -283,7 +285,7 @@ try {
 	$html = post(array('rtsubmit' => 'Continue', 'rtpath' => 'new', 'randnum' => $rn, 'projectid' => GF_PROJECT, 'gpkgname' => 'edited.gpkg'));
 	check('export, project chosen: today\'s layer list', strpos($html, 'Select Layer(s)') !== false);
 	$html = post(array('submitfile' => 'Submit', 'projectid' => GF_PROJECT), $edited);
-	check('export, project picked on the first page: preselected under "load as new data"', strpos($html, 'value="' . GF_PROJECT . '" selected') !== false);
+	check('export, a project posted with the upload (older form): preselected under "load as new data"', strpos($html, 'value="' . GF_PROJECT . '" selected') !== false);
 
 	$html = post(array('submitfile' => 'Submit'), $plain);
 	$rn = randnum_of($html);
