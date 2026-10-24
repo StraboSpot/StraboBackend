@@ -429,7 +429,7 @@ class MicroLanding
 					foreach($json->grainInfo->grainSizeInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases ?? array());
+							$showPhases = implode(", ", (array)($g->phases ?? array()));
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -446,7 +446,7 @@ class MicroLanding
 					foreach($json->grainInfo->grainShapeInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases ?? array());
+							$showPhases = implode(", ", (array)($g->phases ?? array()));
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -463,7 +463,7 @@ class MicroLanding
 					foreach($json->grainInfo->grainOrientationInfo as $g){
 						$this->showBasicHeaders($g);
 						if($g->phases){
-							$showPhases = implode(", ", $g->phases ?? array());
+							$showPhases = implode(", ", (array)($g->phases ?? array()));
 							?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 						}
 					}
@@ -492,7 +492,7 @@ class MicroLanding
 				<?php
 					$this->showBasicHeaders($f);
 					if($f->fabricDefinedBy){
-						$showPhases = implode(", ", $f->fabricDefinedBy ?? array());
+						$showPhases = implode(", ", (array)($f->fabricDefinedBy ?? array()));
 						?><div><strong>Defined By:</strong> <?php echo $showPhases?></div><?php
 					}
 
@@ -553,7 +553,7 @@ class MicroLanding
 						<?php
 							$this->showBasicHeaders($f->fabricGrainShapeInfo);
 							if($f->fabricGrainShapeInfo->phases){
-								$showPhases = implode(", ", $f->fabricGrainShapeInfo->phases ?? array());
+								$showPhases = implode(", ", (array)($f->fabricGrainShapeInfo->phases ?? array()));
 								?><div><strong>Phases:</strong> <?php echo $showPhases?></div><?php
 							}
 						?>
@@ -568,7 +568,7 @@ class MicroLanding
 						<?php
 							$this->showBasicHeaders($f->fabricCleavageInfo);
 							if($f->fabricCleavageInfo->geometryOfSeams){
-								$showPhases = implode(", ", $f->fabricCleavageInfo->geometryOfSeams ?? array());
+								$showPhases = implode(", ", (array)($f->fabricCleavageInfo->geometryOfSeams ?? array()));
 								?><div><strong>Geometry of Seams:</strong> <?php echo $showPhases?></div><?php
 							}
 						?>
@@ -865,7 +865,7 @@ class MicroLanding
 					$this->showBasicHeaders($f);
 					if($f->interLimbAngle){
 						?>
-						<div><strong>Inter-Limb Angle:</strong> <?php echo implode(", ", $f->interLimbAngle ?? array())?></div>
+						<div><strong>Inter-Limb Angle:</strong> <?php echo implode(", ", (array)($f->interLimbAngle ?? array()))?></div>
 						<?php
 					}
 					?>

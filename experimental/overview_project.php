@@ -147,7 +147,7 @@ function render_experiment($json_data, $experiment_id, $project_name) {
 
     if ($exp && !empty($exp->features) && is_array($exp->features)) {
         render_section_subheader('Test Features');
-        echo '<p>' . h(implode(', ', $exp->features ?? array())) . '</p>';
+        echo '<p>' . h(implode(', ', (array)($exp->features ?? array()))) . '</p>';
     }
 
     if ($exp && !empty($exp->author)) {
@@ -221,7 +221,7 @@ function render_experiment($json_data, $experiment_id, $project_name) {
             render_labeled_field('Location', $app->location ?? '');
             render_labeled_field('Description', $app->description ?? '');
             if (!empty($app->features) && is_array($app->features)) {
-                render_labeled_field('Features', implode(', ', $app->features ?? array()));
+                render_labeled_field('Features', implode(', ', (array)($app->features ?? array())));
             }
             echo '</tbody></table>';
 

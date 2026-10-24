@@ -2996,7 +2996,7 @@ class newSearchOutputClass
 									}
 
 									if($content->purpose!=""){
-										$pdf->valueRow("Purpose",implode(", ", $content->purpose ?? array()),25);
+										$pdf->valueRow("Purpose",implode(", ", (array)($content->purpose ?? array())),25);
 									}
 
 									if($content->other_purpose!=""){
@@ -3012,7 +3012,7 @@ class newSearchOutputClass
 									}
 
 									if($content->scale_of_interest!=""){
-										$pdf->valueRow("Scale of Interest",implode(", ", $content->scale_of_interest ?? array()),25);
+										$pdf->valueRow("Scale of Interest",implode(", ", (array)($content->scale_of_interest ?? array())),25);
 									}
 
 									if($content->other_scale_of_interest!=""){
@@ -3059,7 +3059,7 @@ class newSearchOutputClass
 										}
 
 										if($content->evaporite_type!=""){
-											$pdf->valueRow("Evaporite type",implode(", ", $content->evaporite_type ?? array()),30);
+											$pdf->valueRow("Evaporite type",implode(", ", (array)($content->evaporite_type ?? array())),30);
 										}
 
 										if($content->other_evaporite_type!=""){
@@ -3067,7 +3067,7 @@ class newSearchOutputClass
 										}
 
 										if($content->organic_coal_lithologies!=""){
-											$pdf->valueRow("Organic/Coal Lithologies",implode(", ", $content->organic_coal_lithologies ?? array()),30);
+											$pdf->valueRow("Organic/Coal Lithologies",implode(", ", (array)($content->organic_coal_lithologies ?? array())),30);
 										}
 
 										if($content->other_organic_coal_lithology!=""){
@@ -3075,7 +3075,7 @@ class newSearchOutputClass
 										}
 
 										if($content->volcaniclastic_type!=""){
-											$pdf->valueRow("Volcaniclastic type",implode(", ", $content->volcaniclastic_type ?? array()),30);
+											$pdf->valueRow("Volcaniclastic type",implode(", ", (array)($content->volcaniclastic_type ?? array())),30);
 										}
 
 										if($content->other_volcaniclastic_type!=""){
@@ -3087,7 +3087,7 @@ class newSearchOutputClass
 										}
 
 										if($content->componentry!=""){
-											$pdf->valueRow("Componentry",implode(", ", $content->componentry ?? array()),30);
+											$pdf->valueRow("Componentry",implode(", ", (array)($content->componentry ?? array())),30);
 										}
 
 										if($content->approximate_relative_abundance!=""){
@@ -3095,7 +3095,7 @@ class newSearchOutputClass
 										}
 
 										if($content->phosphorite_type!=""){
-											$pdf->valueRow("Phosphorite type",implode(", ", $content->phosphorite_type ?? array()),30);
+											$pdf->valueRow("Phosphorite type",implode(", ", (array)($content->phosphorite_type ?? array())),30);
 										}
 
 										if($content->other_phosphorite_type!=""){
@@ -3129,7 +3129,7 @@ class newSearchOutputClass
 										}
 
 										if($content->color_appearance!=""){
-											$pdf->valueRow("Color Appearance",implode(", ", $content->color_appearance ?? array()),30);
+											$pdf->valueRow("Color Appearance",implode(", ", (array)($content->color_appearance ?? array())),30);
 										}
 
 										if($content->other_color_appearance!=""){
@@ -3143,7 +3143,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Composition: ", 25);
 
 										if($content->minerals_present!=""){
-											$pdf->valueRow("Minerals Present",implode(", ", $content->minerals_present ?? array()),30);
+											$pdf->valueRow("Minerals Present",implode(", ", (array)($content->minerals_present ?? array())),30);
 										}
 
 										if($content->other_minerals!=""){
@@ -3151,15 +3151,15 @@ class newSearchOutputClass
 										}
 
 										if($content->sandstone_type_dott!=""){
-											$pdf->valueRow("Dott Classification",implode(", ", $content->sandstone_type_dott ?? array()),30);
+											$pdf->valueRow("Dott Classification",implode(", ", (array)($content->sandstone_type_dott ?? array())),30);
 										}
 
 										if($content->sandstone_type_folk_mcbride!=""){
-											$pdf->valueRow("Folk/McBride Classification",implode(", ", $content->sandstone_type_folk_mcbride ?? array()),30);
+											$pdf->valueRow("Folk/McBride Classification",implode(", ", (array)($content->sandstone_type_folk_mcbride ?? array())),30);
 										}
 
 										if($content->sandstone_modifier!=""){
-											$pdf->valueRow("Sandstone modifier",implode(", ", $content->sandstone_modifier ?? array()),30);
+											$pdf->valueRow("Sandstone modifier",implode(", ", (array)($content->sandstone_modifier ?? array())),30);
 										}
 
 										if($content->other_sandstone_modifier!=""){
@@ -3167,7 +3167,7 @@ class newSearchOutputClass
 										}
 
 										if($content->skeletal_carbonate_components!=""){
-											$pdf->valueRow("Skeletal Carbonate Components",implode(", ", $content->skeletal_carbonate_components ?? array()),30);
+											$pdf->valueRow("Skeletal Carbonate Components",implode(", ", (array)($content->skeletal_carbonate_components ?? array())),30);
 										}
 
 										if($content->other_skeletal_carbonate_component!=""){
@@ -3227,7 +3227,7 @@ class newSearchOutputClass
 										}
 
 										if($content->non_skeletal_carbonate_compone!=""){
-											$pdf->valueRow("Non-Skeletal Carbonate Components",implode(", ", $content->non_skeletal_carbonate_compone ?? array()),30);
+											$pdf->valueRow("Non-Skeletal Carbonate Components",implode(", ", (array)($content->non_skeletal_carbonate_compone ?? array())),30);
 										}
 
 										if($content->other_non_skeletal_carbonate_component!=""){
@@ -3287,7 +3287,7 @@ class newSearchOutputClass
 										}
 
 										if($content->clay_or_mudstone_type!=""){
-											$pdf->valueRow("Claystone or Mudstone Type",implode(", ", $content->clay_or_mudstone_type ?? array()),30);
+											$pdf->valueRow("Claystone or Mudstone Type",implode(", ", (array)($content->clay_or_mudstone_type ?? array())),30);
 										}
 
 										if($content->other_claystone_mudstone!=""){
@@ -3343,11 +3343,11 @@ class newSearchOutputClass
 										}
 
 										if($content->conglomerate_composition!=""){
-											$pdf->valueRow("Conglomerate/Breccia Composition",implode(", ", $content->conglomerate_composition ?? array()),30);
+											$pdf->valueRow("Conglomerate/Breccia Composition",implode(", ", (array)($content->conglomerate_composition ?? array())),30);
 										}
 
 										if($content->clast_composition!=""){
-											$pdf->valueRow("Clast Composition",implode(", ", $content->clast_composition ?? array()),30);
+											$pdf->valueRow("Clast Composition",implode(", ", (array)($content->clast_composition ?? array())),30);
 										}
 
 										if($content->other_clast_types!=""){
@@ -3411,7 +3411,7 @@ class newSearchOutputClass
 										}
 
 										if($content->matrix_composition!=""){
-											$pdf->valueRow("Matrix composition",implode(", ", $content->matrix_composition ?? array()),30);
+											$pdf->valueRow("Matrix composition",implode(", ", (array)($content->matrix_composition ?? array())),30);
 										}
 
 										if($content->other_matrix_types!=""){
@@ -3447,7 +3447,7 @@ class newSearchOutputClass
 										}
 
 										if($content->carbonate_matrix_type!=""){
-											$pdf->valueRow("Carbonate Matrix Type",implode(", ", $content->carbonate_matrix_type ?? array()),30);
+											$pdf->valueRow("Carbonate Matrix Type",implode(", ", (array)($content->carbonate_matrix_type ?? array())),30);
 										}
 
 										if($content->limestone_matrix_percent!=""){
@@ -3487,7 +3487,7 @@ class newSearchOutputClass
 										}
 
 										if($content->volcaniclastic_type!=""){
-											$pdf->valueRow("Volcaniclastic type",implode(", ", $content->volcaniclastic_type ?? array()),30);
+											$pdf->valueRow("Volcaniclastic type",implode(", ", (array)($content->volcaniclastic_type ?? array())),30);
 										}
 
 										if($content->other_volcaniclastic_type!=""){
@@ -3547,7 +3547,7 @@ class newSearchOutputClass
 										}
 
 										if($content->evaporite_type!=""){
-											$pdf->valueRow("Evaporite type",implode(", ", $content->evaporite_type ?? array()),30);
+											$pdf->valueRow("Evaporite type",implode(", ", (array)($content->evaporite_type ?? array())),30);
 										}
 
 										if($content->gypsum_anhydrite_primary_percent!=""){
@@ -3555,7 +3555,7 @@ class newSearchOutputClass
 										}
 
 										if($content->gypsum_anhydrite_primary_type!=""){
-											$pdf->valueRow("Gypsum - anhydrite primary type",implode(", ", $content->gypsum_anhydrite_primary_type ?? array()),30);
+											$pdf->valueRow("Gypsum - anhydrite primary type",implode(", ", (array)($content->gypsum_anhydrite_primary_type ?? array())),30);
 										}
 
 										if($content->gypsum_anhydrite_diagenetic_percent!=""){
@@ -3563,7 +3563,7 @@ class newSearchOutputClass
 										}
 
 										if($content->gypsum_anhydrite_diagenetic_type!=""){
-											$pdf->valueRow("Gypsum - anhydrite diagenetic type",implode(", ", $content->gypsum_anhydrite_diagenetic_type ?? array()),30);
+											$pdf->valueRow("Gypsum - anhydrite diagenetic type",implode(", ", (array)($content->gypsum_anhydrite_diagenetic_type ?? array())),30);
 										}
 
 										if($content->halite_primary_percent!=""){
@@ -3571,7 +3571,7 @@ class newSearchOutputClass
 										}
 
 										if($content->halite_primary_type!=""){
-											$pdf->valueRow("Halite - primary type",implode(", ", $content->halite_primary_type ?? array()),30);
+											$pdf->valueRow("Halite - primary type",implode(", ", (array)($content->halite_primary_type ?? array())),30);
 										}
 
 										if($content->halite_diagenetic_percent!=""){
@@ -3579,15 +3579,15 @@ class newSearchOutputClass
 										}
 
 										if($content->halite_diagenetic_type!=""){
-											$pdf->valueRow("Halite - diagenetic type",implode(", ", $content->halite_diagenetic_type ?? array()),30);
+											$pdf->valueRow("Halite - diagenetic type",implode(", ", (array)($content->halite_diagenetic_type ?? array())),30);
 										}
 
 										if($content->phosphorite_type!=""){
-											$pdf->valueRow("Phosphorite type",implode(", ", $content->phosphorite_type ?? array()),30);
+											$pdf->valueRow("Phosphorite type",implode(", ", (array)($content->phosphorite_type ?? array())),30);
 										}
 
 										if($content->organic_coal_lithologies!=""){
-											$pdf->valueRow("Organic/Coal Lithologies",implode(", ", $content->organic_coal_lithologies ?? array()),30);
+											$pdf->valueRow("Organic/Coal Lithologies",implode(", ", (array)($content->organic_coal_lithologies ?? array())),30);
 										}
 
 										if($content->amber_percent!=""){
@@ -3641,7 +3641,7 @@ class newSearchOutputClass
 										}
 
 										if($content->grain_size_range!=""){
-											$pdf->valueRow("Grain Size Range",implode(", ", $content->grain_size_range ?? array()),30);
+											$pdf->valueRow("Grain Size Range",implode(", ", (array)($content->grain_size_range ?? array())),30);
 										}
 
 										if($content->clay_percent!=""){
@@ -3713,23 +3713,23 @@ class newSearchOutputClass
 										}
 
 										if($content->matrix_size!=""){
-											$pdf->valueRow("Matrix Size",implode(", ", $content->matrix_size ?? array()),30);
+											$pdf->valueRow("Matrix Size",implode(", ", (array)($content->matrix_size ?? array())),30);
 										}
 
 										if($content->character!=""){
-											$pdf->valueRow("Character",implode(", ", $content->character ?? array()),30);
+											$pdf->valueRow("Character",implode(", ", (array)($content->character ?? array())),30);
 										}
 
 										if($content->sorting!=""){
-											$pdf->valueRow("Sorting",implode(", ", $content->sorting ?? array()),30);
+											$pdf->valueRow("Sorting",implode(", ", (array)($content->sorting ?? array())),30);
 										}
 
 										if($content->rounding!=""){
-											$pdf->valueRow("Rounding",implode(", ", $content->rounding ?? array()),30);
+											$pdf->valueRow("Rounding",implode(", ", (array)($content->rounding ?? array())),30);
 										}
 
 										if($content->shape!=""){
-											$pdf->valueRow("Shape",implode(", ", $content->shape ?? array()),30);
+											$pdf->valueRow("Shape",implode(", ", (array)($content->shape ?? array())),30);
 										}
 
 										if($content->other_shape!=""){
@@ -3741,27 +3741,27 @@ class newSearchOutputClass
 										}
 
 										if($content->stratification!=""){
-											$pdf->valueRow("Stratification",implode(", ", $content->stratification ?? array()),30);
+											$pdf->valueRow("Stratification",implode(", ", (array)($content->stratification ?? array())),30);
 										}
 
 										if($content->laminae_thickness_i_select_more_than_one!=""){
-											$pdf->valueRow("Laminae Thickness",implode(", ", $content->laminae_thickness_i_select_more_than_one ?? array()),30);
+											$pdf->valueRow("Laminae Thickness",implode(", ", (array)($content->laminae_thickness_i_select_more_than_one ?? array())),30);
 										}
 
 										if($content->lamination_character!=""){
-											$pdf->valueRow("Lamination Character",implode(", ", $content->lamination_character ?? array()),30);
+											$pdf->valueRow("Lamination Character",implode(", ", (array)($content->lamination_character ?? array())),30);
 										}
 
 										if($content->bedding_thickness!=""){
-											$pdf->valueRow("Bedding Thickness",implode(", ", $content->bedding_thickness ?? array()),30);
+											$pdf->valueRow("Bedding Thickness",implode(", ", (array)($content->bedding_thickness ?? array())),30);
 										}
 
 										if($content->bedding_character!=""){
-											$pdf->valueRow("Bedding character",implode(", ", $content->bedding_character ?? array()),30);
+											$pdf->valueRow("Bedding character",implode(", ", (array)($content->bedding_character ?? array())),30);
 										}
 
 										if($content->package_geometry!=""){
-											$pdf->valueRow("Package Geometry",implode(", ", $content->package_geometry ?? array()),30);
+											$pdf->valueRow("Package Geometry",implode(", ", (array)($content->package_geometry ?? array())),30);
 										}
 
 										if($content->package_lateral_extent!=""){
@@ -3777,11 +3777,11 @@ class newSearchOutputClass
 										}
 
 										if($content->shape_of_lower_contacts!=""){
-											$pdf->valueRow("Shape of lower contact(s)",implode(", ", $content->shape_of_lower_contacts ?? array()),30);
+											$pdf->valueRow("Shape of lower contact(s)",implode(", ", (array)($content->shape_of_lower_contacts ?? array())),30);
 										}
 
 										if($content->character_of_lower_contacts!=""){
-											$pdf->valueRow("Character of lower contact(s)",implode(", ", $content->character_of_lower_contacts ?? array()),30);
+											$pdf->valueRow("Character of lower contact(s)",implode(", ", (array)($content->character_of_lower_contacts ?? array())),30);
 										}
 
 										if($content->lower_contact_relief!=""){
@@ -3789,11 +3789,11 @@ class newSearchOutputClass
 										}
 
 										if($content->shape_of_upper_contacts!=""){
-											$pdf->valueRow("Shape of upper contact(s)",implode(", ", $content->shape_of_upper_contacts ?? array()),30);
+											$pdf->valueRow("Shape of upper contact(s)",implode(", ", (array)($content->shape_of_upper_contacts ?? array())),30);
 										}
 
 										if($content->character_of_upper_contacts!=""){
-											$pdf->valueRow("Character of upper contact(s)",implode(", ", $content->character_of_upper_contacts ?? array()),30);
+											$pdf->valueRow("Character of upper contact(s)",implode(", ", (array)($content->character_of_upper_contacts ?? array())),30);
 										}
 
 										if($content->upper_contact_relief!=""){
@@ -3864,17 +3864,17 @@ class newSearchOutputClass
 									foreach($beds as $content){
 
 										if($content->package_geometry!=""){
-											$pdf->valueRow("Bed Geometry",implode(", ", $content->package_geometry ?? array()),25);
+											$pdf->valueRow("Bed Geometry",implode(", ", (array)($content->package_geometry ?? array())),25);
 										}
 
 										$pdf->valueTitle("Lower Contact: ", 25);
 
 										if($content->shape_of_lower_contacts!=""){
-											$pdf->valueRow("Shape of lower contact",implode(", ", $content->shape_of_lower_contacts ?? array()),30);
+											$pdf->valueRow("Shape of lower contact",implode(", ", (array)($content->shape_of_lower_contacts ?? array())),30);
 										}
 
 										if($content->character_of_lower_contacts!=""){
-											$pdf->valueRow("Character of lower contact(s)",implode(", ", $content->character_of_lower_contacts ?? array()),30);
+											$pdf->valueRow("Character of lower contact(s)",implode(", ", (array)($content->character_of_lower_contacts ?? array())),30);
 										}
 
 										if($content->lower_contact_relief!=""){
@@ -3884,11 +3884,11 @@ class newSearchOutputClass
 										$pdf->valueTitle("Upper Contact: ", 25);
 
 										if($content->shape_of_upper_contacts!=""){
-											$pdf->valueRow("Shape of upper contact",implode(", ", $content->shape_of_upper_contacts ?? array()),30);
+											$pdf->valueRow("Shape of upper contact",implode(", ", (array)($content->shape_of_upper_contacts ?? array())),30);
 										}
 
 										if($content->character_of_upper_contacts!=""){
-											$pdf->valueRow("Character of upper contact",implode(", ", $content->character_of_upper_contacts ?? array()),30);
+											$pdf->valueRow("Character of upper contact",implode(", ", (array)($content->character_of_upper_contacts ?? array())),30);
 										}
 
 										if($content->upper_contact_relief!=""){
@@ -3932,7 +3932,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Cross Bedding: ", 25);
 
 										if($content->cross_bedding_type!=""){
-											$pdf->valueRow("Cross Bedding Type",implode(", ", $content->cross_bedding_type ?? array()),30);
+											$pdf->valueRow("Cross Bedding Type",implode(", ", (array)($content->cross_bedding_type ?? array())),30);
 										}
 
 										if($content->cross_bedding_height_cm!=""){
@@ -3954,7 +3954,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Ripple Lamination: ", 25);
 
 										if($content->ripple_lamination_type!=""){
-											$pdf->valueRow("Ripple Lamination Type",implode(", ", $content->ripple_lamination_type ?? array()),30);
+											$pdf->valueRow("Ripple Lamination Type",implode(", ", (array)($content->ripple_lamination_type ?? array())),30);
 										}
 
 										if($content->other_ripple_lamination_type!=""){
@@ -3980,7 +3980,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Horizontal Bedding: ", 25);
 
 										if($content->horizontal_bedding_type!=""){
-											$pdf->valueRow("Horizontal Bedding Type",implode(", ", $content->horizontal_bedding_type ?? array()),30);
+											$pdf->valueRow("Horizontal Bedding Type",implode(", ", (array)($content->horizontal_bedding_type ?? array())),30);
 										}
 
 										if($content->other_horizontal_bedding_type!=""){
@@ -3996,7 +3996,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Deformation Structures: ", 25);
 
 										if($content->deformation_structures!=""){
-											$pdf->valueRow("Deformation Structure Type",implode(", ", $content->deformation_structures ?? array()),30);
+											$pdf->valueRow("Deformation Structure Type",implode(", ", (array)($content->deformation_structures ?? array())),30);
 										}
 
 										if($content->other_deformation_structure_type!=""){
@@ -4006,7 +4006,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Lags: ", 25);
 
 										if($content->lag_type!=""){
-											$pdf->valueRow("Lag Type",implode(", ", $content->lag_type ?? array()),30);
+											$pdf->valueRow("Lag Type",implode(", ", (array)($content->lag_type ?? array())),30);
 										}
 
 										if($content->other_lag_type!=""){
@@ -4028,11 +4028,11 @@ class newSearchOutputClass
 										$pdf->valueTitle("Other Common Structures: ", 25);
 
 										if($content->other_common_structures!=""){
-											$pdf->valueRow("Other Common Structure Type",implode(", ", $content->other_common_structures ?? array()),30);
+											$pdf->valueRow("Other Common Structure Type",implode(", ", (array)($content->other_common_structures ?? array())),30);
 										}
 
 										if($content->bouma_sequence_part!=""){
-											$pdf->valueRow("Bouma Sequence Part",implode(", ", $content->bouma_sequence_part ?? array()),30);
+											$pdf->valueRow("Bouma Sequence Part",implode(", ", (array)($content->bouma_sequence_part ?? array())),30);
 										}
 
 										if($content->bioturbation_index!=""){
@@ -4040,7 +4040,7 @@ class newSearchOutputClass
 										}
 
 										if($content->bedding_plane_features!=""){
-											$pdf->valueRow("Bedding plane features",implode(", ", $content->bedding_plane_features ?? array()),30);
+											$pdf->valueRow("Bedding plane features",implode(", ", (array)($content->bedding_plane_features ?? array())),30);
 										}
 
 										if($content->other_bedding_plane_feature!=""){
@@ -4056,7 +4056,7 @@ class newSearchOutputClass
 										}
 
 										if($content->bedform_type!=""){
-											$pdf->valueRow("Bedform Type",implode(", ", $content->bedform_type ?? array()),30);
+											$pdf->valueRow("Bedform Type",implode(", ", (array)($content->bedform_type ?? array())),30);
 										}
 
 										if($content->other_bedform_type!=""){
@@ -4074,7 +4074,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Pedogenic Structures: ", 25);
 
 										if($content->paleosol_horizons!=""){
-											$pdf->valueRow("Master Paleosol Horizons",implode(", ", $content->paleosol_horizons ?? array()),30);
+											$pdf->valueRow("Master Paleosol Horizons",implode(", ", (array)($content->paleosol_horizons ?? array())),30);
 										}
 
 										if($content->other_horizon!=""){
@@ -4118,7 +4118,7 @@ class newSearchOutputClass
 										}
 
 										if($content->paleosol_structures!=""){
-											$pdf->valueRow("Paleosol structures",implode(", ", $content->paleosol_structures ?? array()),30);
+											$pdf->valueRow("Paleosol structures",implode(", ", (array)($content->paleosol_structures ?? array())),30);
 										}
 
 										if($content->other_structure!=""){
@@ -4130,7 +4130,7 @@ class newSearchOutputClass
 										}
 
 										if($content->paleosol_classification!=""){
-											$pdf->valueRow("Paleosol classification",implode(", ", $content->paleosol_classification ?? array()),30);
+											$pdf->valueRow("Paleosol classification",implode(", ", (array)($content->paleosol_classification ?? array())),30);
 										}
 
 										if($content->notes!=""){
@@ -4149,7 +4149,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Cement: ", 25);
 
 										if($content->cement_composition!=""){
-											$pdf->valueRow("Cement Mineralogy",implode(", ", $content->cement_composition ?? array()),30);
+											$pdf->valueRow("Cement Mineralogy",implode(", ", (array)($content->cement_composition ?? array())),30);
 										}
 
 										if($content->other_cement_composition!=""){
@@ -4227,7 +4227,7 @@ class newSearchOutputClass
 										}
 
 										if($content->nodules_concretions_shape!=""){
-											$pdf->valueRow("Nodules/Concretions Shape",implode(", ", $content->nodules_concretions_shape ?? array()),30);
+											$pdf->valueRow("Nodules/Concretions Shape",implode(", ", (array)($content->nodules_concretions_shape ?? array())),30);
 										}
 
 										if($content->other_nodules_concretion_shape!=""){
@@ -4247,7 +4247,7 @@ class newSearchOutputClass
 										}
 
 										if($content->nodules_concretions_comp!=""){
-											$pdf->valueRow("Nodules/Concretions Composition",implode(", ", $content->nodules_concretions_comp ?? array()),30);
+											$pdf->valueRow("Nodules/Concretions Composition",implode(", ", (array)($content->nodules_concretions_comp ?? array())),30);
 										}
 
 										if($content->other_nodules_concretion_comp!=""){
@@ -4277,7 +4277,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Other Diagenetic Features: ", 25);
 
 										if($content->other_diagenetic_features!=""){
-											$pdf->valueRow("Other Diagenetic Features",implode(", ", $content->other_diagenetic_features ?? array()),30);
+											$pdf->valueRow("Other Diagenetic Features",implode(", ", (array)($content->other_diagenetic_features ?? array())),30);
 										}
 
 										if($content->other_features!=""){
@@ -4287,7 +4287,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Porosity type: ", 25);
 
 										if($content->fabric_selective!=""){
-											$pdf->valueRow("Fabric Selective",implode(", ", $content->fabric_selective ?? array()),30);
+											$pdf->valueRow("Fabric Selective",implode(", ", (array)($content->fabric_selective ?? array())),30);
 										}
 
 										if($content->other_fabric_selective!=""){
@@ -4295,7 +4295,7 @@ class newSearchOutputClass
 										}
 
 										if($content->non_selective!=""){
-											$pdf->valueRow("Non-Frabric Selective",implode(", ", $content->non_selective ?? array()),30);
+											$pdf->valueRow("Non-Frabric Selective",implode(", ", (array)($content->non_selective ?? array())),30);
 										}
 
 										if($content->other_non_selective!=""){
@@ -4305,7 +4305,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Carbonate Desiccation and Dissolution: ", 25);
 
 										if($content->carbonate_desicc_and_diss!=""){
-											$pdf->valueRow("Carbonate Desiccation and Dissolution Type",implode(", ", $content->carbonate_desicc_and_diss ?? array()),30);
+											$pdf->valueRow("Carbonate Desiccation and Dissolution Type",implode(", ", (array)($content->carbonate_desicc_and_diss ?? array())),30);
 										}
 
 										if($content->other_carbonate_desicc_diss!=""){
@@ -4327,7 +4327,7 @@ class newSearchOutputClass
 										$pdf->valueTitle("Body: ", 25);
 
 										if($content->invertebrate!=""){
-											$pdf->valueRow("Invertebrate",implode(", ", $content->invertebrate ?? array()),30);
+											$pdf->valueRow("Invertebrate",implode(", ", (array)($content->invertebrate ?? array())),30);
 										}
 
 										if($content->other_invertebrate!=""){
@@ -4335,7 +4335,7 @@ class newSearchOutputClass
 										}
 
 										if($content->mollusca!=""){
-											$pdf->valueRow("Mollusc",implode(", ", $content->mollusca ?? array()),30);
+											$pdf->valueRow("Mollusc",implode(", ", (array)($content->mollusca ?? array())),30);
 										}
 
 										if($content->other_mollusca!=""){
@@ -4343,7 +4343,7 @@ class newSearchOutputClass
 										}
 
 										if($content->arthropoda!=""){
-											$pdf->valueRow("Arthropod",implode(", ", $content->arthropoda ?? array()),30);
+											$pdf->valueRow("Arthropod",implode(", ", (array)($content->arthropoda ?? array())),30);
 										}
 
 										if($content->other_anthropoda!=""){
@@ -4351,7 +4351,7 @@ class newSearchOutputClass
 										}
 
 										if($content->echinodermata!=""){
-											$pdf->valueRow("Echinoderm",implode(", ", $content->echinodermata ?? array()),30);
+											$pdf->valueRow("Echinoderm",implode(", ", (array)($content->echinodermata ?? array())),30);
 										}
 
 										if($content->other_echinodermata!=""){
@@ -4359,7 +4359,7 @@ class newSearchOutputClass
 										}
 
 										if($content->cnidaria!=""){
-											$pdf->valueRow("Cnidarian",implode(", ", $content->cnidaria ?? array()),30);
+											$pdf->valueRow("Cnidarian",implode(", ", (array)($content->cnidaria ?? array())),30);
 										}
 
 										if($content->other_cnidaria!=""){
@@ -4375,7 +4375,7 @@ class newSearchOutputClass
 										}
 
 										if($content->protista!=""){
-											$pdf->valueRow("Protist",implode(", ", $content->protista ?? array()),30);
+											$pdf->valueRow("Protist",implode(", ", (array)($content->protista ?? array())),30);
 										}
 
 										if($content->other_protista!=""){
@@ -4383,7 +4383,7 @@ class newSearchOutputClass
 										}
 
 										if($content->calcimicrobe!=""){
-											$pdf->valueRow("Calcimicrobe",implode(", ", $content->calcimicrobe ?? array()),30);
+											$pdf->valueRow("Calcimicrobe",implode(", ", (array)($content->calcimicrobe ?? array())),30);
 										}
 
 										if($content->other_calcimicrobe!=""){
@@ -4391,7 +4391,7 @@ class newSearchOutputClass
 										}
 
 										if($content->plant_algae!=""){
-											$pdf->valueRow("Plant/algae",implode(", ", $content->plant_algae ?? array()),30);
+											$pdf->valueRow("Plant/algae",implode(", ", (array)($content->plant_algae ?? array())),30);
 										}
 
 										if($content->other_plant_algae!=""){
@@ -4399,7 +4399,7 @@ class newSearchOutputClass
 										}
 
 										if($content->green_algae!=""){
-											$pdf->valueRow("Green Algae",implode(", ", $content->green_algae ?? array()),30);
+											$pdf->valueRow("Green Algae",implode(", ", (array)($content->green_algae ?? array())),30);
 										}
 
 										if($content->other_green_algae!=""){
@@ -4407,7 +4407,7 @@ class newSearchOutputClass
 										}
 
 										if($content->vertebrate!=""){
-											$pdf->valueRow("Vertebrate",implode(", ", $content->vertebrate ?? array()),30);
+											$pdf->valueRow("Vertebrate",implode(", ", (array)($content->vertebrate ?? array())),30);
 										}
 
 										if($content->other_vertebrate!=""){
@@ -4429,7 +4429,7 @@ class newSearchOutputClass
 										}
 
 										if($content->descriptive!=""){
-											$pdf->valueRow("Descriptive",implode(", ", $content->descriptive ?? array()),30);
+											$pdf->valueRow("Descriptive",implode(", ", (array)($content->descriptive ?? array())),30);
 										}
 
 										if($content->other_descriptive!=""){
@@ -4437,7 +4437,7 @@ class newSearchOutputClass
 										}
 
 										if($content->burrow_fill_type!=""){
-											$pdf->valueRow("Burrow Fill Type",implode(", ", $content->burrow_fill_type ?? array()),30);
+											$pdf->valueRow("Burrow Fill Type",implode(", ", (array)($content->burrow_fill_type ?? array())),30);
 										}
 
 										if($content->other_burrow_fill!=""){
@@ -4475,7 +4475,7 @@ class newSearchOutputClass
 										}
 
 										if($content->microbial_reef_or_skelatal_mic!=""){
-											$pdf->valueRow("Microbial Reef or Skeletal-Microbial Reef Type",implode(", ", $content->microbial_reef_or_skelatal_mic ?? array()),30);
+											$pdf->valueRow("Microbial Reef or Skeletal-Microbial Reef Type",implode(", ", (array)($content->microbial_reef_or_skelatal_mic ?? array())),30);
 										}
 
 										if($content->other_microbial_or_skeletal_mi!=""){
@@ -4483,7 +4483,7 @@ class newSearchOutputClass
 										}
 
 										if($content->mud_mound!=""){
-											$pdf->valueRow("Mud Mound Type",implode(", ", $content->mud_mound ?? array()),30);
+											$pdf->valueRow("Mud Mound Type",implode(", ", (array)($content->mud_mound ?? array())),30);
 										}
 
 										if($content->other_mud_mound!=""){
@@ -4513,7 +4513,7 @@ class newSearchOutputClass
 										}
 
 										if($content->accessory_structures!=""){
-											$pdf->valueRow("Accessory Structures",implode(", ", $content->accessory_structures ?? array()),30);
+											$pdf->valueRow("Accessory Structures",implode(", ", (array)($content->accessory_structures ?? array())),30);
 										}
 
 										if($content->other_accessory_structure!=""){
@@ -4542,7 +4542,7 @@ class newSearchOutputClass
 										}
 
 										if($content->sediment_transport!=""){
-											$pdf->valueRow("Sediment Transport",implode(", ", $content->sediment_transport ?? array()),30);
+											$pdf->valueRow("Sediment Transport",implode(", ", (array)($content->sediment_transport ?? array())),30);
 										}
 
 										if($content->other_sediment_transport!=""){
@@ -4558,7 +4558,7 @@ class newSearchOutputClass
 										}
 
 										if($content->miscellaneous!=""){
-											$pdf->valueRow("Miscellaneous",implode(", ", $content->miscellaneous ?? array()),30);
+											$pdf->valueRow("Miscellaneous",implode(", ", (array)($content->miscellaneous ?? array())),30);
 										}
 
 										if($content->other_miscellaneous!=""){
@@ -4568,15 +4568,15 @@ class newSearchOutputClass
 										$pdf->valueTitle("Environment Interpretation: ", 25);
 
 										if($content->general!=""){
-											$pdf->valueRow("General",implode(", ", $content->general ?? array()),30);
+											$pdf->valueRow("General",implode(", ", (array)($content->general ?? array())),30);
 										}
 
 										if($content->clastic!=""){
-											$pdf->valueRow("Clastic",implode(", ", $content->clastic ?? array()),30);
+											$pdf->valueRow("Clastic",implode(", ", (array)($content->clastic ?? array())),30);
 										}
 
 										if($content->alluvial_fan_environments!=""){
-											$pdf->valueRow("Alluvial fan environments",implode(", ", $content->alluvial_fan_environments ?? array()),30);
+											$pdf->valueRow("Alluvial fan environments",implode(", ", (array)($content->alluvial_fan_environments ?? array())),30);
 										}
 
 										if($content->other_alluvial_fan!=""){
@@ -4584,7 +4584,7 @@ class newSearchOutputClass
 										}
 
 										if($content->eolian_environments!=""){
-											$pdf->valueRow("Eolian environments",implode(", ", $content->eolian_environments ?? array()),30);
+											$pdf->valueRow("Eolian environments",implode(", ", (array)($content->eolian_environments ?? array())),30);
 										}
 
 										if($content->other_eolian!=""){
@@ -4592,7 +4592,7 @@ class newSearchOutputClass
 										}
 
 										if($content->fluvial_environments!=""){
-											$pdf->valueRow("Fluvial environments",implode(", ", $content->fluvial_environments ?? array()),30);
+											$pdf->valueRow("Fluvial environments",implode(", ", (array)($content->fluvial_environments ?? array())),30);
 										}
 
 										if($content->other_fluvial!=""){
@@ -4600,7 +4600,7 @@ class newSearchOutputClass
 										}
 
 										if($content->shallow_marine_clastic_environ!=""){
-											$pdf->valueRow("Shallow marine clastic environments",implode(", ", $content->shallow_marine_clastic_environ ?? array()),30);
+											$pdf->valueRow("Shallow marine clastic environments",implode(", ", (array)($content->shallow_marine_clastic_environ ?? array())),30);
 										}
 
 										if($content->other_shallow_marine!=""){
@@ -4608,7 +4608,7 @@ class newSearchOutputClass
 										}
 
 										if($content->deep_marine_environments!=""){
-											$pdf->valueRow("Deep marine environments",implode(", ", $content->deep_marine_environments ?? array()),30);
+											$pdf->valueRow("Deep marine environments",implode(", ", (array)($content->deep_marine_environments ?? array())),30);
 										}
 
 										if($content->other_deep_marine!=""){
@@ -4616,7 +4616,7 @@ class newSearchOutputClass
 										}
 
 										if($content->glacial_and_proglacial_environ!=""){
-											$pdf->valueRow("Glacial and proglacial environments",implode(", ", $content->glacial_and_proglacial_environ ?? array()),30);
+											$pdf->valueRow("Glacial and proglacial environments",implode(", ", (array)($content->glacial_and_proglacial_environ ?? array())),30);
 										}
 
 										if($content->other_glacial!=""){
@@ -4624,7 +4624,7 @@ class newSearchOutputClass
 										}
 
 										if($content->lake_environments!=""){
-											$pdf->valueRow("Lake environments",implode(", ", $content->lake_environments ?? array()),30);
+											$pdf->valueRow("Lake environments",implode(", ", (array)($content->lake_environments ?? array())),30);
 										}
 
 										if($content->other_lake!=""){
@@ -4636,15 +4636,15 @@ class newSearchOutputClass
 										}
 
 										if($content->carbonates!=""){
-											$pdf->valueRow("Carbonates",implode(", ", $content->carbonates ?? array()),30);
+											$pdf->valueRow("Carbonates",implode(", ", (array)($content->carbonates ?? array())),30);
 										}
 
 										if($content->factory!=""){
-											$pdf->valueRow("Factory",implode(", ", $content->factory ?? array()),30);
+											$pdf->valueRow("Factory",implode(", ", (array)($content->factory ?? array())),30);
 										}
 
 										if($content->carbonate!=""){
-											$pdf->valueRow("Environment",implode(", ", $content->carbonate ?? array()),30);
+											$pdf->valueRow("Environment",implode(", ", (array)($content->carbonate ?? array())),30);
 										}
 
 										if($content->other_carbonate_environment!=""){
@@ -4652,7 +4652,7 @@ class newSearchOutputClass
 										}
 
 										if($content->lake_subenvironments!=""){
-											$pdf->valueRow("Lake Subenvironments",implode(", ", $content->lake_subenvironments ?? array()),30);
+											$pdf->valueRow("Lake Subenvironments",implode(", ", (array)($content->lake_subenvironments ?? array())),30);
 										}
 
 										if($content->other_carbonate_lake_subenvironment!=""){
@@ -4660,7 +4660,7 @@ class newSearchOutputClass
 										}
 
 										if($content->tidal_flat_subenvironments!=""){
-											$pdf->valueRow("Tidal Flat Subenvironments",implode(", ", $content->tidal_flat_subenvironments ?? array()),30);
+											$pdf->valueRow("Tidal Flat Subenvironments",implode(", ", (array)($content->tidal_flat_subenvironments ?? array())),30);
 										}
 
 										if($content->other_tidal_flat!=""){
@@ -4668,7 +4668,7 @@ class newSearchOutputClass
 										}
 
 										if($content->reef_subenvironments!=""){
-											$pdf->valueRow("Reef Subenvironments",implode(", ", $content->reef_subenvironments ?? array()),30);
+											$pdf->valueRow("Reef Subenvironments",implode(", ", (array)($content->reef_subenvironments ?? array())),30);
 										}
 
 										if($content->other_reef!=""){
@@ -4680,7 +4680,7 @@ class newSearchOutputClass
 										}
 
 										if($content->tectonic_setting!=""){
-											$pdf->valueRow("Tectonic Setting",implode(", ", $content->tectonic_setting ?? array()),30);
+											$pdf->valueRow("Tectonic Setting",implode(", ", (array)($content->tectonic_setting ?? array())),30);
 										}
 
 										if($content->other_tectonic_setting!=""){
@@ -4710,7 +4710,7 @@ class newSearchOutputClass
 										}
 
 										if($content->type!=""){
-											$pdf->valueRow("Type",implode(", ", $content->type ?? array()),30);
+											$pdf->valueRow("Type",implode(", ", (array)($content->type ?? array())),30);
 										}
 
 										if($content->other_type!=""){
@@ -4742,11 +4742,11 @@ class newSearchOutputClass
 										$pdf->valueTitle("Architecture Interpretation: ", 25);
 
 										if($content->description!=""){
-											$pdf->valueRow("Description",implode(", ", $content->description ?? array()),30);
+											$pdf->valueRow("Description",implode(", ", (array)($content->description ?? array())),30);
 										}
 
 										if($content->stacking_sequence_stratigraphy!=""){
-											$pdf->valueRow("Stacking/Sequence Stratigraphy",implode(", ", $content->stacking_sequence_stratigraphy ?? array()),30);
+											$pdf->valueRow("Stacking/Sequence Stratigraphy",implode(", ", (array)($content->stacking_sequence_stratigraphy ?? array())),30);
 										}
 
 										if($content->other_stacking_sequence_stratigraphy!=""){
@@ -4754,7 +4754,7 @@ class newSearchOutputClass
 										}
 
 										if($content->fluvial_architectural_elements!=""){
-											$pdf->valueRow("Fluvial Architectural Elements",implode(", ", $content->fluvial_architectural_elements ?? array()),30);
+											$pdf->valueRow("Fluvial Architectural Elements",implode(", ", (array)($content->fluvial_architectural_elements ?? array())),30);
 										}
 
 										if($content->other_fluvial_element!=""){
@@ -4762,7 +4762,7 @@ class newSearchOutputClass
 										}
 
 										if($content->lacustrine_architecture_interpretation!=""){
-											$pdf->valueRow("Lacustrine Architecture Interpretation",implode(", ", $content->lacustrine_architecture_interpretation ?? array()),30);
+											$pdf->valueRow("Lacustrine Architecture Interpretation",implode(", ", (array)($content->lacustrine_architecture_interpretation ?? array())),30);
 										}
 
 										if($content->other_lacustrine_architecture_interpretation!=""){
@@ -4770,7 +4770,7 @@ class newSearchOutputClass
 										}
 
 										if($content->carbonate_platform_geometry!=""){
-											$pdf->valueRow("Carbonate Platform Geometry",implode(", ", $content->carbonate_platform_geometry ?? array()),30);
+											$pdf->valueRow("Carbonate Platform Geometry",implode(", ", (array)($content->carbonate_platform_geometry ?? array())),30);
 										}
 
 										if($content->other_platform_geometry!=""){
@@ -4778,7 +4778,7 @@ class newSearchOutputClass
 										}
 
 										if($content->deep_water_architctural_element!=""){
-											$pdf->valueRow("Deep-Water Architectural Elements",implode(", ", $content->deep_water_architctural_element ?? array()),30);
+											$pdf->valueRow("Deep-Water Architectural Elements",implode(", ", (array)($content->deep_water_architctural_element ?? array())),30);
 										}
 
 										if($content->other_deep_water_architectural_element!=""){
@@ -4786,7 +4786,7 @@ class newSearchOutputClass
 										}
 
 										if($content->carbonate_margin_geometry!=""){
-											$pdf->valueRow("Carbonate Margin Geometry",implode(", ", $content->carbonate_margin_geometry ?? array()),30);
+											$pdf->valueRow("Carbonate Margin Geometry",implode(", ", (array)($content->carbonate_margin_geometry ?? array())),30);
 										}
 
 										if($content->other_carbonate_margin_geometry!=""){
@@ -4811,9 +4811,9 @@ class newSearchOutputClass
 									foreach($rocks as $r){
 										$rockString = "";
 										$rockString .= ", " . $r->metamorphic_rock_type;
-										$rockString .= ", " . implode(", ", $r->facies ?? array());
+										$rockString .= ", " . implode(", ", (array)($r->facies ?? array()));
 										$rockString .= ", " . $r->protolith;
-										$rockString .= ", " . implode(", ", $r->zone ?? array());
+										$rockString .= ", " . implode(", ", (array)($r->zone ?? array()));
 
 										$pdf->valueRow($rockNum, $rockString, 20);
 										$rockNum++;
@@ -4836,14 +4836,14 @@ class newSearchOutputClass
 										if($r->occurence_volcanic) $rockString .= ", " . $r->occurence_volcanic;
 										if($r->plutonic_rock_type) $rockString .= ", " . $r->plutonic_rock_type;
 										if($r->occurence_plutonic) $rockString .= ", " . $r->occurence_plutonic;
-										if($r->texture_volcanic) $rockString .= ", " . implode(", ", $r->texture_volcanic ?? array());
-										if($r->texture_plutonic) $rockString .= ", " . implode(", ", $r->texture_plutonic ?? array());
+										if($r->texture_volcanic) $rockString .= ", " . implode(", ", (array)($r->texture_volcanic ?? array()));
+										if($r->texture_plutonic) $rockString .= ", " . implode(", ", (array)($r->texture_plutonic ?? array()));
 										if($r->color_index_volc) $rockString .= ", " . $r->color_index_volc;
 										if($r->color_index_pluton) $rockString .= ", " . $r->color_index_pluton;
 										if($r->color_index_source_volc) $rockString .= ", " . $r->color_index_source_volc;
 										if($r->color_index_source_pluton) $rockString .= ", " . $r->color_index_source_pluton;
-										if($r->alteration_volcanic) $rockString .= ", " . implode(", ", $r->alteration_volcanic ?? array());
-										if($r->alteration_plutonic) $rockString .= ", " . implode(", ", $r->alteration_plutonic ?? array());
+										if($r->alteration_volcanic) $rockString .= ", " . implode(", ", (array)($r->alteration_volcanic ?? array()));
+										if($r->alteration_plutonic) $rockString .= ", " . implode(", ", (array)($r->alteration_plutonic ?? array()));
 
 										$pdf->valueRow($rockNum, $rockString, 20);
 										$rockNum++;
@@ -7151,9 +7151,9 @@ public function getKMLHtml($inSpots, $geoType){
 							foreach($rocks as $r){
 								$rockString = "";
 								if($r->metamorphic_rock_type != "") $rockString .= "" . $r->metamorphic_rock_type;
-								if($r->facies != "") $rockString .= ", " . implode(", ", $r->facies ?? array());
+								if($r->facies != "") $rockString .= ", " . implode(", ", (array)($r->facies ?? array()));
 								if($r->protolith != "") $rockString .= ", " . $r->protolith;
-								if($r->zone != "") $rockString .= ", " . implode(", ", $r->zone ?? array());
+								if($r->zone != "") $rockString .= ", " . implode(", ", (array)($r->zone ?? array()));
 
 								$html.="<div class=\"\">".$rockNum.": ".$rockString."</div>\n";
 								$rockNum++;
@@ -7179,14 +7179,14 @@ public function getKMLHtml($inSpots, $geoType){
 								if($r->occurence_volcanic) $rockString .= ", " . $r->occurence_volcanic;
 								if($r->plutonic_rock_type) $rockString .= ", " . $r->plutonic_rock_type;
 								if($r->occurence_plutonic) $rockString .= ", " . $r->occurence_plutonic;
-								if($r->texture_volcanic) $rockString .= ", " . implode(", ", $r->texture_volcanic ?? array());
-								if($r->texture_plutonic) $rockString .= ", " . implode(", ", $r->texture_plutonic ?? array());
+								if($r->texture_volcanic) $rockString .= ", " . implode(", ", (array)($r->texture_volcanic ?? array()));
+								if($r->texture_plutonic) $rockString .= ", " . implode(", ", (array)($r->texture_plutonic ?? array()));
 								if($r->color_index_volc) $rockString .= ", " . $r->color_index_volc;
 								if($r->color_index_pluton) $rockString .= ", " . $r->color_index_pluton;
 								if($r->color_index_source_volc) $rockString .= ", " . $r->color_index_source_volc;
 								if($r->color_index_source_pluton) $rockString .= ", " . $r->color_index_source_pluton;
-								if($r->alteration_volcanic) $rockString .= ", " . implode(", ", $r->alteration_volcanic ?? array());
-								if($r->alteration_plutonic) $rockString .= ", " . implode(", ", $r->alteration_plutonic ?? array());
+								if($r->alteration_volcanic) $rockString .= ", " . implode(", ", (array)($r->alteration_volcanic ?? array()));
+								if($r->alteration_plutonic) $rockString .= ", " . implode(", ", (array)($r->alteration_plutonic ?? array()));
 
 								$html.="<div class=\"\">".$rockNum.": ".$rockString."</div>\n";
 								$rockNum++;
@@ -7646,9 +7646,9 @@ public function getKMLHtml($inSpots, $geoType){
 							foreach($rocks as $r){
 								$rockString = "";
 								if($r->metamorphic_rock_type != "") $rockString .= "" . $r->metamorphic_rock_type;
-								if($r->facies != "") $rockString .= ", " . implode(", ", $r->facies ?? array());
+								if($r->facies != "") $rockString .= ", " . implode(", ", (array)($r->facies ?? array()));
 								if($r->protolith != "") $rockString .= ", " . $r->protolith;
-								if($r->zone != "") $rockString .= ", " . implode(", ", $r->zone ?? array());
+								if($r->zone != "") $rockString .= ", " . implode(", ", (array)($r->zone ?? array()));
 
 								$html.="<div class=\"\">".$rockNum.": ".$rockString."</div>\n";
 								$rockNum++;
@@ -7674,14 +7674,14 @@ public function getKMLHtml($inSpots, $geoType){
 								if($r->occurence_volcanic) $rockString .= ", " . $r->occurence_volcanic;
 								if($r->plutonic_rock_type) $rockString .= ", " . $r->plutonic_rock_type;
 								if($r->occurence_plutonic) $rockString .= ", " . $r->occurence_plutonic;
-								if($r->texture_volcanic) $rockString .= ", " . implode(", ", $r->texture_volcanic ?? array());
-								if($r->texture_plutonic) $rockString .= ", " . implode(", ", $r->texture_plutonic ?? array());
+								if($r->texture_volcanic) $rockString .= ", " . implode(", ", (array)($r->texture_volcanic ?? array()));
+								if($r->texture_plutonic) $rockString .= ", " . implode(", ", (array)($r->texture_plutonic ?? array()));
 								if($r->color_index_volc) $rockString .= ", " . $r->color_index_volc;
 								if($r->color_index_pluton) $rockString .= ", " . $r->color_index_pluton;
 								if($r->color_index_source_volc) $rockString .= ", " . $r->color_index_source_volc;
 								if($r->color_index_source_pluton) $rockString .= ", " . $r->color_index_source_pluton;
-								if($r->alteration_volcanic) $rockString .= ", " . implode(", ", $r->alteration_volcanic ?? array());
-								if($r->alteration_plutonic) $rockString .= ", " . implode(", ", $r->alteration_plutonic ?? array());
+								if($r->alteration_volcanic) $rockString .= ", " . implode(", ", (array)($r->alteration_volcanic ?? array()));
+								if($r->alteration_plutonic) $rockString .= ", " . implode(", ", (array)($r->alteration_plutonic ?? array()));
 
 								$html.="<div class=\"\">".$rockNum.": ".$rockString."</div>\n";
 								$rockNum++;

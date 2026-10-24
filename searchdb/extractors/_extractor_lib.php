@@ -503,7 +503,7 @@ class BulkInsertBuffer {
 	}
 	public function flush() {
 		if (!$this->buffer) return 0;
-		$sql = $this->sqlPrefix . implode(",\n", $this->buffer ?? array());
+		$sql = $this->sqlPrefix . implode(",\n", (array)($this->buffer ?? array()));
 		$ok = $this->db->query($sql);
 		$lost = 0;
 		if ($ok === false) {

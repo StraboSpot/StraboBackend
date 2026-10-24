@@ -197,7 +197,7 @@ if(file_exists($jsonFile)){
 		<p style="color: rgba(255, 255, 255, 0.7); font-size: 1.1em;">No upcoming events at this time. Check back soon!</p>
 		<?php else: ?>
 		<?php foreach($events as $event): ?>
-		<div class="event-row" data-tags="<?php echo htmlspecialchars(implode(' ', $event['tags'] ?? array())); ?>">
+		<div class="event-row" data-tags="<?php echo htmlspecialchars(implode(' ', (array)($event['tags'] ?? array()))); ?>">
 			<div class="event-date">
 				<span class="event-date-days"><?php echo htmlspecialchars(!empty($event['end_day']) && $event['end_day'] != $event['start_day'] ? $event['start_day'] . '-' . $event['end_day'] : $event['start_day']); ?></span>
 				<span class="event-date-month"><?php echo htmlspecialchars($event['month']); ?></span>

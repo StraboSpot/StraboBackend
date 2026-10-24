@@ -278,7 +278,7 @@ include("includes/mheader.php");
                 <span class="si-chip"><strong><?= (int)$reviewPlan['counts']['noop'] ?></strong> unchanged</span>
             </div>
             <?php if (!empty($reviewPlan['ignored_headers'])): ?>
-            <p class="si-note">Ignored read-only columns: <?= htmlspecialchars(implode(', ', $reviewPlan['ignored_headers'] ?? array())) ?></p>
+            <p class="si-note">Ignored read-only columns: <?= htmlspecialchars(implode(', ', (array)($reviewPlan['ignored_headers'] ?? array()))) ?></p>
             <?php endif; ?>
         </div>
 
