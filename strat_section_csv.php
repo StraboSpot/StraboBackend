@@ -56,7 +56,8 @@ foreach($allspots as $spot){
 		$newSpot->unitName = $spot['properties']['name'];
 
 		//figure out top and bottom
-		if(count($spot['geometry']->coordinates[0]) == 1){
+		// Point: coordinates[0] is a number (count() of a number threw on PHP 8; 7.x counted it as 1)
+		if(!is_array($spot['geometry']->coordinates[0]) || count($spot['geometry']->coordinates[0]) == 1){
 			$min = $spot['geometry']->coordinates[1];
 			$max = $spot['geometry']->coordinates[1];
 		}else{
