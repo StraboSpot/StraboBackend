@@ -482,7 +482,9 @@ function ih_fig($file, $w, $alt, $caption) {
 				<tr><td><span class="ih-pill">No link back</span></td><td>The SESAR record does not link back to the
 					sample's StraboSpot page yet.</td><td>Send to SESAR adds it.</td></tr>
 				<tr><td><span class="ih-pill">SESAR, not managed here</span></td><td>The IGSN field holds a SESAR IGSN that
-					is not linked yet (typed in by hand, for example).</td><td>Pull from SESAR links it.</td></tr>
+					is not linked yet (typed in by hand, or registered in StraboField, for example).</td><td>If the IGSN is in
+					your own SESAR account, the IGSNs page links it by itself once your account is connected. Otherwise
+					Pull from SESAR links it.</td></tr>
 				<tr><td><span class="ih-pill">read-only</span></td><td>Linked to a record another SESAR account
 					owns.</td><td>You can pull from it; changes go through its owner.</td></tr>
 				<tr><td><span class="ih-pill warn">Differs from Field</span></td><td>The sample comes from StraboField and

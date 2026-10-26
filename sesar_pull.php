@@ -18,6 +18,10 @@
  *                batch_link   {sample_id, igsn}               -> {ok, result}
  *              (Phase 8 B2: IGSNs from SESAR batch uploads whose Other
  *              Name(s) carry "StraboSpot <sample id>".)
+ *                own_matches  {}                              -> {ok, matches}
+ *                own_link     {sample_id}                     -> {ok, result}
+ *              (IGSNs already in the sample from the user's own SESAR
+ *              account, e.g. registered in StraboField: linked as they are.)
  *              Errors: {ok:false, error, message, fields}
  *
  * @package    StraboSpot Web Site
@@ -74,6 +78,12 @@ try {
 			break;
 		case 'batch_link':
 			SesarEndpoint::out(200, array('ok' => true, 'result' => $pull->batchLink($userpkey, $str('sample_id'), $str('igsn'))));
+			break;
+		case 'own_matches':
+			SesarEndpoint::out(200, array('ok' => true, 'matches' => $pull->ownMatches($userpkey)));
+			break;
+		case 'own_link':
+			SesarEndpoint::out(200, array('ok' => true, 'result' => $pull->linkOwn($userpkey, $str('sample_id'))));
 			break;
 		default:
 			SesarEndpoint::out(400, array('ok' => false, 'error' => 'unknown_action', 'message' => 'Unknown action.'));

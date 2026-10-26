@@ -150,6 +150,8 @@ include("includes/mheader.php");
 .si-note { margin-top: 1em; padding: 0.75em 1em; border-radius: 4px; background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.8); font-size: 0.95em; }
 .si-note.si-ok { background: rgba(110, 190, 120, 0.14); border: 1px solid rgba(110, 190, 120, 0.35); }
 .si-note.si-err { background: rgba(228, 76, 101, 0.14); border: 1px solid rgba(228, 76, 101, 0.4); }
+#si-ownlink .si-note { margin: 0 0 1em; }
+#si-ownlink ul { margin: 0.4em 0 0 1.2em; }
 .si-form { display: grid; grid-template-columns: 1fr 1fr; gap: 0.8em 1em; margin: 0.5em 0 1em; }
 .si-form label { display: block; font-size: 0.85em; color: rgba(255,255,255,0.65); margin-bottom: 0.25em; }
 .si-form .si-full { grid-column: 1 / -1; }
@@ -306,6 +308,7 @@ body { overflow-x: clip; overflow-y: visible; }
             </div>
             <p class="si-lead">Every sample you own in StraboSamples, with its IGSN (if any) and how it stands with SESAR.
                Select samples, then choose an action below the filters.</p>
+            <div id="si-ownlink" aria-live="polite"></div>
             <details class="si-help">
                 <summary>What the buttons and IGSN states mean</summary>
                 <h4>Actions on selected samples</h4>
@@ -333,7 +336,8 @@ body { overflow-x: clip; overflow-y: visible; }
                 <dl>
                     <dt>No IGSN</dt><dd>Nothing registered yet. Use Register IGSNs or a SESAR batch file.</dd>
                     <dt>Managed here</dt><dd>Linked to its SESAR record; edits can be sent to SESAR.</dd>
-                    <dt>SESAR, not managed here</dt><dd>The sample has a SESAR IGSN that is not linked yet (for example, typed in by hand). Pull from SESAR links it.</dd>
+                    <dt>SESAR, not managed here</dt><dd>The sample has a SESAR IGSN that is not linked yet (for example, typed in by hand, or registered in StraboField).
+                        If it is in your own SESAR account, this page links it by itself while you are connected; otherwise Pull from SESAR links it.</dd>
                     <dt>read-only</dt><dd>Linked to a record another SESAR account owns: you can pull from it but not send changes.</dd>
                     <dt>Changed since sent</dt><dd>Edited here since the last send. Use Send to SESAR.</dd>
                     <dt>Differs from Field</dt><dd>The sample comes from StraboField and its SESAR record disagrees on location, material or purpose.
@@ -943,6 +947,50 @@ body { overflow-x: clip; overflow-y: visible; }
                 : '<div class="si-note si-err">' + esc(j.message || 'The report could not be made.') + '</div>';
         });
     });
+    // IGSNs already in samples that come from the user's own SESAR account (mostly registered in
+    // StraboField) are linked on their own once the account is connected (Claire 10-26). One SESAR
+    // list read, only when some sample shows "SESAR, not managed here"; one own_link call per sample.
+    // Runs on DOMContentLoaded: sesar_ui.js (SesarUi) loads after this inline script.
+    document.addEventListener('DOMContentLoaded', function ownLink() {
+        if (STATUS.step !== 'connected' || !ROWS.some(function (r) { return r.state === 'unmanaged' && !r.gone; })) return;
+        var box = document.getElementById('si-ownlink');
+        var note = function (cls, html) { box.innerHTML = '<div class="si-note ' + cls + '">' + html + '</div>'; };
+        var refresh = function (n) { return ' <a href="#" data-act="si-reload">Refresh the list</a> to see ' + (n === 1 ? 'its' : 'their') + ' full status.'; };
+        box.addEventListener('click', function (e) {
+            if (e.target.getAttribute('data-act') === 'si-reload') { e.preventDefault(); window.location.reload(); }
+        });
+        SesarUi.post('/sesar_pull.php', { action: 'own_matches' }).then(function (j) {
+            if (!j.ok) return;   // quiet: the user can still Pull from SESAR by hand
+            var todo = j.matches.rows, skipped = j.matches.skipped, done = 0, failed = [];
+            var skipNote = skipped.length ? '<ul>' + skipped.map(function (k) { return '<li>' + esc(k.name || k.sample_id) + ': ' + esc(k.reason) + '</li>'; }).join('') + '</ul>' : '';
+            if (!todo.length) { if (skipNote) note('', 'Some IGSNs from your SESAR account could not be linked on their own:' + skipNote); return; }
+            (function next() {
+                if (!todo.length) {
+                    var h = done ? 'Linked ' + done + ' IGSN' + (done === 1 ? '' : 's') + ' that ' + (done === 1 ? 'was' : 'were')
+                        + ' already in your samples and in your SESAR account (for example, registered in StraboField). '
+                        + (done === 1 ? 'It is' : 'They are') + ' now managed here.' + refresh(done) : '';
+                    if (failed.length) h += (h ? '<br>' : '') + 'Not linked:<ul>' + failed.map(function (k) { return '<li>' + esc(k.name) + ': ' + esc(k.message) + '</li>'; }).join('') + '</ul>';
+                    note(failed.length || skipped.length ? (done ? '' : 'si-err') : 'si-ok', h + skipNote);
+                    renderRows();
+                    return;
+                }
+                var m = todo.shift();
+                note('', 'Linking IGSNs from your SESAR account: ' + (done + failed.length + 1) + ' of ' + (done + failed.length + todo.length + 1) + '...');
+                SesarUi.post('/sesar_pull.php', { action: 'own_link', sample_id: m.sample_id }).then(function (k) {
+                    if (k.ok) {
+                        done++;
+                        ROWS.forEach(function (r) {
+                            if (r.id === m.sample_id) { r.state = 'managed'; r.readonly = k.result.access === 'readonly'; }
+                        });
+                    } else {
+                        failed.push({ name: m.name || m.sample_id, message: k.message || 'Not linked.' });
+                    }
+                    next();
+                });
+            })();
+        });
+    });
+
     var findBtn = document.getElementById('si-findbatch');
     findBtn.hidden = STATUS.step !== 'connected';
     findBtn.addEventListener('click', function () {
