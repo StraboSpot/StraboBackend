@@ -301,16 +301,16 @@ body { overflow-x: clip; overflow-y: visible; }
                 </div>
             </div>
             <p class="si-lead">Every sample you own in StraboSamples, with its IGSN (if any) and how it stands with SESAR.
-               Tick samples, then choose an action below the filters.</p>
+               Select samples, then choose an action below the filters.</p>
             <details class="si-help">
                 <summary>What the buttons and IGSN states mean</summary>
-                <h4>Actions on ticked samples</h4>
+                <h4>Actions on selected samples</h4>
                 <dl>
                     <dt>Register IGSNs</dt>
-                    <dd>Asks SESAR for a new IGSN for each ticked sample that does not have one. You review everything before anything is sent.
+                    <dd>Asks SESAR for a new IGSN for each selected sample that does not have one. You review everything before anything is sent.
                         StraboSpot then keeps the SESAR record in step with the sample ("Managed here").</dd>
                     <dt>SESAR batch file</dt>
-                    <dd>Another way to register: writes the ticked samples into your own SESAR spreadsheet template, which you upload at SESAR yourself.
+                    <dd>Another way to register: writes the selected samples into your own SESAR spreadsheet template, which you upload at SESAR yourself.
                         Afterwards, use <strong>Find my batch IGSNs</strong> to attach the IGSNs SESAR assigned back to these samples.</dd>
                     <dt>Send to SESAR</dt>
                     <dd>Updates SESAR records with edits you made here since they were last sent (only for IGSNs managed here).</dd>
@@ -323,7 +323,7 @@ body { overflow-x: clip; overflow-y: visible; }
                     <dt>Find my batch IGSNs</dt>
                     <dd>After a SESAR batch upload, finds the IGSNs SESAR assigned and links each one to its sample.</dd>
                     <dt>Download report</dt>
-                    <dd>An Excel or CSV list of your samples with IGSNs (the ticked ones, or all shown).</dd>
+                    <dd>An Excel or CSV list of your samples with IGSNs (the selected ones, or all shown).</dd>
                 </dl>
                 <h4>IGSN states</h4>
                 <dl>
@@ -391,7 +391,7 @@ body { overflow-x: clip; overflow-y: visible; }
                    its SESAR record and linked to it. Two ways:</p>
                 <ul class="si-lead">
                     <li><strong>From your SESAR account</strong>: the list below shows every sample registered under your SESAR account, including
-                        ones made at SESAR directly. Tick the ones you want, then Create.</li>
+                        ones made at SESAR directly. Select the ones you want, then Create.</li>
                     <li><strong>Paste a list of IGSNs</strong>: quicker when you already have the IGSNs (for example in a spreadsheet). Works for any
                         public IGSN, including samples registered by colleagues; those are linked read-only.</li>
                 </ul>
@@ -811,7 +811,7 @@ body { overflow-x: clip; overflow-y: visible; }
 
     function renderSel() {
         var n = Object.keys(selected).length, m = selectedRows(mintable).length, p = selectedRows(pullable).length, u = selectedRows(pushable).length;
-        selCount.textContent = n === 0 ? 'Tick samples to register IGSNs, pull their SESAR records, or send their changes to SESAR.'
+        selCount.textContent = n === 0 ? 'Select samples to register IGSNs, pull their SESAR records, or send their changes to SESAR.'
             : n + ' sample' + (n === 1 ? '' : 's') + ' selected' + (Math.max(m, p, u) > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '');
         selClear.hidden = n === 0;
         if (n > 0) stickTop();   // the narrow title bar is built after load, so measure when pinning
@@ -1070,7 +1070,7 @@ body { overflow-x: clip; overflow-y: visible; }
 
     function renderImpSel() {
         var n = Object.keys(imp.selected).length;
-        impSel.textContent = n === 0 ? 'Tick SESAR samples to create them in StraboSamples.'
+        impSel.textContent = n === 0 ? 'Select SESAR samples to create them in StraboSamples.'
             : n + ' selected' + (n > MAX_RUN ? ' (at most ' + MAX_RUN + ' per run)' : '') + (imp.pages > 1 ? ' (kept across pages)' : '');
         impCreate.disabled = n === 0 || n > MAX_RUN;
         if (n > 0) stickTop();

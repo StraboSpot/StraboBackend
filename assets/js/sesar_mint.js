@@ -189,7 +189,7 @@
         var idx = st.rows.map(function (r, i) { return { r: r, i: i }; });
         body += table(idx.filter(function (x) { return x.r.group === 'ready'; }), 'Ready to register');
         body += table(idx.filter(function (x) { return x.r.group === 'replace'; }), 'Needs your OK',
-            'the IGSN field holds a value that is not a registered IGSN; tick a sample to replace that value');
+            'the IGSN field holds a value that is not a registered IGSN; select a sample to replace that value');
         body += table(idx.filter(function (x) { return x.r.group === 'blocked'; }), 'Cannot be registered');
         if (p.missing && p.missing.length) {
             body += '<p class="sm-muted" style="margin-top:1em">' + p.missing.length + ' selected sample' + (p.missing.length === 1 ? ' is' : 's are')

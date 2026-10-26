@@ -78,7 +78,7 @@
             + '</fieldset><fieldset><legend>SESAR values</legend>'
             + '<div class="sr-row"><input type="checkbox" id="sr-refresh" checked><label for="sr-refresh">Refresh from SESAR first</label>'
             + '<div class="sm-sub">Reads SESAR now and marks anything changed there since StraboSpot last read it. Nothing StraboSpot has stored is changed; use Pull from SESAR to take changes in. '
-            + 'Untick to use StraboSpot\'s stored copies (faster).</div></div>'
+            + 'Deselect to use StraboSpot\'s stored copies (faster).</div></div>'
             + '</fieldset></div><div id="sr-msg"></div>';
         dlg.show('Download IGSN report');
         dlg.body(h);

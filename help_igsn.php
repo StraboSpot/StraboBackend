@@ -199,11 +199,11 @@ function ih_fig($file, $w, $alt, $caption) {
 		<?php ih_fig('ready_filter', 924, 'Search, filters and the Ready for an IGSN button', 'Ready for an IGSN lists the samples SESAR will accept now.'); ?>
 
 		<h3>Acting on samples</h3>
-		<p>Tick samples, then pick an action in the bar above the list. Each button shows how many of the
-		ticked samples it applies to, and is greyed out when none do. Once you tick something, the bar stays
+		<p>Select samples, then pick an action in the bar above the list. Each button shows how many of the
+		selected samples it applies to, and is greyed out when none do. Once you select something, the bar stays
 		pinned under the site menu while you scroll. Most actions take up to 100 samples at a time.</p>
 
-		<?php ih_fig('selection_bar', 924, 'Three samples ticked, with the action buttons showing counts', 'Three samples ticked. Register IGSNs (3) counts the ones without an IGSN.'); ?>
+		<?php ih_fig('selection_bar', 924, 'Three samples selected, with the action buttons showing counts', 'Three samples selected. Register IGSNs (3) counts the ones without an IGSN.'); ?>
 
 		<p class="ih-top"><a href="#main">Back to top</a></p>
 
@@ -213,7 +213,7 @@ function ih_fig($file, $w, $alt, $caption) {
 		<p>You can register from two places:</p>
 		<ul>
 			<li><strong>One sample:</strong> open the sample's page and click <strong>Register IGSN</strong>.</li>
-			<li><strong>Many samples:</strong> on the IGSNs page, tick samples and click
+			<li><strong>Many samples:</strong> on the IGSNs page, select samples and click
 			<strong>Register IGSNs</strong>.</li>
 		</ul>
 
@@ -237,15 +237,15 @@ function ih_fig($file, $w, $alt, $caption) {
 			example <em>Granite</em> or <em>Zircon</em>. Leave it blank if nothing fits; SESAR only accepts
 			names from its list.</li>
 			<li>With several samples, the <strong>for all checked samples</strong> boxes let you set the object
-			type or material for every ticked row at once.</li>
+			type or material for every selected row at once.</li>
 		</ul>
 
 		<h3>The three groups</h3>
 		<ul>
-			<li><strong>Ready to register</strong>: ticked, and will be registered.</li>
+			<li><strong>Ready to register</strong>: selected, and will be registered.</li>
 			<li><strong>Needs your OK</strong>: the sample's IGSN field already holds something that is not a
-			registered IGSN (a placeholder, a typo, or an IGSN that SESAR deactivated). These start unticked.
-			Tick one to register a real IGSN in its place; the old value is kept in the sample's history.</li>
+			registered IGSN (a placeholder, a typo, or an IGSN that SESAR deactivated). These start unselected.
+			Select one to register a real IGSN in its place; the old value is kept in the sample's history.</li>
 			<li><strong>Cannot be registered</strong>, with the reason. The usual ones: the sample has no
 			<strong>location</strong> (SESAR requires a latitude and longitude) or no name, or it already has a
 			SESAR IGSN (use <a href="#pull">Pull from SESAR</a> to link that one instead).</li>
@@ -254,7 +254,7 @@ function ih_fig($file, $w, $alt, $caption) {
 		<h3>Parents and children</h3>
 		<p>If a sample has children (splits, thin sections, separates) or a parent without an IGSN, the
 		review adds them for you, tagged <span class="ih-pill">parent</span> or
-		<span class="ih-pill">child</span>. Untick any you do not want yet. Parents are always registered
+		<span class="ih-pill">child</span>. Deselect any you do not want yet. Parents are always registered
 		first, and each child's SESAR record is linked to its parent's IGSN. A child is never registered
 		without its parent: if the parent fails, the child is skipped so it does not lose its parent
 		link.</p>
@@ -331,15 +331,15 @@ function ih_fig($file, $w, $alt, $caption) {
 			IGSN, so StraboSpot can manage it from then on.</li>
 		</ul>
 
-		<p>The review lists the sample's values next to SESAR's. Tick the SESAR values you want:</p>
+		<p>The review lists the sample's values next to SESAR's. Select the SESAR values you want:</p>
 		<ul>
-			<li><span class="ih-pill ok">fills an empty field</span>: ticked for you.</li>
-			<li><span class="ih-pill warn">replaces</span>: SESAR's value differs from yours. Unticked; tick
+			<li><span class="ih-pill ok">fills an empty field</span>: selected for you.</li>
+			<li><span class="ih-pill warn">replaces</span>: SESAR's value differs from yours. Unselected; select
 			it only if SESAR is right.</li>
 			<li><span class="ih-pill">same</span>: nothing to do.</li>
 		</ul>
 
-		<?php ih_fig('pull_dialog', 980, 'The Pull from SESAR review', 'SESAR\'s description fills an empty field; its material would replace the sample\'s, so that one starts unticked.'); ?>
+		<?php ih_fig('pull_dialog', 980, 'The Pull from SESAR review', 'SESAR\'s description fills an empty field; its material would replace the sample\'s, so that one starts unselected.'); ?>
 
 		<p>Locations less than 10 m apart count as the same. <strong>Everything SESAR has for this
 		sample</strong> expands to show the full record.</p>
@@ -350,7 +350,7 @@ function ih_fig($file, $w, $alt, $caption) {
 		is wrong.</p>
 
 		<p>On the IGSNs page, <strong>Pull from SESAR</strong> works on many samples at once: it fills empty
-		fields only, unless you tick <em>Also replace values that differ from SESAR</em>.</p>
+		fields only, unless you select <em>Also replace values that differ from SESAR</em>.</p>
 
 		<h3>Records owned by another SESAR account</h3>
 		<p>You can link a colleague's public IGSN to your sample. It is linked
@@ -374,7 +374,7 @@ function ih_fig($file, $w, $alt, $caption) {
 
 		<h3>From your SESAR account</h3>
 		<p>The tab lists every sample in your SESAR account. Type a name or IGSN in the search box and press
-		Enter to narrow the list. Samples already in StraboSamples show which sample holds them; tick the
+		Enter to narrow the list. Samples already in StraboSamples show which sample holds them; select the
 		others and click <strong>Create samples</strong>. Parents are created before their children and
 		linked to them.</p>
 
@@ -402,14 +402,14 @@ function ih_fig($file, $w, $alt, $caption) {
 			<li>At SESAR, open the <strong>Batch Template Creator</strong>, make a template with your SESAR
 			code, choose to enter <strong>Object Type</strong> per sample, and click <strong>Generate
 			Spreadsheet</strong>.</li>
-			<li>On the IGSNs page, tick the samples, click <strong>SESAR batch file</strong>, and choose that
+			<li>On the IGSNs page, select the samples, click <strong>SESAR batch file</strong>, and choose that
 			template. StraboSpot fills in the samples and gives you the file back (nothing else in it
 			changes). Up to 4,999 samples per file.</li>
 			<li>Upload the filled file at SESAR. SESAR assigns the IGSNs right away; its curators review the
 			batch before the records go public.</li>
 			<li>Back on the IGSNs page, click <strong>Find my batch IGSNs</strong>. StraboSpot finds the new
 			IGSNs (each row carries "StraboSpot" and the sample's ID in SESAR's <em>Other Name(s)</em> column)
-			and adds each one to its sample. Drafts still waiting for review start unticked.</li>
+			and adds each one to its sample. Drafts still waiting for review start unselected.</li>
 		</ol>
 
 		<p>This route does not need a SESAR connection until the last step. Without one, you can add the
@@ -423,7 +423,7 @@ function ih_fig($file, $w, $alt, $caption) {
 		<ul>
 			<li><strong>Download report</strong> (My samples tab): an Excel or CSV file with one row per
 			sample: its IGSN and links, its StraboSamples values, its SESAR values, and whether the two are in
-			step. It covers the ticked samples, or every sample with an IGSN that the list currently shows.
+			step. It covers the selected samples, or every sample with an IGSN that the list currently shows.
 			<em>Refresh from SESAR first</em> reads SESAR now and flags anything changed there; it never
 			changes your samples.</li>
 			<li><strong>Download account report</strong> (Import from SESAR tab): every sample in your SESAR
