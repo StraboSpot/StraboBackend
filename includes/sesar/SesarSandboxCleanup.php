@@ -8,9 +8,12 @@
  *              clear     Samples whose IGSN field still holds an IGSN that a
  *                        sandbox registration row tracks for that sample
  *                        (compared normalized: the field may hold the bare
- *                        "IEJMA0003" form). Cleared through updateSample
- *                        (Field writeback, search, changelog). Never by
- *                        pattern: only what StraboSpot tracked (D3).
+ *                        "IEJMA0003" form) AND that production SESAR does not
+ *                        know (10-26: the sandbox holds copies of real records,
+ *                        so a sandbox row can track a real IGSN). Cleared
+ *                        through updateSample (Field writeback, search,
+ *                        changelog). Never by pattern: only what StraboSpot
+ *                        tracked (D3).
  *              untracked REPORT ONLY (Q2): SESAR-shaped values with no
  *                        registration row of any environment, on samples of
  *                        testers, that production SESAR does NOT know. The
@@ -59,16 +62,19 @@ class SesarSandboxCleanup
 
 	/**
 	 * Everything the cleanup would do, changing nothing.
-	 * @return array {clear[], already_clear, changed[], sample_gone, untracked[], unchecked[], created[]}
+	 * @return array {clear[], already_clear, changed[], sample_gone, real[], clear_unchecked[], untracked[], unchecked[], created[]}
 	 *   clear / changed rows: {owner, sample_id, name, field, igsn}
+	 *   real: tracked by a sandbox row but known at production, never cleared: {..., status}
+	 *   clear_unchecked: production lookup failed, not cleared this run: {..., message}
 	 *   untracked / unchecked: {owner, sample_id, name, field, igsn[, message]}
-	 *   created: {owner, sample_id, name, created_at, igsn}
+	 *   created: {owner, sample_id, name, created_at, igsn, production (lookup status of its IGSN)}
 	 * @param int[]|null $onlyOwners limit every list to these sample owners (tests)
 	 */
 	public function plan(array $onlyOwners = null)
 	{
 		$only = $onlyOwners === null ? '' : '{' . implode(',', array_map('intval', $onlyOwners)) . '}';
 		$out = array('clear' => array(), 'already_clear' => 0, 'changed' => array(), 'sample_gone' => 0,
+			'real' => array(), 'clear_unchecked' => array(),
 			'untracked' => array(), 'unchecked' => array(), 'created' => array());
 
 		// ---- clear: sandbox rows (every state) whose sample still holds them
@@ -170,6 +176,42 @@ class SesarSandboxCleanup
 			$listed[$k] = true;
 			$out['created'][] = array('owner' => (int)$c->userpkey, 'sample_id' => (string)$c->id, 'name' => (string)$c->name,
 				'created_at' => (string)$c->created_at, 'igsn' => (string)$c->igsn);
+		}
+
+		// ---- real at production (10-26): the sandbox holds COPIES of real records under the same
+		// IGSNs, so a sandbox row can track a real IGSN (a pull, import or auto-link of the copy).
+		// Prod dry run 10-26: 15 of a tester's real IGSNs sat in the clear list. Anything production
+		// SESAR knows (found / private / deactivated) is never cleared; a failed lookup is not cleared
+		// this run either. Created samples are marked so nobody deletes a real one by hand.
+		$status = $this->productionStatus(array_merge(
+			array_map(function ($i) { return $i['igsn']; }, $out['clear']),
+			array_map(function ($i) { return $i['igsn']; }, $out['created'])));
+		$keep = array();
+		foreach ($out['clear'] as $i) {
+			$st = $status[strtoupper($i['igsn'])];
+			if ($st['status'] === 'not_found') { $keep[] = $i; continue; }
+			if ($st['status'] === 'error') $out['clear_unchecked'][] = $i + array('message' => $st['message']);
+			else $out['real'][] = $i + array('status' => $st['status']);
+		}
+		$out['clear'] = $keep;
+		foreach ($out['created'] as $k => $i) {
+			$out['created'][$k]['production'] = $status[strtoupper($i['igsn'])]['status'];
+		}
+		return $out;
+	}
+
+	/** upper(IGSN) => {status: found|private|gone|not_found|error, message} at production SESAR. */
+	private function productionStatus(array $igsns)
+	{
+		$igsns = array_values(array_unique(array_map('strtoupper', $igsns)));
+		$out = array();
+		foreach (array_chunk($igsns, 8) as $chunk) {
+			$looked = $this->prod->lookupIgsns($chunk);
+			$up = array();
+			foreach ((array)$looked as $k => $v) $up[strtoupper($k)] = $v;
+			foreach ($chunk as $g) {
+				$out[$g] = isset($up[$g]) ? $up[$g] + array('message' => '') : array('status' => 'error', 'message' => 'No answer.');
+			}
 		}
 		return $out;
 	}
