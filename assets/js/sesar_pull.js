@@ -164,7 +164,7 @@
         }
         if (resultHtml) h += resultHtml;
         var changeable = p.rows.filter(function (r) { return r.action === 'fill' || r.action === 'overwrite'; });
-        h += '<div class="sm-group">Values' + (changeable.length && st.phase === 'review' ? '<small>tick the SESAR values to copy into this sample</small>' : '') + '</div>'
+        h += '<div class="sm-group">Values' + (changeable.length && st.phase === 'review' ? '<small>select the SESAR values to copy into this sample</small>' : '') + '</div>'
             + '<table class="sm-table sp-cmp"><thead><tr><th></th><th>Field</th><th>In StraboSamples</th><th>At SESAR</th></tr></thead><tbody>';
         p.rows.forEach(function (r, i) {
             if (r.action === 'same' && r.current == null && r.sesar == null) return;   // empty on both sides: nothing to say

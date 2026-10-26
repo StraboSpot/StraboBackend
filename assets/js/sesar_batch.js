@@ -109,7 +109,7 @@
 
     function renderFind() {
         var h = '<p>SESAR samples whose Other Name(s) name one of your StraboSpot samples, as the SESAR batch file writes them. '
-            + 'Tick the ones to link: each IGSN is added to its sample and linked, and nothing else in the sample changes.</p>';
+            + 'Select the ones to link: each IGSN is added to its sample and linked, and nothing else in the sample changes.</p>';
         if (st.error) h += '<div class="sm-msg err">' + esc(st.error) + '</div>';
         if (st.busy === 'load') h += '<p class="sm-muted">Reading your SESAR account...</p>';
         if (st.rows && !st.rows.length) h += '<div class="sm-msg">No SESAR samples in your account name a StraboSpot sample that is not linked yet.</div>';
@@ -165,7 +165,7 @@
             + ' into a spreadsheet you upload to SESAR yourself. Use it if you register samples through SESAR\'s batch upload instead of from StraboSpot.</p>'
             + '<ol class="sb-steps">'
             + '<li>At ' + ext(o.appBase, 'SESAR') + ', open <strong>Batch Template Creator</strong> and create a template with your SESAR code. '
-            + 'For <strong>Object Type</strong>, choose to enter it per sample. Tick any other fields you want, then click <strong>Generate Spreadsheet</strong>.</li>'
+            + 'For <strong>Object Type</strong>, choose to enter it per sample. Select any other fields you want, then click <strong>Generate Spreadsheet</strong>.</li>'
             + '<li>Choose that file below. StraboSpot fills in your samples and gives the file back. Nothing else in it changes.</li>'
             + '<li>Upload the filled file at SESAR (batch upload). SESAR assigns the IGSNs right away; its curators review the batch before they go public.</li>'
             + '</ol>'
@@ -181,7 +181,7 @@
             + esc(p.sesar_code) + (p.template_version ? ', template ' + esc(p.template_version) : '') + ').</p>';
         if (p.unfilled_columns && p.unfilled_columns.length) {
             h += '<div class="sm-msg sb-warn">Your template has no column for: ' + esc(p.unfilled_columns.join(', '))
-                + '. Those values are left out. To include them, tick those fields in the Batch Template Creator and generate a new template.</div>';
+                + '. Those values are left out. To include them, select those fields in the Batch Template Creator and generate a new template.</div>';
         }
         var skipped = p.samples.filter(function (s) { return !s.included; });
         var noted = p.samples.filter(function (s) { return s.included && s.notes.length; });

@@ -383,7 +383,7 @@ class SesarPull
 
 	/**
 	 * @return array {count, page, pages, rows[] {igsn, name, sesar_code,
-	 *   object_type, material, registered, has_location, parent_igsn, holder}}
+	 *   object_type, material, registered, has_location, location ("lat, lon" or ""), parent_igsn, holder}}
 	 */
 	public function importPage($userpkey, $page, $search = null)
 	{
@@ -409,6 +409,8 @@ class SesarPull
 				'material'     => isset($r['general_material_type']) ? (string)$r['general_material_type'] : '',
 				'registered'   => isset($r['registration_date']) ? $r['registration_date'] : (isset($r['publish_date']) ? $r['publish_date'] : null),
 				'has_location' => isset($r['latitude'], $r['longitude']) && is_numeric($r['latitude']) && is_numeric($r['longitude']),
+				'location'     => (isset($r['latitude'], $r['longitude']) && is_numeric($r['latitude']) && is_numeric($r['longitude']))
+				                  ? sprintf('%.4f, %.4f', $r['latitude'], $r['longitude']) : '',
 				'parent_igsn'  => $pc['normalized'],
 				'holder'       => isset($holders[strtoupper((string)$r['igsn'])]) ? $holders[strtoupper((string)$r['igsn'])] : null,
 			);
@@ -570,6 +572,83 @@ class SesarPull
 			}
 		}
 		// Nothing accepted = only the link (tracking row + snapshot) is recorded.
+		return $this->apply($userpkey, $sampleId, array('mode' => 'review', 'accept' => array()));
+	}
+
+	/**
+	 * The user's samples whose IGSN field already holds an IGSN from their OWN
+	 * SESAR account but which are not linked here yet: mostly IGSNs StraboField
+	 * registered through its own SESAR connection. The IGSNs page links them
+	 * on its own once the account is connected (Claire 10-26). One SESAR list
+	 * read, and none at all when no sample has an unlinked SESAR IGSN.
+	 * IGSNs another account owns are left alone (Pull links those read-only).
+	 *
+	 * @return array {environment, rows[] {sample_id, name, igsn, state},
+	 *   skipped[] {sample_id, name, igsn, reason}, truncated}
+	 */
+	public function ownMatches($userpkey)
+	{
+		$userpkey = (int)$userpkey;
+		$out = array('environment' => $this->env, 'rows' => array(), 'skipped' => array(), 'truncated' => false);
+		$samples = $this->db->get_results_prepared(
+			"SELECT s.id, s.name, s.igsn FROM strabosamples.samples s
+			  WHERE s.userpkey = $1 AND s.igsn IS NOT NULL AND btrim(s.igsn) <> ''
+			    AND NOT EXISTS (SELECT 1 FROM strabosamples.sesar_registrations r
+			                     WHERE r.sample_id = s.id AND r.sample_userpkey = s.userpkey AND r.environment = $2 AND r.active)
+			  ORDER BY s.id",
+			array($userpkey, $this->env)
+		);
+		$byIgsn = array();
+		foreach ((is_array($samples) ? $samples : array()) as $s) {
+			$c = SesarMapper::classifyIgsn($s->igsn);
+			if ($c['kind'] === 'sesar') $byIgsn[strtoupper($c['normalized'])][] = array('sample_id' => (string)$s->id, 'name' => (string)$s->name, 'igsn' => $c['normalized']);
+		}
+		if (empty($byIgsn)) return $out;
+
+		$acct = $this->accountSamples($userpkey);
+		$out['truncated'] = $acct['truncated'];
+		$linked = array();
+		$regs = $this->db->get_results_prepared(
+			"SELECT upper(igsn) AS igsn FROM strabosamples.sesar_registrations
+			  WHERE sample_userpkey = $1 AND environment = $2 AND active AND igsn IS NOT NULL",
+			array($userpkey, $this->env)
+		);
+		foreach ((is_array($regs) ? $regs : array()) as $r) $linked[(string)$r->igsn] = true;
+
+		foreach ($acct['rows'] as $r) {
+			$k = strtoupper((string)$r['igsn']);
+			if (!isset($byIgsn[$k])) continue;
+			$holders = $byIgsn[$k];
+			if (isset($linked[$k])) {
+				foreach ($holders as $h) $out['skipped'][] = $h + array('reason' => $h['igsn'] . ' is already linked to another of your samples.');
+			} elseif (count($holders) > 1) {
+				foreach ($holders as $h) $out['skipped'][] = $h + array('reason' => count($holders) . ' of your samples hold ' . $h['igsn'] . '. An IGSN can be linked to only one sample; use Pull from SESAR on the right one.');
+			} else {
+				$out['rows'][] = $holders[0] + array('state' => self::recordState($r));
+			}
+		}
+		return $out;
+	}
+
+	/**
+	 * Links one sample whose IGSN field holds an IGSN from the user's own
+	 * SESAR account (ownMatches). SESAR is re-read; nothing in the sample
+	 * changes, only the link (tracking row + snapshot) is recorded.
+	 * @return array apply() result
+	 */
+	public function linkOwn($userpkey, $sampleId)
+	{
+		$userpkey = (int)$userpkey;
+		$sampleId = (string)$sampleId;
+		$v = $this->views->build($sampleId, $userpkey);
+		if ($v === null) throw new SesarError(404, 'This is not one of your samples.');
+		if ($this->activeRegistration($sampleId, $userpkey) !== null) throw new SesarError(409, 'This sample is already linked to a SESAR record.');
+		$cls = SesarMapper::classifyIgsn($v['igsn']);
+		if ($cls['kind'] !== 'sesar') throw new SesarError(400, 'Its IGSN field does not hold a SESAR IGSN.');
+		$igsn = $cls['normalized'];
+		$client = $this->client;
+		$row = $this->conn->withAccess($userpkey, function ($access) use ($client, $igsn) { return $client->findOwnByIgsn($access, $igsn); });
+		if (!is_array($row)) throw new SesarError(404, $igsn . ' is not one of the samples in your SESAR account.');
 		return $this->apply($userpkey, $sampleId, array('mode' => 'review', 'accept' => array()));
 	}
 

@@ -284,7 +284,7 @@ check("someone else's sample -> not found", $e !== null && $e->kind === 'not_fou
 $e = mintErr(function () use ($mint, $A, $CH) { $mint->mintOne($A, 'sesarmint-found', array('replace_existing' => true) + $CH); });
 check('IGSN field holds a live SESAR IGSN -> refused even with replace', $e !== null && strpos($e->getMessage(), 'registered at SESAR') !== false);
 $e = mintErr(function () use ($mint, $A, $CH) { $mint->mintOne($A, 'sesarmint-junk', $CH); });
-check('junk IGSN text without replace confirmation -> refused', $e !== null && strpos($e->getMessage(), 'Tick it') !== false);
+check('junk IGSN text without replace confirmation -> refused', $e !== null && strpos($e->getMessage(), 'Select it') !== false);
 check('none of that reached SESAR registration', $posts() === $n0);
 check('no tracking rows left behind', $db->get_var("SELECT count(*) FROM strabosamples.sesar_registrations WHERE sample_userpkey = $A") === '0');
 

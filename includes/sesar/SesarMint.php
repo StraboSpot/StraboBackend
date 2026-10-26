@@ -301,7 +301,7 @@ class SesarMint
 			$verdict = $this->storedIgsnVerdict($cls, $looked);
 			if ($verdict['group'] === 'blocked') throw new SesarError(409, $verdict['text'], array('igsn' => array($verdict['text'])));
 			if (!$replaceExisting) {
-				throw new SesarError(409, 'Its IGSN field already holds "' . trim((string)$v['igsn']) . '". Tick it in the review to replace that value.',
+				throw new SesarError(409, 'Its IGSN field already holds "' . trim((string)$v['igsn']) . '". Select it in the review to replace that value.',
 					array('igsn' => array('replace_not_confirmed')));
 			}
 			$notes[] = 'Replaced the old IGSN field value "' . trim((string)$v['igsn']) . '" (kept in the sample history).';
@@ -595,7 +595,7 @@ class SesarMint
 	{
 		if ($cls['kind'] === 'empty') return array('group' => 'ok', 'text' => null);
 		if ($cls['kind'] === 'invalid') {
-			return array('group' => 'replace', 'text' => 'Its IGSN field holds text that is not an IGSN. Tick it to register a real IGSN in its place.');
+			return array('group' => 'replace', 'text' => 'Its IGSN field holds text that is not an IGSN. Select it to register a real IGSN in its place.');
 		}
 		$n = $cls['normalized'];
 		$st = isset($looked[$n]) ? $looked[$n]['status'] : 'error';
@@ -609,9 +609,9 @@ class SesarMint
 			return array('group' => 'blocked', 'text' => 'Its IGSN field holds ' . $n . ', a DOI that SESAR does not know. It is probably an IGSN from another registry, so registering it again would make a duplicate.');
 		}
 		if ($st === 'gone') {
-			return array('group' => 'replace', 'text' => 'Its IGSN field holds ' . $n . ', which was deactivated at SESAR. Tick it to register a new IGSN.');
+			return array('group' => 'replace', 'text' => 'Its IGSN field holds ' . $n . ', which was deactivated at SESAR. Select it to register a new IGSN.');
 		}
-		return array('group' => 'replace', 'text' => 'Its IGSN field holds ' . $n . ', which SESAR does not know. Tick it to register a real IGSN in its place.');
+		return array('group' => 'replace', 'text' => 'Its IGSN field holds ' . $n . ', which SESAR does not know. Select it to register a real IGSN in its place.');
 	}
 
 	private function validChoices($userpkey, array $in)
