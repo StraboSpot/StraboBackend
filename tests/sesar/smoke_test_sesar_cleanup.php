@@ -105,6 +105,11 @@ mk('sesarclean-c6', $A, '10.58052/IEFAK0306');                  track('sesarclea
 mk('sesarclean-c8', $A, '10.58052/IEFAK0308');                  track('sesarclean-c8', $A, '10.58052/IEFAK0399', 'linked', 'unlinked');
                                                                 track('sesarclean-c8', $A, '10.58052/IEFAK0308', 'linked');   // relinked
 mk('sesarclean-p1', $A, '10.58052/IEFAK0309');                  track('sesarclean-p1', $A, '10.58052/IEFAK0309', 'minted', 'active', 'production');
+// 10-26: sandbox rows tracking REAL IGSNs (the sandbox holds copies of real records): never cleared
+mk('sesarclean-r1', $A, '10.58052/IEFAK0310');                  track('sesarclean-r1', $A, '10.58052/IEFAK0310', 'linked');   // found at production
+mk('sesarclean-r2', $A, 'IEFAK0311');                           track('sesarclean-r2', $A, '10.58052/IEFAK0311', 'linked');   // private at production
+$fake->seedSample('10.58052/IEFAK0310', array('name' => 'Real one', '_owner' => 'x'));
+$fake->seedSample('10.58052/IEFAK0311', array('name' => 'Real private', '_owner' => 'x', '_private' => true));
 
 mk('sesarclean-u0', $A, '10.58052/IEFAK0400');   // lookup fails
 mk('sesarclean-u1', $A, '10.58052/IEFAK0401');   // not at production -> listed
@@ -131,6 +136,7 @@ mk('sesarclean-k6', $A, null);          track('sesarclean-k6', $A, '10.58052/IEF
                                         track('sesarclean-k6', $A, '10.58052/IEFAK0607', 'linked');   // two rows, one sample
 $db->prepare_query("INSERT INTO strabosamples.sample_subsystem_links (sample_id, sample_userpkey, subsystem, reference_id, reference_userpkey)
 	VALUES ('sesarclean-k5', $1, 'field', '123', $1)", array($A));
+mk('sesarclean-k7', $A, null);          track('sesarclean-k7', $A, '10.58052/IEFAK0310', 'linked');   // created from the copy of a real record
 
 // ===========================================================================
 section('constructor');
@@ -145,8 +151,13 @@ $plan = $cleanup->plan($U);
 check('clear = tracked sandbox IGSN still in the field, full / bare / URL form, any row state, relinked sample once',
 	ids($plan['clear']) === array('sesarclean-c1', 'sesarclean-c2', 'sesarclean-c3', 'sesarclean-c8'), ids($plan['clear']));
 check('field holding other text is left and reported as changed', ids($plan['changed']) === array('sesarclean-c4'), $plan['changed']);
-check('empty field counted as already clear (k1-k6 rows + c5)', $plan['already_clear'] === 8, $plan['already_clear']);
+check('empty field counted as already clear (k1-k7 rows + c5)', $plan['already_clear'] === 9, $plan['already_clear']);
 check('row whose sample was deleted counted', $plan['sample_gone'] === 1, $plan['sample_gone']);
+check('sandbox rows tracking IGSNs production knows are NOT cleared, listed as real with the status (r1 found, r2 private)',
+	ids($plan['real']) === array('sesarclean-r1', 'sesarclean-r2') && !array_intersect(ids($plan['clear']), array('sesarclean-r1', 'sesarclean-r2')), $plan['real']);
+$st = array(); foreach ($plan['real'] as $i) $st[$i['sample_id']] = $i['status'];
+check('real list carries the production status', $st === array('sesarclean-r1' => 'found', 'sesarclean-r2' => 'private'), $st);
+check('nothing unchecked in the clear list', $plan['clear_unchecked'] === array(), $plan['clear_unchecked']);
 check('a production row with the same IGSN keeps it (c6), production-only row ignored (p1)',
 	!in_array('sesarclean-c6', ids($plan['clear']), true) && !in_array('sesarclean-p1', ids($plan['clear']), true));
 check('plan changes nothing', regSnapshot() === $before && spine('sesarclean-c1', $A) === '10.58052/IEFAK0301');
@@ -158,13 +169,17 @@ check('a failed lookup is listed apart, never as not found', ids($plan['unchecke
 $asked = array_map(function ($c) { parse_str((string)parse_url($c['url'], PHP_URL_QUERY), $q); return $q['igsn']; }, $fake->calls('landing-page'));
 check('lookups went to PRODUCTION SESAR only', count($fake->calls('landing-page')) > 0 && count(array_filter($fake->calls('landing-page'), function ($c) { return strpos($c['url'], 'api.geosamples.org') !== false && strpos($c['url'], 'sandbox') === false; })) === count($fake->calls('landing-page')),
 	array_map(function ($c) { return $c['url']; }, $fake->calls('landing-page')));
-check('tracked values, junk text and non-testers are never looked up',
-	!in_array('10.58052/IEFAK0301', $asked, true) && !in_array('10.58052/IEFAK0501', $asked, true) && count($asked) === 5, $asked);
+check('junk text and non-testers are never looked up; clear candidates are, once each (10-26)',
+	!in_array('10.58052/IEFAK0501', $asked, true) && count(array_keys($asked, '10.58052/IEFAK0301', true)) === 1
+	&& in_array('10.58052/IEFAK0310', $asked, true), $asked);
 check('no SESAR call other than landing-page lookups', count($fake->calls()) === count($fake->calls('landing-page')));
 
 section('plan (Q3 created from sandbox records, report only)');
 check('only a linked row written with its sample, no links, no children; one line per sample',
-	ids($plan['created']) === array('sesarclean-k1', 'sesarclean-k6'), ids($plan['created']));
+	ids($plan['created']) === array('sesarclean-k1', 'sesarclean-k6', 'sesarclean-k7'), ids($plan['created']));
+$cp = array(); foreach ($plan['created'] as $i) $cp[$i['sample_id']] = $i['production'];
+check('created samples carry the production status of their IGSN (k7 = copy of a real record)',
+	$cp['sesarclean-k7'] === 'found' && $cp['sesarclean-k1'] === 'not_found', $cp);
 
 // ===========================================================================
 section('apply');
@@ -178,6 +193,7 @@ pg_close($other);
 check('cleared c1 + c3, skipped c2 (edited since the plan), c8 busy', $r['cleared'] === 2 && $r['skipped'] === 1
 	&& count($r['failed']) === 1 && $r['failed'][0]['sample_id'] === 'sesarclean-c8' && strpos($r['failed'][0]['error'], 'busy') !== false, $r);
 check('fields cleared', spine('sesarclean-c1', $A) === null && spine('sesarclean-c3', $A) === null, array(spine('sesarclean-c1', $A), spine('sesarclean-c3', $A)));
+check('real IGSNs kept by apply', spine('sesarclean-r1', $A) === '10.58052/IEFAK0310' && spine('sesarclean-r2', $A) === 'IEFAK0311');
 check('edited field kept, left-alone fields kept', spine('sesarclean-c2', $A) === 'EDITED-AFTER-PLAN' && spine('sesarclean-c4', $A) === 'MY-OWN-TEXT'
 	&& spine('sesarclean-c6', $A) === '10.58052/IEFAK0306' && spine('sesarclean-u1', $A) === '10.58052/IEFAK0401');
 check('each clear went through updateSample (changelog)', (int)$db->get_var("SELECT count(*) FROM strabosamples.sample_changelog WHERE sample_userpkey = $A") === $clBefore + 2);
@@ -191,6 +207,14 @@ $p3 = $cleanup->plan($U);
 check('a sandbox IGSN that came back is found again', ids($p3['clear']) === array('sesarclean-c1'), ids($p3['clear']));
 $cleanup->apply($p3);
 check('and cleared again', spine('sesarclean-c1', $A) === null);
+$db->prepare_query("UPDATE strabosamples.samples SET igsn = 'IEFAK0301' WHERE id = 'sesarclean-c1' AND userpkey = $1", array($A));
+$db->query("UPDATE strabosamples.samples SET igsn = NULL WHERE userpkey = $A AND id LIKE 'sesarclean-u%'");   // so the first lookup is c1's
+$fake->set('fail_next', array('landing-page' => 503));
+$p4 = $cleanup->plan($U);
+check('production lookup fails for a clear candidate -> not cleared this run, listed apart',
+	ids($p4['clear']) === array() && ids($p4['clear_unchecked']) === array('sesarclean-c1'), array(ids($p4['clear']), $p4['clear_unchecked']));
+$cleanup->apply($p4);
+check('and the field is kept', spine('sesarclean-c1', $A) === 'IEFAK0301');
 
 // ===========================================================================
 section('CLI');

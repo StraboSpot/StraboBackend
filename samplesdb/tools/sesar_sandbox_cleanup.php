@@ -71,6 +71,15 @@ try {
 		foreach ($plan['changed'] as $i) echo '  ' . $line($i) . '   (tracked: ' . $i['igsn'] . ")\n";
 	}
 
+	if ($plan['real']) {
+		echo "   NOT cleared, real IGSNs known at production SESAR (the sandbox holds copies of real records) (" . count($plan['real']) . "):\n";
+		foreach ($plan['real'] as $i) echo '  ' . $line($i) . '   (production: ' . $i['status'] . ")\n";
+	}
+	if ($plan['clear_unchecked']) {
+		echo "   NOT cleared this run, production SESAR could not be asked; run again (" . count($plan['clear_unchecked']) . "):\n";
+		foreach ($plan['clear_unchecked'] as $i) echo '  ' . $line($i) . '   (' . $i['message'] . ")\n";
+	}
+
 	echo "\n2. REPORT ONLY: IGSNs typed in by hand (no tracking row) that real SESAR does not know (" . count($plan['untracked']) . ")\n";
 	echo "   Likely sandbox test values. Fix by hand in the sample's Edit Metadata.\n";
 	foreach ($plan['untracked'] as $i) echo $line($i) . "\n";
@@ -83,6 +92,10 @@ try {
 	echo "   No Field/Micro/Exp links and no children. Delete by hand if they were only for testing (curl asks for the password):\n";
 	foreach ($plan['created'] as $i) {
 		echo '  ' . $email($i['owner']) . ' | ' . $i['sample_id'] . ' | ' . $i['name'] . ' | created ' . substr($i['created_at'], 0, 19) . ' | ' . $i['igsn'] . "\n";
+		if ($i['production'] !== 'not_found') {
+			echo '     KEEP unless you are sure: this IGSN is ' . ($i['production'] === 'error' ? 'unchecked' : $i['production']) . " at production SESAR (a real record; the sample may be real).\n";
+			continue;
+		}
 		echo '     curl -u ' . $email($i['owner']) . ' -X DELETE https://strabospot.org/samplesdb/sample/' . rawurlencode($i['sample_id']) . "\n";
 	}
 
