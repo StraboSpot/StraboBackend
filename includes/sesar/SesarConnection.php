@@ -54,6 +54,7 @@ class SesarConnection
 	public function connectWithOrcid($userpkey, $orcidIdToken, $orcidId)
 	{
 		if ($this->key === null) throw new SesarError(500, 'SESAR token storage is not configured.');
+		$this->assertOrcidFree($userpkey, $orcidId);
 		$pair = $this->client->tokenFromOrcid($orcidIdToken);
 		$user = null;
 		$codes = null;
@@ -193,6 +194,14 @@ class SesarConnection
 	/** Forget the tokens locally. (SESAR-side revocation is the user's Developer Settings.) */
 	public function disconnect($userpkey)
 	{
+		// Revoke the refresh token at SESAR too (10-26), not just our copy. Best effort: an
+		// unreachable SESAR never blocks a disconnect; the token then simply expires there.
+		$row = $this->db->get_row_prepared("SELECT refresh_token_enc FROM strabosamples.sesar_connections WHERE userpkey = $1 AND environment = $2",
+			array((int)$userpkey, $this->env));
+		$refresh = ($row !== null && $this->key !== null) ? SesarCrypto::open($row->refresh_token_enc, $this->key) : null;
+		if ($refresh !== null) {
+			try { $this->client->blacklist($refresh); } catch (Throwable $e) { /* best effort */ }
+		}
 		$this->db->prepare_query(
 			"UPDATE strabosamples.sesar_connections
 			    SET refresh_token_enc = NULL, refresh_expires_at = NULL, access_token_enc = NULL, access_expires_at = NULL,
@@ -200,6 +209,35 @@ class SesarConnection
 			  WHERE userpkey = $1 AND environment = $2",
 			array((int)$userpkey, $this->env)
 		);
+	}
+
+	/**
+	 * One ORCID iD, one StraboSpot account (per environment). ORCID approves at once when the
+	 * browser is still signed in to ORCID as someone else, so without this a shared browser tied
+	 * user B's StraboSpot account to user A's SESAR account (10-26, found on prod: A had even
+	 * disconnected first, which does not sign the browser out of ORCID). So ANY row of another
+	 * account with this ORCID iD holds it, disconnected or not; Disconnect does not release it,
+	 * an admin does (delete that account's sesar_connections + sesar_onboarding rows).
+	 * @throws SesarError 409 when another account holds this ORCID iD
+	 */
+	public function assertOrcidFree($userpkey, $orcidId)
+	{
+		$held = $this->db->get_var_prepared(
+			"SELECT 1 FROM strabosamples.sesar_connections
+			  WHERE environment = $1 AND orcid = $2 AND userpkey <> $3
+			 UNION ALL
+			 SELECT 1 FROM strabosamples.sesar_onboarding
+			  WHERE environment = $1 AND orcid = $2 AND userpkey <> $3
+			 LIMIT 1",
+			array($this->env, (string)$orcidId, (int)$userpkey)
+		);
+		if ($held) {
+			throw new SesarError(409, 'The ORCID iD you signed in with (' . $orcidId . ') is already connected to SESAR from another '
+				. 'StraboSpot account. Each ORCID iD can be connected to one StraboSpot account. If this is not your ORCID iD, '
+				. 'sign out at orcid.org (or use a private browser window) and connect again with your own. If it is yours, '
+				. 'please contact StraboSpot to move it to this account.',
+				array('orcid' => array('in_use')));
+		}
 	}
 
 	/** What pages may show. Never includes tokens. */

@@ -228,9 +228,33 @@ $s = $ob->check($D);
 check('revoked at SESAR, no ORCID sign-in held -> reconnect', $s['step'] === 'reconnect' && $s['can_check'] === false, $s);
 $s = $ob->acceptOrcid($D, $ident('tok-D', '0000-0000-0000-00D1'));
 check('signing in again restores the connection', $s['step'] === 'connected', $s);
+$refreshD = SesarCrypto::open($db->get_var_prepared("SELECT refresh_token_enc FROM strabosamples.sesar_connections WHERE userpkey = $1", array($D)), $KEY);
 $s = $ob->disconnect($D);
+$tokD = $fake->state()['tokens'][$refreshD];
+check('disconnect revokes the refresh token at SESAR (blacklist), not just our copy', count($fake->calls('auth/token/blacklist/')) === 1 && $tokD['blacklisted'] === true);
 check('disconnect -> not_connected, tokens gone', $s['step'] === 'not_connected'
 	&& $db->get_var_prepared("SELECT count(*) FROM strabosamples.sesar_connections WHERE userpkey = $1 AND refresh_token_enc IS NOT NULL", array($D)) == 0, $s);
+
+// One ORCID iD, one StraboSpot account (10-26: a browser still signed in to ORCID as A connected B to A's SESAR).
+$cBefore = $db->get_row_prepared("SELECT orcid, id_token_enc FROM strabosamples.sesar_onboarding WHERE userpkey = $1 AND environment = 'sandbox'", array($C));
+$e = null;
+try { $ob->acceptOrcid($C, $ident('tok-A', '0000-0000-0000-00A1')); } catch (SesarError $x) { $e = $x; }
+check("signing in with an ORCID iD another account is connected with -> 409, plain message", $e !== null && $e->status === 409
+	&& strpos($e->getMessage(), 'already connected to SESAR from another StraboSpot account') !== false && strpos($e->getMessage(), 'onboard') === false, $e ? $e->getMessage() : null);
+$cAfter = $db->get_row_prepared("SELECT orcid, id_token_enc FROM strabosamples.sesar_onboarding WHERE userpkey = $1 AND environment = 'sandbox'", array($C));
+check('nothing stored for the refused account', $cAfter->orcid === $cBefore->orcid && $cAfter->id_token_enc === $cBefore->id_token_enc
+	&& !$db->get_var_prepared("SELECT 1 FROM strabosamples.sesar_connections WHERE userpkey = $1 AND orcid = '0000-0000-0000-00A1'", array($C)));
+$e = null;
+try { $conn->connectWithOrcid($C, 'tok-A', '0000-0000-0000-00A1'); } catch (SesarError $x) { $e = $x; }
+check('connectWithOrcid refuses it too (second gate)', $e !== null && $e->status === 409);
+check('the holder itself may sign in again', $ob->acceptOrcid($A, $ident('tok-A', '0000-0000-0000-00A1'))['step'] === 'connected');
+$e = null;
+try { $ob->acceptOrcid($C, $ident('tok-D', '0000-0000-0000-00D1')); } catch (SesarError $x) { $e = $x; }
+check("a DISCONNECTED account still holds its ORCID iD (disconnect does not sign the browser out of ORCID)", $e !== null && $e->status === 409);
+check('...and the message says how to move it', $e !== null && strpos($e->getMessage(), 'contact StraboSpot') !== false);
+$s = $ob->acceptOrcid($D, $ident('tok-D', '0000-0000-0000-00D1'));
+check('the disconnected holder itself can connect again', $s['step'] === 'connected', $s);
+check('ORCID sign-in always asks to sign in (prompt=login)', strpos(SesarOrcid::authorizeUrl('s'), 'prompt=login') !== false);
 
 // ===========================================================================
 section('HTTP: pages + endpoint (forged sessions, no SESAR/ORCID calls)');
