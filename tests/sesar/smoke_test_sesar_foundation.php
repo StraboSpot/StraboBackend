@@ -72,7 +72,7 @@ section('Gate + environment (D10)');
 check('Jason (3) may use it', SesarAccess::canUse(3));
 check('Claire (7217) may use it', SesarAccess::canUse(7217));
 check('string "3" (session value) is cast', SesarAccess::canUse('3'));
-check('fixture user may not', !SesarAccess::canUse($U1));
+check('any logged-in user may (public launch 10-26), e.g. a fixture user', SesarAccess::canUse($U1));
 check('0 / null may not', !SesarAccess::canUse(0) && !SesarAccess::canUse(null));
 $saved = isset($GLOBALS['sesar_env']) ? $GLOBALS['sesar_env'] : null;
 unset($GLOBALS['sesar_env']);

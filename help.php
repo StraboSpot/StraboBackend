@@ -158,6 +158,7 @@ include("includes/mheader.php");
 			<h2 style="color: #ffffff; font-size: 2em; font-weight: 300; margin-bottom: 0.5em;">StraboSamples Help</h2>
 			<div style="padding-left:50px;padding-bottom:30px;">
 				<div class="medHeader" style="padding-left:20px;"><a href="/manual/samples" target="_blank">StraboSamples User Guide</a></div>
+				<div class="medHeader" style="padding-left:20px;padding-top:10px;"><a href="/help_igsn.php" target="_blank">IGSNs: Registering Samples at SESAR</a></div>
 			</div>
 		</section>
 

@@ -1,15 +1,17 @@
 <?php
 /**
  * File: includes/sesar/SesarAccess.php
- * Description: Soft-launch gate and configuration for the StraboSamples IGSN
+ * Description: Access gate and configuration for the StraboSamples IGSN
  *              (SESAR) integration (docs/StraboSamples_IGSN_Feature_Request/
  *              IGSN_Design_Decisions.md D10).
  *
- *              canUse() is the ONE place the pilot allowlist lives. Every
- *              surface checks it: the IGSN page, the My Samples button, the
- *              Sample Overview actions and every endpoint (server-side
- *              refusal, not just hidden buttons). Full launch = make
- *              canUse() return true for any logged-in user.
+ *              canUse() is the ONE gate. Every surface checks it: the IGSN
+ *              page, the My Samples button, the Sample Overview actions and
+ *              every endpoint (server-side refusal, not just hidden buttons).
+ *              Public since 10-26: any logged-in user. SESAR itself still
+ *              approves each account's API access by hand (Sean, 10-26), so a
+ *              new user's first stop is the in-app access request.
+ *              Rollback = return to the pilot list in canUse() (one line).
  *
  *              Configuration comes from includes/config.inc.php globals:
  *                $sesar_env                  'sandbox' | 'production'
@@ -31,7 +33,7 @@
 
 class SesarAccess
 {
-	/** Soft-launch pilot users (D10): Jason, Claire (7217). */
+	/** Pilot testers (D10): Jason, Claire (7217). Since the public launch only the sandbox cleanup's tester list. */
 	const PILOT_USERPKEYS = array(3, 7217);
 
 	/** ORCID redirect URI registered on the web ORCID client (exact match required by ORCID). */
@@ -55,7 +57,7 @@ class SesarAccess
 
 	public static function canUse($userpkey)
 	{
-		return in_array((int)$userpkey, self::PILOT_USERPKEYS, true);
+		return (int)$userpkey > 0;   // any logged-in user (public launch 10-26)
 	}
 
 	public static function environment()

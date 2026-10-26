@@ -327,7 +327,7 @@ $other = forgeSession($A);
 $r = http('POST', '/sesar_deactivate.php', null, array('action' => 'preview', 'sample_id' => 'x'));
 check('no session -> 401', $r['status'] === 401 && $r['json']['error'] === 'not_authenticated', $r['body']);
 $r = http('POST', '/sesar_deactivate.php', $other, array('action' => 'preview', 'sample_id' => 'sesardeact-l'));
-check('non-pilot -> 403 (server-side gate)', $r['status'] === 403 && $r['json']['error'] === 'not_allowed', $r['body']);
+check('logged-in owner off the old pilot list passes the gate (public launch)', $r['status'] !== 403 && $r['json']['error'] !== 'not_allowed', $r['body']);
 $r = http('GET', '/sesar_deactivate.php', $pilot);
 check('GET -> 405', $r['status'] === 405);
 $r = http('POST', '/sesar_deactivate.php', $pilot, array('action' => 'explode'));

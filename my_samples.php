@@ -84,8 +84,8 @@ foreach ($samples as &$s) {
 }
 unset($s);
 
-// IGSN row on the cards: pilot testers only until the SESAR gate opens
-// (then drop the canUse() check). An IGSN StraboSpot manages at SESAR links
+// IGSN row on the cards (canUse(): any logged-in user since the public
+// launch; kept as the one rollback switch). An IGSN StraboSpot manages at SESAR links
 // to its SESAR page, like the IGSN field on the Sample Overview; any other
 // value in the field shows as typed.
 $showIgsn = SesarAccess::canUse($userpkey);
@@ -1021,7 +1021,7 @@ include("includes/mheader.php");
     'use strict';
 
     var rawData = JSON.parse(document.getElementById('ms-data').textContent || '[]');
-    // IGSN row on the cards (pilot testers only for now, see the PHP above).
+    // IGSN row on the cards (see the PHP above).
     var SHOW_IGSN = <?php echo $showIgsn ? 'true' : 'false'; ?>;
     var SESAR_SANDBOX = <?php echo ($showIgsn && $sesarEnv === 'sandbox') ? 'true' : 'false'; ?>;
 
