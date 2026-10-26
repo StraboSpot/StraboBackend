@@ -383,7 +383,7 @@ class SesarPull
 
 	/**
 	 * @return array {count, page, pages, rows[] {igsn, name, sesar_code,
-	 *   object_type, material, registered, has_location, parent_igsn, holder}}
+	 *   object_type, material, registered, has_location, location ("lat, lon" or ""), parent_igsn, holder}}
 	 */
 	public function importPage($userpkey, $page, $search = null)
 	{
@@ -409,6 +409,8 @@ class SesarPull
 				'material'     => isset($r['general_material_type']) ? (string)$r['general_material_type'] : '',
 				'registered'   => isset($r['registration_date']) ? $r['registration_date'] : (isset($r['publish_date']) ? $r['publish_date'] : null),
 				'has_location' => isset($r['latitude'], $r['longitude']) && is_numeric($r['latitude']) && is_numeric($r['longitude']),
+				'location'     => (isset($r['latitude'], $r['longitude']) && is_numeric($r['latitude']) && is_numeric($r['longitude']))
+				                  ? sprintf('%.4f, %.4f', $r['latitude'], $r['longitude']) : '',
 				'parent_igsn'  => $pc['normalized'],
 				'holder'       => isset($holders[strtoupper((string)$r['igsn'])]) ? $holders[strtoupper((string)$r['igsn'])] : null,
 			);

@@ -109,6 +109,7 @@ if ($allowed && $configured) {
 			// Field vs SESAR differences as of the last pull (D5): labels only.
 			'differs'  => is_array($flags) ? array_values(array_map(function ($f) { return (string)$f['label']; }, $flags)) : array(),
 			'hasLoc' => is_numeric($r->latitude) && is_numeric($r->longitude),
+			'loc'    => (is_numeric($r->latitude) && is_numeric($r->longitude)) ? sprintf('%.4f, %.4f', $r->latitude, $r->longitude) : '',
 			// Phase 6: would a send change anything at SESAR (labels), or add the missing link back.
 			'pushable' => $pushSt !== null && $pushSt['pushable'],
 			'changed'  => ($pushSt !== null && $pushSt['pushable']) ? $pushSt['fields'] : array(),
@@ -195,6 +196,7 @@ include("includes/mheader.php");
 .si-pill.other { background: rgba(170, 140, 230, 0.2); color: #d2c2f4; }
 .si-pill.invalid { background: rgba(228, 76, 101, 0.18); color: #f5a3b3; }
 .si-pill.noloc { background: rgba(240, 180, 60, 0.18); color: #f3c97a; }
+.si-coord { white-space: nowrap; font-variant-numeric: tabular-nums; font-size: 0.9em; }
 .si-orphans { margin: 0 0 1.75em; padding: 1em 1.25em; border-radius: 6px; background: rgba(240,180,60,0.08); border: 1px solid rgba(240,180,60,0.35); }
 .si-orphans h3 { margin: 0 0 0.4em; font-size: 1.05em; color: #fff; }
 .si-orphans td.si-oact { text-align: right; white-space: nowrap; }
@@ -221,9 +223,11 @@ include("includes/mheader.php");
 .si-lead { margin: 0 0 1em; color: rgba(255,255,255,0.8); }
 .si-help { margin: 0 0 1.25em; padding: 0.6em 1em; border-radius: 4px; background: rgba(255,255,255,0.05); font-size: 0.93em; }
 .si-help summary { cursor: pointer; color: #fff; font-weight: 600; }
-.si-help h4 { margin: 1.1em 0 0.2em; font-size: 0.78em; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255,255,255,0.55); }
+/* Section headings lead (accent, rule above); the button / state names under them sit one step quieter. */
+.si-help h4 { margin: 1.2em 0 0.3em; padding-top: 0.8em; border-top: 1px solid rgba(255,255,255,0.15);
+              font-size: 1.05em; font-weight: 700; color: #e44c65; }
 .si-help dl { margin: 0; }
-.si-help dt { margin-top: 0.5em; color: #fff; font-weight: 600; }
+.si-help dt { margin-top: 0.5em; color: rgba(255,255,255,0.92); font-weight: 600; font-size: 0.95em; }
 .si-help dd { margin: 0.1em 0 0 1em; color: rgba(255,255,255,0.75); }
 .si-pager { display: flex; gap: 0.75em; align-items: center; justify-content: center; margin: 1em 0; }
 .si-more { text-align: center; margin: 1em 0; }
@@ -801,7 +805,7 @@ body { overflow-x: clip; overflow-y: visible; }
                     : 'The SESAR record has no link back to this sample yet') + '">' + (r.changed.length ? 'Changed since sent' : 'No link back') + '</span>' : '')
                 + (r.differs.length ? '<span class="si-pill differs" title="' + esc('As of the last pull, SESAR and the StraboField spot differ in: ' + r.differs.join(', ').toLowerCase()) + '">Differs from Field</span>' : '')
                 + '</td>'
-                + '<td class="si-col-loc">' + (r.hasLoc ? 'Yes' : '<span class="si-pill noloc">Missing</span>') + '</td></tr>';
+                + '<td class="si-col-loc">' + (r.hasLoc ? '<span class="si-coord" title="Latitude, longitude">' + esc(r.loc) + '</span>' : '<span class="si-pill noloc">Missing</span>') + '</td></tr>';
         }).join('') || '<tr><td colspan="5" class="si-muted">No samples match.</td></tr>';
         more.hidden = list.length <= shown;
         var vis = list.slice(0, shown).filter(selectable);
@@ -1058,7 +1062,7 @@ body { overflow-x: clip; overflow-y: visible; }
                 + (meta ? '<div class="si-muted">' + esc(meta) + '</div>' : '') + '</td>'
                 + '<td class="si-igsn"><a href="' + esc(STATUS.links.landing_base + r.igsn) + '" target="_blank" rel="noopener">' + esc(r.igsn) + '</a></td>'
                 + '<td>' + (r.holder ? '<a href="' + esc(r.holder.url) + '">' + esc(r.holder.name) + '</a>' : '<span class="si-muted">not yet</span>') + '</td>'
-                + '<td class="si-col-loc">' + (r.has_location ? 'Yes' : '<span class="si-pill noloc">Missing</span>') + '</td></tr>';
+                + '<td class="si-col-loc">' + (r.has_location ? '<span class="si-coord" title="Latitude, longitude">' + esc(r.location) + '</span>' : '<span class="si-pill noloc">Missing</span>') + '</td></tr>';
         }).join('') || '<tr><td colspan="5" class="si-muted">' + (imp.search ? 'No samples match.' : 'Your SESAR account has no samples yet.') + '</td></tr>';
         impPrev.hidden = imp.page <= 1;
         impNext.hidden = imp.page >= imp.pages;
