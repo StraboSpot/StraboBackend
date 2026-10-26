@@ -3,7 +3,7 @@
  * File: includes/sesar/SesarEndpoint.php
  * Description: What every sesar_*.php endpoint does around its own work:
  *              the logged-in user of a POST request, the JSON body, the
- *              pilot gate, and the answer for a SesarError. One copy, so the
+ *              access gate, and the answer for a SesarError. One copy, so the
  *              endpoints can never drift apart.
  *
  *              config.inc.php, db.php and neodb.php are NOT included here:

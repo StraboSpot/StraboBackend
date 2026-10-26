@@ -485,7 +485,7 @@ $other = forgeSession($A);
 $r = http('POST', '/sesar_mint.php', null, array('action' => 'plan', 'sample_ids' => array('x')));
 check('no session -> 401', $r['status'] === 401 && $r['json']['error'] === 'not_authenticated', $r['body']);
 $r = http('POST', '/sesar_mint.php', $other, array('action' => 'mint', 'sample_id' => 'sesarmint-t7'));
-check('non-pilot -> 403 (server-side gate)', $r['status'] === 403 && $r['json']['error'] === 'not_allowed', $r['body']);
+check('logged-in owner off the old pilot list passes the gate (public launch)', $r['status'] !== 403 && $r['json']['error'] !== 'not_allowed', $r['body']);
 $r = http('GET', '/sesar_mint.php', $pilot);
 check('GET -> 405', $r['status'] === 405);
 $r = http('POST', '/sesar_mint.php', $pilot, 'not json');

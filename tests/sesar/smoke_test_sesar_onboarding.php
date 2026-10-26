@@ -265,7 +265,7 @@ $other = forgeSession($U[0]);
 $r = http('POST', '/sesar_connect.php', null, array('action' => 'status'));
 check('endpoint: no session -> 401 JSON', $r['status'] === 401 && $r['json']['error'] === 'not_authenticated', $r['body']);
 $r = http('POST', '/sesar_connect.php', $other, array('action' => 'status'));
-check('endpoint: non-pilot -> 403', $r['status'] === 403 && $r['json']['error'] === 'not_allowed', $r['body']);
+check('endpoint: any logged-in user -> 200 status (public launch)', $r['status'] === 200 && $r['json']['ok'] === true, $r['body']);
 $r = http('GET', '/sesar_connect.php', $pilot);
 check('endpoint: GET -> 405', $r['status'] === 405);
 $r = http('POST', '/sesar_connect.php', $pilot, 'not json');
@@ -286,14 +286,14 @@ $r = http('GET', '/sesar_orcid_start.php', $pilot);
 check('popup start: 302 to ORCID with web client + state', $r['status'] === 302 && strpos($r['location'], 'https://orcid.org/oauth/authorize?') === 0
 	&& strpos($r['location'], 'client_id=' . urlencode(SesarAccess::orcidClientId())) !== false && preg_match('/state=[0-9a-f]{32}/', $r['location']), $r['location']);
 $r = http('GET', '/sesar_orcid_start.php', $other);
-check('popup start: non-pilot -> 403', $r['status'] === 403);
+check('popup start: any logged-in user -> 302 to ORCID', $r['status'] === 302 && strpos($r['location'], 'https://orcid.org/oauth/authorize?') === 0);
 $r = http('GET', '/sesar_orcid_callback.php?code=abc&state=forged', $pilot);
 check('callback: forged state -> 400, nothing exchanged', $r['status'] === 400 && strpos($r['body'], 'expired or was already used') !== false);
 $r = http('GET', '/sesar_orcid_callback.php?error=access_denied&state=x', $pilot);
 check('callback: Deny at ORCID -> friendly cancel message', $r['status'] === 200 && strpos($r['body'], 'cancelled') !== false);
 check('callback: posts result to the opener only on our origin', strpos($r['body'], 'window.location.origin') !== false);
 $r = http('GET', '/sesar_orcid_callback.php?code=abc&state=x', $other);
-check('callback: non-pilot -> 403', $r['status'] === 403);
+check('callback: any logged-in user, unknown state -> 400, nothing exchanged', $r['status'] === 400);
 
 $r = http('GET', '/samples_igsn.php', $pilot);
 check('IGSN page renders for the pilot (shell, panel, table, no PHP noise)', $r['status'] === 200 && strpos($r['body'], 'IGSNs at SESAR') !== false
@@ -301,12 +301,12 @@ check('IGSN page renders for the pilot (shell, panel, table, no PHP noise)', $r[
 	&& !preg_match('/(Warning|Notice|Fatal error|Error preparing)/', $r['body']), substr($r['body'], 0, 300));
 check('IGSN page embeds no token', strpos($r['body'], 'eyJ') === false);
 $r = http('GET', '/samples_igsn.php', $other);
-check('IGSN page: non-pilot sees "not available", no panel', $r['status'] === 200 && strpos($r['body'], 'not available for your account') !== false
-	&& strpos($r['body'], 'id="si-conn"') === false);
+check('IGSN page: any logged-in user gets the page and panel', $r['status'] === 200 && strpos($r['body'], 'id="si-conn"') !== false
+	&& strpos($r['body'], 'not available for your account') === false);
 $r = http('GET', '/my_samples.php', $pilot);
 check('My Samples: IGSNs button for the pilot', strpos($r['body'], 'href="/samples_igsn.php"') !== false);
 $r = http('GET', '/my_samples.php', $other);
-check('My Samples: no IGSNs button for others', $r['status'] === 200 && strpos($r['body'], 'href="/samples_igsn.php"') === false);
+check('My Samples: IGSNs button for any logged-in user', $r['status'] === 200 && strpos($r['body'], 'href="/samples_igsn.php"') !== false);
 
 } finally {
 	cleanup();

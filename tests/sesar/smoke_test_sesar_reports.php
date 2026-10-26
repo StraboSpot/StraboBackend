@@ -521,7 +521,7 @@ check('batch: unknown action -> 400', $r['status'] === 400 && $r['json']['error'
 $r = http('POST', '/sesar_batch.php', $pilot, array('action' => 'check', 'ids' => '["x"]'));
 check('batch: no file -> 400 plain message', $r['status'] === 400 && strpos($r['json']['message'], 'Batch Template Creator') !== false);
 $r = http('POST', '/sesar_batch.php', $other, array('action' => 'check', 'ids' => '["sesarrep-parent"]', 'file' => $file));
-check('batch: non-pilot -> 403 (server-side gate)', $r['status'] === 403 && $r['json']['error'] === 'not_allowed');
+check('batch: logged-in owner passes the gate (public launch)', $r['status'] !== 403);
 $r = http('POST', '/sesar_batch.php', $pilot, array('action' => 'check', 'ids' => '["sesarrep-parent"]', 'file' => new CURLFile($TMP . '/junk.xlsx', 'text/plain', 'junk.xlsx')));
 check('batch: not a template -> 400', $r['status'] === 400 && $r['json']['error'] === 'validation');
 $r = http('POST', '/sesar_batch.php', $pilot, array('action' => 'check', 'ids' => '["sesarrep-parent"]', 'file' => $file));
@@ -530,7 +530,7 @@ check("batch: pilot checking someone else's sample -> it is left out", $r['statu
 $r = http('POST', '/sesar_reports.php', null, array('report' => 'igsns'));
 check('reports: no session -> 401', $r['status'] === 401);
 $r = http('POST', '/sesar_reports.php', $other, array('report' => 'igsns'));
-check('reports: non-pilot -> 403', $r['status'] === 403 && $r['json']['error'] === 'not_allowed');
+check('reports: logged-in user passes the gate (public launch)', $r['status'] !== 403);
 $r = http('POST', '/sesar_reports.php', $pilot, array('report' => 'nope'));
 check('reports: unknown report -> 400', $r['status'] === 400);
 $r = http('GET', '/sesar_reports.php', $pilot);
@@ -541,7 +541,7 @@ check("reports: pilot asking for someone else's sample -> header row only", $r['
 $r = http('POST', '/sesar_pull.php', null, null, array('action' => 'batch_matches'));
 check('pull batch_matches: no session -> 401', $r['status'] === 401);
 $r = http('POST', '/sesar_pull.php', $other, null, array('action' => 'batch_link', 'sample_id' => 'sesarrep-m-pend', 'igsn' => '10.58052/IEFAK0B03'));
-check('pull batch_link: non-pilot -> 403, nothing written', $r['status'] === 403 && reg('sesarrep-m-pend', $A) === null);
+check('pull batch_link: owner without a real SESAR connection is refused, nothing written', $r['status'] !== 200 && reg('sesarrep-m-pend', $A) === null, $r['body']);
 $r = http('POST', '/sesar_pull.php', $pilot, null, array('action' => 'batch_link', 'sample_id' => 'sesarrep-m-pend', 'igsn' => 'bad'));
 check('pull batch_link: not an IGSN -> 400', $r['status'] === 400);
 

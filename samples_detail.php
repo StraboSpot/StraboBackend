@@ -482,7 +482,7 @@ if (!$notFound) {
     // IGSN at SESAR (StraboSamples IGSN integration): the registration
     // StraboSpot manages for this sample, if any (the IGSN links to its
     // SESAR page, with a badge while we use SESAR's test site), and the
-    // owner's "Register IGSN" button (pilot-gated, D10). The button shows
+    // owner's "Register IGSN" button (SesarAccess::canUse, D10). The button shows
     // only while the IGSN field is empty or holds text that is not an
     // IGSN; the review (sesar_mint.php) decides everything else.
     // "Pull from SESAR" (D5) shows for the owner while the field holds an
@@ -550,7 +550,7 @@ if (!$notFound) {
         'can_unlink'  => $sesarPilot && $sesarReg && $sesarReg->origin === 'linked' && $sesarReg->state === 'active',
         'push'        => null,
     );
-    // "Changed since last sent to SESAR" (Phase 6, P1 + P4): owner + pilot,
+    // "Changed since last sent to SESAR" (Phase 6, P1 + P4): owner + canUse,
     // managed links only; no SESAR call (sample vs the stored snapshot).
     if ($sesarPilot && $sesarReg && $sesarReg->access === 'managed' && SesarAccess::isConfigured()) {
         try {
