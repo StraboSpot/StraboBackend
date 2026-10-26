@@ -65,6 +65,7 @@ class SesarOnboarding
 	public function acceptOrcid($userpkey, array $identity)
 	{
 		if ($this->key === null) throw new SesarError(500, 'SESAR token storage is not configured.');
+		$this->conn->assertOrcidFree($userpkey, (string)$identity['orcid']);   // before anything is stored
 		$this->db->prepare_query(
 			"INSERT INTO strabosamples.sesar_onboarding (userpkey, environment, orcid, id_token_enc, id_token_expires_at, updated_at)
 			 VALUES ($1, $2, $3, $4, $5, now())

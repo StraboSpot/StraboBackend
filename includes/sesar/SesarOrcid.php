@@ -46,6 +46,9 @@ class SesarOrcid
 			'scope'         => 'openid',
 			'redirect_uri'  => SesarAccess::ORCID_REDIRECT_URI,
 			'state'         => $state,
+			// Always show ORCID's sign-in: a browser still signed in to ORCID as someone else
+			// must not connect that person's SESAR account (10-26).
+			'prompt'        => 'login',
 		));
 	}
 

@@ -184,7 +184,7 @@ class FakeSesar implements SesarTransport
 		}
 
 		// -- auth -------------------------------------------------------------
-		if ($method === 'POST' && preg_match('#^auth/token/([^/]+)/$#', $path, $m) && $m[1] !== 'refresh') {
+		if ($method === 'POST' && preg_match('#^auth/token/([^/]+)/$#', $path, $m) && $m[1] !== 'refresh' && $m[1] !== 'blacklist') {
 			if (strpos((string)self::header($headers, 'Content-Type'), 'x-www-form-urlencoded') === false) {
 				return self::err(401, 'token', 'The given ORCID JWT is either invalid or no associated user was found.');
 			}
@@ -193,6 +193,13 @@ class FakeSesar implements SesarTransport
 			if ($u === null) return self::err(401, 'token', 'The given ORCID JWT is either invalid or no associated user was found.');
 			if (!$u['upload']) return self::err(401, 'permissions', 'You do not have permission to generate a JWT.');
 			return array(201, json_encode(array('data' => self::issue($s, $u['orcid'], urldecode($m[1])))), 0);
+		}
+		if ($method === 'POST' && $path === 'auth/token/blacklist/') {
+			parse_str((string)$body, $f);
+			$r = isset($f['refresh']) ? $f['refresh'] : '';
+			if (!isset($s['tokens'][$r]) || $s['tokens'][$r]['kind'] !== 'refresh') return array(401, json_encode(array('detail' => 'Token is invalid', 'code' => 'token_not_valid')), 0);
+			$s['tokens'][$r]['blacklisted'] = true;
+			return array(200, '{}', 0);
 		}
 		if ($method === 'POST' && $path === 'auth/token/refresh/') {
 			parse_str((string)$body, $f);

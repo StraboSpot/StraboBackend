@@ -189,6 +189,12 @@ class SesarClient
 		return $this->pair($d);
 	}
 
+	/** Revokes a refresh token at SESAR (Disconnect; simplejwt blacklist endpoint). */
+	public function blacklist($refreshToken)
+	{
+		$this->call('POST', 'auth/token/blacklist/', null, array('refresh' => $refreshToken), 'form');
+	}
+
 	public function currentUser($access)
 	{
 		return $this->unwrap($this->call('GET', 'auth/user/', $access));
