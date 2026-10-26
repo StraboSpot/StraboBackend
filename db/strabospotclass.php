@@ -6063,6 +6063,19 @@ public function getSpotName($id){
 
 		$thisuserpkey = $ownerPkey ?? $this->userpkey;
 
+		// Serialize with other rebuilds of this project: two first uploads at once both saw no row
+		// and both inserted one (duplicate project rows in search). Same lock pattern as buildPgDataset.
+		$lockkey = pg_escape_string("strabo_pg_project:$thisuserpkey:$projectid");
+		$this->db->query("select pg_advisory_lock(hashtext('$lockkey'))");
+		try{
+			$this->buildPgProjectUnlocked($projectid, $thisuserpkey);
+		}finally{
+			$this->db->query("select pg_advisory_unlock(hashtext('$lockkey'))");
+		}
+	}
+
+	private function buildPgProjectUnlocked($projectid, $thisuserpkey){
+
 		$userrow = $this->db->get_row("select * from users where pkey = $thisuserpkey");
 		if(!$userrow){
 			return;
@@ -6145,9 +6158,24 @@ public function getSpotName($id){
 	public function buildPgDataset($datasetid, $ownerPkey = null){
 		// $ownerPkey: when collaborating, pass the project owner's pkey; defaults to current user
 
-		//add neo4j dataset to postgres for search
-
+		// Rebuilds of one dataset must not overlap: each one deletes the dataset row (spots cascade)
+		// and re-inserts it, so concurrent rebuilds (the web app posts one spot per edit, several per
+		// 100 ms) deleted each other's rows (spot_dataset_fkey errors) or left duplicate dataset rows.
+		// A session-level advisory lock serializes them without a transaction, so one bad spot insert
+		// still only skips that spot. The lock is released here, or when the connection closes.
 		$thisuserpkey = $ownerPkey ?? $this->userpkey;
+		$lockkey = pg_escape_string("strabo_pg_dataset:$thisuserpkey:$datasetid");
+		$this->db->query("select pg_advisory_lock(hashtext('$lockkey'))");
+		try{
+			$this->buildPgDatasetUnlocked($datasetid, $thisuserpkey);
+		}finally{
+			$this->db->query("select pg_advisory_unlock(hashtext('$lockkey'))");
+		}
+	}
+
+	private function buildPgDatasetUnlocked($datasetid, $thisuserpkey){
+
+		//add neo4j dataset to postgres for search
 
 		$userrow = $this->db->get_row("select * from users where pkey = $thisuserpkey");
 		$firstname = pg_escape_string($userrow->firstname);
