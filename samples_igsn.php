@@ -440,7 +440,7 @@ body { overflow-x: clip; overflow-y: visible; }
     var PAGE = 100;
     var AUTO_CHECK_EVERY = 60 * 1000;   // re-check on tab return at most once a minute
     var panel = document.getElementById('si-conn');
-    var busy = false, lastCheck = 0, flash = null, popup = null;
+    var busy = false, lastCheck = 0, flash = null, popup = null, reloading = false;
 
     function esc(s) {
         if (s == null) return '';
@@ -467,10 +467,28 @@ body { overflow-x: clip; overflow-y: visible; }
             return r.json().catch(function () { return { ok: false, message: 'Unexpected response (HTTP ' + r.status + ').' }; });
         }).then(function (j) {
             if (j.status) STATUS = j.status;
+            reloadIfNewlyConnected();
             return j;
         }, function () {
             return { ok: false, message: 'Could not reach StraboSpot. Please check your connection and try again.' };
         });
+    }
+
+    // Just connected on this page: reload so everything set up at load (Find my batch IGSNs, the
+    // own-account auto-link, the list's SESAR state) sees the connection. At most once per 30 s,
+    // so a page and endpoint that ever disagreed about the step could not loop.
+    var LOADED_STEP = STATUS.step;
+    function reloadIfNewlyConnected() {
+        if (LOADED_STEP === 'connected' || STATUS.step !== 'connected') return;
+        var last = 0;
+        try { last = +sessionStorage.getItem('si-reloaded') || 0; } catch (e) { /* storage blocked */ }
+        if (Date.now() - last < 30000) return;
+        try { sessionStorage.setItem('si-reloaded', String(Date.now())); } catch (e) { /* storage blocked */ }
+        LOADED_STEP = 'connected';
+        reloading = true;
+        busy = true;
+        render();
+        setTimeout(function () { window.location.reload(); }, 600);
     }
 
     function run(action, extra, okNote) {
@@ -648,6 +666,7 @@ body { overflow-x: clip; overflow-y: visible; }
     }
 
     function render(working) {
+        if (reloading) working = 'Connected. Loading your samples…';
         var h = stepper() + body();
         if (working) h += '<div class="si-note">' + esc(working) + '</div>';
         else if (flash) h += '<div class="si-note ' + flash.cls + '">' + flash.html + '</div>';
