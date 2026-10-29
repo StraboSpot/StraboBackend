@@ -248,6 +248,18 @@ try {
 	check('flags: built, clean, files written, pdf pending', $flags->built === 't' && $flags->clean === 't' && $flags->files_dirty === 'f' && $flags->pdf_dirty === 't');
 	check('no project.zip for synced projects', !file_exists("$d/project.zip"));
 
+	// A body stored before isMicroVisible was per-user (2026-10-29) still holds it: project.json
+	// (web viewer, PDF) leaves it out, so the micrograph shows whoever hid it in their copy
+	$bodyM2 = $db->get_var_prepared("SELECT body::text FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'micrograph' AND entity_id = 'wM2'", array($P));
+	$db->prepare_query("UPDATE strabomicro.micro_entities SET body = $2::json WHERE project_id = $1 AND entity_type = 'micrograph' AND entity_id = 'wM2'",
+		array($P, rtrim(rtrim($bodyM2), '}') . ', "isMicroVisible": false}'));
+	check('stored body with a stale isMicroVisible (setup)', strpos((string)$db->get_var_prepared("SELECT body::text FROM strabomicro.micro_entities WHERE project_id = $1 AND entity_type = 'micrograph' AND entity_id = 'wM2'", array($P)), 'isMicroVisible') !== false);
+	check('rebuild with the stale value', build_now($P) === 'built');
+	$pjVis = json_decode(@file_get_contents("$d/project.json"), true);
+	check('project.json leaves the stored isMicroVisible out', strpos(json_encode($pjVis), 'isMicroVisible') === false);
+	$db->prepare_query("UPDATE strabomicro.micro_entities SET body = $2::json WHERE project_id = $1 AND entity_type = 'micrograph' AND entity_id = 'wM2'", array($P, $bodyM2));
+	build_now($P);
+
 	section('C. Non-ASCII text');
 	$label = $db->get_var_prepared(
 		"SELECT s.label FROM strabomicro.micro_samplemetadata s JOIN strabomicro.micro_datasetmetadata d ON d.id = s.dataset_id WHERE d.project_id = $1",
