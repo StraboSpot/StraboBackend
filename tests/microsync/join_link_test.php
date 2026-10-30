@@ -229,9 +229,11 @@ try {
 	$db->prepare_query("UPDATE strabomicro.micro_join_links SET expires_at = now() - interval '1 minute' WHERE code = $1", array($code3));
 	$db->prepare_query("DELETE FROM strabomicro.micro_join_requests WHERE project_id = $1 AND user_pkey = $2", array($C, $R['pkey']));
 	check('expired: the page says so', strpos(page('GET', "/join/$code3", $R['sid'])['body'], 'has expired') !== false);
-	ask($R['sid'], $code3);
-	$expiredPost = page('POST', "/join/$code3", $R['sid'], array('csrf' => 'x'));
+	// The expired page has no form, so post with a secret this session really holds
+	file_put_contents('/var/lib/php/sessions/sess_' . $R['sid'], 'micro_collab_token|s:4:"abcd";', FILE_APPEND);
+	page('POST', "/join/$code3", $R['sid'], array('csrf' => 'abcd'));
 	check('expired: no request', stateOf($db, $C, $R['pkey']) === null);
+	check('expired: the refusal is shown', strpos(page('GET', "/join/$code3", $R['sid'])['body'], 'no longer open') !== false);
 	page('GET', $url, $OWNS);
 	check('expired: the owner sees it and can make a new one', strpos(page('GET', $url, $OWNS)['body'], 'The last join link expired') !== false && strpos(page('GET', $url, $OWNS)['body'], 'Create Join Link') !== false);
 
