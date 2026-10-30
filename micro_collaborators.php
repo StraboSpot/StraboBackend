@@ -59,6 +59,11 @@ include 'includes/mheader.php';
 .collabInviteRow { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:1em; }
 .collabInviteRow select { width:auto; min-width:12em; }
 .collabHelp { opacity:0.75; font-size:0.9em; }
+@media (max-width: 736px) {
+	.collabForm select { font-size:0.8em; padding:0 1.8em 0 0.5em; min-width:6.5em; }
+	.collabForm .button { padding:0 0.8em; }
+	td { padding-left:0.3em !important; padding-right:0.3em !important; }
+}
 </style>
 
 <!-- Main -->
