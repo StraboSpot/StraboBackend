@@ -71,6 +71,10 @@ require_once("./includes/login_return.php");
 			$_SESSION['credentials']=base64_encode($email."*****".$password);
 
 			$uri=$_SESSION['uri'];
+			$joinUri = login_saved_join($db, (int)$rows->pkey, (string)$uri);
+			if($joinUri !== null){
+				$uri = $joinUri;
+			}
 			if($uri==""){
 				$uri="/";
 			}

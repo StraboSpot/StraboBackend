@@ -303,6 +303,12 @@ if($_POST['submit']!=""){
 		$db->prepare_query("INSERT INTO users (firstname, lastname, password, hash, email) VALUES ($1, $2, crypt($3, gen_salt('md5')), $4, $5)",
 			array($firstname, $lastname, $password, $randstring, $email));
 		$newpkey = $db->get_var_prepared("SELECT pkey FROM users WHERE email=$1 AND hash=$2", array($email, $randstring));
+		// Signed up from a StraboMicro join link: their next login goes back to it once (login.php)
+		if(register_join_code() !== "" && $newpkey){
+			$db->prepare_query("INSERT INTO strabomicro.micro_join_signups (user_pkey, code)
+				SELECT $1, code FROM strabomicro.micro_join_links WHERE code = upper($2) ON CONFLICT (user_pkey) DO NOTHING",
+				array($newpkey, register_join_code()));
+		}
 
 		send_validation_mail($email, $firstname, $lastname, $randstring);
 

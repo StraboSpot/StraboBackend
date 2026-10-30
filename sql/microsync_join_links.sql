@@ -9,6 +9,9 @@
 -- micro_members so waiting people never reach the member list or older apps;
 -- approving makes them an active member.
 --
+-- micro_join_signups: the join code someone signed up from, until their next
+-- website login sends them to it once (login.php).
+--
 -- Design: StraboMicro2 repo, docs/specs/collaboration-workflow-spec-v3.md.
 --
 -- Deploy: apply BEFORE pulling the code that references it, as postgres.
@@ -43,6 +46,12 @@ CREATE TABLE IF NOT EXISTS strabomicro.micro_join_requests (
 CREATE INDEX IF NOT EXISTS micro_join_requests_waiting
   ON strabomicro.micro_join_requests(project_id) WHERE state = 'requested';
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON strabomicro.micro_join_links, strabomicro.micro_join_requests TO strabodbuser;
+CREATE TABLE IF NOT EXISTS strabomicro.micro_join_signups (
+  user_pkey  integer PRIMARY KEY REFERENCES public.users(pkey) ON DELETE CASCADE,
+  code       varchar NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+GRANT SELECT, INSERT, UPDATE, DELETE ON strabomicro.micro_join_links, strabomicro.micro_join_requests, strabomicro.micro_join_signups TO strabodbuser;
 GRANT USAGE, SELECT ON SEQUENCE strabomicro.micro_join_links_id_seq, strabomicro.micro_join_requests_id_seq TO strabodbuser;
-GRANT SELECT ON strabomicro.micro_join_links, strabomicro.micro_join_requests TO readonly;
+GRANT SELECT ON strabomicro.micro_join_links, strabomicro.micro_join_requests, strabomicro.micro_join_signups TO readonly;

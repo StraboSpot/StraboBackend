@@ -278,7 +278,7 @@ try {
 	$CSJ = csrfOf($OWNS, $J);
 	page('POST', $action, $OWNS, array('pid' => $J, 'csrf' => $CSJ, 'action' => 'create_link', 'role' => 'contributor', 'days' => 7));
 	$codeJ = codeOf($db, $J);
-	$newEmail = 'mjoin-' . $run . '@test.strabospot.org';
+	$newEmail = 'mjoin1-' . $run . '@test.strabospot.org';
 	$anon = substr(bin2hex(random_bytes(16)), 0, 26);
 	$anonFile = '/var/lib/php/sessions/sess_' . $anon;
 	file_put_contents($anonFile, 'loggedin|s:2:"no";');
@@ -301,20 +301,61 @@ try {
 		check('the confirmation page leads back to the link', strpos($b, "/login?uri=/join/$codeJ") !== false && strpos($b, 'Log In and Continue') !== false);
 		$plain = page('GET', "/validate/$hash", $anon)['body'];
 		check('without a code it stays the plain login link', strpos($plain, 'Log In and Continue') === false && strpos($plain, 'href="/login"') !== false);
-		$fresh = substr(bin2hex(random_bytes(16)), 0, 26);
-		$freshFile = '/var/lib/php/sessions/sess_' . $fresh;
-		file_put_contents($freshFile, 'loggedin|s:2:"no";');
-		chmod($freshFile, 0600); @chown($freshFile, 'www-data'); @chgrp($freshFile, 'www-data');
-		$sessionFiles[] = $freshFile;
-		page('GET', "/login?uri=/join/$codeJ", $fresh);
-		$r = page('POST', '/login', $fresh, array('email' => $newEmail, 'password' => 'Joinpass123!', 'submit_login' => 'Login'));
+		$newSession = function () use (&$sessionFiles) {
+			$sid = substr(bin2hex(random_bytes(16)), 0, 26);
+			$f = '/var/lib/php/sessions/sess_' . $sid;
+			file_put_contents($f, 'loggedin|s:2:"no";');
+			chmod($f, 0600); @chown($f, 'www-data'); @chgrp($f, 'www-data');
+			$sessionFiles[] = $f;
+			return $sid;
+		};
+		$login = function ($sid) use ($newEmail) {
+			return page('POST', '/login', $sid, array('email' => $newEmail, 'password' => 'Joinpass123!', 'submit_login' => 'Login'))['location'];
+		};
+		$newPkey = (int)$db->get_var_prepared("SELECT pkey FROM users WHERE email = $1", array($newEmail));
+		$saved = function () use ($db, $newPkey) {
+			return $db->get_var_prepared("SELECT code FROM strabomicro.micro_join_signups WHERE user_pkey = $1", array($newPkey));
+		};
+		$resave = function ($code) use ($db, $newPkey) {
+			$db->prepare_query("INSERT INTO strabomicro.micro_join_signups (user_pkey, code) VALUES ($1, $2) ON CONFLICT (user_pkey) DO UPDATE SET code = EXCLUDED.code", array($newPkey, $code));
+		};
+		check('signing up saves the code', $saved() === $codeJ);
+		check('first login, any browser, nothing else planned: the join page', $login($newSession()) === "/join/$codeJ");
+		check('used up', (string)$saved() === '');
+		check('the next login goes to the usual place', $login($newSession()) === '/');
+		$resave($codeJ);
+		$s = $newSession();
+		page('GET', '/login?uri=/my_micro_data', $s);
+		check('a page they were heading to wins', $login($s) === '/my_micro_data');
+		check('and the code waits', $saved() === $codeJ);
+		$s = $newSession();
+		page('GET', "/login?uri=/join/$codeJ", $s);
+		$r = array('location' => $login($s));
+		check('arriving by the join page itself uses it up', (string)$saved() === '');
 		check('in another browser, logging in lands on the join page', $r['location'] === "/join/$codeJ", $r['location']);
-		check('where they can ask to join', strpos(page('GET', "/join/$codeJ", $fresh)['body'], 'Ask to Join') !== false);
+		check('where they can ask to join', strpos(page('GET', "/join/$codeJ", $s)['body'], 'Ask to Join') !== false);
+		$resave('BAD/../CODE');
+		check('a saved value that is not a code goes nowhere', $login($newSession()) === '/' && (string)$saved() === '');
+		$resave($codeJ);
+		$db->prepare_query("UPDATE strabomicro.micro_join_links SET revoked_at = now() WHERE code = $1", array($codeJ));
+		$s = $newSession();
+		check('a revoked link: sent there once', $login($s) === "/join/$codeJ");
+		check('and told it is no longer open', strpos(page('GET', "/join/$codeJ", $s)['body'], 'not valid') !== false);
+		$db->prepare_query("UPDATE strabomicro.micro_join_links SET revoked_at = NULL WHERE code = $1", array($codeJ));
+		$other = 'mjoin2-' . $run . '@test.strabospot.org';
+		page('POST', '/register', $newSession(), array('firstname' => 'No', 'lastname' => 'Link', 'email' => $other, 'emailconfirm' => $other,
+			'password' => 'Joinpass123!', 'passwordconfirm' => 'Joinpass123!', 'email_checked' => $other, 'submit' => 'Submit'));
+		$other3 = 'mjoin3-' . $run . '@test.strabospot.org';
+		page('POST', '/register', $newSession(), array('join' => 'NOSUCHCODE', 'firstname' => 'Bad', 'lastname' => 'Code', 'email' => $other3, 'emailconfirm' => $other3,
+			'password' => 'Joinpass123!', 'passwordconfirm' => 'Joinpass123!', 'email_checked' => $other3, 'submit' => 'Submit'));
+		check('no link or an unknown code saves nothing', (int)$db->get_var_prepared(
+			"SELECT count(*) FROM strabomicro.micro_join_signups s JOIN users u ON u.pkey = s.user_pkey WHERE u.email IN ($1, $2)", array($other, $other3)) === 0
+			&& (int)$db->get_var_prepared("SELECT count(*) FROM users WHERE email IN ($1, $2)", array($other, $other3)) === 2);
 		$anon2 = forgeSession(0);
 		file_put_contents('/var/lib/php/sessions/sess_' . $anon2, 'loggedin|s:2:"no";uri|s:' . strlen("/join/$codeJ") . ':"/join/' . $codeJ . '";');
 		check('Sign up from the login page keeps the code too', strpos(page('GET', '/login', $anon2)['body'], "/register?join=$codeJ") !== false);
 	} finally {
-		$db->prepare_query("DELETE FROM users WHERE email = $1", array($newEmail));
+		$db->prepare_query("DELETE FROM users WHERE email LIKE $1", array('mjoin%-' . $run . '@test.strabospot.org'));
 	}
 
 	section('Addresses');
