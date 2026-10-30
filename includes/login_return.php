@@ -25,3 +25,21 @@ function login_return_path($raw)
 	if (strpos($raw, '/login') === 0) return null;          // never loop back onto the login page
 	return $raw;
 }
+
+/**
+ * The StraboMicro join page to send this person to, once, because they signed
+ * up from its link (strabomicro.micro_join_signups); null for none. A page
+ * they were already heading to wins, and the saved code waits for a later
+ * login, unless that page is a join page: then it is used up.
+ */
+function login_saved_join($db, $pkey, $uri)
+{
+	if ($uri !== '' && $uri !== '/' && strpos($uri, '/join/') !== 0) return null;
+	$code = $db->get_var_prepared("SELECT code FROM strabomicro.micro_join_signups WHERE user_pkey = $1", array($pkey));
+	if ($code !== null) {
+		$db->prepare_query("DELETE FROM strabomicro.micro_join_signups WHERE user_pkey = $1", array($pkey));
+	}
+	if ($uri !== '' && $uri !== '/') return null;
+	return is_string($code) && preg_match('/^[A-Z0-9]+$/', $code) ? '/join/' . $code : null;
+}
+

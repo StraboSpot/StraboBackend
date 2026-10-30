@@ -71,6 +71,10 @@ require_once("./includes/login_return.php");
 			$_SESSION['credentials']=base64_encode($email."*****".$password);
 
 			$uri=$_SESSION['uri'];
+			$joinUri = login_saved_join($db, (int)$rows->pkey, (string)$uri);
+			if($joinUri !== null){
+				$uri = $joinUri;
+			}
 			if($uri==""){
 				$uri="/";
 			}
@@ -119,7 +123,7 @@ include("includes/mheader.php");
 						<p>Email: <input type="text" name="email" ></p>
 						<p>Password: <input type="password" name="password" ></p>
 						<p><input class="primary" type="submit" name="submit_login" value="Login"></p>
-						<p><a href="/register">Sign up for new account.</a></p>
+						<p><a href="/register<?php echo isset($_SESSION['uri']) && preg_match('#^/join/([A-Za-z0-9]+)$#', (string)$_SESSION['uri'], $joinMatch) ? '?join=' . $joinMatch[1] : ''?>">Sign up for new account.</a></p>
 						<p><a href="/forgotpassword">Forgot Password?</a></p>
 						<p><a href="/resendlink">Resend Validation Link?</a></p>
 						<input type="hidden" name="script" value="#session.script#">
