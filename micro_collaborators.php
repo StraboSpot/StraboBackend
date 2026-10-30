@@ -6,7 +6,10 @@
  *              Open to the project's active members. The owner also invites
  *              (one address or many pasted), changes roles, and removes
  *              people here, through micro_collaborators_action.php; the app's
- *              File > Collaborate... works on the same list.
+ *              File > Collaborate... works on the same list. The owner also
+ *              makes the join link (QR code, printable page, micro_join_pdf.php)
+ *              and approves who asks to join. ?waiting=1 answers only the
+ *              waiting list, which the open page reloads.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -17,7 +20,7 @@
 
 include("logincheck.php");
 include("prepare_connections.php");
-require_once(__DIR__ . '/microdb/lib/micro_members_web.php');
+require_once(__DIR__ . '/microdb/lib/micro_join_web.php');
 
 $project_id = isset($_GET['project_id']) ? (int)$_GET['project_id'] : 0;
 $msdb = micro_members_db($db);
@@ -25,6 +28,11 @@ try {
 	$p = MsStore::project($msdb, $project_id, (int)$userpkey);
 } catch (MsHttpError $e) {
 	exit('Project not found.');
+}
+if (isset($_GET['waiting'])) {
+	header('Cache-Control: no-store');
+	echo $p['role'] === 'owner' ? micro_join_waiting_html($msdb, $project_id, micro_collab_token()) : '';
+	exit();
 }
 $list = MsMembers::memberList($msdb, $p);
 $name = $db->get_var_prepared(
@@ -35,6 +43,8 @@ $name = $db->get_var_prepared(
 $stateText = array('active' => 'Member', 'invited' => 'Invited', 'declined' => 'Declined');
 $isOwner = $list['myRole'] === 'owner';
 $csrf = micro_collab_token();
+$joinLink = $isOwner ? MsJoin::linkOf($msdb, $project_id) : null;
+$joinOpen = $joinLink !== null && !($joinLink['expired'] === true || $joinLink['expired'] === 't');
 $result = isset($_SESSION['micro_collab_result']) && $_SESSION['micro_collab_result']['pid'] === $project_id ? $_SESSION['micro_collab_result'] : null;
 unset($_SESSION['micro_collab_result']);
 
@@ -59,6 +69,19 @@ include 'includes/mheader.php';
 .collabInviteRow { display:flex; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:1em; }
 .collabInviteRow select { width:auto; min-width:12em; }
 .collabHelp { opacity:0.75; font-size:0.9em; }
+.collabJoin { margin-top:2em; }
+.collabJoinOpen { display:flex; gap:2em; flex-wrap:wrap; align-items:flex-start; margin-bottom:1.5em; }
+.collabQr { width:240px; max-width:100%; flex:none; }
+.collabQr svg { display:block; width:100%; height:auto; }
+.collabJoinInfo { flex:1; min-width:260px; }
+.collabJoinInfo input[type=text], .collabJoinInfo textarea { background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:inherit; margin-bottom:0.8em; }
+.collabJoinInfo textarea { height:5em; }
+.collabAddress { font-size:1.2em; font-weight:bold; word-break:break-all; }
+.collabWaitHead { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:0.8em; }
+#collabFull { display:none; position:fixed; top:0; left:0; right:0; bottom:0; z-index:100000; background:#fff; color:#000; text-align:center; cursor:pointer; padding:2vh 2vw; box-sizing:border-box; flex-direction:column; align-items:center; justify-content:center; }
+#collabFull.show { display:flex; }
+#collabFull svg { width:min(82vh, 94vw); height:min(82vh, 94vw); }
+#collabFullAddress { font-size:4vh; font-weight:bold; word-break:break-all; color:#000; }
 @media (max-width: 736px) {
 	.collabForm select { font-size:0.8em; padding:0 1.8em 0 0.5em; min-width:6.5em; }
 	.collabForm .button { padding:0 0.8em; }
@@ -184,6 +207,93 @@ include 'includes/mheader.php';
 			<p>Ownership has been offered to <?php echo htmlspecialchars($list['transferTo']['name'])?> and is waiting for them to accept in StraboMicro.</p>
 <?php } ?>
 <?php if ($isOwner) { ?>
+			<div class="collabJoin">
+				<h3>Join link</h3>
+<?php if ($joinOpen) {
+	$joinUrl = micro_join_url($joinLink['code']);
+	$joinShort = micro_join_short($joinLink['code']);
+	$joinSvg = micro_join_svg($joinUrl, 'QR code for ' . $joinShort);
+?>
+				<div class="collabJoinOpen">
+					<div class="collabQr"><?php echo $joinSvg?></div>
+					<div class="collabJoinInfo">
+						<p class="collabAddress" id="collabAddress"><?php echo htmlspecialchars($joinShort)?></p>
+						<p>People who open this link ask to join as <?php echo htmlspecialchars(micro_role_label($joinLink['role']))?>, and you approve each one below. It stops working on <?php echo htmlspecialchars(date('F j, Y', strtotime($joinLink['expires_on'])))?>.</p>
+						<div class="collabActions" style="margin-bottom:1.5em;">
+							<button type="button" class="button small" onclick="collabFull(true)">Show Full Screen</button>
+							<button type="button" class="button small" onclick="collabCopy(this)" data-url="<?php echo htmlspecialchars($joinUrl)?>">Copy Link</button>
+							<form method="post" action="/micro_collaborators_action" class="collabForm" onsubmit="return confirm('Stop this join link? The QR code and any printed pages stop working. People who already joined stay.')">
+								<?php echo collab_form_fields($project_id, $csrf)?>
+								<input type="hidden" name="action" value="revoke_link">
+								<button type="submit" class="button small">Revoke Link</button>
+							</form>
+						</div>
+						<form method="post" action="/micro_join_pdf">
+							<?php echo collab_form_fields($project_id, $csrf)?>
+							<label for="joinTitle">Title for the printable page (optional)</label>
+							<input type="text" id="joinTitle" name="title" maxlength="<?php echo MsJoin::TITLE_MAX?>" value="<?php echo htmlspecialchars((string)$joinLink['pdf_title'])?>" placeholder="Join this StraboMicro project">
+							<label for="joinDetails">Details (optional)</label>
+							<textarea id="joinDetails" name="details" maxlength="<?php echo MsJoin::DETAILS_MAX?>" placeholder="Workshop name, date, room, what to bring..."><?php echo htmlspecialchars((string)$joinLink['pdf_details'])?></textarea>
+							<button type="submit" class="button small">Download PDF</button>
+						</form>
+					</div>
+				</div>
+				<div id="collabFull" onclick="collabFull(false)" role="dialog" aria-label="Join link QR code">
+					<?php echo $joinSvg?>
+					<div id="collabFullAddress"><?php echo htmlspecialchars($joinShort)?></div>
+				</div>
+<?php } else { ?>
+<?php if ($joinLink !== null) { ?>
+				<p>The last join link expired on <?php echo htmlspecialchars(date('F j, Y', strtotime($joinLink['expires_on'])))?>.</p>
+<?php } ?>
+				<p>Make a QR code and a short address for a workshop or class. Anyone with the link can ask to join, including people who still need to create an account, and you approve each person.</p>
+				<form method="post" action="/micro_collaborators_action">
+					<?php echo collab_form_fields($project_id, $csrf)?>
+					<input type="hidden" name="action" value="create_link">
+					<div class="collabInviteRow">
+						<label for="joinRole" style="margin:0;">Role</label>
+						<select id="joinRole" name="role">
+							<option value="contributor" selected>Contributor</option>
+							<option value="editor">Editor</option>
+							<option value="viewer">Viewer</option>
+						</select>
+						<label for="joinDays" style="margin:0;">Stays open for</label>
+						<select id="joinDays" name="days">
+<?php foreach (MsJoin::EXPIRY_DAYS as $d) { ?>
+							<option value="<?php echo $d?>"<?php echo $d === 7 ? ' selected' : ''?>><?php echo $d === 1 ? '1 day' : "$d days"?></option>
+<?php } ?>
+						</select>
+						<button type="submit" class="button primary small">Create Join Link</button>
+					</div>
+				</form>
+<?php } ?>
+				<div id="collabWaiting"><?php echo micro_join_waiting_html($msdb, $project_id, $csrf)?></div>
+			</div>
+			<script>
+			function collabFull(show) {
+				document.getElementById('collabFull').classList.toggle('show', show);
+			}
+			function collabCopy(button) {
+				navigator.clipboard.writeText(button.getAttribute('data-url')).then(function () {
+					button.textContent = 'Copied';
+					setTimeout(function () { button.textContent = 'Copy Link'; }, 2000);
+				});
+			}
+			document.addEventListener('keydown', function (e) {
+				var full = document.getElementById('collabFull');
+				if (e.key === 'Escape' && full) { full.classList.remove('show'); }
+			});
+			setInterval(function () {
+				fetch('/micro_collaborators?project_id=<?php echo (int)$project_id?>&waiting=1', { credentials: 'same-origin', redirect: 'error' })
+					.then(function (r) { return r.ok ? r.text() : null; })
+					.then(function (html) {
+						var box = document.getElementById('collabWaiting');
+						if (html !== null && box.innerHTML !== html) { box.innerHTML = html; }
+					})
+					.catch(function () {});
+			}, 5000);
+			</script>
+
 			<div class="collabInvite">
 				<h3>Invite people</h3>
 				<form method="post" action="/micro_collaborators_action">

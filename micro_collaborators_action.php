@@ -3,8 +3,9 @@
  * File: micro_collaborators_action.php
  * Description: The owner's changes from micro_collaborators.php (POST: pid,
  *              csrf, action): invite pasted addresses, change a role, remove
- *              someone or withdraw an invitation. The rules are in MsMembers,
- *              shared with the app. The result is shown once on the page.
+ *              someone or withdraw an invitation (MsMembers, shared with the
+ *              app); make or revoke the join link and answer the people
+ *              waiting (MsJoin). The result is shown once on the page.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -15,7 +16,7 @@
 
 include("logincheck.php");
 include("prepare_connections.php");
-require_once(__DIR__ . '/microdb/lib/micro_members_web.php');
+require_once(__DIR__ . '/microdb/lib/micro_join_web.php');
 
 $pid = isset($_POST['pid']) ? (int)$_POST['pid'] : 0;
 $back = $pid > 0 ? '/micro_collaborators?project_id=' . $pid : '/my_micro_data';
@@ -45,6 +46,26 @@ if (!micro_collab_token_ok(isset($_POST['csrf']) ? $_POST['csrf'] : null)) {
 		} elseif ($action === 'remove') {
 			MsMembers::removeFor($msdb, $me, $pid, isset($_POST['pkey']) ? (int)$_POST['pkey'] : 0);
 			$result = array('pid' => $pid, 'ok' => true, 'text' => 'Removed.');
+		} elseif ($action === 'create_link') {
+			MsJoin::createLink($msdb, $me, $pid, isset($_POST['role']) ? (string)$_POST['role'] : '', isset($_POST['days']) ? (int)$_POST['days'] : 0);
+			$result = array('pid' => $pid, 'ok' => true, 'text' => 'Join link created.');
+		} elseif ($action === 'revoke_link') {
+			MsJoin::revokeLink($msdb, $me, $pid);
+			$result = array('pid' => $pid, 'ok' => true, 'text' => 'The join link no longer works. Anyone who already joined stays until you remove them.');
+		} elseif ($action === 'approve') {
+			MsJoin::approve($msdb, $me, $pid, isset($_POST['pkey']) ? (int)$_POST['pkey'] : 0);
+			$result = array('pid' => $pid, 'ok' => true, 'text' => 'Approved.');
+		} elseif ($action === 'deny') {
+			MsJoin::deny($msdb, $me, $pid, isset($_POST['pkey']) ? (int)$_POST['pkey'] : 0);
+			$result = array('pid' => $pid, 'ok' => true, 'text' => 'Request denied.');
+		} elseif ($action === 'approve_all') {
+			set_time_limit(0); // each approval sends its email during the request
+			$all = MsJoin::approveAll($msdb, $me, $pid);
+			$text = 'Approved ' . $all['approved'] . ($all['approved'] === 1 ? ' person.' : ' people.');
+			if (count($all['refused']) > 0) {
+				$text .= ' Could not approve: ' . implode(' ', $all['refused']);
+			}
+			$result = array('pid' => $pid, 'ok' => count($all['refused']) === 0, 'text' => $text);
 		}
 	} catch (MsHttpError $e) {
 		$result = array('pid' => $pid, 'ok' => false, 'text' => $e->getMessage());

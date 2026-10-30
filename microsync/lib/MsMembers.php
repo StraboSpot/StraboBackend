@@ -493,7 +493,7 @@ class MsMembers {
 	}
 
 	/** Synced project I own; also refuses projects whose first upload is not done. */
-	private static function ownerProject($db, $pid, $me) {
+	public static function ownerProject($db, $pid, $me) {
 		$p = MsStore::project($db, $pid, $me);
 		if ($p['role'] !== 'owner') {
 			$db->rollback();
@@ -540,7 +540,7 @@ class MsMembers {
 		return (int)$owner;
 	}
 
-	private static function memberRow($db, $pid, $pkey) {
+	public static function memberRow($db, $pid, $pkey) {
 		return $db->row(
 			"SELECT user_pkey, role, state FROM strabomicro.micro_members WHERE project_id = $1 AND user_pkey = $2",
 			array($pid, $pkey));
@@ -550,7 +550,7 @@ class MsMembers {
 	 * P0-14: a user who owns another server project with this straboId
 	 * cannot join (ownership by straboId would become ambiguous).
 	 */
-	private static function refuseCopyOwner($db, $p, $pkey, $code, $message) {
+	public static function refuseCopyOwner($db, $p, $pkey, $code, $message) {
 		$other = $db->val(
 			"SELECT 1 FROM strabomicro.micro_projectmetadata
 			  WHERE userpkey = $1 AND strabo_id = $2 AND id <> $3 LIMIT 1",
@@ -561,7 +561,7 @@ class MsMembers {
 		}
 	}
 
-	private static function projectName($db, $p) {
+	public static function projectName($db, $p) {
 		$name = $db->val(
 			"SELECT body->>'name' FROM strabomicro.micro_entities
 			  WHERE project_id = $1 AND entity_type = 'project' AND entity_id = $2",
@@ -570,7 +570,7 @@ class MsMembers {
 	}
 
 	/** "Name (email)" of a user, for emails. */
-	private static function whoText($db, $pkey) {
+	public static function whoText($db, $pkey) {
 		$u = $db->row("SELECT firstname, lastname, email FROM public.users WHERE pkey = $1", array($pkey));
 		if ($u === null) {
 			return 'A StraboSpot user';

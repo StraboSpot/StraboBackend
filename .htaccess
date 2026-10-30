@@ -37,6 +37,7 @@ RewriteRule ^voicestations_data(/|$) - [F,L]
 RewriteCond %{REQUEST_FILENAME} !-f
 RewriteRule ^straboMicroFiles/([0-9]+)/project\.zip$ download_micro_file.php?project_id=$1 [L]
 RewriteRule ^validate/(.*)$ validateuser.php?hash=$1 [L]
+RewriteRule ^join/([A-Za-z0-9]+)$ micro_join.php?c=$1 [L,QSA]
 RewriteRule ^passwdreset/(.*)$ passwordreset.php?hash=$1 [L]
 RewriteRule ^changeemail/(.*)$ confirmemailchange.php?token=$1 [L]
 RewriteRule ^viewdataset/(.*)$ view_dataset.php?id=$1 [L]

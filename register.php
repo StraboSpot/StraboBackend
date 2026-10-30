@@ -129,7 +129,7 @@ function send_validation_mail($email, $firstname, $lastname, $hash){
 		'intro'    => array('Thanks for your interest in StraboSpot. Please confirm your email address to activate your account.'),
 		'facts'    => array('Account' => $email),
 		'button'   => array('Confirm my account', "https://strabospot.org/validate/$hash"),
-		'after'    => array('If you did not create a StraboSpot account, you can ignore this message and nothing will happen.'),
+		'after'    => array_merge(register_join_code() !== '' ? array('Joining a StraboMicro project? After you confirm, log in and go back to https://strabospot.org/join/' . register_join_code()) : array(), array('If you did not create a StraboSpot account, you can ignore this message and nothing will happen.')),
 		'footer'   => 'You received this because this address was used to register at StraboSpot (https://strabospot.org).',
 	));
 	try {
@@ -137,6 +137,12 @@ function send_validation_mail($email, $firstname, $lastname, $hash){
 	} catch (Exception $e) {
 		error_log('register: validation mail to ' . $email . ' failed: ' . $e->getMessage());
 	}
+}
+
+// The StraboMicro join link that sent this person here (/register?join=CODE), kept by the forms.
+function register_join_code(){
+	$code = isset($_POST['join']) ? $_POST['join'] : (isset($_GET['join']) ? $_GET['join'] : '');
+	return is_string($code) ? substr(preg_replace('/[^A-Za-z0-9]/', '', $code), 0, 16) : '';
 }
 
 // Error box + "Did you mean" card shown above a form.
@@ -349,7 +355,7 @@ include("includes/mheader.php");
 				If <b><?php echo h($sentemail)?></b> is not right, enter the correct address and we will send the link there instead.
 				The link sent to <?php echo h($sentemail)?> will stop working.
 				<?php echo $fixerror?>
-				<form method="POST">
+				<form method="POST"><input type="hidden" name="join" value="<?php echo register_join_code()?>">
 					<input type="hidden" name="fixtoken" value="<?php echo h($sentfixtoken)?>">
 					<input type="hidden" name="email_checked" value="<?php echo $suggestion !== null ? h($fixemail) : ""?>">
 					<div class="padTop">Correct Email:<input type="text" name="email" autocomplete="email" value="<?php echo h($fixemail)?>"></div>
@@ -363,7 +369,7 @@ include("includes/mheader.php");
 		The StraboSpot Team
 <?php }else{ ?>
 						<?php echo $error?>
-						<form method="POST">
+						<form method="POST"><input type="hidden" name="join" value="<?php echo register_join_code()?>">
 								<input type="hidden" name="email_checked" value="<?php echo $suggestion !== null ? h($email) : ""?>">
 								<div>First Name:</td><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input type="text" name="firstname" value="<?php echo h($firstname)?>"></div>
 								<div class="padTop">Last Name:</td><td>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<input type="text" name="lastname" value="<?php echo h($lastname)?>"></div>
