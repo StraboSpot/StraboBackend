@@ -119,7 +119,7 @@ include("includes/mheader.php");
 						<p>Email: <input type="text" name="email" ></p>
 						<p>Password: <input type="password" name="password" ></p>
 						<p><input class="primary" type="submit" name="submit_login" value="Login"></p>
-						<p><a href="/register">Sign up for new account.</a></p>
+						<p><a href="/register<?php echo isset($_SESSION['uri']) && preg_match('#^/join/([A-Za-z0-9]+)$#', (string)$_SESSION['uri'], $joinMatch) ? '?join=' . $joinMatch[1] : ''?>">Sign up for new account.</a></p>
 						<p><a href="/forgotpassword">Forgot Password?</a></p>
 						<p><a href="/resendlink">Resend Validation Link?</a></p>
 						<input type="hidden" name="script" value="#session.script#">

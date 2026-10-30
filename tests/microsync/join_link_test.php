@@ -273,6 +273,50 @@ try {
 	check('fields are kept and escaped on the page', strpos($body, 'Κλάση &lt;script&gt;') !== false && strpos($body, '<script>alert(1)') === false && strpos($body, "Room 2\nFriday") !== false);
 	check('a member cannot make the PDF', strpos(page('POST', '/micro_join_pdf', $E['sid'], array('pid' => $C, 'csrf' => 'abcd', 'title' => 'x'))['body'], '%PDF') !== 0);
 
+	section('Signing up from the link');
+	$J = readyProject($U['owner']['tok'], $PREFIX . 'j-' . $run, 'Signup ' . $run);
+	$CSJ = csrfOf($OWNS, $J);
+	page('POST', $action, $OWNS, array('pid' => $J, 'csrf' => $CSJ, 'action' => 'create_link', 'role' => 'contributor', 'days' => 7));
+	$codeJ = codeOf($db, $J);
+	$newEmail = 'mjoin-' . $run . '@test.strabospot.org';
+	$anon = substr(bin2hex(random_bytes(16)), 0, 26);
+	$anonFile = '/var/lib/php/sessions/sess_' . $anon;
+	file_put_contents($anonFile, 'loggedin|s:2:"no";');
+	chmod($anonFile, 0600); @chown($anonFile, 'www-data'); @chgrp($anonFile, 'www-data');
+	$sessionFiles[] = $anonFile;
+	$logFile = '/srv/app/www/exportjobs_data/log/mail.log';
+	$logStart = filesize($logFile);
+	page('POST', '/register', $anon, array('join' => $codeJ, 'firstname' => 'Join', 'lastname' => 'Tester', 'email' => $newEmail, 'emailconfirm' => $newEmail,
+		'password' => 'Joinpass123!', 'passwordconfirm' => 'Joinpass123!', 'email_checked' => $newEmail, 'submit' => 'Submit'));
+	try {
+		$hash = $db->get_var_prepared("SELECT hash FROM users WHERE email = $1", array($newEmail));
+		check('the account is made', (string)$hash !== '');
+		clearstatcache();
+		$mail = (string)file_get_contents($logFile, false, null, $logStart);
+		check('the confirmation link carries the join code', strpos($mail, "/validate/$hash?join=$codeJ") !== false, substr($mail, 0, 300));
+		check('the email also names the join link', strpos($mail, "/join/$codeJ") !== false);
+		// Activating for real also calls Mailchimp, so this reaches the page's shared login button through its already-active branch
+		$db->prepare_query("UPDATE users SET active = true WHERE email = $1", array($newEmail));
+		$b = page('GET', "/validate/$hash?join=$codeJ", $anon)['body'];
+		check('the confirmation page leads back to the link', strpos($b, "/login?uri=/join/$codeJ") !== false && strpos($b, 'Log In and Continue') !== false);
+		$plain = page('GET', "/validate/$hash", $anon)['body'];
+		check('without a code it stays the plain login link', strpos($plain, 'Log In and Continue') === false && strpos($plain, 'href="/login"') !== false);
+		$fresh = substr(bin2hex(random_bytes(16)), 0, 26);
+		$freshFile = '/var/lib/php/sessions/sess_' . $fresh;
+		file_put_contents($freshFile, 'loggedin|s:2:"no";');
+		chmod($freshFile, 0600); @chown($freshFile, 'www-data'); @chgrp($freshFile, 'www-data');
+		$sessionFiles[] = $freshFile;
+		page('GET', "/login?uri=/join/$codeJ", $fresh);
+		$r = page('POST', '/login', $fresh, array('email' => $newEmail, 'password' => 'Joinpass123!', 'submit_login' => 'Login'));
+		check('in another browser, logging in lands on the join page', $r['location'] === "/join/$codeJ", $r['location']);
+		check('where they can ask to join', strpos(page('GET', "/join/$codeJ", $fresh)['body'], 'Ask to Join') !== false);
+		$anon2 = forgeSession(0);
+		file_put_contents('/var/lib/php/sessions/sess_' . $anon2, 'loggedin|s:2:"no";uri|s:' . strlen("/join/$codeJ") . ':"/join/' . $codeJ . '";');
+		check('Sign up from the login page keeps the code too', strpos(page('GET', '/login', $anon2)['body'], "/register?join=$codeJ") !== false);
+	} finally {
+		$db->prepare_query("DELETE FROM users WHERE email = $1", array($newEmail));
+	}
+
 	section('Addresses');
 	check('the local dev address stays local; real hosts use the site', micro_join_url('ABC') === 'https://strabospot.org/join/ABC');
 	$_SERVER['HTTP_HOST'] = 'localhost';

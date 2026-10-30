@@ -17,6 +17,16 @@ include("neodb.php");
 $hash = $_GET['hash'] ?? '';
 $hash = preg_replace('/[^a-zA-Z0-9]/', '', $hash);
 
+// The StraboMicro join link this person signed up from (/register?join=CODE): the way back after confirming.
+$joinCode = isset($_GET['join']) && is_string($_GET['join']) ? substr(preg_replace('/[^a-zA-Z0-9]/', '', $_GET['join']), 0, 16) : '';
+
+function validate_login_link($joinCode){
+	if($joinCode !== ""){
+		return '<p>Log in to continue joining the StraboMicro project.</p><p><a href="/login?uri=/join/' . $joinCode . '" class="button primary">Log In and Continue</a></p>';
+	}
+	return '<div style="padding-left:150px;"><a href="/login">Login</a></div><br>';
+}
+
 $row = null;
 if($hash!=""){
 	$row=$db->get_row_prepared("SELECT * FROM users WHERE hash=$1", array($hash));
@@ -62,7 +72,7 @@ if(!$row || $row->pkey==""){
 						</header>
 		Your account has already been activated.<br>
 		Please use the login link below to login to your account.<br><br>
-		<div style="padding-left:150px;"><a href="/login">Login</a></div><br>
+		<?php echo validate_login_link($joinCode)?>
 		Thanks,<br><br>
 		The StraboSpot Team
 						<div class="bottomSpacer"></div>
@@ -110,7 +120,7 @@ include("includes/mheader.php");
 						</header>
 Congratulations! Your account has been activated.<br><br>
 Please use the login link below to login to your account.<br><br>
-<div style="padding-left:150px;"><a href="/login">Login</a></div><br>
+<?php echo validate_login_link($joinCode)?>
 Thanks,<br><br>
 The StraboSpot Team
 						<div class="bottomSpacer"></div>
