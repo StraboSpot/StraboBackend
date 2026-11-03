@@ -14,6 +14,7 @@
 if(!class_exists('ExportNoDataException')){ class ExportNoDataException extends Exception {} }
 
 require_once dirname(__DIR__) . '/fieldvocab/FieldVocab.php';
+require_once __DIR__ . '/sample_list_entries.php';
 
 class straboOutputClass
 {
@@ -1527,20 +1528,14 @@ class straboOutputClass
 
 				//Gather all samples and show error if none found.
 
+				// Real samples only: parent-spot stubs of sample spots are skipped
+				// (includes/straboClasses/sample_list_entries.php, 2026-11-03)
 				$foundSamples = [];
-				foreach($data['features'] as $feature){
-
+				foreach(sample_list_entries($data['features']) as $entry){
 					// Field choice translation: sample cells carry form labels
-					$samples = FieldVocab::displayProperties(array('samples' => $feature['properties']['samples']))['samples'];
-					if($samples){
-						foreach($samples as $sample){
-							$sample->geometry = $feature['geometry'];
-							$foundSamples[] = $sample;
-						}
-					}
-
-					$x++;
-
+					$sample = FieldVocab::displayProperties(array('samples' => array($entry['sample'])))['samples'][0];
+					$sample->geometry = $entry['feature']['geometry'];
+					$foundSamples[] = $sample;
 				}
 
 				if(count($foundSamples)==0){

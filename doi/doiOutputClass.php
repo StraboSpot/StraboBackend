@@ -11,6 +11,7 @@
  */
 
 require_once dirname(__DIR__) . '/includes/fieldvocab/FieldVocab.php';
+require_once dirname(__DIR__) . '/includes/straboClasses/sample_list_entries.php';
 
 class doiOutputClass
 {
@@ -1259,19 +1260,13 @@ class doiOutputClass
 
 				//Gather all samples and show error if none found.
 
+				// Real samples only: parent-spot stubs of sample spots are skipped
+				// (includes/straboClasses/sample_list_entries.php, 2026-11-03)
 				$foundSamples = [];
-				foreach($data['features'] as $feature){
-
-					$samples = $feature['properties']['samples'];
-					if($samples){
-						foreach($samples as $sample){
-							$sample->geometry = $feature['geometry'];
-							$foundSamples[] = $sample;
-						}
-					}
-
-					$x++;
-
+				foreach(sample_list_entries($data['features']) as $entry){
+					$sample = $entry['sample'];
+					$sample->geometry = $entry['feature']['geometry'];
+					$foundSamples[] = $sample;
 				}
 
 				if(count($foundSamples)==0){
