@@ -1554,13 +1554,20 @@ class straboOutputClass
 						return $c != 0 ? $c : $a['n'] - $b['n'];
 					});
 				}
+				// Spot Name: sample spots take their parent spot's name; parents outside this export
+				// are looked up among the owner's spots (sample_list_parent_names)
+				$missing = array();
+				foreach($entries as $entry){
+					if($entry['spot_name'] === null) $missing[] = (string)($entry['feature']['properties']['id'] ?? '');
+				}
+				$lookedUp = count($missing) ? sample_list_parent_names($this->strabo->neodb, (int)($this->get['userpkey'] ?? 0), $missing) : array();
 				$foundSamples = [];
 				foreach($entries as $entry){
 					// Field choice translation: sample cells carry form labels
 					$sample = FieldVocab::displayProperties(array('samples' => array($entry['sample'])))['samples'][0];
 					$sample->geometry = $entry['feature']['geometry'];
-					// Spot Name (Wesdome 2026-11-03): name of the spot holding the sample, to join assay data
-					$sample->strabo_list_spot = (string)($entry['feature']['properties']['name'] ?? '');
+					// Spot Name (Wesdome 2026-11-03): the spot the sample was taken at, to join assay data
+					$sample->strabo_list_spot = $entry['spot_name'] ?? ($lookedUp[(string)($entry['feature']['properties']['id'] ?? '')] ?? '');
 					if($isProject) $sample->strabo_list_dataset = (string)($entry['feature']['properties']['ds_name'] ?? '');
 					$foundSamples[] = $sample;
 				}
