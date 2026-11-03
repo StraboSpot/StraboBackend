@@ -30,7 +30,8 @@ unset($getParams['scope_groups'], $getParams['all_dsids'], $_GET['scope_groups']
 unset($getParams['export_scope']);
 // GeoPackage of a whole project (My Field Data project menu): the project's datasets, checked the
 // same way, and the manifest records the project scope (docs/GeoPackage/GeoPackage_RoundTrip_Design.md 3.1)
-if(($getParams['type'] ?? '') == 'gpkg' && isset($getParams['projectid']) && !isset($getParams['dsids'])){
+// Project Sample List (2026-11-03): same project check, one sheet for all its datasets
+if(in_array(($getParams['type'] ?? ''), array('gpkg', 'sample_list'), true) && isset($getParams['projectid']) && !isset($getParams['dsids'])){
 	$getParams = array_merge($getParams, $strabo->exportProjectParams($getParams['projectid']));
 	$getParams['export_scope'] = 'project';
 }elseif(isset($getParams['dsids'])){

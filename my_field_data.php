@@ -165,6 +165,9 @@ include("includes/mheader.php");
 			case "gpkg":
 				window.location='/searchdownload?type=gpkg&projectid='+pid;
 				break;
+			case "sample_list":
+				window.location='/searchdownload?type=sample_list&projectid='+pid;
+				break;
 			case "geologic_units":
 				window.location='/project_geologic_units?p='+pid;
 				break;
@@ -447,6 +450,7 @@ if($collaboration_level == "editttt"){ //Turn this option off for now per reques
 													<option value="field">Download/Share StraboMobile Project File</option>
 													<option value="json">Download Project in Strabo JSON Format</option>
 													<option value="gpkg">Download Project as GeoPackage</option>
+													<option value="sample_list">Download Project Sample List</option>
 													<option value="geologic_units">Download Geologic Units</option>
 												</select>
 											</li>
@@ -645,6 +649,7 @@ if(in_array($userpkey, $acollaboration_testing_pkeys)){
 ?>													
 													<option value="json">Download Project in Strabo JSON Format</option>
 													<option value="gpkg">Download Project as GeoPackage</option>
+													<option value="sample_list">Download Project Sample List</option>
 													<option value="geologic_units">Download Geologic Units</option>
 <?php
 if(ProjectTransfer::canInitiate($userpkey, $_SESSION['username'] ?? '')){ // Project transfer: fully launched 2026-09-03 (always true; docs/ProjectTransfer_Design.md D6)
