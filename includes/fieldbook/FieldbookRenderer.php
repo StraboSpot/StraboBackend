@@ -961,10 +961,22 @@ class FieldbookRenderer
 	private function photoMeta(array $img)
 	{
 		$bits = array('id ' . $img['id']);
+		// view direction right after the id, so a narrow contact-sheet cell cuts the size first (Coleman 2026-11-03)
+		if (($v = $this->photoView($img)) !== '') $bits[] = $v;
 		if ($img['width'] && $img['height']) $bits[] = $img['width'] . ' x ' . $img['height'];
 		if ($img['type'] !== '' && strtolower($img['type']) !== 'photo') $bits[] = $img['typeLabel'];
 		if ($img['annotated']) $bits[] = 'annotated';
 		return implode(' · ', $bits);
+	}
+
+	/** "view 155°, plunge 10°" / "view 155°" / "plunge 10°" / '' from the camera view angles. */
+	private function photoView(array $img)
+	{
+		$t = $img['viewTrend'] ?? ''; $p = $img['viewPlunge'] ?? '';
+		if ($t !== '' && $p !== '') return 'view ' . $t . '°, plunge ' . $p . '°';
+		if ($t !== '') return 'view ' . $t . '°';
+		if ($p !== '') return 'plunge ' . $p . '°';
+		return '';
 	}
 
 	/** Everything stored with the image, for the index. */

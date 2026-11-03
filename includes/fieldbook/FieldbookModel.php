@@ -275,6 +275,13 @@ class FieldbookModel
 		return gmdate('F j, Y H:i', (int)substr($v, 0, 10)) . ' UTC';
 	}
 
+	/** A photo view angle as a display string ('' when not recorded); 0 is a real value. */
+	public static function viewAngle($v)
+	{
+		if ($v === null || $v === '' || is_array($v) || is_object($v) || !is_numeric($v)) return '';
+		return (string)(0 + $v);
+	}
+
 	/** Image attribute blocks from an app images array (spot images and memo images share the shape). */
 	public static function imageBlocks($images)
 	{
@@ -295,6 +302,9 @@ class FieldbookModel
 				'typeLabel' => isset($img['image_type']) && (string)$img['image_type'] !== ''
 					? FieldVocab::labelText(FieldVocab::formsFor('images'), 'image_type', (string)$img['image_type'], ', ', array('FieldbookProps', 'humanize')) : '',
 				'annotated' => !empty($img['annotated']),
+				// camera view direction (app form: View azimuth (trend), View angle (plunge)); also stays in rows for the index
+				'viewTrend' => self::viewAngle($img['view_azimuth_trend'] ?? null),
+				'viewPlunge' => self::viewAngle($img['view_angle_plunge'] ?? null),
 				'width' => isset($img['width']) ? (int)$img['width'] : 0, 'height' => isset($img['height']) ? (int)$img['height'] : 0,
 				'rows' => $rows, 'children' => array(),
 			);
