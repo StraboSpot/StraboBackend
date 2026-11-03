@@ -4,7 +4,8 @@
  * Description: Photo view direction under fieldbook figures (2026-11-03): FieldbookModel::imageBlocks
  *              carries view_azimuth_trend / view_angle_plunge as viewTrend / viewPlunge (0 kept,
  *              junk dropped, still listed in rows for the index), and the renderer's photoMeta line
- *              puts "view T°, plunge P°" right after the id.
+ *              puts "view T°, plunge P°" right after the id; in a narrow contact-sheet cell the
+ *              image size is dropped so the view is never cut.
  *
  * Run: docker exec strabo-php php /srv/app/www/tests/fieldbook/unit_test_photo_view.php
  */
@@ -44,6 +45,16 @@ check('photoMeta: trend only', $meta->invoke($r, $b[1]) === 'id 2 · view 155° 
 check('photoMeta: unchanged without view', $meta->invoke($r, $b[2]) === 'id 3 · 4080 x 3060');
 $pl = $b[2]; $pl['viewPlunge'] = '-5';
 check('photoMeta: plunge only', $meta->invoke($r, $pl) === 'id 3 · plunge -5° · 4080 x 3060');
+
+// narrow contact-sheet cell: the size is dropped before anything is cut (stand-in pdf, width = characters)
+class FakeWidthPdf { public function GetStringWidth($s) { return mb_strlen($s, 'UTF-8'); } }
+$prop = new ReflectionProperty('FieldbookRenderer', 'pdf'); $prop->setAccessible(true); $prop->setValue($r, new FakeWidthPdf());
+$full = 'id 1 · view 23°, plunge 0° · 4080 x 3060';
+check('photoMeta $w: fits -> size kept', $meta->invoke($r, $b[0], mb_strlen($full, 'UTF-8')) === $full);
+check('photoMeta $w: too narrow -> size dropped, view whole', $meta->invoke($r, $b[0], 30) === 'id 1 · view 23°, plunge 0°');
+$an = $b[0]; $an['annotated'] = true;
+check('photoMeta $w: annotated kept when size dropped', $meta->invoke($r, $an, 30) === 'id 1 · view 23°, plunge 0° · annotated');
+check('photoMeta $w: no view, fits -> unchanged', $meta->invoke($r, $b[2], 40) === 'id 3 · 4080 x 3060');
 
 echo "\n$pass passed, $fail failed\n";
 echo $fail === 0 ? "ALL PASS\n" : "FAILURES\n";

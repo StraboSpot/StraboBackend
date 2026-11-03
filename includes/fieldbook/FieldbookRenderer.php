@@ -957,16 +957,21 @@ class FieldbookRenderer
 	/** Image title for labels and the index. */
 	private function photoTitle(array $img) { return $img['title'] !== '' ? $img['title'] : 'Image ' . $img['id']; }
 
-	/** Short attribute line under a figure; the full details go to the index. */
-	private function photoMeta(array $img)
+	/** Short attribute line under a figure; the full details go to the index. With $w (a contact-sheet
+	 *  cell, current font) the image size is left out when the whole line does not fit, so the view
+	 *  direction is never cut ("4080 x…", Jason 2026-11-03); the size stays in the photo index. */
+	private function photoMeta(array $img, $w = null)
 	{
-		$bits = array('id ' . $img['id']);
-		// view direction right after the id, so a narrow contact-sheet cell cuts the size first (Coleman 2026-11-03)
-		if (($v = $this->photoView($img)) !== '') $bits[] = $v;
-		if ($img['width'] && $img['height']) $bits[] = $img['width'] . ' x ' . $img['height'];
-		if ($img['type'] !== '' && strtolower($img['type']) !== 'photo') $bits[] = $img['typeLabel'];
-		if ($img['annotated']) $bits[] = 'annotated';
-		return implode(' · ', $bits);
+		$head = array('id ' . $img['id']);
+		// view direction right after the id (Coleman 2026-11-03)
+		if (($v = $this->photoView($img)) !== '') $head[] = $v;
+		$size = ($img['width'] && $img['height']) ? array($img['width'] . ' x ' . $img['height']) : array();
+		$tail = array();
+		if ($img['type'] !== '' && strtolower($img['type']) !== 'photo') $tail[] = $img['typeLabel'];
+		if ($img['annotated']) $tail[] = 'annotated';
+		$line = implode(' · ', array_merge($head, $size, $tail));
+		if ($w !== null && $size && $this->pdf->GetStringWidth($line) > $w) $line = implode(' · ', array_merge($head, $tail));
+		return $line;
 	}
 
 	/** "view 155°, plunge 10°" / "view 155°" / "plunge 10°" / '' from the camera view angles. */
@@ -1077,7 +1082,7 @@ class FieldbookRenderer
 				foreach ($c['cap'] as $line) { $pdf->SetXY($x, $yy); $pdf->Cell($cw, 3.2, $line, 0, 0, 'L'); $yy += 3.2; }
 				$pdf->SetFont($pdf->head, '', 6.5); $pdf->SetTextColor(120, 120, 120);
 				$pdf->SetXY($x, $y0 + $boxH + 1 + 3.4 + $capMax * 3.2);
-				$pdf->Cell($cw, 3.0, $pdf->fit($this->photoMeta($img), $cw), 0, 0, 'L');
+				$pdf->Cell($cw, 3.0, $pdf->fit($this->photoMeta($img, $cw), $cw), 0, 0, 'L');
 				$pdf->SetTextColor(0, 0, 0);
 				$this->indexPhoto($no, $img, $spot, $y0);
 			}
