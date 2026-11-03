@@ -1516,10 +1516,25 @@ class straboOutputClass
 				$dsids=$this->get['dsids'];
 				$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
-				$data = $this->strabo->getDatasetSpotsSearch(null,$this->get);
+				// Whole project (My Field Data project menu, 2026-11-03): every dataset of the
+				// project in one sheet, a Dataset column after Sample Id, rows grouped by dataset.
+				// searchdownload.php resolved dsids + userpkey with exportProjectParams.
+				$isProject = (($this->get['export_scope'] ?? '') == 'project');
+				$getvals = $this->get;
+				if($isProject) $getvals['attribution'] = 1;   // stamps ds_name on each spot
+
+				$data = $this->strabo->getDatasetSpotsSearch(null,$getvals);
+
+				if($isProject){
+					$owner = (int)($this->get['userpkey'] ?? 0);
+					$pid = preg_match('/^[0-9]+$/', (string)($this->get['projectid'] ?? '')) ? $this->get['projectid'] : "0";
+					$listname = (string)$this->strabo->neodb->get_var("MATCH (p:Project {id: $pid, userpkey: $owner}) RETURN p.desc_project_name LIMIT 1");
+				}else{
+					$listname = (string)$this->strabo->getDatasetName($dsids);
+				}
 
 				$filedate = date("m_d_Y");
-				$outFileName = $this->fixFileName($this->strabo->getDatasetName($dsids)."_Strabo_Sample_List_".$filedate);
+				$outFileName = $this->fixFileName($listname."_Strabo_Sample_List_".$filedate);
 				$outFileName .= ".xlsx";
 
 				if(empty($data)){
@@ -1530,16 +1545,26 @@ class straboOutputClass
 
 				// Real samples only: parent-spot stubs of sample spots are skipped
 				// (includes/straboClasses/sample_list_entries.php, 2026-11-03)
+				$entries = sample_list_entries($data['features']);
+				if($isProject){
+					// group by dataset name, keeping the spot order inside each dataset
+					foreach($entries as $i => $e) $entries[$i]['n'] = $i;
+					usort($entries, function($a, $b){
+						$c = strnatcasecmp((string)($a['feature']['properties']['ds_name'] ?? ''), (string)($b['feature']['properties']['ds_name'] ?? ''));
+						return $c != 0 ? $c : $a['n'] - $b['n'];
+					});
+				}
 				$foundSamples = [];
-				foreach(sample_list_entries($data['features']) as $entry){
+				foreach($entries as $entry){
 					// Field choice translation: sample cells carry form labels
 					$sample = FieldVocab::displayProperties(array('samples' => array($entry['sample'])))['samples'][0];
 					$sample->geometry = $entry['feature']['geometry'];
+					if($isProject) $sample->strabo_list_dataset = (string)($entry['feature']['properties']['ds_name'] ?? '');
 					$foundSamples[] = $sample;
 				}
 
 				if(count($foundSamples)==0){
-				echo "No samples found for this dataset.";exit();
+				echo $isProject ? "No samples found for this project." : "No samples found for this dataset.";exit();
 				}
 
 				//Get Centroids
@@ -1577,6 +1602,9 @@ class straboOutputClass
 							"sample_description",
 							"material_type"
 						];
+				if($isProject) array_splice($cols, 1, 0, array("strabo_list_dataset"));
+				$loncol = array_search("longitude", $cols);
+				$latcol = array_search("latitude", $cols);
 
 				foreach($fixedSamples as $samp){
 					foreach($samp as $key=>$value){
@@ -1607,12 +1635,13 @@ class straboOutputClass
 				// Add some data
 				$objPHPExcel->setActiveSheetIndex(0);
 
-				$objPHPExcel->getActiveSheet()->SetCellValue('A1', "StraboSpot Sample List: $datasetname");
+				$objPHPExcel->getActiveSheet()->SetCellValue('A1', "StraboSpot Sample List: $listname");
 
 				$colnum = 0;
 				foreach($cols as $col){
 					if($col == "sample_id_name") $col = "sample_id";
 					if($col == "main_sampling_purpose") $col = "sampling_purpose";
+					if($col == "strabo_list_dataset") $col = "dataset";
 
 					$fixcolname = $this->fix_column_name($col);
 
@@ -1642,8 +1671,8 @@ class straboOutputClass
 
 					}
 
-					$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,3), $s->centroid[0]);
-					$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,4), $s->centroid[1]);
+					$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,$loncol), $s->centroid[0]);
+					$objPHPExcel->getActiveSheet()->SetCellValue($this->rowcol($rownum,$latcol), $s->centroid[1]);
 
 					$rownum ++;
 				}
