@@ -1559,6 +1559,8 @@ class straboOutputClass
 					// Field choice translation: sample cells carry form labels
 					$sample = FieldVocab::displayProperties(array('samples' => array($entry['sample'])))['samples'][0];
 					$sample->geometry = $entry['feature']['geometry'];
+					// Spot Name (Wesdome 2026-11-03): name of the spot holding the sample, to join assay data
+					$sample->strabo_list_spot = (string)($entry['feature']['properties']['name'] ?? '');
 					if($isProject) $sample->strabo_list_dataset = (string)($entry['feature']['properties']['ds_name'] ?? '');
 					$foundSamples[] = $sample;
 				}
@@ -1602,7 +1604,8 @@ class straboOutputClass
 							"sample_description",
 							"material_type"
 						];
-				if($isProject) array_splice($cols, 1, 0, array("strabo_list_dataset"));
+				// Spot Name always in column B (dataset and project lists alike), Dataset after it
+				array_splice($cols, 1, 0, $isProject ? array("strabo_list_spot", "strabo_list_dataset") : array("strabo_list_spot"));
 				$loncol = array_search("longitude", $cols);
 				$latcol = array_search("latitude", $cols);
 
@@ -1642,6 +1645,7 @@ class straboOutputClass
 					if($col == "sample_id_name") $col = "sample_id";
 					if($col == "main_sampling_purpose") $col = "sampling_purpose";
 					if($col == "strabo_list_dataset") $col = "dataset";
+					if($col == "strabo_list_spot") $col = "spot_name";
 
 					$fixcolname = $this->fix_column_name($col);
 
