@@ -13,13 +13,16 @@ set -euo pipefail
 
 APP="${1:-$HOME/Desktop/Work/StraboMicro2}"
 HERE="$(cd "$(dirname "$0")" && pwd)"
-FILES="projectSerializer.js pdfReactExport.js imageExport.js"
+# The three renderer files, plus the local files projectSerializer.js requires
+# (since StraboMicro 2.0.55). If the app adds another local require to any of
+# them, add it here, or the service fails to start with "Cannot find module".
+FILES="projectSerializer.js pdfReactExport.js imageExport.js atomicFile.js deepEqual.js shared/deepEqual.mjs shared/entityModel.mjs"
 
 for f in $FILES; do
   [ -f "$APP/electron/$f" ] || { echo "missing $APP/electron/$f" >&2; exit 1; }
 done
 
-mkdir -p "$HERE/vendor"
+mkdir -p "$HERE/vendor/shared"
 for f in $FILES; do
   cp "$APP/electron/$f" "$HERE/vendor/$f"
 done
