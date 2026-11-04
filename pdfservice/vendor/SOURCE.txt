@@ -1,7 +1,11 @@
 Copied from StraboMicro2 electron/ by sync-renderer.sh. Do not edit here.
-App commit: 4e079c8 [Fix] PDF report: page numbers are fixed elements, so a nearly full page no longer pushes its number onto an extra blank page
-App branch: feature/pdf-image-cap
+App commit: 4071952 Release merge: develop -> main (2.0.55: collaboration, Grain Spot, Drop to Place, Custom User Data, Quick Spot Presets library)
+App branch: main
 
-3ab2f944a83d61870391ca82fe8c39a531f14b6ad9687069262e8da77ca7614f  projectSerializer.js
-e0111f39507ba95ad60fd851621d1d49242c0410e6832d2275a05c5b733b5226  pdfReactExport.js
-a5a445840d9a0b2420707e5bef490fbeec4acbc81057b3bf7deacee175390b8c  imageExport.js
+88c8d90cd4e700aca3ef99e4687dc9d331ddf9fe2a602b5c07d521d4d95a3708  projectSerializer.js
+fab226207a1687496091b28431f40b78ee90fc6733190d419344e702c2e179d2  pdfReactExport.js
+8e58e7106ee059f19f02dca9d14fde3700b749fd4e89f305125e27fe21285493  imageExport.js
+10a6682af372e53c8d096d20dc25d6472a1c4749770ef0981ca9fd64eedfa34f  atomicFile.js
+953c08f472a161daec969ca4715a5b9448f452803770a0cca2489a9b1dc677e5  deepEqual.js
+748eb56099782336e13963b38bc73123a191482d4c80af21139608f79ffdda57  shared/deepEqual.mjs
+10b0cb7487794cfb393682352a9e4c9d3441d59666852a6830a48f80344d37a5  shared/entityModel.mjs
