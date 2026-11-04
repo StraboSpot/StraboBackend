@@ -48,9 +48,21 @@ function geopackageLayers($path){
 	if(!geopackageIsSqlite($path)) return false;
 	$rows = geopackageQuery($path, "SELECT c.table_name AS name, g.geometry_type_name AS geometrytype, c.srs_id AS srsid, s.organization AS org, s.organization_coordsys_id AS code FROM gpkg_contents c LEFT JOIN gpkg_geometry_columns g ON g.table_name = c.table_name LEFT JOIN gpkg_spatial_ref_sys s ON s.srs_id = c.srs_id WHERE c.data_type = 'features' ORDER BY c.table_name");
 	if($rows === false) return false;
+	// A StraboSpot export: its orientations layer is one feature per measurement of the same point
+	// spots as its points layer (for viewing in QGIS), so it is never offered for loading and never
+	// read by a round trip upload. Exports have a points layer and strabo_id on both.
+	$isStraboExport = false;
+	foreach($rows as $row){
+		if($row['name'] === 'orientations'){
+			$cols = geopackageQuery($path, "SELECT COUNT(*) AS n FROM pragma_table_info('orientations') WHERE name = 'strabo_id'");
+			$pts = geopackageQuery($path, "SELECT COUNT(*) AS n FROM gpkg_contents WHERE table_name = 'points' AND data_type = 'features'");
+			$isStraboExport = $cols && (int)$cols[0]['n'] > 0 && $pts && (int)$pts[0]['n'] > 0;
+		}
+	}
 	$layers = array();
 	foreach($rows as $row){
 		$name = $row['name'];
+		if($isStraboExport && $name === 'orientations') continue;
 		$count = geopackageQuery($path, "SELECT COUNT(*) AS n FROM \"".str_replace('"', '""', $name)."\"");
 		$layers[$name] = array(
 			'geometrytype' => $row['geometrytype'],

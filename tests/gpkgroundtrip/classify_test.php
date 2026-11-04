@@ -75,6 +75,18 @@ try {
 	$r = summary(classify($EXPORT));
 	check('every spot unchanged, nothing else', $r['unchanged'] === $ALL && !$r['update'] && !$r['conflict'] && !$r['new'] && !$r['missing'] && !$r['refused'] && !$r['locked'], json_encode($r));
 
+	section('Classification: the orientations layer is never read (one row per measurement, a copy of points)');
+	check('the export has an orientations layer', count(layer_features($EXPORT, 'orientations')) > 0);
+	$orient = "$TMP/orient.gpkg";
+	copy($EXPORT, $orient);
+	$rows = layer_features($EXPORT, 'orientations');
+	foreach ($rows as $i => $f) $rows[$i]['geometry'] = shift($f['geometry'], 0.05, 0.05);   // every row moved in QGIS
+	file_put_contents("$TMP/orient.json", json_encode(array('type' => 'FeatureCollection', 'features' => $rows)));
+	exec('ogr2ogr -update -overwrite -nlt POINT -nln orientations ' . escapeshellarg($orient) . ' ' . escapeshellarg("$TMP/orient.json") . ' 2>&1');
+	check('Load GeoPackage does not list it', !isset(geopackageLayers($orient)['orientations']) && isset(geopackageLayers($orient)['points']), implode(',', array_keys(geopackageLayers($orient) ?: array())));
+	$r = summary(classify($orient));
+	check('moved orientations rows change nothing: every spot unchanged, no layer reported as not read', $r['unchanged'] === $ALL && !$r['update'] && !$r['conflict'] && !$r['new'] && !$r['notread'], json_encode($r));
+
 	section('Classification: saved in EPSG:3857 (float noise within tolerance)');
 	$merc = rebuild($EXPORT, "$TMP/merc.gpkg", function ($l, $fs) { return $fs; }, null, 'EPSG:3857');
 	$r = summary(classify($merc));

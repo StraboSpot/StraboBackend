@@ -4,15 +4,17 @@
  * Description: GeoPackage round trip, phase 1 (export side), docs/GeoPackage/GeoPackage_RoundTrip_Design.md
  *              sections 3 and 4. Downloads the golden fixture through /searchdownload (owner session)
  *              as a project export and as a dataset export and checks:
- *                - layers: points, lines, polygons (one feature per spot); attribute tables
- *                  strabo_export, strabo_spots, layer_styles
+ *                - layers: points, lines, polygons (one feature per spot), orientations (one per
+ *                  measurement); attribute tables strabo_export, strabo_spots, layer_styles; every
+ *                  table described in gpkg_contents
  *                - symbol_orientations on points: the spot's orientations in order (associated first)
  *                - strabo_id on every feature, proj_/ds_ columns
  *                - strabo_export (scope, project, datasets, owner) and strabo_spots (one row per spot,
  *                  layer, timestamp, original_geojson = the layer's geometry, editable = 0 for image
  *                  basemap and strat section spots)
- *                - styles: points = the per-spot orientation style (GeometryGenerator, one copy per
- *                  orientation, every rule as an "enabled" expression), strabo_id read-only everywhere
+ *                - styles: points = rule based per-spot orientation style (19 rules on symbol_orientations,
+ *                  GeometryGenerator per rule, one copy per orientation), orientations = dots by default +
+ *                  the per-measurement rules as a second style, strabo_id read-only everywhere
  *                - no file for a request without a session; another account's project id gives no data
  *
  *              Uses the golden fixture of tests/fieldvocab (needs the test users from
@@ -65,10 +67,24 @@ function check_file($what, $gpkg, array $wantLayers, array $wantSpots, $scope, $
 	$contents = array();
 	foreach (gpkg_rows($gpkg, 'SELECT table_name, data_type FROM gpkg_contents') as $r) $contents[$r['table_name']] = $r['data_type'];
 	// layer_styles registered too: otherwise GDAL (and so QGIS) hides it once the file has attribute tables
-	$want = array('strabo_export' => 'attributes', 'strabo_spots' => 'attributes', 'layer_styles' => 'attributes');
+	// strabo_export / strabo_spots: an extension data_type, so QGIS does not offer them as layers (Zane Jobe 2026-11-04)
+	$want = array('strabo_export' => 'x-strabo-roundtrip', 'strabo_spots' => 'x-strabo-roundtrip', 'layer_styles' => 'attributes');
 	foreach ($wantLayers as $l) $want[$l] = 'features';
+	if (in_array('points', $wantLayers)) $want['orientations'] = 'features';   // one row per measurement
 	ksort($want); ksort($contents);
 	check("$what: tables " . implode(', ', array_keys($want)), $contents === $want, json_encode($contents));
+	// every table is described for QGIS users (helper tables say they are not needed for mapping)
+	$desc = array(); foreach (gpkg_rows($gpkg, 'SELECT table_name, description FROM gpkg_contents') as $r) $desc[$r['table_name']] = $r['description'];
+	$noDesc = array(); foreach (array_keys($want) as $t) if (trim((string)($desc[$t] ?? '')) === '') $noDesc[] = $t;
+	check("$what: every table has a gpkg_contents description", !$noDesc, implode(',', $noDesc));
+	$helper = array(); foreach (array('strabo_export', 'strabo_spots', 'layer_styles') as $t) if (strpos((string)($desc[$t] ?? ''), 'Not needed for mapping') === false) $helper[] = $t;
+	check("$what: strabo_export, strabo_spots, layer_styles say they are not needed for mapping", !$helper, implode(',', $helper));
+	// what GDAL (and so QGIS) lists when the file is opened: the feature layers only
+	$listed = array(); exec('ogrinfo -ro -q ' . escapeshellarg($gpkg) . ' 2>/dev/null', $lo);
+	foreach ($lo as $line) if (preg_match('/^\d+: (\S+)/', $line, $m)) $listed[] = $m[1];
+	$wantListed = array_merge($wantLayers, in_array('points', $wantLayers) ? array('orientations') : array(), array('layer_styles'));
+	sort($listed); sort($wantListed);
+	check("$what: GDAL lists only the feature layers (+ layer_styles, which QGIS hides), not strabo_export / strabo_spots", $listed === $wantListed, implode(',', $listed));
 
 	// one feature per spot, strabo_id on every feature, the spot's dataset columns
 	$byLayer = array(); $all = array();
@@ -98,6 +114,30 @@ function check_file($what, $gpkg, array $wantLayers, array $wantSpots, $scope, $
 	$other = array(); foreach ($so as $id => $v) if ((string)$id !== (string)$S['structure'] && $v !== null) $other[] = $id;
 	check("$what: symbol_orientations null on points without orientations", !$other, implode(',', $other));
 
+	// orientations: one row per measurement in a single po_ / lo_ / to_ set (the points layout before
+	// the round trip), one row for a point without one, strabo_id on every row
+	if (in_array('points', $wantLayers)) {
+		$rows = array(); $noId = array(); $cols = array();
+		foreach (layer_features($gpkg, 'orientations') as $f) {
+			$sid = (string)($f['properties']['strabo_id'] ?? '');
+			if ($sid === '') $noId[] = json_encode($f['properties']);
+			$rows[$sid][] = $f['properties'];
+			$cols += $f['properties'];
+		}
+		$want = array(); foreach ($so as $id => $v) $want[(string)$id] = ((string)$id === (string)$S['structure']) ? 5 : 1;
+		$got = array(); foreach ($rows as $id => $r) $got[(string)$id] = count($r);
+		ksort($want); ksort($got);
+		check("$what: orientations = 5 rows for the GF structure spot, 1 for every other point", $got === $want && !$noId, json_encode($got) . ' ' . implode(' | ', $noId));
+		$r = $rows[(string)$S['structure']] ?? array();
+		$seen = array(); foreach ($r as $p) $seen[] = isset($p['lo_trend']) ? "lo {$p['lo_trend']}/{$p['lo_plunge']}" : (isset($p['to_strike']) ? "to {$p['to_strike']}" : "po {$p['po_strike']}/{$p['po_dip']}");
+		check("$what: orientations rows of the GF structure spot in order: lineation 210/20, planar 120/35, 40/80, 45/82, tabular 300",
+			$seen === array('lo 210/20', 'po 120/35', 'po 40/80', 'po 45/82', 'to 300'), implode(', ', $seen));
+		$numbered = array_values(array_filter(array_keys($cols), function ($c) { return preg_match('/^(po|lo|to)_[0-9]+_/', $c); }));
+		check("$what: orientations has no symbol_orientations and no numbered po_2_ / lo_2_ columns for the multi spot",
+			!array_key_exists('symbol_orientations', $cols) && !array_filter($r, function ($p) { foreach ($p as $k => $v) if (preg_match('/^(po|lo|to)_[0-9]+_/', $k) && $v !== null) return true; return false; }),
+			implode(',', $numbered));
+	}
+
 	// strabo_export
 	$ex = gpkg_rows($gpkg, 'SELECT * FROM strabo_export');
 	check("$what: strabo_export has one row", count($ex) === 1, json_encode($ex));
@@ -124,11 +164,27 @@ function check_file($what, $gpkg, array $wantLayers, array $wantSpots, $scope, $
 	check("$what: strabo_spots layer, original_geojson, timestamp, dataset, editable (0 for basemap + strat interval)", !$bad, implode(' | ', $bad));
 
 	// styles
-	$styles = array(); foreach (gpkg_rows($gpkg, 'SELECT f_table_name, styleQML FROM layer_styles') as $r) $styles[$r['f_table_name']] = $r['styleQML'];
+	$styles = array(); $extra = array();
+	foreach (gpkg_rows($gpkg, 'SELECT f_table_name, styleName, styleQML, useAsDefault FROM layer_styles') as $r) {
+		if ($r['useAsDefault'] === '1') $styles[$r['f_table_name']] = $r['styleQML']; else $extra[$r['f_table_name']][$r['styleName']] = $r['styleQML'];
+	}
 	$ps = $styles['points'] ?? '';
-	check("$what: points style draws every orientation from symbol_orientations (generator + rules as enabled expressions)",
-		strpos($ps, 'type="singleSymbol"') !== false && strpos($ps, 'class="GeometryGenerator"') !== false && strpos($ps, '@geometry_part_num') !== false
-		&& substr_count($ps, 'name="enabled" type="Map"') >= 19 && strpos($ps, '<rule ') === false, 'enabled: ' . substr_count($ps, 'name="enabled" type="Map"'));
+	// rule based (Zane Jobe 2026-11-04: one legend entry per structure type that can be switched off);
+	// each rule's symbol repeats the point per orientation and draws its own type on matching copies
+	$nRules = preg_match_all('/<rule [^>]*filter="([^"]*)"/', $ps, $rm);
+	$soRules = 0; foreach ($rm[1] as $flt) if (strpos(html_entity_decode($flt, ENT_QUOTES | ENT_XML1), 'from_json("symbol_orientations")') !== false) $soRules++;
+	check("$what: points style is rule based, 19 rules, each matching on symbol_orientations",
+		strpos($ps, 'type="RuleRenderer"') !== false && $nRules === 19 && $soRules === 19 && strpos($ps, 'label="Bedding (inclined)"') !== false, "rules $nRules, on symbol_orientations $soRules");
+	check("$what: points style draws every orientation from symbol_orientations (a generator per rule + enabled expressions)",
+		substr_count($ps, 'class="GeometryGenerator"') >= 19 && strpos($ps, '@geometry_part_num') !== false
+		&& substr_count($ps, 'name="enabled" type="Map"') >= 19, 'enabled: ' . substr_count($ps, 'name="enabled" type="Map"'));
+	if (in_array('points', $wantLayers)) {
+		$os = $styles['orientations'] ?? '';
+		check("$what: orientations default style = plain dots without labels", strpos($os, 'type="singleSymbol"') !== false && strpos($os, 'labelsEnabled="0"') !== false && strpos($os, 'GeometryGenerator') === false);
+		$alt = $extra['orientations']['StraboSpot Orientations (one per measurement)'] ?? '';
+		check("$what: orientations second style = the one-per-measurement orientation rules (not default)", strpos($alt, 'type="RuleRenderer"') !== false && substr_count($alt, '<rule ') === 19 && strpos($alt, 'symbol_orientations') === false);
+		$wantLayers[] = 'orientations';
+	}
 	check("$what: points label = first three dips from symbol_orientations + count of the rest, placed from the point", strpos($ps, "with_variable('dips'") !== false && strpos($ps, 'array_slice(@dips, 0, 2)') !== false && strpos($ps, "' (+'") !== false && preg_match('/<placement [^>]*offsetType="0"/', $ps) === 1);
 	$noRo = array(); foreach ($wantLayers as $l) if (!isset($styles[$l]) || strpos($styles[$l], '<field name="strabo_id" editable="0"/>') === false) $noRo[] = $l;
 	check("$what: strabo_id read-only in every layer style", !$noRo, implode(',', $noRo));

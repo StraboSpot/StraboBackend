@@ -45,13 +45,19 @@ function rebuild($src, $dst, $edit, $export = null, $srs = 'EPSG:4326', $types =
 		exec('ogr2ogr -f GPKG ' . ($first ? '' : '-update ') . "-nlt $nlt -nln " . escapeshellarg($layer) . ' -s_srs EPSG:4326 -t_srs ' . escapeshellarg($srs) . ' ' . escapeshellarg($dst) . ' ' . escapeshellarg("$TMP/layer.json") . ' 2>&1');
 		$first = false;
 	}
-	exec('ogr2ogr -update -nlt NONE ' . escapeshellarg($dst) . ' ' . escapeshellarg($src) . ' strabo_spots 2>&1');
+	// the manifest tables are not layers in an export (extension data_type): copied with SQL, and
+	// registered the same way again, as in the file a user edits
+	$copy = function ($table) use ($src, $dst) {
+		exec('ogr2ogr -update -nlt NONE -nln ' . $table . ' -sql ' . escapeshellarg("SELECT * FROM $table") . ' ' . escapeshellarg($dst) . ' ' . escapeshellarg($src) . ' 2>&1');
+	};
+	$copy('strabo_spots');
 	if ($export === null) {
-		exec('ogr2ogr -update -nlt NONE ' . escapeshellarg($dst) . ' ' . escapeshellarg($src) . ' strabo_export 2>&1');
+		$copy('strabo_export');
 	} elseif ($export !== false) {
 		file_put_contents("$TMP/export.json", json_encode(array('type' => 'FeatureCollection', 'features' => array(array('type' => 'Feature', 'geometry' => null, 'properties' => $export)))));
 		exec('ogr2ogr -update -nlt NONE -nln strabo_export ' . escapeshellarg($dst) . ' ' . escapeshellarg("$TMP/export.json") . ' 2>&1');
 	}
+	exec('ogrinfo ' . escapeshellarg($dst) . ' -sql ' . escapeshellarg("UPDATE gpkg_contents SET data_type = 'x-strabo-roundtrip' WHERE table_name IN ('strabo_export', 'strabo_spots')") . ' 2>&1');
 	return $dst;
 }
 
