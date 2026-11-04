@@ -176,6 +176,12 @@ class MsWorker {
 		$build = function ($type, $id) use (&$build, $bodies, $orders, $children, &$micrographs, &$pointCounts) {
 			$k = MsModel::key($type, $id);
 			$obj = $bodies[$k];
+			// Per-user fields stored before they were per-user (isMicroVisible until
+			// 2026-10-29) never reach project.json: the web viewer and the PDF show
+			// every micrograph, whoever hid it in their own copy
+			foreach (MsModel::perUserFields($type) as $f) {
+				unset($obj->$f);
+			}
 			$order = MsModel::normalizeChildOrder($type, $orders[$k], isset($children[$k]) ? $children[$k] : array());
 			foreach (MsModel::$CHILD_KEYS[$type] as $childKey => $childType) {
 				$list = array();

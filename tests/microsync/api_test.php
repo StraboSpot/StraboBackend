@@ -216,7 +216,7 @@ try {
 		array('op' => 'create', 'type' => 'sample', 'id' => 'S1', 'parentType' => 'dataset', 'parentId' => 'D1', 'body' => array('name' => 'S1', 'isExpanded' => true)),
 		array('op' => 'create', 'type' => 'sample', 'id' => 'S2', 'parentType' => 'dataset', 'parentId' => 'D1', 'body' => array('name' => 'S2')),
 		array('op' => 'create', 'type' => 'micrograph', 'id' => 'M1', 'parentType' => 'sample', 'parentId' => 'S1',
-			'body' => array('name' => 'M1', 'scale' => 1.0, 'mineralogy' => array('notes' => 'n', 'minerals' => array()), 'tags' => array(), 'emptyObj' => new stdClass())),
+			'body' => array('name' => 'M1', 'scale' => 1.0, 'mineralogy' => array('notes' => 'n', 'minerals' => array()), 'tags' => array(), 'emptyObj' => new stdClass(), 'isMicroVisible' => false)),
 		array('op' => 'create', 'type' => 'spot', 'id' => 'P1', 'parentType' => 'micrograph', 'parentId' => 'M1', 'body' => array('name' => 'P1')),
 		array('op' => 'create', 'type' => 'micrograph', 'id' => 'MX', 'parentType' => 'sample', 'parentId' => 'S2', 'body' => array('name' => 'MX')),
 	));
@@ -283,7 +283,7 @@ try {
 	check('change id -> schema', st(one($PID, $OWN, array('op' => 'update', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 2, 'fields' => array('id' => 'Z')))) === 'invalid/schema');
 	check('path through a list -> schema', st(one($PID, $OWN, array('op' => 'update', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 2, 'fields' => array('mineralogy.minerals.x' => 1)))) === 'invalid/schema');
 	$r = one($PID, $OWN, array('op' => 'update', 'type' => 'micrograph', 'id' => 'M1', 'baseVersion' => 2,
-		'fields' => array('mineralogy.notes' => null, 'isExpanded' => true, 'new.deep.value' => 5)));
+		'fields' => array('mineralogy.notes' => null, 'isExpanded' => true, 'isMicroVisible' => true, 'new.deep.value' => 5)));
 	check('null removes, per-user ignored, deep path created', st($r) === 'accepted' && $r['version'] === 3);
 	check('update missing entity -> not_found', st(one($PID, $OWN, array('op' => 'update', 'type' => 'spot', 'id' => 'NOPE', 'baseVersion' => 1, 'fields' => array('a' => 1)))) === 'invalid/not_found');
 
@@ -533,6 +533,7 @@ try {
 	check('project childOrder lists datasets, tags, groups, presets',
 		array_keys($byKey['project:' . $SID]['childOrder']) === array('datasets', 'tags', 'groups', 'presets'));
 	check('per-user fields stripped', !isset($byKey['sample:S1']['body']['isExpanded']) && !isset($byKey['project:' . $SID]['body']['presetKeyBindings']));
+	check('micrograph visibility is per-user: never stored (create or update)', !array_key_exists('isMicroVisible', $byKey['micrograph:M1']['body']), json_encode($byKey['micrograph:M1']['body']));
 	check('outsider snapshot -> 404', req('GET', "/projects/$PID/snapshot", $OUT)['code'] === 404);
 
 	// -----------------------------------------------------------------------

@@ -67,12 +67,17 @@ class MsModel {
 		'point_count' => array('micrographId'),
 	);
 
-	/** Per-user fields: stay in the local project.json, dropped here. */
+	/**
+	 * Per-user fields: stay in the local project.json, dropped here. Matches
+	 * the app's list (electron/shared/entityModel.mjs). isMicroVisible (the
+	 * micrograph eye) is each person's own view (2026-10-29); bodies stored
+	 * before still hold it, and assembly leaves it out (MsWorker).
+	 */
 	public static function perUserFields($type) {
 		if ($type === 'project') {
 			return array('presetKeyBindings', 'grainAnalysisSpotFilter', 'grainAnalysisSelectedSpotIds');
 		}
-		return array('isExpanded', 'isSpotExpanded');
+		return array('isExpanded', 'isSpotExpanded', 'isMicroVisible');
 	}
 
 	public static function isType($type) {
