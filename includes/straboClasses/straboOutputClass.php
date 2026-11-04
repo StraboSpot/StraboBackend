@@ -19,6 +19,9 @@ require_once __DIR__ . '/sample_list_entries.php';
 class straboOutputClass
 {
 
+	/** gpkg_contents data_type of the GeoPackage round trip tables (strabo_export, strabo_spots): not a layer in QGIS */
+	const GPKG_MANIFEST_DATA_TYPE = 'x-strabo-roundtrip';
+
 	 public $holdings = [];
 
 	 public function addHolding($row, $col, $val){
@@ -27199,6 +27202,11 @@ QML;
 			file_put_contents("$workdir/$table.json", json_encode(array('type' => 'FeatureCollection', 'features' => $features)));
 			exec("ogr2ogr -f GPKG -append -nlt NONE -nln $table " . escapeshellarg($gpkgFile) . " " . escapeshellarg("$workdir/$table.json") . " 2>&1");
 			unlink("$workdir/$table.json");
+			// Registered with an extension data_type instead of 'attributes': GDAL, and so QGIS, then
+			// do not offer them as layers when the file is opened (Zane Jobe 2026-11-04: unclear what
+			// they are). The upload reads them by name with SQL, which is unaffected. To revert, set
+			// data_type back to 'attributes'.
+			exec("ogrinfo " . escapeshellarg($gpkgFile) . " -sql " . escapeshellarg("UPDATE gpkg_contents SET data_type = '" . self::GPKG_MANIFEST_DATA_TYPE . "' WHERE table_name = '$table'") . " 2>&1");
 		}
 
 		return array('id' => $pid, 'name' => $pname, 'scope' => $scope);

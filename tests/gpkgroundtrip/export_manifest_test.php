@@ -67,7 +67,8 @@ function check_file($what, $gpkg, array $wantLayers, array $wantSpots, $scope, $
 	$contents = array();
 	foreach (gpkg_rows($gpkg, 'SELECT table_name, data_type FROM gpkg_contents') as $r) $contents[$r['table_name']] = $r['data_type'];
 	// layer_styles registered too: otherwise GDAL (and so QGIS) hides it once the file has attribute tables
-	$want = array('strabo_export' => 'attributes', 'strabo_spots' => 'attributes', 'layer_styles' => 'attributes');
+	// strabo_export / strabo_spots: an extension data_type, so QGIS does not offer them as layers (Zane Jobe 2026-11-04)
+	$want = array('strabo_export' => 'x-strabo-roundtrip', 'strabo_spots' => 'x-strabo-roundtrip', 'layer_styles' => 'attributes');
 	foreach ($wantLayers as $l) $want[$l] = 'features';
 	if (in_array('points', $wantLayers)) $want['orientations'] = 'features';   // one row per measurement
 	ksort($want); ksort($contents);
@@ -78,6 +79,12 @@ function check_file($what, $gpkg, array $wantLayers, array $wantSpots, $scope, $
 	check("$what: every table has a gpkg_contents description", !$noDesc, implode(',', $noDesc));
 	$helper = array(); foreach (array('strabo_export', 'strabo_spots', 'layer_styles') as $t) if (strpos((string)($desc[$t] ?? ''), 'Not needed for mapping') === false) $helper[] = $t;
 	check("$what: strabo_export, strabo_spots, layer_styles say they are not needed for mapping", !$helper, implode(',', $helper));
+	// what GDAL (and so QGIS) lists when the file is opened: the feature layers only
+	$listed = array(); exec('ogrinfo -ro -q ' . escapeshellarg($gpkg) . ' 2>/dev/null', $lo);
+	foreach ($lo as $line) if (preg_match('/^\d+: (\S+)/', $line, $m)) $listed[] = $m[1];
+	$wantListed = array_merge($wantLayers, in_array('points', $wantLayers) ? array('orientations') : array(), array('layer_styles'));
+	sort($listed); sort($wantListed);
+	check("$what: GDAL lists only the feature layers (+ layer_styles, which QGIS hides), not strabo_export / strabo_spots", $listed === $wantListed, implode(',', $listed));
 
 	// one feature per spot, strabo_id on every feature, the spot's dataset columns
 	$byLayer = array(); $all = array();
