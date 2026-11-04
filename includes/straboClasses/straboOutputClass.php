@@ -26531,10 +26531,13 @@ QML;
 	 * symbols stay exactly those of the one-feature-per-orientation style.
 	 *
 	 * The spot's orientations are in the column symbol_orientations (JSON list, one map per orientation
-	 * with the po_ / lo_ / to_ values explodeOrientations() writes). A marker GeometryGenerator repeats
-	 * the spot's point once per orientation (one copy when there are none); its sub-symbol holds every
-	 * rule's symbol layers, each enabled by its rule filter, and every po_ / lo_ / to_ reference reads
-	 * the orientation of the copy being drawn (@geometry_part_num). Moving the spot moves all symbols.
+	 * with the po_ / lo_ / to_ values explodeOrientations() writes). The renderer keeps the 19 rules of
+	 * that style (so each structure type is its own legend entry that can be switched off); a rule
+	 * matches a spot when any of its orientations passes the rule filter. Each rule's symbol is a marker
+	 * GeometryGenerator that repeats the spot's point once per orientation (one copy when there are
+	 * none), with the rule's symbol layers enabled only on the copies whose orientation passes the
+	 * filter; every po_ / lo_ / to_ reference reads the orientation of the copy being drawn
+	 * (@geometry_part_num). Moving the spot moves all symbols.
 	 */
 	private function generateSpotOrientationQml($layerName){
 
@@ -26549,21 +26552,45 @@ QML;
 			}, $expr);
 		};
 
+		// The same po_ / lo_ / to_ value of the orientation the rule filter is tried on (@element = its index)
+		$each = function($expr){
+			return preg_replace_callback('/"?\b(po|lo|to)_([a-z_]+)\b"?/', function($m){
+				return "map_get(array_get(@so, @element), '" . $m[1] . "_" . $m[2] . "')";
+			}, $expr);
+		};
+
+		// The spot's point once per orientation (at least once)
+		$n = 'coalesce(array_length(from_json("symbol_orientations")), 0)';
+		$copies = "collect_geometries(array_foreach(generate_series(1, if($n < 1, 1, $n)), \$geometry))";
+
 		$symbols = array();
 		foreach($xp->query('/qgis/renderer-v2/symbols/symbol') as $s){
 			$symbols[$s->getAttribute('name')] = $s;
 		}
 
-		// Every rule's symbol layers, each enabled by the rule (rules are mutually exclusive)
-		$sub = $doc->createElement('symbol');
-		foreach(array('name' => '@0@0', 'force_rhr' => '0', 'type' => 'marker', 'clip_to_extent' => '1', 'is_animated' => '0', 'frame_rate' => '10', 'alpha' => '1') as $k => $v){
-			$sub->setAttribute($k, $v);
-		}
-		$sub->appendChild($this->qmlDdProps($doc, array()));
+		// Rule based, one rule per structure type (Zane Jobe 2026-11-04: the legend classes can be
+		// switched on and off, as in the one-feature-per-orientation layout). A rule matches a spot when
+		// one of its orientations matches the rule's filter; its symbol repeats the point per orientation
+		// and draws only on the copies whose orientation matches (rules are mutually exclusive per
+		// orientation, so a spot with bedding and a lineation draws each symbol once).
 		foreach($xp->query('/qgis/renderer-v2/rules/rule') as $rule){
-			// a NULL "enabled" means "use the layer default" (on) in QGIS: missing values must give false
-			$enabled = 'coalesce((' . $part($rule->getAttribute('filter')) . '), false)';
-			foreach($xp->query('layer', $symbols[$rule->getAttribute('symbol')]) as $layer){
+			$filter = $rule->getAttribute('filter');
+			$rule->setAttribute('filter', "with_variable('so', coalesce(from_json(\"symbol_orientations\"), array()), "
+				. "array_contains(array_foreach(generate_series(0, if(array_length(@so) < 1, 1, array_length(@so)) - 1), "
+				. "coalesce((" . $each($filter) . "), false)), true))");
+
+			$old = $symbols[$rule->getAttribute('symbol')];
+			$name = $old->getAttribute('name');
+
+			// the rule's own symbol layers, enabled on the copies of a matching orientation. A NULL
+			// "enabled" means "use the layer default" (on) in QGIS: missing values must give false
+			$enabled = 'coalesce((' . $part($filter) . '), false)';
+			$sub = $doc->createElement('symbol');
+			foreach(array('name' => '@' . $name . '@0', 'force_rhr' => '0', 'type' => 'marker', 'clip_to_extent' => '1', 'is_animated' => '0', 'frame_rate' => '10', 'alpha' => '1') as $k => $v){
+				$sub->setAttribute($k, $v);
+			}
+			$sub->appendChild($this->qmlDdProps($doc, array()));
+			foreach($xp->query('layer', $old) as $layer){
 				$layer = $layer->cloneNode(true);
 				foreach((new DOMXPath($doc))->query('.//Option[@name="expression" or @name="geometryModifier"]', $layer) as $opt){
 					$opt->setAttribute('value', $part($opt->getAttribute('value')));
@@ -26582,45 +26609,46 @@ QML;
 				$props->appendChild($this->qmlDdOption($doc, 'enabled', $enabled));
 				$sub->appendChild($layer);
 			}
-		}
 
-		// The spot's point once per orientation (at least once)
-		$n = 'coalesce(array_length(from_json("symbol_orientations")), 0)';
-		$copies = "collect_geometries(array_foreach(generate_series(1, if($n < 1, 1, $n)), \$geometry))";
-		$gen = $doc->createElement('layer');
-		foreach(array('locked' => '0', 'class' => 'GeometryGenerator', 'pass' => '0', 'enabled' => '1') as $k => $v){
-			$gen->setAttribute($k, $v);
-		}
-		$opts = $doc->createElement('Option');
-		$opts->setAttribute('type', 'Map');
-		foreach(array('SymbolType' => 'Marker', 'geometryModifier' => $copies, 'units' => 'MapUnit') as $k => $v){
-			$o = $doc->createElement('Option');
-			$o->setAttribute('value', $v); $o->setAttribute('name', $k); $o->setAttribute('type', 'QString');
-			$opts->appendChild($o);
-		}
-		$gen->appendChild($opts);
-		$gen->appendChild($this->qmlDdProps($doc, array()));
-		$gen->appendChild($sub);
+			$gen = $doc->createElement('layer');
+			foreach(array('locked' => '0', 'class' => 'GeometryGenerator', 'pass' => '0', 'enabled' => '1') as $k => $v){
+				$gen->setAttribute($k, $v);
+			}
+			$opts = $doc->createElement('Option');
+			$opts->setAttribute('type', 'Map');
+			foreach(array('SymbolType' => 'Marker', 'geometryModifier' => $copies, 'units' => 'MapUnit') as $k => $v){
+				$o = $doc->createElement('Option');
+				$o->setAttribute('value', $v); $o->setAttribute('name', $k); $o->setAttribute('type', 'QString');
+				$opts->appendChild($o);
+			}
+			$gen->appendChild($opts);
+			$gen->appendChild($this->qmlDdProps($doc, array()));
+			$gen->appendChild($sub);
 
-		$top = $doc->createElement('symbol');
-		foreach(array('name' => '0', 'force_rhr' => '0', 'type' => 'marker', 'clip_to_extent' => '1', 'is_animated' => '0', 'frame_rate' => '10', 'alpha' => '1') as $k => $v){
-			$top->setAttribute($k, $v);
+			$top = $doc->createElement('symbol');
+			foreach(array('name' => $name, 'force_rhr' => '0', 'type' => 'marker', 'clip_to_extent' => '1', 'is_animated' => '0', 'frame_rate' => '10', 'alpha' => '1') as $k => $v){
+				$top->setAttribute($k, $v);
+			}
+			$top->appendChild($this->qmlDdProps($doc, array()));
+			$top->appendChild($gen);
+			// QGIS sizes a legend icon from the marker layers of the symbol and a GeometryGenerator
+			// has none (the icons were clipped): an invisible marker as long as the strike line gives
+			// the icon the room of the one-feature-per-orientation style. It draws nothing, and it is
+			// off for map features (only the legend preview has no feature), so it is no label obstacle.
+			$spacer = new DOMDocument();
+			$spacer->loadXML('<symbol>' . $this->qmlMarkerLayer('circle', '8', ['color' => '0,0,0,0', 'outlineColor' => '0,0,0,0', 'outlineWidth' => '0', 'outlineStyle' => 'no']) . '</symbol>');
+			foreach($spacer->documentElement->childNodes as $c){
+				if(!($c instanceof DOMElement)) continue;
+				$c = $doc->importNode($c, true);
+				foreach((new DOMXPath($doc))->query('data_defined_properties/Option/Option[@name="properties"]', $c) as $props){
+					$props->setAttribute('type', 'Map');
+					$props->appendChild($this->qmlDdOption($doc, 'enabled', '@feature IS NULL'));
+				}
+				$top->appendChild($c);
+			}
+			$old->parentNode->replaceChild($top, $old);
+			$symbols[$name] = $top;
 		}
-		$top->appendChild($this->qmlDdProps($doc, array()));
-		$top->appendChild($gen);
-
-		// Single symbol renderer instead of the rules
-		$old = $xp->query('/qgis/renderer-v2')->item(0);
-		$renderer = $doc->createElement('renderer-v2');
-		foreach(array('type' => 'singleSymbol', 'symbollevels' => '0', 'forceraster' => '0', 'enableorderby' => '0') as $k => $v){
-			$renderer->setAttribute($k, $v);
-		}
-		$syms = $doc->createElement('symbols');
-		$syms->appendChild($top);
-		$renderer->appendChild($syms);
-		$renderer->appendChild($doc->createElement('rotation'));
-		$renderer->appendChild($doc->createElement('sizescale'));
-		$old->parentNode->replaceChild($renderer, $old);
 
 		// One label per spot: the first three dips (or plunges) in order, then how many more ("82, 83, 79 (+4)",
 		// Jason 10-23); orientations without one (tabular zones) are left out, as before
@@ -26666,7 +26694,21 @@ QML;
 
 	private function generateSimpleQml($geometryType){
 
-		if($geometryType == 'plainpoint'){
+		if($geometryType == 'orientationdot'){
+			// GeoPackage orientations layer: a small grey dot per measurement (the points layer draws the symbols)
+			$symbol = $this->qmlSymbol('0', $this->qmlMarkerLayer('circle', '1.2', ['color' => '130,130,130,255', 'outlineWidth' => '0']));
+			$qml = <<<QML
+<!DOCTYPE qgis PUBLIC 'http://mrcc.com/qgis.dtd' 'SYSTEM'>
+<qgis simplifyDrawingHints="0" version="3.28.11-Firenze" styleCategories="AllStyleCategories" labelsEnabled="0">
+  <renderer-v2 type="singleSymbol" symbollevels="0" forceraster="0" enableorderby="0">
+    <symbols>
+$symbol    </symbols>
+    <rotation/>
+    <sizescale/>
+  </renderer-v2>
+</qgis>
+QML;
+		}elseif($geometryType == 'plainpoint'){
 			// GeoPackage points layer (one feature per spot): the "Plain point" symbol of the
 			// orientation style; the orientation symbols are their own layer
 			$symbol = $this->qmlSymbol('0', $this->qmlMarkerLayer('circle', '2.5', ['outlineWidth' => '0']));
@@ -26815,6 +26857,13 @@ QML;
 			if($layerType == 'point'){
 				$qml = $this->generateOrientationQml($layerName);
 				$styleName = 'StraboSpot Orientations';
+			}elseif($layerType == 'orientationrows'){
+				// small grey dots by default (the points layer draws the symbols; both drawing them
+				// would double every symbol and label); the orientation symbols are a second style
+				// (Layer Properties, Style, Load Style, From Database)
+				$this->insertGpkgStyle($gpkgPath, $layerName, 'StraboSpot Orientations (one per measurement)', $this->generateOrientationQml($layerName), 0);
+				$qml = $this->generateSimpleQml('orientationdot');
+				$styleName = 'StraboSpot Measurement Dots';
 			}elseif($layerType == 'spotpoint'){
 				$qml = $this->generateSpotOrientationQml($layerName);
 				$styleName = 'StraboSpot Orientations';
@@ -26823,19 +26872,46 @@ QML;
 				$styleName = 'StraboSpot Default';
 			}
 
-			// strabo_id ties a feature to its spot for the round trip: read-only in the QGIS form
-			$qml = str_replace('</qgis>', "  <editable>\n    <field name=\"strabo_id\" editable=\"0\"/>\n  </editable>\n</qgis>", $qml);
+			$this->insertGpkgStyle($gpkgPath, $layerName, $styleName, $qml, 1);
+		}
+	}
 
-			// Write SQL to temp file to avoid shell argument length limits
-			$escapedQml = str_replace("'", "''", $qml);
-			$insertSql = "INSERT INTO layer_styles (f_table_name, f_geometry_column, styleName, styleQML, useAsDefault, description) "
-				. "VALUES ('$layerName', 'geom', '$styleName', '$escapedQml', 1, 'Auto-generated by StraboSpot export')";
+	/** One layer_styles row (useAsDefault 1 = the style QGIS loads with the layer). */
+	private function insertGpkgStyle($gpkgPath, $layerName, $styleName, $qml, $useAsDefault){
 
-			// Write SQL to temp file and use @file syntax to avoid shell argument length limits
-			$sqlFile = dirname($gpkgPath) . "/style_{$layerName}.sql";
-			file_put_contents($sqlFile, $insertSql);
-			exec("ogrinfo " . escapeshellarg($gpkgPath) . " -sql @" . escapeshellarg($sqlFile) . " 2>&1");
-			unlink($sqlFile);
+		// strabo_id ties a feature to its spot for the round trip: read-only in the QGIS form
+		$qml = str_replace('</qgis>', "  <editable>\n    <field name=\"strabo_id\" editable=\"0\"/>\n  </editable>\n</qgis>", $qml);
+
+		$escapedQml = str_replace("'", "''", $qml);
+		$escapedName = str_replace("'", "''", $styleName);
+		$insertSql = "INSERT INTO layer_styles (f_table_name, f_geometry_column, styleName, styleQML, useAsDefault, description) "
+			. "VALUES ('$layerName', 'geom', '$escapedName', '$escapedQml', " . ($useAsDefault ? 1 : 0) . ", 'Auto-generated by StraboSpot export')";
+
+		// Write SQL to temp file and use @file syntax to avoid shell argument length limits
+		$sqlFile = dirname($gpkgPath) . "/style_{$layerName}_" . ($useAsDefault ? 1 : 0) . ".sql";
+		file_put_contents($sqlFile, $insertSql);
+		exec("ogrinfo " . escapeshellarg($gpkgPath) . " -sql @" . escapeshellarg($sqlFile) . " 2>&1");
+		unlink($sqlFile);
+	}
+
+	/**
+	 * gpkg_contents descriptions, so QGIS users can tell what each table is (it lists them when the
+	 * file is opened) and that the strabo_ tables are not needed for mapping (Zane Jobe 2026-11-04).
+	 */
+	private function describeGpkgTables($gpkgPath){
+		$descriptions = array(
+			'points' => 'StraboSpot point spots, one feature per spot (all of its measurements are drawn). Move points here to update the spots in StraboSpot (Load GeoPackage).',
+			'orientations' => 'One feature per measurement (spots without one get one row), for queries and styles per measurement. A copy of the points layer: edits here are not sent back to StraboSpot.',
+			'lines' => 'StraboSpot line spots, one feature per spot.',
+			'polygons' => 'StraboSpot polygon spots, one feature per spot.',
+			'strabo_export' => 'StraboSpot export details, used when this file is loaded back into StraboSpot. Not needed for mapping.',
+			'strabo_spots' => 'The exported spots as they were, used when this file is loaded back into StraboSpot. Not needed for mapping.',
+			'layer_styles' => 'QGIS styles of the layers (loaded with the layers). Not needed for mapping.',
+		);
+		foreach($descriptions as $table => $text){
+			// a table the file does not have updates nothing
+			$sql = "UPDATE gpkg_contents SET description = '" . str_replace("'", "''", $text) . "' WHERE table_name = '$table'";
+			exec("ogrinfo " . escapeshellarg($gpkgPath) . " -sql " . escapeshellarg($sql) . " 2>&1");
 		}
 	}
 
@@ -26847,7 +26923,9 @@ QML;
 	 * Round trip layout (docs/GeoPackage/GeoPackage_RoundTrip_Design.md, section 3):
 	 *   points               one feature per spot (the layer edited in QGIS); its style draws every
 	 *                        orientation of the spot from symbol_orientations, so symbols move with it
-	 *   lines, polygons      one feature per spot
+	 *   orientations         one feature per orientation (the points layout before the round trip),
+ *                        for queries and styles per measurement; never read back by an upload
+ *   lines, polygons      one feature per spot
 	 * Every feature carries strabo_id (the spot id) plus proj_/ds_ columns, and the file holds
 	 * two attribute tables (strabo_export, strabo_spots) that let a later upload update the
 	 * original spots. Those tables are written only when the export covers one project of one owner.
@@ -26883,13 +26961,20 @@ QML;
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
 				$features = array();
+				$rows = array();
 				foreach($pointjson['features'] as $spot){
 					$spot = $this->gpkgFeature($spot, 'points', $manifestSpots);
+					// orientations layer: one row per measurement, the points layout before the round
+					// trip (April 2026), plus strabo_id (Zane Jobe 2026-11-04)
+					foreach($this->explodeOrientations($spot) as $row){
+						$rows[] = $row;
+					}
 					$spot['properties']['symbol_orientations'] = $this->symbolOrientations($spot);
 					$features[] = $spot;
 				}
 				$newjson['features']=$features;
 				$pointjson = json_encode($newjson,JSON_PRETTY_PRINT);
+				$orientationjson = json_encode(array('type' => 'FeatureCollection', 'features' => $rows), JSON_PRETTY_PRINT);
 			}
 
 			$linejson = $this->strabo->getDatasetSpotsSearch('line',$get);
@@ -26922,6 +27007,11 @@ QML;
 					unlink("ogrtemp/$randnum/point.json");
 					$layers['points'] = 'spotpoint';
 					$firstLayer = false;
+
+					file_put_contents("ogrtemp/$randnum/orientation.json", $orientationjson);
+					exec("ogr2ogr -f GPKG -append -nlt POINT -nln orientations -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/orientation.json 2>&1");
+					unlink("ogrtemp/$randnum/orientation.json");
+					$layers['orientations'] = 'orientationrows';
 				}
 
 				if($linejson!=""){
@@ -26950,6 +27040,7 @@ QML;
 				// Inject QGIS styles
 				if(file_exists($gpkgFile)){
 					$this->injectGpkgStyles($gpkgFile, $layers);
+					$this->describeGpkgTables($gpkgFile);
 				}
 
 				// File name: the project for a project export, else the dataset
