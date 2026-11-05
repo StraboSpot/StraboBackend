@@ -26946,8 +26946,11 @@ QML;
 
 			$manifestSpots = array();
 
-			// Get spots by geometry type
-			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$get);
+			// Spots by layer. Multi-part lines and polygons (shapefile / GIS imports) go to the lines and
+			// polygons layers too; stripJSON() dropped them, so a dataset of MultiPolygons exported as
+			// "No data found" (Rip Langford 2026-11-04). One query, split here (stripJSON order kept).
+			$bylayer = $this->gpkgSpotsByLayer($this->strabo->getDatasetSpotsSearch(null,$get));
+			$polygonjson = $bylayer['polygons'];
 			if($polygonjson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -26959,7 +26962,7 @@ QML;
 				$polygonjson = json_encode($newjson,JSON_PRETTY_PRINT);
 			}
 
-			$pointjson = $this->strabo->getDatasetSpotsSearch('point',$get);
+			$pointjson = $bylayer['points'];
 			if($pointjson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -26980,7 +26983,7 @@ QML;
 				$orientationjson = json_encode(array('type' => 'FeatureCollection', 'features' => $rows), JSON_PRETTY_PRINT);
 			}
 
-			$linejson = $this->strabo->getDatasetSpotsSearch('line',$get);
+			$linejson = $bylayer['lines'];
 			if($linejson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -27020,7 +27023,7 @@ QML;
 				if($linejson!=""){
 					$appendFlag = $firstLayer ? "" : "-append";
 					file_put_contents("ogrtemp/$randnum/line.json", $linejson);
-					exec("ogr2ogr -f GPKG $appendFlag -nlt LINESTRING -nln lines -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/line.json 2>&1");
+					exec("ogr2ogr -f GPKG $appendFlag -nlt " . ($bylayer['multi']['lines'] ? "MULTILINESTRING" : "LINESTRING") . " -nln lines -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/line.json 2>&1");
 					unlink("ogrtemp/$randnum/line.json");
 					$layers['lines'] = 'line';
 					$firstLayer = false;
@@ -27029,7 +27032,7 @@ QML;
 				if($polygonjson!=""){
 					$appendFlag = $firstLayer ? "" : "-append";
 					file_put_contents("ogrtemp/$randnum/polygon.json", $polygonjson);
-					exec("ogr2ogr -f GPKG $appendFlag -nlt POLYGON -nln polygons -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/polygon.json 2>&1");
+					exec("ogr2ogr -f GPKG $appendFlag -nlt " . ($bylayer['multi']['polygons'] ? "MULTIPOLYGON" : "POLYGON") . " -nln polygons -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/polygon.json 2>&1");
 					unlink("ogrtemp/$randnum/polygon.json");
 					$layers['polygons'] = 'polygon';
 				}
@@ -27076,6 +27079,28 @@ QML;
 
 		}
 
+	}
+
+	/**
+	 * The spots of a GeoPackage export by layer: points (Point, MultiPoint), lines (LineString,
+	 * MultiLineString), polygons (Polygon, MultiPolygon), each a FeatureCollection array or null when
+	 * empty (what getDatasetSpotsSearch() returns per type), in query order. multi[layer] is true when
+	 * the layer holds a multi-part line / polygon: only then is it written as MULTILINESTRING /
+	 * MULTIPOLYGON, so exports without them are unchanged. MultiPoints stay in the POINT layer as
+	 * before. Spots without geometry or of another type are left out, as before.
+	 */
+	private function gpkgSpotsByLayer($json){
+		$types = array('point' => 'points', 'multipoint' => 'points', 'linestring' => 'lines', 'multilinestring' => 'lines', 'polygon' => 'polygons', 'multipolygon' => 'polygons');
+		$out = array('points' => null, 'lines' => null, 'polygons' => null, 'multi' => array('lines' => false, 'polygons' => false));
+		foreach(($json['features'] ?? array()) as $f){
+			$type = strtolower((string)(is_object($f['geometry'] ?? null) ? $f['geometry']->type : ($f['geometry']['type'] ?? '')));
+			if(!isset($types[$type])) continue;
+			$layer = $types[$type];
+			if($out[$layer] === null) $out[$layer] = array('type' => 'FeatureCollection', 'features' => array());
+			$out[$layer]['features'][] = $f;
+			if($layer != 'points' && substr($type, 0, 5) == 'multi') $out['multi'][$layer] = true;
+		}
+		return $out;
 	}
 
 	/**

@@ -80,21 +80,35 @@ function gpkgRoundTripTarget($neodb, $db, $userpkey, $export){
 
 /*
 	A feature geometry checked for a layer: array(geometry, "") or array(null, reason).
-	A multi geometry with one part is unwrapped (QGIS often saves MultiLineString).
+	A multi geometry with one part is unwrapped (QGIS often saves MultiLineString). Several parts
+	only when $allowmulti: a spot that was multi-part when exported (shapefile / GIS imports, the
+	lines / polygons layer is then MULTI*) keeps its parts; anything else has one geometry.
 */
-function gpkgRoundTripGeometry($geometry, $wanttype){
+function gpkgRoundTripGeometry($geometry, $wanttype, $allowmulti = false){
 	if(!is_array($geometry) || !isset($geometry['type'])) return array(null, "no geometry");
 	$type = $geometry['type'];
 	$coords = $geometry['coordinates'] ?? null;
 	if($type === "Multi".$wanttype){
 		if(!is_array($coords) || count($coords) == 0) return array(null, "no geometry");
-		if(count($coords) > 1) return array(null, count($coords)." parts (a spot has one geometry)");
+		if(count($coords) > 1){
+			if($allowmulti) return array(array('type' => $type, 'coordinates' => $coords), "");
+			return array(null, count($coords)." parts (a spot has one geometry)");
+		}
 		$type = $wanttype;
 		$coords = $coords[0];
 	}
 	if($type !== $wanttype) return array(null, "geometry type $type");
 	if(!is_array($coords) || count($coords) == 0) return array(null, "no geometry");
 	return array(array('type' => $type, 'coordinates' => $coords), "");
+}
+
+// A geometry compared the way the file's features are read: a one-part multi is unwrapped
+// (a MULTI* layer holds single spots as one-part multis), anything else is returned as it is
+function gpkgRoundTripNormal($geometry){
+	if(!is_array($geometry) || !isset($geometry['type']) || substr($geometry['type'], 0, 5) !== "Multi") return $geometry;
+	$coords = $geometry['coordinates'] ?? null;
+	if(!is_array($coords) || count($coords) != 1) return $geometry;
+	return array('type' => substr($geometry['type'], 5), 'coordinates' => $coords[0]);
 }
 
 // Same geometry: same type, same structure, every coordinate within GPKG_RT_TOLERANCE (x and y only)
@@ -141,7 +155,7 @@ function gpkgRoundTripServerSpots($neodb, $db, $target){
 		$geometry = null;
 		if((string)$r->get('origwkt') !== "" && (string)$r->get('wkt') !== ""){
 			$g = geoPHP::load((string)$r->get('wkt'), "wkt");
-			if($g) $geometry = json_decode($g->out('json'), true);
+			if($g) $geometry = gpkgRoundTripNormal(json_decode($g->out('json'), true));
 		}
 		$createdby = $r->get('createdby') ? (int)$r->get('createdby') : $owner;
 		$spots[$id] = array(
@@ -187,7 +201,7 @@ function gpkgRoundTripClassify($neodb, $db, $randnum, $gpkgpath, $layers, $targe
 		$id = (string)$row['spot_id'];
 		if(!preg_match('/^[0-9]+$/', $id) || !isset($GPKG_RT_LAYERS[$row['layer']])) continue;
 		$orig = json_decode((string)$row['original_geojson'], true);
-		$manifest[$id] = array('layer' => $row['layer'], 'orig' => is_array($orig) ? $orig : null, 'editable' => ((string)$row['editable'] !== "0"));
+		$manifest[$id] = array('layer' => $row['layer'], 'orig' => is_array($orig) ? gpkgRoundTripNormal($orig) : null, 'editable' => ((string)$row['editable'] !== "0"));
 	}
 
 	$server = gpkgRoundTripServerSpots($neodb, $db, $target);
@@ -209,8 +223,9 @@ function gpkgRoundTripClassify($neodb, $db, $randnum, $gpkgpath, $layers, $targe
 		foreach(vectorImportReadFeatures($randnum, $gpkgpath, $layer, $options) as $f){
 			$n++;
 			$sid = trim((string)($f['properties']['strabo_id'] ?? ""));
-			list($geometry, $reason) = gpkgRoundTripGeometry($f['geometry'] ?? null, $GPKG_RT_LAYERS[$layer]);
 			$known = ($sid !== "" && isset($manifest[$sid]) && $manifest[$sid]['layer'] === $layer);
+			$wasmulti = $known && ($manifest[$sid]['orig']['type'] ?? "") === "Multi".$GPKG_RT_LAYERS[$layer];
+			list($geometry, $reason) = gpkgRoundTripGeometry($f['geometry'] ?? null, $GPKG_RT_LAYERS[$layer], $wasmulti);
 			$entry = array(
 				'id' => $known ? $sid : "",
 				'name' => $known && isset($server[$sid]) ? $server[$sid]['name'] : "",
