@@ -636,7 +636,13 @@ if(empty($projectrows)){
 											<li>
 												<select class="myDataSelect" id="pdl-<?php echo $projectid?>" onChange="doProjectDownload(<?php echo $projectid?>,'<?php echo $dropdown_projectname?>');">
 													<option value="" style="display:none">Options...</option>
+<?php
+if($collabcount == 0){ // the web app has no collaboration rules: owners of a project with active collaborators would edit everyone's data (Field app devs 2026-11-05)
+?>
 													<option value="edit">View/Edit/Add Data</option>
+<?php
+}
+?>
 													<option value="template_wizard">Add Data with Template Wizard</option>
 													<option value="field">Download/Share StraboMobile Project File</option>
 													<option value="doi">Get DOI for Project</option>
