@@ -48,6 +48,12 @@ class Request {
 		if(isset($_SERVER['CONTENT_TYPE'])) {
 			$content_type = $_SERVER['CONTENT_TYPE'];
 		}
+		// JSON is matched on the media type alone: "application/json; charset=UTF-8" (what api.php documents and many
+		// HTTP libraries send) left the body unread, so e.g. verifyImages answered "all present" (2026-11-05).
+		// Form posts keep the exact match: with a charset they never switched the response to the html view.
+		if($content_type !== false && strtolower(trim(explode(';', $content_type)[0])) === 'application/json') {
+			$content_type = "application/json";
+		}
 		switch($content_type) {
 			case "application/json":
 
