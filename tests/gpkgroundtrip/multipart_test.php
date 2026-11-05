@@ -6,7 +6,9 @@
  *              A project like his: the golden fixture (single points, lines, polygons) plus a
  *              "polygons" dataset of MultiPolygons and a "lines" dataset of MultiLineStrings, imported
  *              through load_geopackage.php the way a user loads GIS data. Checks:
- *                - the import stores MULTIPOLYGON / MULTILINESTRING spots (Rip's data)
+ *                - the import stores one-part features plain (POLYGON / LINESTRING, since 11-04) and
+ *                  multi-part ones MULTI; the two one-part spots are then set back to one-part MULTI,
+ *                  the way uploads before 11-04 stored them (Rip's data on prod), for the checks below
  *                - dataset export of each: a file, layer MultiPolygon / MultiLineString, every spot with
  *                  its parts
  *                - project export: lines / polygons layers multi, every spot once, points layer unchanged
@@ -145,7 +147,21 @@ try {
 	$IMP = imported_spots();
 	$types = array();
 	foreach ($IMP as $n => $s) $types[$n] = $s['ds'] . ' ' . strtoupper(strtok(trim($s['wkt']), ' ('));
-	check('imported: 3 MULTIPOLYGON spots in "polygons", 3 MULTILINESTRING in "lines" (Rip\'s data)', $types === array(
+	check('imported: one-part features stored plain (POLYGON / LINESTRING), multi-part stay MULTI', $types === array(
+		'ML four parts' => 'lines MULTILINESTRING', 'ML one part' => 'lines LINESTRING', 'ML two parts' => 'lines MULTILINESTRING',
+		'MP one part' => 'polygons POLYGON', 'MP three hole' => 'polygons MULTIPOLYGON', 'MP two parts' => 'polygons MULTIPOLYGON'), json_encode($types));
+	// Uploads before 2026-11-04 stored one-part features as one-part MULTI (Rip's 134 spots on prod are still
+	// stored that way): put the two one-part spots back in that form so the exports below cover such data.
+	foreach (array('MP one part', 'ML one part') as $n) {
+		$id = $IMP[$n]['id'] ?? '';
+		$multi = $db->get_var_prepared("SELECT ST_AsText(ST_Multi(ST_GeomFromText($1)))", array($IMP[$n]['wkt'] ?? ''));
+		$gtype = $n === 'MP one part' ? 'MultiPolygon' : 'MultiLineString';
+		if ($id !== '' && $multi) $neodb->query("MATCH (s:Spot {id: $id}) WHERE s.userpkey = $OWNER SET s.wkt = '" . addslashes($multi) . "', s.origwkt = '" . addslashes($multi) . "', s.geometrytype = '$gtype'");
+	}
+	$IMP = imported_spots();
+	$types = array();
+	foreach ($IMP as $n => $s) $types[$n] = $s['ds'] . ' ' . strtoupper(strtok(trim($s['wkt']), ' ('));
+	check('stored as before 11-04: 3 MULTIPOLYGON spots in "polygons", 3 MULTILINESTRING in "lines" (Rip\'s data)', $types === array(
 		'ML four parts' => 'lines MULTILINESTRING', 'ML one part' => 'lines MULTILINESTRING', 'ML two parts' => 'lines MULTILINESTRING',
 		'MP one part' => 'polygons MULTIPOLYGON', 'MP three hole' => 'polygons MULTIPOLYGON', 'MP two parts' => 'polygons MULTIPOLYGON'), json_encode($types));
 	$DSP = $IMP['MP one part']['dsid'] ?? '';

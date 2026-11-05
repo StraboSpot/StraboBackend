@@ -45,6 +45,19 @@ function vectorImportReadFeatures($randnum, $source, $layer = "", $options = arr
 	return $json['features'] ?? array();
 }
 
+/*
+	A Multi geometry with one part as its plain type (MultiPolygon with one polygon -> Polygon, etc.);
+	anything else unchanged. QGIS and ArcGIS declare shapefile layers Multi when they save a GeoPackage,
+	so single features arrived as one-part MultiPolygon / MultiLineString (Rip Langford, 2026-11-04).
+	Same rule as gpkgRoundTripNormal() in gpkgroundtrip.php.
+*/
+function vectorImportSinglePart($geometry){
+	if(!is_array($geometry) || !isset($geometry['type']) || substr($geometry['type'], 0, 5) !== "Multi") return $geometry;
+	$coords = $geometry['coordinates'] ?? null;
+	if(!is_array($coords) || count($coords) != 1) return $geometry;
+	return array('type' => substr($geometry['type'], 5), 'coordinates' => $coords[0]);
+}
+
 // Controlled-vocabulary and number errors for the mapped columns, "" if none.
 function vectorImportVocabError($smodel, $features){
 	$vocaberror = array();
@@ -325,7 +338,7 @@ function vectorImportRun($smodel, $o){
 
 		foreach($json as $onesample){
 
-			$geometry = $onesample['geometry'];
+			$geometry = vectorImportSinglePart($onesample['geometry']);
 
 			if($geometry != ""){
 
