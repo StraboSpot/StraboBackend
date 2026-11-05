@@ -182,6 +182,12 @@ include("includes/mheader.php");
 <style>
 .mfd-toolbar { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 0.75em 1em; margin: -0.5em auto 2em auto; }
 .mfd-toolbar .button { margin: 0; }
+/* owner's project with active collaborators (no web app editing there) */
+section.mfd-collab { border-left: 3px solid #6cc3b8; padding-left: calc(0.9em - 3px); margin-left: -0.9em; }
+.mfd-collab-badge { display: inline-flex; align-items: center; gap: 0.4em; margin-left: 0.6em; padding: 0.2em 0.75em;
+	border: 1px solid #6cc3b8; border-radius: 999px; color: #6cc3b8 !important; font-size: 0.55em; font-weight: 400;
+	letter-spacing: 0.04em; line-height: 1.4; vertical-align: middle; text-decoration: none; white-space: nowrap; }
+.mfd-collab-badge:hover { background: rgba(108, 195, 184, 0.15); border-bottom-color: #6cc3b8; }
 </style>
 
 			<!-- Main -->
@@ -628,8 +634,8 @@ if(empty($projectrows)){
 ?>
 
 								<!-- foreach project -->
-								<section>
-									<h3><?php echo $projectname?></h3>
+								<section<?php if($collabcount > 0) echo ' class="mfd-collab"'?>>
+									<h3><?php echo $projectname?><?php if($collabcount > 0){ ?> <a class="mfd-collab-badge" href="collaborate?p=<?php echo $projectid?>" title="Open to collaboration: <?php echo $collabcount?> active <?php echo $collabcount == 1 ? "collaborator" : "collaborators"?>"><i class="fas fa-users"></i> Collaborating</a><?php } ?></h3>
 									<div style="margin-top:-5px" class="myDataTable">
 										<ul class="actions MyDataUL">
 											<li>Last Uploaded: <?php echo $uploaddate?></li>
