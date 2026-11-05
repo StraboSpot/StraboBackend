@@ -170,6 +170,23 @@ try {
 		check("$layer dataset export uploaded untouched: 3 unchanged, nothing else", count($r['unchanged']) === 3 && !$r['update'] && !$r['conflict'] && !$r['new'] && !$r['refused'] && !$r['missing'], json_encode($r));
 	}
 
+	section('Shapefile exports of the same datasets (legacy and expanded)');
+	foreach (array('shapefile', 'expandedShapefile') as $type) {
+		foreach (array('polygons' => array($DSP, array(1, 2, 3)), 'lines' => array($DSL, array(1, 2, 4))) as $layer => list($dsid, $wantParts)) {
+			list($st, $bytes) = http('GET', "/searchdownload?type=$type&userpkey=$OWNER&dsids=$dsid", null, 'session');
+			$zip = "$TMP/{$type}_$layer.zip";
+			file_put_contents($zip, $bytes);
+			check("$type $layer: a zip, not \"No data found\"", $st === 200 && substr($bytes, 0, 2) === 'PK', "HTTP $st " . substr($bytes, 0, 80));
+			$dir = "$TMP/{$type}_$layer";
+			exec('rm -rf ' . escapeshellarg($dir) . '; mkdir -p ' . escapeshellarg($dir) . '; unzip -q -o ' . escapeshellarg($zip) . ' -d ' . escapeshellarg($dir));
+			$shp = "$dir/$layer.shp";
+			$fc = json_decode((string)shell_exec('ogr2ogr -f GeoJSON /vsistdout/ ' . escapeshellarg($shp) . ' 2>/dev/null'), true);
+			$parts = array_map(function ($f) { return parts($f['geometry']); }, $fc['features'] ?? array());
+			sort($parts);
+			check("$type $layer: $layer.shp with the 3 spots, parts " . json_encode($wantParts), $parts === $wantParts, json_encode($parts) . ' ' . implode(',', array_map('basename', glob("$dir/*.shp") ?: array())));
+		}
+	}
+
 	section('Project export');
 	list($EXPORT, $st, $bytes) = download('projectid=' . GF_PROJECT, 'export');
 	check('project export downloaded', $st === 200 && substr($bytes, 0, 15) === 'SQLite format 3', "HTTP $st");
