@@ -3137,6 +3137,33 @@ class StraboSpot
 		return true;
 	}
 
+	/**
+	 * For an image upload by a collaborator: the project owner's Image node with this id that a spot in
+	 * the collaborative project links to, when the uploader may edit the dataset holding that spot (the
+	 * same rule the spot upload used to store it). Returns array('neoid', 'owner') or null.
+	 */
+	private function collabImageNodeForUpload($id){
+		$id = (int)$id;
+		$me = (int)$this->userpkey;
+		$rows = $this->neodb->get_results("MATCH (p:Project)-[:HAS_DATASET]->(d:Dataset)-[:HAS_SPOT]->(:Spot)-[:HAS_IMAGE]->(i:Image)
+			WHERE i.id = $id AND i.userpkey <> $me AND i.userpkey = p.userpkey
+			RETURN DISTINCT id(i) AS neoid, p.id AS pid, p.userpkey AS ppk, d.created_by AS dcb");
+		if(!$rows) return null;
+
+		require_once(__DIR__ . '/services/CollaborationAuth.php');
+		$auth = new CollaborationAuth($this->db, $this->neodb);
+		foreach($rows as $r){
+			$ppk = (int)$r->get('ppk');
+			$context = $auth->getProjectContext($me, (string)$r->get('pid'));
+			if((int)$context->effectiveOwner !== $ppk) continue;
+			$dcb = $r->get('dcb') ? (int)$r->get('dcb') : $ppk;
+			if($auth->canEditDataset($context, $dcb)){
+				return array('neoid' => $r->get('neoid'), 'owner' => $ppk);
+			}
+		}
+		return null;
+	}
+
 	public function insertImage($post,$file){
 
 		$imagefilename = $file['name'];
@@ -3185,16 +3212,33 @@ class StraboSpot
 			//********************************************************************
 			// check to see if image already exists
 			//********************************************************************
+			$imageowner = $this->userpkey;
 			if($id!=""){
 				$querystring = "MATCH (n:Image) WHERE n.id=$id and n.userpkey = $this->userpkey RETURN id(n);";
 				$neoid = $this->neodb->get_var($querystring);
+
+				// Collaborative project: the spot upload (which comes first) stored this image under the
+				// project owner with no file yet. Fill that node instead of the uploader's own, which no
+				// spot links to (the owner never saw the photo and verifyImages kept answering "missing",
+				// so the app uploaded it again and again; Jessica 2026-11-05).
+				$ownlinked = false;
+				if($neoid!=""){
+					$ownlinked = $this->neodb->get_var("MATCH (n:Image)<-[:HAS_IMAGE]-(:Spot) WHERE id(n)=$neoid RETURN count(n);") > 0;
+				}
+				if(!$ownlinked){
+					$collab = $this->collabImageNodeForUpload($id);
+					if($collab){
+						$neoid = $collab['neoid'];
+						$imageowner = $collab['owner'];
+					}
+				}
 			}else{
 				$neoid="";
 			}
 
 			if($neoid!=""){
 
-				$querystring = "MATCH (n:Image) WHERE n.id=$id and n.userpkey = $this->userpkey RETURN n;";
+				$querystring = "MATCH (n:Image) WHERE id(n)=$neoid RETURN n;";
 				$body = $this->neodb->getNode($querystring);
 
 				$filename = $body["filename"];
@@ -3212,7 +3256,7 @@ class StraboSpot
 
 				$injson['filename'] = $filename;
 				$injson['origfilename'] = $imagefilename;
-				$injson['userpkey']=$this->userpkey;
+				$injson['userpkey']=$imageowner;
 				// Preserve existing created_by or set to current user if not set
 				if(!isset($injson['created_by'])){
 					$injson['created_by']=$this->userpkey;
@@ -3234,7 +3278,7 @@ class StraboSpot
 				// StraboSearch live-sync (§5.3): re-index via the parent spot
 				// (image metadata + has_images ride the spot touch).
 				require_once __DIR__ . '/lib/search_sync.php';
-				field_search_sync_touch_image($this->db, $this->neodb, $id, $this->userpkey);
+				field_search_sync_touch_image($this->db, $this->neodb, $id, $imageowner);
 
 				header("Image updated", true, 201);
 				$data['self']="https://strabospot.org/db/image/$id";
