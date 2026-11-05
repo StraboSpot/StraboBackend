@@ -24817,12 +24817,14 @@ $html.='
 			$pointjson = json_encode($featureCollection, JSON_PRETTY_PRINT);
 		}
 
-		//Line
+		//Line (multi-part too: Rip Langford 2026-11-04; the layer is MULTILINESTRING only when one is present)
 		$features = [];
+		$multilines = false;
 		for($x=1; $x<count($this->holdings); $x++){
 			$row = $this->holdings[$x];
 			$geometry = $row[4];
-			if(substr($geometry,0,10)=="LINESTRING"){
+			if(substr($geometry,0,10)=="LINESTRING" || substr($geometry,0,15)=="MULTILINESTRING"){
+				if(substr($geometry,0,5)=="MULTI") $multilines = true;
 				$thisFeature = new stdClass();
 				$thisFeature->type = "Feature";
 				$mywkt=geoPHP::load($geometry,"wkt");
@@ -24844,12 +24846,14 @@ $html.='
 			$linejson = json_encode($featureCollection, JSON_PRETTY_PRINT);
 		}
 
-		//Polygon
+		//Polygon (multi-part too, as lines)
 		$features = [];
+		$multipolygons = false;
 		for($x=1; $x<count($this->holdings); $x++){
 			$row = $this->holdings[$x];
 			$geometry = $row[4];
-			if(substr($geometry,0,7)=="POLYGON"){
+			if(substr($geometry,0,7)=="POLYGON" || substr($geometry,0,12)=="MULTIPOLYGON"){
+				if(substr($geometry,0,5)=="MULTI") $multipolygons = true;
 				$thisFeature = new stdClass();
 				$thisFeature->type = "Feature";
 				$mywkt=geoPHP::load($geometry,"wkt");
@@ -24880,12 +24884,12 @@ $html.='
 
 			if($polygonjson!=""){
 				file_put_contents("ogrtemp/$randnum/polygon.json", $polygonjson);
-				exec("ogr2ogr -nlt POLYGON -f \"ESRI Shapefile\" -skipfailures ogrtemp/$randnum/data/polygons.shp ogrtemp/$randnum/polygon.json 2>&1",$results);
+				exec("ogr2ogr -nlt " . ($multipolygons ? "MULTIPOLYGON" : "POLYGON") . " -f \"ESRI Shapefile\" -skipfailures ogrtemp/$randnum/data/polygons.shp ogrtemp/$randnum/polygon.json 2>&1",$results);
 			}
 
 			if($linejson!=""){
 				file_put_contents("ogrtemp/$randnum/line.json", $linejson);
-				exec("ogr2ogr -nlt LINESTRING -f \"ESRI Shapefile\" -skipfailures ogrtemp/$randnum/data/lines.shp ogrtemp/$randnum/line.json 2>&1",$results);
+				exec("ogr2ogr -nlt " . ($multilines ? "MULTILINESTRING" : "LINESTRING") . " -f \"ESRI Shapefile\" -skipfailures ogrtemp/$randnum/data/lines.shp ogrtemp/$randnum/line.json 2>&1",$results);
 				unlink("ogrtemp/$randnum/line.json");
 			}
 
@@ -26946,8 +26950,11 @@ QML;
 
 			$manifestSpots = array();
 
-			// Get spots by geometry type
-			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$get);
+			// Spots by layer. Multi-part lines and polygons (shapefile / GIS imports) go to the lines and
+			// polygons layers too; stripJSON() dropped them, so a dataset of MultiPolygons exported as
+			// "No data found" (Rip Langford 2026-11-04). One query, split here (stripJSON order kept).
+			$bylayer = $this->spotsByLayer($this->strabo->getDatasetSpotsSearch(null,$get));
+			$polygonjson = $bylayer['polygons'];
 			if($polygonjson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -26959,7 +26966,7 @@ QML;
 				$polygonjson = json_encode($newjson,JSON_PRETTY_PRINT);
 			}
 
-			$pointjson = $this->strabo->getDatasetSpotsSearch('point',$get);
+			$pointjson = $bylayer['points'];
 			if($pointjson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -26980,7 +26987,7 @@ QML;
 				$orientationjson = json_encode(array('type' => 'FeatureCollection', 'features' => $rows), JSON_PRETTY_PRINT);
 			}
 
-			$linejson = $this->strabo->getDatasetSpotsSearch('line',$get);
+			$linejson = $bylayer['lines'];
 			if($linejson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -27020,7 +27027,7 @@ QML;
 				if($linejson!=""){
 					$appendFlag = $firstLayer ? "" : "-append";
 					file_put_contents("ogrtemp/$randnum/line.json", $linejson);
-					exec("ogr2ogr -f GPKG $appendFlag -nlt LINESTRING -nln lines -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/line.json 2>&1");
+					exec("ogr2ogr -f GPKG $appendFlag -nlt " . ($bylayer['multi']['lines'] ? "MULTILINESTRING" : "LINESTRING") . " -nln lines -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/line.json 2>&1");
 					unlink("ogrtemp/$randnum/line.json");
 					$layers['lines'] = 'line';
 					$firstLayer = false;
@@ -27029,7 +27036,7 @@ QML;
 				if($polygonjson!=""){
 					$appendFlag = $firstLayer ? "" : "-append";
 					file_put_contents("ogrtemp/$randnum/polygon.json", $polygonjson);
-					exec("ogr2ogr -f GPKG $appendFlag -nlt POLYGON -nln polygons -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/polygon.json 2>&1");
+					exec("ogr2ogr -f GPKG $appendFlag -nlt " . ($bylayer['multi']['polygons'] ? "MULTIPOLYGON" : "POLYGON") . " -nln polygons -skipfailures " . escapeshellarg($gpkgFile) . " ogrtemp/$randnum/polygon.json 2>&1");
 					unlink("ogrtemp/$randnum/polygon.json");
 					$layers['polygons'] = 'polygon';
 				}
@@ -27076,6 +27083,28 @@ QML;
 
 		}
 
+	}
+
+	/**
+	 * The spots of a GeoPackage / shapefile export by layer: points (Point, MultiPoint), lines (LineString,
+	 * MultiLineString), polygons (Polygon, MultiPolygon), each a FeatureCollection array or null when
+	 * empty (what getDatasetSpotsSearch() returns per type), in query order. multi[layer] is true when
+	 * the layer holds a multi-part line / polygon: only then is it written as MULTILINESTRING /
+	 * MULTIPOLYGON, so exports without them are unchanged. MultiPoints stay in the POINT layer as
+	 * before. Spots without geometry or of another type are left out, as before.
+	 */
+	private function spotsByLayer($json){
+		$types = array('point' => 'points', 'multipoint' => 'points', 'linestring' => 'lines', 'multilinestring' => 'lines', 'polygon' => 'polygons', 'multipolygon' => 'polygons');
+		$out = array('points' => null, 'lines' => null, 'polygons' => null, 'multi' => array('lines' => false, 'polygons' => false));
+		foreach(($json['features'] ?? array()) as $f){
+			$type = strtolower((string)(is_object($f['geometry'] ?? null) ? $f['geometry']->type : ($f['geometry']['type'] ?? '')));
+			if(!isset($types[$type])) continue;
+			$layer = $types[$type];
+			if($out[$layer] === null) $out[$layer] = array('type' => 'FeatureCollection', 'features' => array());
+			$out[$layer]['features'][] = $f;
+			if($layer != 'points' && substr($type, 0, 5) == 'multi') $out['multi'][$layer] = true;
+		}
+		return $out;
 	}
 
 	/**
@@ -27219,7 +27248,9 @@ QML;
 			$dsids=$this->get['dsids'];
 			$this->alltags = $this->strabo->getTagsFromDatasetIds($dsids, $this->tagOwner());
 
-			$polygonjson = $this->strabo->getDatasetSpotsSearch('polygon',$this->get);
+			// multi-part lines / polygons too (stripJSON dropped them, Rip Langford 2026-11-04)
+			$bylayer = $this->spotsByLayer($this->strabo->getDatasetSpotsSearch(null,$this->get));
+			$polygonjson = $bylayer['polygons'];
 			if($polygonjson!=""){
 
 				$newjson = array();
@@ -27234,7 +27265,7 @@ QML;
 				$polygonjson = json_encode($newjson,JSON_PRETTY_PRINT);
 			}
 
-			$pointjson = $this->strabo->getDatasetSpotsSearch('point',$this->get);
+			$pointjson = $bylayer['points'];
 			if($pointjson!=""){
 				$newjson = array();
 				$newjson['type']="FeatureCollection";
@@ -27248,7 +27279,7 @@ QML;
 				$pointjson = json_encode($newjson,JSON_PRETTY_PRINT);
 			}
 
-			$linejson = $this->strabo->getDatasetSpotsSearch('line',$this->get);
+			$linejson = $bylayer['lines'];
 			if($linejson!=""){
 
 				$newjson = array();
@@ -27273,12 +27304,12 @@ QML;
 
 				if($polygonjson!=""){
 					file_put_contents("ogrtemp/$randnum/polygon.json", $polygonjson);
-					exec("ogr2ogr -nlt POLYGON -f \"ESRI Shapefile\" -skipfailures ogrtemp/$randnum/data/polygons.shp ogrtemp/$randnum/polygon.json 2>&1",$results);
+					exec("ogr2ogr -nlt " . ($bylayer['multi']['polygons'] ? "MULTIPOLYGON" : "POLYGON") . " -f \"ESRI Shapefile\" -skipfailures ogrtemp/$randnum/data/polygons.shp ogrtemp/$randnum/polygon.json 2>&1",$results);
 				}
 
 				if($linejson!=""){
 					file_put_contents("ogrtemp/$randnum/line.json", $linejson);
-					exec("ogr2ogr -nlt LINESTRING -f \"ESRI Shapefile\" -skipfailures ogrtemp/$randnum/data/lines.shp ogrtemp/$randnum/line.json 2>&1",$results);
+					exec("ogr2ogr -nlt " . ($bylayer['multi']['lines'] ? "MULTILINESTRING" : "LINESTRING") . " -f \"ESRI Shapefile\" -skipfailures ogrtemp/$randnum/data/lines.shp ogrtemp/$randnum/line.json 2>&1",$results);
 					unlink("ogrtemp/$randnum/line.json");
 				}
 
