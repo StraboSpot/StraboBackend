@@ -116,7 +116,10 @@ if($userpkey!=""){
 						if($zname === false || substr($zname, -1) === "/" || preg_match('#(^|/)__MACOSX/#', $zname)) continue;
 						$zbase = preg_replace('/[^A-Za-z0-9_.\-]/', '_', basename($zname));
 						if($zbase === "" || $zbase[0] === ".") continue;
-						if(!in_array(strtolower(pathinfo($zbase, PATHINFO_EXTENSION)), array("tif","tiff","tfw","tifw","ovr"))) continue;
+						//.aux.xml / .aux sidecars can hold the only georeferencing (ArcGIS GCPs, e.g. NGMDB maps)
+						$zlower = strtolower($zbase);
+						$isAux = substr($zlower, -8) === ".aux.xml";
+						if(!$isAux && !in_array(strtolower(pathinfo($zbase, PATHINFO_EXTENSION)), array("tif","tiff","tfw","tifw","ovr","aux"))) continue;
 						$zin = $za->getStream($zname);
 						if(!$zin) continue;
 						$zout = fopen("$mydir/$zbase", "wb");
