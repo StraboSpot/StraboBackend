@@ -20,6 +20,13 @@ if($hash==""){exit();}
 
 $count=$db->get_var_prepared("SELECT count(*) FROM users WHERE hash=$1", array($hash));
 
+// Field camp accounts share one password that their instructor set; it cannot
+// be reset through a link.
+require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
+if($count > 0 && FieldCamp::isCampAccount($db, (int)$db->get_var_prepared("SELECT pkey FROM users WHERE hash=$1", array($hash)))){
+	exit("This is a field camp account. Its password is managed by your instructor.");
+}
+
 if($count > 0){
 
 	if($_POST['submit']!=""){
