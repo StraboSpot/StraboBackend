@@ -16,6 +16,7 @@
 --                                     email change, no self delete)
 --              fieldcamp_viewer       existing accounts (instructors, TAs) that
 --                                     get access to the camp's student work
+--              fieldcamp_copy         student projects copied to the camp owner
 --
 -- Apply (dev or prod), idempotent / safe to re-run:
 --   cat sql/fieldcamp.sql | docker exec -i strabo-postgres \
@@ -79,12 +80,33 @@ CREATE TABLE IF NOT EXISTS fieldcamp_viewer (
     UNIQUE (fieldcamp_pkey, user_pkey)
 );
 
+-- One row per student project copied into the camp owner's account
+-- (includes/fieldcamp/FieldCampCopy.php). The copy gets new project, dataset
+-- and tag ids, because every student of a shared-package camp holds the same
+-- ids and an account can hold only one project per id.
+CREATE TABLE IF NOT EXISTS fieldcamp_copy (
+    pkey               SERIAL PRIMARY KEY,
+    fieldcamp_pkey     INTEGER                  NOT NULL REFERENCES fieldcamp(pkey),
+    source_user_pkey   INTEGER                  NOT NULL,
+    source_project_id  VARCHAR                  NOT NULL,
+    target_user_pkey   INTEGER                  NOT NULL,
+    target_project_id  VARCHAR                  NOT NULL,
+    project_name       VARCHAR(255),
+    dataset_count      INTEGER                  NOT NULL DEFAULT 0,
+    spot_count         INTEGER                  NOT NULL DEFAULT 0,
+    image_count        INTEGER                  NOT NULL DEFAULT 0,
+    created_date       TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    UNIQUE (source_user_pkey, source_project_id, target_user_pkey)
+);
+
+CREATE INDEX IF NOT EXISTS fieldcamp_copy_camp_idx ON fieldcamp_copy (fieldcamp_pkey);
+
 -- ---------------------------------------------------------------------------
 -- Privileges. Tables are created by the superuser (postgres) but the web app
 -- connects as strabodbuser, with a readonly role for reporting.
 -- (GRANT is idempotent, so this is safe to re-run.)
 -- ---------------------------------------------------------------------------
-GRANT ALL PRIVILEGES ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer TO strabodbuser;
+GRANT ALL PRIVILEGES ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer, fieldcamp_copy TO strabodbuser;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE fieldcamp_instructors_pkey_seq, fieldcamp_pkey_seq,
-    fieldcamp_account_pkey_seq, fieldcamp_viewer_pkey_seq TO strabodbuser;
-GRANT SELECT ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer TO readonly;
+    fieldcamp_account_pkey_seq, fieldcamp_viewer_pkey_seq, fieldcamp_copy_pkey_seq TO strabodbuser;
+GRANT SELECT ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer, fieldcamp_copy TO readonly;

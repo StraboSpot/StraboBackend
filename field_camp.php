@@ -75,6 +75,22 @@ if($camp && $step === 'accounts'){
 	$liveCount = count($accounts);
 	foreach($accounts as $a){ if(FieldCamp::truthy($a->active)) $activeCount++; }
 }
+$projectCounts = array(); $copiedCounts = array(); $toCopy = array();
+if($accounts){
+	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
+	$copier = new FieldCampCopy($db, $neodb);
+	$pks = array(); foreach($accounts as $a){ $pks[] = (int)$a->user_pkey; }
+	$projectCounts = $copier->projectCounts($pks);
+	$copiedCounts = $copier->copiedCounts($camp->pkey);
+	// Deactivated accounts that still hold a project not yet copied to the owner.
+	foreach($accounts as $a){
+		$pk = (int)$a->user_pkey;
+		if(!FieldCamp::truthy($a->active) && ($projectCounts[$pk] ?? 0) > ($copiedCounts[$pk] ?? 0)){
+			$toCopy[] = array('user' => $pk, 'username' => $a->username);
+		}
+	}
+}
+$ownsCamp = $camp && (int)$camp->owner_user_pkey === (int)$userpkey;
 $size = $camp ? FieldCamp::areaSizeKm($camp) : null;
 
 include("includes/mheader.php");
@@ -272,12 +288,14 @@ if($step === 'accounts'){
 			</div>
 			<div class="strabotable" style="margin-left:0px;">
 				<table class="fc-table">
-					<tr><td>Username</td><td>Created</td><td>Status</td></tr>
+					<tr><td>Username</td><td>Created</td><td>Status</td><td>Projects uploaded</td><td>Copied to <?php echo $ownsCamp ? 'you' : 'the owner'; ?></td></tr>
 <?php foreach($accounts as $a){ ?>
 					<tr>
 						<td><?php echo htmlspecialchars($a->username); ?></td>
 						<td><?php echo htmlspecialchars(substr((string)$a->created_date, 0, 10)); ?></td>
 						<td><?php echo FieldCamp::truthy($a->active) ? 'Active' : 'Deactivated'; ?></td>
+						<td><?php echo (int)($projectCounts[(int)$a->user_pkey] ?? 0); ?></td>
+						<td><?php echo (int)($copiedCounts[(int)$a->user_pkey] ?? 0); ?></td>
 					</tr>
 <?php } ?>
 				</table>
@@ -393,12 +411,75 @@ if($step === 'accounts'){
 				<?php echo fc_hidden($csrf, 'accounts_reactivate', $camp); ?>
 				<div class="fc-buttons"><button type="submit" class="button small">Reactivate <?php echo (int)($liveCount - $activeCount); ?> deactivated account(s)</button></div>
 			</form>
+<?php if($toCopy){ ?>
+			<div class="fc-field" style="margin-top:1.5em;">
+				<label>Keep the students' work</label>
+				<div class="fc-hint" style="margin-bottom:0.5em;">
+					Copies every project of the <?php echo count($toCopy); ?> deactivated account(s) that has not been copied yet
+					into <?php echo $ownsCamp ? 'your account' : "the camp owner's account"; ?>, named after the student
+					(for example "<?php echo htmlspecialchars($camp->project_name . ' (' . $toCopy[0]['username'] . ')'); ?>").
+					The students' own projects are not changed. Do this before removing the accounts.
+				</div>
+				<div class="fc-buttons">
+					<button type="button" class="button small" id="fcCopyBtn">Copy student projects</button>
+				</div>
+				<div class="fc-preview" id="fcCopyLog" style="display:none; max-width:none;"></div>
+			</div>
+			<script>
+			(function(){
+				var todo = <?php echo json_encode($toCopy); ?>;
+				var btn = document.getElementById('fcCopyBtn');
+				var log = document.getElementById('fcCopyLog');
+				function line(text, bad){
+					var d = document.createElement('div');
+					if(bad) d.className = 'fc-taken';
+					d.textContent = text;
+					log.appendChild(d);
+					log.scrollTop = log.scrollHeight;
+				}
+				function next(i, failed){
+					if(i >= todo.length){
+						line(failed ? 'Finished, with ' + failed + ' account(s) not copied. Reload the page to see the result.'
+							: 'Finished. Reload the page to see the result.', failed > 0);
+						return;
+					}
+					var a = todo[i];
+					var body = new URLSearchParams();
+					body.append('csrf', <?php echo json_encode($csrf); ?>);
+					body.append('action', 'copy_account');
+					body.append('id', '<?php echo (int)$camp->pkey; ?>');
+					body.append('user', a.user);
+					fetch('/field_camp_action', {method: 'POST', body: body, credentials: 'same-origin'})
+						.then(function(r){ return r.json(); })
+						.then(function(res){
+							(res.copied || []).forEach(function(c){
+								line(c.name + ': ' + c.datasets + ' dataset(s), ' + c.spots + ' spot(s), ' + c.images + ' photo(s)'
+									+ (c.missing_images ? ' (' + c.missing_images + ' photo(s) were never uploaded by the student)' : ''));
+							});
+							if(res.error){ line(res.error, true); next(i + 1, failed + 1); return; }
+							if(!(res.copied || []).length) line(a.username + ': nothing new to copy');
+							next(i + 1, failed);
+						})
+						.catch(function(){ line(a.username + ': the copy did not finish. Reload the page and try again.', true); next(i + 1, failed + 1); });
+				}
+				btn.addEventListener('click', function(){
+					btn.disabled = true;
+					log.style.display = '';
+					line('Copying ' + todo.length + ' account(s). Keep this page open...');
+					next(0, 0);
+				});
+			})();
+			</script>
+<?php } ?>
 			<form method="post" action="/field_camp_action" style="margin-top:1.5em;">
 				<?php echo fc_hidden($csrf, 'accounts_remove', $camp); ?>
 				<div class="fc-field">
 					<label for="fcConfirm">Remove the <?php echo (int)($liveCount - $activeCount); ?> deactivated account(s)</label>
 					<div class="fc-hint" style="margin-bottom:0.5em;">
 						Removed accounts are closed for good and their usernames cannot be used again.
+<?php if($toCopy){ ?>
+						<strong><?php echo count($toCopy); ?> of them still hold work that has not been copied.</strong>
+<?php } ?>
 						To confirm, type the name of this camp: <strong><?php echo htmlspecialchars($camp->camp_name); ?></strong>
 					</div>
 					<input type="text" name="confirm" id="fcConfirm" autocomplete="off">

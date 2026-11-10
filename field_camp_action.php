@@ -4,7 +4,8 @@
  * Description: Field Camp Wizard, every change (POST only, then a redirect back
  *              to the page that posted): create a camp, save Basics, save the
  *              study area, create accounts, deactivate / reactivate / remove
- *              them, add / remove instructors. Each request needs the form
+ *              them, copy a deactivated account's projects to the camp owner
+ *              (answers JSON), add / remove instructors. Each request needs the form
  *              token, an account on the instructor list, and (except create) a
  *              camp that account may manage.
  *
@@ -124,6 +125,29 @@ if($action === 'basics'){
 	}
 	$n = FieldCamp::removeAccounts($db, $neodb, $camp);
 	fc_back($here . "accounts", "$n account" . ($n === 1 ? '' : 's') . " removed.");
+
+}elseif($action === 'copy_account'){
+
+	// One account per request (the page calls this once per account), answered as JSON.
+	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
+	set_time_limit(0);
+	header('Content-Type: application/json');
+	$want = (int)($_POST['user'] ?? 0);
+	$account = null;
+	foreach(FieldCamp::listAccounts($db, $id) as $a){
+		if((int)$a->user_pkey === $want) $account = $a;
+	}
+	if(!$account){
+		echo json_encode(array('error' => "That account does not belong to this camp.", 'copied' => array(), 'skipped' => 0));
+		exit();
+	}
+	$copier = new FieldCampCopy($db, $neodb);
+	$result = $copier->copyAccount($camp, $account);
+	// The loaders it reuses set the API's own status headers (201 Created); this page answers 200.
+	http_response_code(200);
+	header('Content-Type: application/json');
+	echo json_encode($result);
+	exit();
 
 }elseif($action === 'viewer_add'){
 
