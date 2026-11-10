@@ -145,9 +145,16 @@ $maps = array(
 	'fcpkgtest0003' => array($INSTR, 'not_referenced.tif', "Driver: GTiff/GeoTIFF\nSize is 10, 10\n", '2026-11-03'),
 	'fcpkgtest0004' => array($INSTR, 'USGS_B-1221-D.zip', gdalinfo_text(-105.40, 38.40, -105.38, 38.60), '2026-11-04'),
 	'fcpkgtest0005' => array($OUTSIDER, 'someone_elses.tif', gdalinfo_text(-105.33, 38.50, -105.20, 38.56), '2026-11-05'),
+	'fcpkgtest0006' => array($OUTSIDER, 'public_here.tif', gdalinfo_text(-105.30, 38.52, -105.25, 38.55), '2026-11-06', true),
+	'fcpkgtest0007' => array($OUTSIDER, 'public_elsewhere.tif', gdalinfo_text(-90.0, 40.0, -89.0, 41.0), '2026-11-07', true),
 );
 foreach ($maps as $hash => $m) {
-	$db->prepare_query("insert into geotiffs (userpkey, hash, name, gdalinfo, uploaddate) values ($1, $2, $3, $4, $5)", array($m[0], $hash, $m[1], $m[2], $m[3]));
+	$db->prepare_query("insert into geotiffs (userpkey, hash, name, gdalinfo, uploaddate, ispublic) values ($1, $2, $3, $4, $5, $6)",
+		array($m[0], $hash, $m[1], $m[2], $m[3], empty($m[4]) ? 'f' : 't'));
+}
+/** The fixture maps in a list (this machine's real public maps over the same area are left aside). */
+function ours($list) {
+	return array_values(array_filter($list, function ($m) { return strpos($m['hash'], 'fcpkgtest') === 0; }));
 }
 list($clean) = FieldCamp::validateBasics(array('camp_name' => 'Package Camp', 'camp_year' => '2027', 'project_name' => 'KU Field Camp 2027 (test)', 'start_date' => '2027-06-01', 'end_date' => '2027-06-20'));
 $campid = FieldCamp::createCamp($db, $INSTR, $clean);
@@ -168,9 +175,14 @@ check('a projected map (UTM metres) is read by its longitude and latitude', $e &
 check('a map without corners has no extent', FieldCampPackage::extentFromGdalinfo($maps['fcpkgtest0003'][2]) === null && FieldCampPackage::extentFromGdalinfo('') === null && FieldCampPackage::extentFromGdalinfo(null) === null);
 check('southern and eastern hemispheres', (function () { $e = FieldCampPackage::extentFromGdalinfo(gdalinfo_text(150.5, -34.25, 151.5, -33.5)); return $e && abs($e['west'] - 150.5) < 1e-4 && abs($e['south'] + 34.25) < 1e-4; })());
 
-$list = FieldCampPackage::listMyMaps($db, $camp);
+$list = ours(FieldCampPackage::listMyMaps($db, $camp));
 $by = array(); foreach ($list as $m) $by[$m['hash']] = $m;
-check('the owner\'s four maps, newest first; nobody else\'s', array_keys($by) === array('fcpkgtest0004', 'fcpkgtest0003', 'fcpkgtest0002', 'fcpkgtest0001'), array_keys($by));
+check('the owner\'s four maps, newest first, then the public map over the area', array_keys($by) === array('fcpkgtest0004', 'fcpkgtest0003', 'fcpkgtest0002', 'fcpkgtest0001', 'fcpkgtest0006'), array_keys($by));
+check('someone else\'s private map and a public map elsewhere are not offered', !isset($by['fcpkgtest0005']) && !isset($by['fcpkgtest0007']));
+check('the public map is marked public, the owner\'s are not', $by['fcpkgtest0006']['public'] === true && $by['fcpkgtest0006']['overlaps'] === true && $by['fcpkgtest0001']['public'] === false);
+list($cleanNA) = FieldCamp::validateBasics(array('camp_name' => 'No Area', 'camp_year' => '2027', 'project_name' => 'No Area'));
+$noAreaId = FieldCamp::createCamp($db, $INSTR, $cleanNA);
+check('without a study area no public map is offered', count(ours(FieldCampPackage::listMyMaps($db, FieldCamp::getCamp($db, $noAreaId)))) === 4);
 check('a map inside the study area overlaps', $by['fcpkgtest0001']['overlaps'] === true);
 check('a map elsewhere does not', $by['fcpkgtest0002']['overlaps'] === false);
 check('a map that touches the area\'s edge strip overlaps', $by['fcpkgtest0004']['overlaps'] === true);
@@ -193,12 +205,24 @@ check('two maps cannot share a title', count($errs) === 1 && strpos($errs[0], 'b
 $errs = FieldCampPackage::saveMaps($db, $camp, array(array('hash' => 'fcpkgtest0001', 'chosen' => true, 'title' => str_repeat('t', 101))));
 check('too long a title is refused', count($errs) === 1, $errs);
 check('a refused save changes nothing', count(FieldCampPackage::listCampMaps($db, $campid)) === 2);
-check('someone else\'s map and an unknown map are not taken', FieldCampPackage::saveMaps($db, $camp, array(
+check('someone else\'s private map, a public map elsewhere and an unknown map are not taken', FieldCampPackage::saveMaps($db, $camp, array(
 	array('hash' => 'fcpkgtest0001', 'chosen' => true, 'title' => 'Canon City Map'),
 	array('hash' => 'fcpkgtest0005', 'chosen' => true, 'title' => 'Not mine'),
+	array('hash' => 'fcpkgtest0007', 'chosen' => true, 'title' => 'Public, far away'),
 	array('hash' => 'nosuchmap', 'chosen' => true, 'title' => 'Nothing'),
 	'junk',
 )) === array() && array_map(function ($r) { return $r->geotiff_hash; }, FieldCampPackage::listCampMaps($db, $campid)) === array('fcpkgtest0001'));
+check('a public map over the area can be selected', FieldCampPackage::saveMaps($db, $camp, array(
+	array('hash' => 'fcpkgtest0001', 'chosen' => true, 'title' => 'Canon City Map'),
+	array('hash' => 'fcpkgtest0006', 'chosen' => true, 'title' => 'Public geology'),
+)) === array() && count(FieldCampPackage::listCampMaps($db, $campid)) === 2);
+$cmPub = FieldCampPackage::customMapsForCamp($db, $camp);
+check('and becomes a custom map like any other', count($cmPub) === 2 && $cmPub[1]['id'] === 'fcpkgtest0006' && $cmPub[1]['title'] === 'Public geology' && $cmPub[1]['source'] === 'strabospot_mymaps' && $cmPub[1]['bbox'] === '-105.3,38.52,-105.25,38.55', $cmPub);
+$db->prepare_query("update geotiffs set ispublic = false where hash = $1", array('fcpkgtest0006'));
+check('made private again by its owner: it drops out of the project and off the list',
+	count(FieldCampPackage::customMapsForCamp($db, $camp)) === 1 && count(array_filter(ours(FieldCampPackage::listMyMaps($db, $camp)), function ($m) { return $m['hash'] === 'fcpkgtest0006'; })) === 0);
+$db->prepare_query("update geotiffs set ispublic = true where hash = $1", array('fcpkgtest0006'));
+FieldCampPackage::saveMaps($db, $camp, array(array('hash' => 'fcpkgtest0001', 'chosen' => true, 'title' => 'Canon City Map')));
 check('the list shows the selection and the saved title', (function () use ($db, $camp) {
 	foreach (FieldCampPackage::listMyMaps($db, $camp) as $m) { if ($m['hash'] === 'fcpkgtest0001') return $m['chosen'] && $m['title'] === 'Canon City Map'; }
 	return false;
@@ -326,16 +350,20 @@ $sidI = forge($INSTR, $FIX[$INSTR]);
 $sidO = forge($OUTSIDER, $FIX[$OUTSIDER]);
 list($code, $body) = http('GET', "/field_camp?id=$campid&step=maps", $sidI);
 check('the owner opens the Maps step', $code === 200 && !php_error($body) && strpos($body, 'Custom maps') !== false, $code);
-check('maps in the area can be selected; the saved one is checked with its title', substr_count($body, 'class="fc-mapline" data-hash=') + substr_count($body, 'class="fc-mapline fc-unit-off" data-hash=') === 2
-	&& preg_match('~id="fcMfcpkgtest0001" checked~', $body) === 1 && strpos($body, 'value="Canon City Map"') !== false && strpos($body, 'value="USGS B-1221-D"') !== false, substr_count($body, 'data-hash='));
-check('maps elsewhere are listed but cannot be selected', strpos($body, 'Not in the study area (2)') !== false && strpos($body, 'Arizona_Illustrated.tif') !== false && strpos($body, 'No location could be read from this map') !== false
+check('the owner\'s maps in the area can be selected; the saved one is checked with its title', strpos($body, 'Your maps in the study area (2)') !== false
+	&& strpos($body, 'data-hash="fcpkgtest0001"') !== false && strpos($body, 'data-hash="fcpkgtest0004"') !== false
+	&& preg_match('~id="fcMfcpkgtest0001" checked~', $body) === 1 && strpos($body, 'value="Canon City Map"') !== false && strpos($body, 'value="USGS B-1221-D"') !== false);
+check('public maps over the area have their own list and can be selected', preg_match('~Public maps in the study area \(\d+\)~', $body) === 1
+	&& strpos($body, 'data-hash="fcpkgtest0006"') !== false && strpos($body, 'public_here.tif') !== false && preg_match('~id="fcMfcpkgtest0006" checked~', $body) === 0);
+check('the owner\'s maps elsewhere are listed but cannot be selected', strpos($body, 'Your maps not in the study area (2)') !== false && strpos($body, 'Arizona_Illustrated.tif') !== false && strpos($body, 'No location could be read from this map') !== false
 	&& strpos($body, 'data-hash="fcpkgtest0002"') === false);
-check('nobody else\'s map is shown', strpos($body, 'someone_elses.tif') === false);
+check('someone else\'s private map and a public map elsewhere are not shown', strpos($body, 'someone_elses.tif') === false && strpos($body, 'public_elsewhere.tif') === false);
 check('the steps run Basics, Study area, Maps, Rock units, Accounts, Package', preg_match('~step=basics".*step=area".*step=maps".*step=units".*step=accounts".*step=package"~s', $body) === 1);
 list($code, $body) = http('GET', "/field_camp?id=$campid&step=area", $sidI);
 check('Study area leads on to Maps', strpos($body, 'Next: Maps') !== false);
 list($code, $body) = http('GET', "/field_camp?id=$bareid&step=maps", $sidI);
-check('without a study area every map is listed and selectable', $code === 200 && !php_error($body) && strpos($body, 'No study area is saved yet') !== false && substr_count($body, 'data-hash=') === 4);
+check('without a study area every map of the owner is listed and selectable, and no public map', $code === 200 && !php_error($body) && strpos($body, 'No study area is saved yet') !== false
+	&& substr_count($body, 'data-hash=') === 4 && strpos($body, 'Public maps in the study area') === false);
 
 list($code, $body) = post_follow($sidI, array('action' => 'maps_save', 'id' => $campid, 'maps_json' => json_encode(array(
 	array('hash' => 'fcpkgtest0001', 'chosen' => true, 'title' => 'Canon City Map'), array('hash' => 'fcpkgtest0004', 'chosen' => true, 'title' => 'USGS Bulletin 1221-D')))));

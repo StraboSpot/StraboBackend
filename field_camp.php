@@ -333,44 +333,50 @@ if($step === 'area'){
 // ===========================================================================
 if($step === 'maps'){
 	$hasArea = ($size !== null);
-	$inArea = array(); $elsewhere = array();
+	// Three lists: the owner's maps that can be selected, public maps over the area, the owner's other maps.
+	$inArea = array(); $publicMaps = array(); $elsewhere = array(); $ownCount = 0;
 	foreach($myMaps as $m){
-		if($m['overlaps'] === true || $m['chosen']) $inArea[] = $m; else $elsewhere[] = $m;
+		if($m['public']){ $publicMaps[] = $m; continue; }
+		$ownCount++;
+		if(!$hasArea || $m['overlaps'] === true || $m['chosen']) $inArea[] = $m; else $elsewhere[] = $m;
 	}
 ?>
 		<div class="fc-panel">
 			<h4>Custom maps</h4>
 			<div class="fc-mapnote">
-				Your own maps from <a href="/geotiff">My Maps</a> that cover the study area. Each map you select is added to
-				the students' project as a custom map, under the title you give it here.
+				Maps that cover the study area: your own from <a href="/geotiff">My Maps</a>, and maps other people have
+				made public on <a href="/publicmaps" target="_blank" rel="noopener">Public Maps</a>. Each map you select is
+				added to the students' project as a custom map, under the title you give it here.
 				<?php echo $ownsCamp ? '' : 'These are the maps of the owner of the camp.'; ?>
 			</div>
 <?php if(!$hasArea){ ?>
-			<div class="fc-small" style="margin-bottom:0.75em;">No study area is saved yet, so every map is listed.
+			<div class="fc-small" style="margin-bottom:0.75em;">No study area is saved yet, so every map of your own is listed and no public maps.
 				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=area">Choose the study area</a> to see which maps cover it.</div>
 <?php } ?>
 <?php if(!$myMaps){ ?>
-			<div class="fc-mapnote" style="margin:0;">There are no maps in My Maps yet. Upload a GeoTIFF there, then come back to this step.</div>
-<?php }elseif(!$inArea && $hasArea){ ?>
-			<div class="fc-mapnote" style="margin:0;">None of your <?php echo count($myMaps); ?> maps covers the study area.</div>
+			<div class="fc-mapnote" style="margin:0;">No map covers the study area, and there are no maps in My Maps yet.
+				Upload a GeoTIFF there, then come back to this step.</div>
+<?php }elseif(!$inArea && !$publicMaps && $hasArea){ ?>
+			<div class="fc-mapnote" style="margin:0;">No map covers the study area: none of your own <?php echo (int)$ownCount; ?>, and no public map.</div>
 <?php } ?>
 <?php if($myMaps){ ?>
 			<form method="post" action="/field_camp_action" id="fcMapForm" style="margin:0;">
 				<?php echo fc_hidden($csrf, 'maps_save', $camp); ?>
 				<input type="hidden" name="maps_json" id="fcMapsJson" value="">
 <?php
-	foreach(array('in' => $hasArea ? $inArea : $myMaps, 'out' => $hasArea ? $elsewhere : array()) as $group => $list){
+	foreach(array('in' => $inArea, 'public' => $publicMaps, 'out' => $elsewhere) as $group => $list){
 		if(!$list) continue;
-		if($group === 'out'){ ?>
-				<div class="fc-small" style="margin:1.25em 0 0.5em 0;">Not in the study area (<?php echo count($list); ?>):</div>
-<?php	} ?>
+		$labels = array('in' => $hasArea ? 'Your maps in the study area' : 'Your maps',
+			'public' => 'Public maps in the study area', 'out' => 'Your maps not in the study area');
+?>
+				<div class="fc-maphead"><?php echo $labels[$group]; ?> (<?php echo count($list); ?>)</div>
 				<div class="fc-units">
-<?php	if($group === 'in'){ ?>
+<?php	if($group !== 'out'){ ?>
 					<div class="fc-mapline fc-unit-head"><div></div><div>Title in the app</div><div>File</div><div>Uploaded</div></div>
 <?php	}
 		foreach($list as $m){
 			$rowId = 'fcM' . htmlspecialchars($m['hash']);
-			$selectable = ($group === 'in');
+			$selectable = ($group !== 'out');
 ?>
 					<div class="fc-mapline<?php echo $selectable ? '' : ' fc-unit-off'; ?>"<?php echo $selectable ? ' data-hash="' . htmlspecialchars($m['hash']) . '"' : ''; ?>>
 <?php		if($selectable){ ?>

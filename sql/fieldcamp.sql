@@ -1,8 +1,8 @@
 -- =============================================================================
 -- File: sql/fieldcamp.sql
--- Description: Field Camp Wizard, stages 1 to 4 (camp records, the instructor
---              list, the dedicated camp accounts, the rock units, the custom
---              maps and the project package). An instructor (an account
+-- Description: Field Camp Wizard, stages 1 to 4 and 6 (camp records, the
+--              instructor list, the dedicated camp accounts, the rock units,
+--              the custom maps, the project package and its offline tiles). An instructor (an account
 --              our team puts on fieldcamp_instructors) sets up a camp on the
 --              website and creates the student accounts for it; later stages
 --              add the maps, rock units and the project package.
@@ -171,7 +171,8 @@ CREATE TABLE IF NOT EXISTS fieldcamp_unit_source (
 ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS project_id BIGINT;
 ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS dataset_id BIGINT;
 
--- The owner's My Maps (geotiffs.hash) that go into the project as custom maps.
+-- The My Maps entries (geotiffs.hash: the owner's own, or public ones) that go
+-- into the project as custom maps.
 CREATE TABLE IF NOT EXISTS fieldcamp_map (
     pkey            SERIAL PRIMARY KEY,
     fieldcamp_pkey  INTEGER                  NOT NULL REFERENCES fieldcamp(pkey),
@@ -180,6 +181,22 @@ CREATE TABLE IF NOT EXISTS fieldcamp_map (
     created_date    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     UNIQUE (fieldcamp_pkey, geotiff_hash)
 );
+
+-- ---------------------------------------------------------------------------
+-- Stage 6: offline map tiles (includes/fieldcamp/FieldCampTiles.php).
+-- ---------------------------------------------------------------------------
+
+-- What the instructor chose on the Offline maps step: the deepest zoom and the
+-- layers (JSON list of basemap ids and My Maps hashes).
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS tiles_zoom INTEGER;
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS tiles_layers TEXT;
+-- The tile build: '' (never built) | building | ready | failed. The tiles are
+-- kept in fieldcamp_files/<files_token>/ (a folder name nobody can guess).
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS build_status VARCHAR(20) NOT NULL DEFAULT '';
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS build_message TEXT;
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS build_started TIMESTAMP WITH TIME ZONE;
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS build_finished TIMESTAMP WITH TIME ZONE;
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS files_token VARCHAR(40);
 
 -- ---------------------------------------------------------------------------
 -- Privileges. Tables are created by the superuser (postgres) but the web app

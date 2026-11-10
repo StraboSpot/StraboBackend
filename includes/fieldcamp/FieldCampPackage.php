@@ -117,11 +117,13 @@ class FieldCampPackage
 	}
 
 	/**
-	 * Every My Maps entry of the camp's owner, newest first, each with its
-	 * extent, whether it overlaps the study area and whether it is selected
-	 * for the camp.
+	 * The maps the Maps step offers, newest first: every My Maps entry of the
+	 * camp's owner, then the PUBLIC maps of other accounts (the ones on the
+	 * site's Public Maps page) that overlap the study area or are already
+	 * selected. Each comes with its extent, whether it overlaps the study
+	 * area and whether it is selected for the camp.
 	 *
-	 * @return array of ['hash', 'name', 'uploaded', 'extent' (array|null), 'overlaps' (bool|null), 'chosen', 'title']
+	 * @return array of ['hash', 'name', 'uploaded', 'extent' (array|null), 'overlaps' (bool|null), 'chosen', 'title', 'public' (bool)]
 	 */
 	public static function listMyMaps($db, $camp)
 	{
@@ -129,17 +131,24 @@ class FieldCampPackage
 		foreach (self::listCampMaps($db, $camp->pkey) as $m) $chosen[$m->geotiff_hash] = $m->title;
 
 		$area = FieldCampUnits::campBbox($camp);
+		$owner = (int)$camp->owner_user_pkey;
 		$rows = $db->get_results_prepared("
-			select hash, name, gdalinfo, uploaddate from geotiffs where userpkey = $1 order by uploaddate desc, pkey desc
-			", array((int)$camp->owner_user_pkey));
+			select hash, name, gdalinfo, uploaddate, (userpkey = $1) as mine
+			from geotiffs
+			where userpkey = $1 or ispublic is true
+			order by (userpkey = $1) desc, uploaddate desc, pkey desc
+			", array($owner));
 		$out = array();
 		foreach (($rows ? $rows : array()) as $r) {
+			$mine = ($r->mine === true || $r->mine === 't');
 			$extent = self::extentFromGdalinfo($r->gdalinfo);
 			$overlaps = null;
 			if ($extent !== null && $area !== null) {
 				$overlaps = $extent['west'] < $area['east'] && $extent['east'] > $area['west']
 					&& $extent['south'] < $area['north'] && $extent['north'] > $area['south'];
 			}
+			// Other people's public maps are only of interest where the camp is.
+			if (!$mine && $overlaps !== true && !isset($chosen[$r->hash])) continue;
 			$out[] = array(
 				'hash' => $r->hash,
 				'name' => (string)$r->name,
@@ -148,6 +157,7 @@ class FieldCampPackage
 				'overlaps' => $overlaps,
 				'chosen' => isset($chosen[$r->hash]),
 				'title' => $chosen[$r->hash] ?? self::titleFromFileName($r->name),
+				'public' => !$mine,
 			);
 		}
 		return $out;
@@ -162,8 +172,9 @@ class FieldCampPackage
 	}
 
 	/**
-	 * Save the Maps step: the selected My Maps and their titles replace the
-	 * camp's list. Only maps of the camp's owner are accepted. All or nothing.
+	 * Save the Maps step: the selected maps and their titles replace the
+	 * camp's list. Only maps the step offers are accepted: the camp owner's
+	 * own, and public maps over the study area. All or nothing.
 	 *
 	 * @param array $rows [['hash' => string, 'chosen' => bool, 'title' => string], ...]
 	 * @return array list of problems (empty = saved)
@@ -177,7 +188,7 @@ class FieldCampPackage
 		foreach ((array)$rows as $row) {
 			if (!is_array($row) || empty($row['chosen'])) continue;
 			$hash = (string)($row['hash'] ?? '');
-			if (!isset($mine[$hash]) || isset($keep[$hash])) continue;   // not the owner's map
+			if (!isset($mine[$hash]) || isset($keep[$hash])) continue;   // not a map this camp may use
 			$title = trim(preg_replace('/\s+/u', ' ', (string)($row['title'] ?? '')));
 			if ($title === '') {
 				$errors[] = "\"" . $mine[$hash]['name'] . "\" needs a title. It is the name students see in the app's map list.";
@@ -234,12 +245,15 @@ class FieldCampPackage
 		return $map;
 	}
 
-	/** The camp's selected maps as custom map objects. A map deleted from My Maps since is left out. */
+	/**
+	 * The camp's selected maps as custom map objects. A map deleted from
+	 * My Maps since, or a public map that was made private again, is left out.
+	 */
 	public static function customMapsForCamp($db, $camp)
 	{
 		$out = array();
 		foreach (self::listCampMaps($db, $camp->pkey) as $m) {
-			$g = $db->get_row_prepared("select hash, gdalinfo from geotiffs where hash = $1 and userpkey = $2",
+			$g = $db->get_row_prepared("select hash, gdalinfo from geotiffs where hash = $1 and (userpkey = $2 or ispublic is true)",
 				array($m->geotiff_hash, (int)$camp->owner_user_pkey));
 			if (!$g) continue;
 			$out[] = self::customMap($g->hash, $m->title, self::bboxString($g->hash, $g->gdalinfo));
