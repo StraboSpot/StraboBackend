@@ -166,9 +166,13 @@ if($action === 'basics'){
 	$password = (string)($_POST['password'] ?? '');
 	$keep = array('username_template' => $template, 'count' => (string)($_POST['count'] ?? ''));
 
-	// One password per camp: accounts added later must use the one already in place.
+	// One password per camp: accounts added later get the one already in place. When it is on record
+	// the instructor is not asked for it; otherwise it must be typed, and is proven against an account.
 	$existing = FieldCamp::listAccounts($db, $id);
-	if($existing){
+	$known = $existing ? FieldCamp::campPassword($camp) : null;
+	if($known !== null){
+		$password = $known;
+	}elseif($existing){
 		$match = (int)$db->get_var_prepared(
 			"select count(*) from users where pkey = $1 and crypt($2, password) = password",
 			array((int)$existing[0]->user_pkey, $password));

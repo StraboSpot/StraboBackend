@@ -56,7 +56,11 @@ if(!$isNew){
 // ---------------------------------------------------------------------------
 if($camp && isset($_GET['ajax'])){
 	header('Content-Type: application/json');
-	if($_GET['ajax'] === 'plan'){
+	if($_GET['ajax'] === 'password'){
+		// The camp's shared password, for the eye button on the Accounts step. Only sent when asked for.
+		header('Cache-Control: no-store');
+		echo json_encode(array('password' => FieldCamp::campPassword($camp)));
+	}elseif($_GET['ajax'] === 'plan'){
 		echo json_encode(FieldCamp::planAccounts($db, $camp, (string)($_GET['template'] ?? ''), (int)($_GET['count'] ?? 0)));
 	}elseif($_GET['ajax'] === 'build' && FieldCampTiles::installed($db)){
 		echo json_encode(FieldCampTiles::status($db, $camp));
@@ -1048,6 +1052,41 @@ if($step === 'accounts'){
 				Students sign in to StraboField with one of these usernames and the password you chose.
 				These accounts cannot change their password.
 			</div>
+<?php $pwKept = FieldCamp::campPassword($camp) !== null; ?>
+			<div class="fc-field">
+				<label>Password of every account</label>
+<?php if($pwKept){ ?>
+				<div class="fc-pw">
+					<code id="fcPwText" data-shown="0">&bull;&bull;&bull;&bull;&bull;&bull;&bull;&bull;</code>
+					<button type="button" class="fc-eye" id="fcPwEye" aria-label="Show the password" title="Show the password">
+						<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7S1 12 1 12z"/><circle cx="12" cy="12" r="3"/><line id="fcPwSlash" x1="3" y1="3" x2="21" y2="21" style="display:none;"/></svg>
+					</button>
+				</div>
+				<script>
+				(function(){
+					var text = document.getElementById('fcPwText'), eye = document.getElementById('fcPwEye'), slash = document.getElementById('fcPwSlash');
+					var dots = text.textContent;
+					eye.addEventListener('click', function(){
+						if(text.getAttribute('data-shown') === '1'){
+							text.textContent = dots; text.setAttribute('data-shown', '0'); slash.style.display = 'none';
+							eye.setAttribute('aria-label', 'Show the password'); eye.title = 'Show the password';
+							return;
+						}
+						fetch('/field_camp?id=<?php echo (int)$camp->pkey; ?>&ajax=password', {credentials: 'same-origin'})
+							.then(function(r){ return r.json(); })
+							.then(function(j){
+								if(!j.password) return;
+								text.textContent = j.password; text.setAttribute('data-shown', '1'); slash.style.display = '';
+								eye.setAttribute('aria-label', 'Hide the password'); eye.title = 'Hide the password';
+							});
+					});
+				})();
+				</script>
+<?php }else{ ?>
+				<div class="fc-hint" style="margin-top:0;">The password of this camp is not on record: its accounts were made before the
+					wizard kept passwords. If you remember it, type it once under "Add more accounts" and it will be kept from then on.</div>
+<?php } ?>
+			</div>
 			<div class="strabotable" style="margin-left:0px;">
 				<table class="fc-table">
 					<tr><td>Username</td><td>Created</td><td>Status</td><td>Projects uploaded</td><td>Copied to <?php echo $ownsCamp ? 'you' : 'the owner'; ?></td></tr>
@@ -1093,6 +1132,11 @@ if($step === 'accounts'){
 						value="<?php echo htmlspecialchars((string)($form['count'] ?? '')); ?>">
 					<div class="fc-hint">Up to <?php echo (int)$room; ?> <?php echo $liveCount > 0 ? 'more' : ''; ?>.</div>
 				</div>
+<?php if($liveCount > 0 && FieldCamp::campPassword($camp) !== null){ ?>
+				<div class="fc-field">
+					<div class="fc-hint" style="margin-top:0;">The new accounts get the password the camp's accounts already use.</div>
+				</div>
+<?php }else{ ?>
 				<div class="fc-field">
 					<label for="fcPassword">Password for <?php echo $liveCount > 0 ? 'these accounts' : 'every account'; ?></label>
 					<input type="text" name="password" id="fcPassword" autocomplete="off" maxlength="72">
@@ -1101,10 +1145,12 @@ if($step === 'accounts'){
 						Enter the password the camp's accounts already use, so every account matches.
 <?php }else{ ?>
 						At least <?php echo FieldCamp::MIN_PASSWORD_LENGTH; ?> characters. Every account of the camp gets this
-						password. Write it down: it is not shown again and students cannot change it.
+						password, and it cannot be changed afterwards. You can look it up on this page at any time.
+						Every student will know it, so do not use a password you use anywhere else.
 <?php } ?>
 					</div>
 				</div>
+<?php } ?>
 				<div class="fc-preview-msg" id="fcPreviewMsg"></div>
 				<div class="fc-preview" id="fcPreview" style="display:none;"></div>
 				<div class="fc-buttons">

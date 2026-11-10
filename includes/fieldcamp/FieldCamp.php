@@ -10,7 +10,10 @@
  *              Camp accounts cannot change their password or email and cannot
  *              delete themselves (see isCampAccount() and its callers), because
  *              a whole camp shares one default password and the instructor owns
- *              the accounts.
+ *              the accounts. That password is kept, encrypted, so the
+ *              instructor can look it up (campPassword()); there is on purpose
+ *              no way to change it afterwards, because a device that has to
+ *              sign in again loses the work it has not uploaded.
  *
  *              Tables: sql/fieldcamp.sql. Design: docs/Field_Camp_Builder/DESIGN.md.
  *
@@ -438,6 +441,7 @@ class FieldCamp
 				"update fieldcamp set username_template = $2, modified_date = now() where pkey = $1",
 				array((int)$camp->pkey, $plan['template']));
 			$db->query("COMMIT");
+			self::keepPassword($db, (int)$camp->pkey, $password);
 		} catch (\Throwable $e) {
 			$db->query("ROLLBACK");
 			foreach ($madePkeys as $pk) {
@@ -449,6 +453,59 @@ class FieldCamp
 			$out['error'] = "The accounts could not be created. Nothing was changed; please try again.";
 		}
 		return $out;
+	}
+
+	// -------------------------------------------------------------------
+	// The camp password, kept for the instructor
+	// -------------------------------------------------------------------
+
+	/** The key the camp passwords are encrypted with: derived from a secret of config.inc.php, never stored. */
+	private static function passwordKey()
+	{
+		global $jwtsecret;
+		if (!isset($jwtsecret) || !is_string($jwtsecret) || strlen($jwtsecret) < 16) return null;
+		return hash('sha256', 'fieldcamp-account-password|' . $jwtsecret, true);
+	}
+
+	/** A password as stored in fieldcamp.account_password_enc (AES-256-GCM), or null when it cannot be kept. */
+	public static function sealPassword($plain)
+	{
+		$key = self::passwordKey();
+		if ($key === null || !function_exists('openssl_encrypt')) return null;
+		$iv = random_bytes(12);
+		$tag = '';
+		$cipher = openssl_encrypt((string)$plain, 'aes-256-gcm', $key, OPENSSL_RAW_DATA, $iv, $tag);
+		if ($cipher === false) return null;
+		return base64_encode($iv . $tag . $cipher);
+	}
+
+	/** The reverse of sealPassword(); null when nothing is stored or it cannot be read (for example after a key change). */
+	public static function openPassword($sealed)
+	{
+		$key = self::passwordKey();
+		$raw = base64_decode((string)$sealed, true);
+		if ($key === null || $raw === false || strlen($raw) < 29) return null;
+		$plain = openssl_decrypt(substr($raw, 28), 'aes-256-gcm', $key, OPENSSL_RAW_DATA, substr($raw, 0, 12), substr($raw, 12, 16));
+		return $plain === false ? null : $plain;
+	}
+
+	/** The password the camp's accounts share, or null when it was never kept. */
+	public static function campPassword($camp)
+	{
+		if (!$camp || !isset($camp->account_password_enc) || (string)$camp->account_password_enc === '') return null;
+		return self::openPassword($camp->account_password_enc);
+	}
+
+	/** Keep the camp's password (called when accounts are created with it, or when it has just been proven right). */
+	public static function keepPassword($db, $camppkey, $password)
+	{
+		$sealed = self::sealPassword($password);
+		if ($sealed === null) return;
+		$has = (int)$db->get_var_prepared("select count(*) from information_schema.columns
+			where table_name = 'fieldcamp' and column_name = 'account_password_enc'", array());
+		if ($has > 0) {
+			$db->prepare_query("update fieldcamp set account_password_enc = $2 where pkey = $1", array((int)$camppkey, $sealed));
+		}
 	}
 
 	/**

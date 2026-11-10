@@ -207,6 +207,16 @@ check('3 Neo4j :User nodes', user_nodes($pkeys) === 3);
 check('each account can sign in with the camp password', can_sign_in('fctest94_1', $PW) && can_sign_in('fctest94_3', $PW));
 check('a wrong password cannot sign in', !can_sign_in('fctest94_1', 'wrong-pass'));
 check('accounts are camp accounts', FieldCamp::isCampAccount($db, $pkeys[0]));
+
+// The camp password is kept so the instructor can look it up; it is never stored as it is.
+$kept = FieldCamp::getCamp($db, $campid);
+check('the password is on record for the camp', FieldCamp::campPassword($kept) === $PW);
+check('what the database holds is not the password, and differs each time', strpos((string)$kept->account_password_enc, $PW) === false && strlen((string)$kept->account_password_enc) > 40
+	&& FieldCamp::sealPassword($PW) !== FieldCamp::sealPassword($PW) && FieldCamp::openPassword(FieldCamp::sealPassword($PW)) === $PW);
+check('odd characters survive', FieldCamp::openPassword(FieldCamp::sealPassword("p\u{e4}ss w\u{f6}rd \"'<>&")) === "p\u{e4}ss w\u{f6}rd \"'<>&");
+$tampered = base64_decode((string)$kept->account_password_enc); $tampered[strlen($tampered) - 1] = chr(ord($tampered[strlen($tampered) - 1]) ^ 1);
+check('a damaged or foreign value reads as "not on record", not as garbage', FieldCamp::openPassword(base64_encode($tampered)) === null && FieldCamp::openPassword('nonsense') === null && FieldCamp::openPassword('') === null);
+check('a camp without accounts has no password on record', FieldCamp::campPassword(FieldCamp::getCamp($db, FieldCamp::createCamp($db, $INSTR, $clean))) === null);
 check('the instructor is not a camp account', !FieldCamp::isCampAccount($db, $INSTR));
 $camp = FieldCamp::getCamp($db, $campid);
 check('template stored on the camp', $camp->username_template === 'fctest94_{n}');
@@ -329,7 +339,15 @@ foreach (array('basics' => 'Field camp name', 'area' => 'fcMap', 'accounts' => '
 	check("$step step renders", $code === 200 && strpos($body, $needle) !== false && !php_error($body), $code);
 }
 list($code, $body) = http('GET', "/field_camp?id=$campid&step=accounts", $sInstr);
-check('accounts step never shows the password', strpos($body, $PW) === false);
+check('the accounts page does not carry the password until it is asked for', strpos($body, $PW) === false && strpos($body, 'id="fcPwEye"') !== false);
+list($code, $pwBody) = http('GET', "/field_camp?id=$campid&ajax=password", $sInstr);
+check('the eye button gets it for the owner', $code === 200 && json_decode($pwBody, true) === array('password' => $PW), $pwBody);
+list($code, $pwBody) = http('GET', "/field_camp?id=$campid&ajax=password", $sOut);
+check('not for someone who is not an instructor', $code === 404 && strpos($pwBody, $PW) === false, $code);
+list($code, $pwBody) = http('GET', "/field_camp?id=$campid&ajax=password", $sInstr2);
+check('not for another instructor', $code === 404 && strpos($pwBody, $PW) === false, $code);
+list($code, $pwBody) = http('GET', "/field_camp?id=$campid&ajax=password", null);
+check('not without signing in', strpos($pwBody, $PW) === false);
 check('accounts step does not list the removed account', strpos($body, 'fctest94_5') === false);
 list($code, $body) = http('GET', '/field_camp?new=1', $sInstr);
 check('new camp form renders', $code === 200 && strpos($body, 'Create field camp') !== false && !php_error($body));
@@ -362,23 +380,36 @@ check('an empty area is refused and the saved one stays', strpos($body, 'Choose 
 
 list($code, $body) = post_follow($sInstr, array('action' => 'accounts_create', 'id' => $hid, 'username_template' => 'fctest94h_{n}', 'count' => '2', 'password' => $PW));
 check('accounts are created over HTTP', strpos($body, '2 accounts created') !== false && can_sign_in('fctest94h_1', $PW) && can_sign_in('fctest94h_2', $PW), substr($body, 0, 200));
+check('the password typed over HTTP is on record too', FieldCamp::campPassword(FieldCamp::getCamp($db, $hid)) === $PW);
+list($code, $body) = http('GET', "/field_camp?id=$hid&step=accounts", $sInstr);
+check('adding accounts no longer asks for the password', strpos($body, 'name="password"') === false && strpos($body, 'get the password the camp') !== false);
+list($code, $body) = post_follow($sInstr, array('action' => 'accounts_create', 'id' => $hid, 'count' => '1'));
+check('and the new account gets the camp password', count(FieldCamp::listAccounts($db, $hid)) === 3 && can_sign_in('fctest94h_3', $PW));
 list($code, $body) = post_follow($sInstr, array('action' => 'accounts_create', 'id' => $hid, 'count' => '1', 'password' => 'another-pass'));
-check('adding accounts with a different password is refused', strpos($body, 'not the password') !== false && count(FieldCamp::listAccounts($db, $hid)) === 2);
+check('a password posted anyway cannot make an account with a different one', count(FieldCamp::listAccounts($db, $hid)) === 4 && can_sign_in('fctest94h_4', $PW) && !can_sign_in('fctest94h_4', 'another-pass'));
+// A camp from before passwords were kept: nothing on record.
+$db->prepare_query("update fieldcamp set account_password_enc = null where pkey = $1", array($hid));
+list($code, $body) = http('GET', "/field_camp?id=$hid&step=accounts", $sInstr);
+check('an older camp says the password is not on record and asks for it when adding', strpos($body, 'is not on record') !== false && strpos($body, 'id="fcPwEye"') === false && strpos($body, 'name="password"') !== false);
+list($code, $pwBody) = http('GET', "/field_camp?id=$hid&ajax=password", $sInstr);
+check('the eye has nothing to show for it', json_decode($pwBody, true) === array('password' => null), $pwBody);
+list($code, $body) = post_follow($sInstr, array('action' => 'accounts_create', 'id' => $hid, 'count' => '1', 'password' => 'another-pass'));
+check('adding accounts with a different password is refused', strpos($body, 'not the password') !== false && count(FieldCamp::listAccounts($db, $hid)) === 4 && FieldCamp::campPassword(FieldCamp::getCamp($db, $hid)) === null);
 list($code, $body) = post_follow($sInstr, array('action' => 'accounts_create', 'id' => $hid, 'count' => '1', 'password' => $PW));
-check('adding accounts with the camp password works', count(FieldCamp::listAccounts($db, $hid)) === 3 && can_sign_in('fctest94h_3', $PW));
+check('adding accounts with the camp password works, and puts it on record', count(FieldCamp::listAccounts($db, $hid)) === 5 && can_sign_in('fctest94h_5', $PW) && FieldCamp::campPassword(FieldCamp::getCamp($db, $hid)) === $PW);
 
 list($code, $body) = post_follow($sInstr, array('action' => 'viewer_add', 'id' => $hid, 'email' => $FIX[$VIEWER]));
 check('instructor of the camp added over HTTP', strpos($body, 'Instructor added') !== false && count(FieldCamp::listViewers($db, $hid)) === 1);
 
 list($code, $body) = post_follow($sInstr, array('action' => 'accounts_deactivate', 'id' => $hid));
-check('deactivate all over HTTP', strpos($body, '3 accounts deactivated') !== false && !can_sign_in('fctest94h_1', $PW));
+check('deactivate all over HTTP', strpos($body, '5 accounts deactivated') !== false && !can_sign_in('fctest94h_1', $PW));
 list($code, $body) = post_follow($sInstr, array('action' => 'accounts_remove', 'id' => $hid, 'confirm' => 'wrong name'));
-check('remove with the wrong camp name removes nothing', strpos($body, 'does not match') !== false && count(FieldCamp::listAccounts($db, $hid)) === 3);
+check('remove with the wrong camp name removes nothing', strpos($body, 'does not match') !== false && count(FieldCamp::listAccounts($db, $hid)) === 5);
 list($code, $body) = post_follow($sInstr, array('action' => 'accounts_reactivate', 'id' => $hid));
-check('reactivate over HTTP', strpos($body, '3 accounts reactivated') !== false && can_sign_in('fctest94h_1', $PW));
+check('reactivate over HTTP', strpos($body, '5 accounts reactivated') !== false && can_sign_in('fctest94h_1', $PW));
 post_follow($sInstr, array('action' => 'accounts_deactivate', 'id' => $hid));
 list($code, $body) = post_follow($sInstr, array('action' => 'accounts_remove', 'id' => $hid, 'confirm' => 'HTTP Camp 2'));
-check('remove with the camp name removes the deactivated accounts', strpos($body, '3 accounts removed') !== false && count(FieldCamp::listAccounts($db, $hid)) === 0);
+check('remove with the camp name removes the deactivated accounts', strpos($body, '5 accounts removed') !== false && count(FieldCamp::listAccounts($db, $hid)) === 0);
 
 // ===========================================================================
 section('Locks on a camp account');

@@ -83,6 +83,11 @@
 .fc-zoomline { display: grid; grid-template-columns: 2.2em 4em 8em 8em 8em 1fr; gap: 0 0.75em; align-items: center;
 	padding: 0.3em 0; border-top: 1px solid rgba(255,255,255,0.08); }
 .fc-tileline input[type=checkbox] + label, .fc-zoomline input[type=radio] + label { margin: 0; padding-left: 1.6em; height: 1.4em; }
+.fc-pw { display: flex; align-items: center; gap: 0.6em; }
+.fc-pw code { font-size: 1.05em; padding: 0.3em 0.7em; min-width: 9em; }
+.fc-eye { background: transparent; border: 1px solid rgba(255,255,255,0.25); border-radius: 4px; color: rgba(255,255,255,0.85);
+	padding: 0.3em 0.5em; cursor: pointer; line-height: 0; height: auto; min-width: 0; box-shadow: none; }
+.fc-eye:hover { border-color: #e44c65; color: #ffffff; background: transparent; }
 .fc-maphead { font-weight: bold; color: #ffffff; margin: 1.25em 0 0.4em 0; }
 .fc-mapline { display: grid; grid-template-columns: 2.2em minmax(12em, 1.4fr) minmax(10em, 1.6fr) 7em;
 	gap: 0 0.75em; align-items: center; padding: 0.3em 0; border-top: 1px solid rgba(255,255,255,0.08); }

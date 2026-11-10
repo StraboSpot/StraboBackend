@@ -67,6 +67,13 @@ CREATE TABLE IF NOT EXISTS fieldcamp (
 
 CREATE INDEX IF NOT EXISTS fieldcamp_owner_idx ON fieldcamp (owner_user_pkey);
 
+-- The one password all accounts of the camp share, kept so the instructor can
+-- look it up again (camp accounts cannot change or reset it, and a forgotten
+-- password must not force every device to sign in anew). Encrypted with a key
+-- that is not in the database (FieldCamp::sealPassword). NULL for camps whose
+-- accounts were made before this column existed.
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS account_password_enc TEXT;
+
 CREATE TABLE IF NOT EXISTS fieldcamp_account (
     pkey              SERIAL PRIMARY KEY,
     fieldcamp_pkey    INTEGER                  NOT NULL REFERENCES fieldcamp(pkey),
