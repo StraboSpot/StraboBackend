@@ -109,6 +109,15 @@ CREATE TABLE IF NOT EXISTS fieldcamp_copy (
 
 CREATE INDEX IF NOT EXISTS fieldcamp_copy_camp_idx ON fieldcamp_copy (fieldcamp_pkey);
 
+-- Refreshable copies (stage 5): a copy can be brought up to date while the camp
+-- runs. id_map (JSON) holds the copy's ids per source id (project, datasets,
+-- tags), so a refreshed copy is the same project in the instructor's account;
+-- source_stamp is the state of the student's project when it was copied, to
+-- tell whether it has changed since.
+ALTER TABLE fieldcamp_copy ADD COLUMN IF NOT EXISTS id_map TEXT;
+ALTER TABLE fieldcamp_copy ADD COLUMN IF NOT EXISTS source_stamp VARCHAR(200);
+ALTER TABLE fieldcamp_copy ADD COLUMN IF NOT EXISTS updated_date TIMESTAMP WITH TIME ZONE;
+
 -- ---------------------------------------------------------------------------
 -- Stage 3: rock units (includes/fieldcamp/FieldCampUnits.php).
 -- ---------------------------------------------------------------------------

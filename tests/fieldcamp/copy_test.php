@@ -249,10 +249,7 @@ check('student 1 photo is on the server', $srcFile !== null && $srcFile !== '' &
 $copier = new FieldCampCopy($db, $neodb);
 check('roster counts 1 project for each uploader, none for the third', $copier->projectCounts(array($S1, $S2, $S3)) == array($S1 => 1, $S2 => 1));
 
-section('Copy needs a deactivated account');
-$accounts = FieldCamp::listAccounts($db, $campid);
-$res = $copier->copyAccount($camp, $accounts[0]);
-check('an active account is refused', $res['error'] !== '' && !$res['copied'] && count($copier->projectsOf($INSTR)) === 0, $res);
+// The after-camp order first: accounts deactivated, then copied. (Copying an active account: "Refreshing" below.)
 FieldCamp::setAccountsActive($db, $camp, false);
 $accounts = FieldCamp::listAccounts($db, $campid);
 
@@ -333,6 +330,58 @@ check('2 copy records', (int)$db->get_var_prepared("select count(*) from fieldca
 check('copied counts per account', $copier->copiedCounts($campid) == array($S1 => 1, $S2 => 1));
 list($code, $body) = web('GET', "/field_camp?id=$campid&step=accounts", $sInstr);
 check('the accounts page no longer offers the copy', $code === 200 && strpos($body, 'fcCopyBtn') === false);
+
+section('Refreshing a copy while the camp runs');
+// Student 1 is active again, adds a spot to Day 2 and uploads, the way the app sends a dataset: all its spots.
+FieldCamp::setAccountsActive($db, $camp, true, array($S1));
+list($code, $cur) = api('GET', "datasetspots/$D2", 'fctest95_1');
+$features = $cur['features'] ?? array();
+$NEWSPOT = $base + 1000 + 9;
+$features[] = array('type' => 'Feature', 'geometry' => array('type' => 'Point', 'coordinates' => array(-105.25, 39.95)),
+	'properties' => array('id' => $NEWSPOT, 'name' => 'S1-9 added later', 'date' => '2027-06-03T15:00:00.000Z', 'modified_timestamp' => $ts + 5000));
+list($code) = api('POST', "datasetspots/$D2", 'fctest95_1', array('type' => 'FeatureCollection', 'features' => $features));
+$after1 = snapshot($S1, $P);
+check('fixture: student 1 now has 2 spots in Day 2', $code >= 200 && $code < 300 && count($after1['datasets']['Day 2']['spots']) === 2, $code);
+$stampRow = $db->get_row_prepared("select * from fieldcamp_copy where source_user_pkey = $1", array($S1));
+check('the copy is known to be behind', $copier->sourceStamp($S1, $P) !== (string)$stampRow->source_stamp && (string)$stampRow->source_stamp !== '');
+check('student 2 has not changed, and the copy knows', $copier->sourceStamp($S2, $P) === (string)$db->get_var_prepared("select source_stamp from fieldcamp_copy where source_user_pkey = $1", array($S2)));
+$seqBefore = (int)$db->get_var("select last_value from image_seq");
+$accounts = FieldCamp::listAccounts($db, $campid);
+$res = $copier->copyAccount($camp, $accounts[0]);
+check('an active account is copied: one project, marked as an update', $res['error'] === '' && count($res['copied']) === 1 && $res['copied'][0]['updated'] === true && $res['skipped'] === 0, $res);
+check('the refreshed copy is the same project in the owner\'s account', (string)$res['copied'][0]['project_id'] === (string)$NP1 && $res['copied'][0]['spots'] === 4, $res['copied'][0]);
+$fresh = snapshot($INSTR, $NP1);
+check('with the same dataset ids as before', $fresh['datasets']['Default']['id'] === $copy1['datasets']['Default']['id'] && $fresh['datasets']['Day 2']['id'] === $copy1['datasets']['Day 2']['id']);
+check('and the same tag ids', (string)$fresh['project']['tags'][0]['id'] === (string)$copy1['project']['tags'][0]['id'] && (string)$fresh['project']['tags'][1]['id'] === (string)$copy1['project']['tags'][1]['id']);
+check('it now holds the new spot, and every spot equals the student\'s', isset($fresh['datasets']['Day 2']['spots'][(string)$NEWSPOT])
+	&& $fresh['datasets']['Day 2']['spots'] == $after1['datasets']['Day 2']['spots'] && $fresh['datasets']['Default']['spots'] == $after1['datasets']['Default']['spots']);
+check('the photo file was not copied a second time', image_node($IMG1, $INSTR) === $dstFile && is_file("/srv/app/www/dbimages/$dstFile") && (int)$db->get_var("select last_value from image_seq") === $seqBefore);
+check('the owner still holds exactly 2 projects', count($copier->projectsOf($INSTR)) === 2);
+check('refreshing leaves no version of the replaced copy behind', (int)$db->get_var_prepared("select count(*) from versions where userpkey = $1 and projectid = $2", array($INSTR, (string)$NP1)) === 0);
+$rec = $db->get_row_prepared("select * from fieldcamp_copy where source_user_pkey = $1", array($S1));
+check('one record per student project, brought up to date', (int)$db->get_var_prepared("select count(*) from fieldcamp_copy where fieldcamp_pkey = $1", array($campid)) === 2
+	&& (int)$rec->spot_count === 4 && (string)$rec->updated_date !== '' && (string)$rec->source_stamp === $copier->sourceStamp($S1, $P) && is_array(json_decode($rec->id_map, true)));
+check('the student\'s own project is untouched by the refresh', snapshot($S1, $P) == $after1);
+$res = $copier->copyAccount($camp, $accounts[0]);
+check('nothing new: the next run leaves the copy alone', $res['error'] === '' && !$res['copied'] && $res['skipped'] === 1, $res);
+// The student deletes a spot: the refreshed copy loses it too.
+array_pop($features);
+api('POST', "datasetspots/$D2", 'fctest95_1', array('type' => 'FeatureCollection', 'features' => $features));
+$res = $copier->copyAccount($camp, $accounts[0]);
+$fresh = snapshot($INSTR, $NP1);
+check('a spot the student removed is gone from the refreshed copy', $res['error'] === '' && count($res['copied']) === 1 && !isset($fresh['datasets']['Day 2']['spots'][(string)$NEWSPOT]) && count($fresh['datasets']['Day 2']['spots']) === 1, $res);
+// The instructor deletes the copy from their own account: the next run makes it again, under the same id.
+$own = new StraboSpot($neodb, $INSTR, $db); $own->setuuid(new UUID());
+$own->deleteProject($NP1);
+@unlink("/srv/app/www/dbimages/$dstFile");   // the site's project delete leaves photo files on disk
+$res = $copier->copyAccount($camp, $accounts[0]);
+check('a copy the instructor deleted is made again, with the id it had', $res['error'] === '' && count($res['copied']) === 1 && (string)$res['copied'][0]['project_id'] === (string)$NP1
+	&& count($copier->projectsOf($INSTR)) === 2, $res);
+$dstFile = image_node($IMG1, $INSTR);
+check('with its photo', $dstFile !== null && $dstFile !== '' && is_file("/srv/app/www/dbimages/$dstFile"));
+list($code, $body) = web('POST', '/field_camp_action', $sInstr, array('csrf' => $TOKEN, 'action' => 'copy_account', 'id' => $campid, 'user' => $S1));
+$j = json_decode($body, true);
+check('over HTTP an active account is accepted too (nothing new this time)', $code === 200 && is_array($j) && $j['error'] === '' && $j['skipped'] === 1, substr($body, 0, 200));
 
 section('A failed copy leaves nothing behind');
 class BoomCopy extends FieldCampCopy {

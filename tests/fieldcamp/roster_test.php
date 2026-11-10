@@ -60,6 +60,10 @@ function cleanup() {
 	$db->prepare_query("DELETE FROM strabosearch.item_hit WHERE item_userpkey = ANY($1) OR project_userpkey = ANY($1)", array($arr));
 	$db->prepare_query("DELETE FROM strabosearch.image_hit WHERE image_userpkey = ANY($1) OR project_userpkey = ANY($1)", array($arr));
 	$db->prepare_query("DELETE FROM project WHERE user_pkey = ANY($1)", array($arr));
+	$db->query("delete from fieldcamp_copy where target_user_pkey in ($in) or source_user_pkey in ($in)");
+	$rows = $db->get_results_prepared("select uuid from versions where userpkey in ($in)", array());
+	if ($rows) foreach ($rows as $r) { if (preg_match('/^[0-9a-f-]{36}$/i', (string)$r->uuid)) @unlink("/srv/app/www/versions/" . $r->uuid); }
+	$db->query("delete from versions where userpkey in ($in)");
 	$fix = implode(',', array_keys($FIX));
 	$rows = $db->get_results_prepared("select pkey from fieldcamp where owner_user_pkey in ($fix)", array());
 	if ($rows) {
@@ -121,6 +125,7 @@ cleanup();
 foreach ($FIX as $pk => $email) {
 	$db->prepare_query("insert into users (pkey, firstname, lastname, password, hash, email, active) values ($1, 'FC', 'Roster', crypt('fixture-pw', gen_salt('md5')), $2, $3, true)",
 		array($pk, 'fctest96hash' . $pk, $email));
+	$neodb->query("CREATE (:User {userpkey: $pk, email: '$email'})");
 }
 FieldCamp::addInstructor($db, $INSTR, 'roster test', 3);
 list($clean) = FieldCamp::validateBasics(array('camp_name' => 'Roster Camp', 'camp_year' => '2027', 'project_name' => 'Roster Project'));
@@ -188,6 +193,25 @@ check('it states how many have uploaded and the totals', preg_match('~<strong>2<
 check('one line per student and project', strpos($body, 'fctest96_1') !== false && strpos($body, 'My own side project') !== false && strpos($body, '(not the camp project)') !== false
 	&& strpos($body, 'Nothing uploaded yet') !== false && strpos($body, '(deactivated)') !== false && strpos($body, '(1 not uploaded yet)') !== false);
 check('it is the last step of the wizard', preg_match('~step=package".*step=roster"~s', $body) === 1);
+check('nothing is copied yet: the step offers to copy the two students who uploaded', strpos($body, 'Copy the work of 2 students that is new or has changed') !== false
+	&& substr_count($body, 'Not copied') === 3 && strpos($body, '"username":"fctest96_3"') === false);
+require_once 'includes/fieldcamp/FieldCampCopy.php';
+$copier = new FieldCampCopy($db, $neodb);
+$accs = FieldCamp::listAccounts($db, $campid);
+$res = $copier->copyAccount($camp, $accs[0]);
+check('student 1 copied while still active', $res['error'] === '' && count($res['copied']) === 1 && $res['copied'][0]['name'] === 'Roster Project (fctest96_1)', $res);
+list($code, $body) = web("/field_camp?id=$campid&step=roster", $sidI);
+check('the step shows that copy as up to date and offers the one student left', $code === 200 && substr_count($body, 'Up to date') === 1 && strpos($body, 'Copy the work of 1 student that is new or has changed') !== false
+	&& strpos($body, '"username":"fctest96_2"') !== false && strpos($body, '"username":"fctest96_1"') === false && preg_match('~<b>(Warning|Notice|Deprecated|Fatal error|Parse error)</b>~', $body) === 0);
+upload('fctest96_1', $P, 'Roster Project', array('Default' => array(array(), array(), array(), array())), $seed + 1000);
+list($code, $body) = web("/field_camp?id=$campid&step=roster", $sidI);
+check('after the student uploads again the copy is shown as behind', strpos($body, 'Changed since the copy') !== false && strpos($body, 'Copy the work of 2 students') !== false);
+$copier->copyAccount($camp, $accs[0]); $copier->copyAccount($camp, $accs[1]);
+list($code, $body) = web("/field_camp?id=$campid&step=roster", $sidI);
+check('with everything copied nothing is offered', strpos($body, 'Every copy is up to date.') !== false && strpos($body, 'fcCopyBtn') === false && substr_count($body, 'Up to date') === 3);
+check('the owner holds three copies named after the students', array_column($copier->projectsOf($INSTR), 'name') == array_column($copier->projectsOf($INSTR), 'name')
+	&& count($copier->projectsOf($INSTR)) === 3 && count(array_filter($copier->projectsOf($INSTR), function ($p) { return strpos($p['name'], '(fctest96_') !== false; })) === 3, $copier->projectsOf($INSTR));
+
 list($code) = web("/field_camp?id=$campid&step=roster", $sidO);
 check('someone not on the instructor list gets 404', $code === 404, $code);
 list($code, $body) = web("/field_camp?id=$campid&step=roster", null);

@@ -171,8 +171,26 @@ if($camp && isset($steps['tiles']) && ($step === 'tiles' || $step === 'package')
 	}
 }
 $roster = array('rows' => array(), 'uploaded' => 0, 'total' => 0, 'spots' => 0, 'photos' => 0);
+$rosterTodo = array(); $rosterCopies = array();
 if($camp && $step === 'roster'){
 	$roster = FieldCampRoster::forCamp($neodb, $camp, FieldCamp::listAccounts($db, $camp->pkey));
+	// Each project's copy in the owner's account: none yet, up to date, or behind what the student has uploaded.
+	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
+	$copier = new FieldCampCopy($db, $neodb);
+	$copyRows = $copier->copyRows($camp->pkey, (int)$camp->owner_user_pkey);
+	foreach($roster['rows'] as $r){
+		$needs = false;
+		foreach($r['projects'] as $p){
+			$key = $r['user_pkey'] . ':' . $p['id'];
+			$row = $copyRows[$key] ?? null;
+			if(!$row){ $state = 'none'; }
+			elseif((string)$row->source_stamp !== '' && (string)$row->source_stamp === $copier->sourceStamp($r['user_pkey'], $p['id'])){ $state = 'current'; }
+			else{ $state = 'behind'; }
+			$rosterCopies[$key] = array('state' => $state, 'when' => $row ? strtotime((string)($row->updated_date ?: $row->created_date)) : null);
+			if($state !== 'current') $needs = true;
+		}
+		if($needs) $rosterTodo[] = array('user' => $r['user_pkey'], 'username' => $r['username']);
+	}
 }
 if($camp && $step === 'package'){
 	$packageMaps = FieldCampPackage::listCampMaps($db, $camp->pkey);
@@ -752,14 +770,30 @@ if($step === 'roster'){
 				<?php echo number_format($roster['photos']); ?> photo<?php echo $roster['photos'] === 1 ? '' : 's'; ?> in all.
 				This shows what is on the server; work that is still only on a student's device does not appear until they upload.
 			</div>
+			<div class="fc-mapnote">
+				To look at a student's work, copy it into <?php echo $ownsCamp ? 'your own account' : "the camp owner's account"; ?>: each student's project
+				appears there as "<?php echo htmlspecialchars($camp->project_name); ?> (username)", on the website and in StraboField.
+				A copy shows the work as it was when it was made; copy again to bring it up to date. The students' own projects are never changed.
+			</div>
+			<div class="fc-buttons" style="margin-bottom:1em;">
+<?php 	if($rosterTodo){ ?>
+				<button type="button" class="button primary small" id="fcCopyBtn">Copy the work of <?php echo count($rosterTodo); ?> student<?php echo count($rosterTodo) === 1 ? '' : 's'; ?> that is new or has changed</button>
+<?php 	}elseif($roster['uploaded'] > 0){ ?>
+				<span class="fc-small">Every copy is up to date.</span>
+<?php 	} ?>
+<?php 	if($ownsCamp && $rosterCopies){ ?>
+				<a href="/my_field_data" class="button small">Open My Field Data</a>
+<?php 	} ?>
+			</div>
+			<div class="fc-preview" id="fcCopyLog" style="display:none; max-width:none;"></div>
 			<div class="strabotable" style="margin-left:0px;">
 				<table class="fc-table">
-					<tr><td>Username</td><td>Project</td><td>Last upload</td><td>Datasets</td><td>Spots</td><td>Photos</td></tr>
+					<tr><td>Username</td><td>Project</td><td>Last upload</td><td>Datasets</td><td>Spots</td><td>Photos</td><td><?php echo $ownsCamp ? 'Your copy' : "Owner's copy"; ?></td></tr>
 <?php 	foreach($roster['rows'] as $r){
 			if(!$r['projects']){ ?>
 					<tr>
 						<td><?php echo htmlspecialchars($r['username']); ?><?php echo $r['active'] ? '' : ' <span class="fc-small">(deactivated)</span>'; ?></td>
-						<td colspan="5" class="fc-small">Nothing uploaded yet</td>
+						<td colspan="6" class="fc-small">Nothing uploaded yet</td>
 					</tr>
 <?php 		}
 			foreach($r['projects'] as $i => $p){ ?>
@@ -770,11 +804,66 @@ if($step === 'roster'){
 						<td><?php echo (int)$p['datasets']; ?></td>
 						<td><?php echo number_format($p['spots']); ?></td>
 						<td><?php echo number_format($p['photos']); ?><?php echo $p['photos_missing'] > 0 ? ' <span class="fc-small">(' . (int)$p['photos_missing'] . ' not uploaded yet)</span>' : ''; ?></td>
+						<td><?php
+							$c = $rosterCopies[$r['user_pkey'] . ':' . $p['id']] ?? array('state' => 'none', 'when' => null);
+							$when = $c['when'] ? '<span class="fc-when" data-t="' . (int)$c['when'] . '">' . gmdate('Y-m-d H:i', $c['when']) . ' UTC</span>' : '';
+							if($c['state'] === 'current') echo 'Up to date <span class="fc-small">(' . $when . ')</span>';
+							elseif($c['state'] === 'behind') echo '<span class="fc-preview-msg fc-bad">Changed since the copy</span> <span class="fc-small">(' . $when . ')</span>';
+							else echo '<span class="fc-small">Not copied</span>';
+						?></td>
 					</tr>
 <?php 		}
 		} ?>
 				</table>
 			</div>
+<?php 	if($rosterTodo){ ?>
+			<script>
+			// One account per request, so a long copy shows its progress and one failure does not stop the rest.
+			(function(){
+				var todo = <?php echo json_encode($rosterTodo); ?>;
+				var btn = document.getElementById('fcCopyBtn');
+				var log = document.getElementById('fcCopyLog');
+				function line(text, bad){
+					var d = document.createElement('div');
+					if(bad) d.className = 'fc-taken';
+					d.textContent = text;
+					log.appendChild(d);
+					log.scrollTop = log.scrollHeight;
+				}
+				function next(i, failed){
+					if(i >= todo.length){
+						line(failed ? 'Finished, with ' + failed + ' student(s) not copied.' : 'Finished.', failed > 0);
+						setTimeout(function(){ window.location.reload(); }, failed ? 4000 : 1200);
+						return;
+					}
+					var a = todo[i];
+					var body = new URLSearchParams();
+					body.append('csrf', <?php echo json_encode($csrf); ?>);
+					body.append('action', 'copy_account');
+					body.append('id', '<?php echo (int)$camp->pkey; ?>');
+					body.append('user', a.user);
+					fetch('/field_camp_action', {method: 'POST', body: body, credentials: 'same-origin'})
+						.then(function(r){ return r.json(); })
+						.then(function(res){
+							(res.copied || []).forEach(function(c){
+								line(c.name + (c.updated ? ' (updated): ' : ': ') + c.datasets + ' dataset(s), ' + c.spots + ' spot(s), ' + c.images + ' photo(s)'
+									+ (c.missing_images ? ' (' + c.missing_images + ' photo(s) not uploaded by the student yet)' : ''));
+							});
+							if(res.error){ line(res.error, true); next(i + 1, failed + 1); return; }
+							if(!(res.copied || []).length) line(a.username + ': nothing new');
+							next(i + 1, failed);
+						})
+						.catch(function(){ line(a.username + ': the copy did not finish.', true); next(i + 1, failed + 1); });
+				}
+				btn.addEventListener('click', function(){
+					btn.disabled = true;
+					log.style.display = '';
+					line('Copying ' + todo.length + ' student(s). Keep this page open...');
+					next(0, 0);
+				});
+			})();
+			</script>
+<?php 	} ?>
 			<script>
 			// Upload times in the reader's own time zone.
 			Array.prototype.forEach.call(document.querySelectorAll('.fc-when'), function(el){
