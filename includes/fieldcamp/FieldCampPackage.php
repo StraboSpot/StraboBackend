@@ -12,6 +12,8 @@
  *                                 spotsDb
  *                other_maps.json  the custom maps again, as the app writes them
  *                images/          empty
+ *                maps/OfflineTiles.zip  the offline map tiles, once built
+ *                                 (FieldCampTiles); mapNamesDb lists the maps
  *              The app's "Import Project From Zip" makes a folder named after
  *              the zip and unzips into it, so the zip's name is the name the
  *              project is saved under on the device.
@@ -19,8 +21,8 @@
  *              The project holds the camp's project name, one empty dataset
  *              "Default", the selected rock units as geologic unit tags
  *              (FieldCampUnits) and the selected My Maps as custom maps. No
- *              spots, and no offline tiles yet (a later stage adds
- *              maps/OfflineTiles.zip and the mapNamesDb entries).
+ *              spots. Without built tiles the package has no maps folder and
+ *              an empty mapNamesDb.
  *
  *              Shared-package camps (delivery "shared"): one package for
  *              every student, so the project id and dataset id are the
@@ -36,6 +38,7 @@
  */
 
 require_once __DIR__ . '/FieldCampUnits.php';
+require_once __DIR__ . '/FieldCampTiles.php';
 
 class FieldCampPackage
 {
@@ -359,8 +362,11 @@ class FieldCampPackage
 			'_persist' => array('version' => 1, 'rehydrated' => true),
 		);
 
+		// Offline maps: only what a finished tile build holds (FieldCampTiles).
+		$manifest = FieldCampTiles::installed($db) ? FieldCampTiles::manifest($camp) : null;
+
 		return array(
-			'mapNamesDb' => new stdClass(),
+			'mapNamesDb' => FieldCampTiles::mapNamesDb($manifest, FieldCampTiles::layers($maps)),
 			'mapTilesDb' => new stdClass(),
 			'otherMapsDb' => $otherMapsDb,
 			'projectDb' => $projectDb,
@@ -385,11 +391,11 @@ class FieldCampPackage
 	/**
 	 * Write the package zip.
 	 *
-	 * @return array ['error' => string, 'tags' => int, 'maps' => int, 'bytes' => int]
+	 * @return array ['error' => string, 'tags' => int, 'maps' => int, 'offline_maps' => int, 'bytes' => int]
 	 */
 	public static function buildZip($db, $camp, $path)
 	{
-		$out = array('error' => '', 'tags' => 0, 'maps' => 0, 'bytes' => 0);
+		$out = array('error' => '', 'tags' => 0, 'maps' => 0, 'offline_maps' => 0, 'bytes' => 0);
 		$data = self::buildData($db, $camp);
 		$flags = JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE;
 		$json = json_encode($data, $flags);
@@ -409,6 +415,13 @@ class FieldCampPackage
 		$zip->addFromString('data.json', $json);
 		$zip->addFromString('other_maps.json', $other);
 		$zip->addEmptyDir('images');
+		$offline = count(get_object_vars($data['mapNamesDb']));
+		if ($offline > 0) {
+			// The tile zip goes in as it is: its PNGs are compressed already.
+			$zip->addFile(FieldCampTiles::tilesZipPath($camp), 'maps/OfflineTiles.zip');
+			$zip->setCompressionName('maps/OfflineTiles.zip', ZipArchive::CM_STORE);
+		}
+		$out['offline_maps'] = $offline;
 		if (!$zip->close()) {
 			$out['error'] = "The package could not be built.";
 			return $out;

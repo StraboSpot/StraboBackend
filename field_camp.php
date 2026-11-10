@@ -2,7 +2,10 @@
 /**
  * File: field_camp.php
  * Description: Field Camp Wizard, one camp: the steps Basics, Study area,
- *              Maps, Rock units, Accounts and Package. ?new=1 starts a camp (Basics only);
+ *              Maps, Offline maps, Rock units, Accounts and Package. Offline
+ *              maps chooses the maps and the deepest zoom for the offline
+ *              tiles and starts their build (FieldCampTiles); ?ajax=build
+ *              answers the state of a running build. ?new=1 starts a camp (Basics only);
  *              ?id=N&step=... opens an existing one. Rock units lists the units
  *              Macrostrat maps show in the study area (FieldCampUnits); the
  *              selected ones become geologic unit tags of the project. Maps
@@ -25,6 +28,7 @@ include("prepare_connections.php");
 require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampUnits.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampPackage.php';
+require_once __DIR__ . '/includes/fieldcamp/FieldCampTiles.php';
 
 if(!FieldCamp::canUse($db, $userpkey)){
 	header("HTTP/1.0 404 Not Found");
@@ -48,17 +52,20 @@ if($camp && isset($_GET['ajax'])){
 	header('Content-Type: application/json');
 	if($_GET['ajax'] === 'plan'){
 		echo json_encode(FieldCamp::planAccounts($db, $camp, (string)($_GET['template'] ?? ''), (int)($_GET['count'] ?? 0)));
+	}elseif($_GET['ajax'] === 'build' && FieldCampTiles::installed($db)){
+		echo json_encode(FieldCampTiles::status($db, $camp));
 	}else{
 		echo json_encode(array());
 	}
 	exit();
 }
 
-$steps = array('basics' => 'Basics', 'area' => 'Study area', 'maps' => 'Maps', 'units' => 'Rock units',
-	'accounts' => 'Accounts', 'package' => 'Package');
+$steps = array('basics' => 'Basics', 'area' => 'Study area', 'maps' => 'Maps', 'tiles' => 'Offline maps',
+	'units' => 'Rock units', 'accounts' => 'Accounts', 'package' => 'Package');
 // Later steps need their tables (the stage 3 and stage 4 parts of sql/fieldcamp.sql).
 if(!FieldCampUnits::installed($db)) unset($steps['units']);
 if(!FieldCampPackage::installed($db)){ unset($steps['maps']); unset($steps['package']); }
+if(!isset($steps['package']) || !FieldCampTiles::installed($db)) unset($steps['tiles']);
 /** The step after $key that this install has, as [key, label], or null at the end. */
 function fc_next($steps, $key){
 	$keys = array_keys($steps);
@@ -139,6 +146,20 @@ if($camp && $step === 'maps'){
 		if(!isset($typedMaps[$m['hash']])) continue;
 		$myMaps[$i]['chosen'] = !empty($typedMaps[$m['hash']]['chosen']);
 		if(is_string($typedMaps[$m['hash']]['title'] ?? null)) $myMaps[$i]['title'] = $typedMaps[$m['hash']]['title'];
+	}
+}
+$tileLayers = array(); $tileChosen = array(); $tileOptions = array(); $tileZoom = null;
+$tileStatus = array('status' => '', 'message' => '', 'tiles' => 0, 'maps' => 0, 'bytes' => 0); $tilesOutdated = '';
+if($camp && isset($steps['tiles']) && ($step === 'tiles' || $step === 'package')){
+	$tileLayers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+	$tileChosen = FieldCampTiles::chosenLayerIds($camp, $tileLayers);
+	$tileStatus = FieldCampTiles::status($db, $camp);
+	$tilesOutdated = FieldCampTiles::outdated($camp, FieldCampTiles::manifest($camp), $tileLayers);
+	$tileBbox = FieldCampUnits::campBbox($camp);
+	if($tileBbox !== null){
+		$picked = array(); foreach($tileChosen as $tid){ $picked[] = $tileLayers[$tid]; }
+		$tileOptions = FieldCampTiles::options($tileBbox, $picked ? $picked : array_values($tileLayers));
+		$tileZoom = (int)$camp->tiles_zoom > 0 ? (int)$camp->tiles_zoom : FieldCampTiles::defaultZoom($tileOptions);
 	}
 }
 if($camp && $step === 'package'){
@@ -398,10 +419,13 @@ if($step === 'maps'){
 ?>
 				<div class="fc-buttons" style="margin-top:1em;">
 					<button type="submit" class="button primary small">Save maps</button>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=units" class="button small">Next: Rock units</a>
+<?php $next = fc_next($steps, 'maps'); ?>
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo $next[0]; ?>" class="button small">Next: <?php echo $next[1]; ?></a>
 				</div>
-				<div class="fc-small" style="margin-top:0.75em;">Offline map tiles are not part of the package yet: students see
-					these maps while their device is online, or after saving them for offline use in the app.</div>
+<?php if(isset($steps['tiles'])){ ?>
+				<div class="fc-small" style="margin-top:0.75em;">The next step, Offline maps, saves these maps and the standard
+					basemaps into the package so they work without a connection.</div>
+<?php } ?>
 			</form>
 			<script>
 			(function(){
@@ -419,11 +443,232 @@ if($step === 'maps'){
 			})();
 			</script>
 <?php }else{ ?>
+<?php $next = fc_next($steps, 'maps'); ?>
 			<div class="fc-buttons" style="margin-top:1em;">
-				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=units" class="button small">Next: Rock units</a>
+				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo $next[0]; ?>" class="button small">Next: <?php echo $next[1]; ?></a>
 			</div>
 <?php } ?>
 		</div>
+<?php
+}
+
+// ===========================================================================
+// Offline maps
+// ===========================================================================
+if($step === 'tiles'){
+	$hasArea = ($size !== null);
+	$fmtSize = function($bytes){
+		return $bytes >= 1e9 ? number_format($bytes / 1e9, 1) . ' GB' : ($bytes >= 1e6 ? number_format($bytes / 1e6, $bytes >= 1e7 ? 0 : 1) . ' MB' : max(1, round($bytes / 1e3)) . ' kB');
+	};
+?>
+<?php if(!$hasArea){ ?>
+		<div class="fc-panel">
+			<h4>Offline maps</h4>
+			<div class="fc-mapnote">Choose the study area first. The offline maps are made for that area.</div>
+			<div class="fc-buttons">
+				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=area" class="button primary small">Go to Study area</a>
+			</div>
+		</div>
+<?php }else{ ?>
+		<div class="fc-panel">
+			<h4>Offline maps</h4>
+			<div class="fc-mapnote">
+				Map tiles that go into the project package, so the maps work in the field without a connection. Choose
+				the maps and how far students can zoom in. Each deeper zoom level shows more detail and takes about four
+				times the tiles.
+			</div>
+
+<?php if($tileStatus['status'] !== ''){ ?>
+			<div class="<?php echo $tileStatus['status'] === 'failed' ? 'fc-flash-err' : 'fc-flash'; ?>" id="fcBuildBox">
+				<strong id="fcBuildHead"><?php
+					echo $tileStatus['status'] === 'building' ? 'Building the offline tiles...'
+						: ($tileStatus['status'] === 'ready' ? 'Offline tiles built' . ((string)$camp->build_finished !== '' ? ' ' . htmlspecialchars(substr((string)$camp->build_finished, 0, 10)) : '') . '.'
+						: 'The last build did not finish.'); ?></strong>
+				<span id="fcBuildMsg"><?php echo htmlspecialchars($tileStatus['message']); ?></span>
+<?php 	if($tileStatus['status'] === 'ready' && $tileStatus['bytes'] > 0){ ?>
+				<span><?php echo $fmtSize($tileStatus['bytes']); ?>.</span>
+<?php 	} ?>
+<?php 	if($tileStatus['status'] === 'building'){ ?>
+				<div class="fc-small" style="margin-top:0.35em;">This takes a few minutes. You can leave this page; the build goes on.</div>
+<?php 	} ?>
+			</div>
+<?php } ?>
+<?php if($tilesOutdated !== ''){ ?>
+			<div class="fc-flash-err"><?php echo htmlspecialchars($tilesOutdated); ?> Build them again to bring the package up to date.</div>
+<?php } ?>
+
+			<form method="post" action="/field_camp_action" id="fcTileForm" style="margin:0;">
+				<?php echo fc_hidden($csrf, 'tiles_build', $camp); ?>
+				<input type="hidden" name="layers_json" id="fcTileLayersJson" value="">
+
+				<div class="fc-maphead" style="margin-top:0.5em;">Maps</div>
+				<div class="fc-units">
+<?php foreach($tileLayers as $l){
+		$on = in_array($l['id'], $tileChosen, true);
+		$cid = 'fcT' . htmlspecialchars($l['id']);
+?>
+					<div class="fc-tileline" data-layer="<?php echo htmlspecialchars($l['id']); ?>">
+						<div><input type="checkbox" class="fc-tile-on" id="<?php echo $cid; ?>"<?php echo $on ? ' checked' : ''; ?>><label for="<?php echo $cid; ?>"></label></div>
+						<div><?php echo htmlspecialchars($l['name']); ?><?php echo $l['custom'] ? ' <span class="fc-small">(custom map)</span>' : ''; ?></div>
+						<div class="fc-unit-text"><a href="#" class="fc-tile-show">Show in the preview</a></div>
+					</div>
+<?php } ?>
+				</div>
+<?php if(count($tileLayers) === count(FieldCampTiles::BASEMAPS)){ ?>
+				<div class="fc-small" style="margin-top:0.5em;">Custom maps selected on the <a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=maps">Maps</a> step are listed here too.</div>
+<?php } ?>
+
+				<div class="fc-maphead">Deepest zoom</div>
+				<div class="fc-units">
+					<div class="fc-zoomline fc-unit-head"><div></div><div>Zoom</div><div>Scale</div><div>Tiles per map</div><div>Tiles in all</div><div>About</div></div>
+<?php foreach($tileOptions as $o){
+		$zid = 'fcZ' . (int)$o['zoom'];
+?>
+					<div class="fc-zoomline" data-zoom="<?php echo (int)$o['zoom']; ?>">
+						<div><input type="radio" name="zoom" class="fc-zoom-on" id="<?php echo $zid; ?>" value="<?php echo (int)$o['zoom']; ?>"<?php
+							echo (int)$o['zoom'] === (int)$tileZoom ? ' checked' : ''; ?>><label for="<?php echo $zid; ?>"></label></div>
+						<div><?php echo (int)$o['zoom']; ?></div>
+						<div class="fc-unit-text">1:<?php echo number_format($o['scale']); ?></div>
+						<div class="fc-unit-text"><?php echo number_format($o['per_map']); ?></div>
+						<div class="fc-unit-text fc-zoom-total"></div>
+						<div class="fc-unit-text fc-zoom-size"></div>
+					</div>
+<?php } ?>
+				</div>
+				<div class="fc-small" id="fcTileWhy" style="margin-top:0.5em;"></div>
+
+				<div class="fc-maphead">Preview</div>
+				<div class="fc-small" style="margin-bottom:0.5em;">The closest view students will have without a connection, on
+					<strong id="fcTilePreviewName"></strong>. The outline is the study area; tiles are saved for everything inside it.</div>
+				<div id="fcTileMap" class="fc-map" style="height:420px;"></div>
+
+				<div class="fc-mapnote" id="fcTileSummary" style="margin-top:0.75em;"></div>
+				<div class="fc-buttons">
+					<button type="submit" class="button primary small" id="fcTileBuildBtn"<?php echo $tileStatus['status'] === 'building' ? ' disabled' : ''; ?>><?php
+						echo $tileStatus['status'] === 'ready' ? 'Save and build the tiles again' : 'Save and build the offline tiles'; ?></button>
+<?php $next = fc_next($steps, 'tiles'); ?>
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo $next[0]; ?>" class="button small">Next: <?php echo $next[1]; ?></a>
+				</div>
+				<div class="fc-small" style="margin-top:0.75em;">The sizes are estimates from typical tiles; the real size shows
+					once the tiles are built. Zoom <?php echo FieldCampTiles::MAX_ZOOM; ?> is the deepest level offered for now.</div>
+			</form>
+		</div>
+
+		<link rel="stylesheet" href="/assets/js/leaflet/leaflet.css" />
+		<script src="/assets/js/leaflet/leaflet.js"></script>
+		<script>
+		(function(){
+			var cfg = <?php echo json_encode(array(
+				'area' => FieldCampUnits::campBbox($camp),
+				'options' => $tileOptions,
+				'layers' => array_values($tileLayers),
+				'maxPerMap' => FieldCampTiles::MAX_TILES_PER_MAP,
+				'maxTotal' => FieldCampTiles::MAX_TILES_TOTAL,
+				'building' => $tileStatus['status'] === 'building',
+				'campId' => (int)$camp->pkey,
+			)); ?>;
+			var form = document.getElementById('fcTileForm');
+			var layerRows = Array.prototype.slice.call(form.querySelectorAll('.fc-tileline'));
+			var zoomRows = Array.prototype.slice.call(form.querySelectorAll('.fc-zoomline[data-zoom]'));
+			var btn = document.getElementById('fcTileBuildBtn');
+
+			function fmtSize(bytes){
+				if(bytes >= 1e9) return (bytes / 1e9).toFixed(1) + ' GB';
+				if(bytes >= 1e7) return Math.round(bytes / 1e6) + ' MB';
+				if(bytes >= 1e6) return (bytes / 1e6).toFixed(1) + ' MB';
+				return Math.max(1, Math.round(bytes / 1e3)) + ' kB';
+			}
+			function chosenLayers(){
+				return cfg.layers.filter(function(l, i){ return layerRows[i].querySelector('.fc-tile-on').checked; });
+			}
+			function selectedZoom(){
+				var r = form.querySelector('.fc-zoom-on:checked');
+				return r ? parseInt(r.value, 10) : null;
+			}
+
+			// --- preview map ---------------------------------------------------
+			var a = cfg.area, bounds = [[a.south, a.west], [a.north, a.east]];
+			var map = L.map('fcTileMap', {minZoom: 2, zoomControl: false, scrollWheelZoom: false, doubleClickZoom: false,
+				touchZoom: false, boxZoom: false, keyboard: false});
+			L.rectangle(bounds, {color: '#e44c65', weight: 2, fill: false, interactive: false}).addTo(map);
+			L.control.scale().addTo(map);
+			var tileLayer = null, previewId = null;
+			function tileUrl(l){
+				return l.custom ? 'https://strabospot.org/geotiff/tiles/' + encodeURIComponent(l.id) + '/{z}/{x}/{y}.png'
+					: 'https://tiles.strabospot.org/v5/' + l.id + '/{z}/{x}/{y}.png';
+			}
+			function showLayer(id){
+				var l = cfg.layers.filter(function(x){ return x.id === id; })[0] || cfg.layers[0];
+				if(tileLayer) map.removeLayer(tileLayer);
+				tileLayer = L.tileLayer(tileUrl(l), {maxZoom: 19, noWrap: true}).addTo(map);
+				previewId = l.id;
+				document.getElementById('fcTilePreviewName').textContent = l.name;
+			}
+			function showZoom(){
+				var z = selectedZoom();
+				if(z === null) map.fitBounds(bounds);
+				else map.setView([(a.south + a.north) / 2, (a.west + a.east) / 2], z);
+			}
+
+			// --- numbers --------------------------------------------------------
+			function refresh(){
+				var layers = chosenLayers(), kb = 0;
+				layers.forEach(function(l){ kb += l.kb; });
+				var z = selectedZoom(), why = '', summary = '';
+				zoomRows.forEach(function(row, i){
+					var o = cfg.options[i];
+					var total = o.per_map * layers.length;
+					var reason = '';
+					if(o.per_map > cfg.maxPerMap) reason = 'Zoom ' + o.zoom + ' needs more than ' + cfg.maxPerMap.toLocaleString() + ' tiles per map. Use a smaller study area for this zoom.';
+					else if(total > cfg.maxTotal) reason = 'Zoom ' + o.zoom + ' needs more than ' + cfg.maxTotal.toLocaleString() + ' tiles in all. Select fewer maps or use a smaller study area.';
+					var radio = row.querySelector('.fc-zoom-on');
+					radio.disabled = reason !== '';
+					row.classList.toggle('fc-unit-off', reason !== '');
+					row.querySelector('.fc-zoom-total').textContent = layers.length ? total.toLocaleString() : '';
+					row.querySelector('.fc-zoom-size').textContent = layers.length ? fmtSize(o.per_map * kb * 1000) : '';
+					if(o.zoom === z){
+						if(reason) why = reason;
+						else if(layers.length) summary = layers.length + ' map' + (layers.length === 1 ? '' : 's') + ' to zoom ' + o.zoom + ': '
+							+ total.toLocaleString() + ' tiles, about ' + fmtSize(o.per_map * kb * 1000) + '.';
+					}
+				});
+				if(!layers.length) why = 'Select at least one map.';
+				else if(z === null) why = 'Choose a zoom level.';
+				document.getElementById('fcTileWhy').textContent = why;
+				document.getElementById('fcTileSummary').textContent = summary;
+				btn.disabled = cfg.building || why !== '';
+				layerRows.forEach(function(r){ r.classList.toggle('fc-unit-off', !r.querySelector('.fc-tile-on').checked); });
+			}
+
+			layerRows.forEach(function(r){
+				r.querySelector('.fc-tile-on').addEventListener('change', refresh);
+				r.querySelector('.fc-tile-show').addEventListener('click', function(ev){ ev.preventDefault(); showLayer(r.getAttribute('data-layer')); });
+			});
+			zoomRows.forEach(function(r){ r.querySelector('.fc-zoom-on').addEventListener('change', function(){ refresh(); showZoom(); }); });
+			form.addEventListener('submit', function(){
+				document.getElementById('fcTileLayersJson').value = JSON.stringify(chosenLayers().map(function(l){ return l.id; }));
+				btn.disabled = true;
+			});
+			showLayer((chosenLayers()[0] || cfg.layers[0]).id);
+			showZoom();
+			refresh();
+
+			// --- a build in progress --------------------------------------------
+			if(cfg.building){
+				var timer = setInterval(function(){
+					fetch('/field_camp?id=' + cfg.campId + '&ajax=build', {credentials: 'same-origin'})
+						.then(function(r){ return r.json(); })
+						.then(function(s){
+							if(s.status === 'building'){ document.getElementById('fcBuildMsg').textContent = s.message; return; }
+							clearInterval(timer);
+							window.location.href = '/field_camp?id=' + cfg.campId + '&step=tiles';
+						})
+						.catch(function(){ });
+				}, 3000);
+			}
+		})();
+		</script>
+<?php } ?>
 <?php
 }
 
@@ -447,7 +692,19 @@ if($step === 'package'){
 					<tr><td>Custom maps</td><td><?php echo count($packageMaps); ?><?php
 						$t = array(); foreach($packageMaps as $m){ $t[] = htmlspecialchars($m->title); }
 						echo $t ? ': ' . implode(', ', $t) : ''; ?></td></tr>
-					<tr><td>Offline map tiles</td><td>Not included yet</td></tr>
+					<tr><td>Offline map tiles</td><td><?php
+						if($tileStatus['status'] === 'ready' && $tileStatus['tiles'] > 0){
+							$b = $tileStatus['bytes'];
+							echo number_format($tileStatus['tiles']) . ' tiles in ' . (int)$tileStatus['maps'] . ' map' . ((int)$tileStatus['maps'] === 1 ? '' : 's') . ', '
+								. ($b >= 1e9 ? number_format($b / 1e9, 1) . ' GB' : number_format($b / 1e6, $b >= 1e7 ? 0 : 1) . ' MB');
+							if($tilesOutdated !== '') echo ' &nbsp; <span class="fc-preview-msg fc-bad">' . htmlspecialchars($tilesOutdated) . '</span>';
+						}elseif($tileStatus['status'] === 'building'){
+							echo 'Being built now; the package has no tiles until the build is done';
+						}else{
+							echo 'None';
+						}
+						if(isset($steps['tiles'])) echo ' &nbsp; <a href="/field_camp?id=' . (int)$camp->pkey . '&amp;step=tiles">Offline maps</a>';
+					?></td></tr>
 				</table>
 			</div>
 			<div class="fc-buttons" style="margin-top:1em;">

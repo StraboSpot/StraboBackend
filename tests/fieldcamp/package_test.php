@@ -358,7 +358,7 @@ check('public maps over the area have their own list and can be selected', preg_
 check('the owner\'s maps elsewhere are listed but cannot be selected', strpos($body, 'Your maps not in the study area (2)') !== false && strpos($body, 'Arizona_Illustrated.tif') !== false && strpos($body, 'No location could be read from this map') !== false
 	&& strpos($body, 'data-hash="fcpkgtest0002"') === false);
 check('someone else\'s private map and a public map elsewhere are not shown', strpos($body, 'someone_elses.tif') === false && strpos($body, 'public_elsewhere.tif') === false);
-check('the steps run Basics, Study area, Maps, Rock units, Accounts, Package', preg_match('~step=basics".*step=area".*step=maps".*step=units".*step=accounts".*step=package"~s', $body) === 1);
+check('the steps run Basics, Study area, Maps, Offline maps, Rock units, Accounts, Package', preg_match('~step=basics".*step=area".*step=maps".*step=tiles".*step=units".*step=accounts".*step=package"~s', $body) === 1);
 list($code, $body) = http('GET', "/field_camp?id=$campid&step=area", $sidI);
 check('Study area leads on to Maps', strpos($body, 'Next: Maps') !== false);
 list($code, $body) = http('GET', "/field_camp?id=$bareid&step=maps", $sidI);

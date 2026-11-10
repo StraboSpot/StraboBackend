@@ -480,8 +480,8 @@ check('13 unit rows, 10 selected', substr_count($body, 'class="fc-unit" data-pke
 	substr_count($body, 'class="fc-unit" data-pkey='));
 check('the steps bar offers Rock units between Study area and Accounts', preg_match('~step=area".*step=units".*step=accounts"~s', $body) === 1);
 check('attribution is on the page', strpos($body, 'CC-BY 4.0') !== false);
-list($code, $body) = http('GET', "/field_camp?id=$campid&step=maps", $sidI);
-check('the step before (Maps) leads on to Rock units', $code === 200 && strpos($body, 'Next: Rock units') !== false);
+list($code, $body) = http('GET', "/field_camp?id=$campid&step=tiles", $sidI);
+check('the step before (Offline maps) leads on to Rock units', $code === 200 && strpos($body, 'Next: Rock units') !== false);
 
 $noarea = new_camp('No Area Camp', null);
 list($code, $body) = http('GET', "/field_camp?id=$noarea&step=units", $sidI);

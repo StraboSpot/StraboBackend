@@ -2,8 +2,9 @@
 /**
  * File: field_camp_package.php
  * Description: Field Camp Wizard: download a camp's project package
- *              (?id=N). Builds the zip on request (FieldCampPackage) and sends
- *              it; nothing is kept on the server. Open only to the camp's
+ *              (?id=N). Puts the zip together on request (FieldCampPackage:
+ *              the project as it is saved now, plus the offline tiles of the
+ *              last tile build if there is one) and sends it. Open only to the camp's
  *              owner (an instructor) and the admin.
  *
  * @package    StraboSpot Web Site
@@ -24,6 +25,7 @@ if(!$camp || !FieldCamp::canManage($camp, $userpkey) || !FieldCampPackage::insta
 	exit("Not found.");
 }
 
+set_time_limit(0);   // with offline tiles the package can be a few hundred MB
 $tmp = tempnam(sys_get_temp_dir(), 'fcpkg');
 $result = FieldCampPackage::buildZip($db, $camp, $tmp);
 if($result['error'] !== ''){
@@ -38,5 +40,6 @@ header('Content-Type: application/zip');
 header('Content-Disposition: attachment; filename="' . $name . '"');
 header('Content-Length: ' . filesize($tmp));
 header('Cache-Control: no-store');
+while(ob_get_level() > 0) ob_end_clean();   // send the file as it is read, not from memory
 readfile($tmp);
 unlink($tmp);

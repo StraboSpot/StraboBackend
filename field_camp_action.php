@@ -5,7 +5,8 @@
  *              to the page that posted): create a camp, save Basics, save the
  *              study area, look up the rock units of the study area at
  *              Macrostrat, save which units become tags, save which My Maps
- *              become custom maps, create accounts, deactivate / reactivate / remove
+ *              become custom maps, save the offline map choice and start the
+ *              tile build, create accounts, deactivate / reactivate / remove
  *              them, copy a deactivated account's projects to the camp owner
  *              (answers JSON), add / remove instructors. Each request needs the form
  *              token, an account on the instructor list, and (except create) a
@@ -23,6 +24,7 @@ include("prepare_connections.php");
 require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampUnits.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampPackage.php';
+require_once __DIR__ . '/includes/fieldcamp/FieldCampTiles.php';
 
 if(!FieldCamp::canUse($db, $userpkey)){
 	header("HTTP/1.0 404 Not Found");
@@ -96,6 +98,19 @@ if($action === 'basics'){
 	$n = count(FieldCampPackage::listCampMaps($db, $id));
 	fc_back($here . "maps", $n === 0 ? "Saved. No custom maps are in the project."
 		: "Saved. $n custom map" . ($n === 1 ? ' is' : 's are') . " in the project.");
+
+}elseif($action === 'tiles_build'){
+
+	if(!FieldCampPackage::installed($db) || !FieldCampTiles::installed($db)) fc_back($here . "basics");
+	if(FieldCampTiles::isBuilding($camp)) fc_back($here . "tiles", '', "The tiles for this camp are being built already.");
+	$layers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+	$wanted = json_decode((string)($_POST['layers_json'] ?? ''), true);
+	list($zoom, $ids, $errors) = FieldCampTiles::validateChoice($camp, $layers, (int)($_POST['zoom'] ?? 0), is_array($wanted) ? $wanted : array());
+	if($errors) fc_back($here . "tiles", '', $errors);
+	FieldCampTiles::saveChoice($db, $camp, $zoom, $ids);
+	$problem = FieldCampTiles::startBuild($db, FieldCamp::getCamp($db, $id));
+	if($problem !== '') fc_back($here . "tiles", '', $problem);
+	fc_back($here . "tiles", "The build has started.");
 
 }elseif($action === 'units_fetch' || $action === 'units_save'){
 
