@@ -510,6 +510,14 @@ check('a refused save names the problem and keeps what was typed', $code === 200
 	&& strpos($body, 'value="Typed &lt;b&gt;name&lt;/b&gt;"') !== false && strpos($body, '<b>name</b>') === false
 	&& units_by_name($db, $campid)['Arikaree Formation']->unit_label === 'Ta');
 
+$keep = array();
+foreach (FieldCampUnits::listUnits($db, $campid) as $u) { $keep[] = array('pkey' => (int)$u->pkey, 'chosen' => FieldCamp::truthy($u->chosen), 'name' => $u->tag_name, 'label' => $u->tag_name === 'Arikaree Formation' ? 'Tark' : $u->unit_label); }
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'units_save', 'id' => $campid, 'goto' => 'accounts', 'units_json' => json_encode($keep)));
+check('Next on Rock units saves and opens Accounts', strpos($loc, 'step=accounts') !== false && $code === 200 && units_by_name($db, $campid)['Arikaree Formation']->unit_label === 'Tark', $loc);
+list($code, $body) = http('GET', "/field_camp?id=$campid&step=units", $sidI);
+check('the step has one button, Next, and no separate save', preg_match('~data-fc-next="accounts">Next: Accounts</button>~', $body) === 1 && strpos($body, 'Save rock units') === false);
+$db->prepare_query("update fieldcamp_unit set unit_label = 'Ta' where fieldcamp_pkey = $1 and tag_name = 'Arikaree Formation'", array($campid));
+
 list($code, $body) = post_follow($sidI, array('action' => 'units_save', 'id' => $campid, 'units_json' => 'not json'));
 check('an unreadable list is refused', $code === 200 && strpos($body, 'could not be read') !== false);
 list($code, $body) = post_follow($sidI, array('action' => 'units_save', 'id' => $campid, 'units_json' => json_encode($rows)), 'wrong-token');

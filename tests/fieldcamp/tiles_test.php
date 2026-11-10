@@ -424,6 +424,12 @@ list($code, $body) = post_follow($sidI, array('action' => 'tiles_build', 'id' =>
 check('a zoom that is not offered is refused and nothing starts', strpos($body, 'Choose one of the zoom levels listed.') !== false && FieldCamp::getCamp($db, $campid)->build_status === 'ready' && (int)FieldCamp::getCamp($db, $campid)->tiles_zoom === 15);
 list($code, $body) = post_follow($sidI, array('action' => 'tiles_build', 'id' => $campid, 'zoom' => '15', 'layers_json' => '[]'));
 check('no map selected is refused', strpos($body, 'Select at least one map.') !== false && FieldCamp::getCamp($db, $campid)->build_status === 'ready');
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'units', 'zoom' => '14', 'layers_json' => json_encode(array('macrostrat', 'usgs.hillshade'))));
+$after = FieldCamp::getCamp($db, $campid);
+check('Next on Offline maps keeps the choice and moves on, without building', strpos($loc, 'step=units') !== false && (int)$after->tiles_zoom === 14 && $after->tiles_layers === '["macrostrat","usgs.hillshade"]' && $after->build_status === 'ready', $loc);
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'units', 'zoom' => '14', 'layers_json' => '[]'));
+check('a choice that cannot be saved keeps the page on the step', strpos($loc, 'step=tiles') !== false && strpos($body, 'Select at least one map.') !== false);
+FieldCampTiles::saveChoice($db, $after, 15, array('mapbox.outdoors', 'macrostrat', 'fctilestest01'));
 list($code) = http('POST', '/field_camp_action', $sidO, array('action' => 'tiles_build', 'id' => $campid, 'zoom' => '12', 'layers_json' => '["macrostrat"]', 'csrf' => $TOKEN));
 check('an outsider cannot start a build', $code === 404 && FieldCamp::getCamp($db, $campid)->build_status === 'ready', $code);
 $db->prepare_query("update fieldcamp set build_status = 'building', build_started = now() where pkey = $1", array($campid));

@@ -12,6 +12,10 @@
  *              selects the owner's My Maps that go in as custom maps, and
  *              Package offers the project package (FieldCampPackage,
  *              field_camp_package.php). All changes post to field_camp_action.php.
+ *              Nothing needs a separate "save": the Next button of a step
+ *              saves and moves on, and leaving a step by the tabs with unsaved
+ *              changes saves it first (forms marked data-fc-save, script at
+ *              the end of the page).
  *              ?id=N&ajax=plan answers the Accounts step's live preview (which
  *              usernames a template would create and whether any is taken).
  *              Open only to the camp's owner (an instructor) and the admin.
@@ -87,8 +91,10 @@ function fc_val($form, $camp, $key, $default = ''){
 	if($camp && isset($camp->$key) && $camp->$key !== null) return (string)$camp->$key;
 	return (string)$default;
 }
-function fc_hidden($csrf, $action, $camp){
+/** $goto: the step to open after a successful save ('' = stay on the step that posted). */
+function fc_hidden($csrf, $action, $camp, $goto = ''){
 	return '<input type="hidden" name="csrf" value="' . htmlspecialchars($csrf) . '">'
+		. '<input type="hidden" name="goto" value="' . htmlspecialchars($goto) . '">'
 		. '<input type="hidden" name="action" value="' . htmlspecialchars($action) . '">'
 		. ($camp ? '<input type="hidden" name="id" value="' . (int)$camp->pkey . '">' : '');
 }
@@ -215,7 +221,7 @@ if($step === 'basics'){
 ?>
 		<div class="fc-panel">
 			<h4>Basics</h4>
-			<form method="post" action="/field_camp_action">
+			<form method="post" action="/field_camp_action"<?php echo $isNew ? '' : ' data-fc-save="basics"'; ?>>
 				<?php echo fc_hidden($csrf, $isNew ? 'create' : 'basics', $camp); ?>
 				<div class="fc-field">
 					<label for="fcName">Field camp name</label>
@@ -248,9 +254,10 @@ if($step === 'basics'){
 					<div class="fc-hint">The name of the StraboField project the students will work in.</div>
 				</div>
 				<div class="fc-buttons">
-					<button type="submit" class="button primary small"><?php echo $isNew ? 'Create field camp' : 'Save'; ?></button>
-<?php if(!$isNew){ ?>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=area" class="button small">Next: Study area</a>
+<?php if($isNew){ ?>
+					<button type="submit" class="button primary small">Create field camp</button>
+<?php }else{ ?>
+					<button type="submit" class="button primary small" data-fc-next="area">Next: Study area</button>
 <?php } ?>
 				</div>
 			</form>
@@ -280,15 +287,19 @@ if($step === 'area'){
 <?php } ?>
 			</div>
 			<form method="post" action="/field_camp_action" id="fcAreaForm">
-				<?php echo fc_hidden($csrf, 'area', $camp); ?>
+<?php $next = fc_next($steps, 'area'); ?>
+				<?php echo fc_hidden($csrf, 'area', $camp, $hasArea ? '' : $next[0]); ?>
 				<input type="hidden" name="west" id="fcWest">
 				<input type="hidden" name="south" id="fcSouth">
 				<input type="hidden" name="east" id="fcEast">
 				<input type="hidden" name="north" id="fcNorth">
 				<div class="fc-buttons">
-					<button type="submit" class="button primary small"><?php echo $hasArea ? 'Replace the study area with this view' : 'Save this view as the study area'; ?></button>
-<?php $next = fc_next($steps, 'area'); ?>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo $next[0]; ?>" class="button small">Next: <?php echo $next[1]; ?></a>
+<?php if($hasArea){ ?>
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo $next[0]; ?>" class="button primary small">Next: <?php echo $next[1]; ?></a>
+					<button type="submit" class="button small">Replace the study area with this view</button>
+<?php }else{ ?>
+					<button type="submit" class="button primary small">Use this view as the study area</button>
+<?php } ?>
 				</div>
 			</form>
 		</div>
@@ -381,7 +392,7 @@ if($step === 'maps'){
 			<div class="fc-mapnote" style="margin:0;">No map covers the study area: none of your own <?php echo (int)$ownCount; ?>, and no public map.</div>
 <?php } ?>
 <?php if($myMaps){ ?>
-			<form method="post" action="/field_camp_action" id="fcMapForm" style="margin:0;">
+			<form method="post" action="/field_camp_action" id="fcMapForm" style="margin:0;" data-fc-save="maps_save">
 				<?php echo fc_hidden($csrf, 'maps_save', $camp); ?>
 				<input type="hidden" name="maps_json" id="fcMapsJson" value="">
 <?php
@@ -418,9 +429,8 @@ if($step === 'maps'){
 	}
 ?>
 				<div class="fc-buttons" style="margin-top:1em;">
-					<button type="submit" class="button primary small">Save maps</button>
 <?php $next = fc_next($steps, 'maps'); ?>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo $next[0]; ?>" class="button small">Next: <?php echo $next[1]; ?></a>
+					<button type="submit" class="button primary small" data-fc-next="<?php echo $next[0]; ?>">Next: <?php echo $next[1]; ?></button>
 				</div>
 <?php if(isset($steps['tiles'])){ ?>
 				<div class="fc-small" style="margin-top:0.75em;">The next step, Offline maps, saves these maps and the standard
@@ -497,7 +507,7 @@ if($step === 'tiles'){
 			<div class="fc-flash-err"><?php echo htmlspecialchars($tilesOutdated); ?> Build them again to bring the package up to date.</div>
 <?php } ?>
 
-			<form method="post" action="/field_camp_action" id="fcTileForm" style="margin:0;">
+			<form method="post" action="/field_camp_action" id="fcTileForm" style="margin:0;" data-fc-save="tiles_save">
 				<?php echo fc_hidden($csrf, 'tiles_build', $camp); ?>
 				<input type="hidden" name="layers_json" id="fcTileLayersJson" value="">
 
@@ -547,7 +557,7 @@ if($step === 'tiles'){
 					<button type="submit" class="button primary small" id="fcTileBuildBtn"<?php echo $tileStatus['status'] === 'building' ? ' disabled' : ''; ?>><?php
 						echo $tileStatus['status'] === 'ready' ? 'Save and build the tiles again' : 'Save and build the offline tiles'; ?></button>
 <?php $next = fc_next($steps, 'tiles'); ?>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo $next[0]; ?>" class="button small">Next: <?php echo $next[1]; ?></a>
+					<button type="submit" class="button small" data-fc-next="<?php echo $next[0]; ?>">Next: <?php echo $next[1]; ?></button>
 				</div>
 				<div class="fc-small" style="margin-top:0.75em;">The sizes are estimates from typical tiles; the real size shows
 					once the tiles are built. Zoom <?php echo FieldCampTiles::MAX_ZOOM; ?> is the deepest level offered for now.</div>
@@ -647,7 +657,6 @@ if($step === 'tiles'){
 			zoomRows.forEach(function(r){ r.querySelector('.fc-zoom-on').addEventListener('change', function(){ refresh(); showZoom(); }); });
 			form.addEventListener('submit', function(){
 				document.getElementById('fcTileLayersJson').value = JSON.stringify(chosenLayers().map(function(l){ return l.id; }));
-				btn.disabled = true;
 			});
 			showLayer((chosenLayers()[0] || cfg.layers[0]).id);
 			showZoom();
@@ -756,6 +765,7 @@ if($step === 'units'){
 <?php } ?>
 			<form method="post" action="/field_camp_action" id="fcUnitFetchForm" style="margin:0;">
 				<?php echo fc_hidden($csrf, 'units_fetch', $camp); ?>
+				<input type="hidden" name="units_json" id="fcUnitsJsonFetch" value="">
 				<div class="fc-buttons">
 					<button type="submit" class="button <?php echo $fetched ? '' : 'primary '; ?>small" id="fcUnitFetchBtn"><?php echo $fetched ? 'Look up the units again' : 'Find the rock units of the study area'; ?></button>
 <?php if($fetched){ ?>
@@ -775,7 +785,7 @@ if($step === 'units'){
 <?php } ?>
 
 <?php if($units){ ?>
-		<form method="post" action="/field_camp_action" id="fcUnitForm">
+		<form method="post" action="/field_camp_action" id="fcUnitForm" data-fc-save="units_save">
 			<?php echo fc_hidden($csrf, 'units_save', $camp); ?>
 			<input type="hidden" name="units_json" id="fcUnitsJson" value="">
 <?php foreach($bySource as $sourceId => $list){
@@ -815,8 +825,8 @@ if($step === 'units'){
 					The label is the short code a geologic map prints on the unit (for example Kd); the ones here are a first guess.
 					Hold the pointer over a unit to read its description.</div>
 				<div class="fc-buttons">
-					<button type="submit" class="button primary small">Save rock units</button>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=accounts" class="button small">Next: Accounts</a>
+<?php $next = fc_next($steps, 'units'); ?>
+					<button type="submit" class="button primary small" data-fc-next="<?php echo $next[0]; ?>">Next: <?php echo $next[1]; ?></button>
 				</div>
 				<div class="fc-small" style="margin-top:0.75em;">Rock unit data from Macrostrat (macrostrat.org), CC-BY 4.0.
 					Each tag's notes name the source map.</div>
@@ -845,8 +855,8 @@ if($step === 'units'){
 				});
 			});
 			// One field for the whole list: a large area can hold more units than PHP accepts as separate inputs.
-			form.addEventListener('submit', function(){
-				document.getElementById('fcUnitsJson').value = JSON.stringify(rows.map(function(r){
+			function listJson(){
+				return JSON.stringify(rows.map(function(r){
 					return {
 						pkey: parseInt(r.getAttribute('data-pkey'), 10),
 						chosen: r.querySelector('.fc-unit-on').checked,
@@ -854,7 +864,11 @@ if($step === 'units'){
 						name: r.querySelector('.fc-unit-name').value
 					};
 				}));
-			});
+			}
+			form.addEventListener('submit', function(){ document.getElementById('fcUnitsJson').value = listJson(); });
+			// "Look up the units again" takes what is on the page along, so nothing typed here is lost by it.
+			var fetchForm = document.getElementById('fcUnitFetchForm');
+			if(fetchForm) fetchForm.addEventListener('submit', function(){ document.getElementById('fcUnitsJsonFetch').value = listJson(); });
 			count();
 		})();
 		</script>
@@ -1149,6 +1163,41 @@ if($step === 'accounts'){
 <?php
 }
 ?>
+
+		<script>
+		// No separate "save": a step's Next button saves and moves on, and leaving by the step tabs with
+		// unsaved changes saves first. Anything else that would lose changes (closing the page) asks.
+		(function(){
+			var form = document.querySelector('form[data-fc-save]');
+			var leaving = false, dirty = false;
+			document.addEventListener('submit', function(){ leaving = true; }, true);
+			if(!form) return;
+			function mark(){ dirty = true; }
+			form.addEventListener('input', mark);
+			form.addEventListener('change', mark);
+			form.addEventListener('click', function(ev){ if(ev.target.closest('a, button, label, input')) mark(); });
+			function saveAndGo(step){
+				form.querySelector('input[name=goto]').value = step;
+				form.querySelector('input[name=action]').value = form.getAttribute('data-fc-save');
+			}
+			Array.prototype.forEach.call(form.querySelectorAll('[data-fc-next]'), function(b){
+				b.addEventListener('click', function(){ saveAndGo(b.getAttribute('data-fc-next')); });
+			});
+			Array.prototype.forEach.call(document.querySelectorAll('.fc-steps a'), function(a){
+				var m = /[?&]step=([a-z]+)/.exec(a.getAttribute('href') || '');
+				if(!m) return;
+				a.addEventListener('click', function(ev){
+					if(!dirty) return;
+					ev.preventDefault();
+					saveAndGo(m[1]);
+					if(form.requestSubmit) form.requestSubmit(); else form.submit();
+				});
+			});
+			window.addEventListener('beforeunload', function(ev){
+				if(dirty && !leaving){ ev.preventDefault(); ev.returnValue = ''; }
+			});
+		})();
+		</script>
 
 		<div class="bottomSpacer"></div>
 	</div>

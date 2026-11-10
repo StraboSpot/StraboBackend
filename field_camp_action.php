@@ -37,6 +37,17 @@ function fc_back($url, $ok = '', $err = array(), $form = array()){
 	exit();
 }
 
+/**
+ * After a successful save: open the step the page asked for (its Next button, or a step tab clicked with
+ * unsaved changes), else go back to the step that posted.
+ */
+function fc_saved($here, $step, $ok = ''){
+	$goto = (string)($_POST['goto'] ?? '');
+	if(!in_array($goto, array('basics', 'area', 'maps', 'tiles', 'units', 'accounts', 'package'), true)) $goto = $step;
+	// What was saved is said only when the page stays; on the next step it would read as that step's news.
+	fc_back($here . $goto, $goto === $step ? $ok : '');
+}
+
 if($_SERVER['REQUEST_METHOD'] !== 'POST'){
 	header("Location: /field_camp_wizard");
 	exit();
@@ -79,14 +90,14 @@ if($action === 'basics'){
 			array_flip(array('camp_name', 'camp_year', 'start_date', 'end_date', 'project_name'))));
 	}
 	FieldCamp::updateBasics($db, $id, $clean);
-	fc_back($here . "basics", "Saved.");
+	fc_saved($here, "basics", "Saved.");
 
 }elseif($action === 'area'){
 
 	list($v, $errors) = FieldCamp::validateArea($_POST);
 	if($errors) fc_back($here . "area", '', $errors);
 	FieldCamp::saveArea($db, $id, $v);
-	fc_back($here . "area", "Study area saved.");
+	fc_saved($here, "area", "Study area saved.");
 
 }elseif($action === 'maps_save'){
 
@@ -96,18 +107,23 @@ if($action === 'basics'){
 	$errors = FieldCampPackage::saveMaps($db, $camp, $rows);
 	if($errors) fc_back($here . "maps", '', $errors, array('maps' => $rows));
 	$n = count(FieldCampPackage::listCampMaps($db, $id));
-	fc_back($here . "maps", $n === 0 ? "Saved. No custom maps are in the project."
+	fc_saved($here, "maps", $n === 0 ? "Saved. No custom maps are in the project."
 		: "Saved. $n custom map" . ($n === 1 ? ' is' : 's are') . " in the project.");
 
-}elseif($action === 'tiles_build'){
+}elseif($action === 'tiles_build' || $action === 'tiles_save'){
 
+	// tiles_save keeps the choice of maps and zoom (leaving the step); tiles_build also starts the build.
 	if(!FieldCampPackage::installed($db) || !FieldCampTiles::installed($db)) fc_back($here . "basics");
-	if(FieldCampTiles::isBuilding($camp)) fc_back($here . "tiles", '', "The tiles for this camp are being built already.");
+	if(FieldCampTiles::isBuilding($camp)){
+		if($action === 'tiles_save') fc_saved($here, "tiles");   // the running build keeps its own choice
+		fc_back($here . "tiles", '', "The tiles for this camp are being built already.");
+	}
 	$layers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
 	$wanted = json_decode((string)($_POST['layers_json'] ?? ''), true);
 	list($zoom, $ids, $errors) = FieldCampTiles::validateChoice($camp, $layers, (int)($_POST['zoom'] ?? 0), is_array($wanted) ? $wanted : array());
 	if($errors) fc_back($here . "tiles", '', $errors);
 	FieldCampTiles::saveChoice($db, $camp, $zoom, $ids);
+	if($action === 'tiles_save') fc_saved($here, "tiles", "Saved.");
 	$problem = FieldCampTiles::startBuild($db, FieldCamp::getCamp($db, $id));
 	if($problem !== '') fc_back($here . "tiles", '', $problem);
 	fc_back($here . "tiles", "The build has started.");
@@ -119,6 +135,9 @@ if($action === 'basics'){
 	if($action === 'units_fetch'){
 		$bbox = FieldCampUnits::campBbox($camp);
 		if($bbox === null) fc_back($here . "units", '', "Choose the study area first.");
+		// The page sends its list along: keep what was selected and typed there before the new lookup.
+		$typed = json_decode((string)($_POST['units_json'] ?? ''), true);
+		if(is_array($typed) && $typed) FieldCampUnits::saveSelection($db, $camp, $typed);
 		$lookup = FieldCampUnits::lookup($bbox);
 		if($lookup['error'] !== '') fc_back($here . "units", '', $lookup['error']);
 		$saved = FieldCampUnits::save($db, $camp, $lookup);
@@ -137,7 +156,7 @@ if($action === 'basics'){
 	$errors = FieldCampUnits::saveSelection($db, $camp, $rows);
 	if($errors) fc_back($here . "units", '', $errors, array('units' => $rows));
 	$n = count(FieldCampUnits::listUnits($db, $id, true));
-	fc_back($here . "units", "Saved. $n rock unit" . ($n === 1 ? '' : 's') . " will become "
+	fc_saved($here, "units", "Saved. $n rock unit" . ($n === 1 ? '' : 's') . " will become "
 		. ($n === 1 ? 'a geologic unit tag' : 'geologic unit tags') . " in the project.");
 
 }elseif($action === 'accounts_create'){

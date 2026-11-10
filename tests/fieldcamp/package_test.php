@@ -371,6 +371,25 @@ check('saving the step works', $code === 200 && strpos($body, 'Saved. 2 custom m
 list($code, $body) = post_follow($sidI, array('action' => 'maps_save', 'id' => $campid, 'maps_json' => json_encode(array(
 	array('hash' => 'fcpkgtest0001', 'chosen' => true, 'title' => ''), array('hash' => 'fcpkgtest0004', 'chosen' => true, 'title' => 'Typed "title"')))));
 check('a refused save names the problem and keeps what was typed', strpos($body, 'needs a title') !== false && strpos($body, 'value="Typed &quot;title&quot;"') !== false && count(FieldCampPackage::listCampMaps($db, $campid)) === 2);
+// Next saves and moves on; nothing needs a separate save.
+FieldCampPackage::saveMaps($db, FieldCamp::getCamp($db, $campid), array());
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'maps_save', 'id' => $campid, 'goto' => 'tiles', 'maps_json' => json_encode(array(
+	array('hash' => 'fcpkgtest0001', 'chosen' => true, 'title' => 'Canon City Map'), array('hash' => 'fcpkgtest0006', 'chosen' => true, 'title' => 'Public geology')))));
+check('Next on the Maps step saves the selection and opens Offline maps', strpos($loc, 'step=tiles') !== false && count(FieldCampPackage::listCampMaps($db, $campid)) === 2, $loc);
+check('and the maps just selected, a public one included, are offered there', $code === 200 && !php_error($body) && strpos($body, 'data-layer="fcpkgtest0001"') !== false && strpos($body, 'data-layer="fcpkgtest0006"') !== false
+	&& strpos($body, 'Public geology') !== false && strpos($body, 'Saved.') === false);
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'maps_save', 'id' => $campid, 'goto' => 'tiles', 'maps_json' => json_encode(array(
+	array('hash' => 'fcpkgtest0001', 'chosen' => true, 'title' => '')))));
+check('when the step cannot be saved, Next stays on it and says why', strpos($loc, 'step=maps') !== false && strpos($body, 'needs a title') !== false && count(FieldCampPackage::listCampMaps($db, $campid)) === 2, $loc);
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'maps_save', 'id' => $campid, 'goto' => 'https://example.org/x', 'maps_json' => json_encode(array(
+	array('hash' => 'fcpkgtest0001', 'chosen' => true, 'title' => 'Canon City Map'), array('hash' => 'fcpkgtest0004', 'chosen' => true, 'title' => 'USGS Bulletin 1221-D')))));
+check('a "go to" that is not a step is ignored', strpos($loc, 'step=maps') !== false && strpos($loc, 'example.org') === false && strpos($body, 'Saved. 2 custom maps') !== false, $loc);
+list($code, $body) = http('GET', "/field_camp?id=$campid&step=maps", $sidI);
+check('the Maps step has one button, Next, and no separate save', preg_match('~<button type="submit" class="button primary small" data-fc-next="tiles">Next: Offline maps</button>~', $body) === 1 && strpos($body, 'Save maps') === false
+	&& strpos($body, 'data-fc-save="maps_save"') !== false);
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'basics', 'id' => $campid, 'goto' => 'area', 'camp_name' => 'Package Camp', 'camp_year' => '2027', 'project_name' => 'KU Field Camp 2027 (test)', 'start_date' => '2027-06-01', 'end_date' => '2027-06-20'));
+check('Next on Basics saves and opens Study area', strpos($loc, 'step=area') !== false && $code === 200, $loc);
+
 list($code, $body) = post_follow($sidI, array('action' => 'maps_save', 'id' => $campid, 'maps_json' => '{'));
 check('an unreadable list is refused', strpos($body, 'could not be read') !== false);
 list($code) = http('POST', '/field_camp_action', $sidO, array('action' => 'maps_save', 'id' => $campid, 'maps_json' => '[]', 'csrf' => $TOKEN));
