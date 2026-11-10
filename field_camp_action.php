@@ -4,7 +4,8 @@
  * Description: Field Camp Wizard, every change (POST only, then a redirect back
  *              to the page that posted): create a camp, save Basics, save the
  *              study area, look up the rock units of the study area at
- *              Macrostrat, save which units become tags, create accounts, deactivate / reactivate / remove
+ *              Macrostrat, save which units become tags, save which My Maps
+ *              become custom maps, create accounts, deactivate / reactivate / remove
  *              them, copy a deactivated account's projects to the camp owner
  *              (answers JSON), add / remove instructors. Each request needs the form
  *              token, an account on the instructor list, and (except create) a
@@ -21,6 +22,7 @@ include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampUnits.php';
+require_once __DIR__ . '/includes/fieldcamp/FieldCampPackage.php';
 
 if(!FieldCamp::canUse($db, $userpkey)){
 	header("HTTP/1.0 404 Not Found");
@@ -83,6 +85,17 @@ if($action === 'basics'){
 	if($errors) fc_back($here . "area", '', $errors);
 	FieldCamp::saveArea($db, $id, $v);
 	fc_back($here . "area", "Study area saved.");
+
+}elseif($action === 'maps_save'){
+
+	if(!FieldCampPackage::installed($db)) fc_back($here . "basics");
+	$rows = json_decode((string)($_POST['maps_json'] ?? ''), true);
+	if(!is_array($rows)) fc_back($here . "maps", '', "The maps could not be read. Please try again.");
+	$errors = FieldCampPackage::saveMaps($db, $camp, $rows);
+	if($errors) fc_back($here . "maps", '', $errors, array('maps' => $rows));
+	$n = count(FieldCampPackage::listCampMaps($db, $id));
+	fc_back($here . "maps", $n === 0 ? "Saved. No custom maps are in the project."
+		: "Saved. $n custom map" . ($n === 1 ? ' is' : 's are') . " in the project.");
 
 }elseif($action === 'units_fetch' || $action === 'units_save'){
 

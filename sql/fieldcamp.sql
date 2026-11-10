@@ -1,7 +1,8 @@
 -- =============================================================================
 -- File: sql/fieldcamp.sql
--- Description: Field Camp Wizard, stages 1 to 3 (camp records, the instructor
---              list, the dedicated camp accounts and the rock units). An instructor (an account
+-- Description: Field Camp Wizard, stages 1 to 4 (camp records, the instructor
+--              list, the dedicated camp accounts, the rock units, the custom
+--              maps and the project package). An instructor (an account
 --              our team puts on fieldcamp_instructors) sets up a camp on the
 --              website and creates the student accounts for it; later stages
 --              add the maps, rock units and the project package.
@@ -22,6 +23,8 @@
 --                                     become geologic unit tags of the project
 --              fieldcamp_unit_source  the source maps those units come from
 --                                     (name and citation, for attribution)
+--              fieldcamp_map          stage 4: the owner's My Maps that go into
+--                                     the project as custom maps
 --
 -- Apply (dev or prod), idempotent / safe to re-run:
 --   cat sql/fieldcamp.sql | docker exec -i strabo-postgres \
@@ -159,14 +162,34 @@ CREATE TABLE IF NOT EXISTS fieldcamp_unit_source (
 );
 
 -- ---------------------------------------------------------------------------
+-- Stage 4: the project package (includes/fieldcamp/FieldCampPackage.php).
+-- ---------------------------------------------------------------------------
+
+-- The ids the camp's project and its Default dataset carry in the package, in
+-- the app's id format. Given at the first build and kept, so a rebuilt package
+-- is the same project. (Shared-package camps: every student gets these ids.)
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS project_id BIGINT;
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS dataset_id BIGINT;
+
+-- The owner's My Maps (geotiffs.hash) that go into the project as custom maps.
+CREATE TABLE IF NOT EXISTS fieldcamp_map (
+    pkey            SERIAL PRIMARY KEY,
+    fieldcamp_pkey  INTEGER                  NOT NULL REFERENCES fieldcamp(pkey),
+    geotiff_hash    VARCHAR(50)              NOT NULL,
+    title           VARCHAR(255)             NOT NULL,
+    created_date    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    UNIQUE (fieldcamp_pkey, geotiff_hash)
+);
+
+-- ---------------------------------------------------------------------------
 -- Privileges. Tables are created by the superuser (postgres) but the web app
 -- connects as strabodbuser, with a readonly role for reporting.
 -- (GRANT is idempotent, so this is safe to re-run.)
 -- ---------------------------------------------------------------------------
 GRANT ALL PRIVILEGES ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer, fieldcamp_copy,
-    fieldcamp_unit, fieldcamp_unit_source TO strabodbuser;
+    fieldcamp_unit, fieldcamp_unit_source, fieldcamp_map TO strabodbuser;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE fieldcamp_instructors_pkey_seq, fieldcamp_pkey_seq,
     fieldcamp_account_pkey_seq, fieldcamp_viewer_pkey_seq, fieldcamp_copy_pkey_seq,
-    fieldcamp_unit_pkey_seq, fieldcamp_unit_source_pkey_seq TO strabodbuser;
+    fieldcamp_unit_pkey_seq, fieldcamp_unit_source_pkey_seq, fieldcamp_map_pkey_seq TO strabodbuser;
 GRANT SELECT ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer, fieldcamp_copy,
-    fieldcamp_unit, fieldcamp_unit_source TO readonly;
+    fieldcamp_unit, fieldcamp_unit_source, fieldcamp_map TO readonly;

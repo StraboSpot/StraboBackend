@@ -78,6 +78,13 @@
 	font-size: 0.95em; height: auto; line-height: 1.4; }
 .fc-unit input[type=text]:focus { border-color: #e44c65; outline: none; }
 .fc-unit input[type=checkbox] + label { margin: 0; padding-left: 1.6em; height: 1.4em; }
+.fc-mapline { display: grid; grid-template-columns: 2.2em minmax(12em, 1.4fr) minmax(10em, 1.6fr) 7em;
+	gap: 0 0.75em; align-items: center; padding: 0.3em 0; border-top: 1px solid rgba(255,255,255,0.08); }
+.fc-mapline input[type=text] { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.08);
+	border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #ffffff; padding: 0.35em 0.6em;
+	font-size: 0.95em; height: auto; line-height: 1.4; }
+.fc-mapline input[type=text]:focus { border-color: #e44c65; outline: none; }
+.fc-mapline input[type=checkbox] + label { margin: 0; padding-left: 1.6em; height: 1.4em; }
 .fc-unit-text { font-size: 0.9em; color: rgba(255,255,255,0.75); overflow-wrap: anywhere; }
 .fc-unit-off .fc-unit-text, .fc-unit-off input[type=text] { opacity: 0.45; }
 .fc-chip { display: inline-block; width: 1.4em; height: 1.4em; border-radius: 3px; vertical-align: middle;

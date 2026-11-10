@@ -2,10 +2,13 @@
 /**
  * File: field_camp.php
  * Description: Field Camp Wizard, one camp: the steps Basics, Study area,
- *              Rock units and Accounts. ?new=1 starts a camp (Basics only);
+ *              Maps, Rock units, Accounts and Package. ?new=1 starts a camp (Basics only);
  *              ?id=N&step=... opens an existing one. Rock units lists the units
  *              Macrostrat maps show in the study area (FieldCampUnits); the
- *              selected ones become geologic unit tags of the project. All changes post to field_camp_action.php.
+ *              selected ones become geologic unit tags of the project. Maps
+ *              selects the owner's My Maps that go in as custom maps, and
+ *              Package offers the project package (FieldCampPackage,
+ *              field_camp_package.php). All changes post to field_camp_action.php.
  *              ?id=N&ajax=plan answers the Accounts step's live preview (which
  *              usernames a template would create and whether any is taken).
  *              Open only to the camp's owner (an instructor) and the admin.
@@ -21,6 +24,7 @@ include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampUnits.php';
+require_once __DIR__ . '/includes/fieldcamp/FieldCampPackage.php';
 
 if(!FieldCamp::canUse($db, $userpkey)){
 	header("HTTP/1.0 404 Not Found");
@@ -50,9 +54,18 @@ if($camp && isset($_GET['ajax'])){
 	exit();
 }
 
-$steps = array('basics' => 'Basics', 'area' => 'Study area', 'units' => 'Rock units', 'accounts' => 'Accounts');
-// The Rock units step needs its tables (the stage 3 part of sql/fieldcamp.sql).
+$steps = array('basics' => 'Basics', 'area' => 'Study area', 'maps' => 'Maps', 'units' => 'Rock units',
+	'accounts' => 'Accounts', 'package' => 'Package');
+// Later steps need their tables (the stage 3 and stage 4 parts of sql/fieldcamp.sql).
 if(!FieldCampUnits::installed($db)) unset($steps['units']);
+if(!FieldCampPackage::installed($db)){ unset($steps['maps']); unset($steps['package']); }
+/** The step after $key that this install has, as [key, label], or null at the end. */
+function fc_next($steps, $key){
+	$keys = array_keys($steps);
+	$i = array_search($key, $keys, true);
+	if($i === false || !isset($keys[$i + 1])) return null;
+	return array($keys[$i + 1], $steps[$keys[$i + 1]]);
+}
 $step = (string)($_GET['step'] ?? 'basics');
 if($isNew || !isset($steps[$step])) $step = 'basics';
 
@@ -113,6 +126,24 @@ if($camp && $step === 'units'){
 		}
 		if(FieldCamp::truthy($u->chosen)) $chosenCount++;
 	}
+}
+$myMaps = array(); $packageMaps = array(); $packageTags = 0;
+if($camp && $step === 'maps'){
+	$myMaps = FieldCampPackage::listMyMaps($db, $camp);
+	// After a refused save, show what was typed, not what is stored.
+	$typedMaps = array();
+	if(isset($form['maps']) && is_array($form['maps'])){
+		foreach($form['maps'] as $row){ if(is_array($row) && isset($row['hash'])) $typedMaps[(string)$row['hash']] = $row; }
+	}
+	foreach($myMaps as $i => $m){
+		if(!isset($typedMaps[$m['hash']])) continue;
+		$myMaps[$i]['chosen'] = !empty($typedMaps[$m['hash']]['chosen']);
+		if(is_string($typedMaps[$m['hash']]['title'] ?? null)) $myMaps[$i]['title'] = $typedMaps[$m['hash']]['title'];
+	}
+}
+if($camp && $step === 'package'){
+	$packageMaps = FieldCampPackage::listCampMaps($db, $camp->pkey);
+	$packageTags = count(FieldCampUnits::listUnits($db, $camp->pkey, true));
 }
 $ownsCamp = $camp && (int)$camp->owner_user_pkey === (int)$userpkey;
 $size = $camp ? FieldCamp::areaSizeKm($camp) : null;
@@ -235,7 +266,8 @@ if($step === 'area'){
 				<input type="hidden" name="north" id="fcNorth">
 				<div class="fc-buttons">
 					<button type="submit" class="button primary small"><?php echo $hasArea ? 'Replace the study area with this view' : 'Save this view as the study area'; ?></button>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo isset($steps['units']) ? 'units' : 'accounts'; ?>" class="button small">Next: <?php echo isset($steps['units']) ? 'Rock units' : 'Accounts'; ?></a>
+<?php $next = fc_next($steps, 'area'); ?>
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo $next[0]; ?>" class="button small">Next: <?php echo $next[1]; ?></a>
 				</div>
 			</form>
 		</div>
@@ -293,6 +325,135 @@ if($step === 'area'){
 			readView();
 		})();
 		</script>
+<?php
+}
+
+// ===========================================================================
+// Maps
+// ===========================================================================
+if($step === 'maps'){
+	$hasArea = ($size !== null);
+	$inArea = array(); $elsewhere = array();
+	foreach($myMaps as $m){
+		if($m['overlaps'] === true || $m['chosen']) $inArea[] = $m; else $elsewhere[] = $m;
+	}
+?>
+		<div class="fc-panel">
+			<h4>Custom maps</h4>
+			<div class="fc-mapnote">
+				Your own maps from <a href="/geotiff">My Maps</a> that cover the study area. Each map you select is added to
+				the students' project as a custom map, under the title you give it here.
+				<?php echo $ownsCamp ? '' : 'These are the maps of the owner of the camp.'; ?>
+			</div>
+<?php if(!$hasArea){ ?>
+			<div class="fc-small" style="margin-bottom:0.75em;">No study area is saved yet, so every map is listed.
+				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=area">Choose the study area</a> to see which maps cover it.</div>
+<?php } ?>
+<?php if(!$myMaps){ ?>
+			<div class="fc-mapnote" style="margin:0;">There are no maps in My Maps yet. Upload a GeoTIFF there, then come back to this step.</div>
+<?php }elseif(!$inArea && $hasArea){ ?>
+			<div class="fc-mapnote" style="margin:0;">None of your <?php echo count($myMaps); ?> maps covers the study area.</div>
+<?php } ?>
+<?php if($myMaps){ ?>
+			<form method="post" action="/field_camp_action" id="fcMapForm" style="margin:0;">
+				<?php echo fc_hidden($csrf, 'maps_save', $camp); ?>
+				<input type="hidden" name="maps_json" id="fcMapsJson" value="">
+<?php
+	foreach(array('in' => $hasArea ? $inArea : $myMaps, 'out' => $hasArea ? $elsewhere : array()) as $group => $list){
+		if(!$list) continue;
+		if($group === 'out'){ ?>
+				<div class="fc-small" style="margin:1.25em 0 0.5em 0;">Not in the study area (<?php echo count($list); ?>):</div>
+<?php	} ?>
+				<div class="fc-units">
+<?php	if($group === 'in'){ ?>
+					<div class="fc-mapline fc-unit-head"><div></div><div>Title in the app</div><div>File</div><div>Uploaded</div></div>
+<?php	}
+		foreach($list as $m){
+			$rowId = 'fcM' . htmlspecialchars($m['hash']);
+			$selectable = ($group === 'in');
+?>
+					<div class="fc-mapline<?php echo $selectable ? '' : ' fc-unit-off'; ?>"<?php echo $selectable ? ' data-hash="' . htmlspecialchars($m['hash']) . '"' : ''; ?>>
+<?php		if($selectable){ ?>
+						<div><input type="checkbox" class="fc-map-on" id="<?php echo $rowId; ?>"<?php echo $m['chosen'] ? ' checked' : ''; ?>><label for="<?php echo $rowId; ?>"></label></div>
+						<div><input type="text" class="fc-map-title" maxlength="<?php echo FieldCampPackage::MAX_TITLE; ?>" value="<?php echo htmlspecialchars($m['title']); ?>" aria-label="Title"></div>
+<?php		}else{ ?>
+						<div></div>
+						<div class="fc-unit-text"><?php echo $m['extent'] === null ? 'No location could be read from this map' : 'Outside the study area'; ?></div>
+<?php		} ?>
+						<div class="fc-unit-text"><a href="/geotiff/detail/<?php echo htmlspecialchars($m['hash']); ?>" target="_blank" rel="noopener"><?php echo htmlspecialchars($m['name']); ?></a><?php
+							echo ($m['chosen'] && $m['overlaps'] === false) ? ' <span class="fc-small">(outside the study area)</span>' : ''; ?></div>
+						<div class="fc-unit-text"><?php echo htmlspecialchars($m['uploaded']); ?></div>
+					</div>
+<?php		}
+?>
+				</div>
+<?php
+	}
+?>
+				<div class="fc-buttons" style="margin-top:1em;">
+					<button type="submit" class="button primary small">Save maps</button>
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=units" class="button small">Next: Rock units</a>
+				</div>
+				<div class="fc-small" style="margin-top:0.75em;">Offline map tiles are not part of the package yet: students see
+					these maps while their device is online, or after saving them for offline use in the app.</div>
+			</form>
+			<script>
+			(function(){
+				var form = document.getElementById('fcMapForm');
+				var rows = Array.prototype.slice.call(form.querySelectorAll('.fc-mapline[data-hash]'));
+				function shade(){ rows.forEach(function(r){ r.classList.toggle('fc-unit-off', !r.querySelector('.fc-map-on').checked); }); }
+				rows.forEach(function(r){ r.querySelector('.fc-map-on').addEventListener('change', shade); });
+				form.addEventListener('submit', function(){
+					document.getElementById('fcMapsJson').value = JSON.stringify(rows.map(function(r){
+						return {hash: r.getAttribute('data-hash'), chosen: r.querySelector('.fc-map-on').checked,
+							title: r.querySelector('.fc-map-title').value};
+					}));
+				});
+				shade();
+			})();
+			</script>
+<?php }else{ ?>
+			<div class="fc-buttons" style="margin-top:1em;">
+				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=units" class="button small">Next: Rock units</a>
+			</div>
+<?php } ?>
+		</div>
+<?php
+}
+
+// ===========================================================================
+// Package
+// ===========================================================================
+if($step === 'package'){
+?>
+		<div class="fc-panel">
+			<h4>Project package</h4>
+			<div class="fc-mapnote">
+				One file that sets up the project on a student's device. It is the same kind of file StraboField makes
+				with "Backup", "Save &amp; Zip", so it loads the same way.
+			</div>
+			<div class="strabotable" style="margin-left:0px;">
+				<table class="fc-table">
+					<tr><td>Project name</td><td><?php echo htmlspecialchars($camp->project_name); ?></td></tr>
+					<tr><td>Dataset</td><td>Default (empty)</td></tr>
+					<tr><td>Geologic unit tags</td><td><?php echo (int)$packageTags; ?><?php
+						echo $packageTags === 0 ? ' &nbsp; <a href="/field_camp?id=' . (int)$camp->pkey . '&amp;step=units">Choose rock units</a>' : ''; ?></td></tr>
+					<tr><td>Custom maps</td><td><?php echo count($packageMaps); ?><?php
+						$t = array(); foreach($packageMaps as $m){ $t[] = htmlspecialchars($m->title); }
+						echo $t ? ': ' . implode(', ', $t) : ''; ?></td></tr>
+					<tr><td>Offline map tiles</td><td>Not included yet</td></tr>
+				</table>
+			</div>
+			<div class="fc-buttons" style="margin-top:1em;">
+				<a href="/field_camp_package?id=<?php echo (int)$camp->pkey; ?>" class="button primary small">Download the project package</a>
+			</div>
+			<div class="fc-small" style="margin-top:1em;">
+				Every student loads this same file, as in past camps: send it to each device (AirDrop works), then in
+				StraboField import the project from the zip and open it. The package always holds what is saved on the
+				other steps at the moment you download it. If you change the rock units or maps after students have
+				loaded it, download it again; devices that already hold the project keep the older version.
+			</div>
+		</div>
 <?php
 }
 
@@ -664,6 +825,12 @@ if($step === 'accounts'){
 				<div class="fc-buttons"><button type="submit" class="button small">Remove deactivated accounts</button></div>
 			</form>
 <?php } ?>
+		</div>
+<?php } ?>
+
+<?php if(isset($steps['package'])){ ?>
+		<div class="fc-buttons" style="margin-bottom:1.5em;">
+			<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=package" class="button small">Next: Package</a>
 		</div>
 <?php } ?>
 
