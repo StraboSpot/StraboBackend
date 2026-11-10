@@ -43,7 +43,7 @@ function fc_back($url, $ok = '', $err = array(), $form = array()){
  */
 function fc_saved($here, $step, $ok = ''){
 	$goto = (string)($_POST['goto'] ?? '');
-	if(!in_array($goto, array('basics', 'area', 'maps', 'tiles', 'units', 'accounts', 'package'), true)) $goto = $step;
+	if(!in_array($goto, array('basics', 'area', 'maps', 'tiles', 'units', 'accounts', 'package', 'roster'), true)) $goto = $step;
 	// What was saved is said only when the page stays; on the next step it would read as that step's news.
 	fc_back($here . $goto, $goto === $step ? $ok : '');
 }

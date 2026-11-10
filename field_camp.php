@@ -2,7 +2,8 @@
 /**
  * File: field_camp.php
  * Description: Field Camp Wizard, one camp: the steps Basics, Study area,
- *              Maps, Offline maps, Rock units, Accounts and Package. Offline
+ *              Maps, Offline maps, Rock units, Accounts, Package and Student
+ *              work (the roster: what each account has uploaded). Offline
  *              maps chooses the maps and the deepest zoom for the offline
  *              tiles and starts their build (FieldCampTiles); ?ajax=build
  *              answers the state of a running build. ?new=1 starts a camp (Basics only);
@@ -33,6 +34,7 @@ require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampUnits.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampPackage.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampTiles.php';
+require_once __DIR__ . '/includes/fieldcamp/FieldCampRoster.php';
 
 if(!FieldCamp::canUse($db, $userpkey)){
 	header("HTTP/1.0 404 Not Found");
@@ -65,7 +67,7 @@ if($camp && isset($_GET['ajax'])){
 }
 
 $steps = array('basics' => 'Basics', 'area' => 'Study area', 'maps' => 'Maps', 'tiles' => 'Offline maps',
-	'units' => 'Rock units', 'accounts' => 'Accounts', 'package' => 'Package');
+	'units' => 'Rock units', 'accounts' => 'Accounts', 'package' => 'Package', 'roster' => 'Student work');
 // Later steps need their tables (the stage 3 and stage 4 parts of sql/fieldcamp.sql).
 if(!FieldCampUnits::installed($db)) unset($steps['units']);
 if(!FieldCampPackage::installed($db)){ unset($steps['maps']); unset($steps['package']); }
@@ -167,6 +169,10 @@ if($camp && isset($steps['tiles']) && ($step === 'tiles' || $step === 'package')
 		$tileOptions = FieldCampTiles::options($tileBbox, $picked ? $picked : array_values($tileLayers));
 		$tileZoom = (int)$camp->tiles_zoom > 0 ? (int)$camp->tiles_zoom : FieldCampTiles::defaultZoom($tileOptions);
 	}
+}
+$roster = array('rows' => array(), 'uploaded' => 0, 'total' => 0, 'spots' => 0, 'photos' => 0);
+if($camp && $step === 'roster'){
+	$roster = FieldCampRoster::forCamp($neodb, $camp, FieldCamp::listAccounts($db, $camp->pkey));
 }
 if($camp && $step === 'package'){
 	$packageMaps = FieldCampPackage::listCampMaps($db, $camp->pkey);
@@ -725,6 +731,58 @@ if($step === 'package'){
 				other steps at the moment you download it. If you change the rock units or maps after students have
 				loaded it, download it again; devices that already hold the project keep the older version.
 			</div>
+		</div>
+<?php
+}
+
+// ===========================================================================
+// Student work (roster)
+// ===========================================================================
+if($step === 'roster'){
+?>
+		<div class="fc-panel">
+			<h4>Student work</h4>
+<?php if(!$roster['rows']){ ?>
+			<div class="fc-mapnote" style="margin:0;">This camp has no accounts yet. Create them on the
+				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=accounts">Accounts</a> step.</div>
+<?php }else{ ?>
+			<div class="fc-mapnote">
+				<strong><?php echo (int)$roster['uploaded']; ?></strong> of <?php echo (int)$roster['total']; ?> students have uploaded the camp project:
+				<?php echo number_format($roster['spots']); ?> spot<?php echo $roster['spots'] === 1 ? '' : 's'; ?> and
+				<?php echo number_format($roster['photos']); ?> photo<?php echo $roster['photos'] === 1 ? '' : 's'; ?> in all.
+				This shows what is on the server; work that is still only on a student's device does not appear until they upload.
+			</div>
+			<div class="strabotable" style="margin-left:0px;">
+				<table class="fc-table">
+					<tr><td>Username</td><td>Project</td><td>Last upload</td><td>Datasets</td><td>Spots</td><td>Photos</td></tr>
+<?php 	foreach($roster['rows'] as $r){
+			if(!$r['projects']){ ?>
+					<tr>
+						<td><?php echo htmlspecialchars($r['username']); ?><?php echo $r['active'] ? '' : ' <span class="fc-small">(deactivated)</span>'; ?></td>
+						<td colspan="5" class="fc-small">Nothing uploaded yet</td>
+					</tr>
+<?php 		}
+			foreach($r['projects'] as $i => $p){ ?>
+					<tr>
+						<td><?php echo $i === 0 ? htmlspecialchars($r['username']) . ($r['active'] ? '' : ' <span class="fc-small">(deactivated)</span>') : ''; ?></td>
+						<td><?php echo htmlspecialchars($p['name'] !== '' ? $p['name'] : 'Unnamed project'); ?><?php echo $p['camp'] ? '' : ' <span class="fc-small">(not the camp project)</span>'; ?></td>
+						<td><?php echo $p['uploaded'] ? '<span class="fc-when" data-t="' . (int)$p['uploaded'] . '">' . gmdate('Y-m-d H:i', $p['uploaded']) . ' UTC</span>' : ''; ?></td>
+						<td><?php echo (int)$p['datasets']; ?></td>
+						<td><?php echo number_format($p['spots']); ?></td>
+						<td><?php echo number_format($p['photos']); ?><?php echo $p['photos_missing'] > 0 ? ' <span class="fc-small">(' . (int)$p['photos_missing'] . ' not uploaded yet)</span>' : ''; ?></td>
+					</tr>
+<?php 		}
+		} ?>
+				</table>
+			</div>
+			<script>
+			// Upload times in the reader's own time zone.
+			Array.prototype.forEach.call(document.querySelectorAll('.fc-when'), function(el){
+				var d = new Date(parseInt(el.getAttribute('data-t'), 10) * 1000);
+				el.textContent = d.toLocaleString([], {year: 'numeric', month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit'});
+			});
+			</script>
+<?php } ?>
 		</div>
 <?php
 }
