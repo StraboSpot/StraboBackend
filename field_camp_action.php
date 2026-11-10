@@ -3,7 +3,8 @@
  * File: field_camp_action.php
  * Description: Field Camp Wizard, every change (POST only, then a redirect back
  *              to the page that posted): create a camp, save Basics, save the
- *              study area, create accounts, deactivate / reactivate / remove
+ *              study area, look up the rock units of the study area at
+ *              Macrostrat, save which units become tags, create accounts, deactivate / reactivate / remove
  *              them, copy a deactivated account's projects to the camp owner
  *              (answers JSON), add / remove instructors. Each request needs the form
  *              token, an account on the instructor list, and (except create) a
@@ -19,6 +20,7 @@
 include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
+require_once __DIR__ . '/includes/fieldcamp/FieldCampUnits.php';
 
 if(!FieldCamp::canUse($db, $userpkey)){
 	header("HTTP/1.0 404 Not Found");
@@ -81,6 +83,34 @@ if($action === 'basics'){
 	if($errors) fc_back($here . "area", '', $errors);
 	FieldCamp::saveArea($db, $id, $v);
 	fc_back($here . "area", "Study area saved.");
+
+}elseif($action === 'units_fetch' || $action === 'units_save'){
+
+	if(!FieldCampUnits::installed($db)) fc_back($here . "basics");
+
+	if($action === 'units_fetch'){
+		$bbox = FieldCampUnits::campBbox($camp);
+		if($bbox === null) fc_back($here . "units", '', "Choose the study area first.");
+		$lookup = FieldCampUnits::lookup($bbox);
+		if($lookup['error'] !== '') fc_back($here . "units", '', $lookup['error']);
+		$saved = FieldCampUnits::save($db, $camp, $lookup);
+		if($saved['error'] !== '') fc_back($here . "units", '', $saved['error']);
+		$n = $saved['total']; $m = count($lookup['sources']);
+		if($n === 0) fc_back($here . "units", "Macrostrat has no mapped rock units in this study area.");
+		fc_back($here . "units", "$n rock unit" . ($n === 1 ? '' : 's') . " found on $m source map" . ($m === 1 ? '' : 's') . "."
+			. ($saved['removed'] > 0 ? " " . $saved['removed'] . " unit" . ($saved['removed'] === 1 ? '' : 's')
+				. " from the earlier lookup " . ($saved['removed'] === 1 ? 'is' : 'are') . " no longer in the area and "
+				. ($saved['removed'] === 1 ? 'was' : 'were') . " dropped." : '')
+			. " Select the ones to turn into tags, then save.");
+	}
+
+	$rows = json_decode((string)($_POST['units_json'] ?? ''), true);
+	if(!is_array($rows)) fc_back($here . "units", '', "The rock units could not be read. Please try again.");
+	$errors = FieldCampUnits::saveSelection($db, $camp, $rows);
+	if($errors) fc_back($here . "units", '', $errors, array('units' => $rows));
+	$n = count(FieldCampUnits::listUnits($db, $id, true));
+	fc_back($here . "units", "Saved. $n rock unit" . ($n === 1 ? '' : 's') . " will become "
+		. ($n === 1 ? 'a geologic unit tag' : 'geologic unit tags') . " in the project.");
 
 }elseif($action === 'accounts_create'){
 

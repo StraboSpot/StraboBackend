@@ -67,4 +67,24 @@
 .fc-preview-msg.fc-bad { color: #f06880; }
 .fc-danger { border-color: rgba(228,76,101,0.5); }
 .fc-small { font-size: 0.88em; color: rgba(255,255,255,0.65); }
+.fc-units { display: flex; flex-direction: column; }
+.fc-unit { display: grid; grid-template-columns: 2.2em 1.8em 6.5em minmax(12em, 2fr) minmax(8em, 1fr) minmax(8em, 1.3fr);
+	gap: 0 0.75em; align-items: center; padding: 0.3em 0; border-top: 1px solid rgba(255,255,255,0.08); }
+/* The size sits on the cells: on the row it would shrink the em-based columns out of line with the rows below. */
+.fc-unit-head { border-top: none; }
+.fc-unit-head div { font-size: 0.8em; text-transform: uppercase; letter-spacing: 0.05em; color: rgba(255,255,255,0.5); }
+.fc-unit input[type=text] { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.08);
+	border: 1px solid rgba(255,255,255,0.2); border-radius: 4px; color: #ffffff; padding: 0.35em 0.6em;
+	font-size: 0.95em; height: auto; line-height: 1.4; }
+.fc-unit input[type=text]:focus { border-color: #e44c65; outline: none; }
+.fc-unit input[type=checkbox] + label { margin: 0; padding-left: 1.6em; height: 1.4em; }
+.fc-unit-text { font-size: 0.9em; color: rgba(255,255,255,0.75); overflow-wrap: anywhere; }
+.fc-unit-off .fc-unit-text, .fc-unit-off input[type=text] { opacity: 0.45; }
+.fc-chip { display: inline-block; width: 1.4em; height: 1.4em; border-radius: 3px; vertical-align: middle;
+	border: 1px solid rgba(255,255,255,0.35); background: transparent; }
+@media (max-width: 900px) {
+	.fc-unit { grid-template-columns: 2.2em 1.8em 6em 1fr; }
+	.fc-unit-head div:nth-child(n+5) { display: none; }
+	.fc-unit .fc-unit-text { grid-column: 3 / -1; }
+}
 </style>

@@ -1,9 +1,11 @@
 <?php
 /**
  * File: field_camp.php
- * Description: Field Camp Wizard, one camp: the steps Basics, Study area and
- *              Accounts. ?new=1 starts a camp (Basics only); ?id=N&step=...
- *              opens an existing one. All changes post to field_camp_action.php.
+ * Description: Field Camp Wizard, one camp: the steps Basics, Study area,
+ *              Rock units and Accounts. ?new=1 starts a camp (Basics only);
+ *              ?id=N&step=... opens an existing one. Rock units lists the units
+ *              Macrostrat maps show in the study area (FieldCampUnits); the
+ *              selected ones become geologic unit tags of the project. All changes post to field_camp_action.php.
  *              ?id=N&ajax=plan answers the Accounts step's live preview (which
  *              usernames a template would create and whether any is taken).
  *              Open only to the camp's owner (an instructor) and the admin.
@@ -18,6 +20,7 @@
 include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
+require_once __DIR__ . '/includes/fieldcamp/FieldCampUnits.php';
 
 if(!FieldCamp::canUse($db, $userpkey)){
 	header("HTTP/1.0 404 Not Found");
@@ -47,7 +50,9 @@ if($camp && isset($_GET['ajax'])){
 	exit();
 }
 
-$steps = array('basics' => 'Basics', 'area' => 'Study area', 'accounts' => 'Accounts');
+$steps = array('basics' => 'Basics', 'area' => 'Study area', 'units' => 'Rock units', 'accounts' => 'Accounts');
+// The Rock units step needs its tables (the stage 3 part of sql/fieldcamp.sql).
+if(!FieldCampUnits::installed($db)) unset($steps['units']);
 $step = (string)($_GET['step'] ?? 'basics');
 if($isNew || !isset($steps[$step])) $step = 'basics';
 
@@ -88,6 +93,25 @@ if($accounts){
 		if(!FieldCamp::truthy($a->active) && ($projectCounts[$pk] ?? 0) > ($copiedCounts[$pk] ?? 0)){
 			$toCopy[] = array('user' => $pk, 'username' => $a->username);
 		}
+	}
+}
+$units = array(); $unitSources = array(); $chosenCount = 0;
+if($camp && $step === 'units'){
+	$units = FieldCampUnits::listUnits($db, $camp->pkey);
+	$unitSources = FieldCampUnits::listSources($db, $camp->pkey);
+	// After a refused save, show what was typed, not what is stored.
+	$typed = array();
+	if(isset($form['units']) && is_array($form['units'])){
+		foreach($form['units'] as $row){ if(is_array($row) && isset($row['pkey'])) $typed[(int)$row['pkey']] = $row; }
+	}
+	foreach($units as $u){
+		if(isset($typed[(int)$u->pkey])){
+			$row = $typed[(int)$u->pkey];
+			$u->chosen = !empty($row['chosen']);
+			$u->tag_name = is_string($row['name'] ?? null) ? $row['name'] : $u->tag_name;
+			$u->unit_label = is_string($row['label'] ?? null) ? $row['label'] : $u->unit_label;
+		}
+		if(FieldCamp::truthy($u->chosen)) $chosenCount++;
 	}
 }
 $ownsCamp = $camp && (int)$camp->owner_user_pkey === (int)$userpkey;
@@ -211,7 +235,7 @@ if($step === 'area'){
 				<input type="hidden" name="north" id="fcNorth">
 				<div class="fc-buttons">
 					<button type="submit" class="button primary small"><?php echo $hasArea ? 'Replace the study area with this view' : 'Save this view as the study area'; ?></button>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=accounts" class="button small">Next: Accounts</a>
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo isset($steps['units']) ? 'units' : 'accounts'; ?>" class="button small">Next: <?php echo isset($steps['units']) ? 'Rock units' : 'Accounts'; ?></a>
 				</div>
 			</form>
 		</div>
@@ -267,6 +291,159 @@ if($step === 'area'){
 			}
 			map.on('moveend', readView);
 			readView();
+		})();
+		</script>
+<?php
+}
+
+// ===========================================================================
+// Rock units
+// ===========================================================================
+if($step === 'units'){
+	$hasArea = ($size !== null);
+	$fetched = isset($camp->units_fetched_date) && (string)$camp->units_fetched_date !== '';
+	$areaChanged = $fetched && FieldCampUnits::areaChanged($camp);
+	// Units grouped by the source map they come from, in map order.
+	$bySource = array();
+	foreach($units as $u){ $bySource[(int)$u->source_id][] = $u; }
+?>
+		<div class="fc-panel">
+			<h4>Rock units</h4>
+<?php if(!$hasArea){ ?>
+			<div class="fc-mapnote">Choose the study area first. The rock units are looked up for that area.</div>
+			<div class="fc-buttons">
+				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=area" class="button primary small">Go to Study area</a>
+			</div>
+<?php }else{ ?>
+			<div class="fc-mapnote">
+				The rock units that geologic maps show inside the study area, from
+				<a href="https://macrostrat.org" target="_blank" rel="noopener">Macrostrat</a>.
+				Each unit you select becomes a geologic unit tag in the students' project, with its age,
+				rock type, description and map color filled in.
+			</div>
+<?php if($areaChanged){ ?>
+			<div class="fc-flash-err">The study area has changed since these units were looked up. Look them up again to match the new area.</div>
+<?php } ?>
+<?php if($fetched && (int)$camp->units_zoom < FieldCampUnits::DETAIL_ZOOM){ ?>
+			<div class="fc-small" style="margin-bottom:0.75em;">
+				The study area is too large for Macrostrat's most detailed maps, so these units come from a
+				less detailed map. A smaller study area gives more detailed units.
+			</div>
+<?php } ?>
+			<form method="post" action="/field_camp_action" id="fcUnitFetchForm" style="margin:0;">
+				<?php echo fc_hidden($csrf, 'units_fetch', $camp); ?>
+				<div class="fc-buttons">
+					<button type="submit" class="button <?php echo $fetched ? '' : 'primary '; ?>small" id="fcUnitFetchBtn"><?php echo $fetched ? 'Look up the units again' : 'Find the rock units of the study area'; ?></button>
+<?php if($fetched){ ?>
+					<span class="fc-small">Last looked up <?php echo htmlspecialchars(substr((string)$camp->units_fetched_date, 0, 10)); ?>.
+						Looking up again keeps your selection, names and labels.</span>
+<?php } ?>
+				</div>
+			</form>
+<?php } ?>
+		</div>
+
+<?php if($hasArea && $fetched && !$units){ ?>
+		<div class="fc-panel">
+			<div class="fc-mapnote" style="margin:0;">Macrostrat has no mapped rock units in this study area.
+				Geologic unit tags can still be added by hand in StraboField.</div>
+		</div>
+<?php } ?>
+
+<?php if($units){ ?>
+		<form method="post" action="/field_camp_action" id="fcUnitForm">
+			<?php echo fc_hidden($csrf, 'units_save', $camp); ?>
+			<input type="hidden" name="units_json" id="fcUnitsJson" value="">
+<?php foreach($bySource as $sourceId => $list){
+		$src = $unitSources[$sourceId] ?? null;
+		$srcName = $src && (string)$src->name !== '' ? $src->name : 'Macrostrat source map ' . $sourceId;
+?>
+			<div class="fc-panel fc-unit-source">
+				<h4><?php echo htmlspecialchars($srcName); ?> <span class="fc-small">(<?php echo count($list); ?> unit<?php echo count($list) === 1 ? '' : 's'; ?>)</span></h4>
+<?php if($src && (string)$src->ref_title !== ''){ ?>
+				<div class="fc-small" style="margin-bottom:0.5em;"><?php echo htmlspecialchars($src->ref_title); ?></div>
+<?php } ?>
+				<div class="fc-small" style="margin-bottom:0.75em;">
+					<a href="#" class="fc-unit-all" data-on="1">Select all</a> &nbsp;&middot;&nbsp;
+					<a href="#" class="fc-unit-all" data-on="0">Select none</a>
+				</div>
+				<div class="fc-units">
+					<div class="fc-unit fc-unit-head">
+						<div></div><div></div><div>Label</div><div>Tag name</div><div>Age</div><div>Lithology</div>
+					</div>
+<?php foreach($list as $u){
+			$on = FieldCamp::truthy($u->chosen);
+?>
+					<div class="fc-unit" data-pkey="<?php echo (int)$u->pkey; ?>"<?php echo (string)$u->descrip !== '' ? ' title="' . htmlspecialchars($u->descrip) . '"' : ''; ?>>
+						<div><input type="checkbox" class="fc-unit-on" id="fcU<?php echo (int)$u->pkey; ?>"<?php echo $on ? ' checked' : ''; ?>><label for="fcU<?php echo (int)$u->pkey; ?>"></label></div>
+						<div><span class="fc-chip"<?php echo (string)$u->color !== '' ? ' style="background:' . htmlspecialchars($u->color) . ';"' : ''; ?>></span></div>
+						<div><input type="text" class="fc-unit-label" maxlength="<?php echo FieldCampUnits::MAX_LABEL; ?>" value="<?php echo htmlspecialchars($u->unit_label); ?>" aria-label="Unit label"></div>
+						<div><input type="text" class="fc-unit-name" maxlength="<?php echo FieldCampUnits::MAX_NAME; ?>" value="<?php echo htmlspecialchars($u->tag_name); ?>" aria-label="Tag name"></div>
+						<div class="fc-unit-text"><?php echo htmlspecialchars((string)$u->age); ?></div>
+						<div class="fc-unit-text"><?php echo htmlspecialchars((string)$u->lith); ?></div>
+					</div>
+<?php } ?>
+				</div>
+			</div>
+<?php } ?>
+			<div class="fc-panel">
+				<div class="fc-mapnote"><strong id="fcUnitCount"><?php echo (int)$chosenCount; ?></strong> of <?php echo count($units); ?> units selected.
+					The label is the short code a geologic map prints on the unit (for example Kd); the ones here are a first guess.
+					Hold the pointer over a unit to read its description.</div>
+				<div class="fc-buttons">
+					<button type="submit" class="button primary small">Save rock units</button>
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=accounts" class="button small">Next: Accounts</a>
+				</div>
+				<div class="fc-small" style="margin-top:0.75em;">Rock unit data from Macrostrat (macrostrat.org), CC-BY 4.0.
+					Each tag's notes name the source map.</div>
+			</div>
+		</form>
+		<script>
+		(function(){
+			var form = document.getElementById('fcUnitForm');
+			var rows = Array.prototype.slice.call(form.querySelectorAll('.fc-unit[data-pkey]'));
+			function count(){
+				var n = 0;
+				rows.forEach(function(r){
+					var on = r.querySelector('.fc-unit-on').checked;
+					if(on) n++;
+					r.classList.toggle('fc-unit-off', !on);
+				});
+				document.getElementById('fcUnitCount').textContent = n;
+			}
+			rows.forEach(function(r){ r.querySelector('.fc-unit-on').addEventListener('change', count); });
+			Array.prototype.forEach.call(form.querySelectorAll('.fc-unit-all'), function(a){
+				a.addEventListener('click', function(ev){
+					ev.preventDefault();
+					var on = a.getAttribute('data-on') === '1';
+					Array.prototype.forEach.call(a.closest('.fc-unit-source').querySelectorAll('.fc-unit-on'), function(c){ c.checked = on; });
+					count();
+				});
+			});
+			// One field for the whole list: a large area can hold more units than PHP accepts as separate inputs.
+			form.addEventListener('submit', function(){
+				document.getElementById('fcUnitsJson').value = JSON.stringify(rows.map(function(r){
+					return {
+						pkey: parseInt(r.getAttribute('data-pkey'), 10),
+						chosen: r.querySelector('.fc-unit-on').checked,
+						label: r.querySelector('.fc-unit-label').value,
+						name: r.querySelector('.fc-unit-name').value
+					};
+				}));
+			});
+			count();
+		})();
+		</script>
+<?php } ?>
+		<script>
+		(function(){
+			var f = document.getElementById('fcUnitFetchForm');
+			if(!f) return;
+			f.addEventListener('submit', function(){
+				var b = document.getElementById('fcUnitFetchBtn');
+				b.disabled = true;
+				b.textContent = 'Asking Macrostrat...';
+			});
 		})();
 		</script>
 <?php

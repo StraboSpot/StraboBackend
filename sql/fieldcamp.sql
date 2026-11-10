@@ -1,7 +1,7 @@
 -- =============================================================================
 -- File: sql/fieldcamp.sql
--- Description: Field Camp Wizard, stages 1 and 2 (camp records, the instructor
---              list and the dedicated camp accounts). An instructor (an account
+-- Description: Field Camp Wizard, stages 1 to 3 (camp records, the instructor
+--              list, the dedicated camp accounts and the rock units). An instructor (an account
 --              our team puts on fieldcamp_instructors) sets up a camp on the
 --              website and creates the student accounts for it; later stages
 --              add the maps, rock units and the project package.
@@ -17,6 +17,11 @@
 --              fieldcamp_viewer       existing accounts (instructors, TAs) that
 --                                     get access to the camp's student work
 --              fieldcamp_copy         student projects copied to the camp owner
+--              fieldcamp_unit         stage 3: the rock units Macrostrat maps
+--                                     show in the study area; the chosen ones
+--                                     become geologic unit tags of the project
+--              fieldcamp_unit_source  the source maps those units come from
+--                                     (name and citation, for attribution)
 --
 -- Apply (dev or prod), idempotent / safe to re-run:
 --   cat sql/fieldcamp.sql | docker exec -i strabo-postgres \
@@ -102,11 +107,66 @@ CREATE TABLE IF NOT EXISTS fieldcamp_copy (
 CREATE INDEX IF NOT EXISTS fieldcamp_copy_camp_idx ON fieldcamp_copy (fieldcamp_pkey);
 
 -- ---------------------------------------------------------------------------
+-- Stage 3: rock units (includes/fieldcamp/FieldCampUnits.php).
+-- ---------------------------------------------------------------------------
+
+-- When and how the units were last looked up. units_bbox is the study area
+-- (west,south,east,north) the lookup used, so the page can tell when the area
+-- has changed since.
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS units_fetched_date TIMESTAMP WITH TIME ZONE;
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS units_zoom INTEGER;
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS units_bbox VARCHAR(120);
+
+-- One row per Macrostrat legend entry found in the study area. The Macrostrat
+-- columns are replaced by every new lookup; chosen, tag_name, unit_label and
+-- tag_id are the instructor's and survive a new lookup. tag_id is the id the
+-- unit's tag carries in the project (the app's id format), fixed once given so
+-- a rebuilt package does not duplicate tags.
+CREATE TABLE IF NOT EXISTS fieldcamp_unit (
+    pkey            SERIAL PRIMARY KEY,
+    fieldcamp_pkey  INTEGER                  NOT NULL REFERENCES fieldcamp(pkey),
+    source_id       INTEGER                  NOT NULL,
+    legend_id       INTEGER                  NOT NULL,
+    map_unit_name   VARCHAR(500)             NOT NULL,
+    strat_name      TEXT,
+    age             TEXT,
+    lith            TEXT,
+    descrip         TEXT,
+    comments        TEXT,
+    t_age           DOUBLE PRECISION,                   -- top (youngest), Ma
+    b_age           DOUBLE PRECISION,                   -- bottom (oldest), Ma
+    lith_classes    TEXT,                               -- comma separated
+    lith_types      TEXT,                               -- comma separated
+    color           VARCHAR(7),                         -- #rrggbb or NULL
+    sort_order      INTEGER                  NOT NULL DEFAULT 0,
+    chosen          BOOLEAN                  NOT NULL DEFAULT TRUE,
+    tag_name        VARCHAR(255)             NOT NULL,
+    unit_label      VARCHAR(40)              NOT NULL,
+    tag_id          BIGINT                   NOT NULL UNIQUE,
+    created_date    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
+    UNIQUE (fieldcamp_pkey, legend_id)
+);
+
+CREATE TABLE IF NOT EXISTS fieldcamp_unit_source (
+    pkey            SERIAL PRIMARY KEY,
+    fieldcamp_pkey  INTEGER                  NOT NULL REFERENCES fieldcamp(pkey),
+    source_id       INTEGER                  NOT NULL,
+    name            TEXT,
+    ref_title       TEXT,
+    url             TEXT,
+    scale           VARCHAR(40),
+    UNIQUE (fieldcamp_pkey, source_id)
+);
+
+-- ---------------------------------------------------------------------------
 -- Privileges. Tables are created by the superuser (postgres) but the web app
 -- connects as strabodbuser, with a readonly role for reporting.
 -- (GRANT is idempotent, so this is safe to re-run.)
 -- ---------------------------------------------------------------------------
-GRANT ALL PRIVILEGES ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer, fieldcamp_copy TO strabodbuser;
+GRANT ALL PRIVILEGES ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer, fieldcamp_copy,
+    fieldcamp_unit, fieldcamp_unit_source TO strabodbuser;
 GRANT USAGE, SELECT, UPDATE ON SEQUENCE fieldcamp_instructors_pkey_seq, fieldcamp_pkey_seq,
-    fieldcamp_account_pkey_seq, fieldcamp_viewer_pkey_seq, fieldcamp_copy_pkey_seq TO strabodbuser;
-GRANT SELECT ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer, fieldcamp_copy TO readonly;
+    fieldcamp_account_pkey_seq, fieldcamp_viewer_pkey_seq, fieldcamp_copy_pkey_seq,
+    fieldcamp_unit_pkey_seq, fieldcamp_unit_source_pkey_seq TO strabodbuser;
+GRANT SELECT ON TABLE fieldcamp_instructors, fieldcamp, fieldcamp_account, fieldcamp_viewer, fieldcamp_copy,
+    fieldcamp_unit, fieldcamp_unit_source TO readonly;
