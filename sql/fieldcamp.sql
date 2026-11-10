@@ -120,8 +120,8 @@ ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS units_bbox VARCHAR(120);
 -- One row per Macrostrat legend entry found in the study area. The Macrostrat
 -- columns are replaced by every new lookup; chosen, tag_name, unit_label and
 -- tag_id are the instructor's and survive a new lookup. tag_id is the id the
--- unit's tag carries in the project (the app's id format), fixed once given so
--- a rebuilt package does not duplicate tags.
+-- unit's tag carries in the project (a UUID, as the app gives its tags), fixed
+-- once given so a rebuilt package does not duplicate tags.
 CREATE TABLE IF NOT EXISTS fieldcamp_unit (
     pkey            SERIAL PRIMARY KEY,
     fieldcamp_pkey  INTEGER                  NOT NULL REFERENCES fieldcamp(pkey),
@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS fieldcamp_unit (
     chosen          BOOLEAN                  NOT NULL DEFAULT TRUE,
     tag_name        VARCHAR(255)             NOT NULL,
     unit_label      VARCHAR(40)              NOT NULL,
-    tag_id          BIGINT                   NOT NULL UNIQUE,
+    tag_id          VARCHAR(36)              NOT NULL UNIQUE,
     created_date    TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now(),
     UNIQUE (fieldcamp_pkey, legend_id)
 );

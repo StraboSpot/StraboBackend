@@ -54,7 +54,6 @@ class FieldCampUnits
 	public static $fetcher = null;
 
 	private static $tablesChecked = null;
-	private static $lastId = 0;
 
 	/** True once the stage 3 part of sql/fieldcamp.sql has been applied. */
 	public static function installed($db)
@@ -281,7 +280,7 @@ class FieldCampUnits
 						descrip, comments, t_age, b_age, lith_classes, lith_types, color, sort_order,
 						chosen, tag_name, unit_label, tag_id)
 					values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
-					", array_merge(array($camppkey, $unit['legend_id']), $cols, array($chosen, $name, $label, self::newTagId($db))));
+					", array_merge(array($camppkey, $unit['legend_id']), $cols, array($chosen, $name, $label, self::newTagId())));
 				$out['added']++;
 			}
 
@@ -420,17 +419,23 @@ class FieldCampUnits
 	}
 
 	/**
-	 * One unit as a tag the way the app writes one: id, name, type, color and
-	 * the fields of its geologic_unit form. Only values the form offers are set;
-	 * anything Macrostrat says that has no field goes into the notes.
+	 * One unit as a tag the way the app writes one (checked against a backup
+	 * made by StraboField 2.32.0): a UUID id, created and modified timestamps
+	 * in milliseconds, name, type, color and the fields of its geologic_unit
+	 * form. Only values the form offers are set; anything Macrostrat says that
+	 * has no field goes into the notes.
 	 *
 	 * @param object $u      fieldcamp_unit row
 	 * @param object|null $source fieldcamp_unit_source row
 	 */
 	public static function buildTag($u, $source = null)
 	{
+		$made = isset($u->created_date) ? strtotime((string)$u->created_date) : false;
+		$stamp = ($made ? $made : time()) * 1000;
 		$tag = array(
-			'id' => (int)$u->tag_id,
+			'id' => (string)$u->tag_id,
+			'created_timestamp' => $stamp,
+			'modified_timestamp' => $stamp,
 			'name' => (string)$u->tag_name,
 			'type' => 'geologic_unit',
 			'unit_label_abbreviation' => (string)$u->unit_label,
@@ -696,17 +701,13 @@ class FieldCampUnits
 		return $candidate;
 	}
 
-	/**
-	 * A new tag id in the app's format (getNewId: milliseconds x 10), above
-	 * every id this request and the table have given out.
-	 */
-	private static function newTagId($db)
+	/** A new tag id the way the app makes one (getNewUUID: a random version 4 UUID). */
+	private static function newTagId()
 	{
-		if (self::$lastId === 0) {
-			self::$lastId = (int)$db->get_var_prepared("select coalesce(max(tag_id), 0) from fieldcamp_unit", array());
-		}
-		self::$lastId = max((int)floor(microtime(true) * 10000), self::$lastId + 1);
-		return self::$lastId;
+		$b = random_bytes(16);
+		$b[6] = chr((ord($b[6]) & 0x0f) | 0x40);
+		$b[8] = chr((ord($b[8]) & 0x3f) | 0x80);
+		return vsprintf('%s%s-%s-%s-%s-%s%s%s', str_split(bin2hex($b), 4));
 	}
 
 	// -------------------------------------------------------------------

@@ -170,10 +170,13 @@ function tag_problems($tag) {
 		if (!isset($tag[$k]) || $tag[$k] === '') $bad[] = "missing $k";
 	}
 	if (($tag['type'] ?? '') !== 'geologic_unit') $bad[] = "type";
-	if (!is_int($tag['id'] ?? null) || strlen((string)$tag['id']) < 14) $bad[] = "id is not an app id";
+	if (!is_string($tag['id'] ?? null) || !preg_match('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $tag['id'])) $bad[] = "id is not a UUID";
+	foreach (array('created_timestamp', 'modified_timestamp') as $k) {
+		if (!is_int($tag[$k] ?? null) || strlen((string)$tag[$k]) !== 13) $bad[] = "$k is not a time in ms";
+	}
 	if (isset($tag['color']) && !preg_match('/^#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$/', $tag['color'])) $bad[] = "color";
 	foreach ($tag as $k => $v) {
-		if (in_array($k, array('id', 'type', 'color'), true)) continue;
+		if (in_array($k, array('id', 'type', 'color', 'created_timestamp', 'modified_timestamp', 'spots', 'features'), true)) continue;
 		if (!isset($formFields[$k])) { $bad[] = "unknown field $k"; continue; }
 		$f = $formFields[$k];
 		if ($f['kind'] === 'select_one' && !(is_string($v) && in_array($v, $formChoices[$f['list']], true))) $bad[] = "$k value " . json_encode($v);
@@ -279,15 +282,15 @@ check('saved: 14 added', $saved['error'] === '' && $saved['total'] === 14 && $sa
 $units = FieldCampUnits::listUnits($db, $campid);
 check('14 rows in map order', count($units) === 14 && $units[0]->map_unit_name === 'Alluvium' && $units[13]->map_unit_name === 'Pierre Formation');
 $names = array(); $labels = array(); $ids = array();
-foreach ($units as $u) { $names[] = $u->tag_name; $labels[] = $u->unit_label; $ids[] = (int)$u->tag_id; }
+foreach ($units as $u) { $names[] = $u->tag_name; $labels[] = $u->unit_label; $ids[] = (string)$u->tag_id; }
 check('tag names are unique', count(array_unique(array_map('mb_strtolower', $names))) === 14, $names);
 check('the three Gravel units are told apart by age',
 	in_array('Gravel (Holocene and/or Pleistocene, and/or Pliocene)', $names, true) && in_array('Gravel (Holocene or Pleistocene)', $names, true) && in_array('Gravel (Tertiary)', $names, true), $names);
 check('a name that comes up once is kept as it is', in_array('Hell Creek Formation', $names, true) && in_array('Alluvium', $names, true));
 check('unit labels are unique', count(array_unique(array_map('mb_strtolower', $labels))) === 14, $labels);
 check('labels read like map labels', $labels[0] === 'Qal' && in_array('Khc', $labels, true) && in_array('Kpi', $labels, true) && in_array('Kfht', $labels, true) && in_array('Kfht2', $labels, true), $labels);
-$sorted = $ids; sort($sorted);
-check('tag ids are unique, rising, in the app\'s format', count(array_unique($ids)) === 14 && $sorted === $ids && strlen((string)$ids[0]) === 14 && abs($ids[0] / 10000 - time()) < 120, $ids[0]);
+check('tag ids are 14 different UUIDs, as the app gives its tags', count(array_unique($ids)) === 14
+	&& count(preg_grep('/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/', $ids)) === 14, $ids[0]);
 check('every unit starts selected', count(FieldCampUnits::listUnits($db, $campid, true)) === 14);
 $sources = FieldCampUnits::listSources($db, $campid);
 check('source map saved', count($sources) === 1 && $sources[543]->name === 'Geologic map of Testland');
@@ -302,7 +305,7 @@ $rows = array();
 foreach ($units as $u) {
 	$rows[] = array('pkey' => (int)$u->pkey, 'chosen' => strpos($u->tag_name, 'Gravel') !== 0, 'name' => $u->tag_name, 'label' => $u->unit_label);
 }
-$hcPkey = (int)$by['Hell Creek Formation']->pkey; $hcTagId = (int)$by['Hell Creek Formation']->tag_id;
+$hcPkey = (int)$by['Hell Creek Formation']->pkey; $hcTagId = (string)$by['Hell Creek Formation']->tag_id;
 foreach ($rows as &$row) { if ($row['pkey'] === $hcPkey) { $row['name'] = ' Hell Creek Fm '; $row['label'] = 'Khc*'; } }
 unset($row);
 check('selection saved', FieldCampUnits::saveSelection($db, $camp, $rows) === array());
@@ -355,12 +358,12 @@ $saved = FieldCampUnits::save($db, $camp, FieldCampUnits::lookup(FieldCampUnits:
 check('second lookup: 1 added, 2 removed, 13 in all', $saved['error'] === '' && $saved['added'] === 1 && $saved['removed'] === 2 && $saved['total'] === 13, $saved);
 $by = units_by_name($db, $campid);
 check('a kept unit keeps the instructor\'s name, label, selection and its tag id',
-	isset($by['Hell Creek Fm']) && $by['Hell Creek Fm']->unit_label === 'Khc*' && (int)$by['Hell Creek Fm']->tag_id === $hcTagId && FieldCamp::truthy($by['Hell Creek Fm']->chosen));
+	isset($by['Hell Creek Fm']) && $by['Hell Creek Fm']->unit_label === 'Khc*' && $by['Hell Creek Fm']->tag_id === $hcTagId && FieldCamp::truthy($by['Hell Creek Fm']->chosen));
 check('and takes Macrostrat\'s new text', $by['Hell Creek Fm']->descrip === 'New description.' && $by['Hell Creek Fm']->map_unit_name === 'Hell Creek Formation (revised)');
 check('deselected units stay deselected', !FieldCamp::truthy($by['Gravel (Tertiary)']->chosen));
 check('removed units are gone', !isset($by['Alluvium']) && !isset($by['Pierre Formation']));
 check('a new unit whose name is taken gets its own name and label', isset($by['Hell Creek Fm 2']) && (int)$by['Hell Creek Fm 2']->legend_id === 999001 && $by['Hell Creek Fm 2']->unit_label === 'Khcf', array_keys($by));
-check('its tag id is above every earlier one', (int)$by['Hell Creek Fm 2']->tag_id > max($ids));
+check('its tag id is a new one', !in_array($by['Hell Creek Fm 2']->tag_id, $ids, true) && strlen($by['Hell Creek Fm 2']->tag_id) === 36);
 check('sources replaced', array_keys(FieldCampUnits::listSources($db, $campid)) === array(543, 777));
 
 FieldCamp::saveArea($db, $campid, array('west' => -104.8, 'south' => 45.7, 'east' => -104.3, 'north' => 46.6));
@@ -395,7 +398,15 @@ check('ages given the wrong way round are read anyway', FieldCampUnits::ageField
 // ===========================================================================
 section('Tags: the three sample areas against the app\'s form');
 check('the form copy was read (fields and choices)', count($formFields) > 50 && isset($formFields['unit_label_abbreviation']) && $formFields['unit_label_abbreviation']['required'] && count($formChoices) > 30);
-$probe = array('id' => 17000000000000, 'name' => 'x', 'type' => 'geologic_unit', 'unit_label_abbreviation' => 'x');
+$probe = array('id' => 'a7882593-d3e4-4836-8946-f024f45afdd9', 'created_timestamp' => 1794347052683, 'modified_timestamp' => 1794347052683,
+	'name' => 'x', 'type' => 'geologic_unit', 'unit_label_abbreviation' => 'x');
+// Tags written by the app itself (StraboField 2.32.0 on an iPad, Jason's reference backup of 11-10): one bare, one with
+// nearly every field filled. The yardstick has to pass them, or it is measuring the wrong thing.
+$appTags = json_decode(file_get_contents("$FIXDIR/app_written_tags.json"), true);
+$appProblems = array();
+foreach ($appTags as $t) { if ($t['type'] === 'geologic_unit') foreach (tag_problems($t) as $p) $appProblems[] = $t['name'] . ': ' . $p; }
+check('the yardstick passes the tags the app wrote itself', count($appTags) === 3 && !$appProblems, $appProblems);
+check('an old-style numeric id is caught', count(tag_problems(array('id' => 17000000000000) + $probe)) === 1);
 check('the yardstick itself catches a bad value', count(tag_problems($probe + array('rock_type' => 'granite'))) === 1);
 check('the yardstick catches a field the form would hide', count(tag_problems($probe + array('sediment_type' => 'till'))) === 1 && count(tag_problems($probe + array('epoch_quaternary' => array('holocene')))) === 1);
 check('the yardstick catches an unknown field', count(tag_problems($probe + array('lithology' => 'x'))) === 1);
@@ -443,10 +454,10 @@ check('talus is sediment even when its clasts are metamorphic', $tagsets['barabo
 check('Water is not a tag unless selected', !isset($tagsets['baraboo']['Water']));
 check('five Till units have five names', count(array_filter(array_keys($tagsets['baraboo']), function ($n) { return strpos($n, 'Till') === 0; })) === 5, array_keys($tagsets['baraboo']));
 check('a unit with no color has no color key', (function () use ($db) {
-	$u = (object)array('tag_id' => 17000000000001, 'tag_name' => 'W', 'unit_label' => 'w', 'map_unit_name' => 'W', 'color' => '', 'lith_classes' => '', 'lith_types' => '',
+	$u = (object)array('tag_id' => 'fd625467-c057-4fd4-87a8-1b7f855cb2cf', 'created_date' => '2026-11-10 15:00:00-06', 'tag_name' => 'W', 'unit_label' => 'w', 'map_unit_name' => 'W', 'color' => '', 'lith_classes' => '', 'lith_types' => '',
 		'lith' => '', 't_age' => null, 'b_age' => null, 'descrip' => '', 'age' => '', 'strat_name' => '', 'comments' => '', 'source_id' => 1, 'legend_id' => 2);
 	$t = FieldCampUnits::buildTag($u, null);
-	return !isset($t['color']) && !isset($t['description']) && tag_problems($t) === array() && $t['notes'] === 'Source: from Macrostrat (macrostrat.org, CC-BY 4.0), source map 1, legend entry 2.';
+	return !isset($t['color']) && !isset($t['description']) && tag_problems($t) === array() && $t['created_timestamp'] === 1794344400000 && $t['notes'] === 'Source: from Macrostrat (macrostrat.org, CC-BY 4.0), source map 1, legend entry 2.';
 })());
 check('tags are plain JSON', json_decode(json_encode($tagsets['baraboo']), true) == $tagsets['baraboo']);
 

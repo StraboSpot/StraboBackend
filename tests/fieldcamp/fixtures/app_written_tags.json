@@ -1,0 +1,94 @@
+[
+ {
+  "type": "documentation",
+  "name": "Non Geo Unit Tag",
+  "documentation_type": "type_of_data",
+  "notes": "Notes here",
+  "id": "c877c5d9-f68b-48da-ace5-61fcac60a624",
+  "created_timestamp": 1794347091413,
+  "modified_timestamp": 1794347091413
+ },
+ {
+  "type": "geologic_unit",
+  "name": "Test Unit Barren",
+  "unit_label_abbreviation": "TUB",
+  "id": "a7882593-d3e4-4836-8946-f024f45afdd9",
+  "created_timestamp": 1794347052683,
+  "modified_timestamp": 1794347052683
+ },
+ {
+  "type": "geologic_unit",
+  "name": "Test Unit Filled",
+  "unit_label_abbreviation": "TUF",
+  "map_unit_name": "Unit name",
+  "member_name": "Member type",
+  "submember_name": "Sub name",
+  "rock_type": "igneous",
+  "igneous_rock_class": "volcanic",
+  "volcanic_rock_type": "tuff",
+  "eon": [
+   "phanerozoic",
+   "proterozoic"
+  ],
+  "era_phanerozoic": [
+   "cenozoic",
+   "paleozoic"
+  ],
+  "period_cenozoic": [
+   "quaternary",
+   "neogene"
+  ],
+  "epoch_quaternary": [
+   "holocene"
+  ],
+  "epoch_neogene": [
+   "pliocene"
+  ],
+  "age_pliocene": [
+   "piacenzian"
+  ],
+  "period_paleozoic": [
+   "permian",
+   "carboniferous",
+   "devonian"
+  ],
+  "era_proterozoic": [
+   "neoproterozoic",
+   "mesoproterozoi"
+  ],
+  "period_neoproterozoic": [
+   "ediacaran",
+   "tonian"
+  ],
+  "period_mesoproterozoic": [
+   "stenian",
+   "calymmian"
+  ],
+  "age_permian": [
+   "changhsingian",
+   "wuchiapingian"
+  ],
+  "age_carboniferous": [
+   "gzelian",
+   "moscovian"
+  ],
+  "age_devonian": [
+   "famennian",
+   "givetian"
+  ],
+  "age_modifier": [
+   "late"
+  ],
+  "absolute_age_of_geologic_unit": 55,
+  "age_uncertainty": 4,
+  "description": "Desc here",
+  "notes": "Notes here",
+  "id": "fd625467-c057-4fd4-87a8-1b7f855cb2cf",
+  "created_timestamp": 1794347005726,
+  "color": "#00FFFF",
+  "modified_timestamp": 1794347495424,
+  "spots": [
+   17943474879243
+  ]
+ }
+]
