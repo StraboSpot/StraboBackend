@@ -56,6 +56,17 @@ if($_SESSION['userpkey']!=""){
 	}
 }
 
+// Field Camp Wizard: the menu entry shows for accounts on the instructor list;
+// dedicated camp accounts lose the password / email / delete entries (they
+// share one password that the instructor owns).
+$showfieldcamp = false;
+$iscampaccount = false;
+if($_SESSION['userpkey']!="" && $db){
+	require_once(__DIR__ . "/fieldcamp/FieldCamp.php");
+	$showfieldcamp = FieldCamp::canUse($db, (int)$_SESSION['userpkey']);
+	$iscampaccount = FieldCamp::isCampAccount($db, (int)$_SESSION['userpkey']);
+}
+
 $showdois = false;
 if($_SESSION['userpkey']!=""){
 	if($db){
@@ -210,6 +221,13 @@ if($showcollaborationsxxx){
 									<li><a href="/load_shapefile">Load Shapefile</a></li>
 									<li><a href="/load_geopackage">Load GeoPackage</a></li>
 									<li><a href="/TemplateWizard/">Field Template Wizard</a></li>
+<?php
+if($showfieldcamp){
+?>
+									<li><a href="/field_camp_wizard">Field Camp Wizard</a></li>
+<?php
+}
+?>
 									<li><a href="/geotiff">My Maps</a></li>
 									<!--<li><a href="/my_jwts">My JWTs</a></li>-->
 									<li><a href="/versioning">Versioning</a></li>
@@ -262,9 +280,15 @@ if(in_array($userpkey, array(3, 7217))){
 <?php
 }
 ?>
+<?php
+if(!$iscampaccount){
+?>
 									<li><a href="/change_password">Change Password</a></li>
 									<li><a href="/change_email">Change Email</a></li>
 									<li><a href="/delete_account">Delete Account</a></li>
+<?php
+}
+?>
 									<li><a href="/logout">Logout</a></li>
 								<?php
 								}else{

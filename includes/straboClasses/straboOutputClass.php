@@ -59,6 +59,7 @@ class straboOutputClass
 	public $imagesMissing = 0;     // images skipped by the copiers because no file exists on disk
 	public $captured = array();
 	public $progress = null;       // optional callable(stage, done, total, note) set by the export worker (fieldbook page progress)
+	public $bookLabel = '';        // Field Book only: a label added to the title, owner line and file name (Field Camp Wizard: the student's username)
 
 	public function capturing(){ return $this->captureDir !== null; }
 

@@ -18,6 +18,26 @@ $userpkey = (int)$_SESSION['userpkey'];
 include("includes/config.inc.php");
 include("db.php");
 
+// Field camp accounts share one password that their instructor set; they
+// cannot change it (or their sign-in name) themselves.
+require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
+if(FieldCamp::isCampAccount($db, $userpkey)){
+	include("includes/mheader.php");
+	?>
+		<div id="main" class="wrapper style1">
+			<div class="container">
+				<header class="major">
+					<h2>Change Password</h2>
+				</header>
+				This is a field camp account. Its sign-in details are managed by your instructor and cannot be changed here.
+				<div class="bottomSpacer"></div>
+			</div>
+		</div>
+	<?php
+	include("includes/mfooter.php");
+	exit();
+}
+
 $count=$db->get_var_prepared("SELECT count(*) FROM users WHERE pkey=$1", array($userpkey));
 
 if($count > 0){

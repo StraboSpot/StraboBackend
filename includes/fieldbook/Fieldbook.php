@@ -73,12 +73,20 @@ class Fieldbook
 			$notes[(string)$d] = is_array($dn) ? $dn : array();
 		}
 		$meta = self::meta($strabo, $owner, $tree, $get);
+		// A book made for someone other than its owner's own account can carry a label (Field Camp Wizard: the
+		// student's username, so thirty books of one camp project can be told apart). Set in code, never from a request.
+		$label = isset($out->bookLabel) ? trim((string)$out->bookLabel) : '';
+		if ($label !== '') { $meta['title'] .= ' (' . $label . ')'; $meta['owner'] = $label; }
 		// project-level data (design §14 M7): every tag of each project + the memos (reports) the READER may see.
 		// The reader is the signed-in user on the two web doors ($strabo is built from the session) and the
 		// job's user in the Export Builder worker (readerUserpkey, set by the plugin; $strabo is the owner there).
 		$reader = isset($out->readerUserpkey) ? (int)$out->readerUserpkey : (int)$strabo->userpkey;
 		$projectData = self::projectData($strabo, $tree, $reader);
 		$model = FieldbookModel::build($features, $tags, $notes, $tree, $meta, $projectData);
+		if ($label !== '') {
+			$safe = trim(preg_replace('/[^A-Za-z0-9._-]+/', '_', $label), '_');
+			if ($safe !== '') $model->filename = substr($safe, 0, 40) . '_' . $model->filename;
+		}
 		if ($progress) call_user_func($progress, 'gather', 0, 0, count($features) . ' spots, ' . count($model->imageIds()) . ' photos, ' . self::dayCount($model) . ' field days' . ($model->counts['memos'] ? ', ' . $model->counts['memos'] . ' memos' : ''));
 		$photos = self::photos($meta['options']);
 		if ($photos->enabled()) $photos->setFilenames(self::imageFilenames($strabo, $model->imageIds()));

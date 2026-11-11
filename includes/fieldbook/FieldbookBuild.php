@@ -59,10 +59,13 @@ class FieldbookBuild
 		return $p;
 	}
 
-	/** Build key: the signed-in user + the normalised parameters. */
-	public static function key($sessionUser, array $params)
+	/**
+	 * Build key: the signed-in user + the normalised parameters. $door names a door other than the usual one
+	 * (the Field Camp Wizard's: ['camp' => id]) so its builds never share a key with the usual door's.
+	 */
+	public static function key($sessionUser, array $params, array $door = array())
 	{
-		return sha1((int)$sessionUser . '|' . json_encode($params));
+		return sha1((int)$sessionUser . '|' . json_encode($params) . ($door ? '|' . json_encode($door) : ''));
 	}
 
 	public static function statePath($key) { return self::dir() . '/' . preg_replace('/[^a-f0-9]/', '', $key) . '.json'; }
@@ -86,11 +89,16 @@ class FieldbookBuild
 		return @rename($tmp, $p);
 	}
 
-	/** A fresh queued state for a page visit that starts a build. */
-	public static function newState($sessionUser, array $params, $title)
+	/**
+	 * A fresh queued state for a page visit that starts a build. $door (Field Camp Wizard, see
+	 * FieldCampRoster::book): 'camp', 'project', 'run_as' (the camp account whose data the book reads; the
+	 * build runs as that account) and 'label'. Only code that has checked the access may pass it.
+	 */
+	public static function newState($sessionUser, array $params, $title, array $door = array())
 	{
-		return array(
-			'key' => self::key($sessionUser, $params),
+		$keyDoor = isset($door['camp']) ? array('camp' => (int)$door['camp']) : array();
+		return $door + array(
+			'key' => self::key($sessionUser, $params, $keyDoor),
 			'userpkey' => (int)$sessionUser, 'params' => $params, 'title' => (string)$title,
 			'state' => 'queued', 'stage' => 'gather', 'done' => 0, 'total' => 0, 'note' => 'Waiting to start',
 			'stages_seen' => array(), 'created' => microtime(true), 'started' => null, 'finished' => null,
@@ -167,7 +175,15 @@ class FieldbookBuild
 		if (!is_dir($tmp)) @mkdir($tmp, 0775, true);
 		foreach (glob("$tmp/*") as $f) @unlink($f);
 		$get = $state['params'];
+		if (!empty($state['run_as'])) {
+			// Field Camp Wizard door: the book is the camp account's, read exactly as that account would read it
+			// (daily notes and memos are looked up by the instance's own user). Access was checked by the caller.
+			$owner = new StraboSpot($strabo->neodb, (int)$state['run_as'], $strabo->db);
+			if (isset($strabo->uuid)) $owner->setuuid($strabo->uuid);
+			$strabo = $owner;
+		}
 		$out = new straboOutputClass($strabo, $get);
+		if (!empty($state['label'])) $out->bookLabel = (string)$state['label'];
 		$out->captureDir = $tmp;
 		$out->progress = self::progressWriter($key, $state);
 		try {

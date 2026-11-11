@@ -13,6 +13,8 @@ Header set Cache-Control "no-cache"
 RewriteEngine on
 # Old copies of the site code (prod: bkup -> /StraboData/bigDriveData/bkup/): never served or run
 RewriteRule ^bkup(/|$) - [F,L]
+# Field Camp Wizard tile builds: read from disk by field_camp_package.php, never served
+RewriteRule ^fieldcamp_files(/|$) - [F,L]
 # Upload work folders are numbered by a sequence: uploaded shapefile / GeoPackage / GeoTIFF files
 # must not be downloadable by others. Only the StraboImages.zip downloads are fetched from ziptemp.
 RewriteCond %{REQUEST_URI} !\.zip$ [NC]

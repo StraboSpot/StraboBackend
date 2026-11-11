@@ -9,7 +9,9 @@
  *              file is flock'd for the duration. Keeps running if the browser
  *              leaves (the finished book is served to the next visit within
  *              two minutes). Releases the session lock first so the page's
- *              polls are not queued behind it.
+ *              polls are not queued behind it. A build queued by the Field Camp
+ *              Wizard door (state has camp + run_as) has its access checked
+ *              again here and runs as the camp account.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -31,6 +33,13 @@ header('Cache-Control: no-store');
 $key = (string)($_GET['k'] ?? '');
 $state = FieldbookBuild::load($key);
 if (!$state || (int)$state['userpkey'] !== (int)$userpkey) { http_response_code(404); echo json_encode(array('found' => false)); exit(); }
+// A book from the Field Camp Wizard door reads another account's data: check that access again now,
+// a queued or older state is not proof of it.
+if (!empty($state['camp']) || !empty($state['run_as'])) {
+	require_once("includes/fieldcamp/FieldCampRoster.php");
+	$door = FieldCampRoster::book($db, $neodb, $userpkey, (int)($state['camp'] ?? 0), (int)($state['run_as'] ?? 0), (string)($state['project'] ?? ''));
+	if (!$door) { http_response_code(404); echo json_encode(array('found' => false)); exit(); }
+}
 if (FieldbookBuild::isRunning($state)) { $v = FieldbookBuild::view($key, $state); $v['attached'] = true; echo json_encode($v); exit(); }
 if (FieldbookBuild::isReusable($state, $key)) { echo json_encode(FieldbookBuild::view($key, $state)); exit(); }
 
