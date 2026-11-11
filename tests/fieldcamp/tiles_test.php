@@ -34,6 +34,8 @@ chdir('/srv/app/www');
 $_SERVER['DOCUMENT_ROOT'] = '/srv/app/www';
 require_once 'includes/config.inc.php';
 require_once 'db.php';
+require_once 'neodb.php';
+require_once 'db/strabospotclass.php';
 require_once 'includes/fieldcamp/FieldCamp.php';
 require_once 'includes/fieldcamp/FieldCampUnits.php';
 require_once 'includes/fieldcamp/FieldCampPackage.php';
@@ -59,8 +61,17 @@ function rmtree($dir) {
 	@rmdir($dir);
 }
 function cleanup() {
-	global $db, $FIX;
+	global $db, $neodb, $FIX;
 	$fixpkeys = implode(',', array_keys($FIX));
+	// the two camp accounts made for the list label checks (they must go before their camp)
+	$accs = $db->get_results_prepared("select pkey from users where email like 'fctilesstate\\_%'", array());
+	if ($accs) {
+		$ain = implode(',', array_map(function ($r) { return (int)$r->pkey; }, $accs));
+		$neodb->query("MATCH (n) WHERE n.userpkey IN [$ain] DETACH DELETE n");
+		$db->query("delete from fieldcamp_account where user_pkey in ($ain)");
+		$db->query("delete from apptokens where email like 'fctilesstate\\_%'");
+		$db->query("delete from users where pkey in ($ain)");
+	}
 	$rows = $db->get_results_prepared("select pkey, files_token from fieldcamp where owner_user_pkey in ($fixpkeys)", array());
 	if ($rows) {
 		foreach ($rows as $r) {
@@ -499,6 +510,29 @@ $token = basename(FieldCampTiles::dir($camp));
 list($code) = http('GET', "/fieldcamp_files/$token/OfflineTiles.zip", $sidI);
 check('the built files cannot be fetched from the web, even with the folder name', $code === 403, $code);
 
+// The label on the wizard's first page is worked out from the camp (FieldCamp::stateOf)
+$stateOf = function ($id) use ($db, $INSTR) { foreach (FieldCamp::listCamps($db, $INSTR) as $c) { if ((int)$c->pkey === (int)$id) return FieldCamp::stateOf($db, $c); } return null; };
+$st = $stateOf($campid);
+check('a camp with a study area but no accounts is "Setting up", and says what is missing', $st['key'] === 'setup' && $st['label'] === 'Setting up' && $st['note'] === 'No accounts yet', $st);
+check('a camp without a study area too', $stateOf($noareaid)['note'] === 'No study area yet, no accounts yet', $stateOf($noareaid));
+$stCamp = FieldCamp::getCamp($db, $campid);
+$mk = FieldCamp::createAccounts($db, $neodb, $stCamp, 'fctilesstate_{n}', 2, 'abcd');
+check('(two accounts for the camp)', $mk['error'] === '' && count($mk['created']) === 2, $mk);
+check('study area, accounts and current offline maps: "Ready"', $stateOf($campid) === array('key' => 'ready', 'label' => 'Ready', 'note' => ''), $stateOf($campid));
+FieldCampTiles::saveChoice($db, $stCamp, 14, array('macrostrat'));
+check('offline maps that no longer match: "Needs attention"', $stateOf($campid) === array('key' => 'attention', 'label' => 'Needs attention', 'note' => 'Offline maps are out of date'), $stateOf($campid));
+list($code, $body) = http('GET', '/field_camp_wizard', $sidI);
+check('the list shows the label and where to fix it, and no camp says Draft', $code === 200 && !php_error($body) && strpos($body, 'fc-pill-failed">Needs attention</span>') !== false
+	&& strpos($body, "Offline maps are out of date: <a href=\"/field_camp?id=$campid&amp;step=tiles\"") !== false && stripos($body, '>Draft<') === false && strpos($body, '>Setting up</span>') !== false);
+FieldCampTiles::saveChoice($db, $stCamp, 15, $built3);
+$db->prepare_query("update fieldcamp set build_status = 'building', build_started = now() where pkey = $1", array($campid));
+check('while tiles are built: "Building offline maps"', $stateOf($campid)['key'] === 'building' && $stateOf($campid)['label'] === 'Building offline maps');
+$db->prepare_query("update fieldcamp set build_status = 'ready' where pkey = $1", array($campid));
+FieldCamp::setAccountsActive($db, $stCamp, false);
+check('every account deactivated: "Closed"', $stateOf($campid)['key'] === 'closed' && $stateOf($campid)['note'] === 'All accounts are deactivated', $stateOf($campid));
+FieldCamp::setAccountsActive($db, $stCamp, true);
+check('reactivated: "Ready" again', $stateOf($campid)['key'] === 'ready');
+
 // Offline maps switched off
 list($code, $body, $loc) = post_follow($sidI, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'units', 'offline' => '0', 'zoom' => '15', 'layers_json' => json_encode($built3)));
 $off = FieldCamp::getCamp($db, $campid);
@@ -512,6 +546,7 @@ check('the Package step says they are switched off and offers the plain download
 list($code, $body) = http('GET', "/field_camp_package?id=$campid", $sidI);
 $tmp = tempnam(sys_get_temp_dir(), 'fctilesoff'); file_put_contents($tmp, $body);
 $zip = new ZipArchive(); $ok = $zip->open($tmp) === true;
+check('offline maps switched off do not hold a camp back: "Ready"', $stateOf($campid)['key'] === 'ready', $stateOf($campid));
 check('and the package has no tile zip', $code === 200 && $ok && $zip->locateName('maps/OfflineTiles.zip') === false);
 if ($ok) $zip->close(); unlink($tmp);
 

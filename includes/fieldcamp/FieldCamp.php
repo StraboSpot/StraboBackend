@@ -250,6 +250,45 @@ class FieldCamp
 	}
 
 	/**
+	 * Where a camp stands, for the label on the wizard's first page. Worked out from what the camp has
+	 * (2026-11-10; the stored fieldcamp.status was never changed by anything and always read "draft").
+	 * The first that applies:
+	 *   building   the offline maps are being built
+	 *   setup      no study area yet, or no accounts yet
+	 *   closed     every account is deactivated (the camp is over)
+	 *   attention  offline maps are wanted but not built, out of date, or their last build failed
+	 *   ready      all of the above in order
+	 *
+	 * @param object $camp a row of listCamps() (needs accountcount and inactivecount)
+	 * @return array ['key', 'label', 'note' (what is missing or wrong, '' when nothing)]
+	 */
+	public static function stateOf($db, $camp)
+	{
+		require_once __DIR__ . '/FieldCampPackage.php';
+		require_once __DIR__ . '/FieldCampTiles.php';
+		$tiles = FieldCampPackage::installed($db) && FieldCampTiles::installed($db);
+		if ($tiles && FieldCampTiles::isBuilding($camp)) return array('key' => 'building', 'label' => 'Building offline maps', 'note' => '');
+
+		$accounts = (int)($camp->accountcount ?? 0); $inactive = (int)($camp->inactivecount ?? 0);
+		$missing = array();
+		if ($camp->bbox_west === null || $camp->bbox_west === '') $missing[] = 'no study area yet';
+		if ($accounts === 0) $missing[] = 'no accounts yet';
+		if ($missing) return array('key' => 'setup', 'label' => 'Setting up', 'note' => ucfirst(implode(', ', $missing)));
+
+		if ($inactive === $accounts) return array('key' => 'closed', 'label' => 'Closed', 'note' => 'All accounts are deactivated');
+
+		if ($tiles) {
+			$layers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+			if (FieldCampTiles::needsBuild($camp, $layers)) {
+				$manifest = FieldCampTiles::manifest($camp);
+				$note = $manifest ? 'Offline maps are out of date' : ((string)$camp->build_status !== '' ? 'The offline maps could not be built' : 'Offline maps are not built yet');
+				return array('key' => 'attention', 'label' => 'Needs attention', 'note' => $note);
+			}
+		}
+		return array('key' => 'ready', 'label' => 'Ready', 'note' => '');
+	}
+
+	/**
 	 * Check the Basics step.
 	 * @return array [clean values, list of problems]
 	 */

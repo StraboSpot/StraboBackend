@@ -28,10 +28,8 @@ $isAdmin = FieldCamp::isAdmin($userpkey);
 $flash = $_SESSION['fieldcamp_flash'] ?? null;
 unset($_SESSION['fieldcamp_flash']);
 
-$statusLabels = array(
-	'draft' => 'Draft', 'building' => 'Building', 'ready' => 'Ready',
-	'failed' => 'Failed', 'archived' => 'Archived',
-);
+// Label style per state (FieldCamp::stateOf).
+$stateStyle = array('setup' => 'off', 'building' => 'building', 'ready' => 'ready', 'attention' => 'failed', 'closed' => 'off');
 
 include("includes/mheader.php");
 include("includes/fieldcamp/fieldcamp_style.php");
@@ -69,7 +67,7 @@ include("includes/fieldcamp/fieldcamp_style.php");
 		<div class="fc-list">
 <?php
 	foreach($camps as $c){
-		$status = isset($statusLabels[$c->status]) ? $c->status : 'draft';
+		$state = FieldCamp::stateOf($db, $c);
 		$accounts = (int)$c->accountcount;
 		$inactive = (int)$c->inactivecount;
 ?>
@@ -77,7 +75,7 @@ include("includes/fieldcamp/fieldcamp_style.php");
 				<div>
 					<div class="fc-camp-name">
 						<?php echo htmlspecialchars($c->camp_name); ?>
-						<span class="fc-pill fc-pill-<?php echo $status; ?>"><?php echo $statusLabels[$status]; ?></span>
+						<span class="fc-pill fc-pill-<?php echo $stateStyle[$state['key']]; ?>"><?php echo htmlspecialchars($state['label']); ?></span>
 					</div>
 					<div class="fc-meta">
 						<span><?php echo (int)$c->camp_year; ?></span>
@@ -86,6 +84,9 @@ include("includes/fieldcamp/fieldcamp_style.php");
 							if($accounts > 0 && $inactive === $accounts){ echo " (deactivated)"; }
 							elseif($inactive > 0){ echo " ($inactive deactivated)"; } ?></span>
 						<span><?php echo ($c->bbox_west === null || $c->bbox_west === '') ? 'No study area yet' : 'Study area set'; ?></span>
+<?php if($state['key'] === 'attention'){ ?>
+						<span class="fc-preview-msg fc-bad"><?php echo htmlspecialchars($state['note']); ?>: <a href="/field_camp?id=<?php echo (int)$c->pkey; ?>&amp;step=tiles">Offline maps</a></span>
+<?php } ?>
 <?php if($isAdmin && (int)$c->owner_user_pkey !== (int)$userpkey){ ?>
 						<span>Owner: <?php echo htmlspecialchars($c->owner_email); ?></span>
 <?php } ?>

@@ -31,6 +31,7 @@
 .fc-pill { display: inline-block; font-size: 0.72em; text-transform: uppercase; letter-spacing: 0.06em;
 	padding: 0.2em 0.6em; border-radius: 3px; border: 1px solid rgba(255,255,255,0.25);
 	color: rgba(255,255,255,0.8); margin-left: 0.6em; vertical-align: middle; }
+.fc-pill-building { border-color: #e0b050; color: #e0b050; }
 .fc-pill-ready { border-color: #5cb87a; color: #5cb87a; }
 .fc-pill-failed { border-color: #f06880; color: #f06880; }
 .fc-pill-off { border-color: rgba(255,255,255,0.2); color: rgba(255,255,255,0.45); }
