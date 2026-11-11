@@ -249,15 +249,15 @@ class FieldCamp
 		foreach (array('west', 'south', 'east', 'north') as $k) {
 			$raw = trim((string)($in[$k] ?? ''));
 			if ($raw === '' || !is_numeric($raw)) {
-				return array(null, array("Choose the study area on the map first."));
+				return array(null, array("Draw the study area on the map first."));
 			}
 			$v[$k] = round((float)$raw, 6);
 		}
 		if ($v['west'] < -180 || $v['east'] > 180 || $v['south'] < -85 || $v['north'] > 85) {
-			$errors[] = "The area reaches past the edge of the map. Zoom in on the study area.";
+			$errors[] = "The area reaches past the edge of the map. Draw a smaller study area.";
 		}
 		if ($v['west'] >= $v['east'] || $v['south'] >= $v['north']) {
-			$errors[] = "The area is empty. Zoom in on the study area.";
+			$errors[] = "The area is empty. Draw the study area again.";
 		}
 		return array($v, $errors);
 	}

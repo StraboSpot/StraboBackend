@@ -368,6 +368,8 @@ list($code, $body, $loc) = post_follow($sInstr, array('action' => 'create', 'cam
 $http = $db->get_row_prepared("select * from fieldcamp where camp_name = 'HTTP Camp' and owner_user_pkey = $1", array($INSTR));
 check('create saves the camp and moves on to the study area', $http && strpos($loc, 'step=area') !== false && strpos($body, 'fcMap') !== false, $loc);
 $hid = $http ? (int)$http->pkey : 0;
+check('the study area is drawn as a box, and Next saves it (no separate save)', strpos($body, 'id="fcDrawBtn"') !== false && strpos($body, 'not drawn yet') !== false
+	&& strpos($body, 'id="fcAreaForm" data-fc-save="area"') !== false && strpos($body, 'data-fc-next="maps">Next: Maps') !== false && strpos($body, 'this view') === false);
 
 post_follow($sInstr, array('action' => 'basics', 'id' => $hid, 'camp_name' => 'HTTP Camp 2', 'camp_year' => '2028', 'project_name' => 'HTTP Project'));
 check('basics are updated', FieldCamp::getCamp($db, $hid)->camp_name === 'HTTP Camp 2');
@@ -376,7 +378,7 @@ list($code, $body) = post_follow($sInstr, array('action' => 'area', 'id' => $hid
 $h = FieldCamp::getCamp($db, $hid);
 check('area is saved', abs((float)$h->bbox_west + 110.5) < 1e-6 && abs((float)$h->bbox_north - 38.4) < 1e-6 && strpos($body, 'Study area saved') !== false);
 list($code, $body) = post_follow($sInstr, array('action' => 'area', 'id' => $hid, 'west' => '', 'south' => '', 'east' => '', 'north' => ''));
-check('an empty area is refused and the saved one stays', strpos($body, 'Choose the study area') !== false && abs((float)FieldCamp::getCamp($db, $hid)->bbox_west + 110.5) < 1e-6);
+check('an empty area is refused and the saved one stays', strpos($body, 'Draw the study area on the map first') !== false && abs((float)FieldCamp::getCamp($db, $hid)->bbox_west + 110.5) < 1e-6);
 
 list($code, $body) = post_follow($sInstr, array('action' => 'accounts_create', 'id' => $hid, 'username_template' => 'fctest94h_{n}', 'count' => '2', 'password' => $PW));
 check('accounts are created over HTTP', strpos($body, '2 accounts created') !== false && can_sign_in('fctest94h_1', $PW) && can_sign_in('fctest94h_2', $PW), substr($body, 0, 200));

@@ -298,36 +298,35 @@ if($step === 'basics'){
 // ===========================================================================
 if($step === 'area'){
 	$hasArea = ($size !== null);
+	$next = fc_next($steps, 'area');
 ?>
+		<style>
+		.fc-handle { width: 14px; height: 14px; box-sizing: border-box; background: #fff; border: 2px solid #e44c65; border-radius: 50%; cursor: move; }
+		.fc-map.fc-drawing, .fc-map.fc-drawing .leaflet-grab, .fc-map.fc-drawing .leaflet-interactive { cursor: crosshair; }
+		.fc-map.fc-drawing { touch-action: none; }
+		</style>
 		<div class="fc-panel">
 			<h4>Study area</h4>
 			<div class="fc-mapnote">
-				Zoom and move the map until the whole area the camp will work in is visible, then save.
-				Everything in view becomes the study area.
+				Move and zoom the map to where the camp will work. Then click <strong>Draw the study area</strong> and drag a box
+				around the whole area. To adjust the box, drag one of its corners; to start over, draw it again.
+			</div>
+			<div class="fc-buttons" style="margin-bottom:0.75em;">
+				<button type="button" class="button small" id="fcDrawBtn"><?php echo $hasArea ? 'Draw the study area again' : 'Draw the study area'; ?></button>
+				<span class="fc-small" id="fcDrawHint" style="display:none;">Drag a box on the map: press where one corner should be and let go at the opposite corner.</span>
 			</div>
 			<div id="fcMap" class="fc-map"></div>
 			<div class="fc-mapnote">
-				Area in view: <strong id="fcViewSize">...</strong>
-<?php if($hasArea){ ?>
-				<span class="fc-small">&nbsp; Saved area (outlined):
-					<?php echo number_format($size['width'], 1); ?> km wide,
-					<?php echo number_format($size['height'], 1); ?> km tall</span>
-<?php } ?>
+				Study area: <strong id="fcViewSize"><?php echo $hasArea ? '...' : 'not drawn yet'; ?></strong>
 			</div>
-			<form method="post" action="/field_camp_action" id="fcAreaForm">
-<?php $next = fc_next($steps, 'area'); ?>
-				<?php echo fc_hidden($csrf, 'area', $camp, $hasArea ? '' : $next[0]); ?>
+			<form method="post" action="/field_camp_action" id="fcAreaForm" data-fc-save="area">
+				<?php echo fc_hidden($csrf, 'area', $camp, $next[0]); ?>
 				<input type="hidden" name="west" id="fcWest">
 				<input type="hidden" name="south" id="fcSouth">
 				<input type="hidden" name="east" id="fcEast">
 				<input type="hidden" name="north" id="fcNorth">
 				<div class="fc-buttons">
-<?php if($hasArea){ ?>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=<?php echo $next[0]; ?>" class="button primary small">Next: <?php echo $next[1]; ?></a>
-					<button type="submit" class="button small">Replace the study area with this view</button>
-<?php }else{ ?>
-					<button type="submit" class="button primary small">Use this view as the study area</button>
-<?php } ?>
+					<button type="submit" class="button primary small" data-fc-next="<?php echo $next[0]; ?>">Next: <?php echo $next[1]; ?></button>
 				</div>
 			</form>
 		</div>
@@ -335,11 +334,14 @@ if($step === 'area'){
 		<link rel="stylesheet" href="/assets/js/leaflet/leaflet.css" />
 		<script src="/assets/js/leaflet/leaflet.js"></script>
 		<script>
+		// The study area is a box the user draws (2026-11-10; before, it was whatever the map window showed, and
+		// the window's wide shape rarely fits a field area). Drag to draw, drag a corner to adjust.
 		(function(){
 			var saved = <?php echo $hasArea ? json_encode(array(
 				'west' => (float)$camp->bbox_west, 'south' => (float)$camp->bbox_south,
 				'east' => (float)$camp->bbox_east, 'north' => (float)$camp->bbox_north)) : 'null'; ?>;
 
+			var el = document.getElementById('fcMap');
 			var map = L.map('fcMap', {
 				worldCopyJump: false,
 				maxBounds: [[-85, -180], [85, 180]],
@@ -357,32 +359,97 @@ if($step === 'area'){
 			L.control.layers({'Topo': topo, 'Satellite': satellite}).addTo(map);
 			L.control.scale().addTo(map);
 
-			if(saved){
-				var b = [[saved.south, saved.west], [saved.north, saved.east]];
-				L.rectangle(b, {color: '#e44c65', weight: 2, fill: false, interactive: false}).addTo(map);
-				map.fitBounds(b);
-			}else{
-				map.setView([39.5, -98.5], 4);
-			}
+			var form = document.getElementById('fcAreaForm');
+			var btn = document.getElementById('fcDrawBtn'), hint = document.getElementById('fcDrawHint');
+			var style = {color: '#e44c65', weight: 2, fillOpacity: 0.08, interactive: false};
+			var rect = null, handles = [], box = null;   // box: {west, south, east, north}
+			var drawing = false, startLL = null, startPt = null, drawRect = null;
 
 			function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
+			function boxOf(a, b){
+				return {west: clamp(Math.min(a.lng, b.lng), -180, 180), east: clamp(Math.max(a.lng, b.lng), -180, 180),
+					south: clamp(Math.min(a.lat, b.lat), -85, 85), north: clamp(Math.max(a.lat, b.lat), -85, 85)};
+			}
+			function boundsOf(bx){ return [[bx.south, bx.west], [bx.north, bx.east]]; }
+			function corners(bx){ return [[bx.north, bx.west], [bx.north, bx.east], [bx.south, bx.east], [bx.south, bx.west]]; }
 
-			function readView(){
-				var v = map.getBounds();
-				var west = clamp(v.getWest(), -180, 180), east = clamp(v.getEast(), -180, 180);
-				var south = clamp(v.getSouth(), -85, 85), north = clamp(v.getNorth(), -85, 85);
-				document.getElementById('fcWest').value = west.toFixed(6);
-				document.getElementById('fcSouth').value = south.toFixed(6);
-				document.getElementById('fcEast').value = east.toFixed(6);
-				document.getElementById('fcNorth').value = north.toFixed(6);
-				var midlat = (south + north) / 2;
-				var w = (east - west) * 111.32 * Math.cos(midlat * Math.PI / 180);
-				var h = (north - south) * 111.32;
+			function show(bx){
+				document.getElementById('fcWest').value = bx.west.toFixed(6);
+				document.getElementById('fcSouth').value = bx.south.toFixed(6);
+				document.getElementById('fcEast').value = bx.east.toFixed(6);
+				document.getElementById('fcNorth').value = bx.north.toFixed(6);
+				var midlat = (bx.south + bx.north) / 2;
+				var w = (bx.east - bx.west) * 111.32 * Math.cos(midlat * Math.PI / 180);
+				var h = (bx.north - bx.south) * 111.32;
 				var fmt = function(km){ return km >= 100 ? Math.round(km).toLocaleString() : km.toFixed(1); };
 				document.getElementById('fcViewSize').textContent = fmt(w) + ' km wide, ' + fmt(h) + ' km tall';
 			}
-			map.on('moveend', readView);
-			readView();
+			// changed: the user did it (tells the wizard there is something to save)
+			function setBox(bx, changed){
+				box = bx;
+				if(rect) rect.setBounds(boundsOf(bx)); else rect = L.rectangle(boundsOf(bx), style).addTo(map);
+				var cs = corners(bx);
+				if(!handles.length){
+					cs.forEach(function(c, i){
+						var m = L.marker(c, {draggable: true, keyboard: false, title: 'Drag to adjust the study area',
+							icon: L.divIcon({className: 'fc-handle', iconSize: [14, 14]})}).addTo(map);
+						// the corner opposite the one being dragged stays where it is
+						m.on('drag', function(){ var o = corners(box)[(i + 2) % 4]; var bx2 = boxOf(m.getLatLng(), L.latLng(o[0], o[1])); rect.setBounds(boundsOf(bx2)); show(bx2); });
+						m.on('dragend', function(){ var o = corners(box)[(i + 2) % 4]; setBox(boxOf(m.getLatLng(), L.latLng(o[0], o[1])), true); });
+						handles.push(m);
+					});
+				}else{
+					handles.forEach(function(m, i){ m.setLatLng(cs[i]); });
+				}
+				show(bx);
+				btn.textContent = 'Draw the study area again';
+				if(changed) form.dispatchEvent(new Event('change', {bubbles: true}));
+			}
+
+			function setDrawing(on){
+				drawing = on;
+				el.classList.toggle('fc-drawing', on);
+				hint.style.display = on ? '' : 'none';
+				btn.textContent = on ? 'Cancel drawing' : (box ? 'Draw the study area again' : 'Draw the study area');
+				if(on) map.dragging.disable(); else map.dragging.enable();
+				if(!on && drawRect){ map.removeLayer(drawRect); drawRect = null; }
+				startLL = null;
+			}
+			btn.addEventListener('click', function(){ setDrawing(!drawing); });
+			document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape' && drawing) setDrawing(false); });
+
+			// Pointer events, so a mouse, a finger and a pen all draw the same way.
+			el.addEventListener('pointerdown', function(ev){
+				if(!drawing || (ev.pointerType === 'mouse' && ev.button !== 0) || ev.target.closest('.leaflet-control')) return;
+				ev.preventDefault(); ev.stopPropagation();
+				startLL = map.mouseEventToLatLng(ev); startPt = [ev.clientX, ev.clientY];
+				if(el.setPointerCapture) try{ el.setPointerCapture(ev.pointerId); }catch(e){}
+			}, true);
+			el.addEventListener('pointermove', function(ev){
+				if(!drawing || !startLL) return;
+				ev.preventDefault();
+				var b = boundsOf(boxOf(startLL, map.mouseEventToLatLng(ev)));
+				if(drawRect) drawRect.setBounds(b); else drawRect = L.rectangle(b, {color: '#e44c65', weight: 2, dashArray: '6 4', fillOpacity: 0.08, interactive: false}).addTo(map);
+			}, true);
+			function finish(ev){
+				if(!drawing || !startLL) return;
+				var from = startLL, moved = Math.max(Math.abs(ev.clientX - startPt[0]), Math.abs(ev.clientY - startPt[1]));
+				var to = map.mouseEventToLatLng(ev);
+				startLL = null;
+				if(drawRect){ map.removeLayer(drawRect); drawRect = null; }
+				if(ev.type === 'pointercancel' || moved < 8) return;   // a click, not a box: keep drawing
+				setDrawing(false);
+				setBox(boxOf(from, to), true);
+			}
+			el.addEventListener('pointerup', finish, true);
+			el.addEventListener('pointercancel', finish, true);
+
+			if(saved){
+				setBox(saved, false);
+				map.fitBounds(boundsOf(saved), {padding: [40, 40]});
+			}else{
+				map.setView([39.5, -98.5], 4);
+			}
 		})();
 		</script>
 <?php
