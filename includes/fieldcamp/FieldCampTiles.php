@@ -301,6 +301,14 @@ class FieldCampTiles
 		return $camp;
 	}
 
+	/** The camp's folder for built files, made if need be: [fresh camp row, folder or null when it cannot be written]. */
+	public static function campDir($db, $camp)
+	{
+		$camp = self::ensureDir($db, $camp);
+		$dir = self::dir($camp);
+		return array($camp, ($dir !== null && is_dir($dir) && is_writable($dir)) ? $dir : null);
+	}
+
 	/** What the last finished build holds (tiles.json), or null when there is no built tile zip. */
 	public static function manifest($camp)
 	{

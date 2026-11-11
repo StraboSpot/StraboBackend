@@ -114,6 +114,9 @@ class FieldCampRoster
 				'username' => (string)$a->username,
 				'user_pkey' => $pk,
 				'active' => ($a->active === true || $a->active === 't'),
+				// reported by the app after it loaded the package (POST /db/fieldCampPackage/installed); '' = not reported
+				'package_version' => (string)($a->package_version ?? ''),
+				'package_installed' => (string)($a->package_installed_date ?? '') !== '' ? strtotime((string)$a->package_installed_date) : null,
 				'projects' => $projects,
 			);
 		}

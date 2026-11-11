@@ -97,6 +97,15 @@ function fc_val($form, $camp, $key, $default = ''){
 	if($camp && isset($camp->$key) && $camp->$key !== null) return (string)$camp->$key;
 	return (string)$default;
 }
+/** Student work: what the app reported about the package on this account's device ('' until any app reports). */
+function fc_package_note($row, $current){
+	if($current === null) return '';
+	if($row['package_version'] === '') return ' <span class="fc-small">(package not loaded yet)</span>';
+	$when = $row['package_installed'] ? ' ' . gmdate('Y-m-d', $row['package_installed']) : '';
+	return $row['package_version'] === $current ? ' <span class="fc-small">(package loaded' . $when . ')</span>'
+		: ' <span class="fc-small">(an older package loaded' . $when . ')</span>';
+}
+
 /** $goto: the step to open after a successful save ('' = stay on the step that posted). */
 function fc_hidden($csrf, $action, $camp, $goto = ''){
 	return '<input type="hidden" name="csrf" value="' . htmlspecialchars($csrf) . '">'
@@ -201,9 +210,11 @@ if($camp && isset($steps['tiles']) && ($step === 'tiles' || $step === 'package')
 	}
 }
 $roster = array('rows' => array(), 'uploaded' => 0, 'total' => 0, 'spots' => 0, 'photos' => 0);
-$rosterTodo = array(); $rosterCopies = array();
+$rosterTodo = array(); $rosterCopies = array(); $rosterPackage = null;
 if($camp && $step === 'roster'){
 	$roster = FieldCampRoster::forCamp($neodb, $camp, FieldCamp::listAccounts($db, $camp->pkey));
+	// Once an app reports which package it loaded, the step says so per account (and whether it is the current one).
+	foreach($roster['rows'] as $r){ if($r['package_version'] !== ''){ $rosterPackage = FieldCampPackage::version($db, $camp); break; } }
 	// Each project's copy in the owner's account: none yet, up to date, or behind what the student has uploaded.
 	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
 	$copier = new FieldCampCopy($db, $neodb);
@@ -1045,13 +1056,13 @@ if($step === 'roster'){
 <?php 	foreach($roster['rows'] as $r){
 			if(!$r['projects']){ ?>
 					<tr>
-						<td><?php echo htmlspecialchars($r['username']); ?><?php echo $r['active'] ? '' : ' <span class="fc-small">(deactivated)</span>'; ?></td>
+						<td><?php echo htmlspecialchars($r['username']); ?><?php echo $r['active'] ? '' : ' <span class="fc-small">(deactivated)</span>'; ?><?php echo fc_package_note($r, $rosterPackage); ?></td>
 						<td colspan="7" class="fc-small">Nothing uploaded yet</td>
 					</tr>
 <?php 		}
 			foreach($r['projects'] as $i => $p){ ?>
 					<tr>
-						<td><?php echo $i === 0 ? htmlspecialchars($r['username']) . ($r['active'] ? '' : ' <span class="fc-small">(deactivated)</span>') : ''; ?></td>
+						<td><?php echo $i === 0 ? htmlspecialchars($r['username']) . ($r['active'] ? '' : ' <span class="fc-small">(deactivated)</span>') . fc_package_note($r, $rosterPackage) : ''; ?></td>
 						<td><?php echo htmlspecialchars($p['name'] !== '' ? $p['name'] : 'Unnamed project'); ?><?php echo $p['camp'] ? '' : ' <span class="fc-small">(not the camp project)</span>'; ?></td>
 						<td><?php echo $p['uploaded'] ? '<span class="fc-when" data-t="' . (int)$p['uploaded'] . '">' . gmdate('Y-m-d H:i', $p['uploaded']) . ' UTC</span>' : ''; ?></td>
 						<td><?php echo (int)$p['datasets']; ?></td>

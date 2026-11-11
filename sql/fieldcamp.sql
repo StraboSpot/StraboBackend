@@ -223,6 +223,13 @@ ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS deleted_date TIMESTAMP WITH TIME 
 ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS deleted_by INTEGER;
 
 -- ---------------------------------------------------------------------------
+-- The app reports which package version an account has loaded
+-- (POST /db/fieldCampPackage/installed, includes/fieldcamp/FieldCampPackage.php).
+-- ---------------------------------------------------------------------------
+ALTER TABLE fieldcamp_account ADD COLUMN IF NOT EXISTS package_version VARCHAR(40);
+ALTER TABLE fieldcamp_account ADD COLUMN IF NOT EXISTS package_installed_date TIMESTAMP WITH TIME ZONE;
+
+-- ---------------------------------------------------------------------------
 -- Privileges. Tables are created by the superuser (postgres) but the web app
 -- connects as strabodbuser, with a readonly role for reporting.
 -- (GRANT is idempotent, so this is safe to re-run.)
