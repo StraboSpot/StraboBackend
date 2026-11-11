@@ -1004,10 +1004,51 @@ if($step === 'package'){
 			</div>
 <?php } ?>
 			<div class="fc-small" style="margin-top:1em;">
-				Every student loads this same file, as in past camps: send it to each device (AirDrop works), then in
-				StraboField import the project from the zip and open it. The package always holds what is saved on the
-				other steps at the moment you download it. If you change the rock units or maps after students have
-				loaded it, download it again; devices that already hold the project keep the older version.
+				The package always holds what is saved on the other steps at the moment you download it. If you change the
+				rock units or maps after students have loaded it, download it again; devices that already hold the project
+				keep the older version.
+			</div>
+		</div>
+
+		<div class="fc-panel" id="fcPackageHowTo">
+			<h4>Getting the project onto the students' devices</h4>
+			<div class="fc-mapnote">
+				Every student loads the same package. Today that is done by hand, as in past camps; it takes a few minutes per device.
+			</div>
+			<div class="fc-maphead">Today: send the package to each device</div>
+			<ol class="fc-steps-list">
+				<li><strong>Download the package</strong> with the button above. It is one .zip file. Do not unzip it.</li>
+				<li><strong>Send it to each device.</strong> From a Mac, AirDrop it to the iPad and choose "Save to Files" when the iPad asks
+					what to do with it. Any other way of getting a file onto the device works too: a shared cloud folder, a link, a cable.
+					With offline maps the file can be large, so do this on a good connection before the camp leaves for the field.</li>
+				<li><strong>Sign in to StraboField on the device</strong> with that student's camp account: the username from the
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=accounts">Accounts</a> step and the camp password.
+					Sign in before loading the package, and stay signed in for the whole camp: signing out removes the offline maps
+					from the device and can lose work that has not been uploaded.</li>
+				<li><strong>Load the package in StraboField.</strong> Open the main menu, choose StraboField Projects and, under
+					"Load a Project", choose <strong>Import</strong>. Pick the .zip file, then choose <strong>Unzip and Save</strong>.</li>
+				<li><strong>Open the project.</strong> Choose "Go to saved projects" and open
+					<strong><?php echo htmlspecialchars($camp->project_name); ?></strong>.</li>
+				<li><strong>Check it</strong> before going out: the geologic unit tags are there, the custom maps are listed, and the
+					offline maps show with the connection switched off.</li>
+				<li><strong>During the camp</strong> students upload their project from StraboField whenever they have a connection.
+					What they have uploaded shows on the <a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=roster">Student work</a> step.</li>
+			</ol>
+			<div class="fc-maphead">How it is meant to work: StraboField offers the project at sign-in</div>
+			<div class="fc-mapnote">
+				Steps 1, 2, 4 and 5 are meant to disappear. The plan:
+			</div>
+			<ol class="fc-steps-list">
+				<li>The student signs in to StraboField with the camp account.</li>
+				<li>StraboField sees that this account belongs to a field camp and asks: "Your instructor has prepared the project
+					<?php echo htmlspecialchars($camp->project_name); ?>. Download it now?"</li>
+				<li>One tap downloads the package from StraboSpot and loads it: project, unit tags, custom maps and offline maps.</li>
+				<li>The <a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=roster">Student work</a> step then shows which students have loaded the project, and whether anyone still holds an older package.</li>
+			</ol>
+			<div class="fc-mapnote" style="margin-bottom:0;">
+				<strong>Where this stands:</strong> StraboSpot already offers the package to the app this way, for every account of this camp.
+				StraboField does not ask for it yet; that needs an update of the app. Until then, use the steps under "Today".
+				Nothing has to be set up again when the app update arrives: the same accounts and the same package are used.
 			</div>
 		</div>
 <?php

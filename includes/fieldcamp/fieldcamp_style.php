@@ -101,7 +101,8 @@
 .fc-unit-off .fc-unit-text, .fc-unit-off input[type=text] { opacity: 0.45; }
 .fc-chip { display: inline-block; width: 1.4em; height: 1.4em; border-radius: 3px; vertical-align: middle;
 	border: 1px solid rgba(255,255,255,0.35); background: transparent; }
-.fc-danger { border-color: rgba(228,76,101,0.45); }
+.fc-steps-list { margin: 0 0 1.25em 0; padding-left: 1.5em; color: rgba(255,255,255,0.85); }
+.fc-steps-list li { padding: 0.25em 0; line-height: 1.55; }
 .fc-facts { margin: 0 0 1em 0; padding-left: 1.3em; color: rgba(255,255,255,0.85); }
 .fc-facts li { padding: 0.15em 0; }
 .fc-row-picked td { background: rgba(228,76,101,0.12); }

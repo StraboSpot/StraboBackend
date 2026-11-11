@@ -398,6 +398,9 @@ check('an outsider cannot save maps', $code === 404 && count(FieldCampPackage::l
 list($code, $body) = http('GET', "/field_camp?id=$campid&step=package", $sidI);
 check('the Package step sums up the project', $code === 200 && !php_error($body) && strpos($body, 'KU Field Camp 2027 (test)') !== false && preg_match('~Geologic unit tags</td><td>14~', $body) === 1
 	&& strpos($body, '2: Canon City Map, USGS Bulletin 1221-D') !== false && strpos($body, "/field_camp_package?id=$campid") !== false);
+check('it explains how to get the project onto the devices today, and how the app is meant to offer it', strpos($body, 'id="fcPackageHowTo"') !== false && strpos($body, 'Today: send the package to each device') !== false
+	&& strpos($body, 'AirDrop') !== false && strpos($body, 'Unzip and Save') !== false && strpos($body, 'How it is meant to work: StraboField offers the project at sign-in') !== false
+	&& strpos($body, 'Download it now?') !== false && strpos($body, 'StraboField does not ask for it yet') !== false && substr_count($body, '<ol class="fc-steps-list">') === 2);
 list($code, $body) = http('GET', "/field_camp?id=$campid&step=accounts", $sidI);
 check('Accounts leads on to Package', strpos($body, 'Next: Package') !== false);
 
