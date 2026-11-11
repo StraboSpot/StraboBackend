@@ -26,7 +26,9 @@ require_once __DIR__ . '/includes/fieldcamp/FieldCampUnits.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampPackage.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampTiles.php';
 
-if(!FieldCamp::canUse($db, $userpkey)){
+// Changes are for whoever may set up camps. A co-instructor of someone's camp (FieldCamp::isViewer) can
+// open the wizard to look at its student work and has nothing to post here.
+if(!FieldCamp::canSetUp($db, $userpkey)){
 	header("HTTP/1.0 404 Not Found");
 	exit("Not found.");
 }

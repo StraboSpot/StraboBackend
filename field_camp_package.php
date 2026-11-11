@@ -19,7 +19,7 @@ include("prepare_connections.php");
 require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
 require_once __DIR__ . '/includes/fieldcamp/FieldCampPackage.php';
 
-$camp = FieldCamp::canUse($db, $userpkey) ? FieldCamp::getCamp($db, (int)($_GET['id'] ?? 0)) : null;
+$camp = FieldCamp::canSetUp($db, $userpkey) ? FieldCamp::getCamp($db, (int)($_GET['id'] ?? 0)) : null;
 if(!$camp || !FieldCamp::canManage($camp, $userpkey) || !FieldCampPackage::installed($db)){
 	header("HTTP/1.0 404 Not Found");
 	exit("Not found.");

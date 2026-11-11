@@ -23,8 +23,9 @@ class FieldCampRoster
 {
 	/**
 	 * The Field Book of one student's project, read straight from the student's account (no copy needed):
-	 * may $sessionUser have it, and which datasets is it? Allowed for whoever may manage the camp (its owner
-	 * or the admin), for an account of that camp that has not been removed. The datasets are looked up under
+	 * may $sessionUser have it, and which datasets is it? Allowed for whoever may see the camp's student
+	 * work (its owner, the admin, its co-instructors: FieldCamp::canView), for an account of that camp that
+	 * has not been removed. The datasets are looked up under
 	 * the account itself: every student's camp project has the same project and dataset ids, so an id alone
 	 * does not say whose data is meant.
 	 *
@@ -39,7 +40,7 @@ class FieldCampRoster
 		if ($sessionUser <= 0 || $accountPkey <= 0 || !preg_match('/^[0-9]{1,20}$/', $projectId)) return null;
 		if (!FieldCamp::canUse($db, $sessionUser)) return null;
 		$camp = FieldCamp::getCamp($db, (int)$campId);
-		if (!$camp || !FieldCamp::canManage($camp, $sessionUser)) return null;
+		if (!$camp || !FieldCamp::canView($db, $camp, $sessionUser)) return null;
 		$account = null;
 		foreach (FieldCamp::listAccounts($db, $camp->pkey) as $a) if ((int)$a->user_pkey === $accountPkey) $account = $a;
 		if (!$account) return null;

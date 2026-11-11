@@ -63,14 +63,33 @@ class FieldCamp
 		return (int)$userpkey === self::ADMIN_USERPKEY;
 	}
 
-	/** May this account open the Field Camp Wizard? */
-	public static function canUse($db, $userpkey)
+	/**
+	 * May this account set up field camps (start one, own one)? The admin and the accounts on the
+	 * instructor list.
+	 */
+	public static function canSetUp($db, $userpkey)
 	{
 		$userpkey = (int)$userpkey;
 		if ($userpkey <= 0 || !$db || !self::installed($db)) return false;
 		if (self::isAdmin($userpkey)) return true;
 		return (int)$db->get_var_prepared(
 			"select count(*) from fieldcamp_instructors where user_pkey = $1", array($userpkey)) > 0;
+	}
+
+	/**
+	 * May this account open the Field Camp Wizard? Whoever may set up camps, and (2026-11-11) the
+	 * co-instructors of a camp (fieldcamp_viewer): they see that camp's Student work and nothing else,
+	 * see canView().
+	 */
+	public static function canUse($db, $userpkey)
+	{
+		$userpkey = (int)$userpkey;
+		if (self::canSetUp($db, $userpkey)) return true;
+		if ($userpkey <= 0 || !$db || !self::installed($db)) return false;
+		$live = self::canDeleteCamps($db) ? " and fc.deleted_date is null" : "";
+		return (int)$db->get_var_prepared(
+			"select count(*) from fieldcamp_viewer fv join fieldcamp fc on fc.pkey = fv.fieldcamp_pkey
+				where fv.user_pkey = $1$live", array($userpkey)) > 0;
 	}
 
 	/** Is this users row a dedicated camp account (in any state)? */
@@ -87,6 +106,35 @@ class FieldCamp
 	{
 		if (!$camp) return false;
 		return (int)$camp->owner_user_pkey === (int)$userpkey || self::isAdmin($userpkey);
+	}
+
+	/** Is this account one of the camp's co-instructors (the Instructors list on the Accounts step)? */
+	public static function isViewer($db, $camp, $userpkey)
+	{
+		if (!$camp || (int)$userpkey <= 0) return false;
+		return (int)$db->get_var_prepared(
+			"select count(*) from fieldcamp_viewer where fieldcamp_pkey = $1 and user_pkey = $2",
+			array((int)$camp->pkey, (int)$userpkey)) > 0;
+	}
+
+	/**
+	 * May this account run the camp from the wizard: its owner while on the instructor list, or the
+	 * admin. (An owner taken off the list keeps the camp but cannot open it, also when they are a
+	 * co-instructor of some other camp.)
+	 */
+	public static function canRun($db, $camp, $userpkey)
+	{
+		return self::canManage($camp, $userpkey) && self::canSetUp($db, $userpkey);
+	}
+
+	/**
+	 * May this account see the camp's student work (the Student work step and its Field Book links)?
+	 * Whoever may run the camp, and its co-instructors. Read-only for the latter: every change, the
+	 * package, the camp password and the copies stay with canRun().
+	 */
+	public static function canView($db, $camp, $userpkey)
+	{
+		return self::canRun($db, $camp, $userpkey) || self::isViewer($db, $camp, $userpkey);
 	}
 
 	// -------------------------------------------------------------------
@@ -228,10 +276,16 @@ class FieldCamp
 		return $n;
 	}
 
-	/** The camps an account sees on the wizard's first page (the admin sees every camp). */
+	/**
+	 * The camps an account sees on the wizard's first page: its own and those it is a co-instructor of
+	 * (the admin sees every camp).
+	 */
 	public static function listCamps($db, $userpkey)
 	{
-		$where = self::isAdmin($userpkey) ? "true" : "fc.owner_user_pkey = $1";
+		// Own camps only while on the instructor list (as before co-instructors could open the wizard).
+		$own = self::canSetUp($db, $userpkey) ? "fc.owner_user_pkey = $1" : "false";
+		$where = self::isAdmin($userpkey) ? "true"
+			: "($own or exists (select 1 from fieldcamp_viewer fv where fv.fieldcamp_pkey = fc.pkey and fv.user_pkey = $1))";
 		if (self::canDeleteCamps($db)) $where .= " and fc.deleted_date is null";
 		$params = self::isAdmin($userpkey) ? array() : array((int)$userpkey);
 		$rows = $db->get_results_prepared("

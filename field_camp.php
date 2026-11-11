@@ -19,7 +19,10 @@
  *              the end of the page).
  *              ?id=N&ajax=plan answers the Accounts step's live preview (which
  *              usernames a template would create and whether any is taken).
- *              Open only to the camp's owner (an instructor) and the admin.
+ *              Open to the camp's owner (an instructor) and the admin. A
+ *              co-instructor of the camp (its Instructors list on Accounts,
+ *              FieldCamp::isViewer) gets the Student work step alone, read-only
+ *              ($viewOnly): no other step, no ajax answer, no copy button.
  *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
@@ -45,18 +48,26 @@ $isNew = isset($_GET['new']);
 $camp = null;
 if(!$isNew){
 	$camp = FieldCamp::getCamp($db, (int)($_GET['id'] ?? 0));
-	if(!$camp || !FieldCamp::canManage($camp, $userpkey)){
+	if(!$camp || !FieldCamp::canView($db, $camp, $userpkey)){
 		header("HTTP/1.0 404 Not Found");
 		exit("Not found.");
 	}
+}elseif(!FieldCamp::canSetUp($db, $userpkey)){
+	header("HTTP/1.0 404 Not Found");
+	exit("Not found.");
 }
+// A co-instructor: Student work only, nothing to change.
+$viewOnly = $camp && !FieldCamp::canRun($db, $camp, $userpkey);
 
 // ---------------------------------------------------------------------------
 // AJAX: account preview (JSON, no page chrome)
 // ---------------------------------------------------------------------------
 if($camp && isset($_GET['ajax'])){
 	header('Content-Type: application/json');
-	if($_GET['ajax'] === 'password'){
+	if($viewOnly){
+		// Nothing here is for a co-instructor, the camp password least of all.
+		echo json_encode(array());
+	}elseif($_GET['ajax'] === 'password'){
 		// The camp's shared password, for the eye button on the Accounts step. Only sent when asked for.
 		header('Cache-Control: no-store');
 		echo json_encode(array('password' => FieldCamp::campPassword($camp)));
@@ -83,8 +94,9 @@ function fc_next($steps, $key){
 	if($i === false || !isset($keys[$i + 1])) return null;
 	return array($keys[$i + 1], $steps[$keys[$i + 1]]);
 }
+if($viewOnly) $steps = array('roster' => 'Student work');
 $step = (string)($_GET['step'] ?? 'basics');
-if($isNew || !isset($steps[$step])) $step = 'basics';
+if($isNew || !isset($steps[$step])) $step = $viewOnly ? 'roster' : 'basics';
 
 $flash = $_SESSION['fieldcamp_flash'] ?? null;
 unset($_SESSION['fieldcamp_flash']);
@@ -195,7 +207,7 @@ $tileLayers = array(); $tileChosen = array(); $tileOptions = array(); $tileZoom 
 $tileStatus = array('status' => '', 'message' => '', 'percent' => null, 'elapsed' => null, 'tiles' => 0, 'maps' => 0, 'bytes' => 0); $tilesOutdated = '';
 $tilesWanted = false; $tilesNeedBuild = false;
 // A running tile build is shown on every step (the progress panel under the step tabs).
-if($camp && isset($steps['tiles'])) $tileStatus = FieldCampTiles::status($db, $camp);
+if($camp && isset($steps['tiles']) && !$viewOnly) $tileStatus = FieldCampTiles::status($db, $camp);
 if($camp && isset($steps['tiles']) && ($step === 'tiles' || $step === 'package')){
 	$tileLayers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
 	$tileChosen = FieldCampTiles::chosenLayerIds($camp, $tileLayers);
@@ -216,10 +228,11 @@ if($camp && $step === 'roster'){
 	// Once an app reports which package it loaded, the step says so per account (and whether it is the current one).
 	foreach($roster['rows'] as $r){ if($r['package_version'] !== ''){ $rosterPackage = FieldCampPackage::version($db, $camp); break; } }
 	// Each project's copy in the owner's account: none yet, up to date, or behind what the student has uploaded.
+	// (Not for a co-instructor: the copies are the owner's.)
 	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
 	$copier = new FieldCampCopy($db, $neodb);
-	$copyRows = $copier->copyRows($camp->pkey, (int)$camp->owner_user_pkey);
-	foreach($roster['rows'] as $r){
+	$copyRows = $viewOnly ? array() : $copier->copyRows($camp->pkey, (int)$camp->owner_user_pkey);
+	foreach($viewOnly ? array() : $roster['rows'] as $r){
 		$needs = false;
 		foreach($r['projects'] as $p){
 			$key = $r['user_pkey'] . ':' . $p['id'];
@@ -238,6 +251,7 @@ if($camp && $step === 'package'){
 	$packageTags = count(FieldCampUnits::listUnits($db, $camp->pkey, true));
 }
 $ownsCamp = $camp && (int)$camp->owner_user_pkey === (int)$userpkey;
+$campOwnerEmail = $viewOnly ? $db->get_var_prepared("select email from users where pkey = $1", array((int)$camp->owner_user_pkey)) : '';
 $size = $camp ? FieldCamp::areaSizeKm($camp) : null;
 
 include("includes/mheader.php");
@@ -1061,7 +1075,15 @@ if($step === 'roster'){
 ?>
 		<div class="fc-panel">
 			<h4>Student work</h4>
-<?php if(!$roster['rows']){ ?>
+<?php if($viewOnly){ ?>
+			<div class="fc-mapnote">
+				You are an instructor of this field camp, set up by <?php echo htmlspecialchars((string)$campOwnerEmail); ?>.
+				You can follow what the students have uploaded and open each student's Field Book; the camp itself is managed by its owner.
+			</div>
+<?php } ?>
+<?php if(!$roster['rows'] && $viewOnly){ ?>
+			<div class="fc-mapnote" style="margin:0;">This camp has no student accounts yet.</div>
+<?php }elseif(!$roster['rows']){ ?>
 			<div class="fc-mapnote" style="margin:0;">This camp has no accounts yet. Create them on the
 				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=accounts">Accounts</a> step.</div>
 <?php }else{ ?>
@@ -1071,15 +1093,18 @@ if($step === 'roster'){
 				<?php echo number_format($roster['photos']); ?> photo<?php echo $roster['photos'] === 1 ? '' : 's'; ?> in all.
 				This shows what is on the server; work that is still only on a student's device does not appear until they upload.
 			</div>
+<?php 	if(!$viewOnly){ ?>
 			<div class="fc-mapnote">
 				To look at a student's work, copy it into <?php echo $ownsCamp ? 'your own account' : "the camp owner's account"; ?>: each student's project
 				appears there as "<?php echo htmlspecialchars($camp->project_name); ?> (username)", on the website and in StraboField.
 				A copy shows the work as it was when it was made; copy again to bring it up to date. The students' own projects are never changed.
 			</div>
+<?php 	} ?>
 			<div class="fc-mapnote">
-				For a quick look without a copy, <strong>Field Book</strong> opens a PDF of the student's project as it is on the server right now:
+				<?php echo $viewOnly ? '<strong>Field Book</strong> opens' : 'For a quick look without a copy, <strong>Field Book</strong> opens'; ?> a PDF of the student's project as it is on the server right now:
 				spots by day with maps, photos, stereonets and notes. Photos the student has not uploaded yet are left out.
 			</div>
+<?php 	if(!$viewOnly){ ?>
 			<div class="fc-buttons" style="margin-bottom:1em;">
 <?php 	if($rosterTodo){ ?>
 				<button type="button" class="button primary small" id="fcCopyBtn">Copy the work of <?php echo count($rosterTodo); ?> student<?php echo count($rosterTodo) === 1 ? '' : 's'; ?> that is new or has changed</button>
@@ -1091,14 +1116,15 @@ if($step === 'roster'){
 <?php 	} ?>
 			</div>
 			<div class="fc-preview" id="fcCopyLog" style="display:none; max-width:none;"></div>
+<?php 	} ?>
 			<div class="strabotable" style="margin-left:0px;">
 				<table class="fc-table">
-					<tr><td>Username</td><td>Project</td><td>Last upload</td><td>Datasets</td><td>Spots</td><td>Photos</td><td><?php echo $ownsCamp ? 'Your copy' : "Owner's copy"; ?></td><td>Field Book</td></tr>
+					<tr><td>Username</td><td>Project</td><td>Last upload</td><td>Datasets</td><td>Spots</td><td>Photos</td><?php if(!$viewOnly){ ?><td><?php echo $ownsCamp ? 'Your copy' : "Owner's copy"; ?></td><?php } ?><td>Field Book</td></tr>
 <?php 	foreach($roster['rows'] as $r){
 			if(!$r['projects']){ ?>
 					<tr>
 						<td><?php echo htmlspecialchars($r['username']); ?><?php echo $r['active'] ? '' : ' <span class="fc-small">(deactivated)</span>'; ?><?php echo fc_package_note($r, $rosterPackage); ?></td>
-						<td colspan="7" class="fc-small">Nothing uploaded yet</td>
+						<td colspan="<?php echo $viewOnly ? 6 : 7; ?>" class="fc-small">Nothing uploaded yet</td>
 					</tr>
 <?php 		}
 			foreach($r['projects'] as $i => $p){ ?>
@@ -1109,6 +1135,7 @@ if($step === 'roster'){
 						<td><?php echo (int)$p['datasets']; ?></td>
 						<td><?php echo number_format($p['spots']); ?></td>
 						<td><?php echo number_format($p['photos']); ?><?php echo $p['photos_missing'] > 0 ? ' <span class="fc-small">(' . (int)$p['photos_missing'] . ' not uploaded yet)</span>' : ''; ?></td>
+<?php 			if(!$viewOnly){ ?>
 						<td><?php
 							$c = $rosterCopies[$r['user_pkey'] . ':' . $p['id']] ?? array('state' => 'none', 'when' => null);
 							$when = $c['when'] ? '<span class="fc-when" data-t="' . (int)$c['when'] . '">' . gmdate('Y-m-d H:i', $c['when']) . ' UTC</span>' : '';
@@ -1116,6 +1143,7 @@ if($step === 'roster'){
 							elseif($c['state'] === 'behind') echo '<span class="fc-preview-msg fc-bad">Changed since the copy</span> <span class="fc-small">(' . $when . ')</span>';
 							else echo '<span class="fc-small">Not copied</span>';
 						?></td>
+<?php 			} ?>
 						<td><?php
 							// Straight from the student's account (fieldbook_build.php, Field Camp door); a project without spots has no book.
 							if($p['spots'] > 0) echo '<a href="/fieldbook_build?camp=' . (int)$camp->pkey . '&amp;account=' . (int)$r['user_pkey'] . '&amp;project=' . rawurlencode($p['id']) . '" target="_blank" rel="noopener" class="fc-book">Open</a>';
@@ -1559,8 +1587,10 @@ if($step === 'accounts'){
 		<div class="fc-panel">
 			<h4>Instructors</h4>
 			<div class="fc-small" style="margin-bottom:0.75em;">
-				Other StraboSpot accounts (co-instructors, teaching assistants) that may view each student's
-				project once it has been uploaded. You, as the owner of the camp, are always included.
+				Other StraboSpot accounts (co-instructors, teaching assistants) that may follow the students' work.
+				They find this camp under Field Camp Wizard in their account menu and see its Student work step:
+				what each student has uploaded, and each student's Field Book. They cannot change the camp, see
+				the accounts' password or download the package. You, as the owner of the camp, are always included.
 			</div>
 <?php if($viewers){ ?>
 			<div class="strabotable" style="margin-left:0px;">

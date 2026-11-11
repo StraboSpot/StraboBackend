@@ -2,8 +2,9 @@
 /**
  * File: field_camp_wizard.php
  * Description: Field Camp Wizard, first page: the camps an instructor has set
- *              up, with a button to start a new one. Open only to accounts on
- *              the instructor list (FieldCamp::canUse); everyone else gets
+ *              up, with a button to start a new one. Open to accounts on the
+ *              instructor list and to the co-instructors of a camp, who get
+ *              its Student work only (FieldCamp::canUse); everyone else gets
  *              "Not found." so the feature stays invisible.
  *
  * @package    StraboSpot Web Site
@@ -24,6 +25,8 @@ if(!FieldCamp::canUse($db, $userpkey)){
 
 $camps = FieldCamp::listCamps($db, $userpkey);
 $isAdmin = FieldCamp::isAdmin($userpkey);
+// A co-instructor of someone's camp sees that camp here (Student work only) and cannot start camps.
+$canSetUp = FieldCamp::canSetUp($db, $userpkey);
 // Deleted camps are kept on the server; the admin can bring one back with its accounts.
 // They stay off the page until the admin asks for them ("Deleted field camps" button, ?deleted=1).
 $deletedCamps = $isAdmin ? FieldCamp::listDeletedCamps($db) : array();
@@ -47,8 +50,12 @@ include("includes/fieldcamp/fieldcamp_style.php");
 		</header>
 
 		<p class="fc-intro">
+<?php if($canSetUp){ ?>
 			Set up a StraboField project for a field camp: the study area, its maps and rock units,
 			and a set of accounts for the students.
+<?php }else{ ?>
+			The field camps you are an instructor of. Open one to follow what its students have uploaded.
+<?php } ?>
 		</p>
 
 <?php if($flash && !empty($flash['ok'])){ ?>
@@ -59,7 +66,9 @@ include("includes/fieldcamp/fieldcamp_style.php");
 <?php } ?>
 
 		<div class="fc-top">
+<?php if($canSetUp){ ?>
 			<div><a href="/field_camp?new=1" class="button primary small">New field camp</a></div>
+<?php } ?>
 <?php if($isAdmin){ ?>
 			<div style="display:flex; flex-wrap:wrap; gap:0.75em;">
 <?php 	if($deletedCamps && $showDeleted){ ?>
@@ -81,6 +90,8 @@ include("includes/fieldcamp/fieldcamp_style.php");
 		$state = FieldCamp::stateOf($db, $c);
 		$accounts = (int)$c->accountcount;
 		$inactive = (int)$c->inactivecount;
+		// Someone else's camp this account is a co-instructor of: Student work only.
+		$shared = !$isAdmin && (int)$c->owner_user_pkey !== (int)$userpkey;
 ?>
 			<div class="fc-camp">
 				<div>
@@ -95,7 +106,10 @@ include("includes/fieldcamp/fieldcamp_style.php");
 							if($accounts > 0 && $inactive === $accounts){ echo " (deactivated)"; }
 							elseif($inactive > 0){ echo " ($inactive deactivated)"; } ?></span>
 						<span><?php echo ($c->bbox_west === null || $c->bbox_west === '') ? 'No study area yet' : 'Study area set'; ?></span>
-<?php if($state['key'] === 'attention'){ ?>
+<?php if($shared){ ?>
+							<span>Set up by <?php echo htmlspecialchars((string)$c->owner_email); ?>; you see the student work</span>
+<?php } ?>
+<?php if($state['key'] === 'attention' && !$shared){ ?>
 						<span class="fc-preview-msg fc-bad"><?php echo htmlspecialchars($state['note']); ?>: <a href="/field_camp?id=<?php echo (int)$c->pkey; ?>&amp;step=tiles">Offline maps</a></span>
 <?php } ?>
 <?php if($isAdmin && (int)$c->owner_user_pkey !== (int)$userpkey){ ?>
@@ -104,7 +118,7 @@ include("includes/fieldcamp/fieldcamp_style.php");
 					</div>
 				</div>
 				<div>
-					<a href="/field_camp?id=<?php echo (int)$c->pkey; ?>" class="button small">Open</a>
+					<a href="/field_camp?id=<?php echo (int)$c->pkey; ?><?php echo $shared ? '&amp;step=roster' : ''; ?>" class="button small"><?php echo $shared ? 'Student work' : 'Open'; ?></a>
 				</div>
 			</div>
 <?php
