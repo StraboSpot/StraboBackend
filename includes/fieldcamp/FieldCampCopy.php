@@ -121,6 +121,33 @@ class FieldCampCopy
 	}
 
 	/**
+	 * What each account of a camp holds on the server, and whether the camp owner has it: used before an
+	 * account or a camp is removed, so work is not lost by mistake.
+	 *
+	 * @param array $accounts rows of FieldCamp::listAccounts()
+	 * @return array [userpkey => ['username', 'projects', 'spots', 'photos',
+	 *                'uncopied' => projects with spots whose copy is missing or older than the student's last upload]]
+	 */
+	public function holdings($camp, $accounts)
+	{
+		require_once __DIR__ . '/FieldCampRoster.php';
+		$roster = FieldCampRoster::forCamp($this->neodb, $camp, $accounts);
+		$copies = $this->copyRows($camp->pkey, (int)$camp->owner_user_pkey);
+		$out = array();
+		foreach ($roster['rows'] as $r) {
+			$h = array('username' => $r['username'], 'projects' => count($r['projects']), 'spots' => 0, 'photos' => 0, 'uncopied' => 0);
+			foreach ($r['projects'] as $p) {
+				$h['spots'] += $p['spots']; $h['photos'] += $p['photos'];
+				if ($p['spots'] <= 0) continue;   // an empty project is not work to lose
+				$row = $copies[$r['user_pkey'] . ':' . $p['id']] ?? null;
+				if (!$row || (string)$row->source_stamp === '' || (string)$row->source_stamp !== $this->sourceStamp($r['user_pkey'], $p['id'])) $h['uncopied']++;
+			}
+			$out[(int)$r['user_pkey']] = $h;
+		}
+		return $out;
+	}
+
+	/**
 	 * Per source project of a camp: the copy row, keyed "userpkey:project id".
 	 */
 	public function copyRows($camppkey, $targetUserpkey)

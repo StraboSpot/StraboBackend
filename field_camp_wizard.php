@@ -101,6 +101,36 @@ include("includes/fieldcamp/fieldcamp_style.php");
 		</div>
 <?php } ?>
 
+<?php
+// Deleted camps are kept on the server; the admin can bring one back with its accounts.
+$deletedCamps = $isAdmin ? FieldCamp::listDeletedCamps($db) : array();
+if($deletedCamps){ ?>
+		<h4 style="margin-top:2em;">Deleted field camps (admin)</h4>
+		<div class="fc-list">
+<?php 	foreach($deletedCamps as $c){ $n = (int)$c->accountcount; ?>
+			<div class="fc-camp">
+				<div>
+					<div class="fc-camp-name"><?php echo htmlspecialchars($c->camp_name); ?></div>
+					<div class="fc-meta">
+						<span><?php echo (int)$c->camp_year; ?></span>
+						<span>Deleted <?php echo htmlspecialchars(substr((string)$c->deleted_date, 0, 16)); ?></span>
+						<span><?php echo $n; ?> account<?php echo $n === 1 ? '' : 's'; ?> removed with it</span>
+						<span>Owner: <?php echo htmlspecialchars((string)$c->owner_email); ?></span>
+					</div>
+				</div>
+				<div>
+					<form method="post" action="/field_camp_action" style="margin:0;">
+						<input type="hidden" name="csrf" value="<?php echo htmlspecialchars(FieldCamp::token()); ?>">
+						<input type="hidden" name="action" value="camp_restore">
+						<input type="hidden" name="id" value="<?php echo (int)$c->pkey; ?>">
+						<button type="submit" class="button small">Restore</button>
+					</form>
+				</div>
+			</div>
+<?php 	} ?>
+		</div>
+<?php } ?>
+
 		<div class="bottomSpacer"></div>
 	</div>
 </div>

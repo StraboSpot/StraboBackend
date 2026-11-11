@@ -151,15 +151,88 @@ class FieldCamp
 	// Camps
 	// -------------------------------------------------------------------
 
-	public static function getCamp($db, $pkey)
+	private static $deleteColumnChecked = null;
+
+	/** True once fieldcamp.deleted_date exists (sql/fieldcamp.sql, 2026-11-10); without it camps cannot be deleted. */
+	public static function canDeleteCamps($db)
 	{
-		return $db->get_row_prepared("select * from fieldcamp where pkey = $1", array((int)$pkey));
+		if (self::$deleteColumnChecked === null) {
+			$n = (int)$db->get_var_prepared("select count(*) from information_schema.columns
+				where table_name = 'fieldcamp' and column_name = 'deleted_date'", array());
+			self::$deleteColumnChecked = ($n > 0);
+		}
+		return self::$deleteColumnChecked;
+	}
+
+	/** A camp by its key. A deleted camp is "not there" for everything except the admin's restore. */
+	public static function getCamp($db, $pkey, $includeDeleted = false)
+	{
+		$live = (!$includeDeleted && self::canDeleteCamps($db)) ? " and deleted_date is null" : "";
+		return $db->get_row_prepared("select * from fieldcamp where pkey = $1" . $live, array((int)$pkey));
+	}
+
+	/** Deleted camps, newest first, for the admin's restore list. */
+	public static function listDeletedCamps($db)
+	{
+		if (!self::canDeleteCamps($db)) return array();
+		$rows = $db->get_results_prepared("
+			select fc.*, (select email from users where pkey = fc.owner_user_pkey) as owner_email,
+				(select count(*) from fieldcamp_account fa where fa.fieldcamp_pkey = fc.pkey and fa.removed_date = fc.deleted_date) as accountcount
+			from fieldcamp fc where fc.deleted_date is not null order by fc.deleted_date desc", array());
+		return $rows ? $rows : array();
+	}
+
+	/**
+	 * Delete a camp. Soft: the row is kept and hidden, every account of the camp is removed the way
+	 * removeAccount() does (closed, data kept), the built tiles are thrown away (they can be built again).
+	 * Copies of student work in the owner's account are the owner's projects and stay.
+	 *
+	 * @return string '' when done, else why not
+	 */
+	public static function deleteCamp($db, $neodb, $camp, $byUserpkey)
+	{
+		if (!self::canDeleteCamps($db)) return "Field camps cannot be deleted on this server yet.";
+		require_once __DIR__ . '/FieldCampTiles.php';
+		$tiles = FieldCampTiles::installed($db);
+		if ($tiles && FieldCampTiles::isBuilding($camp)) return "The offline maps of this camp are being built. Delete the camp when the build is done.";
+		$when = $db->get_var_prepared("select now()", array());
+		foreach (self::listAccounts($db, $camp->pkey) as $a) self::removeAccount($db, $neodb, $camp, (int)$a->user_pkey, $when);
+		if ($tiles) {
+			FieldCampTiles::clearBuild($db, $camp);
+			$dir = FieldCampTiles::dir($camp);
+			if ($dir !== null && is_dir($dir) && preg_match('~/fieldcamp_files/[a-f0-9]{32}$~', $dir)) {
+				foreach ((array)glob("$dir/*") as $f) { if (is_file($f)) @unlink($f); }
+				@rmdir($dir);
+			}
+		}
+		$db->prepare_query("update fieldcamp set deleted_date = $2, deleted_by = $3, modified_date = now() where pkey = $1",
+			array((int)$camp->pkey, $when, (int)$byUserpkey));
+		return '';
+	}
+
+	/**
+	 * Bring a deleted camp back (admin). The accounts removed with it come back deactivated; the instructor
+	 * reactivates them on the Accounts step. The offline maps have to be built again.
+	 *
+	 * @return int|null how many accounts came back, null when there is no such deleted camp
+	 */
+	public static function restoreCamp($db, $camppkey)
+	{
+		$camp = self::getCamp($db, $camppkey, true);
+		if (!$camp || !self::canDeleteCamps($db) || (string)$camp->deleted_date === '') return null;
+		$rows = $db->get_results_prepared("select user_pkey from fieldcamp_account where fieldcamp_pkey = $1 and removed_date = $2",
+			array((int)$camp->pkey, $camp->deleted_date));
+		$n = 0;
+		foreach (($rows ? $rows : array()) as $r) { if (self::restoreAccount($db, $camp, (int)$r->user_pkey)) $n++; }
+		$db->prepare_query("update fieldcamp set deleted_date = null, deleted_by = null, modified_date = now() where pkey = $1", array((int)$camp->pkey));
+		return $n;
 	}
 
 	/** The camps an account sees on the wizard's first page (the admin sees every camp). */
 	public static function listCamps($db, $userpkey)
 	{
 		$where = self::isAdmin($userpkey) ? "true" : "fc.owner_user_pkey = $1";
+		if (self::canDeleteCamps($db)) $where .= " and fc.deleted_date is null";
 		$params = self::isAdmin($userpkey) ? array() : array((int)$userpkey);
 		$rows = $db->get_results_prepared("
 			select fc.*,
@@ -548,19 +621,61 @@ class FieldCamp
 	 */
 	public static function removeAccounts($db, $neodb, $camp)
 	{
-		if (!class_exists('StraboSpot', false)) {
-			require_once __DIR__ . '/../../db/strabospotclass.php';
-		}
 		$removed = 0;
 		foreach (self::listAccounts($db, $camp->pkey) as $a) {
 			if (self::truthy($a->active)) continue;   // deactivate first
-			$pk = (int)$a->user_pkey;
-			$strabo = new StraboSpot($neodb, $pk, $db);
-			$strabo->deleteUserAccount();
-			$db->prepare_query("update fieldcamp_account set removed_date = now() where user_pkey = $1", array($pk));
-			$removed++;
+			if (self::removeAccount($db, $neodb, $camp, (int)$a->user_pkey)) $removed++;
 		}
 		return $removed;
+	}
+
+	/**
+	 * Remove one account of a camp, active or not: sign-in is closed and its tokens go (so its device is
+	 * signed out), then the account is marked deleted the way a user deleting their own account is. The
+	 * data stays on the server and the username stays taken; restoreAccount() undoes it.
+	 *
+	 * @param string|null $when the removal time to record (deleteCamp passes the camp's), default now
+	 * @return bool false when the account is not a live account of this camp
+	 */
+	public static function removeAccount($db, $neodb, $camp, $userpkey, $when = null)
+	{
+		$userpkey = (int)$userpkey;
+		$account = null;
+		foreach (self::listAccounts($db, $camp->pkey) as $a) { if ((int)$a->user_pkey === $userpkey) $account = $a; }
+		if (!$account) return false;
+		if (!class_exists('StraboSpot', false)) {
+			require_once __DIR__ . '/../../db/strabospotclass.php';
+		}
+		if (self::truthy($account->active)) self::setAccountsActive($db, $camp, false, array($userpkey));
+		$strabo = new StraboSpot($neodb, $userpkey, $db);
+		$strabo->deleteUserAccount();
+		$db->prepare_query("update fieldcamp_account set removed_date = coalesce($2::timestamptz, now()) where user_pkey = $1 and fieldcamp_pkey = $3",
+			array($userpkey, $when, (int)$camp->pkey));
+		return true;
+	}
+
+	/** Removed accounts of a camp (for the admin's restore list on the Accounts step). */
+	public static function listRemovedAccounts($db, $camppkey)
+	{
+		$out = array();
+		foreach (self::listAccounts($db, $camppkey, true) as $a) { if ((string)$a->removed_date !== '') $out[] = $a; }
+		return $out;
+	}
+
+	/**
+	 * Bring a removed account back (admin): no longer deleted, still deactivated, so the instructor decides
+	 * when it may sign in again. Its data never left the server.
+	 */
+	public static function restoreAccount($db, $camp, $userpkey)
+	{
+		$userpkey = (int)$userpkey;
+		$row = $db->get_row_prepared("select pkey from fieldcamp_account where fieldcamp_pkey = $1 and user_pkey = $2 and removed_date is not null",
+			array((int)$camp->pkey, $userpkey));
+		if (!$row) return false;
+		$db->prepare_query("update users set deleted = false, active = false where pkey = $1", array($userpkey));
+		$db->prepare_query("update fieldcamp_account set removed_date = null, deactivated_date = coalesce(deactivated_date, now()) where pkey = $1",
+			array((int)$row->pkey));
+		return true;
 	}
 
 	// -------------------------------------------------------------------

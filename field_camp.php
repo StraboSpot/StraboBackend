@@ -112,19 +112,41 @@ if($camp && $step === 'accounts'){
 	$liveCount = count($accounts);
 	foreach($accounts as $a){ if(FieldCamp::truthy($a->active)) $activeCount++; }
 }
-$projectCounts = array(); $copiedCounts = array(); $toCopy = array();
+$projectCounts = array(); $copiedCounts = array(); $toCopy = array(); $holdings = array();
 if($accounts){
 	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
 	$copier = new FieldCampCopy($db, $neodb);
 	$pks = array(); foreach($accounts as $a){ $pks[] = (int)$a->user_pkey; }
 	$projectCounts = $copier->projectCounts($pks);
 	$copiedCounts = $copier->copiedCounts($camp->pkey);
-	// Deactivated accounts that still hold a project not yet copied to the owner.
+	// What each account holds, and whether the owner has a current copy of it (asked before anything is removed).
+	$holdings = $copier->holdings($camp, $accounts);
+	// Deactivated accounts that still hold work not copied to the owner (or changed since the copy).
 	foreach($accounts as $a){
 		$pk = (int)$a->user_pkey;
-		if(!FieldCamp::truthy($a->active) && ($projectCounts[$pk] ?? 0) > ($copiedCounts[$pk] ?? 0)){
+		if(!FieldCamp::truthy($a->active) && ($holdings[$pk]['uncopied'] ?? 0) > 0){
 			$toCopy[] = array('user' => $pk, 'username' => $a->username);
 		}
+	}
+}
+// One account picked for removal on the Accounts step (?remove=<user pkey>): its confirmation panel.
+$removeAccount = null;
+if($accounts && isset($_GET['remove'])){
+	foreach($accounts as $a){ if((int)$a->user_pkey === (int)$_GET['remove']) $removeAccount = $a; }
+}
+$removedAccounts = ($camp && $step === 'accounts' && FieldCamp::isAdmin($userpkey)) ? FieldCamp::listRemovedAccounts($db, $camp->pkey) : array();
+// Deleting the camp (Basics step, ?delete=1): what would go.
+$deleteAsk = ($camp && $step === 'basics' && isset($_GET['delete']) && FieldCamp::canDeleteCamps($db));
+$deleteFacts = null;
+if($deleteAsk){
+	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
+	$all = FieldCamp::listAccounts($db, $camp->pkey);
+	$deleteFacts = array('accounts' => count($all), 'active' => 0, 'with_work' => 0, 'spots' => 0, 'photos' => 0, 'uncopied' => 0);
+	foreach($all as $a){ if(FieldCamp::truthy($a->active)) $deleteFacts['active']++; }
+	foreach((new FieldCampCopy($db, $neodb))->holdings($camp, $all) as $h){
+		if($h['spots'] > 0) $deleteFacts['with_work']++;
+		$deleteFacts['spots'] += $h['spots']; $deleteFacts['photos'] += $h['photos'];
+		if($h['uncopied'] > 0) $deleteFacts['uncopied']++;
 	}
 }
 $units = array(); $unitSources = array(); $chosenCount = 0;
@@ -317,6 +339,56 @@ if($step === 'basics'){
 				</div>
 			</form>
 		</div>
+<?php if(!$isNew && FieldCamp::canDeleteCamps($db)){ ?>
+		<div class="fc-panel fc-danger" id="fcDelete">
+			<h4>Delete this field camp</h4>
+<?php 	if(!$deleteAsk){ ?>
+			<div class="fc-mapnote">Removes the camp and all of its accounts. You are asked to confirm first, and shown what would go.</div>
+			<div class="fc-buttons">
+				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=basics&amp;delete=1#fcDelete" class="button small">Delete this field camp...</a>
+			</div>
+<?php 	}elseif($tileStatus['status'] === 'building'){ ?>
+			<div class="fc-mapnote">The offline maps of this camp are being built right now. The camp can be deleted when the build is done.</div>
+			<div class="fc-buttons"><a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=basics" class="button small">Cancel</a></div>
+<?php 	}else{ $f = $deleteFacts; ?>
+			<div class="fc-mapnote">Deleting <strong><?php echo htmlspecialchars($camp->camp_name); ?></strong> does this:</div>
+			<ul class="fc-facts">
+				<li>The camp disappears from your list, with its study area, maps, rock units and offline map tiles.</li>
+<?php 		if($f['accounts'] > 0){ ?>
+				<li><strong><?php echo (int)$f['accounts']; ?> account<?php echo $f['accounts'] === 1 ? '' : 's'; ?></strong> <?php echo $f['accounts'] === 1 ? 'is' : 'are'; ?> closed for good<?php
+					echo $f['active'] > 0 ? ' (' . (int)$f['active'] . ' can still sign in today)' : ''; ?>. The usernames cannot be used again.</li>
+				<li>Every device signed in with one of these accounts is signed out. Work that is only on a device and was never uploaded can no longer be uploaded.</li>
+				<li><?php echo $f['with_work'] > 0
+					? '<strong>' . (int)$f['with_work'] . ' account' . ($f['with_work'] === 1 ? ' has' : 's have') . ' uploaded work</strong>: ' . number_format($f['spots']) . ' spot' . ($f['spots'] === 1 ? '' : 's') . ' and ' . number_format($f['photos']) . ' photo' . ($f['photos'] === 1 ? '' : 's') . '.'
+					: 'No account has uploaded any work.'; ?></li>
+<?php 		}else{ ?>
+				<li>This camp has no accounts.</li>
+<?php 		} ?>
+				<li>Copies of student work in <?php echo $ownsCamp ? 'your own account' : "the camp owner's account"; ?> are kept.</li>
+				<li>Nothing is erased from the server: the StraboSpot team can bring the camp and its accounts back if this turns out to be a mistake.</li>
+			</ul>
+			<form method="post" action="/field_camp_action" data-fc-confirm="<?php echo htmlspecialchars(trim((string)$camp->camp_name)); ?>">
+				<?php echo fc_hidden($csrf, 'camp_delete', $camp); ?>
+<?php 		if($f['uncopied'] > 0){ ?>
+				<div class="fc-flash-err">
+					<strong><?php echo (int)$f['uncopied']; ?> account<?php echo $f['uncopied'] === 1 ? ' holds' : 's hold'; ?> work that has not been copied to <?php echo $ownsCamp ? 'you' : 'the owner'; ?></strong>
+					(or that has changed since the copy). Copy it first:
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=roster">go to Student work</a>.
+					<div style="margin-top:0.5em;"><input type="checkbox" name="nocopy" value="1" id="fcDelNoCopy" data-fc-need><label for="fcDelNoCopy">I do not need this work</label></div>
+				</div>
+<?php 		} ?>
+				<div class="fc-field">
+					<label for="fcDelConfirm">To confirm, type the name of this camp: <strong><?php echo htmlspecialchars($camp->camp_name); ?></strong></label>
+					<input type="text" name="confirm" id="fcDelConfirm" autocomplete="off" data-fc-typed>
+				</div>
+				<div class="fc-buttons">
+					<button type="submit" class="button primary small">Delete this field camp</button>
+					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=basics" class="button small">Cancel</a>
+				</div>
+			</form>
+<?php 	} ?>
+		</div>
+<?php } ?>
 <?php
 }
 
@@ -1246,16 +1318,102 @@ if($step === 'accounts'){
 			</div>
 			<div class="strabotable" style="margin-left:0px;">
 				<table class="fc-table">
-					<tr><td>Username</td><td>Created</td><td>Status</td><td>Projects uploaded</td><td>Copied to <?php echo $ownsCamp ? 'you' : 'the owner'; ?></td></tr>
+					<tr><td>Username</td><td>Created</td><td>Status</td><td>Projects uploaded</td><td>Copied to <?php echo $ownsCamp ? 'you' : 'the owner'; ?></td><td></td></tr>
 <?php foreach($accounts as $a){ ?>
-					<tr>
+					<tr<?php echo ($removeAccount && (int)$removeAccount->user_pkey === (int)$a->user_pkey) ? ' class="fc-row-picked"' : ''; ?>>
 						<td><?php echo htmlspecialchars($a->username); ?></td>
 						<td><?php echo htmlspecialchars(substr((string)$a->created_date, 0, 10)); ?></td>
 						<td><?php echo FieldCamp::truthy($a->active) ? 'Active' : 'Deactivated'; ?></td>
 						<td><?php echo (int)($projectCounts[(int)$a->user_pkey] ?? 0); ?></td>
 						<td><?php echo (int)($copiedCounts[(int)$a->user_pkey] ?? 0); ?></td>
+						<td><a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=accounts&amp;remove=<?php echo (int)$a->user_pkey; ?>#fcRemove" class="fc-small">Remove...</a></td>
 					</tr>
 <?php } ?>
+				</table>
+			</div>
+		</div>
+<?php } ?>
+
+<?php if($removeAccount){
+	$rpk = (int)$removeAccount->user_pkey;
+	$h = $holdings[$rpk] ?? array('projects' => 0, 'spots' => 0, 'photos' => 0, 'uncopied' => 0);
+	$stay = '/field_camp?id=' . (int)$camp->pkey . '&amp;step=accounts';
+?>
+		<div class="fc-panel fc-danger" id="fcRemove">
+			<h4>Remove the account <?php echo htmlspecialchars($removeAccount->username); ?></h4>
+			<ul class="fc-facts">
+				<li>The account is closed for good<?php echo FieldCamp::truthy($removeAccount->active) ? ' (it can still sign in today)' : ''; ?>, and its username cannot be used again.</li>
+				<li>Its device is signed out. Work that is only on the device and was never uploaded can no longer be uploaded.</li>
+				<li><?php echo $h['projects'] > 0
+					? 'On the server it holds <strong>' . (int)$h['projects'] . ' project' . ($h['projects'] === 1 ? '' : 's') . '</strong>: ' . number_format($h['spots']) . ' spot' . ($h['spots'] === 1 ? '' : 's') . ' and ' . number_format($h['photos']) . ' photo' . ($h['photos'] === 1 ? '' : 's') . '.'
+					: 'It has not uploaded anything.'; ?></li>
+				<li>Nothing is erased from the server: the StraboSpot team can bring the account back if this turns out to be a mistake.</li>
+			</ul>
+			<form method="post" action="/field_camp_action" data-fc-confirm="<?php echo htmlspecialchars((string)$removeAccount->username); ?>">
+				<?php echo fc_hidden($csrf, 'account_remove', $camp); ?>
+				<input type="hidden" name="user" value="<?php echo $rpk; ?>">
+<?php 	if($h['uncopied'] > 0){ ?>
+				<div class="fc-flash-err">
+					<strong>This account holds work that has not been copied to <?php echo $ownsCamp ? 'you' : 'the owner'; ?></strong> (or that has changed since the copy).
+					<div class="fc-buttons" style="margin-top:0.5em;">
+						<button type="button" class="button small" id="fcRemoveCopyBtn">Copy this student's work first</button>
+						<span class="fc-small" id="fcRemoveCopyMsg"></span>
+					</div>
+					<div style="margin-top:0.5em;"><input type="checkbox" name="nocopy" value="1" id="fcRemNoCopy" data-fc-need><label for="fcRemNoCopy">I do not need this work</label></div>
+				</div>
+				<script>
+				(function(){
+					var btn = document.getElementById('fcRemoveCopyBtn'), msg = document.getElementById('fcRemoveCopyMsg');
+					btn.addEventListener('click', function(){
+						btn.disabled = true; msg.textContent = 'Copying. Keep this page open...';
+						var body = new URLSearchParams();
+						body.append('csrf', <?php echo json_encode($csrf); ?>);
+						body.append('action', 'copy_account');
+						body.append('id', '<?php echo (int)$camp->pkey; ?>');
+						body.append('user', '<?php echo $rpk; ?>');
+						fetch('/field_camp_action', {method: 'POST', body: body, credentials: 'same-origin'})
+							.then(function(r){ return r.json(); })
+							.then(function(res){
+								if(res.error){ msg.textContent = res.error; btn.disabled = false; return; }
+								window.location.reload();
+							})
+							.catch(function(){ msg.textContent = 'The copy did not finish. Please try again.'; btn.disabled = false; });
+					});
+				})();
+				</script>
+<?php 	}elseif($h['spots'] > 0){ ?>
+				<div class="fc-flash"><?php echo $ownsCamp ? 'You have' : 'The owner has'; ?> an up-to-date copy of this account's work.</div>
+<?php 	} ?>
+				<div class="fc-field">
+					<label for="fcRemConfirm">To confirm, type the username: <strong><?php echo htmlspecialchars($removeAccount->username); ?></strong></label>
+					<input type="text" name="confirm" id="fcRemConfirm" autocomplete="off" data-fc-typed>
+				</div>
+				<div class="fc-buttons">
+					<button type="submit" class="button primary small">Remove this account</button>
+					<a href="<?php echo $stay; ?>" class="button small">Cancel</a>
+				</div>
+			</form>
+		</div>
+<?php } ?>
+
+<?php if($removedAccounts){ ?>
+		<div class="fc-panel">
+			<h4>Removed accounts (admin)</h4>
+			<div class="fc-mapnote">Removed accounts keep their data on the server. A restored account comes back deactivated.</div>
+			<div class="strabotable" style="margin-left:0px;">
+				<table class="fc-table">
+					<tr><td>Username</td><td>Removed</td><td></td></tr>
+<?php 	foreach($removedAccounts as $a){ ?>
+					<tr>
+						<td><?php echo htmlspecialchars($a->username); ?></td>
+						<td><?php echo htmlspecialchars(substr((string)$a->removed_date, 0, 16)); ?></td>
+						<td><form method="post" action="/field_camp_action" style="margin:0;">
+							<?php echo fc_hidden($csrf, 'account_restore', $camp); ?>
+							<input type="hidden" name="user" value="<?php echo (int)$a->user_pkey; ?>">
+							<button type="submit" class="button small">Restore</button>
+						</form></td>
+					</tr>
+<?php 	} ?>
 				</table>
 			</div>
 		</div>
@@ -1436,18 +1594,32 @@ if($step === 'accounts'){
 			})();
 			</script>
 <?php } ?>
-			<form method="post" action="/field_camp_action" style="margin-top:1.5em;">
+<?php
+	$goSpots = 0; $goPhotos = 0; $goWork = 0;
+	foreach($accounts as $a){
+		if(FieldCamp::truthy($a->active)) continue;
+		$gh = $holdings[(int)$a->user_pkey] ?? null;
+		if($gh){ $goSpots += $gh['spots']; $goPhotos += $gh['photos']; if($gh['spots'] > 0) $goWork++; }
+	}
+?>
+			<form method="post" action="/field_camp_action" style="margin-top:1.5em;" data-fc-confirm="<?php echo htmlspecialchars(trim((string)$camp->camp_name)); ?>">
 				<?php echo fc_hidden($csrf, 'accounts_remove', $camp); ?>
 				<div class="fc-field">
 					<label for="fcConfirm">Remove the <?php echo (int)($liveCount - $activeCount); ?> deactivated account(s)</label>
 					<div class="fc-hint" style="margin-bottom:0.5em;">
 						Removed accounts are closed for good and their usernames cannot be used again.
-<?php if($toCopy){ ?>
-						<strong><?php echo count($toCopy); ?> of them still hold work that has not been copied.</strong>
-<?php } ?>
-						To confirm, type the name of this camp: <strong><?php echo htmlspecialchars($camp->camp_name); ?></strong>
+						<?php echo $goWork > 0 ? (int)$goWork . ' of them ' . ($goWork === 1 ? 'has' : 'have') . ' uploaded work (' . number_format($goSpots) . ' spot' . ($goSpots === 1 ? '' : 's') . ', ' . number_format($goPhotos) . ' photo' . ($goPhotos === 1 ? '' : 's') . ').' : 'None of them has uploaded work.'; ?>
+						Work that is only on a device can no longer be uploaded. Nothing is erased from the server: the StraboSpot team can bring an account back.
 					</div>
-					<input type="text" name="confirm" id="fcConfirm" autocomplete="off">
+<?php if($toCopy){ ?>
+					<div class="fc-flash-err">
+						<strong><?php echo count($toCopy); ?> of them still hold work that has not been copied.</strong>
+						Copy it first with "Copy student projects" above.
+						<div style="margin-top:0.5em;"><input type="checkbox" name="nocopy" value="1" id="fcAllNoCopy" data-fc-need><label for="fcAllNoCopy">I do not need this work</label></div>
+					</div>
+<?php } ?>
+					<div class="fc-hint" style="margin-bottom:0.5em;">To confirm, type the name of this camp: <strong><?php echo htmlspecialchars($camp->camp_name); ?></strong></div>
+					<input type="text" name="confirm" id="fcConfirm" autocomplete="off" data-fc-typed>
 				</div>
 				<div class="fc-buttons"><button type="submit" class="button small">Remove deactivated accounts</button></div>
 			</form>
@@ -1513,6 +1685,21 @@ if($step === 'accounts'){
 <?php
 }
 ?>
+
+		<script>
+		// Strict confirmation (removing accounts, deleting the camp): the button stays off until the name
+		// asked for is typed exactly and, where work has not been copied, "I do not need this work" is selected.
+		// The server checks the same things again.
+		Array.prototype.forEach.call(document.querySelectorAll('form[data-fc-confirm]'), function(form){
+			var want = form.getAttribute('data-fc-confirm');
+			var typed = form.querySelector('[data-fc-typed]'), need = form.querySelector('[data-fc-need]');
+			var btn = form.querySelector('button[type=submit]');
+			function check(){ btn.disabled = !(typed.value.trim() === want && (!need || need.checked)); }
+			typed.addEventListener('input', check);
+			if(need) need.addEventListener('change', check);
+			check();
+		});
+		</script>
 
 <?php if($camp && $tileStatus['status'] === 'building'){ ?>
 		<script>

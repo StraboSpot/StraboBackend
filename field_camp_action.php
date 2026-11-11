@@ -72,6 +72,20 @@ if($action === 'create'){
 }
 
 // ---------------------------------------------------------------------------
+// Bring a deleted camp back (admin only; a deleted camp is "not there" for everything below)
+// ---------------------------------------------------------------------------
+if($action === 'camp_restore'){
+	if(!FieldCamp::isAdmin($userpkey)){
+		header("HTTP/1.0 404 Not Found");
+		exit("Not found.");
+	}
+	$n = FieldCamp::restoreCamp($db, (int)($_POST['id'] ?? 0));
+	if($n === null) fc_back("/field_camp_wizard", '', "That field camp is not among the deleted ones.");
+	fc_back("/field_camp_wizard", "Field camp restored" . ($n > 0 ? ", with $n account" . ($n === 1 ? '' : 's') . " (deactivated; reactivate them on the Accounts step)" : '')
+		. ". Its offline maps have to be built again.");
+}
+
+// ---------------------------------------------------------------------------
 // Everything else works on one camp
 // ---------------------------------------------------------------------------
 $camp = FieldCamp::getCamp($db, (int)($_POST['id'] ?? 0));
@@ -213,8 +227,62 @@ if($action === 'basics'){
 	if(trim((string)($_POST['confirm'] ?? '')) !== trim((string)$camp->camp_name)){
 		fc_back($here . "accounts", '', "The name you typed does not match this camp. No accounts were removed.");
 	}
+	// Work not copied to the owner blocks the removal unless the instructor says it is not needed.
+	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
+	$going = array();
+	foreach(FieldCamp::listAccounts($db, $id) as $a){ if(!FieldCamp::truthy($a->active)) $going[] = $a; }
+	$uncopied = 0;
+	foreach((new FieldCampCopy($db, $neodb))->holdings($camp, $going) as $h){ if($h['uncopied'] > 0) $uncopied++; }
+	if($uncopied > 0 && empty($_POST['nocopy'])){
+		fc_back($here . "accounts", '', "$uncopied of these accounts hold" . ($uncopied === 1 ? 's' : '') . " work that has not been copied. Copy it first, or select \"I do not need this work\". No accounts were removed.");
+	}
 	$n = FieldCamp::removeAccounts($db, $neodb, $camp);
 	fc_back($here . "accounts", "$n account" . ($n === 1 ? '' : 's') . " removed.");
+
+}elseif($action === 'account_remove'){
+
+	// One account, active or not. Typed username; uncopied work blocks unless overridden.
+	$pk = (int)($_POST['user'] ?? 0);
+	$account = null;
+	foreach(FieldCamp::listAccounts($db, $id) as $a){ if((int)$a->user_pkey === $pk) $account = $a; }
+	if(!$account) fc_back($here . "accounts", '', "That account is not one of this camp's accounts.");
+	$back = $here . "accounts&remove=$pk#fcRemove";
+	if(trim((string)($_POST['confirm'] ?? '')) !== (string)$account->username){
+		fc_back($back, '', "The username you typed does not match. The account was not removed.");
+	}
+	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
+	$h = (new FieldCampCopy($db, $neodb))->holdings($camp, array($account));
+	if(($h[$pk]['uncopied'] ?? 0) > 0 && empty($_POST['nocopy'])){
+		fc_back($back, '', "This account holds work that has not been copied. Copy it first, or select \"I do not need this work\". The account was not removed.");
+	}
+	FieldCamp::removeAccount($db, $neodb, $camp, $pk);
+	fc_back($here . "accounts", "The account " . $account->username . " was removed.");
+
+}elseif($action === 'account_restore'){
+
+	if(!FieldCamp::isAdmin($userpkey)){
+		header("HTTP/1.0 404 Not Found");
+		exit("Not found.");
+	}
+	$ok = FieldCamp::restoreAccount($db, $camp, (int)($_POST['user'] ?? 0));
+	fc_back($here . "accounts", $ok ? "Account restored. It is deactivated; reactivate it when it should sign in again." : '',
+		$ok ? array() : "That account is not among the removed ones.");
+
+}elseif($action === 'camp_delete'){
+
+	$back = $here . "basics&delete=1#fcDelete";
+	if(trim((string)($_POST['confirm'] ?? '')) !== trim((string)$camp->camp_name)){
+		fc_back($back, '', "The name you typed does not match this camp. Nothing was deleted.");
+	}
+	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
+	$uncopied = 0;
+	foreach((new FieldCampCopy($db, $neodb))->holdings($camp, FieldCamp::listAccounts($db, $id)) as $h){ if($h['uncopied'] > 0) $uncopied++; }
+	if($uncopied > 0 && empty($_POST['nocopy'])){
+		fc_back($back, '', "$uncopied account" . ($uncopied === 1 ? ' holds' : 's hold') . " work that has not been copied. Copy it first on the Student work step, or select \"I do not need this work\". Nothing was deleted.");
+	}
+	$problem = FieldCamp::deleteCamp($db, $neodb, $camp, $userpkey);
+	if($problem !== '') fc_back($back, '', $problem);
+	fc_back("/field_camp_wizard", "The field camp \"" . $camp->camp_name . "\" was deleted.");
 
 }elseif($action === 'copy_account'){
 

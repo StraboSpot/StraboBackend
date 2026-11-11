@@ -100,6 +100,10 @@
 .fc-unit-off .fc-unit-text, .fc-unit-off input[type=text] { opacity: 0.45; }
 .fc-chip { display: inline-block; width: 1.4em; height: 1.4em; border-radius: 3px; vertical-align: middle;
 	border: 1px solid rgba(255,255,255,0.35); background: transparent; }
+.fc-danger { border-color: rgba(228,76,101,0.45); }
+.fc-facts { margin: 0 0 1em 0; padding-left: 1.3em; color: rgba(255,255,255,0.85); }
+.fc-facts li { padding: 0.15em 0; }
+.fc-row-picked td { background: rgba(228,76,101,0.12); }
 .fc-build-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5em; }
 .fc-build-nums { color: rgba(255,255,255,0.75); font-variant-numeric: tabular-nums; }
 .fc-bar { position: relative; height: 12px; margin: 0.5em 0 0.45em 0; border-radius: 6px; background: rgba(255,255,255,0.12); overflow: hidden; }

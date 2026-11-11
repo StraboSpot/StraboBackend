@@ -215,6 +215,14 @@ ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS build_finished TIMESTAMP WITH TIM
 ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS files_token VARCHAR(40);
 
 -- ---------------------------------------------------------------------------
+-- Deleting a camp (2026-11-10) is soft: the row stays and is hidden. Its accounts
+-- are removed with the same timestamp (fieldcamp_account.removed_date), which is
+-- how a restore by the admin knows which accounts to bring back.
+-- ---------------------------------------------------------------------------
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS deleted_date TIMESTAMP WITH TIME ZONE;
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS deleted_by INTEGER;
+
+-- ---------------------------------------------------------------------------
 -- Privileges. Tables are created by the superuser (postgres) but the web app
 -- connects as strabodbuser, with a readonly role for reporting.
 -- (GRANT is idempotent, so this is safe to re-run.)
