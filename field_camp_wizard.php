@@ -24,6 +24,10 @@ if(!FieldCamp::canUse($db, $userpkey)){
 
 $camps = FieldCamp::listCamps($db, $userpkey);
 $isAdmin = FieldCamp::isAdmin($userpkey);
+// Deleted camps are kept on the server; the admin can bring one back with its accounts.
+// They stay off the page until the admin asks for them ("Deleted field camps" button, ?deleted=1).
+$deletedCamps = $isAdmin ? FieldCamp::listDeletedCamps($db) : array();
+$showDeleted = $deletedCamps && isset($_GET['deleted']);
 
 $flash = $_SESSION['fieldcamp_flash'] ?? null;
 unset($_SESSION['fieldcamp_flash']);
@@ -57,7 +61,14 @@ include("includes/fieldcamp/fieldcamp_style.php");
 		<div class="fc-top">
 			<div><a href="/field_camp?new=1" class="button primary small">New field camp</a></div>
 <?php if($isAdmin){ ?>
-			<div><a href="/admin_field_camp_instructors" class="button small">Instructor list</a></div>
+			<div style="display:flex; flex-wrap:wrap; gap:0.75em;">
+<?php 	if($deletedCamps && $showDeleted){ ?>
+				<a href="/field_camp_wizard" class="button small">Hide deleted field camps</a>
+<?php 	}elseif($deletedCamps){ ?>
+				<a href="/field_camp_wizard?deleted=1#fcDeleted" class="button small">Deleted field camps (<?php echo count($deletedCamps); ?>)</a>
+<?php 	} ?>
+				<a href="/admin_field_camp_instructors" class="button small">Instructor list</a>
+			</div>
 <?php } ?>
 		</div>
 
@@ -102,11 +113,9 @@ include("includes/fieldcamp/fieldcamp_style.php");
 		</div>
 <?php } ?>
 
-<?php
-// Deleted camps are kept on the server; the admin can bring one back with its accounts.
-$deletedCamps = $isAdmin ? FieldCamp::listDeletedCamps($db) : array();
-if($deletedCamps){ ?>
-		<h4 style="margin-top:2em;">Deleted field camps (admin)</h4>
+<?php if($showDeleted){ ?>
+		<h4 id="fcDeleted" style="margin-top:2em;">Deleted field camps (admin)</h4>
+		<div class="fc-mapnote">Deleted camps keep their data on the server. A restored camp comes back with its accounts deactivated, and its offline maps have to be built again.</div>
 		<div class="fc-list">
 <?php 	foreach($deletedCamps as $c){ $n = (int)$c->accountcount; ?>
 			<div class="fc-camp">

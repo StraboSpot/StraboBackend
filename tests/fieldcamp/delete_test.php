@@ -289,11 +289,17 @@ check('the Field Book door is closed with the camp', FieldCampRoster::book($db, 
 // ===========================================================================
 section('The admin restores the camp');
 list($code, $body) = web("/field_camp_wizard", $sidI);
-check('the instructor sees no deleted list', strpos($body, 'Deleted field camps') === false);
+check('the instructor sees no deleted list and no button for it', strpos($body, 'Deleted field camps') === false && strpos($body, 'deleted=1') === false);
+list($code, $body) = web("/field_camp_wizard?deleted=1", $sidI);
+check('nor when asking for it by address', $code === 200 && strpos($body, 'Deleted field camps') === false && strpos($body, 'camp_restore') === false);
 list($code) = post($sidI, array('action' => 'camp_restore', 'id' => $campid));
 check('and cannot restore', $code === 404 && FieldCamp::getCamp($db, $campid) === null, $code);
 list($code, $body) = web("/field_camp_wizard", $sidA);
-check('the admin sees the deleted camp with its accounts', !noisy($body) && strpos($body, 'Deleted field camps (admin)') !== false && preg_match('~Delete Camp.*?3 accounts removed with it.*?fctest98-instructor@example\.org~s', $body) === 1);
+$nDeleted = count(FieldCamp::listDeletedCamps($db));
+check('the admin\'s front page has a button with the count, not the list', !noisy($body) && strpos($body, 'href="/field_camp_wizard?deleted=1#fcDeleted"') !== false && strpos($body, "Deleted field camps ($nDeleted)") !== false
+	&& strpos($body, 'Deleted field camps (admin)') === false && strpos($body, 'camp_restore') === false && strpos($body, '3 accounts removed with it') === false);
+list($code, $body) = web("/field_camp_wizard?deleted=1", $sidA);
+check('the button opens the list: the deleted camp with its accounts, and a way to hide it', !noisy($body) && strpos($body, 'Deleted field camps (admin)') !== false && strpos($body, 'Hide deleted field camps') !== false && preg_match('~Delete Camp.*?3 accounts removed with it.*?fctest98-instructor@example\.org~s', $body) === 1);
 list($code, $body) = post($sidA, array('action' => 'camp_restore', 'id' => $campid));
 $back = FieldCamp::getCamp($db, $campid);
 check('restore brings the camp back', strpos($body, 'Field camp restored, with 3 accounts') !== false && $back && (string)$back->deleted_date === '' && count(FieldCamp::listCamps($db, $INSTR)) === 1);
