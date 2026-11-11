@@ -22,6 +22,38 @@
 class FieldCampRoster
 {
 	/**
+	 * The Field Book of one student's project, read straight from the student's account (no copy needed):
+	 * may $sessionUser have it, and which datasets is it? Allowed for whoever may manage the camp (its owner
+	 * or the admin), for an account of that camp that has not been removed. The datasets are looked up under
+	 * the account itself: every student's camp project has the same project and dataset ids, so an id alone
+	 * does not say whose data is meant.
+	 *
+	 * @return array|null null = no such book for this user (answer as "not found"), else
+	 *                    ['camp' => int, 'project' => string, 'run_as' => int (the account), 'label' => username,
+	 *                     'dsids' => [string] (empty when the project is not on the server)]
+	 */
+	public static function book($db, $neodb, $sessionUser, $campId, $accountPkey, $projectId)
+	{
+		require_once __DIR__ . '/FieldCamp.php';
+		$sessionUser = (int)$sessionUser; $accountPkey = (int)$accountPkey; $projectId = (string)$projectId;
+		if ($sessionUser <= 0 || $accountPkey <= 0 || !preg_match('/^[0-9]{1,20}$/', $projectId)) return null;
+		if (!FieldCamp::canUse($db, $sessionUser)) return null;
+		$camp = FieldCamp::getCamp($db, (int)$campId);
+		if (!$camp || !FieldCamp::canManage($camp, $sessionUser)) return null;
+		$account = null;
+		foreach (FieldCamp::listAccounts($db, $camp->pkey) as $a) if ((int)$a->user_pkey === $accountPkey) $account = $a;
+		if (!$account) return null;
+		$rows = $neodb->get_results("
+			match (p:Project {id: $projectId})-[:HAS_DATASET]->(d:Dataset)
+			where p.userpkey = $accountPkey and d.userpkey = $accountPkey
+			return distinct d.id as id order by d.id");
+		$dsids = array();
+		foreach (($rows ? $rows : array()) as $r) $dsids[] = (string)$r->get('id');
+		return array('camp' => (int)$camp->pkey, 'project' => $projectId, 'run_as' => $accountPkey,
+			'label' => (string)$account->username, 'dsids' => $dsids);
+	}
+
+	/**
 	 * @param array $accounts rows of FieldCamp::listAccounts()
 	 * @return array ['rows' => [per account: 'username', 'user_pkey', 'active' (bool), 'projects' => [...]],
 	 *                'uploaded' => int (accounts with the camp project, or any project when the camp has no id yet),

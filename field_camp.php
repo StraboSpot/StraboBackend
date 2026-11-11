@@ -779,6 +779,10 @@ if($step === 'roster'){
 				appears there as "<?php echo htmlspecialchars($camp->project_name); ?> (username)", on the website and in StraboField.
 				A copy shows the work as it was when it was made; copy again to bring it up to date. The students' own projects are never changed.
 			</div>
+			<div class="fc-mapnote">
+				For a quick look without a copy, <strong>Field Book</strong> opens a PDF of the student's project as it is on the server right now:
+				spots by day with maps, photos, stereonets and notes. Photos the student has not uploaded yet are left out.
+			</div>
 			<div class="fc-buttons" style="margin-bottom:1em;">
 <?php 	if($rosterTodo){ ?>
 				<button type="button" class="button primary small" id="fcCopyBtn">Copy the work of <?php echo count($rosterTodo); ?> student<?php echo count($rosterTodo) === 1 ? '' : 's'; ?> that is new or has changed</button>
@@ -792,12 +796,12 @@ if($step === 'roster'){
 			<div class="fc-preview" id="fcCopyLog" style="display:none; max-width:none;"></div>
 			<div class="strabotable" style="margin-left:0px;">
 				<table class="fc-table">
-					<tr><td>Username</td><td>Project</td><td>Last upload</td><td>Datasets</td><td>Spots</td><td>Photos</td><td><?php echo $ownsCamp ? 'Your copy' : "Owner's copy"; ?></td></tr>
+					<tr><td>Username</td><td>Project</td><td>Last upload</td><td>Datasets</td><td>Spots</td><td>Photos</td><td><?php echo $ownsCamp ? 'Your copy' : "Owner's copy"; ?></td><td>Field Book</td></tr>
 <?php 	foreach($roster['rows'] as $r){
 			if(!$r['projects']){ ?>
 					<tr>
 						<td><?php echo htmlspecialchars($r['username']); ?><?php echo $r['active'] ? '' : ' <span class="fc-small">(deactivated)</span>'; ?></td>
-						<td colspan="6" class="fc-small">Nothing uploaded yet</td>
+						<td colspan="7" class="fc-small">Nothing uploaded yet</td>
 					</tr>
 <?php 		}
 			foreach($r['projects'] as $i => $p){ ?>
@@ -814,6 +818,11 @@ if($step === 'roster'){
 							if($c['state'] === 'current') echo 'Up to date <span class="fc-small">(' . $when . ')</span>';
 							elseif($c['state'] === 'behind') echo '<span class="fc-preview-msg fc-bad">Changed since the copy</span> <span class="fc-small">(' . $when . ')</span>';
 							else echo '<span class="fc-small">Not copied</span>';
+						?></td>
+						<td><?php
+							// Straight from the student's account (fieldbook_build.php, Field Camp door); a project without spots has no book.
+							if($p['spots'] > 0) echo '<a href="/fieldbook_build?camp=' . (int)$camp->pkey . '&amp;account=' . (int)$r['user_pkey'] . '&amp;project=' . rawurlencode($p['id']) . '" target="_blank" rel="noopener" class="fc-book">Open</a>';
+							else echo '<span class="fc-small">No spots yet</span>';
 						?></td>
 					</tr>
 <?php 		}

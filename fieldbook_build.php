@@ -13,6 +13,12 @@
  *              attached to rather than started twice. Without JavaScript the
  *              page offers the direct download (searchdownload?type=fieldbook).
  *
+ *              Second door (Field Camp Wizard, Student work step, 2026-11-10):
+ *              ?camp=&account=&project= builds the book of one student's
+ *              project straight from the student's camp account, for whoever
+ *              may manage the camp (FieldCampRoster::book). The build then
+ *              runs as that account; nothing in the URL is trusted.
+ *
  * @package    StraboSpot Web Site
  * @author     Jason Ash <jasonash@ku.edu>
  * @copyright  2026 StraboSpot
@@ -26,9 +32,17 @@ require_once("includes/fieldbook/FieldbookBuild.php");
 
 $h = function ($s) { return htmlspecialchars((string)$s, ENT_QUOTES, 'UTF-8'); };
 $params = FieldbookBuild::params($_GET);
+// Field Camp Wizard door: a student's project, for the camp's owner or the admin.
+$campDoor = null; $viaCamp = isset($_GET['camp']);
+if ($viaCamp) {
+	require_once("includes/fieldcamp/FieldCampRoster.php");
+	$campDoor = FieldCampRoster::book($db, $neodb, $userpkey, (int)$_GET['camp'], (int)($_GET['account'] ?? 0), (string)($_GET['project'] ?? ''));
+	$params['dsids'] = $campDoor ? implode(',', $campDoor['dsids']) : '';
+	$params['userpkey'] = $campDoor ? (int)$campDoor['run_as'] : 0;
+}
 // Access check (2026-10-21, docs/Export_Access_Fix.md): run only on the datasets this session may
 // export, as their owner; the URL's userpkey is never trusted.
-if ($params['dsids'] !== '') {
+elseif ($params['dsids'] !== '') {
 	$access = $strabo->exportDatasetParams($params['dsids']);
 	$params['dsids'] = $access['dsids'] === '0' ? '' : $access['dsids'];
 	$params['userpkey'] = (int)$access['userpkey'];
@@ -39,16 +53,20 @@ $key = ''; $mode = 'nodata'; $title = ''; $subtitle = ''; $datasets = array();
 if ($dsList) {
 	$tree = Fieldbook::treeFromNeo4j($strabo, $params['userpkey'], $dsList);
 	$meta = Fieldbook::meta($strabo, $params['userpkey'], $tree, $_GET);
-	$title = $meta['title']; $subtitle = $meta['subtitle'];
+	$title = $meta['title'] . ($campDoor ? ' (' . $campDoor['label'] . ')' : ''); $subtitle = $meta['subtitle'];
 	foreach ($tree as $t) foreach ($t['dsids'] as $d) $datasets[] = $t['dataset_names'][$d];
-	$key = FieldbookBuild::key($userpkey, $params);
+	$door = $campDoor ? array('camp' => $campDoor['camp'], 'project' => $campDoor['project'], 'run_as' => $campDoor['run_as'], 'label' => $campDoor['label']) : array();
+	$key = FieldbookBuild::key($userpkey, $params, $campDoor ? array('camp' => $campDoor['camp']) : array());
 	$state = FieldbookBuild::load($key);
 	if ($state && (int)$state['userpkey'] !== (int)$userpkey) $state = null;
 	$mode = FieldbookBuild::modeFor($state, $key);
 	if ($mode === 'fetch') { header('Location: /fieldbook_fetch?k=' . $key); exit(); }
-	if ($mode === 'run') FieldbookBuild::save($key, FieldbookBuild::newState($userpkey, $params, $title));
+	if ($mode === 'run') FieldbookBuild::save($key, FieldbookBuild::newState($userpkey, $params, $title, $door));
 }
-$directUrl = '/searchdownload?type=fieldbook&' . http_build_query($params);
+// The direct download knows only the usual access rules, so a camp book has none.
+$directUrl = $viaCamp ? '' : '/searchdownload?type=fieldbook&' . http_build_query($params);
+$backUrl = $campDoor ? '/field_camp?id=' . (int)$campDoor['camp'] . '&step=roster' : '/my_field_data';
+$backLabel = $campDoor ? 'Back to Student work' : 'Back to My StraboField Data';
 $opts = Fieldbook::options($_GET);
 
 include("includes/mheader.php");
@@ -90,9 +108,9 @@ include("includes/mheader.php");
 
 <?php if ($mode === 'nodata') { ?>
 						<div class="fb-card warn" id="fb-nodata">
-							<p>No dataset was given for this Field Book.</p>
+							<p><?php echo $viaCamp ? 'There is no work on the server for this Field Book.' : 'No dataset was given for this Field Book.'; ?></p>
 						</div>
-						<ul class="actions"><li><a href="/my_field_data" class="button primary">Go to My StraboField Data</a></li></ul>
+						<ul class="actions"><li><a href="<?php echo $h($campDoor ? $backUrl : '/my_field_data'); ?>" class="button primary"><?php echo $campDoor ? 'Back to Student work' : 'Go to My StraboField Data'; ?></a></li></ul>
 <?php } else { ?>
 						<div class="fb-card" id="fb-book">
 							<ul class="fb-facts">
@@ -121,14 +139,20 @@ include("includes/mheader.php");
 							<p id="fb-error"></p>
 							<ul class="actions">
 								<li><a href="javascript:location.reload()" class="button primary" id="fb-retry">Try again</a></li>
+<?php if ($directUrl !== '') { ?>
 								<li><a href="<?php echo $h($directUrl); ?>" class="button" id="fb-direct">Download directly</a></li>
-								<li><a href="/my_field_data" class="button">Back to My StraboField Data</a></li>
+<?php } ?>
+								<li><a href="<?php echo $h($backUrl); ?>" class="button"><?php echo $h($backLabel); ?></a></li>
 							</ul>
 						</div>
 
 						<noscript>
 						<div class="fb-card warn" id="fb-noscript">
+<?php if ($directUrl !== '') { ?>
 							<p>JavaScript is off, so this page cannot show progress. <a href="<?php echo $h($directUrl); ?>">Download the Field Book directly</a> (the page stays blank until the whole book has been built and sent).</p>
+<?php } else { ?>
+							<p>JavaScript is off, so this page cannot build the Field Book. Please turn it on and load the page again.</p>
+<?php } ?>
 						</div>
 						</noscript>
 
