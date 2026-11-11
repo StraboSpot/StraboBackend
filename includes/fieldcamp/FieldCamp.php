@@ -32,7 +32,7 @@ class FieldCamp
 	/** Most accounts one camp may hold. */
 	const MAX_ACCOUNTS = 100;
 
-	const MIN_PASSWORD_LENGTH = 6;
+	const MIN_PASSWORD_LENGTH = 4;   // 6 until 2026-11-10 (Jason: camps want short passwords)
 
 	/** Shortest fixed part of a username template (what comes before {n}). */
 	const MIN_TEMPLATE_PREFIX = 3;

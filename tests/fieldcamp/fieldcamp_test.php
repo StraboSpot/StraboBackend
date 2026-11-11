@@ -196,8 +196,10 @@ check('plan lists 3 free names', $plan['error'] === '' && count($plan['names']) 
 check('plan refuses a count of 0', FieldCamp::planAccounts($db, $camp, 'fctest94_{n}', 0)['error'] !== '');
 check('plan refuses more than the cap', FieldCamp::planAccounts($db, $camp, 'fctest94_{n}', FieldCamp::MAX_ACCOUNTS + 1)['error'] !== '');
 
-$r = FieldCamp::createAccounts($db, $neodb, $camp, 'fctest94_{n}', 3, 'short');
-check('short password is refused', $r['error'] !== '' && !$r['created']);
+$r = FieldCamp::createAccounts($db, $neodb, $camp, 'fctest94_{n}', 3, 'abc');
+check('a password of three characters is refused: the minimum is four', $r['error'] === 'The password needs at least 4 characters.' && !$r['created'] && FieldCamp::MIN_PASSWORD_LENGTH === 4, $r);
+$r = FieldCamp::createAccounts($db, $neodb, $camp, 'fctest94_{n}', 0, 'abcd');
+check('four characters pass the length rule (this try stops at the count instead)', $r['error'] !== '' && strpos($r['error'], 'password') === false && !$r['created'], $r);
 $r = FieldCamp::createAccounts($db, $neodb, $camp, 'fctest94_{n}', 3, $PW);
 check('3 accounts created', $r['error'] === '' && $r['created'] === array('fctest94_1', 'fctest94_2', 'fctest94_3'), $r);
 $accounts = FieldCamp::listAccounts($db, $campid);
