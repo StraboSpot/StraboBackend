@@ -328,7 +328,8 @@ if($step === 'basics'){
 					<input type="text" name="project_name" id="fcProject" maxlength="120"
 						value="<?php echo htmlspecialchars(fc_val($form, $camp, 'project_name')); ?>"
 						placeholder="e.g. KU Field Camp 2027">
-					<div class="fc-hint">The name of the StraboField project the students will work in.</div>
+					<div class="fc-hint">The name of the StraboField project the students will work in.<?php
+						echo $isNew ? ' It follows the camp name and year until you change it here.' : ''; ?></div>
 				</div>
 				<div class="fc-buttons">
 <?php if($isNew){ ?>
@@ -339,6 +340,30 @@ if($step === 'basics'){
 				</div>
 			</form>
 		</div>
+<?php if($isNew){ ?>
+		<script>
+		// A new camp: the project name follows "camp name + year" (the year is not added when the name already
+		// ends with it) until the user types a project name of their own. Emptying the field hands it back.
+		// Not on an existing camp: its project may already be on students' devices.
+		(function(){
+			var name = document.getElementById('fcName'), year = document.getElementById('fcYear'), project = document.getElementById('fcProject');
+			function suggested(){
+				var n = name.value.trim().replace(/\s+/g, ' '), y = year.value.trim();
+				if(n === '') return '';
+				if(!/^\d{4}$/.test(y) || new RegExp('(^|\\D)' + y + '$').test(n)) return n;
+				return n + ' ' + y;
+			}
+			// follow from the start only when the field is empty or already holds the suggestion (a refused save keeps what was typed)
+			var following = project.value.trim() === '' || project.value.trim() === suggested();
+			function follow(){ if(following) project.value = suggested().slice(0, project.maxLength > 0 ? project.maxLength : 120); }
+			name.addEventListener('input', follow);
+			year.addEventListener('input', follow);
+			project.addEventListener('input', function(){ following = project.value.trim() === ''; });
+			project.addEventListener('blur', function(){ if(project.value.trim() === ''){ following = true; follow(); } });
+			follow();
+		})();
+		</script>
+<?php } ?>
 <?php if(!$isNew && FieldCamp::canDeleteCamps($db)){ ?>
 		<div class="fc-panel fc-danger" id="fcDelete">
 			<h4>Delete this field camp</h4>

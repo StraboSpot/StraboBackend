@@ -369,6 +369,10 @@ check('the form keeps what was typed', strpos($body, 'value="Kept Project"') !==
 list($code, $body, $loc) = post_follow($sInstr, array('action' => 'create', 'camp_name' => 'HTTP Camp', 'camp_year' => '2028', 'project_name' => 'HTTP Project'));
 $http = $db->get_row_prepared("select * from fieldcamp where camp_name = 'HTTP Camp' and owner_user_pkey = $1", array($INSTR));
 check('create saves the camp and moves on to the study area', $http && strpos($loc, 'step=area') !== false && strpos($body, 'fcMap') !== false, $loc);
+list($code, $newBody) = http('GET', '/field_camp?new=1', $sInstr);
+check('a new camp: the project name follows the camp name and year until it is changed', strpos($newBody, 'It follows the camp name and year until you change it here.') !== false && strpos($newBody, 'function suggested()') !== false);
+list($code, $oldBody) = http('GET', "/field_camp?id=" . (int)$http->pkey . "&step=basics", $sInstr);
+check('an existing camp: the project name is left alone', strpos($oldBody, 'function suggested()') === false && strpos($oldBody, 'It follows the camp name') === false);
 $hid = $http ? (int)$http->pkey : 0;
 check('the study area is drawn as a box, and Next saves it (no separate save)', strpos($body, 'id="fcDrawBtn"') !== false && strpos($body, 'not drawn yet') !== false
 	&& strpos($body, 'id="fcAreaForm" data-fc-save="area"') !== false && strpos($body, 'data-fc-next="maps">Next: Maps') !== false && strpos($body, 'this view') === false);
