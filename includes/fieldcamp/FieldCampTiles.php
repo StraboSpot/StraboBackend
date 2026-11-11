@@ -27,6 +27,13 @@
  *              FieldCampPackage puts the zip into the package and writes the
  *              mapNamesDb entries from tiles.json.
  *
+ *              No separate "build" on the page (2026-11-10): leaving the
+ *              Offline maps step saves the choice and starts the build when the
+ *              built tiles do not match it (needsBuild()). No map selected =
+ *              offline maps switched off (tiles_layers '[]'; clearBuild()
+ *              removes what was built). While a build runs it reports how far
+ *              it is (progress.json beside the tiles, read by status()).
+ *
  *              PROVISIONAL limits (Jason's boss has not set them yet):
  *              MAX_ZOOM, MAX_TILES_PER_MAP, MAX_TILES_TOTAL.
  *
@@ -252,7 +259,7 @@ class FieldCampTiles
 		if ($bbox === null) return array(0, array(), array("Choose the study area first."));
 		$ids = array();
 		foreach ((array)$layerIds as $id) { if (is_string($id) && isset($layers[$id]) && !in_array($id, $ids, true)) $ids[] = $id; }
-		if (!$ids) $errors[] = "Select at least one map.";
+		if (!$ids) $errors[] = "Select at least one map, or switch the offline maps off.";
 		$zoom = (int)$zoom;
 		$picked = array();
 		foreach ($ids as $id) $picked[] = $layers[$id];
@@ -330,6 +337,35 @@ class FieldCampTiles
 		return '';
 	}
 
+	/** Does the camp want offline maps at all? (No map selected = switched off; never saved = every map.) */
+	public static function wanted($camp, $layers)
+	{
+		return count(self::chosenLayerIds($camp, $layers)) > 0;
+	}
+
+	/**
+	 * Should leaving the Offline maps step start a build? Yes when maps are wanted, no build is running and
+	 * the built tiles are missing (never built, or the last build failed) or no longer match the choice.
+	 */
+	public static function needsBuild($camp, $layers)
+	{
+		if (!self::wanted($camp, $layers) || self::isBuilding($camp)) return false;
+		if (FieldCampUnits::campBbox($camp) === null) return false;   // no study area yet: nothing can be built
+		$manifest = self::manifest($camp);
+		return !$manifest || self::outdated($camp, $manifest, $layers) !== '';
+	}
+
+	/** Offline maps switched off: remove the built tiles so no package carries them. Not while a build runs. */
+	public static function clearBuild($db, $camp)
+	{
+		if (self::isBuilding($camp)) return false;
+		$dir = self::dir($camp);
+		if ($dir !== null) foreach (array('OfflineTiles.zip', 'OfflineTiles.zip.tmp', 'tiles.json', 'progress.json') as $f) @unlink("$dir/$f");
+		$db->prepare_query("update fieldcamp set build_status = '', build_message = null, build_started = null, build_finished = null where pkey = $1",
+			array((int)$camp->pkey));
+		return true;
+	}
+
 	// -------------------------------------------------------------------
 	// Building
 	// -------------------------------------------------------------------
@@ -362,6 +398,7 @@ class FieldCampTiles
 				build_message = 'Starting...'
 			where pkey = $1 and (build_status <> 'building' or build_started < now() - interval '" . self::STALE_MINUTES . " minutes')
 			", array((int)$camp->pkey));
+		@file_put_contents(self::dir($camp) . '/progress.json', json_encode(array('fraction' => 0)));
 		$script = __DIR__ . '/build_tiles.php';
 		exec('nohup ' . escapeshellarg(PHP_BINDIR . '/php') . ' ' . escapeshellarg($script) . ' ' . (int)$camp->pkey
 			. ' > /dev/null 2>&1 &');
@@ -380,20 +417,38 @@ class FieldCampTiles
 			$message = (string)($camp->build_message ?? '');
 		}
 		$m = self::manifest($camp);
+		// How far a running build is: 0 to 100 from progress.json, and the seconds since it started.
+		$percent = null; $elapsed = null;
+		if ($building) {
+			$elapsed = max(0, time() - (int)strtotime((string)$camp->build_started));
+			$dir = self::dir($camp);
+			$p = ($dir !== null && is_file("$dir/progress.json")) ? json_decode((string)@file_get_contents("$dir/progress.json"), true) : null;
+			if (is_array($p) && isset($p['fraction'])) $percent = (int)round(100 * max(0, min(1, (float)$p['fraction'])));
+		}
 		return array(
 			'status' => $status,
 			'message' => $message,
+			'percent' => $percent,
+			'elapsed' => $elapsed,
 			'tiles' => $m ? (int)$m['tiles'] : 0,
 			'maps' => $m ? count($m['layers']) : 0,
 			'bytes' => $m ? (int)$m['bytes'] : 0,
 		);
 	}
 
-	private static function progress($db, $camp, $message)
+	/** $fraction: how much of the whole build is done, 0 to 1 (null = leave as it is). */
+	private static function progress($db, $camp, $message, $fraction = null)
 	{
 		$db->prepare_query("update fieldcamp set build_message = $2 where pkey = $1 and build_status = 'building'",
 			array((int)$camp->pkey, $message));
+		if ($fraction !== null && ($dir = self::dir($camp)) !== null) {
+			$tmp = "$dir/progress.json." . getmypid();
+			if (@file_put_contents($tmp, json_encode(array('fraction' => round(max(0, min(1, $fraction)), 4)))) !== false) @rename($tmp, "$dir/progress.json");
+		}
 	}
+
+	/** The maps take 95% of a build's bar in equal shares, the packing the rest. */
+	const FETCH_SHARE = 0.95;
 
 	/**
 	 * Fetch the tiles of every selected map and write OfflineTiles.zip and
@@ -424,7 +479,8 @@ class FieldCampTiles
 			$n++;
 			$layer = $layers[$id];
 			$label = $layer['name'] . " ($n of " . count($ids) . ")";
-			$result = self::fetchLayer($db, $camp, $layer, $extent, $zoom, $work, $label);
+			$span = array(self::FETCH_SHARE * ($n - 1) / count($ids), self::FETCH_SHARE * $n / count($ids));
+			$result = self::fetchLayer($db, $camp, $layer, $extent, $zoom, $work, $label, $span);
 			if ($result['error'] !== '') {
 				error_log("FieldCampTiles::build camp " . (int)$camp->pkey . " map $id: " . $result['error']);
 				$out['skipped'][] = array('id' => $id, 'name' => $layer['name'], 'reason' => $result['error']);
@@ -442,7 +498,7 @@ class FieldCampTiles
 			return self::finish($db, $camp, $out, "No map tiles could be fetched (" . $why . "). Please try again later.");
 		}
 
-		self::progress($db, $camp, "Packing " . number_format($out['tiles']) . " tiles...");
+		self::progress($db, $camp, "Packing " . number_format($out['tiles']) . " tiles...", self::FETCH_SHARE);
 		$zipTmp = "$dir/OfflineTiles.zip.tmp";
 		@unlink($zipTmp);
 		$packed = self::packTiles($work, $built, $zipTmp);
@@ -477,6 +533,7 @@ class FieldCampTiles
 		}
 		$db->prepare_query("update fieldcamp set build_status = $2, build_message = $3, build_finished = now() where pkey = $1",
 			array((int)$camp->pkey, $status, $message));
+		if (($dir = self::dir($camp)) !== null) @unlink("$dir/progress.json");
 		return $out;
 	}
 
@@ -484,16 +541,20 @@ class FieldCampTiles
 	 * One map: ask the tile server for its zip, wait for it, download it and
 	 * unpack the tiles into $work/<map id>/tiles/.
 	 *
+	 * $span: the part of the whole build's progress bar this map covers, [from, to] as fractions.
+	 *
 	 * @return array ['error' => string, 'count' => int, 'bytes' => int]
 	 */
-	private static function fetchLayer($db, $camp, $layer, $extent, $zoom, $work, $label)
+	private static function fetchLayer($db, $camp, $layer, $extent, $zoom, $work, $label, $span = array(0, 1))
 	{
 		$res = array('error' => '', 'count' => 0, 'bytes' => 0);
+		// Within one map: the tile server gathering the tiles is 5% to 85%, the download and unpacking the rest.
+		$at = function ($f) use ($span) { return $span[0] + ($span[1] - $span[0]) * $f; };
 		$host = self::tileHost();
 		$id = $layer['id'];
 		if (!preg_match('/^[A-Za-z0-9._-]{1,64}$/', $id)) { $res['error'] = "not a usable map id"; return $res; }
 
-		self::progress($db, $camp, "$label: asking the map server...");
+		self::progress($db, $camp, "$label: asking the map server...", $at(0.02));
 		$url = "$host/asynczip?layer=" . ($layer['custom'] ? 'strabomymaps' : rawurlencode($id))
 			. '&extent=' . $extent . '&zoom=' . (int)$zoom . ($layer['custom'] ? '&id=' . rawurlencode($id) : '');
 		list($code, $body) = self::get($url);
@@ -518,7 +579,7 @@ class FieldCampTiles
 				}
 				if ($text === 'Zip File Ready.') break;
 				$pct = (int)($s['percent'] ?? 0);
-				self::progress($db, $camp, "$label: " . ($text !== '' ? rtrim($text, '.') : 'working') . ($pct > 0 ? " $pct%" : ''));
+				self::progress($db, $camp, "$label: " . ($text !== '' ? rtrim($text, '.') : 'working') . ($pct > 0 ? " $pct%" : ''), $at(0.05 + 0.8 * max(0, min(100, $pct)) / 100));
 			} elseif (++$failures >= 10) {
 				$res['error'] = "the map server stopped answering";
 				return $res;
@@ -527,7 +588,7 @@ class FieldCampTiles
 			if (self::$pollSeconds > 0) sleep(self::$pollSeconds);
 		}
 
-		self::progress($db, $camp, "$label: downloading...");
+		self::progress($db, $camp, "$label: downloading...", $at(0.88));
 		$zipFile = "$work/$uid.zip";
 		list($code) = self::get("$host/ziptemp/$uid/$uid.zip", $zipFile);
 		if ($code !== 200 || !is_file($zipFile)) { $res['error'] = "the tiles could not be downloaded"; return $res; }

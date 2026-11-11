@@ -100,6 +100,15 @@
 .fc-unit-off .fc-unit-text, .fc-unit-off input[type=text] { opacity: 0.45; }
 .fc-chip { display: inline-block; width: 1.4em; height: 1.4em; border-radius: 3px; vertical-align: middle;
 	border: 1px solid rgba(255,255,255,0.35); background: transparent; }
+.fc-build-top { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 0.5em; }
+.fc-build-nums { color: rgba(255,255,255,0.75); font-variant-numeric: tabular-nums; }
+.fc-bar { position: relative; height: 12px; margin: 0.5em 0 0.45em 0; border-radius: 6px; background: rgba(255,255,255,0.12); overflow: hidden; }
+.fc-bar-fill { position: absolute; left: 0; top: 0; bottom: 0; width: 0; background: #6fbf73; transition: width 0.6s ease; }
+.fc-spinner { display: inline-block; width: 1em; height: 1em; margin-right: 0.5em; vertical-align: -0.15em;
+	border: 2px solid rgba(255,255,255,0.25); border-top-color: #fff; border-radius: 50%; animation: fc-spin 0.8s linear infinite; }
+@keyframes fc-spin { to { transform: rotate(360deg); } }
+.fc-tilefields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.fc-tilefields[disabled] { opacity: 0.55; }
 @media (max-width: 900px) {
 	.fc-unit { grid-template-columns: 2.2em 1.8em 6em 1fr; }
 	.fc-unit-head div:nth-child(n+5) { display: none; }

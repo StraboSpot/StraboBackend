@@ -105,6 +105,13 @@ function post_follow($sid, $fields) {
 	list($c2, $b2) = http('GET', $loc, $sid);
 	return array($c2, $b2, $loc);
 }
+/** GET an address that answers with a redirect, and the page it leads to. */
+function post_follow_get($path, $sid) {
+	list($code, $body, $loc) = http('GET', $path, $sid);
+	if ($loc === '') return array($code, $body, $loc);
+	list($c2, $b2) = http('GET', $loc, $sid);
+	return array($c2, $b2, $loc);
+}
 function php_error($body) {
 	return (bool)preg_match('~<b>(Warning|Notice|Deprecated|Fatal error|Parse error)</b>~', $body);
 }
@@ -407,10 +414,13 @@ check('five maps, the saved three selected', substr_count($body, 'class="fc-tile
 	&& preg_match('~id="fcTfctilestest01" checked~', $body) === 1 && strpos($body, 'Canon City Map') !== false);
 check('six zoom rows with scale and tiles per map; the saved zoom is selected', substr_count($body, 'class="fc-zoomline" data-zoom=') === 6 && preg_match('~id="fcZ15" value="15" checked~', $body) === 1
 	&& strpos($body, '1:14,120') !== false && strpos($body, '>303<') !== false && strpos($body, '>1,077<') !== false);
-check('the last build is reported', strpos($body, 'Offline tiles built') !== false && strpos($body, '21 tiles in 3 maps.') !== false);
+check('the last build is reported', strpos($body, 'Offline maps built') !== false && strpos($body, '21 tiles in 3 maps.') !== false);
+check('one button: Next saves (and builds when needed); there is no separate build button', strpos($body, 'id="fcTileNextBtn" data-fc-next="units">Next: Rock units') !== false
+	&& strpos($body, 'Save and build') === false && strpos($body, 'fcTileBuildBtn') === false && strpos($body, 'name="action" value="tiles_save"') !== false);
+check('offline maps are switched on, and no build is shown as running', preg_match('~id="fcTilesOn" checked~', $body) === 1 && strpos($body, 'id="fcTileOffline" value="1"') !== false && strpos($body, 'id="fcBuildBox"') === false);
 check('a preview map and the provisional ceiling are on the page', strpos($body, 'id="fcTileMap"') !== false && strpos($body, 'Zoom 16 is the deepest level offered for now') !== false);
 list($code, $body) = http('GET', "/field_camp?id=$bigid&step=tiles", $sidI);
-check('a new camp starts on its default zoom with every map selected', $code === 200 && !php_error($body) && substr_count($body, ' checked') === 5
+check('a new camp starts with offline maps switched on, on its default zoom with every map selected', $code === 200 && !php_error($body) && substr_count($body, ' checked') === 6 && preg_match('~id="fcTilesOn" checked~', $body) === 1
 	&& preg_match('~id="fcZ' . FieldCampTiles::defaultZoom($bigOpts) . '" value="\d+" checked~', $body) === 1, substr_count($body, ' checked'));
 list($code, $body) = http('GET', "/field_camp?id=$noareaid&step=tiles", $sidI);
 check('without a study area the step says so', $code === 200 && !php_error($body) && strpos($body, 'Choose the study area first') !== false && strpos($body, 'fcTileForm') === false);
@@ -423,20 +433,58 @@ check('not to an outsider', $code === 404, $code);
 list($code, $body) = post_follow($sidI, array('action' => 'tiles_build', 'id' => $campid, 'zoom' => '19', 'layers_json' => json_encode(array('macrostrat'))));
 check('a zoom that is not offered is refused and nothing starts', strpos($body, 'Choose one of the zoom levels listed.') !== false && FieldCamp::getCamp($db, $campid)->build_status === 'ready' && (int)FieldCamp::getCamp($db, $campid)->tiles_zoom === 15);
 list($code, $body) = post_follow($sidI, array('action' => 'tiles_build', 'id' => $campid, 'zoom' => '15', 'layers_json' => '[]'));
-check('no map selected is refused', strpos($body, 'Select at least one map.') !== false && FieldCamp::getCamp($db, $campid)->build_status === 'ready');
-list($code, $body, $loc) = post_follow($sidI, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'units', 'zoom' => '14', 'layers_json' => json_encode(array('macrostrat', 'usgs.hillshade'))));
+check('no map selected is refused', strpos($body, 'Select at least one map') !== false && FieldCamp::getCamp($db, $campid)->build_status === 'ready');
+// Next (tiles_save) builds only when the built tiles do not match the choice.
+$built3 = array('mapbox.outdoors', 'macrostrat', 'fctilestest01');
+$before = FieldCamp::getCamp($db, $campid);
+check('the built tiles match the choice: nothing to build', FieldCampTiles::wanted($before, $layers) && !FieldCampTiles::needsBuild($before, $layers));
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'units', 'zoom' => '15', 'layers_json' => json_encode($built3)));
 $after = FieldCamp::getCamp($db, $campid);
-check('Next on Offline maps keeps the choice and moves on, without building', strpos($loc, 'step=units') !== false && (int)$after->tiles_zoom === 14 && $after->tiles_layers === '["macrostrat","usgs.hillshade"]' && $after->build_status === 'ready', $loc);
+check('Next with the built choice moves on without building again', strpos($loc, 'step=units') !== false && $after->build_status === 'ready' && $after->build_finished === $before->build_finished
+	&& strpos($body, 'id="fcBuildBox"') === false, array($loc, $after->build_status));
 list($code, $body, $loc) = post_follow($sidI, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'units', 'zoom' => '14', 'layers_json' => '[]'));
-check('a choice that cannot be saved keeps the page on the step', strpos($loc, 'step=tiles') !== false && strpos($body, 'Select at least one map.') !== false);
-FieldCampTiles::saveChoice($db, $after, 15, array('mapbox.outdoors', 'macrostrat', 'fctilestest01'));
+check('a choice that cannot be saved keeps the page on the step', strpos($loc, 'step=tiles') !== false && strpos($body, 'Select at least one map') !== false);
+FieldCampTiles::saveChoice($db, $after, 14, array('macrostrat', 'usgs.hillshade'));
+$changed = FieldCamp::getCamp($db, $campid);
+check('a changed choice needs a build', FieldCampTiles::needsBuild($changed, $layers) && FieldCampTiles::outdated($changed, FieldCampTiles::manifest($changed), $layers) !== '');
+list($code, $body) = http('GET', "/field_camp?id=$campid&step=package", $sidI);
+check('the Package step warns that the tiles are out of date and where to build them', strpos($body, 'id="fcPackageTilesWarn"') !== false && strpos($body, 'The offline maps are out of date.') !== false
+	&& strpos($body, 'Go to Offline maps') !== false && strpos($body, 'Download with the older offline maps') !== false && !php_error($body));
+list($code, $body) = http('GET', "/field_camp?id=$campid&step=tiles", $sidI);
+check('and the Offline maps step says Next builds them again', strpos($body, 'Click Next to build them again.') !== false);
+FieldCampTiles::saveChoice($db, $changed, 15, $built3);
+list($code, $body) = http('GET', "/field_camp?id=$bigid&step=package", $sidI);
+check('a camp whose offline maps were never built: the Package step says so before the download', $code === 200 && !php_error($body) && strpos($body, 'The offline maps have not been built yet.') !== false
+	&& strpos($body, 'Download without offline maps') !== false && strpos($body, 'None: not built yet') !== false);
 list($code) = http('POST', '/field_camp_action', $sidO, array('action' => 'tiles_build', 'id' => $campid, 'zoom' => '12', 'layers_json' => '["macrostrat"]', 'csrf' => $TOKEN));
 check('an outsider cannot start a build', $code === 404 && FieldCamp::getCamp($db, $campid)->build_status === 'ready', $code);
 $db->prepare_query("update fieldcamp set build_status = 'building', build_started = now() where pkey = $1", array($campid));
 list($code, $body) = post_follow($sidI, array('action' => 'tiles_build', 'id' => $campid, 'zoom' => '12', 'layers_json' => '["macrostrat"]'));
-check('while a build runs a second one is refused and the page says it is building', strpos($body, 'being built already') !== false && strpos($body, 'Building the offline tiles...') !== false
-	&& preg_match('~id="fcTileBuildBtn" disabled~', $body) === 1 && (int)FieldCamp::getCamp($db, $campid)->tiles_zoom === 15);
-$db->prepare_query("update fieldcamp set build_status = 'ready' where pkey = $1", array($campid));
+check('while a build runs a second one is refused and the page says it is building', strpos($body, 'being built already') !== false && strpos($body, 'Building the offline maps...') !== false
+	&& strpos($body, '<fieldset class="fc-tilefields" disabled>') !== false && (int)FieldCamp::getCamp($db, $campid)->tiles_zoom === 15);
+// progress: the build writes how far it is; every step shows it
+file_put_contents(FieldCampTiles::dir(FieldCamp::getCamp($db, $campid)) . '/progress.json', json_encode(array('fraction' => 0.37)));
+$db->prepare_query("update fieldcamp set build_message = 'Mapbox Topo (2 of 3): Zipping 40%', build_started = now() - interval '95 seconds' where pkey = $1", array($campid));
+list($code, $body) = http('GET', "/field_camp?id=$campid&ajax=build", $sidI);
+$st = json_decode($body, true);
+check('the running build answers with its message, percent and elapsed time', is_array($st) && $st['status'] === 'building' && $st['percent'] === 37 && $st['elapsed'] >= 95 && $st['elapsed'] < 110
+	&& $st['message'] === 'Mapbox Topo (2 of 3): Zipping 40%', $body);
+$shown = array();
+foreach (array('basics', 'area', 'maps', 'tiles', 'units', 'accounts', 'package', 'roster') as $stp) {
+	list($code, $body) = http('GET', "/field_camp?id=$campid&step=$stp", $sidI);
+	if ($code !== 200 || php_error($body) || strpos($body, 'id="fcBuildBox" data-step="' . $stp . '"') === false || strpos($body, '>37%<') === false
+		|| strpos($body, 'style="width:37%"') === false || strpos($body, 'Mapbox Topo (2 of 3): Zipping 40%') === false || strpos($body, "ajax=build") === false) $shown[] = $stp;
+}
+check('every step shows the progress panel (bar, percent, message) and keeps it up to date', $shown === array(), $shown);
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'units', 'zoom' => '12', 'layers_json' => '["macrostrat"]'));
+check('Next during a build goes on and leaves the running build its choice', strpos($loc, 'step=units') !== false && (int)FieldCamp::getCamp($db, $campid)->tiles_zoom === 15 && strpos($body, 'id="fcBuildBox"') !== false, $loc);
+list($code, $body) = http('GET', "/field_camp?id=$campid&step=package", $sidI);
+check('the Package step holds the download until the build is done, and says why', strpos($body, 'id="fcPackageWait" disabled') !== false && strpos($body, 'Available as soon as the offline maps are built.') !== false
+	&& strpos($body, 'href="/field_camp_package?id=') === false && strpos($body, 'Being built now') !== false);
+list($code, $body, $loc) = post_follow_get("/field_camp_package?id=$campid", $sidI);
+check('asking for the package by its address during a build gives the reason, not a package without tiles', strpos($loc, 'step=package') !== false && strpos($body, 'The offline maps are still being built.') !== false && substr($body, 0, 2) !== 'PK', $loc);
+@unlink(FieldCampTiles::dir(FieldCamp::getCamp($db, $campid)) . '/progress.json');
+$db->prepare_query("update fieldcamp set build_status = 'ready', build_message = '21 tiles in 3 maps.' where pkey = $1", array($campid));
 
 list($code, $body) = http('GET', "/field_camp?id=$campid&step=package", $sidI);
 check('the Package step states the tiles', $code === 200 && !php_error($body) && preg_match('~Offline map tiles</td><td>21 tiles in 3 maps, ~', $body) === 1);
@@ -450,6 +498,22 @@ $camp = FieldCamp::getCamp($db, $campid);
 $token = basename(FieldCampTiles::dir($camp));
 list($code) = http('GET', "/fieldcamp_files/$token/OfflineTiles.zip", $sidI);
 check('the built files cannot be fetched from the web, even with the folder name', $code === 403, $code);
+
+// Offline maps switched off
+list($code, $body, $loc) = post_follow($sidI, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'units', 'offline' => '0', 'zoom' => '15', 'layers_json' => json_encode($built3)));
+$off = FieldCamp::getCamp($db, $campid);
+check('switching the offline maps off saves that, removes the built tiles and moves on', strpos($loc, 'step=units') !== false && $off->tiles_layers === '[]' && $off->build_status === ''
+	&& !is_file("$dir/OfflineTiles.zip") && !is_file("$dir/tiles.json") && FieldCampTiles::manifest($off) === null && !FieldCampTiles::wanted($off, $layers) && !FieldCampTiles::needsBuild($off, $layers), array($loc, $off->tiles_layers, $off->build_status));
+list($code, $body) = http('GET', "/field_camp?id=$campid&step=tiles", $sidI);
+check('the step shows the switch off and hides the maps and the zoom', !php_error($body) && preg_match('~id="fcTilesOn"><label~', $body) === 1 && strpos($body, 'id="fcTileOffline" value="0"') !== false && strpos($body, 'id="fcTileBody" style="display:none;"') !== false);
+list($code, $body) = http('GET', "/field_camp?id=$campid&step=package", $sidI);
+check('the Package step says they are switched off and offers the plain download', strpos($body, 'None (offline maps are switched off)') !== false && strpos($body, 'fcPackageTilesWarn') === false
+	&& strpos($body, 'class="button primary small">Download the project package</a>') !== false);
+list($code, $body) = http('GET', "/field_camp_package?id=$campid", $sidI);
+$tmp = tempnam(sys_get_temp_dir(), 'fctilesoff'); file_put_contents($tmp, $body);
+$zip = new ZipArchive(); $ok = $zip->open($tmp) === true;
+check('and the package has no tile zip', $code === 200 && $ok && $zip->locateName('maps/OfflineTiles.zip') === false);
+if ($ok) $zip->close(); unlink($tmp);
 
 // ===========================================================================
 section('Live: the real tile server');
@@ -472,10 +536,18 @@ if (!is_array($probe) || !isset($probe['count'])) {
 
 	// One small real build, started from the page: a 3 km area, one map, zoom 13 (12 tiles).
 	$liveid = new_camp('Live Tiles Camp', $small);
-	list($code, $body) = post_follow($sidI, array('action' => 'tiles_build', 'id' => $liveid, 'zoom' => '13', 'layers_json' => json_encode(array('macrostrat'))));
-	check('the page starts the build in the background', $code === 200 && strpos($body, 'The build has started.') !== false && strpos($body, 'Building the offline tiles...') !== false, $code);
-	$deadline = time() + 180; $live = null;
-	while (time() < $deadline) { sleep(2); $live = FieldCamp::getCamp($db, $liveid); if ($live->build_status !== 'building') break; }
+	list($code, $body, $loc) = post_follow($sidI, array('action' => 'tiles_save', 'id' => $liveid, 'goto' => 'units', 'zoom' => '13', 'layers_json' => json_encode(array('macrostrat'))));
+	check('Next on a new choice starts the build in the background and moves on, with the progress on the next step', $code === 200 && strpos($loc, 'step=units') !== false
+		&& strpos($body, 'id="fcBuildBox" data-step="units"') !== false && strpos($body, 'Building the offline maps...') !== false && FieldCamp::getCamp($db, $liveid)->build_status === 'building', $loc);
+	$deadline = time() + 180; $live = null; $pcts = array();
+	while (time() < $deadline) {
+		usleep(500000); $live = FieldCamp::getCamp($db, $liveid);
+		if ($live->build_status !== 'building') break;
+		$p = FieldCampTiles::status($db, $live)['percent']; if ($p !== null) $pcts[] = $p;
+	}
+	$sorted = $pcts; sort($sorted);
+	check('while it runs the percent only goes up', $pcts === $sorted && (!$pcts || (min($pcts) >= 0 && max($pcts) <= 100)), $pcts);
+	check('no progress file is left when it is done', !is_file(FieldCampTiles::dir($live) . '/progress.json'));
 	$lm = FieldCampTiles::manifest($live);
 	$expect = FieldCampTiles::tileCount($small, 13);
 	check("and it finishes with the $expect tiles we said it would", $live->build_status === 'ready' && $lm && $lm['tiles'] === $expect && $lm['layers'][0]['id'] === 'macrostrat', array($live->build_status, $live->build_message));

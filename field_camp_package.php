@@ -25,6 +25,14 @@ if(!$camp || !FieldCamp::canManage($camp, $userpkey) || !FieldCampPackage::insta
 	exit("Not found.");
 }
 
+// While the offline maps are being built the package would come without them: wait for the build.
+require_once __DIR__ . '/includes/fieldcamp/FieldCampTiles.php';
+if(FieldCampTiles::installed($db) && FieldCampTiles::isBuilding($camp)){
+	$_SESSION['fieldcamp_flash'] = array('ok' => '', 'err' => array("The offline maps are still being built. The package can be downloaded as soon as they are done."), 'form' => array());
+	header("Location: /field_camp?id=" . (int)$camp->pkey . "&step=package");
+	exit();
+}
+
 set_time_limit(0);   // with offline tiles the package can be a few hundred MB
 $tmp = tempnam(sys_get_temp_dir(), 'fcpkg');
 $result = FieldCampPackage::buildZip($db, $camp, $tmp);

@@ -112,20 +112,29 @@ if($action === 'basics'){
 
 }elseif($action === 'tiles_build' || $action === 'tiles_save'){
 
-	// tiles_save keeps the choice of maps and zoom (leaving the step); tiles_build also starts the build.
+	// tiles_save is what the step's Next button and the step tabs send (2026-11-10: no separate "build"):
+	// it keeps the choice of maps and zoom and starts the build when the built tiles do not match it.
+	// offline=0 switches the offline maps off and removes what was built. tiles_build always builds.
 	if(!FieldCampPackage::installed($db) || !FieldCampTiles::installed($db)) fc_back($here . "basics");
 	if(FieldCampTiles::isBuilding($camp)){
 		if($action === 'tiles_save') fc_saved($here, "tiles");   // the running build keeps its own choice
 		fc_back($here . "tiles", '', "The tiles for this camp are being built already.");
 	}
 	$layers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+	if((string)($_POST['offline'] ?? '1') === '0'){
+		FieldCampTiles::saveChoice($db, $camp, (int)$camp->tiles_zoom, array());
+		FieldCampTiles::clearBuild($db, $camp);
+		fc_saved($here, "tiles", "Saved. The package will have no offline maps.");
+	}
 	$wanted = json_decode((string)($_POST['layers_json'] ?? ''), true);
 	list($zoom, $ids, $errors) = FieldCampTiles::validateChoice($camp, $layers, (int)($_POST['zoom'] ?? 0), is_array($wanted) ? $wanted : array());
 	if($errors) fc_back($here . "tiles", '', $errors);
 	FieldCampTiles::saveChoice($db, $camp, $zoom, $ids);
-	if($action === 'tiles_save') fc_saved($here, "tiles", "Saved.");
-	$problem = FieldCampTiles::startBuild($db, FieldCamp::getCamp($db, $id));
+	$camp = FieldCamp::getCamp($db, $id);
+	if($action === 'tiles_save' && !FieldCampTiles::needsBuild($camp, $layers)) fc_saved($here, "tiles", "Saved. The offline maps are built and up to date.");
+	$problem = FieldCampTiles::startBuild($db, $camp);
 	if($problem !== '') fc_back($here . "tiles", '', $problem);
+	if($action === 'tiles_save') fc_saved($here, "tiles");   // the progress panel on every step says the build is running
 	fc_back($here . "tiles", "The build has started.");
 
 }elseif($action === 'units_fetch' || $action === 'units_save'){

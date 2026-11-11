@@ -161,12 +161,16 @@ if($camp && $step === 'maps'){
 	}
 }
 $tileLayers = array(); $tileChosen = array(); $tileOptions = array(); $tileZoom = null;
-$tileStatus = array('status' => '', 'message' => '', 'tiles' => 0, 'maps' => 0, 'bytes' => 0); $tilesOutdated = '';
+$tileStatus = array('status' => '', 'message' => '', 'percent' => null, 'elapsed' => null, 'tiles' => 0, 'maps' => 0, 'bytes' => 0); $tilesOutdated = '';
+$tilesWanted = false; $tilesNeedBuild = false;
+// A running tile build is shown on every step (the progress panel under the step tabs).
+if($camp && isset($steps['tiles'])) $tileStatus = FieldCampTiles::status($db, $camp);
 if($camp && isset($steps['tiles']) && ($step === 'tiles' || $step === 'package')){
 	$tileLayers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
 	$tileChosen = FieldCampTiles::chosenLayerIds($camp, $tileLayers);
-	$tileStatus = FieldCampTiles::status($db, $camp);
 	$tilesOutdated = FieldCampTiles::outdated($camp, FieldCampTiles::manifest($camp), $tileLayers);
+	$tilesWanted = FieldCampTiles::wanted($camp, $tileLayers);
+	$tilesNeedBuild = FieldCampTiles::needsBuild($camp, $tileLayers);
 	$tileBbox = FieldCampUnits::campBbox($camp);
 	if($tileBbox !== null){
 		$picked = array(); foreach($tileChosen as $tid){ $picked[] = $tileLayers[$tid]; }
@@ -242,6 +246,29 @@ include("includes/fieldcamp/fieldcamp_style.php");
 <?php } ?>
 
 <?php
+// ===========================================================================
+// Offline maps being built: a progress panel on every step, kept up to date by the script at the end
+// ===========================================================================
+if($tileStatus['status'] === 'building'){
+	$pct = $tileStatus['percent'];
+	$el = (int)$tileStatus['elapsed'];
+?>
+		<div class="fc-flash fc-build" id="fcBuildBox" data-step="<?php echo htmlspecialchars($step); ?>" data-elapsed="<?php echo $el; ?>">
+			<div class="fc-build-top">
+				<span><span class="fc-spinner"></span><strong id="fcBuildHead">Building the offline maps...</strong></span>
+				<span class="fc-build-nums"><span id="fcBuildPct"><?php echo $pct === null ? '' : (int)$pct . '%'; ?></span> &nbsp; <span id="fcBuildTime"></span></span>
+			</div>
+			<div class="fc-bar"><div class="fc-bar-fill" id="fcBuildBar" style="width:<?php echo $pct === null ? 0 : max(1, (int)$pct); ?>%"></div></div>
+			<div id="fcBuildMsg"><?php echo htmlspecialchars($tileStatus['message']); ?></div>
+			<div class="fc-small" id="fcBuildNote" style="margin-top:0.35em;"><?php
+				if($step === 'package') echo 'The package can be downloaded as soon as the offline maps are built. This page updates by itself.';
+				elseif($step === 'tiles') echo 'A large area can take a while. You can go on to the other steps; the build keeps running. The maps and the zoom can be changed when it is done.';
+				else echo 'You can keep working on the other steps; the build keeps running. The package can be downloaded when it is done.';
+			?></div>
+		</div>
+<?php
+}
+
 // ===========================================================================
 // Basics
 // ===========================================================================
@@ -583,28 +610,35 @@ if($step === 'tiles'){
 				times the tiles.
 			</div>
 
-<?php if($tileStatus['status'] !== ''){ ?>
-			<div class="<?php echo $tileStatus['status'] === 'failed' ? 'fc-flash-err' : 'fc-flash'; ?>" id="fcBuildBox">
-				<strong id="fcBuildHead"><?php
-					echo $tileStatus['status'] === 'building' ? 'Building the offline tiles...'
-						: ($tileStatus['status'] === 'ready' ? 'Offline tiles built' . ((string)$camp->build_finished !== '' ? ' ' . htmlspecialchars(substr((string)$camp->build_finished, 0, 10)) : '') . '.'
-						: 'The last build did not finish.'); ?></strong>
-				<span id="fcBuildMsg"><?php echo htmlspecialchars($tileStatus['message']); ?></span>
+<?php $building = ($tileStatus['status'] === 'building');   // the progress panel above the step says so
+	if($tileStatus['status'] === 'ready' || $tileStatus['status'] === 'failed'){ ?>
+			<div class="<?php echo $tileStatus['status'] === 'failed' ? 'fc-flash-err' : 'fc-flash'; ?>" id="fcBuiltBox">
+				<strong><?php
+					echo $tileStatus['status'] === 'ready' ? 'Offline maps built' . ((string)$camp->build_finished !== '' ? ' ' . htmlspecialchars(substr((string)$camp->build_finished, 0, 10)) : '') . '.'
+						: 'The last build did not finish.'; ?></strong>
+				<span><?php echo htmlspecialchars($tileStatus['message']); ?></span>
 <?php 	if($tileStatus['status'] === 'ready' && $tileStatus['bytes'] > 0){ ?>
 				<span><?php echo $fmtSize($tileStatus['bytes']); ?>.</span>
 <?php 	} ?>
-<?php 	if($tileStatus['status'] === 'building'){ ?>
-				<div class="fc-small" style="margin-top:0.35em;">This takes a few minutes. You can leave this page; the build goes on.</div>
+<?php 	if($tileStatus['status'] === 'failed' && $tilesWanted){ ?>
+				<span>Click Next to try again.</span>
 <?php 	} ?>
 			</div>
 <?php } ?>
-<?php if($tilesOutdated !== ''){ ?>
-			<div class="fc-flash-err"><?php echo htmlspecialchars($tilesOutdated); ?> Build them again to bring the package up to date.</div>
+<?php if($tilesOutdated !== '' && $tilesWanted && !$building){ ?>
+			<div class="fc-flash-err"><?php echo htmlspecialchars($tilesOutdated); ?> Click Next to build them again.</div>
 <?php } ?>
 
 			<form method="post" action="/field_camp_action" id="fcTileForm" style="margin:0;" data-fc-save="tiles_save">
-				<?php echo fc_hidden($csrf, 'tiles_build', $camp); ?>
+				<?php echo fc_hidden($csrf, 'tiles_save', $camp, fc_next($steps, 'tiles')[0]); ?>
+				<fieldset class="fc-tilefields"<?php echo $building ? ' disabled' : ''; ?>>
 				<input type="hidden" name="layers_json" id="fcTileLayersJson" value="">
+				<input type="hidden" name="offline" id="fcTileOffline" value="<?php echo $tilesWanted ? '1' : '0'; ?>">
+
+				<div style="margin-top:0.5em;">
+					<input type="checkbox" id="fcTilesOn"<?php echo $tilesWanted ? ' checked' : ''; ?>><label for="fcTilesOn">Include offline maps in the package</label>
+				</div>
+				<div id="fcTileBody"<?php echo $tilesWanted ? '' : ' style="display:none;"'; ?>>
 
 				<div class="fc-maphead" style="margin-top:0.5em;">Maps</div>
 				<div class="fc-units">
@@ -647,15 +681,16 @@ if($step === 'tiles'){
 					<strong id="fcTilePreviewName"></strong>. The outline is the study area; tiles are saved for everything inside it.</div>
 				<div id="fcTileMap" class="fc-map" style="height:420px;"></div>
 
-				<div class="fc-mapnote" id="fcTileSummary" style="margin-top:0.75em;"></div>
-				<div class="fc-buttons">
-					<button type="submit" class="button primary small" id="fcTileBuildBtn"<?php echo $tileStatus['status'] === 'building' ? ' disabled' : ''; ?>><?php
-						echo $tileStatus['status'] === 'ready' ? 'Save and build the tiles again' : 'Save and build the offline tiles'; ?></button>
-<?php $next = fc_next($steps, 'tiles'); ?>
-					<button type="submit" class="button small" data-fc-next="<?php echo $next[0]; ?>">Next: <?php echo $next[1]; ?></button>
-				</div>
 				<div class="fc-small" style="margin-top:0.75em;">The sizes are estimates from typical tiles; the real size shows
 					once the tiles are built. Zoom <?php echo FieldCampTiles::MAX_ZOOM; ?> is the deepest level offered for now.</div>
+				</div>
+				</fieldset>
+
+				<div class="fc-mapnote" id="fcTileSummary" style="margin-top:1em;"></div>
+				<div class="fc-buttons">
+<?php $next = fc_next($steps, 'tiles'); ?>
+					<button type="submit" class="button primary small" id="fcTileNextBtn" data-fc-next="<?php echo $next[0]; ?>">Next: <?php echo $next[1]; ?></button>
+				</div>
 			</form>
 		</div>
 
@@ -669,13 +704,18 @@ if($step === 'tiles'){
 				'layers' => array_values($tileLayers),
 				'maxPerMap' => FieldCampTiles::MAX_TILES_PER_MAP,
 				'maxTotal' => FieldCampTiles::MAX_TILES_TOTAL,
-				'building' => $tileStatus['status'] === 'building',
+				'building' => $building,
 				'campId' => (int)$camp->pkey,
+				// what is saved, and whether the built tiles match it: decides if Next will build
+				'saved' => array('zoom' => (int)$camp->tiles_zoom, 'ids' => array_values($tileChosen)),
+				'current' => ($tileStatus['status'] === 'ready' && $tileStatus['tiles'] > 0 && $tilesOutdated === ''),
+				'hasBuilt' => ($tileStatus['status'] === 'ready' && $tileStatus['tiles'] > 0),
 			)); ?>;
 			var form = document.getElementById('fcTileForm');
 			var layerRows = Array.prototype.slice.call(form.querySelectorAll('.fc-tileline'));
 			var zoomRows = Array.prototype.slice.call(form.querySelectorAll('.fc-zoomline[data-zoom]'));
-			var btn = document.getElementById('fcTileBuildBtn');
+			var btn = document.getElementById('fcTileNextBtn');
+			var onBox = document.getElementById('fcTilesOn'), body = document.getElementById('fcTileBody');
 
 			function fmtSize(bytes){
 				if(bytes >= 1e9) return (bytes / 1e9).toFixed(1) + ' GB';
@@ -737,13 +777,38 @@ if($step === 'tiles'){
 							+ total.toLocaleString() + ' tiles, about ' + fmtSize(o.per_map * kb * 1000) + '.';
 					}
 				});
-				if(!layers.length) why = 'Select at least one map.';
+				if(!layers.length) why = 'Select at least one map, or switch the offline maps off.';
 				else if(z === null) why = 'Choose a zoom level.';
-				document.getElementById('fcTileWhy').textContent = why;
-				document.getElementById('fcTileSummary').textContent = summary;
-				btn.disabled = cfg.building || why !== '';
 				layerRows.forEach(function(r){ r.classList.toggle('fc-unit-off', !r.querySelector('.fc-tile-on').checked); });
+				document.getElementById('fcTileWhy').textContent = why;
+
+				// What Next will do, said before it is clicked.
+				var on = onBox.checked, text = '';
+				document.getElementById('fcTileOffline').value = on ? '1' : '0';
+				if(cfg.building){
+					text = 'The offline maps are being built now (see the progress above). Next takes you on while the build runs.';
+				}else if(!on){
+					text = 'The package will have no offline maps.' + (cfg.hasBuilt ? ' Next removes the tiles that were built.' : '');
+				}else if(why !== ''){
+					text = why;
+				}else{
+					var ids = layers.map(function(l){ return l.id; }).sort().join(',');
+					var same = cfg.current && z === cfg.saved.zoom && ids === cfg.saved.ids.slice().sort().join(',');
+					text = summary + (same ? ' These tiles are built and up to date.'
+						: ' Next starts building them and takes you on; the build runs in the background and its progress shows on every step.');
+				}
+				document.getElementById('fcTileSummary').textContent = text;
+				btn.disabled = !cfg.building && on && why !== '';
 			}
+			onBox.addEventListener('change', function(){
+				body.style.display = onBox.checked ? '' : 'none';
+				if(onBox.checked){
+					// switched on with nothing selected: start from every map
+					if(!chosenLayers().length) layerRows.forEach(function(r){ r.querySelector('.fc-tile-on').checked = true; });
+					map.invalidateSize(); showZoom();
+				}
+				refresh();
+			});
 
 			layerRows.forEach(function(r){
 				r.querySelector('.fc-tile-on').addEventListener('change', refresh);
@@ -757,19 +822,6 @@ if($step === 'tiles'){
 			showZoom();
 			refresh();
 
-			// --- a build in progress --------------------------------------------
-			if(cfg.building){
-				var timer = setInterval(function(){
-					fetch('/field_camp?id=' + cfg.campId + '&ajax=build', {credentials: 'same-origin'})
-						.then(function(r){ return r.json(); })
-						.then(function(s){
-							if(s.status === 'building'){ document.getElementById('fcBuildMsg').textContent = s.message; return; }
-							clearInterval(timer);
-							window.location.href = '/field_camp?id=' + cfg.campId + '&step=tiles';
-						})
-						.catch(function(){ });
-				}, 3000);
-			}
 		})();
 		</script>
 <?php } ?>
@@ -803,7 +855,13 @@ if($step === 'package'){
 								. ($b >= 1e9 ? number_format($b / 1e9, 1) . ' GB' : number_format($b / 1e6, $b >= 1e7 ? 0 : 1) . ' MB');
 							if($tilesOutdated !== '') echo ' &nbsp; <span class="fc-preview-msg fc-bad">' . htmlspecialchars($tilesOutdated) . '</span>';
 						}elseif($tileStatus['status'] === 'building'){
-							echo 'Being built now; the package has no tiles until the build is done';
+							echo 'Being built now (progress above)';
+						}elseif(isset($steps['tiles']) && !$tilesWanted){
+							echo 'None (offline maps are switched off)';
+						}elseif($tileStatus['status'] === 'failed'){
+							echo '<span class="fc-preview-msg fc-bad">None: the last build did not finish</span>';
+						}elseif(isset($steps['tiles'])){
+							echo '<span class="fc-preview-msg fc-bad">None: not built yet</span>';
 						}else{
 							echo 'None';
 						}
@@ -811,9 +869,32 @@ if($step === 'package'){
 					?></td></tr>
 				</table>
 			</div>
+<?php
+	// The offline maps decide what the download button offers: wait while they are built, and say so
+	// plainly when the package would come without them or with older ones.
+	$tilesUrl = '/field_camp?id=' . (int)$camp->pkey . '&amp;step=tiles';
+	if($tileStatus['status'] === 'building'){ ?>
+			<div class="fc-buttons" style="margin-top:1em;">
+				<button type="button" class="button primary small" id="fcPackageWait" disabled>Download the project package</button>
+				<span class="fc-small">Available as soon as the offline maps are built.</span>
+			</div>
+<?php }elseif($tilesNeedBuild){
+		$hasOld = ($tileStatus['status'] === 'ready' && $tileStatus['tiles'] > 0); ?>
+			<div class="fc-flash-err" style="margin-top:1em;" id="fcPackageTilesWarn">
+				<strong><?php echo $hasOld ? 'The offline maps are out of date.' : ($tileStatus['status'] === 'failed' ? 'The offline maps could not be built.' : 'The offline maps have not been built yet.'); ?></strong>
+				<?php echo $hasOld ? htmlspecialchars($tilesOutdated) . ' A package downloaded now holds the older tiles.'
+					: 'A package downloaded now has no offline maps, so the maps will not work in the field without a connection.'; ?>
+				Open the Offline maps step and click Next to build them, then come back here.
+			</div>
+			<div class="fc-buttons">
+				<a href="<?php echo $tilesUrl; ?>" class="button primary small">Go to Offline maps</a>
+				<a href="/field_camp_package?id=<?php echo (int)$camp->pkey; ?>" class="button small"><?php echo $hasOld ? 'Download with the older offline maps' : 'Download without offline maps'; ?></a>
+			</div>
+<?php }else{ ?>
 			<div class="fc-buttons" style="margin-top:1em;">
 				<a href="/field_camp_package?id=<?php echo (int)$camp->pkey; ?>" class="button primary small">Download the project package</a>
 			</div>
+<?php } ?>
 			<div class="fc-small" style="margin-top:1em;">
 				Every student loads this same file, as in past camps: send it to each device (AirDrop works), then in
 				StraboField import the project from the zip and open it. The package always holds what is saved on the
@@ -1432,6 +1513,54 @@ if($step === 'accounts'){
 <?php
 }
 ?>
+
+<?php if($camp && $tileStatus['status'] === 'building'){ ?>
+		<script>
+		// Offline maps being built: keep the progress panel under the step tabs up to date. When the build
+		// ends, the Offline maps and Package steps load again (they show what was built); any other step
+		// only changes the panel, so nothing typed there is lost.
+		(function(){
+			var box = document.getElementById('fcBuildBox');
+			if(!box) return;
+			var campId = <?php echo (int)$camp->pkey; ?>, step = box.getAttribute('data-step');
+			var elapsed = parseInt(box.getAttribute('data-elapsed'), 10) || 0, tick = Date.now(), done = false;
+			function fmt(sec){ sec = Math.max(0, Math.round(sec)); var m = Math.floor(sec / 60), s = sec % 60; return (m ? m + ' min ' : '') + s + ' s'; }
+			function clock(){ if(!done) document.getElementById('fcBuildTime').textContent = fmt(elapsed + (Date.now() - tick) / 1000); }
+			function finish(s){
+				done = true;
+				if(step === 'tiles' || step === 'package'){ window.location.href = '/field_camp?id=' + campId + '&step=' + step; return; }
+				var ok = s.status === 'ready';
+				box.className = ok ? 'fc-flash' : 'fc-flash-err';
+				box.innerHTML = '';
+				var b = document.createElement('strong');
+				b.textContent = ok ? 'The offline maps are built. ' : 'The offline maps could not be built. ';
+				box.appendChild(b);
+				box.appendChild(document.createTextNode((s.message || '') + ' '));
+				var a = document.createElement('a');
+				a.href = '/field_camp?id=' + campId + '&step=' + (ok ? 'package' : 'tiles');
+				a.textContent = ok ? 'Go to Package' : 'Go to Offline maps';
+				box.appendChild(a);
+			}
+			function poll(){
+				fetch('/field_camp?id=' + campId + '&ajax=build&_=' + Date.now(), {credentials: 'same-origin'})
+					.then(function(r){ return r.json(); })
+					.then(function(s){
+						if(s.status !== 'building'){ finish(s); return; }
+						document.getElementById('fcBuildMsg').textContent = s.message || '';
+						if(s.percent !== null && s.percent !== undefined){
+							document.getElementById('fcBuildPct').textContent = s.percent + '%';
+							document.getElementById('fcBuildBar').style.width = Math.max(1, s.percent) + '%';
+						}
+						if(s.elapsed !== null && s.elapsed !== undefined){ elapsed = s.elapsed; tick = Date.now(); }
+						setTimeout(poll, 2000);
+					})
+					.catch(function(){ setTimeout(poll, 4000); });
+			}
+			clock(); setInterval(clock, 1000);
+			setTimeout(poll, 1500);
+		})();
+		</script>
+<?php } ?>
 
 		<script>
 		// No separate "save": a step's Next button saves and moves on, and leaving by the step tabs with
