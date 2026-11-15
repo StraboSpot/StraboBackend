@@ -276,7 +276,27 @@ class StraboSpot
 		require_once __DIR__ . '/lib/sample_sync.php';
 		field_sample_sync_remove_spot($this->db, $this->neodb, $id, $userpkey);
 
-		$this->neodb->query("MATCH (s:Spot {id: $id,userpkey:$userpkey})-[*0..]->(downstreamNode) DETACH DELETE s, downstreamNode");
+		// Delete the spot and what belongs to it alone (its measurements,
+		// samples, traces and so on, at any depth). Three things below a spot
+		// can belong to another spot too, and must not go with it:
+		//   - another spot or a tag, reached through a leftover IS_RELATED_TO
+		//     or IS_TAGGED link of older data (nothing creates these today);
+		//   - a photo record that another spot still lists (one Image node per
+		//     image id). Only its link to this spot goes.
+		// The old query deleted everything reachable, so uploading one dataset
+		// took a shared photo away from a spot in another dataset.
+		// Test: tests/spotdelete/shared_nodes_test.php
+		$this->neodb->query("MATCH (s:Spot {id: $id,userpkey:$userpkey})
+			OPTIONAL MATCH p = (s)-[*1..]->(n)
+			WHERE NONE(r IN relationships(p) WHERE type(r) IN ['IS_RELATED_TO','IS_TAGGED'])
+			  AND NONE(x IN tail(nodes(p)) WHERE x:Spot OR x:Tag)
+			WITH s, collect(DISTINCT n) AS below
+			UNWIND (CASE WHEN size(below) = 0 THEN [null] ELSE below END) AS n
+			OPTIONAL MATCH (o:Spot)-[:HAS_IMAGE]->(n) WHERE n:Image AND o <> s
+			WITH s, n, count(o) AS otherspots
+			WITH s, collect(CASE WHEN otherspots = 0 THEN n END) AS own
+			FOREACH (x IN own | DETACH DELETE x)
+			DETACH DELETE s");
 
 		// StraboSearch live-sync (§5.3): drop the spot's item + image index
 		// rows (post-delete — identity is denormalized in the index). NOT
