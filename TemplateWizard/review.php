@@ -5,6 +5,10 @@
  *              Receives a
  *              direct file upload (action=upload), stashes the parsed rows
  *              in a server-side state token, then:
+ *                action=reupload -> a corrected file sent from the review
+ *                                  screen replaces the stashed rows; the
+ *                                  target and the answers already given are
+ *                                  kept and the review is run again
  *                action=plan    -> validate + diff against the chosen
  *                                  project/dataset target (review screen)
  *                action=confirm -> re-plan with the user's resolutions;
@@ -44,6 +48,7 @@ $plan         = null;
 $resolutions  = array();
 $target       = array('project_id' => '', 'dataset_choice' => 'existing', 'dataset_id' => '', 'dataset_name' => '', 'as_new' => false);
 $commitInfo   = null;
+$replaced     = false;      // true when a corrected file has just replaced the reviewed one
 $templateName = '';
 
 $myProjects = $twsvc->myProjects();
@@ -109,6 +114,33 @@ function tw_service_target($t) {
     );
 }
 
+/**
+ * Read the posted spreadsheet (field "tabfile"). $templateKey is the template
+ * choice of the upload form: '' for auto-detect, "basic", or a saved template pkey.
+ * Returns array('error' => message) or array('parsed' => ..., 'label' => ...).
+ */
+function tw_read_upload($twsvc, $templateKey) {
+    if (!isset($_FILES['tabfile']) || !is_uploaded_file($_FILES['tabfile']['tmp_name'])) {
+        return array('error' => 'No file received. Choose a .xlsx or .csv file first.');
+    }
+    if ($_FILES['tabfile']['size'] > TW_MAX_UPLOAD_BYTES) {
+        return array('error' => 'File is larger than 15 MB.');
+    }
+    $spec = null;
+    if ($templateKey !== '') {
+        // a saved template pkey, or "basic" for the built-in layout
+        $tpl = $twsvc->resolveTemplate($templateKey);
+        if ($tpl !== null) { $spec = $tpl['spec']; }
+    }
+    $parsed = $twsvc->parseUpload($_FILES['tabfile']['tmp_name'], $_FILES['tabfile']['name'], $spec);
+    if (empty($parsed['ok'])) {
+        return array('error' => $parsed['message']);
+    }
+    $label = htmlspecialchars($_FILES['tabfile']['name'])
+           . (!empty($parsed['embedded_spec']) ? ' (embedded template recognized)' : '');
+    return array('parsed' => $parsed, 'label' => $label);
+}
+
 if ($action === 'cancel') {
     if (isset($_POST['token'])) {
         $twsvc->discardState($_POST['token']);
@@ -118,38 +150,56 @@ if ($action === 'cancel') {
 }
 
 if ($action === 'upload') {
-    if (!isset($_FILES['tabfile']) || !is_uploaded_file($_FILES['tabfile']['tmp_name'])) {
-        $pageError = 'No file received — choose a .xlsx or .csv file first.';
-    } elseif ($_FILES['tabfile']['size'] > TW_MAX_UPLOAD_BYTES) {
-        $pageError = 'File is larger than 15 MB.';
+    $templateKey = isset($_POST['template_pkey']) ? trim((string)$_POST['template_pkey']) : '';
+    $up = tw_read_upload($twsvc, $templateKey);
+    if (isset($up['error'])) {
+        $pageError = $up['error'];
     } else {
-        $spec = null;
-        if (isset($_POST['template_pkey']) && $_POST['template_pkey'] !== '') {
-            // a saved template pkey, or "basic" for the built-in layout
-            $tpl = $twsvc->resolveTemplate($_POST['template_pkey']);
-            if ($tpl !== null) { $spec = $tpl['spec']; }
-        }
-        $parsed = $twsvc->parseUpload($_FILES['tabfile']['tmp_name'], $_FILES['tabfile']['name'], $spec);
-        if (empty($parsed['ok'])) {
-            $pageError = $parsed['message'];
+        $parsed = $up['parsed'];
+        $label  = $up['label'];
+        $token = $twsvc->saveState(array('parsed' => $parsed, 'source' => $label, 'template' => $templateKey));
+        if ($token === null) {
+            $pageError = 'Could not stash the upload for review. Try again.';
         } else {
-            $label = htmlspecialchars($_FILES['tabfile']['name'])
-                   . (!empty($parsed['embedded_spec']) ? ' (embedded template recognized)' : '');
-            $token = $twsvc->saveState(array('parsed' => $parsed, 'source' => $label));
-            if ($token === null) {
-                $pageError = 'Could not stash the upload for review — try again.';
-            } else {
-                $view = 'target';
-                $sourceLabel = $label;
-                $rowCount = count($parsed['rows']);
-                if ($prefillProject !== '') {
-                    $target['project_id'] = $prefillProject;
-                    // A project with one dataset (a new project's Default) needs no choice.
-                    $ds = $twsvc->projectDatasets($prefillProject);
-                    if (count($ds) === 1) { $target['dataset_id'] = (string)$ds[0]['id']; }
-                }
+            $view = 'target';
+            $sourceLabel = $label;
+            $rowCount = count($parsed['rows']);
+            if ($prefillProject !== '') {
+                $target['project_id'] = $prefillProject;
+                // A project with one dataset (a new project's Default) needs no choice.
+                $ds = $twsvc->projectDatasets($prefillProject);
+                if (count($ds) === 1) { $target['dataset_id'] = (string)$ds[0]['id']; }
             }
         }
+    }
+}
+
+// A corrected file sent from the review screen. It takes the place of the file
+// under review (same template choice as the first upload) and the review runs
+// again with the target and answers posted alongside it, so nothing has to be
+// entered twice. A file that cannot be read leaves the earlier one in place.
+if ($action === 'reupload') {
+    $oldToken = isset($_POST['token']) ? $_POST['token'] : '';
+    $state = $twsvc->loadState($oldToken);
+    if ($state === null) {
+        $pageError = 'This review session expired (or was already completed). Upload the file again.';
+        $view = 'upload';
+    } else {
+        $up = tw_read_upload($twsvc, isset($state['template']) ? (string)$state['template'] : '');
+        if (isset($up['error'])) {
+            $pageError = 'The new file was not used: ' . $up['error'] . ' The review below still shows the earlier file.';
+        } else {
+            $newToken = $twsvc->saveState(array('parsed' => $up['parsed'], 'source' => $up['label'],
+                                                'template' => isset($state['template']) ? (string)$state['template'] : ''));
+            if ($newToken === null) {
+                $pageError = 'Could not stash the new file for review. The review below still shows the earlier file.';
+            } else {
+                $twsvc->discardState($oldToken);
+                $_POST['token'] = $newToken;
+                $replaced = true;
+            }
+        }
+        $action = 'plan';
     }
 }
 
@@ -286,7 +336,13 @@ include("includes/mheader.php");
 								<strong>Source:</strong> <?php echo $sourceLabel; ?> &mdash; <?php echo (int)$rowCount; ?> data row<?php echo $rowCount === 1 ? '' : 's'; ?>
 							</div>
 
-							<form method="post" id="planForm">
+							<?php if ($replaced): ?>
+							<div style="background-color: #2e4034; color: #eceff4; padding: 10px; margin-bottom: 20px; border-radius: 5px; border-left: 4px solid #a3be8c;">
+								<strong>Now reviewing the file you just uploaded.</strong> Your project and dataset choices were kept.
+							</div>
+							<?php endif; ?>
+
+							<form method="post" id="planForm" enctype="multipart/form-data">
 								<input type="hidden" name="action" value="plan" id="tw-action">
 								<input type="hidden" name="token" value="<?php echo htmlspecialchars($token); ?>">
 
@@ -350,7 +406,7 @@ include("includes/mheader.php");
 								<?php endif; ?>
 
 								<?php if (!empty($plan['hard_errors'])): ?>
-								<h4 style="color:#bf616a;">Errors — fix these in the file and re-upload (nothing can import until they're gone)</h4>
+								<h4 style="color:#bf616a;">Errors: fix these in the file, then choose &ldquo;Upload a corrected file&rdquo; below (nothing can import until they're gone)</h4>
 								<div style="max-height: 300px; overflow-y: auto;">
 									<table>
 										<thead><tr><th>Row</th><th>Column</th><th>Problem</th></tr></thead>
@@ -427,9 +483,27 @@ include("includes/mheader.php");
 									<li><input type="submit" class="primary" id="confirmBtn" value="Confirm &amp; Import"
 										onclick="document.getElementById('tw-action').value='confirm';"></li>
 									<?php endif; ?>
+									<!-- A corrected file goes up from here: same styled picker as the upload
+									     view; choosing a file sends it with the target above (action=reupload). -->
+									<li><label for="tw-refile" id="tw-refile-btn" class="button<?php echo !empty($plan['hard_errors']) ? ' primary' : ''; ?>">Upload a corrected file&hellip;</label>
+										<input type="file" name="tabfile" id="tw-refile" accept=".xlsx,.xls,.csv"
+											style="position: absolute; left: -9999px; width: 1px; height: 1px; opacity: 0;"></li>
 									<li><input type="submit" value="Cancel"
 										onclick="document.getElementById('tw-action').value='cancel';"></li>
 								</ul>
+								<p class="tw-hint">Changed the spreadsheet? &ldquo;Upload a corrected file&rdquo; reads it again and keeps the project and dataset chosen above.</p>
+								<script>
+									(function () {
+										var input = document.getElementById('tw-refile');
+										var btn   = document.getElementById('tw-refile-btn');
+										input.addEventListener('change', function () {
+											if (!input.files || !input.files.length) { return; }
+											document.getElementById('tw-action').value = 'reupload';
+											btn.textContent = 'Uploading ' + input.files[0].name + '\u2026';
+											document.getElementById('planForm').submit();
+										});
+									})();
+								</script>
 							<?php endif; ?>
 							</form>
 							<?php endif; ?>

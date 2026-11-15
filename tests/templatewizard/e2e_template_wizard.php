@@ -31,6 +31,9 @@
  *               12. Exported XLSX edited (cell edits + new row) -> updates + create
  *               13. How-to example workbook imports as its page documents
  *                   (incl. the tephra block: 3 layers in Layer Order)
+ *               14. Corrected file uploaded from the review screen
+ *                   (action=reupload): target kept, earlier token gone, a bad
+ *                   file or another account leaves the review as it was
  *               (11 also: a form label typed in Excel ("joint") lands as the
  *                app name option_13 and exports back as "joint")
  *               (11 also: same id-less file twice -> name-collision Heads up;
@@ -875,13 +878,94 @@ try {
     check('example tephra layers landed in order with stored names (Ash Site 6-1 pyroclastic_flow .. 6-3 tephra_fall)',
         $tephraLabels === array('Ash Site 6-1/pyroclastic_flow', 'Ash Site 6-2/soil', 'Ash Site 6-3/tephra_fall'));
 
+    // ------------------------------------------------------------------
+    echo "\n=== 14. corrected file uploaded from the review screen (action=reupload) ===\n";
+    // ------------------------------------------------------------------
+    // Ellen Nelson 2026-11-14: errors said "fix these in the file and re-upload",
+    // which meant going back and entering project + dataset again.
+    $badCsv = "strabo_internal_id,spot_name,latitude,longitude,strike,dip\n"
+            . ",WZ-REUP,34.31,-118.31,120,40\n";
+    $goodCsv = "strabo_internal_id,spot_name,latitude,longitude,orientation_type,strike,dip\n"
+             . ",WZ-REUP,34.31,-118.31,planar,120,40\n"
+             . ",WZ-REUP2,34.32,-118.32,planar,130,50\n";
+    $reTarget = array('project_id' => $PROJECT_ID, 'dataset_choice' => 'new', 'dataset_name' => "e2ewiz REUP $stamp");
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload'), 'tabfile', csvFile($badCsv), 'ams.csv');
+    $reToken = extractToken($r['body']);
+    check('target screen (before Analyze) has no corrected-file control', $reToken !== null && strpos($r['body'], 'id="tw-refile"') === false);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $reToken), $reTarget));
+    check('file with errors: review shows the errors, the corrected-file control, no Confirm',
+        strpos($r['body'], 'need an orientation_type') !== false
+        && strpos($r['body'], 'id="tw-refile"') !== false && strpos($r['body'], 'name="tabfile"') !== false
+        && strpos($r['body'], 'Upload a corrected file') !== false
+        && strpos($r['body'], 'enctype="multipart/form-data"') !== false
+        && strpos($r['body'], 'Confirm &amp; Import') === false);
+
+    // a file that cannot be read leaves the review as it was
+    $txt = tempnam(sys_get_temp_dir(), 'e2ewiz_') . '.txt'; $tmpFiles[] = $txt; file_put_contents($txt, 'not a spreadsheet');
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'reupload', 'token' => $reToken), $reTarget), 'tabfile', $txt, 'notes.txt');
+    check('unreadable corrected file: message, same token, earlier review still shown',
+        strpos($r['body'], 'The new file was not used') !== false && extractToken($r['body']) === $reToken
+        && strpos($r['body'], 'need an orientation_type') !== false && strpos($r['body'], 'Now reviewing the file') === false
+        && strpos($r['body'], 'ams.csv') !== false);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'reupload', 'token' => $reToken), $reTarget));
+    check('reupload with no file: message, same token', strpos($r['body'], 'No file received') !== false && extractToken($r['body']) === $reToken);
+
+    // another account cannot replace this review
+    $r = httpPostFile('/TemplateWizard/review.php', $sidStranger, array_merge(array('action' => 'reupload', 'token' => $reToken), $reTarget), 'tabfile', csvFile($goodCsv), 'ams.csv');
+    check('stranger reupload on the owner token is refused', strpos($r['body'], 'review session expired') !== false && extractToken($r['body']) === null);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'plan', 'token' => $reToken), $reTarget));
+    check('owner review untouched by the stranger attempt', extractToken($r['body']) === $reToken && strpos($r['body'], 'need an orientation_type') !== false);
+
+    // the corrected file: one POST, straight back to the review, target kept
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'reupload', 'token' => $reToken), $reTarget), 'tabfile', csvFile($goodCsv), 'ams_fixed.csv');
+    $reToken2 = extractToken($r['body']);
+    check('corrected file: review of the new file (2 new spots, 2 data rows, name shown, Confirm offered)',
+        $reToken2 !== null && $reToken2 !== $reToken
+        && strpos($r['body'], 'Now reviewing the file you just uploaded') !== false
+        && strpos($r['body'], 'ams_fixed.csv') !== false && strpos($r['body'], '2 data rows') !== false
+        && strpos($r['body'], '2 new spots') !== false && strpos($r['body'], 'need an orientation_type') === false
+        && strpos($r['body'], 'Confirm &amp; Import') !== false);
+    check('corrected file: project, new-dataset choice and dataset name are still filled in',
+        preg_match('/<option value="' . $PROJECT_ID . '" selected>/', $r['body']) === 1
+        && preg_match('/id="dc-new" value="new" checked/', $r['body']) === 1
+        && strpos($r['body'], 'value="e2ewiz REUP ' . $stamp . '"') !== false);
+    check('corrected file: the earlier token is gone', extractToken(httpPostForm('/TemplateWizard/review.php', $sidOwner,
+        array_merge(array('action' => 'plan', 'token' => $reToken), $reTarget))['body']) === null);
+    check('nothing saved before Confirm',
+        (int)$neodb->get_var("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-REUP','WZ-REUP2'] RETURN count(s)") === 0);
+    $r = httpPostForm('/TemplateWizard/review.php', $sidOwner, array_merge(array('action' => 'confirm', 'token' => $reToken2), $reTarget));
+    check('corrected file imports', strpos($r['body'], 'Import complete') !== false && preg_match('/<strong>2<\/strong> spots created/', $r['body']) === 1);
+    preg_match('/New dataset created \(id (\d+)\)/', $r['body'], $m);
+    $DS4 = isset($m[1]) ? (int)$m[1] : 0;
+    $datasetIds[] = $DS4;
+    $recs = $neodb->get_results("MATCH (d:Dataset {id: $DS4, userpkey: $ownerPkey})-[:HAS_SPOT]->(s:Spot) RETURN s.id AS id, s.name AS name, s.json_orientation_data AS od");
+    $reNames = array(); $reOrient = 0;
+    foreach ((array)$recs as $rec) {
+        $reNames[] = $rec->value('name'); $spotIds[] = (int)$rec->value('id');
+        $od = json_decode((string)$rec->value('od'), true);
+        if (is_array($od)) { $reOrient += count($od); }
+    }
+    sort($reNames);
+    check('the corrected file is what landed (2 spots, 2 orientations)', $reNames === array('WZ-REUP', 'WZ-REUP2') && $reOrient === 2);
+
+    // template choice of the first upload is used for the corrected file too
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'upload', 'template_pkey' => 'basic'), 'tabfile', $bxPath, 'basic_export.xlsx');
+    $tkA = extractToken($r['body']);
+    $r = httpPostFile('/TemplateWizard/review.php', $sidOwner, array('action' => 'reupload', 'token' => $tkA,
+        'project_id' => $PROJECT_ID, 'dataset_choice' => 'existing', 'dataset_id' => $DS), 'tabfile', $bxPath, 'basic_export.xlsx');
+    $tkB = extractToken($r['body']);
+    check('same file sent again as the corrected file: new token, review runs, all unchanged',
+        $tkB !== null && $tkB !== $tkA && strpos($r['body'], 'Now reviewing the file you just uploaded') !== false
+        && strpos($r['body'], '0 new spots') !== false && strpos($r['body'], '0 updated') !== false);
+    httpPostForm('/TemplateWizard/review.php', $sidOwner, array('action' => 'cancel', 'token' => $tkB));
+
 } finally {
     echo "\n=== cleanup ===\n";
     foreach (array_unique($spotIds) as $sid2) {
         try { $strabo->deleteSingleSpot((int)$sid2); } catch (Exception $e) {}
     }
     // catch strays by name
-    $recs = $neodb->get_results("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3','WZ-POLY'] RETURN s.id AS id");
+    $recs = $neodb->get_results("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3','WZ-POLY','WZ-REUP','WZ-REUP2'] RETURN s.id AS id");
     foreach ((array)$recs as $rec) {
         try { $strabo->deleteSingleSpot((int)$rec->value('id')); } catch (Exception $e) {}
     }
@@ -900,7 +984,7 @@ try {
     foreach ($sessionFiles as $f) { @unlink($f); }
     foreach ($tmpFiles as $f) { @unlink($f); }
 
-    $r1 = (int)$neodb->get_var("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3','WZ-POLY'] RETURN count(s)");
+    $r1 = (int)$neodb->get_var("MATCH (s:Spot {userpkey: $ownerPkey}) WHERE s.name IN ['WZ-A','WZ-B','WZ-DIRTY','WZ-CANCEL','WZ-FILL-1','WZ-FILL-2','WZ-FILL-3','WZ-POLY','WZ-REUP','WZ-REUP2'] RETURN count(s)");
     $r2 = (int)$neodb->get_var("MATCH (d:Dataset {userpkey: $ownerPkey}) WHERE d.name =~ 'e2ewiz.*' RETURN count(d)");
     $r3 = (int)$db->get_var_prepared("SELECT count(*) FROM field_templates WHERE userpkey = $1 AND name ILIKE 'e2ewiz%'", array($ownerPkey));
     $r4 = (int)$db->get_var_prepared("SELECT count(*) FROM strabosamples.samples WHERE userpkey = $1 AND name IN ($2, 'KU-26-001', 'KU-26-002')", array($ownerPkey, "FS-FILL-$stamp"));
