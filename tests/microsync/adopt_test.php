@@ -257,6 +257,7 @@ try {
 		$db->prepare_query("DELETE FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P));
 		if (is_dir("$FILES/$P")) exec('rm -rf ' . escapeshellarg("$FILES/$P"));
 		if (is_dir(MsAdopt::archiveDir($P))) exec('rm -rf ' . escapeshellarg(MsAdopt::archiveDir($P)));
+		foreach (glob(MsWorker::dataDir() . "/restore_images/$P-*.json") ?: array() as $f) @unlink($f);
 	}
 	foreach (array($U, $O) as $u) {
 		$db->prepare_query("DELETE FROM strabosamples.samples WHERE userpkey = $1", array($u));

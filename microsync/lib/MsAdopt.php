@@ -13,7 +13,9 @@
  *              viewer, PDF) keeps working unchanged; only the sync API lets
  *              the owner push into it. POST projects/{pid}/ready then archives
  *              project.zip (plus JavaFX leftovers) like the converter and flips
- *              the row to entity/ready (MsAdopt::finish).
+ *              the row to entity/ready (MsAdopt::finish), then starts
+ *              MsRestoreImages in the background, which gives back any
+ *              image of the upload the adopting copy did not have.
  *
  *              Old-app uploads to an adopting project are refused
  *              (microdb/lib/sync_guard.php). An adoption is dropped (store
@@ -260,6 +262,11 @@ class MsAdopt {
 			throw $e;
 		}
 		@unlink("$arch/adopt.json");
+		// A copy that arrived without some of the upload's images keeps the
+		// upload's (StraboMicro Sentry ELECTRON-39, project 950): restored
+		// from the archive in the background; a no-op when nothing is missing
+		require_once __DIR__ . '/MsRestoreImages.php';
+		MsRestoreImages::kick($pid);
 		MsWorker::kick($pid);
 		MsHttp::json(200, array('pid' => $pid, 'syncState' => 'ready', 'headSeq' => $headSeq, 'adopted' => true));
 	}
