@@ -15,6 +15,8 @@
  *                - refs a micrograph already has are never touched; a rerun
  *                  restores only what is still missing
  *                - a legacy project is refused
+ *                - the adoption itself (POST ready) starts the same restore
+ *                  in the background (MsAdopt::finish -> MsRestoreImages::kick)
  *
  *              Usage: docker exec strabo-php timeout 900 php /srv/app/www/tests/microsync/restore_images_test.php
  *
@@ -94,9 +96,6 @@ try {
 	check('adopt', req('POST', "/projects/$P/adopt", $TOK)['code'] === 201);
 	$j = normalize_fixture(json_decode(file_get_contents("$R/project.json")), $sid);
 	check('entities pushed (no images)', count(push_all($P, $TOK, decompose($j))) === 0);
-	check('ready', req('POST', "/projects/$P/ready", $TOK)['code'] === 200);
-	check('archived with images', is_file(MsAdopt::archiveDir($P) . '/project.zip'));
-	check('built', build_now($P) === 'built');
 	$withImage = array();
 	$withTiles = array();
 	$withThumb = array();
@@ -115,6 +114,32 @@ try {
 		$sizeOk = $sizeOk && $sizes[$id] !== false && (int)$m['w'] === (int)$sizes[$id][0] && (int)$m['h'] === (int)$sizes[$id][1];
 	}
 	check('fixture: 2+ micrographs with images, stored sizes match the files', $sizeOk, json_encode(array($withImage, $sizes)));
+	check('before ready: no image, tiles or thumbnail refs', refCount($P, 'image') === 0 && refCount($P, 'tiles') === 0 && refCount($P, 'thumbnail') === 0);
+	$headPre = (int)$ms->val("SELECT head_seq FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P));
+	check('ready', req('POST', "/projects/$P/ready", $TOK)['code'] === 200);
+	check('archived with images', is_file(MsAdopt::archiveDir($P) . '/project.zip'));
+
+	section('The adoption gives the images back by itself (background)');
+	$waited = 0;
+	while (refCount($P, 'image') < count($withImage) && $waited < 180) {
+		sleep(1);
+		$waited++;
+	}
+	check("every micrograph has its image again ($waited s)", refCount($P, 'image') === count($withImage));
+	sleep(2); // the same transaction set thumbnails and tiles; let the process write its report
+	check('and its thumbnail and tiles', refCount($P, 'thumbnail') === count($withThumb) && refCount($P, 'tiles') === count($withTiles));
+	$auto = $ms->rows("SELECT push_id FROM strabomicro.micro_changes WHERE project_id = $1 AND seq > $2 AND 'refs.image' = ANY(changed_paths)", array($P, $headPre));
+	check('as changes with no push id (every copy pulls them)', count($auto) === count($withImage)
+		&& count(array_filter($auto, function ($r) { return $r['push_id'] !== null; })) === 0, json_encode($auto));
+	$sha = $ms->val("SELECT sha256 FROM strabomicro.micro_blob_refs WHERE project_id = $1 AND entity_id = $2 AND role = 'image'", array($P, $withImage[0]));
+	check('the image is the uploaded file, byte for byte', $sha === hash_file('sha256', "$R/images/{$withImage[0]}"));
+	$log = (string)@file_get_contents(MsWorker::dataDir() . '/log/restore_images.log');
+	check('the background run is logged', strpos($log, "project $P (") !== false);
+	check('built', build_now($P) === 'built');
+
+	section('Back to the incident (refs removed) for the tool by hand');
+	$ms->q("DELETE FROM strabomicro.micro_blobs WHERE project_id = $1", array($P));
+	exec('rm -rf ' . escapeshellarg("$FILES/$P/blobs"));
 	check('the live project has no image, tiles or thumbnail refs', refCount($P, 'image') === 0 && refCount($P, 'tiles') === 0 && refCount($P, 'thumbnail') === 0);
 	$headBefore = (int)$ms->val("SELECT head_seq FROM strabomicro.micro_projectmetadata WHERE id = $1", array($P));
 	$root = "$FILES/$P";
@@ -196,6 +221,7 @@ try {
 		if (is_dir("$FILES/$P")) exec('rm -rf ' . escapeshellarg("$FILES/$P"));
 		if (is_dir(MsAdopt::archiveDir($P))) exec('rm -rf ' . escapeshellarg(MsAdopt::archiveDir($P)));
 	}
+	if ($P !== null) foreach (glob(MsWorker::dataDir() . "/restore_images/$P-*.json") ?: array() as $f) @unlink($f);
 	$db->prepare_query("DELETE FROM strabosamples.samples WHERE userpkey = $1", array($U));
 	$db->prepare_query("DELETE FROM users WHERE pkey = $1", array($U));
 	exec('rm -rf ' . escapeshellarg($W));
