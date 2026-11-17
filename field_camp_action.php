@@ -136,16 +136,19 @@ if($action === 'basics'){
 		if($action === 'tiles_save') fc_saved($here, "tiles");   // the running build keeps its own choice
 		fc_back($here . "tiles", '', "The tiles for this camp are being built already.");
 	}
-	$layers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+	$layers = FieldCampTiles::campLayers($db, $camp);
 	if((string)($_POST['offline'] ?? '1') === '0'){
 		FieldCampTiles::saveChoice($db, $camp, (int)$camp->tiles_zoom, array());
 		FieldCampTiles::clearBuild($db, $camp);
 		fc_saved($here, "tiles", "Saved. The package will have no offline maps.");
 	}
 	$wanted = json_decode((string)($_POST['layers_json'] ?? ''), true);
-	list($zoom, $ids, $errors) = FieldCampTiles::validateChoice($camp, $layers, (int)($_POST['zoom'] ?? 0), is_array($wanted) ? $wanted : array());
+	// The maps given their own zoom (zooms_json: {map id: zoom}); a post without it keeps the saved ones.
+	$own = isset($_POST['zooms_json']) ? json_decode((string)$_POST['zooms_json'], true) : FieldCampTiles::zoomOverrides($camp);
+	list($zoom, $ids, $own, $errors) = FieldCampTiles::validateChoice($camp, $layers, (int)($_POST['zoom'] ?? 0),
+		is_array($wanted) ? $wanted : array(), is_array($own) ? $own : array());
 	if($errors) fc_back($here . "tiles", '', $errors);
-	FieldCampTiles::saveChoice($db, $camp, $zoom, $ids);
+	FieldCampTiles::saveChoice($db, $camp, $zoom, $ids, $own);
 	$camp = FieldCamp::getCamp($db, $id);
 	if($action === 'tiles_save' && !FieldCampTiles::needsBuild($camp, $layers)) fc_saved($here, "tiles", "Saved. The offline maps are built and up to date.");
 	$problem = FieldCampTiles::startBuild($db, $camp);

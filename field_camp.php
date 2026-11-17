@@ -203,22 +203,25 @@ if($camp && $step === 'maps'){
 		if(is_string($typedMaps[$m['hash']]['title'] ?? null)) $myMaps[$i]['title'] = $typedMaps[$m['hash']]['title'];
 	}
 }
-$tileLayers = array(); $tileChosen = array(); $tileOptions = array(); $tileZoom = null;
+$tileLayers = array(); $tileChosen = array(); $tileCounts = array(); $tileScales = array(); $tileZoom = null; $tileOwn = array();
 $tileStatus = array('status' => '', 'message' => '', 'percent' => null, 'elapsed' => null, 'tiles' => 0, 'maps' => 0, 'bytes' => 0); $tilesOutdated = '';
 $tilesWanted = false; $tilesNeedBuild = false;
 // A running tile build is shown on every step (the progress panel under the step tabs).
 if($camp && isset($steps['tiles']) && !$viewOnly) $tileStatus = FieldCampTiles::status($db, $camp);
 if($camp && isset($steps['tiles']) && ($step === 'tiles' || $step === 'package')){
-	$tileLayers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+	$tileLayers = FieldCampTiles::campLayers($db, $camp);
 	$tileChosen = FieldCampTiles::chosenLayerIds($camp, $tileLayers);
 	$tilesOutdated = FieldCampTiles::outdated($camp, FieldCampTiles::manifest($camp), $tileLayers);
 	$tilesWanted = FieldCampTiles::wanted($camp, $tileLayers);
 	$tilesNeedBuild = FieldCampTiles::needsBuild($camp, $tileLayers);
 	$tileAreas = FieldCampUnits::campAreas($camp);
 	if($tileAreas){
+		// Each map's tiles at every zoom it offers, so the page can count as the zooms change.
+		$tileCounts = FieldCampTiles::countTable($tileAreas, $tileLayers);
+		$tileScales = FieldCampTiles::scales($tileAreas);
 		$picked = array(); foreach($tileChosen as $tid){ $picked[] = $tileLayers[$tid]; }
-		$tileOptions = FieldCampTiles::options($tileAreas, $picked ? $picked : array_values($tileLayers));
-		$tileZoom = (int)$camp->tiles_zoom > 0 ? (int)$camp->tiles_zoom : FieldCampTiles::defaultZoom($tileOptions);
+		$tileZoom = (int)$camp->tiles_zoom > 0 ? (int)$camp->tiles_zoom : FieldCampTiles::defaultZoom($tileAreas, $picked ? $picked : array_values($tileLayers));
+		$tileOwn = FieldCampTiles::zoomOverrides($camp);
 	}
 }
 $roster = array('rows' => array(), 'uploaded' => 0, 'total' => 0, 'spots' => 0, 'photos' => 0);
@@ -903,6 +906,7 @@ if($step === 'tiles'){
 				<?php echo fc_hidden($csrf, 'tiles_save', $camp, fc_next($steps, 'tiles')[0]); ?>
 				<fieldset class="fc-tilefields"<?php echo $building ? ' disabled' : ''; ?>>
 				<input type="hidden" name="layers_json" id="fcTileLayersJson" value="">
+				<input type="hidden" name="zooms_json" id="fcTileZoomsJson" value="">
 				<input type="hidden" name="offline" id="fcTileOffline" value="<?php echo $tilesWanted ? '1' : '0'; ?>">
 
 				<div style="margin-top:0.5em;">
@@ -910,15 +914,55 @@ if($step === 'tiles'){
 				</div>
 				<div id="fcTileBody"<?php echo $tilesWanted ? '' : ' style="display:none;"'; ?>>
 
-				<div class="fc-maphead" style="margin-top:0.5em;">Maps</div>
+				<style>
+				.fc-zoomall { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em 1em; }
+				.fc-zoomall select { width: auto; min-width: 14em; height: 2.6em; margin: 0; }
+				.fc-tilerow { display: grid; grid-template-columns: 2.2em minmax(10em, 1fr) 12em 6.5em 6.5em 9em; gap: 0.25em 0.75em;
+					align-items: center; padding: 0.45em 0; border-top: 1px solid rgba(255,255,255,0.08); }
+				.fc-tilerow input[type=checkbox] + label { margin: 0; padding-left: 1.6em; height: 1.4em; }
+				.fc-tilerow select { width: 100%; height: 2.4em; margin: 0; padding-top: 0; padding-bottom: 0; }
+				.fc-tilerow .fc-tile-note { display: block; font-size: 0.82em; color: rgba(255,255,255,0.55); }
+				.fc-tilerow.fc-tile-over .fc-tile-count, .fc-tilerow .fc-tile-note.fc-bad { color: #e44c65; }
+				.fc-tilerow.fc-unit-off .fc-tile-count, .fc-tilerow.fc-unit-off .fc-tile-size, .fc-tilerow.fc-unit-off select { opacity: 0.45; }
+				.fc-tilerow.fc-unit-head { border-top: none; padding-bottom: 0.2em; }
+				@media (max-width: 900px) {
+					.fc-tilerow { grid-template-columns: 2.2em 1fr 1fr; }
+					.fc-tilerow > :nth-child(3) { grid-column: 2 / 3; }
+					.fc-tilerow.fc-unit-head { display: none; }
+					.fc-tilerow .fc-tile-count:before { content: "Tiles: "; } .fc-tilerow .fc-tile-size:before { content: "About "; }
+				}
+				</style>
+				<div class="fc-maphead" style="margin-top:0.75em;">Zoom for all maps</div>
+				<div class="fc-zoomall">
+					<select name="zoom" id="fcZoomAll" aria-label="Zoom for all maps">
+<?php for($z = FieldCampTiles::MIN_ZOOM; $z <= FieldCampTiles::MAX_ZOOM; $z++){ ?>
+						<option value="<?php echo $z; ?>"<?php echo $z === (int)$tileZoom ? ' selected' : ''; ?>>Zoom <?php echo $z; ?> (1:<?php echo number_format($tileScales[$z]); ?>)</option>
+<?php } ?>
+					</select>
+					<span class="fc-small">The closest view students get without a connection. Each deeper zoom shows more detail and
+						takes about four times the tiles. A map stops at its own deepest zoom; a map can also have a zoom of its own below.</span>
+				</div>
+
+				<div class="fc-maphead">Maps</div>
 				<div class="fc-units">
+					<div class="fc-tilerow fc-unit-head"><div></div><div>Map</div><div>Zoom</div><div>Tiles</div><div>About</div><div></div></div>
 <?php foreach($tileLayers as $l){
 		$on = in_array($l['id'], $tileChosen, true);
 		$cid = 'fcT' . htmlspecialchars($l['id']);
+		$own = $tileOwn[$l['id']] ?? null;
 ?>
-					<div class="fc-tileline" data-layer="<?php echo htmlspecialchars($l['id']); ?>">
+					<div class="fc-tilerow fc-tileline" data-layer="<?php echo htmlspecialchars($l['id']); ?>">
 						<div><input type="checkbox" class="fc-tile-on" id="<?php echo $cid; ?>"<?php echo $on ? ' checked' : ''; ?>><label for="<?php echo $cid; ?>"></label></div>
-						<div><?php echo htmlspecialchars($l['name']); ?><?php echo $l['custom'] ? ' <span class="fc-small">(custom map)</span>' : ''; ?></div>
+						<div><?php echo htmlspecialchars($l['name']); ?><?php echo $l['custom'] ? ' <span class="fc-small">(custom map)</span>' : ''; ?>
+							<span class="fc-tile-note"></span></div>
+						<div><select class="fc-tile-zoom" aria-label="Zoom for <?php echo htmlspecialchars($l['name']); ?>">
+							<option value="">Same as all maps</option>
+<?php 	for($z = FieldCampTiles::MIN_ZOOM; $z <= (int)$l['max_zoom']; $z++){ ?>
+							<option value="<?php echo $z; ?>"<?php echo $own === $z ? ' selected' : ''; ?>>Zoom <?php echo $z; ?><?php echo $z === (int)$l['max_zoom'] ? ' (deepest)' : ''; ?></option>
+<?php 	} ?>
+						</select></div>
+						<div class="fc-unit-text fc-tile-count"></div>
+						<div class="fc-unit-text fc-tile-size"></div>
 						<div class="fc-unit-text"><a href="#" class="fc-tile-show">Show in the preview</a></div>
 					</div>
 <?php } ?>
@@ -926,33 +970,16 @@ if($step === 'tiles'){
 <?php if(count($tileLayers) === count(FieldCampTiles::BASEMAPS)){ ?>
 				<div class="fc-small" style="margin-top:0.5em;">Custom maps selected on the <a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=maps">Maps</a> step are listed here too.</div>
 <?php } ?>
-
-				<div class="fc-maphead">Deepest zoom</div>
-				<div class="fc-units">
-					<div class="fc-zoomline fc-unit-head"><div></div><div>Zoom</div><div>Scale</div><div>Tiles per map</div><div>Tiles in all</div><div>About</div></div>
-<?php foreach($tileOptions as $o){
-		$zid = 'fcZ' . (int)$o['zoom'];
-?>
-					<div class="fc-zoomline" data-zoom="<?php echo (int)$o['zoom']; ?>">
-						<div><input type="radio" name="zoom" class="fc-zoom-on" id="<?php echo $zid; ?>" value="<?php echo (int)$o['zoom']; ?>"<?php
-							echo (int)$o['zoom'] === (int)$tileZoom ? ' checked' : ''; ?>><label for="<?php echo $zid; ?>"></label></div>
-						<div><?php echo (int)$o['zoom']; ?></div>
-						<div class="fc-unit-text">1:<?php echo number_format($o['scale']); ?></div>
-						<div class="fc-unit-text"><?php echo number_format($o['per_map']); ?></div>
-						<div class="fc-unit-text fc-zoom-total"></div>
-						<div class="fc-unit-text fc-zoom-size"></div>
-					</div>
-<?php } ?>
-				</div>
 				<div class="fc-small" id="fcTileWhy" style="margin-top:0.5em;"></div>
 
 				<div class="fc-maphead">Preview</div>
 				<div class="fc-small" style="margin-bottom:0.5em;">The closest view students will have without a connection, on
-					<strong id="fcTilePreviewName"></strong>. <?php echo count($campAreaList) > 1 ? "The outlines are the study areas; tiles are saved for everything inside them." : "The outline is the study area; tiles are saved for everything inside it."; ?></div>
+					<strong id="fcTilePreviewName"></strong> at zoom <strong id="fcTilePreviewZoom"></strong>. <?php echo count($campAreaList) > 1 ? "The outlines are the study areas; tiles are saved for everything inside them." : "The outline is the study area; tiles are saved for everything inside it."; ?></div>
 				<div id="fcTileMap" class="fc-map" style="height:420px;"></div>
 
 				<div class="fc-small" style="margin-top:0.75em;">The sizes are estimates from typical tiles; the real size shows
-					once the tiles are built. Zoom <?php echo FieldCampTiles::MAX_ZOOM; ?> is the deepest level offered for now.</div>
+					once the tiles are built. A custom map's deepest zoom comes from the detail of its file; its tiles are saved only
+					where it overlaps the study areas.</div>
 				</div>
 				</fieldset>
 
@@ -969,22 +996,21 @@ if($step === 'tiles'){
 		<script>
 		(function(){
 			var cfg = <?php echo json_encode(array(
-				'area' => FieldCampUnits::campBbox($camp),
 				'areas' => FieldCampUnits::campAreas($camp),
-				'options' => $tileOptions,
 				'layers' => array_values($tileLayers),
+				'counts' => $tileCounts,
 				'maxPerMap' => FieldCampTiles::MAX_TILES_PER_MAP,
 				'maxTotal' => FieldCampTiles::MAX_TILES_TOTAL,
 				'building' => $building,
 				'campId' => (int)$camp->pkey,
 				// what is saved, and whether the built tiles match it: decides if Next will build
-				'saved' => array('zoom' => (int)$camp->tiles_zoom, 'ids' => array_values($tileChosen)),
+				'saved' => array('zoom' => (int)$camp->tiles_zoom, 'ids' => array_values($tileChosen), 'own' => (object)$tileOwn),
 				'current' => ($tileStatus['status'] === 'ready' && $tileStatus['tiles'] > 0 && $tilesOutdated === ''),
 				'hasBuilt' => ($tileStatus['status'] === 'ready' && $tileStatus['tiles'] > 0),
-			)); ?>;
+			), JSON_HEX_TAG | JSON_HEX_AMP); ?>;
 			var form = document.getElementById('fcTileForm');
 			var layerRows = Array.prototype.slice.call(form.querySelectorAll('.fc-tileline'));
-			var zoomRows = Array.prototype.slice.call(form.querySelectorAll('.fc-zoomline[data-zoom]'));
+			var allSel = document.getElementById('fcZoomAll');
 			var btn = document.getElementById('fcTileNextBtn');
 			var onBox = document.getElementById('fcTilesOn'), body = document.getElementById('fcTileBody');
 
@@ -994,69 +1020,73 @@ if($step === 'tiles'){
 				if(bytes >= 1e6) return (bytes / 1e6).toFixed(1) + ' MB';
 				return Math.max(1, Math.round(bytes / 1e3)) + ' kB';
 			}
-			function chosenLayers(){
-				return cfg.layers.filter(function(l, i){ return layerRows[i].querySelector('.fc-tile-on').checked; });
-			}
-			function selectedZoom(){
-				var r = form.querySelector('.fc-zoom-on:checked');
-				return r ? parseInt(r.value, 10) : null;
-			}
+			function rowOf(id){ return layerRows.filter(function(r){ return r.getAttribute('data-layer') === id; })[0]; }
+			function isOn(l){ return rowOf(l.id).querySelector('.fc-tile-on').checked; }
+			function chosenLayers(){ return cfg.layers.filter(isOn); }
+			function ownZoom(l){ var v = rowOf(l.id).querySelector('.fc-tile-zoom').value; return v === '' ? null : parseInt(v, 10); }
+			// The zoom a map is built to: its own, else the one for all maps, never past its deepest.
+			function zoomOf(l){ var o = ownZoom(l); return Math.min(o === null ? parseInt(allSel.value, 10) : o, l.max_zoom); }
+			function tilesOf(l){ return (cfg.counts[l.id] || {})[zoomOf(l)] || 0; }
 
 			// --- preview map ---------------------------------------------------
-			var a = cfg.area, bounds = [[a.south, a.west], [a.north, a.east]];
-			var map = L.map('fcTileMap', {minZoom: 2, zoomControl: false, scrollWheelZoom: false, doubleClickZoom: false,
+			var map = L.map('fcTileMap', {minZoom: 2, maxZoom: 22, zoomControl: false, scrollWheelZoom: false, doubleClickZoom: false,
 				touchZoom: false, boxZoom: false, keyboard: false});
-			// Every study area; a zoom is shown at the first one (the whole map would not load at a deep zoom).
 			cfg.areas.forEach(function(ar){
 				L.rectangle([[ar.south, ar.west], [ar.north, ar.east]], {color: '#e44c65', weight: 2, fill: false, interactive: false}).addTo(map)
 					.bindTooltip(ar.name, {permanent: cfg.areas.length > 1, direction: 'center', className: 'fc-area-label'});
 			});
-			var first = cfg.areas[0];
 			L.control.scale().addTo(map);
-			var tileLayer = null, previewId = null;
+			var tileLayer = null, preview = null;
 			function tileUrl(l){
 				return l.custom ? 'https://strabospot.org/geotiff/tiles/' + encodeURIComponent(l.id) + '/{z}/{x}/{y}.png'
 					: 'https://tiles.strabospot.org/v5/' + l.id + '/{z}/{x}/{y}.png';
 			}
-			function showLayer(id){
-				var l = cfg.layers.filter(function(x){ return x.id === id; })[0] || cfg.layers[0];
-				if(tileLayer) map.removeLayer(tileLayer);
-				tileLayer = L.tileLayer(tileUrl(l), {maxZoom: 19, noWrap: true}).addTo(map);
-				previewId = l.id;
-				document.getElementById('fcTilePreviewName').textContent = l.name;
+			// Where a map is shown: the first study area, or for a custom map the first place it overlaps one.
+			function centerOf(l){
+				var e = l.extent;
+				for(var i = 0; i < cfg.areas.length; i++){
+					var a = cfg.areas[i];
+					if(!l.custom || !e) return [(a.south + a.north) / 2, (a.west + a.east) / 2];
+					var w = Math.max(a.west, e.west), s = Math.max(a.south, e.south), ea = Math.min(a.east, e.east), n = Math.min(a.north, e.north);
+					if(w < ea && s < n) return [(s + n) / 2, (w + ea) / 2];
+				}
+				var f = cfg.areas[0]; return [(f.south + f.north) / 2, (f.west + f.east) / 2];
 			}
-			function showZoom(){
-				var z = selectedZoom();
-				if(z === null) map.fitBounds(bounds);
-				else map.setView([(first.south + first.north) / 2, (first.west + first.east) / 2], z);
+			function showLayer(l){
+				preview = l;
+				if(tileLayer) map.removeLayer(tileLayer);
+				tileLayer = L.tileLayer(tileUrl(l), {maxZoom: 22, maxNativeZoom: l.custom ? 22 : l.max_zoom, noWrap: true}).addTo(map);
+				document.getElementById('fcTilePreviewName').textContent = l.name;
+				document.getElementById('fcTilePreviewZoom').textContent = zoomOf(l);
+				map.setView(centerOf(l), zoomOf(l));
 			}
 
 			// --- numbers --------------------------------------------------------
 			function refresh(){
-				var layers = chosenLayers(), kb = 0;
-				layers.forEach(function(l){ kb += l.kb; });
-				var z = selectedZoom(), why = '', summary = '';
-				zoomRows.forEach(function(row, i){
-					var o = cfg.options[i];
-					var total = o.per_map * layers.length;
-					var reason = '';
-					if(o.per_map > cfg.maxPerMap) reason = 'Zoom ' + o.zoom + ' needs more than ' + cfg.maxPerMap.toLocaleString() + ' tiles per map. Use a smaller study area for this zoom.';
-					else if(total > cfg.maxTotal) reason = 'Zoom ' + o.zoom + ' needs more than ' + cfg.maxTotal.toLocaleString() + ' tiles in all. Select fewer maps or use a smaller study area.';
-					var radio = row.querySelector('.fc-zoom-on');
-					radio.disabled = reason !== '';
-					row.classList.toggle('fc-unit-off', reason !== '');
-					row.querySelector('.fc-zoom-total').textContent = layers.length ? total.toLocaleString() : '';
-					row.querySelector('.fc-zoom-size').textContent = layers.length ? fmtSize(o.per_map * kb * 1000) : '';
-					if(o.zoom === z){
-						if(reason) why = reason;
-						else if(layers.length) summary = layers.length + ' map' + (layers.length === 1 ? '' : 's') + ' to zoom ' + o.zoom + ': '
-							+ total.toLocaleString() + ' tiles, about ' + fmtSize(o.per_map * kb * 1000) + '.';
+				var all = parseInt(allSel.value, 10), why = [], total = 0, bytes = 0, n = 0;
+				cfg.layers.forEach(function(l){
+					var row = rowOf(l.id), on = isOn(l), z = zoomOf(l), own = ownZoom(l), t = tilesOf(l);
+					var note = '', bad = false;
+					if(l.custom && t === 0) { note = 'Outside the study areas: no tiles.'; }
+					else if(own === null && all > l.max_zoom) note = 'Stops at zoom ' + l.max_zoom + ', its deepest.';
+					else if(own !== null) note = 'Its own zoom: ' + own + '.';
+					else note = 'Detail to zoom ' + l.max_zoom + '.';
+					if(on && t > cfg.maxPerMap){
+						bad = true;
+						why.push(l.name + ': zoom ' + z + ' needs ' + t.toLocaleString() + ' tiles, more than ' + cfg.maxPerMap.toLocaleString() + ' per map. Choose a lower zoom for this map.');
 					}
+					var noteEl = row.querySelector('.fc-tile-note');
+					noteEl.textContent = note; noteEl.classList.toggle('fc-bad', bad);
+					row.classList.toggle('fc-tile-over', bad);
+					row.classList.toggle('fc-unit-off', !on);
+					row.querySelector('.fc-tile-count').textContent = t.toLocaleString();
+					row.querySelector('.fc-tile-size').textContent = t ? fmtSize(t * l.kb * 1000) : '';
+					if(on){ total += t; bytes += t * l.kb * 1000; n++; }
 				});
-				if(!layers.length) why = 'Select at least one map, or switch the offline maps off.';
-				else if(z === null) why = 'Choose a zoom level.';
-				layerRows.forEach(function(r){ r.classList.toggle('fc-unit-off', !r.querySelector('.fc-tile-on').checked); });
-				document.getElementById('fcTileWhy').textContent = why;
+				if(!n) why = ['Select at least one map, or switch the offline maps off.'];
+				else if(!why.length && total > cfg.maxTotal) why.push('These zooms need ' + total.toLocaleString() + ' tiles in all, more than ' + cfg.maxTotal.toLocaleString() + '. Select fewer maps or lower zooms.');
+				document.getElementById('fcTileWhy').textContent = why.join(' ');
+				if(preview) document.getElementById('fcTilePreviewZoom').textContent = zoomOf(preview);
 
 				// What Next will do, said before it is clicked.
 				var on = onBox.checked, text = '';
@@ -1065,37 +1095,47 @@ if($step === 'tiles'){
 					text = 'The offline maps are being built now (see the progress above). Next takes you on while the build runs.';
 				}else if(!on){
 					text = 'The package will have no offline maps.' + (cfg.hasBuilt ? ' Next removes the tiles that were built.' : '');
-				}else if(why !== ''){
-					text = why;
+				}else if(why.length){
+					text = why.join(' ');
 				}else{
-					var ids = layers.map(function(l){ return l.id; }).sort().join(',');
-					var same = cfg.current && z === cfg.saved.zoom && ids === cfg.saved.ids.slice().sort().join(',');
-					text = summary + (same ? ' These tiles are built and up to date.'
-						: ' Next starts building them and takes you on; the build runs in the background and its progress shows on every step.');
+					var ids = chosenLayers().map(function(l){ return l.id; }).sort().join(',');
+					var sameOwn = JSON.stringify(ownZooms()) === JSON.stringify(sortKeys(cfg.saved.own));
+					var same = cfg.current && all === cfg.saved.zoom && ids === cfg.saved.ids.slice().sort().join(',') && sameOwn;
+					text = n + ' map' + (n === 1 ? '' : 's') + ': ' + total.toLocaleString() + ' tiles, about ' + fmtSize(bytes) + '.'
+						+ (same ? ' These tiles are built and up to date.'
+							: ' Next starts building them and takes you on; the build runs in the background and its progress shows on every step.');
 				}
 				document.getElementById('fcTileSummary').textContent = text;
-				btn.disabled = !cfg.building && on && why !== '';
+				btn.disabled = !cfg.building && on && why.length > 0;
 			}
+			function sortKeys(o){ var r = {}; Object.keys(o || {}).sort().forEach(function(k){ r[k] = o[k]; }); return r; }
+			function ownZooms(){
+				var r = {};
+				cfg.layers.forEach(function(l){ var o = ownZoom(l); if(o !== null) r[l.id] = o; });
+				return sortKeys(r);
+			}
+
 			onBox.addEventListener('change', function(){
 				body.style.display = onBox.checked ? '' : 'none';
 				if(onBox.checked){
 					// switched on with nothing selected: start from every map
 					if(!chosenLayers().length) layerRows.forEach(function(r){ r.querySelector('.fc-tile-on').checked = true; });
-					map.invalidateSize(); showZoom();
+					map.invalidateSize(); if(preview) showLayer(preview);
 				}
 				refresh();
 			});
-
-			layerRows.forEach(function(r){
+			allSel.addEventListener('change', function(){ refresh(); if(preview) showLayer(preview); });
+			cfg.layers.forEach(function(l){
+				var r = rowOf(l.id);
 				r.querySelector('.fc-tile-on').addEventListener('change', refresh);
-				r.querySelector('.fc-tile-show').addEventListener('click', function(ev){ ev.preventDefault(); showLayer(r.getAttribute('data-layer')); });
+				r.querySelector('.fc-tile-zoom').addEventListener('change', function(){ refresh(); showLayer(l); });
+				r.querySelector('.fc-tile-show').addEventListener('click', function(ev){ ev.preventDefault(); showLayer(l); });
 			});
-			zoomRows.forEach(function(r){ r.querySelector('.fc-zoom-on').addEventListener('change', function(){ refresh(); showZoom(); }); });
 			form.addEventListener('submit', function(){
 				document.getElementById('fcTileLayersJson').value = JSON.stringify(chosenLayers().map(function(l){ return l.id; }));
+				document.getElementById('fcTileZoomsJson').value = JSON.stringify(ownZooms());
 			});
-			showLayer((chosenLayers()[0] || cfg.layers[0]).id);
-			showZoom();
+			showLayer(chosenLayers()[0] || cfg.layers[0]);
 			refresh();
 
 		})();

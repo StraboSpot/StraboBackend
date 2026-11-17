@@ -202,7 +202,7 @@ function build_now($db, $campid) {
 	// What startBuild does, without the background process: mark as building, then build here.
 	$db->prepare_query("update fieldcamp set build_status = 'building', build_started = now(), build_message = 'Starting...' where pkey = $1", array($campid));
 	$camp = FieldCamp::getCamp($db, $campid);
-	return FieldCampTiles::build($db, $camp, FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp)));
+	return FieldCampTiles::build($db, $camp, FieldCampTiles::campLayers($db, $camp));
 }
 
 cleanup();
@@ -211,8 +211,9 @@ foreach ($FIX as $pk => $email) {
 		array($pk, 'fctileshash' . $pk, $email));
 }
 FieldCamp::addInstructor($db, $INSTR, 'tiles test', 3);
+// A map around the whole test area (until 11-17 it lay just south of it; builds fetched it over the area anyway).
 $db->prepare_query("insert into geotiffs (userpkey, hash, name, gdalinfo) values ($1, 'fctilestest01', 'Canon_City_Map.tif', $2)", array($INSTR,
-	"Corner Coordinates:\nUpper Left  (-105.3113443,  38.5058905) (105d18'40.84\"W, 38d30'21.21\"N)\nLower Left  (-105.3113443,  38.4893179) (105d18'40.84\"W, 38d29'21.54\"N)\nUpper Right (-105.2588832,  38.5058905) (105d15'31.98\"W, 38d30'21.21\"N)\nLower Right (-105.2588832,  38.4893179) (105d15'31.98\"W, 38d29'21.54\"N)\n"));
+	"Size is 25000, 11000\nCorner Coordinates:\nUpper Left  (-105.4000000,  38.6000000) (105d24' 0.00\"W, 38d36' 0.00\"N)\nLower Left  (-105.4000000,  38.5000000) (105d24' 0.00\"W, 38d30' 0.00\"N)\nUpper Right (-105.1500000,  38.6000000) (105d 9' 0.00\"W, 38d36' 0.00\"N)\nLower Right (-105.1500000,  38.5000000) (105d 9' 0.00\"W, 38d30' 0.00\"N)\n"));
 
 // Jason's dev camp near Canon City, Colorado: about 20 km by 8 km.
 $AREA = array('west' => -105.389271, 'south' => 38.517549, 'east' => -105.159931, 'north' => 38.587088);
@@ -242,52 +243,88 @@ check('four default basemaps with the app\'s ids and names', array_keys($basemap
 $withMap = FieldCampTiles::layers(array(FieldCampPackage::customMap('fctilestest01', 'Canon City Map', '-105.31,38.49,-105.26,38.51')));
 check('the camp\'s custom maps follow', array_keys($withMap)[4] === 'fctilestest01' && $withMap['fctilestest01']['name'] === 'Canon City Map' && $withMap['fctilestest01']['custom'] === true && $withMap['fctilestest01']['bbox'] === '-105.31,38.49,-105.26,38.51');
 
-$opts = FieldCampTiles::options($AREA, array_values($basemaps));
-check('six zoom choices, 11 to 16', array_column($opts, 'zoom') === array(11, 12, 13, 14, 15, 16));
-check('tiles in all = tiles per map x maps', $opts[4]['per_map'] === 303 && $opts[4]['total'] === 1212 && $opts[5]['total'] === 4308);
-check('the size is an estimate from typical tiles (zoom 15, four basemaps: 20 to 35 MB)', $opts[4]['bytes'] > 20e6 && $opts[4]['bytes'] < 35e6, $opts[4]['bytes']);
-check('every zoom is allowed for a camp-sized area', count(array_filter($opts, function ($o) { return $o['allowed']; })) === 6);
-check('the default is the deepest zoom that keeps a map at 1,500 tiles or fewer: 16 here', FieldCampTiles::defaultZoom($opts) === 16);
+$A1 = array(array('name' => 'Area 1') + $AREA);
+check('each basemap has its deepest zoom (Topo 17, Satellite 19, Geology 16, Hillshade 17); a custom map without a GeoTIFF reading gets ' . FieldCampTiles::MAX_ZOOM,
+	array_column($basemaps, 'max_zoom') === array(17, 19, 16, 17) && $withMap['fctilestest01']['max_zoom'] === FieldCampTiles::MAX_ZOOM);
+$table = FieldCampTiles::countTable($A1, array_values($basemaps));
+check('counts per map for every zoom it offers, from ' . FieldCampTiles::MIN_ZOOM . ' to its deepest', array_keys($table['macrostrat']) === range(10, 16) && array_keys($table['mapbox.satellite']) === range(10, 19)
+	&& $table['mapbox.outdoors'][15] === 303 && $table['mapbox.outdoors'][16] === 1077);
+check('scales for every zoom offered', count(FieldCampTiles::scales($A1)) === 13 && FieldCampTiles::scales($A1)[16] === FieldCampTiles::scale(($AREA['south'] + $AREA['north']) / 2, 16));
+check('the default is the deepest zoom up to 16 that keeps a map at 1,500 tiles or fewer: 16 here', FieldCampTiles::defaultZoom($A1, array_values($basemaps)) === 16);
 $big = array('west' => -106.0, 'south' => 38.0, 'east' => -105.0, 'north' => 39.0);   // about 87 km by 111 km
-$bigOpts = FieldCampTiles::options($big, array_values($basemaps));
-$byZoom = array(); foreach ($bigOpts as $o) $byZoom[$o['zoom']] = $o;
-check('a large area: deep zooms are refused with the reason', $byZoom[16]['allowed'] === false && strpos($byZoom[16]['why'], 'tiles per map') !== false && $byZoom[11]['allowed'] === true, $byZoom[16]);
-check('and its default zoom is shallower', FieldCampTiles::defaultZoom($bigOpts) < 16 && FieldCampTiles::defaultZoom($bigOpts) >= 11, FieldCampTiles::defaultZoom($bigOpts));
-// The limit on all tiles together only bites with more than four maps (4 x 6,000 is under 25,000): look for an
-// area whose zoom 16 takes between 5,001 and 6,000 tiles per map, then count it with five maps and with one.
+$B1 = array(array('name' => 'Area 1') + $big);
+check('a large area gets a shallower default', FieldCampTiles::defaultZoom($B1, array_values($basemaps)) < 16 && FieldCampTiles::defaultZoom($B1, array_values($basemaps)) >= 10, FieldCampTiles::defaultZoom($B1, array_values($basemaps)));
+$tiny = array(array('name' => 'Area 1', 'west' => -105.300, 'south' => 38.500, 'east' => -105.298, 'north' => 38.502));
+check('a tiny area still starts no deeper than ' . FieldCampTiles::DEFAULT_MAX_ZOOM, FieldCampTiles::defaultZoom($tiny, array_values($basemaps)) === FieldCampTiles::DEFAULT_MAX_ZOOM);
+
+// GeoTIFF resolution to deepest zoom
+$gi = function ($w, $s, $e, $n, $px, $py) {
+	$dms = function ($v, $pos, $neg) { $a = abs($v); $d = floor($a); $m = floor(($a - $d) * 60); $sec = ($a - $d - $m / 60) * 3600;
+		return sprintf("%dd%2d'%5.2f\"%s", $d, $m, $sec, $v < 0 ? $neg : $pos); };
+	$c = function ($x, $y) use ($dms) { return "($x, $y) (" . $dms($x, 'E', 'W') . ", " . $dms($y, 'N', 'S') . ")"; };
+	return "Size is $px, $py\nCorner Coordinates:\nUpper Left  " . $c($w, $n) . "\nLower Left  " . $c($w, $s) . "\nUpper Right " . $c($e, $n) . "\nLower Right " . $c($e, $s) . "\n";
+};
+// 0.01 degrees at 38.5 N is about 870 m wide; zoom z has 156543 * cos(lat) / 2^z m per pixel
+check('a 3 cm drone mosaic: zoom 22', FieldCampTiles::nativeZoom($gi(-105.30, 38.50, -105.29, 38.51, 29000, 37000)) === 22);
+check('a 1 m orthophoto: zoom 17', FieldCampTiles::nativeZoom($gi(-105.30, 38.50, -105.29, 38.51, 870, 1110)) === 17);
+check('a scanned quad at about 2.5 m: zoom 16', FieldCampTiles::nativeZoom($gi(-105.30, 38.50, -105.29, 38.51, 350, 445)) === 16);
+check('a coarse regional map: no shallower than ' . FieldCampTiles::MIN_ZOOM, FieldCampTiles::nativeZoom($gi(-115.6, 30.2, -108.3, 38.0, 2328, 2501)) === FieldCampTiles::MIN_ZOOM);
+check('no size in the text: ' . FieldCampTiles::MAX_ZOOM, FieldCampTiles::nativeZoom("Corner Coordinates:\n") === FieldCampTiles::MAX_ZOOM);
+
+// A custom map counts only where it overlaps the areas
+$drone = FieldCampTiles::layers(array(FieldCampPackage::customMap('fctilesdrone', 'Drone', '-105.300,38.520,-105.295,38.524')), array('fctilesdrone' => 21))['fctilesdrone'];
+check('a custom map\'s deepest zoom comes from customZooms', $drone['max_zoom'] === 21 && $drone['extent']['west'] === -105.3);
+$w = FieldCampTiles::layerAreas($A1, $drone);
+check('it is fetched only over itself', count($w) === 1 && $w[0]['west'] === -105.3 && $w[0]['east'] === -105.295 && $w[0]['north'] === 38.524);
+check('so zoom 21 over it costs a few hundred tiles, not the whole area\'s 700,000', FieldCampTiles::layerTileCount($A1, $drone, 21) < 1500 && FieldCampTiles::tileCountAreas($A1, 21) > 500000,
+	FieldCampTiles::layerTileCount($A1, $drone, 21));
+$away = FieldCampTiles::layers(array(FieldCampPackage::customMap('fctilesaway', 'Away', '-100,30,-99,31')))['fctilesaway'];
+check('a custom map outside every area has no tiles', FieldCampTiles::layerAreas($A1, $away) === array() && FieldCampTiles::layerTileCount($A1, $away, 15) === 0);
+check('a basemap covers the whole area', FieldCampTiles::layerAreas($A1, $basemaps['macrostrat']) === $A1);
+
+$campid = new_camp('Tiles Camp', $AREA);
+$camp = FieldCamp::getCamp($db, $campid);
+check('nothing saved yet: every map is selected', FieldCampTiles::chosenLayerIds($camp, $basemaps) === array_keys($basemaps));
+list($z, $ids, $own, $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 15, array('mapbox.outdoors', 'macrostrat', 'no.such.map', 'macrostrat', 17));
+check('a good choice passes; unknown and repeated maps are dropped', !$errs && $z === 15 && $ids === array('mapbox.outdoors', 'macrostrat') && $own === array(), $errs);
+list(, , , $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 15, array());
+check('no map selected is refused', count($errs) === 1 && strpos($errs[0], 'at least one map') !== false, $errs);
+list(, , , $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 23, array('macrostrat'));
+check('a zoom for all maps past ' . FieldCampTiles::MAX_ZOOM . ' is refused', count($errs) === 1 && strpos($errs[0], 'from 10 to 22') !== false, $errs);
+list(, , , $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 3, array('macrostrat'));
+check('so is one below ' . FieldCampTiles::MIN_ZOOM, count($errs) === 1, $errs);
+list($z, $ids, $own, $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 20, array('macrostrat', 'mapbox.outdoors'));
+check('a zoom for all maps deeper than some maps go is fine: they stop at their deepest', !$errs && $z === 20, $errs);
+list($z, $ids, $own, $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 12, array('macrostrat', 'mapbox.satellite'), array('mapbox.satellite' => 17, 'no.such.map' => 14));
+check('a map\'s own zoom passes; unknown maps are dropped', !$errs && $own === array('mapbox.satellite' => 17), array($own, $errs));
+list(, , , $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 12, array('macrostrat'), array('macrostrat' => 17));
+check('a map\'s own zoom past its deepest is refused, by name', count($errs) === 1 && strpos($errs[0], 'Geology from macrostrat: choose a zoom from 10 to 16') === 0, $errs);
+$bigid = new_camp('Big Tiles Camp', $big);
+list(, , , $errs) = FieldCampTiles::validateChoice(FieldCamp::getCamp($db, $bigid), $basemaps, 16, array('macrostrat'));
+check('a zoom the area is too large for is refused, naming the map and the count', count($errs) === 1 && strpos($errs[0], 'Geology from macrostrat: zoom 16 needs') === 0 && strpos($errs[0], 'per map') !== false, $errs);
+list(, , , $errs) = FieldCampTiles::validateChoice(FieldCamp::getCamp($db, $bigid), $basemaps, 16, array('macrostrat', 'mapbox.outdoors'), array('macrostrat' => 12, 'mapbox.outdoors' => 12));
+check('the same area at a lower own zoom per map passes', !$errs, $errs);
+// The limit on all tiles together: five maps of 5,001 to 6,000 tiles each
 $mid = null;
 for ($w = 0.30; $w < 0.60 && $mid === null; $w += 0.005) {
 	$try = array('west' => -105.6, 'south' => 38.3, 'east' => -105.6 + $w, 'north' => 38.3 + $w * 0.7);
 	$n = FieldCampTiles::tileCount($try, 16);
 	if ($n > 5000 && $n <= 6000) $mid = $try;
 }
-$five = $mid ? FieldCampTiles::options($mid, array_values($withMap)) : array();
-$one = $mid ? FieldCampTiles::options($mid, array($basemaps['macrostrat'])) : array();
-check('with five maps the limit on all tiles together refuses a zoom that one map may have', $mid !== null && $five[5]['allowed'] === false && strpos($five[5]['why'], 'tiles in all') !== false
-	&& $five[4]['allowed'] === true && $one[5]['allowed'] === true, array($mid, $five ? $five[5] : null));
-
-$campid = new_camp('Tiles Camp', $AREA);
-$camp = FieldCamp::getCamp($db, $campid);
-check('nothing saved yet: every map is selected', FieldCampTiles::chosenLayerIds($camp, $basemaps) === array_keys($basemaps));
-list($z, $ids, $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 15, array('mapbox.outdoors', 'macrostrat', 'no.such.map', 'macrostrat', 17));
-check('a good choice passes; unknown and repeated maps are dropped', !$errs && $z === 15 && $ids === array('mapbox.outdoors', 'macrostrat'), $errs);
-list(, , $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 15, array());
-check('no map selected is refused', count($errs) === 1 && strpos($errs[0], 'at least one map') !== false, $errs);
-list(, , $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 17, array('macrostrat'));
-check('a zoom past the ceiling is refused', count($errs) === 1 && strpos($errs[0], 'zoom levels listed') !== false, $errs);
-list(, , $errs) = FieldCampTiles::validateChoice($camp, $basemaps, 3, array('macrostrat'));
-check('so is a zoom below the list', count($errs) === 1, $errs);
-$bigid = new_camp('Big Tiles Camp', $big);
-list(, , $errs) = FieldCampTiles::validateChoice(FieldCamp::getCamp($db, $bigid), $basemaps, 16, array('macrostrat'));
-check('a zoom the area is too large for is refused, with the reason', count($errs) === 1 && strpos($errs[0], 'Zoom 16 is not available') !== false && strpos($errs[0], 'smaller study area') !== false, $errs);
+$midid = new_camp('Mid Tiles Camp', $mid);
+$five = FieldCampTiles::layers(array(FieldCampPackage::customMap('fctilesfive', 'Five', '')));
+list(, , , $errs) = FieldCampTiles::validateChoice(FieldCamp::getCamp($db, $midid), $five, 16, array_keys($five), array('mapbox.satellite' => 16));
+check('five maps over 25,000 tiles together are refused', $mid !== null && count($errs) === 1 && strpos($errs[0], 'tiles in all') !== false, $errs);
+list(, , , $errs) = FieldCampTiles::validateChoice(FieldCamp::getCamp($db, $midid), $five, 16, array('macrostrat'));
+check('one of them alone passes', !$errs, $errs);
 $noareaid = new_camp('No Area Tiles Camp', null);
-list(, , $errs) = FieldCampTiles::validateChoice(FieldCamp::getCamp($db, $noareaid), $basemaps, 15, array('macrostrat'));
+list(, , , $errs) = FieldCampTiles::validateChoice(FieldCamp::getCamp($db, $noareaid), $basemaps, 15, array('macrostrat'));
 check('no study area: refused', $errs === array('Choose the study area first.'), $errs);
 
 // ===========================================================================
 section('Building (tile server replaced by a stand-in)');
 FieldCampPackage::saveMaps($db, $camp, array(array('hash' => 'fctilestest01', 'chosen' => true, 'title' => 'Canon City Map')));
-$layers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+$layers = FieldCampTiles::campLayers($db, $camp);
 check('the camp has five maps to offer', count($layers) === 5);
 FieldCampTiles::saveChoice($db, $camp, 15, array('mapbox.outdoors', 'macrostrat', 'fctilestest01'));
 $camp = FieldCamp::getCamp($db, $campid);
@@ -396,7 +433,7 @@ $tz->close(); $zip->close(); unlink($tmp); unlink($inner);
 
 FieldCampPackage::saveMaps($db, $camp, array());
 $camp = FieldCamp::getCamp($db, $campid);
-$layersNow = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+$layersNow = FieldCampTiles::campLayers($db, $camp);
 $data2 = json_decode(json_encode(FieldCampPackage::buildData($db, $camp)));
 check('a custom map taken out of the project is not listed as an offline map either', array_keys(get_object_vars($data2->mapNamesDb)) === array('mapbox.outdoors', 'macrostrat'));
 check('and the tiles are reported as out of date', FieldCampTiles::outdated($camp, FieldCampTiles::manifest($camp), $layersNow) === 'The selected maps have changed since the tiles were built.');
@@ -421,18 +458,21 @@ list($code) = http('GET', "/field_camp?id=$campid&step=tiles", $sidO);
 check('an outsider gets 404', $code === 404, $code);
 list($code, $body) = http('GET', "/field_camp?id=$campid&step=tiles", $sidI);
 check('the owner opens the step', $code === 200 && !php_error($body) && strpos($body, 'Offline maps') !== false, $code);
-check('five maps, the saved three selected', substr_count($body, 'class="fc-tileline"') === 5 && preg_match('~id="fcTmapbox\.outdoors" checked~', $body) === 1 && preg_match('~id="fcTmapbox\.satellite" checked~', $body) === 0
+check('five maps, the saved three selected', substr_count($body, 'class="fc-tilerow fc-tileline"') === 5 && preg_match('~id="fcTmapbox\.outdoors" checked~', $body) === 1 && preg_match('~id="fcTmapbox\.satellite" checked~', $body) === 0
 	&& preg_match('~id="fcTfctilestest01" checked~', $body) === 1 && strpos($body, 'Canon City Map') !== false);
-check('six zoom rows with scale and tiles per map; the saved zoom is selected', substr_count($body, 'class="fc-zoomline" data-zoom=') === 6 && preg_match('~id="fcZ15" value="15" checked~', $body) === 1
-	&& strpos($body, '1:14,120') !== false && strpos($body, '>303<') !== false && strpos($body, '>1,077<') !== false);
+check('a zoom for all maps from 10 to 22 with scales, the saved one selected; each map has its own zoom list to its deepest',
+	substr_count($body, '<option value="', strpos($body, 'id="fcZoomAll"')) >= 13 && strpos($body, '<option value="15" selected>Zoom 15 (1:14,120)</option>') !== false
+	&& strpos($body, '<option value="22">Zoom 22 (') !== false && substr_count($body, 'class="fc-tile-zoom"') === 5
+	&& strpos($body, '<option value="16">Zoom 16 (deepest)</option>') !== false && strpos($body, '<option value="19">Zoom 19 (deepest)</option>') !== false);
+check('the page gets every map\'s tile counts per zoom', strpos($body, '"mapbox.outdoors":{"10":') !== false && strpos($body, '"15":303,"16":1077,"17":') !== false);
 check('the last build is reported', strpos($body, 'Offline maps built') !== false && strpos($body, '21 tiles in 3 maps.') !== false);
 check('one button: Next saves (and builds when needed); there is no separate build button', strpos($body, 'id="fcTileNextBtn" data-fc-next="units">Next: Rock units') !== false
 	&& strpos($body, 'Save and build') === false && strpos($body, 'fcTileBuildBtn') === false && strpos($body, 'name="action" value="tiles_save"') !== false);
 check('offline maps are switched on, and no build is shown as running', preg_match('~id="fcTilesOn" checked~', $body) === 1 && strpos($body, 'id="fcTileOffline" value="1"') !== false && strpos($body, 'id="fcBuildBox"') === false);
-check('a preview map and the provisional ceiling are on the page', strpos($body, 'id="fcTileMap"') !== false && strpos($body, 'Zoom 16 is the deepest level offered for now') !== false);
+check('a preview map and the note on custom maps are on the page', strpos($body, 'id="fcTileMap"') !== false && strpos($body, 'its tiles are saved only') !== false);
 list($code, $body) = http('GET', "/field_camp?id=$bigid&step=tiles", $sidI);
-check('a new camp starts with offline maps switched on, on its default zoom with every map selected', $code === 200 && !php_error($body) && substr_count($body, ' checked') === 6 && preg_match('~id="fcTilesOn" checked~', $body) === 1
-	&& preg_match('~id="fcZ' . FieldCampTiles::defaultZoom($bigOpts) . '" value="\d+" checked~', $body) === 1, substr_count($body, ' checked'));
+check('a new camp starts with offline maps switched on, on its default zoom with every map selected', $code === 200 && !php_error($body) && substr_count($body, ' checked') === 5 && preg_match('~id="fcTilesOn" checked~', $body) === 1
+	&& strpos($body, '<option value="' . FieldCampTiles::defaultZoom($B1, array_values($basemaps)) . '" selected>') !== false, substr_count($body, ' checked'));
 list($code, $body) = http('GET', "/field_camp?id=$noareaid&step=tiles", $sidI);
 check('without a study area the step says so', $code === 200 && !php_error($body) && strpos($body, 'Choose the study area first') !== false && strpos($body, 'fcTileForm') === false);
 list($code, $body) = http('GET', "/field_camp?id=$campid&ajax=build", $sidI);
@@ -441,8 +481,8 @@ check('the build state is answered as JSON', $code === 200 && is_array($st) && $
 list($code) = http('GET', "/field_camp?id=$campid&ajax=build", $sidO);
 check('not to an outsider', $code === 404, $code);
 
-list($code, $body) = post_follow($sidI, array('action' => 'tiles_build', 'id' => $campid, 'zoom' => '19', 'layers_json' => json_encode(array('macrostrat'))));
-check('a zoom that is not offered is refused and nothing starts', strpos($body, 'Choose one of the zoom levels listed.') !== false && FieldCamp::getCamp($db, $campid)->build_status === 'ready' && (int)FieldCamp::getCamp($db, $campid)->tiles_zoom === 15);
+list($code, $body) = post_follow($sidI, array('action' => 'tiles_build', 'id' => $campid, 'zoom' => '23', 'layers_json' => json_encode(array('macrostrat'))));
+check('a zoom that is not offered is refused and nothing starts', strpos($body, 'Choose a zoom for all maps from 10 to 22.') !== false && FieldCamp::getCamp($db, $campid)->build_status === 'ready' && (int)FieldCamp::getCamp($db, $campid)->tiles_zoom === 15);
 list($code, $body) = post_follow($sidI, array('action' => 'tiles_build', 'id' => $campid, 'zoom' => '15', 'layers_json' => '[]'));
 check('no map selected is refused', strpos($body, 'Select at least one map') !== false && FieldCamp::getCamp($db, $campid)->build_status === 'ready');
 // Next (tiles_save) builds only when the built tiles do not match the choice.

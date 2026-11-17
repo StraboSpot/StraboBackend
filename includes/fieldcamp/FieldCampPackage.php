@@ -262,6 +262,18 @@ class FieldCampPackage
 		return $out;
 	}
 
+	/** The deepest zoom of each of the camp's custom maps, from its GeoTIFF's resolution: hash => zoom. */
+	public static function customMapZooms($db, $camp)
+	{
+		require_once __DIR__ . '/FieldCampTiles.php';
+		$out = array();
+		foreach (self::listCampMaps($db, $camp->pkey) as $m) {
+			$g = $db->get_row_prepared("select hash, gdalinfo from geotiffs where hash = $1", array($m->geotiff_hash));
+			if ($g) $out[$g->hash] = FieldCampTiles::nativeZoom($g->gdalinfo);
+		}
+		return $out;
+	}
+
 	// -------------------------------------------------------------------
 	// The package
 	// -------------------------------------------------------------------
@@ -478,7 +490,7 @@ class FieldCampPackage
 		if ($camp->bbox_west === null || $camp->bbox_west === '') return 'none';
 		if (!FieldCampTiles::installed($db)) return 'ready';
 		if (FieldCampTiles::isBuilding($camp)) return 'building';
-		$layers = FieldCampTiles::layers(self::customMapsForCamp($db, $camp));
+		$layers = FieldCampTiles::campLayers($db, $camp);
 		return FieldCampTiles::needsBuild($camp, $layers) ? 'none' : 'ready';
 	}
 

@@ -336,7 +336,7 @@ class FieldCamp
 		if ($inactive === $accounts) return array('key' => 'closed', 'label' => 'Closed', 'note' => 'All accounts are deactivated');
 
 		if ($tiles) {
-			$layers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+			$layers = FieldCampTiles::campLayers($db, $camp);
 			if (FieldCampTiles::needsBuild($camp, $layers)) {
 				$manifest = FieldCampTiles::manifest($camp);
 				$note = $manifest ? 'Offline maps are out of date' : ((string)$camp->build_status !== '' ? 'The offline maps could not be built' : 'Offline maps are not built yet');

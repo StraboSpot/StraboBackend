@@ -241,6 +241,13 @@ ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS study_areas TEXT;
 ALTER TABLE fieldcamp ALTER COLUMN units_bbox TYPE TEXT;
 
 -- ---------------------------------------------------------------------------
+-- A zoom per offline map (2026-11-17). tiles_zoom stays the zoom for all maps;
+-- tiles_layer_zooms is a JSON object {map id: zoom} for the maps given their
+-- own. Each map stops at its own deepest zoom (FieldCampTiles).
+-- ---------------------------------------------------------------------------
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS tiles_layer_zooms TEXT;
+
+-- ---------------------------------------------------------------------------
 -- Privileges. Tables are created by the superuser (postgres) but the web app
 -- connects as strabodbuser, with a readonly role for reporting.
 -- (GRANT is idempotent, so this is safe to re-run.)

@@ -150,7 +150,7 @@ function tile_stub($emptyFor = array()) {
 function build_now($db, $campid) {
 	$db->prepare_query("update fieldcamp set build_status = 'building', build_started = now(), build_message = 'Starting...' where pkey = $1", array($campid));
 	$camp = FieldCamp::getCamp($db, $campid);
-	return FieldCampTiles::build($db, $camp, FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp)));
+	return FieldCampTiles::build($db, $camp, FieldCampTiles::campLayers($db, $camp));
 }
 
 cleanup();
@@ -226,10 +226,9 @@ for ($i = 0; $i < 60; $i++) {
 	if (FieldCampTiles::tileCountAreas($boxes, $z) !== union_count($boxes, $z)) $bad[] = array($boxes, $z);
 }
 check('60 random sets of up to four boxes: the count is the tiles they cover', !$bad, $bad);
-$opts = FieldCampTiles::options(array($A1, $A3), array_values(FieldCampTiles::layers(array())));
-$row14 = null; foreach ($opts as $o) if ($o['zoom'] === 14) $row14 = $o;
-check('the zoom choices count every area', $row14 && $row14['per_map'] === union_count(array($A1, $A3), 14), $row14);
-check('options() still takes one area as before', FieldCampTiles::options($A1, array_values(FieldCampTiles::layers(array())))[0]['per_map'] === FieldCampTiles::tileCount($A1, 11));
+$table = FieldCampTiles::countTable(array($A1, $A3), array_values(FieldCampTiles::layers(array())));
+check('the per-map counts cover every area', $table['macrostrat'][14] === union_count(array($A1, $A3), 14), $table['macrostrat'][14] ?? null);
+check('and the default zoom weighs all of them', FieldCampTiles::defaultZoom(array($A1, $A3), array_values(FieldCampTiles::layers(array()))) >= FieldCampTiles::MIN_ZOOM);
 
 // ===========================================================================
 section('Building offline maps for several areas');
@@ -264,6 +263,66 @@ tile_stub(array(FieldCampUnits::bboxString($A1), FieldCampUnits::bboxString($A2)
 $out = build_now($db, $campid);
 check('a map with no tiles anywhere is skipped as before', count($out['skipped']) === 1 && $out['skipped'][0]['reason'] === 'the map server sent no tiles', $out);
 FieldCampTiles::$http = null; FieldCampTiles::$pollSeconds = 2;
+
+// ===========================================================================
+section('Each map to its own zoom (2026-11-17)');
+FieldCamp::saveAreas($db, $campid, array(array('name' => 'Mapping area') + $A1, array('name' => 'Day trip') + $A3));
+// A drone mosaic inside the mapping area: the GeoTIFF reads as zoom 21.
+$db->prepare_query("insert into geotiffs (userpkey, hash, name, gdalinfo) values ($1, 'fcareastest02', 'Drone.tif', $2)", array($INSTR,
+	"Size is 8700, 8900\nCorner Coordinates:\nUpper Left  (-105.3600000,  38.5400000) (105d21'36.00\"W, 38d32'24.00\"N)\nLower Left  (-105.3600000,  38.5300000) (105d21'36.00\"W, 38d31'48.00\"N)\n"
+	. "Upper Right (-105.3500000,  38.5400000) (105d21' 0.00\"W, 38d32'24.00\"N)\nLower Right (-105.3500000,  38.5300000) (105d21' 0.00\"W, 38d31'48.00\"N)\n"));
+FieldCampPackage::saveMaps($db, FieldCamp::getCamp($db, $campid), array(array('hash' => 'fcareastest02', 'chosen' => true, 'title' => 'Drone')));
+$camp = FieldCamp::getCamp($db, $campid);
+$layers = FieldCampTiles::campLayers($db, $camp);
+check('the drone map\'s deepest zoom comes from its file (10 cm pixels: zoom 21)', $layers['fcareastest02']['max_zoom'] === 21, $layers['fcareastest02']['max_zoom']);
+FieldCampTiles::saveChoice($db, $camp, 12, array('mapbox.outdoors', 'macrostrat', 'fcareastest02'), array('mapbox.outdoors' => 14, 'fcareastest02' => 18));
+$camp = FieldCamp::getCamp($db, $campid);
+check('the own zooms are saved', FieldCampTiles::zoomOverrides($camp) === array('mapbox.outdoors' => 14, 'fcareastest02' => 18));
+check('each map\'s zoom: own, else for all maps', FieldCampTiles::layerZoom($camp, $layers['mapbox.outdoors']) === 14 && FieldCampTiles::layerZoom($camp, $layers['macrostrat']) === 12
+	&& FieldCampTiles::layerZoom($camp, $layers['fcareastest02']) === 18);
+FieldCampTiles::saveChoice($db, $camp, 20, array('mapbox.outdoors', 'macrostrat', 'fcareastest02'));
+$camp = FieldCamp::getCamp($db, $campid);
+check('a zoom for all maps past a map\'s deepest stops at its deepest; own zooms are kept when not sent', FieldCampTiles::layerZoom($camp, $layers['macrostrat']) === 16
+	&& FieldCampTiles::layerZoom($camp, $layers['mapbox.outdoors']) === 14);
+FieldCampTiles::saveChoice($db, $camp, 12, array('mapbox.outdoors', 'macrostrat', 'fcareastest02'));
+$camp = FieldCamp::getCamp($db, $campid);
+tile_stub();
+$out = build_now($db, $campid);
+$camp = FieldCamp::getCamp($db, $campid);
+$m = FieldCampTiles::manifest($camp);
+$byId = array(); foreach ($m['layers'] as $l) $byId[$l['id']] = $l;
+$droneArea = array('west' => -105.36, 'south' => 38.53, 'east' => -105.35, 'north' => 38.54);
+$zipFor = function ($layer) use ($asked) { return array_values(array_filter($asked, function ($u) use ($layer) { return strpos($u, '/asynczip?') !== false && strpos($u, $layer) !== false; })); };
+check('built: every map at its own zoom', $out['error'] === '' && $byId['mapbox.outdoors']['zoom'] === 14 && $byId['macrostrat']['zoom'] === 12 && $byId['fcareastest02']['zoom'] === 18, $m['layers']);
+check('counts match each map\'s zoom', $byId['mapbox.outdoors']['count'] === union_count(array($A1, $A3), 14) && $byId['macrostrat']['count'] === union_count(array($A1, $A3), 12)
+	&& $byId['fcareastest02']['count'] === union_count(array($droneArea), 18));
+$dz = $zipFor('fcareastest02');
+check('the drone map is asked for once, over itself only (not the day trip, not the rest of the mapping area), at 18',
+	count($dz) === 1 && strpos($dz[0], 'extent=' . FieldCampUnits::bboxString($droneArea) . '&zoom=18') !== false, $dz);
+check('the built tiles are current', FieldCampTiles::outdated($camp, $m, $layers) === '');
+FieldCampTiles::saveChoice($db, $camp, 12, array('mapbox.outdoors', 'macrostrat', 'fcareastest02'), array('mapbox.outdoors' => 14, 'fcareastest02' => 19));
+$camp = FieldCamp::getCamp($db, $campid);
+check('changing one map\'s own zoom makes them out of date', FieldCampTiles::outdated($camp, $m, $layers) === "The zoom has changed since the tiles were built.");
+FieldCampTiles::saveChoice($db, $camp, 12, array('mapbox.outdoors', 'macrostrat', 'fcareastest02'), array('mapbox.outdoors' => 14, 'fcareastest02' => 18));
+$camp = FieldCamp::getCamp($db, $campid);
+$old = $m; unset($old['layers'][0]['zoom'], $old['layers'][1]['zoom'], $old['layers'][2]['zoom']); $old['zoom'] = 12;
+FieldCampTiles::saveChoice($db, $camp, 12, array('macrostrat'), array());
+check('a build from before (one zoom in the manifest) still reads as current when nothing changed', FieldCampTiles::outdated(FieldCamp::getCamp($db, $campid), array('layers' => array($old['layers'][1])) + $old, $layers) === '');
+FieldCampTiles::saveChoice($db, $camp, 12, array('mapbox.outdoors', 'macrostrat', 'fcareastest02'), array('mapbox.outdoors' => 14, 'fcareastest02' => 18));
+FieldCampTiles::$http = null; FieldCampTiles::$pollSeconds = 2;
+
+// over HTTP
+$sidZ = forge($INSTR, $FIX[$INSTR]);
+list($code, $body) = http('GET', "/field_camp?id=$campid&step=tiles", $sidZ);
+check('the step shows a zoom for all maps and each map\'s own', $code === 200 && !noisy($body) && strpos($body, 'id="fcZoomAll"') !== false && substr_count($body, 'class="fc-tile-zoom"') === 5
+	&& strpos($body, '<option value="21">Zoom 21 (deepest)</option>') !== false && strpos($body, '"own":{"mapbox.outdoors":14,"fcareastest02":18}') !== false);
+list($code, $body, $loc) = post_follow($sidZ, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'tiles', 'zoom' => '12',
+	'layers_json' => json_encode(array('mapbox.outdoors', 'macrostrat', 'fcareastest02')), 'zooms_json' => json_encode(array('mapbox.outdoors' => 14, 'fcareastest02' => 18))));
+check('Next with the built choice does not build again', strpos($body, 'up to date') !== false && FieldCamp::getCamp($db, $campid)->build_status === 'ready', $loc);
+list($code, $body) = post_follow($sidZ, array('action' => 'tiles_save', 'id' => $campid, 'goto' => 'tiles', 'zoom' => '12',
+	'layers_json' => json_encode(array('macrostrat')), 'zooms_json' => json_encode(array('macrostrat' => 18))));
+check('an own zoom past the map\'s deepest is refused over HTTP too', strpos($body, 'Geology from macrostrat: choose a zoom from 10 to 16') !== false
+	&& FieldCampTiles::zoomOverrides(FieldCamp::getCamp($db, $campid)) === array('mapbox.outdoors' => 14, 'fcareastest02' => 18));
 
 // ===========================================================================
 section('Rock units: one lookup per area, merged');
