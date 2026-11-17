@@ -272,7 +272,7 @@ if($action === 'basics'){
 
 }elseif($action === 'camp_delete'){
 
-	$back = $here . "basics&delete=1#fcDelete";
+	$back = $here . "basics&delete=1" . (($_POST['from'] ?? '') === 'list' ? "&from=list" : "") . "#fcDelete";
 	if(trim((string)($_POST['confirm'] ?? '')) !== trim((string)$camp->camp_name)){
 		fc_back($back, '', "The name you typed does not match this camp. Nothing was deleted.");
 	}
