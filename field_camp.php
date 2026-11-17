@@ -585,6 +585,9 @@ if($step === 'area'){
 			// Put an area's box, handles, label and size where its box says.
 			function place(a, bx, keep){
 				a.rect.setBounds(boundsOf(bx));
+				// Leaflet places a permanent label once; it follows the box only when told to.
+				var tip = a.rect.getTooltip();
+				if(tip) tip.setLatLng([(bx.south + bx.north) / 2, (bx.west + bx.east) / 2]);
 				var pts = handlePoints(bx);
 				a.handles.forEach(function(m, i){ if(m !== keep) m.setLatLng(pts[i]); });
 				a.size.textContent = sizeText(bx);
