@@ -2,11 +2,13 @@
 /**
  * File: tests/fieldcamp/api_package_test.php
  * Description: Suite for the app side of the Field Camp Wizard (stage 7):
- *              GET /db/profile carries "field_camp" for a camp account
- *              (FieldCampPackage::profileKey), GET / HEAD /db/fieldCampPackage
- *              serves the camp's package (cached per version, byte ranges),
- *              POST /db/fieldCampPackage/installed records what the app
- *              loaded, POST /db/profile never stores the key.
+ *              GET /db/profile lists "prepared_projects" for a camp account
+ *              (FieldCampPackage::preparedProjects, generic since 2026-11-17),
+ *              GET / HEAD /db/projectPackage/{id} serves the camp's package
+ *              (cached per version, byte ranges), POST
+ *              /db/projectPackage/{id}/installed records what the app loaded,
+ *              POST /db/profile never stores the key, and the first address
+ *              /db/fieldCampPackage still answers.
  *
  *              Two camps of one instructor, each with accounts; offline maps
  *              are switched off or faked so no tile server is needed.
@@ -113,6 +115,8 @@ function call($method, $path, $user, $json = null, $headers = array()) {
 	return array($code, substr((string)$raw, $hs), substr((string)$raw, 0, $hs));
 }
 function hdr($headers, $name) { return preg_match('/^' . preg_quote($name, '/') . ':\s*(.+)$/mi', $headers, $m) ? trim($m[1]) : ''; }
+/** A profile's first prepared project (a camp account has exactly one), or null. */
+function pp($p) { return is_array($p) ? ($p['prepared_projects'][0] ?? null) : null; }
 function profile($user) { list($code, $body) = call('GET', 'profile', $user); return array($code, json_decode($body, true)); }
 function new_camp($name, $accounts, $template) {
 	global $db, $neodb, $INSTR, $PW;
@@ -164,31 +168,31 @@ $A1 = (int)$acc[0]->user_pkey; $A2 = (int)$acc[1]->user_pkey;
 // ===========================================================================
 section('GET /db/profile');
 list($code, $p) = profile(null);
-check('an ordinary account: the profile as always, without the key', $code === 200 && is_array($p) && !array_key_exists('field_camp', $p) && (int)$p['straboUserId'] === $INSTR, $p);
+check('an ordinary account: the profile as always, without the key', $code === 200 && is_array($p) && !array_key_exists('prepared_projects', $p) && !array_key_exists('field_camp', $p) && (int)$p['straboUserId'] === $INSTR, $p);
 list($code, $p) = profile('fctest99_a1');
-$fc = $p['field_camp'] ?? null;
+$fc = pp($p) ?? null;
 check('a camp account: the usual profile plus field_camp', $code === 200 && is_array($fc) && (int)$p['straboUserId'] === $A1, $p);
 $camp = FieldCamp::getCamp($db, $campid);
-check('it names the camp and the project', $fc && $fc['camp_name'] === 'Api Camp' && $fc['camp_year'] === 2027 && $fc['project_name'] === 'Api Camp Project' && $fc['project_id'] === (string)$camp->project_id && $fc['project_id'] !== '', $fc);
+check('it has an id, its kind, a title and the project', $fc && $fc['id'] === "c$campid" && $fc['kind'] === 'field_camp' && $fc['title'] === 'Api Camp' && !isset($fc['camp_name'], $fc['camp_year']) && $fc['project_name'] === 'Api Camp Project' && $fc['project_id'] === (string)$camp->project_id && $fc['project_id'] !== '', $fc);
 $pk = $fc['package'] ?? array();
-check('the package is ready, with where to get it, its version, date and size', ($pk['status'] ?? '') === 'ready' && $pk['url'] === 'http://localhost/db/fieldCampPackage' && preg_match('/^[a-f0-9]{12}$/', $pk['version']) === 1
+check('the package is ready, with where to get it, its version, date and size', ($pk['status'] ?? '') === 'ready' && $pk['url'] === "http://localhost/db/projectPackage/c$campid" && preg_match('/^[a-f0-9]{12}$/', $pk['version']) === 1
 	&& preg_match('/^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ$/', $pk['updated']) === 1 && $pk['size'] > 500 && $pk['offline_maps'] === 0 && $pk['tags'] === 0 && array_key_exists('installed_version', $pk) && $pk['installed_version'] === null, $pk);
 $V = $pk['version'];
 list($code, $p2) = profile('fctest99_a2');
-check('the version is the same for a classmate and from call to call', $p2['field_camp']['package']['version'] === $V && profile('fctest99_a1')[1]['field_camp']['package']['version'] === $V);
+check('the version is the same for a classmate and from call to call', pp($p2)['package']['version'] === $V && pp(profile('fctest99_a1')[1])['package']['version'] === $V);
 list($code, $pb) = profile('fctest99_b1');
-check('an account of another camp is told about its own camp', $pb['field_camp']['camp_name'] === 'Other Api Camp' && $pb['field_camp']['project_id'] !== $fc['project_id'] && $pb['field_camp']['package']['version'] !== $V);
-check('on the production host the address is https', (function () { $_SERVER['HTTP_HOST'] = 'strabospot.org'; require_once 'db/controllers/MyController.php'; require_once 'db/controllers/FieldCampPackageController.php';
-	$a = FieldCampPackageController::serverBase(); $_SERVER['HTTP_HOST'] = 'localhost'; $b = FieldCampPackageController::serverBase(); unset($_SERVER['HTTP_HOST']); return $a === 'https://strabospot.org' && $b === 'http://localhost'; })());
+check('an account of another camp is told about its own camp', pp($pb)['title'] === 'Other Api Camp' && pp($pb)['id'] === "c$otherid" && pp($pb)['project_id'] !== $fc['project_id'] && pp($pb)['package']['version'] !== $V);
+check('on the production host the address is https', (function () { $_SERVER['HTTP_HOST'] = 'strabospot.org'; require_once 'db/controllers/MyController.php'; require_once 'db/controllers/ProjectPackageController.php';
+	$a = ProjectPackageController::serverBase(); $_SERVER['HTTP_HOST'] = 'localhost'; $b = ProjectPackageController::serverBase(); unset($_SERVER['HTTP_HOST']); return $a === 'https://strabospot.org' && $b === 'http://localhost'; })());
 
 // ===========================================================================
-section('GET /db/fieldCampPackage');
-list($code, $body) = call('GET', 'fieldCampPackage', null);
-check('an ordinary account has no package: 404', $code === 404 && strpos($body, 'no field camp package') !== false, "$code $body");
-list($code, $zipBytes, $h) = call('GET', 'fieldCampPackage', 'fctest99_a1');
+section('GET /db/projectPackage/{id}');
+list($code, $body) = call('GET', "projectPackage/c$campid", null);
+check('an ordinary account has no package: 404', $code === 404 && strpos($body, 'no such prepared project') !== false, "$code $body");
+list($code, $zipBytes, $h) = call('GET', "projectPackage/c$campid", 'fctest99_a1');
 list($ok, $pid, $pname, $hasTiles) = unpack_zip($zipBytes);
 check('a camp account gets the zip', $code === 200 && hdr($h, 'Content-Type') === 'application/zip' && substr($zipBytes, 0, 2) === 'PK' && $ok, "$code " . substr($zipBytes, 0, 200));
-check('with its exact size, its version and a file name', (int)hdr($h, 'Content-Length') === strlen($zipBytes) && hdr($h, 'ETag') === '"' . $V . '"' && hdr($h, 'X-Field-Camp-Package-Version') === $V
+check('with its exact size, its version and a file name', (int)hdr($h, 'Content-Length') === strlen($zipBytes) && hdr($h, 'ETag') === '"' . $V . '"' && hdr($h, 'X-Package-Version') === $V
 	&& hdr($h, 'Accept-Ranges') === 'bytes' && preg_match('/filename="\d{4}-\d\d-\d\d_Api_Camp_Project\.zip"/', hdr($h, 'Content-Disposition')) === 1, $h);
 check('it is the camp\'s project, the one the profile named', $pid === $fc['project_id'] && $pname === 'Api Camp Project' && !$hasTiles, array($pid, $pname));
 $camp = FieldCamp::getCamp($db, $campid);
@@ -196,53 +200,53 @@ $dir = FieldCampTiles::dir($camp);
 $file = "$dir/package_$V.zip";
 check('the file is kept in the camp\'s folder under its version', $dir !== null && is_file($file) && filesize($file) === strlen($zipBytes), $file);
 $mtime = filemtime($file); clearstatcache();
-list($code, $again) = call('GET', 'fieldCampPackage', 'fctest99_a2');
+list($code, $again) = call('GET', "projectPackage/c$campid", 'fctest99_a2');
 clearstatcache();
 check('a classmate gets the very same file, not a new build', $code === 200 && $again === $zipBytes && filemtime($file) === $mtime);
-list($code, $bodyB) = call('GET', 'fieldCampPackage', 'fctest99_b1');
-check('the other camp\'s account gets the other camp\'s project', $code === 200 && unpack_zip($bodyB)[1] === $pb['field_camp']['project_id'] && unpack_zip($bodyB)[2] === 'Other Api Camp Project');
+list($code, $bodyB) = call('GET', "projectPackage/c$otherid", 'fctest99_b1');
+check('the other camp\'s account gets the other camp\'s project', $code === 200 && unpack_zip($bodyB)[1] === pp($pb)['project_id'] && unpack_zip($bodyB)[2] === 'Other Api Camp Project');
 list($code, , $token) = call('GET', "../fieldcamp_files/" . basename($dir) . "/package_$V.zip", 'fctest99_a1');
 check('the kept file cannot be fetched from the web by its address', $code === 403, $code);
 
-list($code, $part, $h) = call('GET', 'fieldCampPackage', 'fctest99_a1', null, array('Range: bytes=0-99'));
+list($code, $part, $h) = call('GET', "projectPackage/c$campid", 'fctest99_a1', null, array('Range: bytes=0-99'));
 check('a byte range: 206 with just those bytes', $code === 206 && $part === substr($zipBytes, 0, 100) && hdr($h, 'Content-Range') === 'bytes 0-99/' . strlen($zipBytes) && (int)hdr($h, 'Content-Length') === 100, "$code " . hdr($h, 'Content-Range'));
-list($code, $rest, $h) = call('GET', 'fieldCampPackage', 'fctest99_a1', null, array('Range: bytes=100-', 'If-Range: "' . $V . '"'));
+list($code, $rest, $h) = call('GET', "projectPackage/c$campid", 'fctest99_a1', null, array('Range: bytes=100-', 'If-Range: "' . $V . '"'));
 check('the rest of a broken download, for the version it started on', $code === 206 && $part . $rest === $zipBytes, $code);
-list($code, $whole) = call('GET', 'fieldCampPackage', 'fctest99_a1', null, array('Range: bytes=100-', 'If-Range: "000000000000"'));
+list($code, $whole) = call('GET', "projectPackage/c$campid", 'fctest99_a1', null, array('Range: bytes=100-', 'If-Range: "000000000000"'));
 check('a range for another version gets the whole new file', $code === 200 && $whole === $zipBytes, $code);
-list($code, , $h) = call('GET', 'fieldCampPackage', 'fctest99_a1', null, array('Range: bytes=' . (strlen($zipBytes) + 10) . '-'));
+list($code, , $h) = call('GET', "projectPackage/c$campid", 'fctest99_a1', null, array('Range: bytes=' . (strlen($zipBytes) + 10) . '-'));
 check('a range past the end: 416', $code === 416 && hdr($h, 'Content-Range') === 'bytes */' . strlen($zipBytes), $code);
-list($code, $none, $h) = call('HEAD', 'fieldCampPackage', 'fctest99_a1');
+list($code, $none, $h) = call('HEAD', "projectPackage/c$campid", 'fctest99_a1');
 check('HEAD: the headers without the file', $code === 200 && $none === '' && (int)hdr($h, 'Content-Length') === strlen($zipBytes) && hdr($h, 'ETag') === '"' . $V . '"', "$code " . strlen($none));
 
 // ===========================================================================
 section('A changed package');
 FieldCamp::updateBasics($db, $campid, FieldCamp::validateBasics(array('camp_name' => 'Api Camp', 'camp_year' => '2027', 'project_name' => 'Api Camp Renamed'))[0]);
 list($code, $p) = profile('fctest99_a1');
-$V2 = $p['field_camp']['package']['version'];
-check('a change to the project gives a new version', $V2 !== $V && preg_match('/^[a-f0-9]{12}$/', $V2) === 1 && $p['field_camp']['project_name'] === 'Api Camp Renamed' && $p['field_camp']['project_id'] === $fc['project_id']);
-list($code, $new, $h) = call('GET', 'fieldCampPackage', 'fctest99_a1');
+$V2 = pp($p)['package']['version'];
+check('a change to the project gives a new version', $V2 !== $V && preg_match('/^[a-f0-9]{12}$/', $V2) === 1 && pp($p)['project_name'] === 'Api Camp Renamed' && pp($p)['project_id'] === $fc['project_id']);
+list($code, $new, $h) = call('GET', "projectPackage/c$campid", 'fctest99_a1');
 clearstatcache();
 check('the download is the new one, and the old file is gone', $code === 200 && hdr($h, 'ETag') === '"' . $V2 . '"' && unpack_zip($new)[2] === 'Api Camp Renamed' && is_file("$dir/package_$V2.zip") && !is_file($file) && count(glob("$dir/package_*")) === 1, glob("$dir/*"));
 
 // ===========================================================================
-section('POST /db/fieldCampPackage/installed');
-list($code, $body) = call('POST', 'fieldCampPackage/installed', 'fctest99_a1', array('version' => $V));
+section('POST /db/projectPackage/{id}/installed');
+list($code, $body) = call('POST', "projectPackage/c$campid/installed", 'fctest99_a1', array('version' => $V));
 check('the app reports the version it loaded', $code === 200 && json_decode($body, true) === array('installed_version' => $V), "$code $body");
 list($code, $p) = profile('fctest99_a1');
-check('the profile gives it back, so the app sees a newer package is offered', $p['field_camp']['package']['installed_version'] === $V && $p['field_camp']['package']['version'] === $V2);
-check('only that account is marked', profile('fctest99_a2')[1]['field_camp']['package']['installed_version'] === null);
-call('POST', 'fieldCampPackage/installed', 'fctest99_a1', array('version' => $V2));
-check('reporting the new version brings the two together', profile('fctest99_a1')[1]['field_camp']['package']['installed_version'] === $V2);
-list($code, $body) = call('POST', 'fieldCampPackage/installed', 'fctest99_a1', array('version' => "x'; drop table users; --"));
-check('a value that is not a version: 400, nothing recorded', $code === 400 && profile('fctest99_a1')[1]['field_camp']['package']['installed_version'] === $V2, $code);
-list($code) = call('POST', 'fieldCampPackage/installed', 'fctest99_a1', array());
+check('the profile gives it back, so the app sees a newer package is offered', pp($p)['package']['installed_version'] === $V && pp($p)['package']['version'] === $V2);
+check('only that account is marked', pp(profile('fctest99_a2')[1])['package']['installed_version'] === null);
+call('POST', "projectPackage/c$campid/installed", 'fctest99_a1', array('version' => $V2));
+check('reporting the new version brings the two together', pp(profile('fctest99_a1')[1])['package']['installed_version'] === $V2);
+list($code, $body) = call('POST', "projectPackage/c$campid/installed", 'fctest99_a1', array('version' => "x'; drop table users; --"));
+check('a value that is not a version: 400, nothing recorded', $code === 400 && pp(profile('fctest99_a1')[1])['package']['installed_version'] === $V2, $code);
+list($code) = call('POST', "projectPackage/c$campid/installed", 'fctest99_a1', array());
 check('no version: 400', $code === 400, $code);
-list($code) = call('POST', 'fieldCampPackage', 'fctest99_a1', array('version' => $V2));
+list($code) = call('POST', "projectPackage/c$campid", 'fctest99_a1', array('version' => $V2));
 check('POST without /installed: 400', $code === 400, $code);
-list($code) = call('POST', 'fieldCampPackage/installed', null, array('version' => $V2));
+list($code) = call('POST', "projectPackage/c$campid/installed", null, array('version' => $V2));
 check('an ordinary account: 404', $code === 404, $code);
-list($code) = call('DELETE', 'fieldCampPackage', 'fctest99_a1');
+list($code) = call('DELETE', "projectPackage/c$campid", 'fctest99_a1');
 check('DELETE: 400', $code === 400, $code);
 $sid = forge($INSTR, $FIX[$INSTR]);
 list($code, $page) = web("/field_camp?id=$campid&step=roster", $sid);
@@ -254,44 +258,77 @@ check('and says nothing about packages while no app has reported', strpos($page,
 // ===========================================================================
 section('POST /db/profile never stores the key');
 list($code, $p) = profile('fctest99_a1');
-$send = $p; $send['field_camp']['camp_name'] = 'Tampered'; $send['notes_marker'] = 'kept';
+$send = $p; $send['prepared_projects'][0]['title'] = 'Tampered'; $send['notes_marker'] = 'kept';
 list($code, $body) = call('POST', 'profile', 'fctest99_a1', $send);
 check('the app posts the whole profile back, key included: accepted', $code === 201, "$code " . substr($body, 0, 200));
 $stored = $neodb->get_results("MATCH (u:User {userpkey: $A1})-[:HAS_PROFILE]->(p:Profile) RETURN p");
 $props = $stored ? $stored[0]->get('p')->values() : array();
-check('the stored profile has the app\'s values but no field_camp', ($props['notes_marker'] ?? '') === 'kept' && !array_key_exists('field_camp', $props), array_keys($props));
+check('the stored profile has the app\'s values but no prepared_projects', ($props['notes_marker'] ?? '') === 'kept' && !array_key_exists('prepared_projects', $props) && !array_key_exists('field_camp', $props), array_keys($props));
 list($code, $p) = profile('fctest99_a1');
-check('and the next profile still tells the truth about the camp', $p['field_camp']['camp_name'] === 'Api Camp' && $p['notes_marker'] === 'kept');
+check('and the next profile still tells the truth about the camp', pp($p)['title'] === 'Api Camp' && $p['notes_marker'] === 'kept');
+
+// ===========================================================================
+section('Ids and the list');
+list($code, $body) = call('GET', "projectPackage/c$otherid", 'fctest99_a1');
+check('an account cannot fetch another camp\'s package by its id', $code === 404, $code);
+list($code) = call('POST', "projectPackage/c$otherid/installed", 'fctest99_a1', array('version' => $V2));
+check('nor mark it loaded', $code === 404 && pp(profile('fctest99_b1')[1])['package']['installed_version'] === null, $code);
+foreach (array('', 'c', 'cx', "c{$campid}x", "C$campid", "p$campid") as $bad) {
+	list($code) = call('GET', "projectPackage/$bad", 'fctest99_a1');
+	if ($bad === '') check('GET /db/projectPackage lists the account\'s prepared projects as the profile does', $code === 200);
+	else check("an id that is not the account's (\"$bad\"): 404", $code === 404, $code);
+}
+list($code, $body) = call('GET', 'projectPackage', 'fctest99_a1');
+$list = json_decode($body, true);
+check('the list equals the profile\'s', $code === 200 && $list['prepared_projects'] === profile('fctest99_a1')[1]['prepared_projects'], $body);
+list($code, $body) = call('GET', 'projectPackage', null);
+check('an ordinary account: an empty list', $code === 200 && json_decode($body, true) === array('prepared_projects' => array()), $body);
+list($code) = call('POST', "projectPackage/c$campid/installed/more", 'fctest99_a1', array('version' => $V2));
+check('nothing after /installed', $code === 400, $code);
+
+section('The first address, /db/fieldCampPackage, still answers');
+list($code, $old, $h) = call('GET', 'fieldCampPackage', 'fctest99_a1');
+list($code2, $new) = call('GET', "projectPackage/c$campid", 'fctest99_a1');
+check('the same zip, the same version', $code === 200 && $old === $new && hdr($h, 'ETag') === '"' . $V2 . '"', $code);
+list($code, $none, $h) = call('HEAD', 'fieldCampPackage', 'fctest99_a1');
+check('HEAD too', $code === 200 && $none === '' && (int)hdr($h, 'Content-Length') === strlen($new), $code);
+list($code, $body) = call('POST', 'fieldCampPackage/installed', 'fctest99_a2', array('version' => $V2));
+check('and installed', $code === 200 && pp(profile('fctest99_a2')[1])['package']['installed_version'] === $V2, "$code $body");
+call('POST', "projectPackage/c$campid/installed", 'fctest99_a2', array('version' => $V));   // back as it was for what follows
+list($code) = call('GET', 'fieldCampPackage', null);
+check('an ordinary account: 404', $code === 404, $code);
+list($code) = call('POST', 'fieldCampPackage', 'fctest99_a1', array('version' => $V2));
+check('POST without /installed: 400', $code === 400, $code);
 
 // ===========================================================================
 section('When no package is on offer');
 $camp = FieldCamp::getCamp($db, $campid);
 FieldCampTiles::saveChoice($db, $camp, 14, array('macrostrat'));   // offline maps wanted, never built
 list($code, $p) = profile('fctest99_a1');
-check('offline maps wanted but not built: status none, nothing to download named', $p['field_camp']['package']['status'] === 'none' && !isset($p['field_camp']['package']['url']) && !isset($p['field_camp']['package']['version'])
-	&& $p['field_camp']['package']['installed_version'] === $V2 && $p['field_camp']['project_name'] === 'Api Camp Renamed', $p['field_camp']);
-list($code, $body) = call('GET', 'fieldCampPackage', 'fctest99_a1');
+check('offline maps wanted but not built: status none, nothing to download named', pp($p)['package']['status'] === 'none' && !isset(pp($p)['package']['url']) && !isset(pp($p)['package']['version'])
+	&& pp($p)['package']['installed_version'] === $V2 && pp($p)['project_name'] === 'Api Camp Renamed', pp($p));
+list($code, $body) = call('GET', "projectPackage/c$campid", 'fctest99_a1');
 check('the download answers 404 "not ready yet"', $code === 404 && json_decode($body, true)['status'] === 'none', "$code $body");
 $db->prepare_query("update fieldcamp set build_status = 'building', build_started = now() where pkey = $1", array($campid));
 list($code, $p) = profile('fctest99_a1');
-check('while the offline maps are built: status building', $p['field_camp']['package']['status'] === 'building' && !isset($p['field_camp']['package']['url']));
-list($code, $body, $h) = call('GET', 'fieldCampPackage', 'fctest99_a1');
+check('while the offline maps are built: status building', pp($p)['package']['status'] === 'building' && !isset(pp($p)['package']['url']));
+list($code, $body, $h) = call('GET', "projectPackage/c$campid", 'fctest99_a1');
 check('the download answers 409 with when to ask again', $code === 409 && hdr($h, 'Retry-After') === '30' && json_decode($body, true)['status'] === 'building', "$code $body");
 $db->prepare_query("update fieldcamp set build_status = '' where pkey = $1", array($campid));
 FieldCampTiles::saveChoice($db, $camp, 0, array());
-check('switched off again: ready', profile('fctest99_a1')[1]['field_camp']['package']['status'] === 'ready');
+check('switched off again: ready', pp(profile('fctest99_a1')[1])['package']['status'] === 'ready');
 $db->prepare_query("update fieldcamp set bbox_west = null, bbox_south = null, bbox_east = null, bbox_north = null where pkey = $1", array($otherid));
-check('a camp without a study area: status none', profile('fctest99_b1')[1]['field_camp']['package']['status'] === 'none');
+check('a camp without a study area: status none', pp(profile('fctest99_b1')[1])['package']['status'] === 'none');
 
 check('a deactivated account has no package (and cannot sign in anyway)', (function () use ($db, $campid, $A2) {
 	FieldCamp::setAccountsActive($db, FieldCamp::getCamp($db, $campid), false, array($A2));
-	$gone = FieldCampPackage::accountCamp($db, $A2) === null && FieldCampPackage::profileKey($db, $A2, 'http://localhost') === null;
-	list($code) = call('GET', 'fieldCampPackage', 'fctest99_a2');
+	$gone = FieldCampPackage::accountCamp($db, $A2) === null && FieldCampPackage::preparedProjects($db, $A2, 'http://localhost') === array();
+	list($code) = call('GET', "projectPackage/c$campid", 'fctest99_a2');
 	return $gone && $code !== 200; })());
 FieldCamp::deleteCamp($db, $neodb, FieldCamp::getCamp($db, $campid), $INSTR);
 clearstatcache();
-check('a deleted camp: no key, no package, and its kept file is gone', FieldCampPackage::profileKey($db, $A1, 'http://localhost') === null && !is_dir($dir), is_dir($dir));
-list($code) = call('GET', 'fieldCampPackage', 'fctest99_a1');
+check('a deleted camp: no key, no package, and its kept file is gone', FieldCampPackage::preparedProjects($db, $A1, 'http://localhost') === array() && !is_dir($dir), is_dir($dir));
+list($code) = call('GET', "projectPackage/c$campid", 'fctest99_a1');
 check('its accounts are turned away', $code !== 200, $code);
 
 // ===========================================================================
