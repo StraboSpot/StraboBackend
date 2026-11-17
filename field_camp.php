@@ -460,8 +460,7 @@ if($step === 'area'){
 		.fc-map path.fc-area-rect { cursor: move; touch-action: none; }
 		.fc-map.fc-drawing, .fc-map.fc-drawing .leaflet-grab, .fc-map.fc-drawing .leaflet-interactive, .fc-map.fc-drawing path.fc-area-rect { cursor: crosshair; }
 		.fc-map.fc-drawing { touch-action: none; }
-		.fc-area-label { background: rgba(20,22,30,0.8); color: #fff; border: 1px solid #e44c65; box-shadow: none; font-size: 12px; padding: 1px 6px; }
-		.fc-area-label:before { display: none; }
+
 		.fc-area-list { display: flex; flex-direction: column; gap: 0.5em; margin-bottom: 0.75em; }
 		.fc-area-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em 0.9em; padding: 0.5em 0.75em;
 			border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: rgba(255,255,255,0.03); }
@@ -735,15 +734,16 @@ if($step === 'area'){
 			el.addEventListener('pointerup', finish, true);
 			el.addEventListener('pointercancel', finish, true);
 
-			saved.forEach(function(s){ addArea(s.name, {west: s.west, south: s.south, east: s.east, north: s.north}); });
-			sync(false);
-			if(areas.length){
-				var all = L.latLngBounds(boundsOf(areas[0].box));
-				areas.forEach(function(a){ all.extend(boundsOf(a.box)); });
+			// The view comes first: a box added to a map without one has no shape yet to drag.
+			if(saved.length){
+				var all = L.latLngBounds(boundsOf(saved[0]));
+				saved.forEach(function(s){ all.extend(boundsOf(s)); });
 				map.fitBounds(all, {padding: [40, 40]});
 			}else{
 				map.setView([39.5, -98.5], 4);
 			}
+			saved.forEach(function(s){ addArea(s.name, {west: s.west, south: s.south, east: s.east, north: s.north}); });
+			sync(false);
 		})();
 		</script>
 <?php
