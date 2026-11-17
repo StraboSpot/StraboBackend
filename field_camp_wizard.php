@@ -17,6 +17,7 @@
 include("logincheck.php");
 include("prepare_connections.php");
 require_once __DIR__ . '/includes/fieldcamp/FieldCamp.php';
+require_once __DIR__ . '/includes/fieldcamp/FieldCampUnits.php';
 
 if(!FieldCamp::canUse($db, $userpkey)){
 	header("HTTP/1.0 404 Not Found");
@@ -107,7 +108,7 @@ include("includes/fieldcamp/fieldcamp_style.php");
 						<span><?php echo $accounts; ?> account<?php echo $accounts === 1 ? '' : 's'; ?><?php
 							if($accounts > 0 && $inactive === $accounts){ echo " (deactivated)"; }
 							elseif($inactive > 0){ echo " ($inactive deactivated)"; } ?></span>
-						<span><?php echo ($c->bbox_west === null || $c->bbox_west === '') ? 'No study area yet' : 'Study area set'; ?></span>
+						<span><?php $na = count(FieldCampUnits::campAreas($c)); echo $na === 0 ? 'No study area yet' : ($na === 1 ? 'Study area set' : "$na study areas"); ?></span>
 <?php if($shared){ ?>
 							<span>Set up by <?php echo htmlspecialchars((string)$c->owner_email); ?>; you see the student work</span>
 <?php } ?>

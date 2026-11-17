@@ -79,6 +79,45 @@ class FieldCampUnits
 		);
 	}
 
+	/**
+	 * A camp's study areas (2026-11-17: up to FieldCamp::MAX_AREAS boxes), each
+	 * ['name', 'west', 'south', 'east', 'north']. A camp saved before there could
+	 * be several (no study_areas) has one, "Area 1", from bbox_*. [] when none.
+	 */
+	public static function campAreas($camp)
+	{
+		$bbox = self::campBbox($camp);
+		if ($bbox === null) return array();
+		$list = json_decode((string)($camp->study_areas ?? ''), true);
+		$out = array();
+		if (is_array($list)) {
+			foreach ($list as $a) {
+				if (!is_array($a)) continue;
+				foreach (array('west', 'south', 'east', 'north') as $k) { if (!isset($a[$k]) || !is_numeric($a[$k])) continue 2; }
+				$out[] = array('name' => (string)($a['name'] ?? ''), 'west' => (float)$a['west'], 'south' => (float)$a['south'],
+					'east' => (float)$a['east'], 'north' => (float)$a['north']);
+			}
+		}
+		if (!$out) $out[] = array('name' => 'Area 1') + $bbox;
+		foreach ($out as $i => $a) { if (trim($a['name']) === '') $out[$i]['name'] = 'Area ' . ($i + 1); }
+		return $out;
+	}
+
+	/** Every area's bounds in one string ("w,s,e,n;w,s,e,n"): one area reads as bboxString() did before. */
+	public static function areasString($areas)
+	{
+		return implode(';', array_map(array(self::class, 'bboxString'), $areas));
+	}
+
+	/** Does a box (west/south/east/north) overlap any of the areas? */
+	public static function overlapsAny($box, $areas)
+	{
+		foreach ($areas as $a) {
+			if ($box['west'] < $a['east'] && $box['east'] > $a['west'] && $box['south'] < $a['north'] && $box['north'] > $a['south']) return true;
+		}
+		return false;
+	}
+
 	/** The form the bounds take in the request and in fieldcamp.units_bbox. */
 	public static function bboxString($bbox)
 	{
@@ -144,6 +183,36 @@ class FieldCampUnits
 		foreach ($out['units'] as $unit) {
 			$sid = $unit['source_id'];
 			if (!isset($out['sources'][$sid])) $out['sources'][$sid] = self::lookupSource($sid);
+		}
+		return $out;
+	}
+
+	/**
+	 * lookup() for each study area, merged: a unit found in two areas is listed once,
+	 * zoom is the least detailed one used, bbox is areasString().
+	 */
+	public static function lookupAreas($areas)
+	{
+		$out = array('error' => '', 'zoom' => self::DETAIL_ZOOM, 'detailed' => true,
+			'bbox' => self::areasString($areas), 'units' => array(), 'sources' => array());
+		$seen = array();
+		foreach ($areas as $a) {
+			$one = self::lookup($a);
+			if ($one['error'] !== '') {
+				$out['error'] = count($areas) > 1 ? $a['name'] . ": " . $one['error'] : $one['error'];
+				return $out;
+			}
+			$out['zoom'] = min($out['zoom'], $one['zoom']);
+			$out['detailed'] = $out['detailed'] && $one['detailed'];
+			foreach ($one['units'] as $unit) {
+				// The same test lookup() uses within one area.
+				$same = $unit['source_id'] . '|' . mb_strtolower($unit['map_unit_name']) . '|' . $unit['age'] . '|'
+					. $unit['lith'] . '|' . $unit['descrip'];
+				if (isset($seen[$same])) continue;
+				$seen[$same] = true;
+				$out['units'][] = $unit;
+			}
+			$out['sources'] += $one['sources'];
 		}
 		return $out;
 	}
@@ -343,9 +412,9 @@ class FieldCampUnits
 	/** Has the study area changed since the units were looked up? */
 	public static function areaChanged($camp)
 	{
-		$bbox = self::campBbox($camp);
-		if ($bbox === null || !isset($camp->units_bbox) || (string)$camp->units_bbox === '') return false;
-		return self::bboxString($bbox) !== (string)$camp->units_bbox;
+		$areas = self::campAreas($camp);
+		if (!$areas || !isset($camp->units_bbox) || (string)$camp->units_bbox === '') return false;
+		return self::areasString($areas) !== (string)$camp->units_bbox;
 	}
 
 	/**

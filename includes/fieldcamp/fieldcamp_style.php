@@ -28,6 +28,10 @@
 #fcDelete, #fcRemove { scroll-margin-top: 90px; }
 .fc-camp-buttons { display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: flex-end; }
 .fc-camp-buttons .fc-delete-button { color: #e44c65 !important; box-shadow: inset 0 0 0 1px #e44c65 !important; }
+/* Study area names on the maps (Study area and Offline maps steps); beats Leaflet's own tooltip style. */
+.leaflet-container .leaflet-tooltip.fc-area-label { background: rgba(20,22,30,0.85); color: #fff; border: 1px solid #e44c65;
+	box-shadow: none; font-size: 12px; padding: 1px 6px; }
+.leaflet-container .leaflet-tooltip.fc-area-label:before { display: none; }
 .fc-camp-name { font-weight: 600; font-size: 1.1em; color: #ffffff; }
 .fc-meta { color: rgba(255,255,255,0.6); font-size: 0.88em; margin-top: 0.25em; }
 .fc-meta span + span:before { content: " \00b7 "; color: rgba(255,255,255,0.3); }

@@ -206,22 +206,25 @@ if($camp && $step === 'maps'){
 		if(is_string($typedMaps[$m['hash']]['title'] ?? null)) $myMaps[$i]['title'] = $typedMaps[$m['hash']]['title'];
 	}
 }
-$tileLayers = array(); $tileChosen = array(); $tileOptions = array(); $tileZoom = null;
+$tileLayers = array(); $tileChosen = array(); $tileCounts = array(); $tileScales = array(); $tileZoom = null; $tileOwn = array();
 $tileStatus = array('status' => '', 'message' => '', 'percent' => null, 'elapsed' => null, 'tiles' => 0, 'maps' => 0, 'bytes' => 0); $tilesOutdated = '';
 $tilesWanted = false; $tilesNeedBuild = false;
 // A running tile build is shown on every step (the progress panel under the step tabs).
 if($camp && isset($steps['tiles']) && !$viewOnly) $tileStatus = FieldCampTiles::status($db, $camp);
 if($camp && isset($steps['tiles']) && ($step === 'tiles' || $step === 'package')){
-	$tileLayers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+	$tileLayers = FieldCampTiles::campLayers($db, $camp);
 	$tileChosen = FieldCampTiles::chosenLayerIds($camp, $tileLayers);
 	$tilesOutdated = FieldCampTiles::outdated($camp, FieldCampTiles::manifest($camp), $tileLayers);
 	$tilesWanted = FieldCampTiles::wanted($camp, $tileLayers);
 	$tilesNeedBuild = FieldCampTiles::needsBuild($camp, $tileLayers);
-	$tileBbox = FieldCampUnits::campBbox($camp);
-	if($tileBbox !== null){
+	$tileAreas = FieldCampUnits::campAreas($camp);
+	if($tileAreas){
+		// Each map's tiles at every zoom it offers, so the page can count as the zooms change.
+		$tileCounts = FieldCampTiles::countTable($tileAreas, $tileLayers);
+		$tileScales = FieldCampTiles::scales($tileAreas);
 		$picked = array(); foreach($tileChosen as $tid){ $picked[] = $tileLayers[$tid]; }
-		$tileOptions = FieldCampTiles::options($tileBbox, $picked ? $picked : array_values($tileLayers));
-		$tileZoom = (int)$camp->tiles_zoom > 0 ? (int)$camp->tiles_zoom : FieldCampTiles::defaultZoom($tileOptions);
+		$tileZoom = (int)$camp->tiles_zoom > 0 ? (int)$camp->tiles_zoom : FieldCampTiles::defaultZoom($tileAreas, $picked ? $picked : array_values($tileLayers));
+		$tileOwn = FieldCampTiles::zoomOverrides($camp);
 	}
 }
 $roster = array('rows' => array(), 'uploaded' => 0, 'total' => 0, 'spots' => 0, 'photos' => 0);
@@ -256,6 +259,9 @@ if($camp && $step === 'package'){
 $ownsCamp = $camp && (int)$camp->owner_user_pkey === (int)$userpkey;
 $campOwnerEmail = $viewOnly ? $db->get_var_prepared("select email from users where pkey = $1", array((int)$camp->owner_user_pkey)) : '';
 $size = $camp ? FieldCamp::areaSizeKm($camp) : null;
+// Several study areas since 2026-11-17: the steps' text says "the study areas" when there are.
+$campAreaList = $camp ? FieldCampUnits::campAreas($camp) : array();
+$theArea = count($campAreaList) > 1 ? 'the study areas' : 'the study area';
 
 include("includes/mheader.php");
 include("includes/fieldcamp/fieldcamp_style.php");
@@ -452,34 +458,47 @@ if($step === 'basics'){
 // Study area
 // ===========================================================================
 if($step === 'area'){
-	$hasArea = ($size !== null);
 	$next = fc_next($steps, 'area');
 ?>
 		<style>
-		.fc-handle { width: 14px; height: 14px; box-sizing: border-box; background: #fff; border: 2px solid #e44c65; border-radius: 50%; cursor: move; }
-		.fc-map.fc-drawing, .fc-map.fc-drawing .leaflet-grab, .fc-map.fc-drawing .leaflet-interactive { cursor: crosshair; }
+		.fc-handle { box-sizing: border-box; background: #fff; border: 2px solid #e44c65; }
+		.fc-handle-corner { border-radius: 50%; }
+		.fc-handle-side { border-radius: 2px; }
+		.fc-h-nw, .fc-h-se { cursor: nwse-resize; } .fc-h-ne, .fc-h-sw { cursor: nesw-resize; }
+		.fc-h-n, .fc-h-s { cursor: ns-resize; } .fc-h-e, .fc-h-w { cursor: ew-resize; }
+		.fc-map path.fc-area-rect { cursor: move; touch-action: none; }
+		.fc-map.fc-drawing, .fc-map.fc-drawing .leaflet-grab, .fc-map.fc-drawing .leaflet-interactive, .fc-map.fc-drawing path.fc-area-rect { cursor: crosshair; }
 		.fc-map.fc-drawing { touch-action: none; }
+
+		.fc-area-list { display: flex; flex-direction: column; gap: 0.5em; margin-bottom: 0.75em; }
+		.fc-area-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em 0.9em; padding: 0.5em 0.75em;
+			border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: rgba(255,255,255,0.03); }
+		.fc-area-row.fc-area-on { border-color: #e44c65; }
+		.fc-area-row input[type=text] { width: 16em; max-width: 100%; height: 2.4em; margin: 0; }
+		.fc-area-row .fc-area-size { flex: 1 1 12em; font-size: 0.88em; color: rgba(255,255,255,0.65); }
+		.fc-area-row .fc-area-buttons { display: flex; gap: 0.5em; }
+		.fc-area-row .button.fc-area-delete { color: #e44c65 !important; box-shadow: inset 0 0 0 1px #e44c65 !important; }
 		</style>
 		<div class="fc-panel">
-			<h4>Study area</h4>
+			<h4>Study areas</h4>
 			<div class="fc-mapnote">
-				Move and zoom the map to where the camp will work. Then click <strong>Draw the study area</strong> and drag a box
-				around the whole area. To adjust the box, drag one of its corners; to start over, draw it again.
+				Move and zoom the map to where the camp will work, then click <strong>Add a study area</strong> and drag a box
+				around it. A camp can have up to <?php echo FieldCamp::MAX_AREAS; ?> study areas, for example the mapping area and the
+				places of day trips; the maps, offline tiles and rock units cover all of them. To move a box, drag it. To change its
+				size, drag a corner or the middle of a side.
 			</div>
 			<div class="fc-buttons" style="margin-bottom:0.75em;">
-				<button type="button" class="button small" id="fcDrawBtn"><?php echo $hasArea ? 'Draw the study area again' : 'Draw the study area'; ?></button>
+				<button type="button" class="button small" id="fcDrawBtn">Add a study area</button>
 				<span class="fc-small" id="fcDrawHint" style="display:none;">Drag a box on the map: press where one corner should be and let go at the opposite corner.</span>
+				<span class="fc-small" id="fcAreaFull" style="display:none;">This camp has <?php echo FieldCamp::MAX_AREAS; ?> study areas, the most it can have. Delete one to add another.</span>
 			</div>
 			<div id="fcMap" class="fc-map"></div>
-			<div class="fc-mapnote">
-				Study area: <strong id="fcViewSize"><?php echo $hasArea ? '...' : 'not drawn yet'; ?></strong>
-			</div>
 			<form method="post" action="/field_camp_action" id="fcAreaForm" data-fc-save="area">
 				<?php echo fc_hidden($csrf, 'area', $camp, $next[0]); ?>
-				<input type="hidden" name="west" id="fcWest">
-				<input type="hidden" name="south" id="fcSouth">
-				<input type="hidden" name="east" id="fcEast">
-				<input type="hidden" name="north" id="fcNorth">
+				<input type="hidden" name="areas_json" id="fcAreasJson">
+				<div class="fc-mapnote" id="fcAreaNone">No study area yet.</div>
+				<div class="fc-area-list" id="fcAreaList"></div>
+				<div class="fc-small" id="fcAreaUndo" style="display:none; margin-bottom:0.75em;"></div>
 				<div class="fc-buttons">
 					<button type="submit" class="button primary small" data-fc-next="<?php echo $next[0]; ?>">Next: <?php echo $next[1]; ?></button>
 				</div>
@@ -489,12 +508,11 @@ if($step === 'area'){
 		<link rel="stylesheet" href="/assets/js/leaflet/leaflet.css" />
 		<script src="/assets/js/leaflet/leaflet.js"></script>
 		<script>
-		// The study area is a box the user draws (2026-11-10; before, it was whatever the map window showed, and
-		// the window's wide shape rarely fits a field area). Drag to draw, drag a corner to adjust.
+		// Study areas: boxes the user draws (one box 2026-11-10; up to MAX since 2026-11-17, with names).
+		// Drag a box to move it; drag a corner or the middle of a side to change its size.
 		(function(){
-			var saved = <?php echo $hasArea ? json_encode(array(
-				'west' => (float)$camp->bbox_west, 'south' => (float)$camp->bbox_south,
-				'east' => (float)$camp->bbox_east, 'north' => (float)$camp->bbox_north)) : 'null'; ?>;
+			var saved = <?php echo json_encode($campAreaList, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+			var MAX = <?php echo (int)FieldCamp::MAX_AREAS; ?>, NAME_MAX = <?php echo (int)FieldCamp::AREA_NAME_MAX; ?>;
 
 			var el = document.getElementById('fcMap');
 			var map = L.map('fcMap', {
@@ -516,9 +534,12 @@ if($step === 'area'){
 
 			var form = document.getElementById('fcAreaForm');
 			var btn = document.getElementById('fcDrawBtn'), hint = document.getElementById('fcDrawHint');
-			var style = {color: '#e44c65', weight: 2, fillOpacity: 0.08, interactive: false};
-			var rect = null, handles = [], box = null;   // box: {west, south, east, north}
-			var drawing = false, startLL = null, startPt = null, drawRect = null;
+			var full = document.getElementById('fcAreaFull'), list = document.getElementById('fcAreaList');
+			var none = document.getElementById('fcAreaNone'), undoEl = document.getElementById('fcAreaUndo');
+			var styleOff = {color: '#e44c65', weight: 2, fillOpacity: 0.08}, styleOn = {color: '#e44c65', weight: 3, fillOpacity: 0.18};
+			var areas = [];          // {name, box: {west, south, east, north}, rect, handles, row, input, size}
+			var selected = null, lastDeleted = null;
+			var drawing = false, startLL = null, startPt = null, drawRect = null, moving = null;
 
 			function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 			function boxOf(a, b){
@@ -526,54 +547,177 @@ if($step === 'area'){
 					south: clamp(Math.min(a.lat, b.lat), -85, 85), north: clamp(Math.max(a.lat, b.lat), -85, 85)};
 			}
 			function boundsOf(bx){ return [[bx.south, bx.west], [bx.north, bx.east]]; }
-			function corners(bx){ return [[bx.north, bx.west], [bx.north, bx.east], [bx.south, bx.east], [bx.south, bx.west]]; }
-
-			function show(bx){
-				document.getElementById('fcWest').value = bx.west.toFixed(6);
-				document.getElementById('fcSouth').value = bx.south.toFixed(6);
-				document.getElementById('fcEast').value = bx.east.toFixed(6);
-				document.getElementById('fcNorth').value = bx.north.toFixed(6);
+			// Eight handles: the corners and the middle of each side, clockwise from the north-west corner.
+			// Each moves the sides it names; the others stay where they are.
+			var HANDLES = [['nw', 'nw'], ['n', 'n'], ['ne', 'ne'], ['e', 'e'], ['se', 'se'], ['s', 's'], ['sw', 'sw'], ['w', 'w']];
+			function handlePoints(bx){
+				var mlat = (bx.south + bx.north) / 2, mlng = (bx.west + bx.east) / 2;
+				return [[bx.north, bx.west], [bx.north, mlng], [bx.north, bx.east], [mlat, bx.east],
+					[bx.south, bx.east], [bx.south, mlng], [bx.south, bx.west], [mlat, bx.west]];
+			}
+			function resized(bx, sides, ll){
+				var b = {west: bx.west, south: bx.south, east: bx.east, north: bx.north};
+				if(sides.indexOf('n') >= 0) b.north = clamp(ll.lat, -85, 85);
+				if(sides.indexOf('s') >= 0) b.south = clamp(ll.lat, -85, 85);
+				if(sides.indexOf('e') >= 0) b.east = clamp(ll.lng, -180, 180);
+				if(sides.indexOf('w') >= 0) b.west = clamp(ll.lng, -180, 180);
+				// dragged past the opposite side: the box turns over instead of going empty
+				return boxOf(L.latLng(b.south, b.west), L.latLng(b.north, b.east));
+			}
+			function sizeText(bx){
 				var midlat = (bx.south + bx.north) / 2;
 				var w = (bx.east - bx.west) * 111.32 * Math.cos(midlat * Math.PI / 180);
 				var h = (bx.north - bx.south) * 111.32;
 				var fmt = function(km){ return km >= 100 ? Math.round(km).toLocaleString() : km.toFixed(1); };
-				document.getElementById('fcViewSize').textContent = fmt(w) + ' km wide, ' + fmt(h) + ' km tall';
+				return fmt(w) + ' km wide, ' + fmt(h) + ' km tall';
 			}
-			// changed: the user did it (tells the wizard there is something to save)
-			function setBox(bx, changed){
-				box = bx;
-				if(rect) rect.setBounds(boundsOf(bx)); else rect = L.rectangle(boundsOf(bx), style).addTo(map);
-				var cs = corners(bx);
-				if(!handles.length){
-					cs.forEach(function(c, i){
-						var m = L.marker(c, {draggable: true, keyboard: false, title: 'Drag to adjust the study area',
-							icon: L.divIcon({className: 'fc-handle', iconSize: [14, 14]})}).addTo(map);
-						// the corner opposite the one being dragged stays where it is
-						m.on('drag', function(){ var o = corners(box)[(i + 2) % 4]; var bx2 = boxOf(m.getLatLng(), L.latLng(o[0], o[1])); rect.setBounds(boundsOf(bx2)); show(bx2); });
-						m.on('dragend', function(){ var o = corners(box)[(i + 2) % 4]; setBox(boxOf(m.getLatLng(), L.latLng(o[0], o[1])), true); });
-						handles.push(m);
-					});
-				}else{
-					handles.forEach(function(m, i){ m.setLatLng(cs[i]); });
+			function nextName(){
+				for(var k = 1; ; k++){
+					var n = 'Area ' + k;
+					if(!areas.some(function(a){ return a.input.value.trim() === n; })) return n;
 				}
-				show(bx);
-				btn.textContent = 'Draw the study area again';
+			}
+
+			// The form's copy of the areas; changed: the user did it (tells the wizard there is something to save).
+			function sync(changed){
+				document.getElementById('fcAreasJson').value = JSON.stringify(areas.map(function(a){
+					return {name: a.input.value.trim(), west: +a.box.west.toFixed(6), south: +a.box.south.toFixed(6),
+						east: +a.box.east.toFixed(6), north: +a.box.north.toFixed(6)};
+				}));
+				none.style.display = areas.length ? 'none' : '';
+				var isFull = areas.length >= MAX;
+				full.style.display = (isFull && !drawing) ? '' : 'none';
+				btn.disabled = isFull && !drawing;
 				if(changed) form.dispatchEvent(new Event('change', {bubbles: true}));
 			}
+
+			// Put an area's box, handles, label and size where its box says.
+			function place(a, bx, keep){
+				a.rect.setBounds(boundsOf(bx));
+				// Leaflet places a permanent label once; it follows the box only when told to.
+				var tip = a.rect.getTooltip();
+				if(tip) tip.setLatLng([(bx.south + bx.north) / 2, (bx.west + bx.east) / 2]);
+				var pts = handlePoints(bx);
+				a.handles.forEach(function(m, i){ if(m !== keep) m.setLatLng(pts[i]); });
+				a.size.textContent = sizeText(bx);
+			}
+			function select(a){
+				selected = a;
+				areas.forEach(function(x){
+					x.rect.setStyle(x === a ? styleOn : styleOff);
+					x.row.classList.toggle('fc-area-on', x === a);
+				});
+				if(a) a.rect.bringToFront();
+			}
+
+			function addArea(name, bx, at){
+				var a = {box: bx, handles: []};
+				a.rect = L.rectangle(boundsOf(bx), L.extend({className: 'fc-area-rect'}, styleOff)).addTo(map);
+				a.rect.bindTooltip('', {permanent: true, direction: 'center', className: 'fc-area-label'});
+
+				// Drag the box to move it (pointer events: a mouse, a finger and a pen all work).
+				a.rect.getElement().addEventListener('pointerdown', function(ev){
+					if(drawing || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+					ev.preventDefault(); ev.stopPropagation();
+					select(a);
+					map.dragging.disable();
+					moving = {a: a, start: map.mouseEventToLatLng(ev), box: a.box, moved: false};
+				});
+
+				handlePoints(bx).forEach(function(p, i){
+					var corner = HANDLES[i][0].length === 2, px = corner ? 14 : 12;
+					var m = L.marker(p, {draggable: true, keyboard: false, title: corner ? 'Drag to change the size' : 'Drag this side',
+						icon: L.divIcon({className: 'fc-handle ' + (corner ? 'fc-handle-corner' : 'fc-handle-side') + ' fc-h-' + HANDLES[i][0], iconSize: [px, px]})}).addTo(map);
+					var from = null;
+					m.on('dragstart', function(){ from = a.box; select(a); });
+					m.on('drag', function(){ place(a, resized(from, HANDLES[i][1], m.getLatLng()), m); });
+					m.on('dragend', function(){ a.box = resized(from, HANDLES[i][1], m.getLatLng()); place(a, a.box); sync(true); });
+					a.handles.push(m);
+				});
+
+				a.row = document.createElement('div');
+				a.row.className = 'fc-area-row';
+				a.input = document.createElement('input');
+				a.input.type = 'text'; a.input.maxLength = NAME_MAX; a.input.value = name;
+				a.input.setAttribute('aria-label', 'Name of the study area');
+				a.size = document.createElement('span'); a.size.className = 'fc-area-size';
+				var buttons = document.createElement('span'); buttons.className = 'fc-area-buttons';
+				var show = document.createElement('button');
+				show.type = 'button'; show.className = 'button small'; show.textContent = 'Show';
+				var del = document.createElement('button');
+				del.type = 'button'; del.className = 'button small fc-area-delete'; del.textContent = 'Delete';
+				buttons.appendChild(show); buttons.appendChild(del);
+				a.row.appendChild(a.input); a.row.appendChild(a.size); a.row.appendChild(buttons);
+				var label = function(){ a.rect.setTooltipContent(a.input.value.trim() || '(no name)'); };
+				a.input.addEventListener('input', function(){ label(); sync(false); });
+				a.input.addEventListener('focus', function(){ select(a); });
+				show.addEventListener('click', function(){ select(a); map.fitBounds(boundsOf(a.box), {padding: [40, 40]}); });
+				del.addEventListener('click', function(){ removeArea(a); });
+
+				if(at === undefined || at >= areas.length){ areas.push(a); list.appendChild(a.row); }
+				else { list.insertBefore(a.row, areas[at].row); areas.splice(at, 0, a); }
+				label();
+				place(a, bx);
+				return a;
+			}
+
+			function removeArea(a){
+				var at = areas.indexOf(a);
+				if(at < 0) return;
+				map.removeLayer(a.rect);
+				a.handles.forEach(function(m){ map.removeLayer(m); });
+				list.removeChild(a.row);
+				areas.splice(at, 1);
+				if(selected === a) selected = null;
+				lastDeleted = {name: a.input.value, box: a.box, at: at};
+				undoEl.textContent = '"' + (a.input.value.trim() || '(no name)') + '" deleted. ';
+				var u = document.createElement('a'); u.href = '#'; u.textContent = 'Undo';
+				u.addEventListener('click', function(ev){
+					ev.preventDefault();
+					if(!lastDeleted || areas.length >= MAX) return;
+					select(addArea(lastDeleted.name, lastDeleted.box, lastDeleted.at));
+					lastDeleted = null; undoEl.style.display = 'none';
+					sync(true);
+				});
+				undoEl.appendChild(u);
+				undoEl.style.display = '';
+				sync(true);
+			}
+
+			document.addEventListener('pointermove', function(ev){
+				if(!moving) return;
+				var ll = map.mouseEventToLatLng(ev), b = moving.box;
+				// the whole box moves, and stops at the edge of the map rather than shrinking
+				var dlat = clamp(ll.lat - moving.start.lat, -85 - b.south, 85 - b.north);
+				var dlng = clamp(ll.lng - moving.start.lng, -180 - b.west, 180 - b.east);
+				moving.moved = true;
+				moving.a.box = {west: b.west + dlng, south: b.south + dlat, east: b.east + dlng, north: b.north + dlat};
+				place(moving.a, moving.a.box);
+			});
+			function endMove(){
+				if(!moving) return;
+				var changed = moving.moved;
+				moving = null;
+				map.dragging.enable();
+				if(changed) sync(true);
+			}
+			document.addEventListener('pointerup', endMove);
+			document.addEventListener('pointercancel', endMove);
 
 			function setDrawing(on){
 				drawing = on;
 				el.classList.toggle('fc-drawing', on);
 				hint.style.display = on ? '' : 'none';
-				btn.textContent = on ? 'Cancel drawing' : (box ? 'Draw the study area again' : 'Draw the study area');
+				btn.textContent = on ? 'Cancel' : 'Add a study area';
 				if(on) map.dragging.disable(); else map.dragging.enable();
 				if(!on && drawRect){ map.removeLayer(drawRect); drawRect = null; }
 				startLL = null;
+				sync(false);
 			}
 			btn.addEventListener('click', function(){ setDrawing(!drawing); });
 			document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape' && drawing) setDrawing(false); });
 
-			// Pointer events, so a mouse, a finger and a pen all draw the same way.
+			// Drawing a new box: pointer events, so a mouse, a finger and a pen all draw the same way.
 			el.addEventListener('pointerdown', function(ev){
 				if(!drawing || (ev.pointerType === 'mouse' && ev.button !== 0) || ev.target.closest('.leaflet-control')) return;
 				ev.preventDefault(); ev.stopPropagation();
@@ -594,17 +738,24 @@ if($step === 'area'){
 				if(drawRect){ map.removeLayer(drawRect); drawRect = null; }
 				if(ev.type === 'pointercancel' || moved < 8) return;   // a click, not a box: keep drawing
 				setDrawing(false);
-				setBox(boxOf(from, to), true);
+				if(areas.length >= MAX) return;
+				lastDeleted = null; undoEl.style.display = 'none';
+				select(addArea(nextName(), boxOf(from, to)));
+				sync(true);
 			}
 			el.addEventListener('pointerup', finish, true);
 			el.addEventListener('pointercancel', finish, true);
 
-			if(saved){
-				setBox(saved, false);
-				map.fitBounds(boundsOf(saved), {padding: [40, 40]});
+			// The view comes first: a box added to a map without one has no shape yet to drag.
+			if(saved.length){
+				var all = L.latLngBounds(boundsOf(saved[0]));
+				saved.forEach(function(s){ all.extend(boundsOf(s)); });
+				map.fitBounds(all, {padding: [40, 40]});
 			}else{
 				map.setView([39.5, -98.5], 4);
 			}
+			saved.forEach(function(s){ addArea(s.name, {west: s.west, south: s.south, east: s.east, north: s.north}); });
+			sync(false);
 		})();
 		</script>
 <?php
@@ -626,7 +777,7 @@ if($step === 'maps'){
 		<div class="fc-panel">
 			<h4>Custom maps</h4>
 			<div class="fc-mapnote">
-				Maps that cover the study area: your own from <a href="/geotiff">My Maps</a>, and maps other people have
+				Maps that cover <?php echo $theArea; ?>: your own from <a href="/geotiff">My Maps</a>, and maps other people have
 				made public on <a href="/publicmaps" target="_blank" rel="noopener">Public Maps</a>. Each map you select is
 				added to the students' project as a custom map, under the title you give it here.
 				<?php echo $ownsCamp ? '' : 'These are the maps of the owner of the camp.'; ?>
@@ -636,10 +787,10 @@ if($step === 'maps'){
 				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=area">Choose the study area</a> to see which maps cover it.</div>
 <?php } ?>
 <?php if(!$myMaps){ ?>
-			<div class="fc-mapnote" style="margin:0;">No map covers the study area, and there are no maps in My Maps yet.
+			<div class="fc-mapnote" style="margin:0;">No map covers <?php echo $theArea; ?>, and there are no maps in My Maps yet.
 				Upload a GeoTIFF there, then come back to this step.</div>
 <?php }elseif(!$inArea && !$publicMaps && $hasArea){ ?>
-			<div class="fc-mapnote" style="margin:0;">No map covers the study area: none of your own <?php echo (int)$ownCount; ?>, and no public map.</div>
+			<div class="fc-mapnote" style="margin:0;">No map covers <?php echo $theArea; ?>: none of your own <?php echo (int)$ownCount; ?>, and no public map.</div>
 <?php } ?>
 <?php if($myMaps){ ?>
 			<form method="post" action="/field_camp_action" id="fcMapForm" style="margin:0;" data-fc-save="maps_save">
@@ -648,8 +799,8 @@ if($step === 'maps'){
 <?php
 	foreach(array('in' => $inArea, 'public' => $publicMaps, 'out' => $elsewhere) as $group => $list){
 		if(!$list) continue;
-		$labels = array('in' => $hasArea ? 'Your maps in the study area' : 'Your maps',
-			'public' => 'Public maps in the study area', 'out' => 'Your maps not in the study area');
+		$labels = array('in' => $hasArea ? 'Your maps in ' . $theArea : 'Your maps',
+			'public' => 'Public maps in ' . $theArea, 'out' => 'Your maps not in ' . $theArea);
 ?>
 				<div class="fc-maphead"><?php echo $labels[$group]; ?> (<?php echo count($list); ?>)</div>
 				<div class="fc-units">
@@ -666,10 +817,10 @@ if($step === 'maps'){
 						<div><input type="text" class="fc-map-title" maxlength="<?php echo FieldCampPackage::MAX_TITLE; ?>" value="<?php echo htmlspecialchars($m['title']); ?>" aria-label="Title"></div>
 <?php		}else{ ?>
 						<div></div>
-						<div class="fc-unit-text"><?php echo $m['extent'] === null ? 'No location could be read from this map' : 'Outside the study area'; ?></div>
+						<div class="fc-unit-text"><?php echo $m['extent'] === null ? 'No location could be read from this map' : 'Outside ' . $theArea; ?></div>
 <?php		} ?>
 						<div class="fc-unit-text"><a href="/geotiff/detail/<?php echo htmlspecialchars($m['hash']); ?>" target="_blank" rel="noopener"><?php echo htmlspecialchars($m['name']); ?></a><?php
-							echo ($m['chosen'] && $m['overlaps'] === false) ? ' <span class="fc-small">(outside the study area)</span>' : ''; ?></div>
+							echo ($m['chosen'] && $m['overlaps'] === false) ? ' <span class="fc-small">(outside ' . $theArea . ')</span>' : ''; ?></div>
 						<div class="fc-unit-text"><?php echo htmlspecialchars($m['uploaded']); ?></div>
 					</div>
 <?php		}
@@ -761,6 +912,7 @@ if($step === 'tiles'){
 				<?php echo fc_hidden($csrf, 'tiles_save', $camp, fc_next($steps, 'tiles')[0]); ?>
 				<fieldset class="fc-tilefields"<?php echo $building ? ' disabled' : ''; ?>>
 				<input type="hidden" name="layers_json" id="fcTileLayersJson" value="">
+				<input type="hidden" name="zooms_json" id="fcTileZoomsJson" value="">
 				<input type="hidden" name="offline" id="fcTileOffline" value="<?php echo $tilesWanted ? '1' : '0'; ?>">
 
 				<div style="margin-top:0.5em;">
@@ -768,15 +920,61 @@ if($step === 'tiles'){
 				</div>
 				<div id="fcTileBody"<?php echo $tilesWanted ? '' : ' style="display:none;"'; ?>>
 
-				<div class="fc-maphead" style="margin-top:0.5em;">Maps</div>
+				<style>
+				.fc-zoomall { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em 1em; }
+				.fc-zoomall select { width: auto; min-width: 14em; height: 2.6em; margin: 0; }
+				.fc-tilerow { display: grid; grid-template-columns: 2.2em minmax(10em, 1fr) 14em 6.5em 6.5em 9em; gap: 0.25em 0.75em;
+					align-items: center; padding: 0.45em 0; border-top: 1px solid rgba(255,255,255,0.08); }
+				.fc-tilerow input[type=checkbox] + label { margin: 0; padding-left: 1.6em; height: 1.4em; }
+				.fc-tilerow select { width: 100%; height: 2.4em; margin: 0; padding-top: 0; padding-bottom: 0; }
+				.fc-tilerow .fc-tile-note { display: block; font-size: 0.82em; color: rgba(255,255,255,0.55); }
+				.fc-tilerow.fc-tile-over .fc-tile-count, .fc-tilerow .fc-tile-note.fc-bad { color: #e44c65; }
+				.fc-tilerow.fc-unit-off .fc-tile-count, .fc-tilerow.fc-unit-off .fc-tile-size, .fc-tilerow.fc-unit-off select { opacity: 0.45; }
+				.fc-tilerow.fc-unit-head { border-top: none; padding-bottom: 0.2em; }
+				@media (max-width: 900px) {
+					/* narrow: name, then the zoom, then tiles and size, then the preview link, all beside the checkbox */
+					.fc-tilerow { grid-template-columns: 2.2em 1fr 1fr; grid-template-areas: "on name name" "on zoom zoom" "on count size" "on show show"; }
+					.fc-tilerow > :nth-child(1) { grid-area: on; align-self: start; }
+					.fc-tilerow > :nth-child(2) { grid-area: name; }
+					.fc-tilerow > :nth-child(3) { grid-area: zoom; max-width: 18em; }
+					.fc-tilerow > :nth-child(4) { grid-area: count; }
+					.fc-tilerow > :nth-child(5) { grid-area: size; }
+					.fc-tilerow > :nth-child(6) { grid-area: show; }
+					.fc-tilerow.fc-unit-head { display: none; }
+					.fc-tilerow .fc-tile-count:before { content: "Tiles: "; } .fc-tilerow .fc-tile-size:not(:empty):before { content: "About "; }
+				}
+				</style>
+				<div class="fc-maphead" style="margin-top:0.75em;">Zoom for all maps</div>
+				<div class="fc-zoomall">
+					<select name="zoom" id="fcZoomAll" aria-label="Zoom for all maps">
+<?php for($z = FieldCampTiles::MIN_ZOOM; $z <= FieldCampTiles::MAX_ZOOM; $z++){ ?>
+						<option value="<?php echo $z; ?>"<?php echo $z === (int)$tileZoom ? ' selected' : ''; ?>>Zoom <?php echo $z; ?> (1:<?php echo number_format($tileScales[$z]); ?>)</option>
+<?php } ?>
+					</select>
+					<span class="fc-small">The closest view students get without a connection. Each deeper zoom shows more detail and
+						takes about four times the tiles. A map stops at its own deepest zoom; a map can also have a zoom of its own below.</span>
+				</div>
+
+				<div class="fc-maphead">Maps</div>
 				<div class="fc-units">
+					<div class="fc-tilerow fc-unit-head"><div></div><div>Map</div><div>Zoom</div><div>Tiles</div><div>About</div><div></div></div>
 <?php foreach($tileLayers as $l){
 		$on = in_array($l['id'], $tileChosen, true);
 		$cid = 'fcT' . htmlspecialchars($l['id']);
+		$own = $tileOwn[$l['id']] ?? null;
 ?>
-					<div class="fc-tileline" data-layer="<?php echo htmlspecialchars($l['id']); ?>">
+					<div class="fc-tilerow fc-tileline" data-layer="<?php echo htmlspecialchars($l['id']); ?>">
 						<div><input type="checkbox" class="fc-tile-on" id="<?php echo $cid; ?>"<?php echo $on ? ' checked' : ''; ?>><label for="<?php echo $cid; ?>"></label></div>
-						<div><?php echo htmlspecialchars($l['name']); ?><?php echo $l['custom'] ? ' <span class="fc-small">(custom map)</span>' : ''; ?></div>
+						<div><?php echo htmlspecialchars($l['name']); ?><?php echo $l['custom'] ? ' <span class="fc-small">(custom map)</span>' : ''; ?>
+							<span class="fc-tile-note"></span></div>
+						<div><select class="fc-tile-zoom" aria-label="Zoom for <?php echo htmlspecialchars($l['name']); ?>">
+							<option value="">Same as all maps</option>
+<?php 	for($z = FieldCampTiles::MIN_ZOOM; $z <= (int)$l['max_zoom']; $z++){ ?>
+							<option value="<?php echo $z; ?>"<?php echo $own === $z ? ' selected' : ''; ?>>Zoom <?php echo $z; ?><?php echo $z === (int)$l['max_zoom'] ? ' (deepest)' : ''; ?></option>
+<?php 	} ?>
+						</select></div>
+						<div class="fc-unit-text fc-tile-count"></div>
+						<div class="fc-unit-text fc-tile-size"></div>
 						<div class="fc-unit-text"><a href="#" class="fc-tile-show">Show in the preview</a></div>
 					</div>
 <?php } ?>
@@ -784,33 +982,16 @@ if($step === 'tiles'){
 <?php if(count($tileLayers) === count(FieldCampTiles::BASEMAPS)){ ?>
 				<div class="fc-small" style="margin-top:0.5em;">Custom maps selected on the <a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=maps">Maps</a> step are listed here too.</div>
 <?php } ?>
-
-				<div class="fc-maphead">Deepest zoom</div>
-				<div class="fc-units">
-					<div class="fc-zoomline fc-unit-head"><div></div><div>Zoom</div><div>Scale</div><div>Tiles per map</div><div>Tiles in all</div><div>About</div></div>
-<?php foreach($tileOptions as $o){
-		$zid = 'fcZ' . (int)$o['zoom'];
-?>
-					<div class="fc-zoomline" data-zoom="<?php echo (int)$o['zoom']; ?>">
-						<div><input type="radio" name="zoom" class="fc-zoom-on" id="<?php echo $zid; ?>" value="<?php echo (int)$o['zoom']; ?>"<?php
-							echo (int)$o['zoom'] === (int)$tileZoom ? ' checked' : ''; ?>><label for="<?php echo $zid; ?>"></label></div>
-						<div><?php echo (int)$o['zoom']; ?></div>
-						<div class="fc-unit-text">1:<?php echo number_format($o['scale']); ?></div>
-						<div class="fc-unit-text"><?php echo number_format($o['per_map']); ?></div>
-						<div class="fc-unit-text fc-zoom-total"></div>
-						<div class="fc-unit-text fc-zoom-size"></div>
-					</div>
-<?php } ?>
-				</div>
 				<div class="fc-small" id="fcTileWhy" style="margin-top:0.5em;"></div>
 
 				<div class="fc-maphead">Preview</div>
 				<div class="fc-small" style="margin-bottom:0.5em;">The closest view students will have without a connection, on
-					<strong id="fcTilePreviewName"></strong>. The outline is the study area; tiles are saved for everything inside it.</div>
+					<strong id="fcTilePreviewName"></strong> at zoom <strong id="fcTilePreviewZoom"></strong>. <?php echo count($campAreaList) > 1 ? "The outlines are the study areas; tiles are saved for everything inside them." : "The outline is the study area; tiles are saved for everything inside it."; ?></div>
 				<div id="fcTileMap" class="fc-map" style="height:420px;"></div>
 
 				<div class="fc-small" style="margin-top:0.75em;">The sizes are estimates from typical tiles; the real size shows
-					once the tiles are built. Zoom <?php echo FieldCampTiles::MAX_ZOOM; ?> is the deepest level offered for now.</div>
+					once the tiles are built. A custom map's deepest zoom comes from the detail of its file; its tiles are saved only
+					where it overlaps the study areas.</div>
 				</div>
 				</fieldset>
 
@@ -827,21 +1008,21 @@ if($step === 'tiles'){
 		<script>
 		(function(){
 			var cfg = <?php echo json_encode(array(
-				'area' => FieldCampUnits::campBbox($camp),
-				'options' => $tileOptions,
+				'areas' => FieldCampUnits::campAreas($camp),
 				'layers' => array_values($tileLayers),
+				'counts' => $tileCounts,
 				'maxPerMap' => FieldCampTiles::MAX_TILES_PER_MAP,
 				'maxTotal' => FieldCampTiles::MAX_TILES_TOTAL,
 				'building' => $building,
 				'campId' => (int)$camp->pkey,
 				// what is saved, and whether the built tiles match it: decides if Next will build
-				'saved' => array('zoom' => (int)$camp->tiles_zoom, 'ids' => array_values($tileChosen)),
+				'saved' => array('zoom' => (int)$camp->tiles_zoom, 'ids' => array_values($tileChosen), 'own' => (object)$tileOwn),
 				'current' => ($tileStatus['status'] === 'ready' && $tileStatus['tiles'] > 0 && $tilesOutdated === ''),
 				'hasBuilt' => ($tileStatus['status'] === 'ready' && $tileStatus['tiles'] > 0),
-			)); ?>;
+			), JSON_HEX_TAG | JSON_HEX_AMP); ?>;
 			var form = document.getElementById('fcTileForm');
 			var layerRows = Array.prototype.slice.call(form.querySelectorAll('.fc-tileline'));
-			var zoomRows = Array.prototype.slice.call(form.querySelectorAll('.fc-zoomline[data-zoom]'));
+			var allSel = document.getElementById('fcZoomAll');
 			var btn = document.getElementById('fcTileNextBtn');
 			var onBox = document.getElementById('fcTilesOn'), body = document.getElementById('fcTileBody');
 
@@ -851,64 +1032,73 @@ if($step === 'tiles'){
 				if(bytes >= 1e6) return (bytes / 1e6).toFixed(1) + ' MB';
 				return Math.max(1, Math.round(bytes / 1e3)) + ' kB';
 			}
-			function chosenLayers(){
-				return cfg.layers.filter(function(l, i){ return layerRows[i].querySelector('.fc-tile-on').checked; });
-			}
-			function selectedZoom(){
-				var r = form.querySelector('.fc-zoom-on:checked');
-				return r ? parseInt(r.value, 10) : null;
-			}
+			function rowOf(id){ return layerRows.filter(function(r){ return r.getAttribute('data-layer') === id; })[0]; }
+			function isOn(l){ return rowOf(l.id).querySelector('.fc-tile-on').checked; }
+			function chosenLayers(){ return cfg.layers.filter(isOn); }
+			function ownZoom(l){ var v = rowOf(l.id).querySelector('.fc-tile-zoom').value; return v === '' ? null : parseInt(v, 10); }
+			// The zoom a map is built to: its own, else the one for all maps, never past its deepest.
+			function zoomOf(l){ var o = ownZoom(l); return Math.min(o === null ? parseInt(allSel.value, 10) : o, l.max_zoom); }
+			function tilesOf(l){ return (cfg.counts[l.id] || {})[zoomOf(l)] || 0; }
 
 			// --- preview map ---------------------------------------------------
-			var a = cfg.area, bounds = [[a.south, a.west], [a.north, a.east]];
-			var map = L.map('fcTileMap', {minZoom: 2, zoomControl: false, scrollWheelZoom: false, doubleClickZoom: false,
+			var map = L.map('fcTileMap', {minZoom: 2, maxZoom: 22, zoomControl: false, scrollWheelZoom: false, doubleClickZoom: false,
 				touchZoom: false, boxZoom: false, keyboard: false});
-			L.rectangle(bounds, {color: '#e44c65', weight: 2, fill: false, interactive: false}).addTo(map);
+			cfg.areas.forEach(function(ar){
+				L.rectangle([[ar.south, ar.west], [ar.north, ar.east]], {color: '#e44c65', weight: 2, fill: false, interactive: false}).addTo(map)
+					.bindTooltip(ar.name, {permanent: cfg.areas.length > 1, direction: 'center', className: 'fc-area-label'});
+			});
 			L.control.scale().addTo(map);
-			var tileLayer = null, previewId = null;
+			var tileLayer = null, preview = null;
 			function tileUrl(l){
 				return l.custom ? 'https://strabospot.org/geotiff/tiles/' + encodeURIComponent(l.id) + '/{z}/{x}/{y}.png'
 					: 'https://tiles.strabospot.org/v5/' + l.id + '/{z}/{x}/{y}.png';
 			}
-			function showLayer(id){
-				var l = cfg.layers.filter(function(x){ return x.id === id; })[0] || cfg.layers[0];
-				if(tileLayer) map.removeLayer(tileLayer);
-				tileLayer = L.tileLayer(tileUrl(l), {maxZoom: 19, noWrap: true}).addTo(map);
-				previewId = l.id;
-				document.getElementById('fcTilePreviewName').textContent = l.name;
+			// Where a map is shown: the first study area, or for a custom map the first place it overlaps one.
+			function centerOf(l){
+				var e = l.extent;
+				for(var i = 0; i < cfg.areas.length; i++){
+					var a = cfg.areas[i];
+					if(!l.custom || !e) return [(a.south + a.north) / 2, (a.west + a.east) / 2];
+					var w = Math.max(a.west, e.west), s = Math.max(a.south, e.south), ea = Math.min(a.east, e.east), n = Math.min(a.north, e.north);
+					if(w < ea && s < n) return [(s + n) / 2, (w + ea) / 2];
+				}
+				var f = cfg.areas[0]; return [(f.south + f.north) / 2, (f.west + f.east) / 2];
 			}
-			function showZoom(){
-				var z = selectedZoom();
-				if(z === null) map.fitBounds(bounds);
-				else map.setView([(a.south + a.north) / 2, (a.west + a.east) / 2], z);
+			function showLayer(l){
+				preview = l;
+				if(tileLayer) map.removeLayer(tileLayer);
+				tileLayer = L.tileLayer(tileUrl(l), {maxZoom: 22, maxNativeZoom: l.custom ? 22 : l.max_zoom, noWrap: true}).addTo(map);
+				document.getElementById('fcTilePreviewName').textContent = l.name;
+				document.getElementById('fcTilePreviewZoom').textContent = zoomOf(l);
+				map.setView(centerOf(l), zoomOf(l));
 			}
 
 			// --- numbers --------------------------------------------------------
 			function refresh(){
-				var layers = chosenLayers(), kb = 0;
-				layers.forEach(function(l){ kb += l.kb; });
-				var z = selectedZoom(), why = '', summary = '';
-				zoomRows.forEach(function(row, i){
-					var o = cfg.options[i];
-					var total = o.per_map * layers.length;
-					var reason = '';
-					if(o.per_map > cfg.maxPerMap) reason = 'Zoom ' + o.zoom + ' needs more than ' + cfg.maxPerMap.toLocaleString() + ' tiles per map. Use a smaller study area for this zoom.';
-					else if(total > cfg.maxTotal) reason = 'Zoom ' + o.zoom + ' needs more than ' + cfg.maxTotal.toLocaleString() + ' tiles in all. Select fewer maps or use a smaller study area.';
-					var radio = row.querySelector('.fc-zoom-on');
-					radio.disabled = reason !== '';
-					row.classList.toggle('fc-unit-off', reason !== '');
-					row.querySelector('.fc-zoom-total').textContent = layers.length ? total.toLocaleString() : '';
-					row.querySelector('.fc-zoom-size').textContent = layers.length ? fmtSize(o.per_map * kb * 1000) : '';
-					if(o.zoom === z){
-						if(reason) why = reason;
-						else if(layers.length) summary = layers.length + ' map' + (layers.length === 1 ? '' : 's') + ' to zoom ' + o.zoom + ': '
-							+ total.toLocaleString() + ' tiles, about ' + fmtSize(o.per_map * kb * 1000) + '.';
+				var all = parseInt(allSel.value, 10), why = [], total = 0, bytes = 0, n = 0;
+				cfg.layers.forEach(function(l){
+					var row = rowOf(l.id), on = isOn(l), z = zoomOf(l), own = ownZoom(l), t = tilesOf(l);
+					var note = '', bad = false;
+					if(l.custom && t === 0) { note = 'Outside the study areas: no tiles.'; }
+					else if(own === null && all > l.max_zoom) note = 'Stops at zoom ' + l.max_zoom + ', its deepest.';
+					else if(own !== null) note = 'Its own zoom: ' + own + '.';
+					else note = 'Detail to zoom ' + l.max_zoom + '.';
+					if(on && t > cfg.maxPerMap){
+						bad = true;
+						why.push(l.name + ': zoom ' + z + ' needs ' + t.toLocaleString() + ' tiles, more than ' + cfg.maxPerMap.toLocaleString() + ' per map. Choose a lower zoom for this map.');
 					}
+					var noteEl = row.querySelector('.fc-tile-note');
+					noteEl.textContent = note; noteEl.classList.toggle('fc-bad', bad);
+					row.classList.toggle('fc-tile-over', bad);
+					row.classList.toggle('fc-unit-off', !on);
+					row.querySelector('.fc-tile-count').textContent = t.toLocaleString();
+					row.querySelector('.fc-tile-size').textContent = t ? fmtSize(t * l.kb * 1000) : '';
+					if(on){ total += t; bytes += t * l.kb * 1000; n++; }
 				});
-				if(!layers.length) why = 'Select at least one map, or switch the offline maps off.';
-				else if(z === null) why = 'Choose a zoom level.';
-				layerRows.forEach(function(r){ r.classList.toggle('fc-unit-off', !r.querySelector('.fc-tile-on').checked); });
-				document.getElementById('fcTileWhy').textContent = why;
+				if(!n) why = ['Select at least one map, or switch the offline maps off.'];
+				else if(!why.length && total > cfg.maxTotal) why.push('These zooms need ' + total.toLocaleString() + ' tiles in all, more than ' + cfg.maxTotal.toLocaleString() + '. Select fewer maps or lower zooms.');
+				document.getElementById('fcTileWhy').textContent = why.join(' ');
+				if(preview) document.getElementById('fcTilePreviewZoom').textContent = zoomOf(preview);
 
 				// What Next will do, said before it is clicked.
 				var on = onBox.checked, text = '';
@@ -917,37 +1107,47 @@ if($step === 'tiles'){
 					text = 'The offline maps are being built now (see the progress above). Next takes you on while the build runs.';
 				}else if(!on){
 					text = 'The package will have no offline maps.' + (cfg.hasBuilt ? ' Next removes the tiles that were built.' : '');
-				}else if(why !== ''){
-					text = why;
+				}else if(why.length){
+					text = why.join(' ');
 				}else{
-					var ids = layers.map(function(l){ return l.id; }).sort().join(',');
-					var same = cfg.current && z === cfg.saved.zoom && ids === cfg.saved.ids.slice().sort().join(',');
-					text = summary + (same ? ' These tiles are built and up to date.'
-						: ' Next starts building them and takes you on; the build runs in the background and its progress shows on every step.');
+					var ids = chosenLayers().map(function(l){ return l.id; }).sort().join(',');
+					var sameOwn = JSON.stringify(ownZooms()) === JSON.stringify(sortKeys(cfg.saved.own));
+					var same = cfg.current && all === cfg.saved.zoom && ids === cfg.saved.ids.slice().sort().join(',') && sameOwn;
+					text = n + ' map' + (n === 1 ? '' : 's') + ': ' + total.toLocaleString() + ' tiles, about ' + fmtSize(bytes) + '.'
+						+ (same ? ' These tiles are built and up to date.'
+							: ' Next starts building them and takes you on; the build runs in the background and its progress shows on every step.');
 				}
 				document.getElementById('fcTileSummary').textContent = text;
-				btn.disabled = !cfg.building && on && why !== '';
+				btn.disabled = !cfg.building && on && why.length > 0;
 			}
+			function sortKeys(o){ var r = {}; Object.keys(o || {}).sort().forEach(function(k){ r[k] = o[k]; }); return r; }
+			function ownZooms(){
+				var r = {};
+				cfg.layers.forEach(function(l){ var o = ownZoom(l); if(o !== null) r[l.id] = o; });
+				return sortKeys(r);
+			}
+
 			onBox.addEventListener('change', function(){
 				body.style.display = onBox.checked ? '' : 'none';
 				if(onBox.checked){
 					// switched on with nothing selected: start from every map
 					if(!chosenLayers().length) layerRows.forEach(function(r){ r.querySelector('.fc-tile-on').checked = true; });
-					map.invalidateSize(); showZoom();
+					map.invalidateSize(); if(preview) showLayer(preview);
 				}
 				refresh();
 			});
-
-			layerRows.forEach(function(r){
+			allSel.addEventListener('change', function(){ refresh(); if(preview) showLayer(preview); });
+			cfg.layers.forEach(function(l){
+				var r = rowOf(l.id);
 				r.querySelector('.fc-tile-on').addEventListener('change', refresh);
-				r.querySelector('.fc-tile-show').addEventListener('click', function(ev){ ev.preventDefault(); showLayer(r.getAttribute('data-layer')); });
+				r.querySelector('.fc-tile-zoom').addEventListener('change', function(){ refresh(); showLayer(l); });
+				r.querySelector('.fc-tile-show').addEventListener('click', function(ev){ ev.preventDefault(); showLayer(l); });
 			});
-			zoomRows.forEach(function(r){ r.querySelector('.fc-zoom-on').addEventListener('change', function(){ refresh(); showZoom(); }); });
 			form.addEventListener('submit', function(){
 				document.getElementById('fcTileLayersJson').value = JSON.stringify(chosenLayers().map(function(l){ return l.id; }));
+				document.getElementById('fcTileZoomsJson').value = JSON.stringify(ownZooms());
 			});
-			showLayer((chosenLayers()[0] || cfg.layers[0]).id);
-			showZoom();
+			showLayer(chosenLayers()[0] || cfg.layers[0]);
 			refresh();
 
 		})();
@@ -1240,17 +1440,18 @@ if($step === 'units'){
 			</div>
 <?php }else{ ?>
 			<div class="fc-mapnote">
-				The rock units that geologic maps show inside the study area, from
+				The rock units that geologic maps show inside <?php echo $theArea; ?>, from
 				<a href="https://macrostrat.org" target="_blank" rel="noopener">Macrostrat</a>.
 				Each unit you select becomes a geologic unit tag in the students' project, with its age,
 				rock type, description and map color filled in.
 			</div>
 <?php if($areaChanged){ ?>
-			<div class="fc-flash-err">The study area has changed since these units were looked up. Look them up again to match the new area.</div>
+			<div class="fc-flash-err"><?php echo count($campAreaList) > 1 ? "The study areas have changed" : "The study area has changed"; ?> since these units were looked up. Look them up again to match.</div>
 <?php } ?>
 <?php if($fetched && (int)$camp->units_zoom < FieldCampUnits::DETAIL_ZOOM){ ?>
 			<div class="fc-small" style="margin-bottom:0.75em;">
-				The study area is too large for Macrostrat's most detailed maps, so these units come from a
+				<?php echo count($campAreaList) > 1 ? "At least one study area is too large for Macrostrat's most detailed maps, so some of these units come"
+					: "The study area is too large for Macrostrat's most detailed maps, so these units come"; ?> from a
 				less detailed map. A smaller study area gives more detailed units.
 			</div>
 <?php } ?>
@@ -1258,7 +1459,7 @@ if($step === 'units'){
 				<?php echo fc_hidden($csrf, 'units_fetch', $camp); ?>
 				<input type="hidden" name="units_json" id="fcUnitsJsonFetch" value="">
 				<div class="fc-buttons">
-					<button type="submit" class="button <?php echo $fetched ? '' : 'primary '; ?>small" id="fcUnitFetchBtn"><?php echo $fetched ? 'Look up the units again' : 'Find the rock units of the study area'; ?></button>
+					<button type="submit" class="button <?php echo $fetched ? '' : 'primary '; ?>small" id="fcUnitFetchBtn"><?php echo $fetched ? 'Look up the units again' : 'Find the rock units of ' . $theArea; ?></button>
 <?php if($fetched){ ?>
 					<span class="fc-small">Last looked up <?php echo htmlspecialchars(substr((string)$camp->units_fetched_date, 0, 10)); ?>.
 						Looking up again keeps your selection, names and labels.</span>
@@ -1270,7 +1471,7 @@ if($step === 'units'){
 
 <?php if($hasArea && $fetched && !$units){ ?>
 		<div class="fc-panel">
-			<div class="fc-mapnote" style="margin:0;">Macrostrat has no mapped rock units in this study area.
+			<div class="fc-mapnote" style="margin:0;">Macrostrat has no mapped rock units in <?php echo $theArea; ?>.
 				Geologic unit tags can still be added by hand in StraboField.</div>
 		</div>
 <?php } ?>

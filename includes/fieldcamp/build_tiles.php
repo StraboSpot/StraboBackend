@@ -31,7 +31,7 @@ $camp = FieldCamp::getCamp($db, (int)($argv[1] ?? 0));
 if (!$camp) { fwrite(STDERR, "No such camp.\n"); exit(1); }
 
 try {
-	$layers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+	$layers = FieldCampTiles::campLayers($db, $camp);
 	$result = FieldCampTiles::build($db, $camp, $layers);
 } catch (\Throwable $e) {
 	error_log("build_tiles camp " . (int)$camp->pkey . ": " . $e->getMessage());

@@ -124,7 +124,7 @@ class FieldCampPackage
 	 * The maps the Maps step offers, newest first: every My Maps entry of the
 	 * camp's owner, then the PUBLIC maps of other accounts (the ones on the
 	 * site's Public Maps page) that overlap the study area or are already
-	 * selected. Each comes with its extent, whether it overlaps the study
+	 * selected. Each comes with its extent, whether it overlaps a study
 	 * area and whether it is selected for the camp.
 	 *
 	 * @return array of ['hash', 'name', 'uploaded', 'extent' (array|null), 'overlaps' (bool|null), 'chosen', 'title', 'public' (bool)]
@@ -134,7 +134,7 @@ class FieldCampPackage
 		$chosen = array();
 		foreach (self::listCampMaps($db, $camp->pkey) as $m) $chosen[$m->geotiff_hash] = $m->title;
 
-		$area = FieldCampUnits::campBbox($camp);
+		$areas = FieldCampUnits::campAreas($camp);
 		$owner = (int)$camp->owner_user_pkey;
 		$rows = $db->get_results_prepared("
 			select hash, name, gdalinfo, uploaddate, (userpkey = $1) as mine
@@ -147,10 +147,7 @@ class FieldCampPackage
 			$mine = ($r->mine === true || $r->mine === 't');
 			$extent = self::extentFromGdalinfo($r->gdalinfo);
 			$overlaps = null;
-			if ($extent !== null && $area !== null) {
-				$overlaps = $extent['west'] < $area['east'] && $extent['east'] > $area['west']
-					&& $extent['south'] < $area['north'] && $extent['north'] > $area['south'];
-			}
+			if ($extent !== null && $areas) $overlaps = FieldCampUnits::overlapsAny($extent, $areas);
 			// Other people's public maps are only of interest where the camp is.
 			if (!$mine && $overlaps !== true && !isset($chosen[$r->hash])) continue;
 			$out[] = array(
@@ -261,6 +258,18 @@ class FieldCampPackage
 				array($m->geotiff_hash, (int)$camp->owner_user_pkey));
 			if (!$g) continue;
 			$out[] = self::customMap($g->hash, $m->title, self::bboxString($g->hash, $g->gdalinfo));
+		}
+		return $out;
+	}
+
+	/** The deepest zoom of each of the camp's custom maps, from its GeoTIFF's resolution: hash => zoom. */
+	public static function customMapZooms($db, $camp)
+	{
+		require_once __DIR__ . '/FieldCampTiles.php';
+		$out = array();
+		foreach (self::listCampMaps($db, $camp->pkey) as $m) {
+			$g = $db->get_row_prepared("select hash, gdalinfo from geotiffs where hash = $1", array($m->geotiff_hash));
+			if ($g) $out[$g->hash] = FieldCampTiles::nativeZoom($g->gdalinfo);
 		}
 		return $out;
 	}
@@ -481,7 +490,7 @@ class FieldCampPackage
 		if ($camp->bbox_west === null || $camp->bbox_west === '') return 'none';
 		if (!FieldCampTiles::installed($db)) return 'ready';
 		if (FieldCampTiles::isBuilding($camp)) return 'building';
-		$layers = FieldCampTiles::layers(self::customMapsForCamp($db, $camp));
+		$layers = FieldCampTiles::campLayers($db, $camp);
 		return FieldCampTiles::needsBuild($camp, $layers) ? 'none' : 'ready';
 	}
 

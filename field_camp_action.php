@@ -110,10 +110,10 @@ if($action === 'basics'){
 
 }elseif($action === 'area'){
 
-	list($v, $errors) = FieldCamp::validateArea($_POST);
+	list($areas, $errors) = FieldCamp::validateAreas($_POST);
 	if($errors) fc_back($here . "area", '', $errors);
-	FieldCamp::saveArea($db, $id, $v);
-	fc_saved($here, "area", "Study area saved.");
+	FieldCamp::saveAreas($db, $id, $areas);
+	fc_saved($here, "area", count($areas) === 1 ? "Study area saved." : count($areas) . " study areas saved.");
 
 }elseif($action === 'maps_save'){
 
@@ -136,16 +136,19 @@ if($action === 'basics'){
 		if($action === 'tiles_save') fc_saved($here, "tiles");   // the running build keeps its own choice
 		fc_back($here . "tiles", '', "The tiles for this camp are being built already.");
 	}
-	$layers = FieldCampTiles::layers(FieldCampPackage::customMapsForCamp($db, $camp));
+	$layers = FieldCampTiles::campLayers($db, $camp);
 	if((string)($_POST['offline'] ?? '1') === '0'){
 		FieldCampTiles::saveChoice($db, $camp, (int)$camp->tiles_zoom, array());
 		FieldCampTiles::clearBuild($db, $camp);
 		fc_saved($here, "tiles", "Saved. The package will have no offline maps.");
 	}
 	$wanted = json_decode((string)($_POST['layers_json'] ?? ''), true);
-	list($zoom, $ids, $errors) = FieldCampTiles::validateChoice($camp, $layers, (int)($_POST['zoom'] ?? 0), is_array($wanted) ? $wanted : array());
+	// The maps given their own zoom (zooms_json: {map id: zoom}); a post without it keeps the saved ones.
+	$own = isset($_POST['zooms_json']) ? json_decode((string)$_POST['zooms_json'], true) : FieldCampTiles::zoomOverrides($camp);
+	list($zoom, $ids, $own, $errors) = FieldCampTiles::validateChoice($camp, $layers, (int)($_POST['zoom'] ?? 0),
+		is_array($wanted) ? $wanted : array(), is_array($own) ? $own : array());
 	if($errors) fc_back($here . "tiles", '', $errors);
-	FieldCampTiles::saveChoice($db, $camp, $zoom, $ids);
+	FieldCampTiles::saveChoice($db, $camp, $zoom, $ids, $own);
 	$camp = FieldCamp::getCamp($db, $id);
 	if($action === 'tiles_save' && !FieldCampTiles::needsBuild($camp, $layers)) fc_saved($here, "tiles", "Saved. The offline maps are built and up to date.");
 	$problem = FieldCampTiles::startBuild($db, $camp);
@@ -158,17 +161,17 @@ if($action === 'basics'){
 	if(!FieldCampUnits::installed($db)) fc_back($here . "basics");
 
 	if($action === 'units_fetch'){
-		$bbox = FieldCampUnits::campBbox($camp);
-		if($bbox === null) fc_back($here . "units", '', "Choose the study area first.");
+		$areas = FieldCampUnits::campAreas($camp);
+		if(!$areas) fc_back($here . "units", '', "Choose the study area first.");
 		// The page sends its list along: keep what was selected and typed there before the new lookup.
 		$typed = json_decode((string)($_POST['units_json'] ?? ''), true);
 		if(is_array($typed) && $typed) FieldCampUnits::saveSelection($db, $camp, $typed);
-		$lookup = FieldCampUnits::lookup($bbox);
+		$lookup = FieldCampUnits::lookupAreas($areas);
 		if($lookup['error'] !== '') fc_back($here . "units", '', $lookup['error']);
 		$saved = FieldCampUnits::save($db, $camp, $lookup);
 		if($saved['error'] !== '') fc_back($here . "units", '', $saved['error']);
 		$n = $saved['total']; $m = count($lookup['sources']);
-		if($n === 0) fc_back($here . "units", "Macrostrat has no mapped rock units in this study area.");
+		if($n === 0) fc_back($here . "units", "Macrostrat has no mapped rock units in " . (count($areas) === 1 ? "this study area." : "these study areas."));
 		fc_back($here . "units", "$n rock unit" . ($n === 1 ? '' : 's') . " found on $m source map" . ($m === 1 ? '' : 's') . "."
 			. ($saved['removed'] > 0 ? " " . $saved['removed'] . " unit" . ($saved['removed'] === 1 ? '' : 's')
 				. " from the earlier lookup " . ($saved['removed'] === 1 ? 'is' : 'are') . " no longer in the area and "
