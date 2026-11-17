@@ -445,9 +445,10 @@ class FieldCampPackage
 
 	// -------------------------------------------------------------------
 	// For the app (stage 7): the package offered at sign-in.
-	//   GET  /db/profile                      gains "field_camp" for a camp account (profileKey)
-	//   GET  /db/fieldCampPackage             the account's package (cached per version, so a download can resume)
-	//   POST /db/fieldCampPackage/installed   the app says which version it loaded
+	//   GET  /db/profile                          lists "prepared_projects" for a camp account (preparedProjects)
+	//   GET  /db/projectPackage/{id}              the package (cached per version, so a download can resume)
+	//   POST /db/projectPackage/{id}/installed    the app says which version it loaded
+	//   (/db/fieldCampPackage[/installed], the first form, answers for the account's camp as before)
 	// Spec for the app developers: docs/Field_Camp_Builder/APP_PACKAGE_API.md
 	// -------------------------------------------------------------------
 
@@ -511,14 +512,17 @@ class FieldCampPackage
 	}
 
 	/**
-	 * The "field_camp" key of GET /db/profile for a camp account, or null for any other account.
-	 * $base: scheme and host of this server ("https://strabospot.org").
+	 * The projects prepared on the web for an account, as GET /db/profile lists them under
+	 * "prepared_projects" (2026-11-17: generic, so a later Field Project Wizard for single users
+	 * needs no second app change). A field camp account has one: its camp's package. [] when none.
+	 * Spec for the app developers: docs/Field_Camp_Builder/APP_PACKAGE_API.md.
 	 */
-	public static function profileKey($db, $userpkey, $base)
+	public static function preparedProjects($db, $userpkey, $base)
 	{
 		$pair = self::accountCamp($db, $userpkey);
-		if (!$pair) return null;
+		if (!$pair) return array();
 		list($account, $camp) = $pair;
+		$id = self::packageId($camp);
 		$status = self::offerStatus($db, $camp);
 		$package = array('status' => $status);
 		if ($status === 'ready') {
@@ -527,7 +531,7 @@ class FieldCampPackage
 			$manifest = FieldCampTiles::installed($db) ? FieldCampTiles::manifest($camp) : null;
 			$updated = max(strtotime((string)$camp->modified_date), $manifest ? (int)strtotime((string)$manifest['built']) : 0);
 			$package += array(
-				'url' => rtrim((string)$base, '/') . '/db/fieldCampPackage',
+				'url' => rtrim((string)$base, '/') . '/db/projectPackage/' . $id,
 				'version' => self::version($db, $camp, $data),
 				'updated' => gmdate('Y-m-d\TH:i:s\Z', $updated > 0 ? $updated : time()),
 				// approximate (the download's Content-Length is exact): the tile zip plus the project data
@@ -537,13 +541,28 @@ class FieldCampPackage
 			);
 		}
 		$package['installed_version'] = (self::canRecordInstall($db) && (string)($account->package_version ?? '') !== '') ? (string)$account->package_version : null;
-		return array(
-			'camp_name' => (string)$camp->camp_name,
-			'camp_year' => (int)$camp->camp_year,
+		return array(array(
+			'id' => $id,
+			'kind' => 'field_camp',
+			'title' => (string)$camp->camp_name,
 			'project_id' => $camp->project_id !== null && $camp->project_id !== '' ? (string)$camp->project_id : null,
 			'project_name' => (string)$camp->project_name,
 			'package' => $package,
-		);
+		));
+	}
+
+	/** The id a camp's package has in the API ("c" + the camp's key; a Field Project Wizard project would get its own letter). */
+	public static function packageId($camp)
+	{
+		return 'c' . (int)$camp->pkey;
+	}
+
+	/** The camp behind a package id, when the account may have it: [account row, camp row] or null. */
+	public static function packageFor($db, $userpkey, $id)
+	{
+		$pair = self::accountCamp($db, $userpkey);
+		if (!$pair || (string)$id !== self::packageId($pair[1])) return null;
+		return $pair;
 	}
 
 	/**
