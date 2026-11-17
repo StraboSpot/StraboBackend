@@ -159,6 +159,9 @@ $removedAccounts = ($camp && $step === 'accounts' && FieldCamp::isAdmin($userpke
 // Deleting the camp (Basics step, ?delete=1): what would go.
 $deleteAsk = ($camp && $step === 'basics' && isset($_GET['delete']) && FieldCamp::canDeleteCamps($db));
 $deleteFacts = null;
+// Opened from "Delete..." on the camp list: Cancel goes back to the list.
+$deleteFromList = ($deleteAsk && ($_GET['from'] ?? '') === 'list');
+$deleteCancel = $camp ? ($deleteFromList ? '/field_camp_wizard' : '/field_camp?id=' . (int)$camp->pkey . '&amp;step=basics') : '';
 if($deleteAsk){
 	require_once __DIR__ . '/includes/fieldcamp/FieldCampCopy.php';
 	$all = FieldCamp::listAccounts($db, $camp->pkey);
@@ -399,7 +402,7 @@ if($step === 'basics'){
 			</div>
 <?php 	}elseif($tileStatus['status'] === 'building'){ ?>
 			<div class="fc-mapnote">The offline maps of this camp are being built right now. The camp can be deleted when the build is done.</div>
-			<div class="fc-buttons"><a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=basics" class="button small">Cancel</a></div>
+			<div class="fc-buttons"><a href="<?php echo $deleteCancel; ?>" class="button small">Cancel</a></div>
 <?php 	}else{ $f = $deleteFacts; ?>
 			<div class="fc-mapnote">Deleting <strong><?php echo htmlspecialchars($camp->camp_name); ?></strong> does this:</div>
 			<ul class="fc-facts">
@@ -419,6 +422,9 @@ if($step === 'basics'){
 			</ul>
 			<form method="post" action="/field_camp_action" data-fc-confirm="<?php echo htmlspecialchars(trim((string)$camp->camp_name)); ?>">
 				<?php echo fc_hidden($csrf, 'camp_delete', $camp); ?>
+<?php 		if($deleteFromList){ ?>
+				<input type="hidden" name="from" value="list">
+<?php 		} ?>
 <?php 		if($f['uncopied'] > 0){ ?>
 				<div class="fc-flash-err">
 					<strong><?php echo (int)$f['uncopied']; ?> account<?php echo $f['uncopied'] === 1 ? ' holds' : 's hold'; ?> work that has not been copied to <?php echo $ownsCamp ? 'you' : 'the owner'; ?></strong>
@@ -433,7 +439,7 @@ if($step === 'basics'){
 				</div>
 				<div class="fc-buttons">
 					<button type="submit" class="button primary small">Delete this field camp</button>
-					<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=basics" class="button small">Cancel</a>
+					<a href="<?php echo $deleteCancel; ?>" class="button small">Cancel</a>
 				</div>
 			</form>
 <?php 	} ?>

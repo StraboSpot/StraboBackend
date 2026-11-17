@@ -317,6 +317,32 @@ list($code, $body, $loc) = post($sidI, array('action' => 'camp_delete', 'id' => 
 check('and it is deleted on its name alone', strpos($loc, '/field_camp_wizard') !== false && FieldCamp::getCamp($db, $emptyid) === null);
 
 // ===========================================================================
+section('Delete from the camp list (Delete... on each camp)');
+list($clean3) = FieldCamp::validateBasics(array('camp_name' => 'List Delete Camp', 'camp_year' => '2027', 'project_name' => 'List'));
+$listid = FieldCamp::createCamp($db, $INSTR, $clean3);
+$listLink = "/field_camp?id=$listid&amp;step=basics&amp;delete=1&amp;from=list#fcDelete";
+list($code, $body) = web("/field_camp_wizard", $sidI);
+check('each camp the instructor runs has a Delete... button that opens its confirmation', $code === 200 && !noisy($body) && strpos($body, $listLink) !== false && strpos($body, '>Delete...</a>') !== false);
+check('the list itself holds no delete form', strpos($body, 'value="camp_delete"') === false);
+$viewErr = FieldCamp::addViewer($db, FieldCamp::getCamp($db, $listid), $FIX[$OUTSIDER]);
+list($code, $body) = web("/field_camp_wizard", $sidO);
+check('a co-instructor sees the camp (Student work) but no Delete... button', $viewErr === '' && strpos($body, "id=$listid&amp;step=roster") !== false && strpos($body, "delete=1") === false && strpos($body, '>Delete...</a>') === false, $viewErr);
+list($code) = post($sidO, array('action' => 'camp_delete', 'id' => $listid, 'confirm' => 'List Delete Camp', 'from' => 'list'));
+check('and cannot delete it by posting', $code === 404 && FieldCamp::getCamp($db, $listid) !== null, $code);
+list($code, $body) = web("/field_camp_wizard", $sidA);
+check('the admin gets the button on other owners\' camps', strpos($body, $listLink) !== false);
+list($code, $body) = web("/field_camp?id=$listid&step=basics&delete=1&from=list", $sidI);
+check('opened from the list: the same typed-name confirmation, Cancel goes back to the list', $code === 200 && !noisy($body) && strpos($body, 'data-fc-confirm="List Delete Camp"') !== false
+	&& strpos($body, 'name="from" value="list"') !== false && preg_match('~Delete this field camp</button>\s*<a href="/field_camp_wizard" class="button small">Cancel</a>~', $body) === 1);
+list($code, $body) = web("/field_camp?id=$listid&step=basics&delete=1", $sidI);
+check('opened from Basics: Cancel stays on Basics', preg_match('~Delete this field camp</button>\s*<a href="/field_camp\?id=' . $listid . '&amp;step=basics" class="button small">Cancel</a>~', $body) === 1 && strpos($body, 'name="from"') === false);
+list($code, $body, $loc) = post($sidI, array('action' => 'camp_delete', 'id' => $listid, 'confirm' => 'list delete camp', 'from' => 'list'));
+check('a wrong name is refused and keeps the way back to the list', strpos($body, 'does not match this camp. Nothing was deleted.') !== false && strpos($loc, '&from=list#fcDelete') !== false && FieldCamp::getCamp($db, $listid) !== null, $loc);
+list($code, $body, $loc) = post($sidI, array('action' => 'camp_delete', 'id' => $listid, 'confirm' => 'List Delete Camp', 'from' => 'list'));
+check('the right name deletes it and lands on the list without it', strpos($loc, '/field_camp_wizard') !== false && strpos($body, 'The field camp &quot;List Delete Camp&quot; was deleted.') !== false
+	&& strpos($body, "id=$listid") === false && FieldCamp::getCamp($db, $listid) === null, $loc);
+
+// ===========================================================================
 cleanup();
 foreach ($sids as $sid) @unlink("$SESS/sess_$sid");
 echo "\n" . ($fail === 0 ? "ALL PASS" : "FAILURES") . ": $pass passed, $fail failed\n";

@@ -31,6 +31,8 @@ $canSetUp = FieldCamp::canSetUp($db, $userpkey);
 // They stay off the page until the admin asks for them ("Deleted field camps" button, ?deleted=1).
 $deletedCamps = $isAdmin ? FieldCamp::listDeletedCamps($db) : array();
 $showDeleted = $deletedCamps && isset($_GET['deleted']);
+// "Delete..." on each camp the user runs opens the camp's own confirmation (typed camp name), Cancel comes back here.
+$canDelete = FieldCamp::canDeleteCamps($db);
 
 $flash = $_SESSION['fieldcamp_flash'] ?? null;
 unset($_SESSION['fieldcamp_flash']);
@@ -117,8 +119,11 @@ include("includes/fieldcamp/fieldcamp_style.php");
 <?php } ?>
 					</div>
 				</div>
-				<div>
+				<div class="fc-camp-buttons">
 					<a href="/field_camp?id=<?php echo (int)$c->pkey; ?><?php echo $shared ? '&amp;step=roster' : ''; ?>" class="button small"><?php echo $shared ? 'Student work' : 'Open'; ?></a>
+<?php if(!$shared && $canDelete){ ?>
+					<a href="/field_camp?id=<?php echo (int)$c->pkey; ?>&amp;step=basics&amp;delete=1&amp;from=list#fcDelete" class="button small fc-delete-button">Delete...</a>
+<?php } ?>
 				</div>
 			</div>
 <?php

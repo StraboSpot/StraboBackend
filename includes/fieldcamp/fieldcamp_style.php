@@ -25,6 +25,9 @@
 .fc-camp { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.12); border-radius: 6px;
 	padding: 1em 1.25em; display: flex; flex-wrap: wrap; gap: 0.5em 1.5em; align-items: center;
 	justify-content: space-between; }
+#fcDelete, #fcRemove { scroll-margin-top: 90px; }
+.fc-camp-buttons { display: flex; flex-wrap: wrap; gap: 0.5em; justify-content: flex-end; }
+.fc-camp-buttons .fc-delete-button { color: #e44c65 !important; box-shadow: inset 0 0 0 1px #e44c65 !important; }
 .fc-camp-name { font-weight: 600; font-size: 1.1em; color: #ffffff; }
 .fc-meta { color: rgba(255,255,255,0.6); font-size: 0.88em; margin-top: 0.25em; }
 .fc-meta span + span:before { content: " \00b7 "; color: rgba(255,255,255,0.3); }
