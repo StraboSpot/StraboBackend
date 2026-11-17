@@ -110,10 +110,10 @@ if($action === 'basics'){
 
 }elseif($action === 'area'){
 
-	list($v, $errors) = FieldCamp::validateArea($_POST);
+	list($areas, $errors) = FieldCamp::validateAreas($_POST);
 	if($errors) fc_back($here . "area", '', $errors);
-	FieldCamp::saveArea($db, $id, $v);
-	fc_saved($here, "area", "Study area saved.");
+	FieldCamp::saveAreas($db, $id, $areas);
+	fc_saved($here, "area", count($areas) === 1 ? "Study area saved." : count($areas) . " study areas saved.");
 
 }elseif($action === 'maps_save'){
 
@@ -158,17 +158,17 @@ if($action === 'basics'){
 	if(!FieldCampUnits::installed($db)) fc_back($here . "basics");
 
 	if($action === 'units_fetch'){
-		$bbox = FieldCampUnits::campBbox($camp);
-		if($bbox === null) fc_back($here . "units", '', "Choose the study area first.");
+		$areas = FieldCampUnits::campAreas($camp);
+		if(!$areas) fc_back($here . "units", '', "Choose the study area first.");
 		// The page sends its list along: keep what was selected and typed there before the new lookup.
 		$typed = json_decode((string)($_POST['units_json'] ?? ''), true);
 		if(is_array($typed) && $typed) FieldCampUnits::saveSelection($db, $camp, $typed);
-		$lookup = FieldCampUnits::lookup($bbox);
+		$lookup = FieldCampUnits::lookupAreas($areas);
 		if($lookup['error'] !== '') fc_back($here . "units", '', $lookup['error']);
 		$saved = FieldCampUnits::save($db, $camp, $lookup);
 		if($saved['error'] !== '') fc_back($here . "units", '', $saved['error']);
 		$n = $saved['total']; $m = count($lookup['sources']);
-		if($n === 0) fc_back($here . "units", "Macrostrat has no mapped rock units in this study area.");
+		if($n === 0) fc_back($here . "units", "Macrostrat has no mapped rock units in " . (count($areas) === 1 ? "this study area." : "these study areas."));
 		fc_back($here . "units", "$n rock unit" . ($n === 1 ? '' : 's') . " found on $m source map" . ($m === 1 ? '' : 's') . "."
 			. ($saved['removed'] > 0 ? " " . $saved['removed'] . " unit" . ($saved['removed'] === 1 ? '' : 's')
 				. " from the earlier lookup " . ($saved['removed'] === 1 ? 'is' : 'are') . " no longer in the area and "

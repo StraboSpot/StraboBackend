@@ -214,10 +214,10 @@ if($camp && isset($steps['tiles']) && ($step === 'tiles' || $step === 'package')
 	$tilesOutdated = FieldCampTiles::outdated($camp, FieldCampTiles::manifest($camp), $tileLayers);
 	$tilesWanted = FieldCampTiles::wanted($camp, $tileLayers);
 	$tilesNeedBuild = FieldCampTiles::needsBuild($camp, $tileLayers);
-	$tileBbox = FieldCampUnits::campBbox($camp);
-	if($tileBbox !== null){
+	$tileAreas = FieldCampUnits::campAreas($camp);
+	if($tileAreas){
 		$picked = array(); foreach($tileChosen as $tid){ $picked[] = $tileLayers[$tid]; }
-		$tileOptions = FieldCampTiles::options($tileBbox, $picked ? $picked : array_values($tileLayers));
+		$tileOptions = FieldCampTiles::options($tileAreas, $picked ? $picked : array_values($tileLayers));
 		$tileZoom = (int)$camp->tiles_zoom > 0 ? (int)$camp->tiles_zoom : FieldCampTiles::defaultZoom($tileOptions);
 	}
 }
@@ -253,6 +253,9 @@ if($camp && $step === 'package'){
 $ownsCamp = $camp && (int)$camp->owner_user_pkey === (int)$userpkey;
 $campOwnerEmail = $viewOnly ? $db->get_var_prepared("select email from users where pkey = $1", array((int)$camp->owner_user_pkey)) : '';
 $size = $camp ? FieldCamp::areaSizeKm($camp) : null;
+// Several study areas since 2026-11-17: the steps' text says "the study areas" when there are.
+$campAreaList = $camp ? FieldCampUnits::campAreas($camp) : array();
+$theArea = count($campAreaList) > 1 ? 'the study areas' : 'the study area';
 
 include("includes/mheader.php");
 include("includes/fieldcamp/fieldcamp_style.php");
@@ -446,34 +449,48 @@ if($step === 'basics'){
 // Study area
 // ===========================================================================
 if($step === 'area'){
-	$hasArea = ($size !== null);
 	$next = fc_next($steps, 'area');
 ?>
 		<style>
-		.fc-handle { width: 14px; height: 14px; box-sizing: border-box; background: #fff; border: 2px solid #e44c65; border-radius: 50%; cursor: move; }
-		.fc-map.fc-drawing, .fc-map.fc-drawing .leaflet-grab, .fc-map.fc-drawing .leaflet-interactive { cursor: crosshair; }
+		.fc-handle { box-sizing: border-box; background: #fff; border: 2px solid #e44c65; }
+		.fc-handle-corner { border-radius: 50%; }
+		.fc-handle-side { border-radius: 2px; }
+		.fc-h-nw, .fc-h-se { cursor: nwse-resize; } .fc-h-ne, .fc-h-sw { cursor: nesw-resize; }
+		.fc-h-n, .fc-h-s { cursor: ns-resize; } .fc-h-e, .fc-h-w { cursor: ew-resize; }
+		.fc-map path.fc-area-rect { cursor: move; touch-action: none; }
+		.fc-map.fc-drawing, .fc-map.fc-drawing .leaflet-grab, .fc-map.fc-drawing .leaflet-interactive, .fc-map.fc-drawing path.fc-area-rect { cursor: crosshair; }
 		.fc-map.fc-drawing { touch-action: none; }
+		.fc-area-label { background: rgba(20,22,30,0.8); color: #fff; border: 1px solid #e44c65; box-shadow: none; font-size: 12px; padding: 1px 6px; }
+		.fc-area-label:before { display: none; }
+		.fc-area-list { display: flex; flex-direction: column; gap: 0.5em; margin-bottom: 0.75em; }
+		.fc-area-row { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em 0.9em; padding: 0.5em 0.75em;
+			border: 1px solid rgba(255,255,255,0.12); border-radius: 6px; background: rgba(255,255,255,0.03); }
+		.fc-area-row.fc-area-on { border-color: #e44c65; }
+		.fc-area-row input[type=text] { width: 16em; max-width: 100%; height: 2.4em; margin: 0; }
+		.fc-area-row .fc-area-size { flex: 1 1 12em; font-size: 0.88em; color: rgba(255,255,255,0.65); }
+		.fc-area-row .fc-area-buttons { display: flex; gap: 0.5em; }
+		.fc-area-row .button.fc-area-delete { color: #e44c65 !important; box-shadow: inset 0 0 0 1px #e44c65 !important; }
 		</style>
 		<div class="fc-panel">
-			<h4>Study area</h4>
+			<h4>Study areas</h4>
 			<div class="fc-mapnote">
-				Move and zoom the map to where the camp will work. Then click <strong>Draw the study area</strong> and drag a box
-				around the whole area. To adjust the box, drag one of its corners; to start over, draw it again.
+				Move and zoom the map to where the camp will work, then click <strong>Add a study area</strong> and drag a box
+				around it. A camp can have up to <?php echo FieldCamp::MAX_AREAS; ?> study areas, for example the mapping area and the
+				places of day trips; the maps, offline tiles and rock units cover all of them. To move a box, drag it. To change its
+				size, drag a corner or the middle of a side.
 			</div>
 			<div class="fc-buttons" style="margin-bottom:0.75em;">
-				<button type="button" class="button small" id="fcDrawBtn"><?php echo $hasArea ? 'Draw the study area again' : 'Draw the study area'; ?></button>
+				<button type="button" class="button small" id="fcDrawBtn">Add a study area</button>
 				<span class="fc-small" id="fcDrawHint" style="display:none;">Drag a box on the map: press where one corner should be and let go at the opposite corner.</span>
+				<span class="fc-small" id="fcAreaFull" style="display:none;">This camp has <?php echo FieldCamp::MAX_AREAS; ?> study areas, the most it can have. Delete one to add another.</span>
 			</div>
 			<div id="fcMap" class="fc-map"></div>
-			<div class="fc-mapnote">
-				Study area: <strong id="fcViewSize"><?php echo $hasArea ? '...' : 'not drawn yet'; ?></strong>
-			</div>
 			<form method="post" action="/field_camp_action" id="fcAreaForm" data-fc-save="area">
 				<?php echo fc_hidden($csrf, 'area', $camp, $next[0]); ?>
-				<input type="hidden" name="west" id="fcWest">
-				<input type="hidden" name="south" id="fcSouth">
-				<input type="hidden" name="east" id="fcEast">
-				<input type="hidden" name="north" id="fcNorth">
+				<input type="hidden" name="areas_json" id="fcAreasJson">
+				<div class="fc-mapnote" id="fcAreaNone">No study area yet.</div>
+				<div class="fc-area-list" id="fcAreaList"></div>
+				<div class="fc-small" id="fcAreaUndo" style="display:none; margin-bottom:0.75em;"></div>
 				<div class="fc-buttons">
 					<button type="submit" class="button primary small" data-fc-next="<?php echo $next[0]; ?>">Next: <?php echo $next[1]; ?></button>
 				</div>
@@ -483,12 +500,11 @@ if($step === 'area'){
 		<link rel="stylesheet" href="/assets/js/leaflet/leaflet.css" />
 		<script src="/assets/js/leaflet/leaflet.js"></script>
 		<script>
-		// The study area is a box the user draws (2026-11-10; before, it was whatever the map window showed, and
-		// the window's wide shape rarely fits a field area). Drag to draw, drag a corner to adjust.
+		// Study areas: boxes the user draws (one box 2026-11-10; up to MAX since 2026-11-17, with names).
+		// Drag a box to move it; drag a corner or the middle of a side to change its size.
 		(function(){
-			var saved = <?php echo $hasArea ? json_encode(array(
-				'west' => (float)$camp->bbox_west, 'south' => (float)$camp->bbox_south,
-				'east' => (float)$camp->bbox_east, 'north' => (float)$camp->bbox_north)) : 'null'; ?>;
+			var saved = <?php echo json_encode($campAreaList, JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP); ?>;
+			var MAX = <?php echo (int)FieldCamp::MAX_AREAS; ?>, NAME_MAX = <?php echo (int)FieldCamp::AREA_NAME_MAX; ?>;
 
 			var el = document.getElementById('fcMap');
 			var map = L.map('fcMap', {
@@ -510,9 +526,12 @@ if($step === 'area'){
 
 			var form = document.getElementById('fcAreaForm');
 			var btn = document.getElementById('fcDrawBtn'), hint = document.getElementById('fcDrawHint');
-			var style = {color: '#e44c65', weight: 2, fillOpacity: 0.08, interactive: false};
-			var rect = null, handles = [], box = null;   // box: {west, south, east, north}
-			var drawing = false, startLL = null, startPt = null, drawRect = null;
+			var full = document.getElementById('fcAreaFull'), list = document.getElementById('fcAreaList');
+			var none = document.getElementById('fcAreaNone'), undoEl = document.getElementById('fcAreaUndo');
+			var styleOff = {color: '#e44c65', weight: 2, fillOpacity: 0.08}, styleOn = {color: '#e44c65', weight: 3, fillOpacity: 0.18};
+			var areas = [];          // {name, box: {west, south, east, north}, rect, handles, row, input, size}
+			var selected = null, lastDeleted = null;
+			var drawing = false, startLL = null, startPt = null, drawRect = null, moving = null;
 
 			function clamp(v, lo, hi){ return Math.max(lo, Math.min(hi, v)); }
 			function boxOf(a, b){
@@ -520,54 +539,174 @@ if($step === 'area'){
 					south: clamp(Math.min(a.lat, b.lat), -85, 85), north: clamp(Math.max(a.lat, b.lat), -85, 85)};
 			}
 			function boundsOf(bx){ return [[bx.south, bx.west], [bx.north, bx.east]]; }
-			function corners(bx){ return [[bx.north, bx.west], [bx.north, bx.east], [bx.south, bx.east], [bx.south, bx.west]]; }
-
-			function show(bx){
-				document.getElementById('fcWest').value = bx.west.toFixed(6);
-				document.getElementById('fcSouth').value = bx.south.toFixed(6);
-				document.getElementById('fcEast').value = bx.east.toFixed(6);
-				document.getElementById('fcNorth').value = bx.north.toFixed(6);
+			// Eight handles: the corners and the middle of each side, clockwise from the north-west corner.
+			// Each moves the sides it names; the others stay where they are.
+			var HANDLES = [['nw', 'nw'], ['n', 'n'], ['ne', 'ne'], ['e', 'e'], ['se', 'se'], ['s', 's'], ['sw', 'sw'], ['w', 'w']];
+			function handlePoints(bx){
+				var mlat = (bx.south + bx.north) / 2, mlng = (bx.west + bx.east) / 2;
+				return [[bx.north, bx.west], [bx.north, mlng], [bx.north, bx.east], [mlat, bx.east],
+					[bx.south, bx.east], [bx.south, mlng], [bx.south, bx.west], [mlat, bx.west]];
+			}
+			function resized(bx, sides, ll){
+				var b = {west: bx.west, south: bx.south, east: bx.east, north: bx.north};
+				if(sides.indexOf('n') >= 0) b.north = clamp(ll.lat, -85, 85);
+				if(sides.indexOf('s') >= 0) b.south = clamp(ll.lat, -85, 85);
+				if(sides.indexOf('e') >= 0) b.east = clamp(ll.lng, -180, 180);
+				if(sides.indexOf('w') >= 0) b.west = clamp(ll.lng, -180, 180);
+				// dragged past the opposite side: the box turns over instead of going empty
+				return boxOf(L.latLng(b.south, b.west), L.latLng(b.north, b.east));
+			}
+			function sizeText(bx){
 				var midlat = (bx.south + bx.north) / 2;
 				var w = (bx.east - bx.west) * 111.32 * Math.cos(midlat * Math.PI / 180);
 				var h = (bx.north - bx.south) * 111.32;
 				var fmt = function(km){ return km >= 100 ? Math.round(km).toLocaleString() : km.toFixed(1); };
-				document.getElementById('fcViewSize').textContent = fmt(w) + ' km wide, ' + fmt(h) + ' km tall';
+				return fmt(w) + ' km wide, ' + fmt(h) + ' km tall';
 			}
-			// changed: the user did it (tells the wizard there is something to save)
-			function setBox(bx, changed){
-				box = bx;
-				if(rect) rect.setBounds(boundsOf(bx)); else rect = L.rectangle(boundsOf(bx), style).addTo(map);
-				var cs = corners(bx);
-				if(!handles.length){
-					cs.forEach(function(c, i){
-						var m = L.marker(c, {draggable: true, keyboard: false, title: 'Drag to adjust the study area',
-							icon: L.divIcon({className: 'fc-handle', iconSize: [14, 14]})}).addTo(map);
-						// the corner opposite the one being dragged stays where it is
-						m.on('drag', function(){ var o = corners(box)[(i + 2) % 4]; var bx2 = boxOf(m.getLatLng(), L.latLng(o[0], o[1])); rect.setBounds(boundsOf(bx2)); show(bx2); });
-						m.on('dragend', function(){ var o = corners(box)[(i + 2) % 4]; setBox(boxOf(m.getLatLng(), L.latLng(o[0], o[1])), true); });
-						handles.push(m);
-					});
-				}else{
-					handles.forEach(function(m, i){ m.setLatLng(cs[i]); });
+			function nextName(){
+				for(var k = 1; ; k++){
+					var n = 'Area ' + k;
+					if(!areas.some(function(a){ return a.input.value.trim() === n; })) return n;
 				}
-				show(bx);
-				btn.textContent = 'Draw the study area again';
+			}
+
+			// The form's copy of the areas; changed: the user did it (tells the wizard there is something to save).
+			function sync(changed){
+				document.getElementById('fcAreasJson').value = JSON.stringify(areas.map(function(a){
+					return {name: a.input.value.trim(), west: +a.box.west.toFixed(6), south: +a.box.south.toFixed(6),
+						east: +a.box.east.toFixed(6), north: +a.box.north.toFixed(6)};
+				}));
+				none.style.display = areas.length ? 'none' : '';
+				var isFull = areas.length >= MAX;
+				full.style.display = (isFull && !drawing) ? '' : 'none';
+				btn.disabled = isFull && !drawing;
 				if(changed) form.dispatchEvent(new Event('change', {bubbles: true}));
 			}
+
+			// Put an area's box, handles, label and size where its box says.
+			function place(a, bx, keep){
+				a.rect.setBounds(boundsOf(bx));
+				var pts = handlePoints(bx);
+				a.handles.forEach(function(m, i){ if(m !== keep) m.setLatLng(pts[i]); });
+				a.size.textContent = sizeText(bx);
+			}
+			function select(a){
+				selected = a;
+				areas.forEach(function(x){
+					x.rect.setStyle(x === a ? styleOn : styleOff);
+					x.row.classList.toggle('fc-area-on', x === a);
+				});
+				if(a) a.rect.bringToFront();
+			}
+
+			function addArea(name, bx, at){
+				var a = {box: bx, handles: []};
+				a.rect = L.rectangle(boundsOf(bx), L.extend({className: 'fc-area-rect'}, styleOff)).addTo(map);
+				a.rect.bindTooltip('', {permanent: true, direction: 'center', className: 'fc-area-label'});
+
+				// Drag the box to move it (pointer events: a mouse, a finger and a pen all work).
+				a.rect.getElement().addEventListener('pointerdown', function(ev){
+					if(drawing || (ev.pointerType === 'mouse' && ev.button !== 0)) return;
+					ev.preventDefault(); ev.stopPropagation();
+					select(a);
+					map.dragging.disable();
+					moving = {a: a, start: map.mouseEventToLatLng(ev), box: a.box, moved: false};
+				});
+
+				handlePoints(bx).forEach(function(p, i){
+					var corner = HANDLES[i][0].length === 2, px = corner ? 14 : 12;
+					var m = L.marker(p, {draggable: true, keyboard: false, title: corner ? 'Drag to change the size' : 'Drag this side',
+						icon: L.divIcon({className: 'fc-handle ' + (corner ? 'fc-handle-corner' : 'fc-handle-side') + ' fc-h-' + HANDLES[i][0], iconSize: [px, px]})}).addTo(map);
+					var from = null;
+					m.on('dragstart', function(){ from = a.box; select(a); });
+					m.on('drag', function(){ place(a, resized(from, HANDLES[i][1], m.getLatLng()), m); });
+					m.on('dragend', function(){ a.box = resized(from, HANDLES[i][1], m.getLatLng()); place(a, a.box); sync(true); });
+					a.handles.push(m);
+				});
+
+				a.row = document.createElement('div');
+				a.row.className = 'fc-area-row';
+				a.input = document.createElement('input');
+				a.input.type = 'text'; a.input.maxLength = NAME_MAX; a.input.value = name;
+				a.input.setAttribute('aria-label', 'Name of the study area');
+				a.size = document.createElement('span'); a.size.className = 'fc-area-size';
+				var buttons = document.createElement('span'); buttons.className = 'fc-area-buttons';
+				var show = document.createElement('button');
+				show.type = 'button'; show.className = 'button small'; show.textContent = 'Show';
+				var del = document.createElement('button');
+				del.type = 'button'; del.className = 'button small fc-area-delete'; del.textContent = 'Delete';
+				buttons.appendChild(show); buttons.appendChild(del);
+				a.row.appendChild(a.input); a.row.appendChild(a.size); a.row.appendChild(buttons);
+				var label = function(){ a.rect.setTooltipContent(a.input.value.trim() || '(no name)'); };
+				a.input.addEventListener('input', function(){ label(); sync(false); });
+				a.input.addEventListener('focus', function(){ select(a); });
+				show.addEventListener('click', function(){ select(a); map.fitBounds(boundsOf(a.box), {padding: [40, 40]}); });
+				del.addEventListener('click', function(){ removeArea(a); });
+
+				if(at === undefined || at >= areas.length){ areas.push(a); list.appendChild(a.row); }
+				else { list.insertBefore(a.row, areas[at].row); areas.splice(at, 0, a); }
+				label();
+				place(a, bx);
+				return a;
+			}
+
+			function removeArea(a){
+				var at = areas.indexOf(a);
+				if(at < 0) return;
+				map.removeLayer(a.rect);
+				a.handles.forEach(function(m){ map.removeLayer(m); });
+				list.removeChild(a.row);
+				areas.splice(at, 1);
+				if(selected === a) selected = null;
+				lastDeleted = {name: a.input.value, box: a.box, at: at};
+				undoEl.textContent = '"' + (a.input.value.trim() || '(no name)') + '" deleted. ';
+				var u = document.createElement('a'); u.href = '#'; u.textContent = 'Undo';
+				u.addEventListener('click', function(ev){
+					ev.preventDefault();
+					if(!lastDeleted || areas.length >= MAX) return;
+					select(addArea(lastDeleted.name, lastDeleted.box, lastDeleted.at));
+					lastDeleted = null; undoEl.style.display = 'none';
+					sync(true);
+				});
+				undoEl.appendChild(u);
+				undoEl.style.display = '';
+				sync(true);
+			}
+
+			document.addEventListener('pointermove', function(ev){
+				if(!moving) return;
+				var ll = map.mouseEventToLatLng(ev), b = moving.box;
+				// the whole box moves, and stops at the edge of the map rather than shrinking
+				var dlat = clamp(ll.lat - moving.start.lat, -85 - b.south, 85 - b.north);
+				var dlng = clamp(ll.lng - moving.start.lng, -180 - b.west, 180 - b.east);
+				moving.moved = true;
+				moving.a.box = {west: b.west + dlng, south: b.south + dlat, east: b.east + dlng, north: b.north + dlat};
+				place(moving.a, moving.a.box);
+			});
+			function endMove(){
+				if(!moving) return;
+				var changed = moving.moved;
+				moving = null;
+				map.dragging.enable();
+				if(changed) sync(true);
+			}
+			document.addEventListener('pointerup', endMove);
+			document.addEventListener('pointercancel', endMove);
 
 			function setDrawing(on){
 				drawing = on;
 				el.classList.toggle('fc-drawing', on);
 				hint.style.display = on ? '' : 'none';
-				btn.textContent = on ? 'Cancel drawing' : (box ? 'Draw the study area again' : 'Draw the study area');
+				btn.textContent = on ? 'Cancel' : 'Add a study area';
 				if(on) map.dragging.disable(); else map.dragging.enable();
 				if(!on && drawRect){ map.removeLayer(drawRect); drawRect = null; }
 				startLL = null;
+				sync(false);
 			}
 			btn.addEventListener('click', function(){ setDrawing(!drawing); });
 			document.addEventListener('keydown', function(ev){ if(ev.key === 'Escape' && drawing) setDrawing(false); });
 
-			// Pointer events, so a mouse, a finger and a pen all draw the same way.
+			// Drawing a new box: pointer events, so a mouse, a finger and a pen all draw the same way.
 			el.addEventListener('pointerdown', function(ev){
 				if(!drawing || (ev.pointerType === 'mouse' && ev.button !== 0) || ev.target.closest('.leaflet-control')) return;
 				ev.preventDefault(); ev.stopPropagation();
@@ -588,14 +727,20 @@ if($step === 'area'){
 				if(drawRect){ map.removeLayer(drawRect); drawRect = null; }
 				if(ev.type === 'pointercancel' || moved < 8) return;   // a click, not a box: keep drawing
 				setDrawing(false);
-				setBox(boxOf(from, to), true);
+				if(areas.length >= MAX) return;
+				lastDeleted = null; undoEl.style.display = 'none';
+				select(addArea(nextName(), boxOf(from, to)));
+				sync(true);
 			}
 			el.addEventListener('pointerup', finish, true);
 			el.addEventListener('pointercancel', finish, true);
 
-			if(saved){
-				setBox(saved, false);
-				map.fitBounds(boundsOf(saved), {padding: [40, 40]});
+			saved.forEach(function(s){ addArea(s.name, {west: s.west, south: s.south, east: s.east, north: s.north}); });
+			sync(false);
+			if(areas.length){
+				var all = L.latLngBounds(boundsOf(areas[0].box));
+				areas.forEach(function(a){ all.extend(boundsOf(a.box)); });
+				map.fitBounds(all, {padding: [40, 40]});
 			}else{
 				map.setView([39.5, -98.5], 4);
 			}
@@ -620,7 +765,7 @@ if($step === 'maps'){
 		<div class="fc-panel">
 			<h4>Custom maps</h4>
 			<div class="fc-mapnote">
-				Maps that cover the study area: your own from <a href="/geotiff">My Maps</a>, and maps other people have
+				Maps that cover <?php echo $theArea; ?>: your own from <a href="/geotiff">My Maps</a>, and maps other people have
 				made public on <a href="/publicmaps" target="_blank" rel="noopener">Public Maps</a>. Each map you select is
 				added to the students' project as a custom map, under the title you give it here.
 				<?php echo $ownsCamp ? '' : 'These are the maps of the owner of the camp.'; ?>
@@ -630,10 +775,10 @@ if($step === 'maps'){
 				<a href="/field_camp?id=<?php echo (int)$camp->pkey; ?>&amp;step=area">Choose the study area</a> to see which maps cover it.</div>
 <?php } ?>
 <?php if(!$myMaps){ ?>
-			<div class="fc-mapnote" style="margin:0;">No map covers the study area, and there are no maps in My Maps yet.
+			<div class="fc-mapnote" style="margin:0;">No map covers <?php echo $theArea; ?>, and there are no maps in My Maps yet.
 				Upload a GeoTIFF there, then come back to this step.</div>
 <?php }elseif(!$inArea && !$publicMaps && $hasArea){ ?>
-			<div class="fc-mapnote" style="margin:0;">No map covers the study area: none of your own <?php echo (int)$ownCount; ?>, and no public map.</div>
+			<div class="fc-mapnote" style="margin:0;">No map covers <?php echo $theArea; ?>: none of your own <?php echo (int)$ownCount; ?>, and no public map.</div>
 <?php } ?>
 <?php if($myMaps){ ?>
 			<form method="post" action="/field_camp_action" id="fcMapForm" style="margin:0;" data-fc-save="maps_save">
@@ -642,8 +787,8 @@ if($step === 'maps'){
 <?php
 	foreach(array('in' => $inArea, 'public' => $publicMaps, 'out' => $elsewhere) as $group => $list){
 		if(!$list) continue;
-		$labels = array('in' => $hasArea ? 'Your maps in the study area' : 'Your maps',
-			'public' => 'Public maps in the study area', 'out' => 'Your maps not in the study area');
+		$labels = array('in' => $hasArea ? 'Your maps in ' . $theArea : 'Your maps',
+			'public' => 'Public maps in ' . $theArea, 'out' => 'Your maps not in ' . $theArea);
 ?>
 				<div class="fc-maphead"><?php echo $labels[$group]; ?> (<?php echo count($list); ?>)</div>
 				<div class="fc-units">
@@ -660,10 +805,10 @@ if($step === 'maps'){
 						<div><input type="text" class="fc-map-title" maxlength="<?php echo FieldCampPackage::MAX_TITLE; ?>" value="<?php echo htmlspecialchars($m['title']); ?>" aria-label="Title"></div>
 <?php		}else{ ?>
 						<div></div>
-						<div class="fc-unit-text"><?php echo $m['extent'] === null ? 'No location could be read from this map' : 'Outside the study area'; ?></div>
+						<div class="fc-unit-text"><?php echo $m['extent'] === null ? 'No location could be read from this map' : 'Outside ' . $theArea; ?></div>
 <?php		} ?>
 						<div class="fc-unit-text"><a href="/geotiff/detail/<?php echo htmlspecialchars($m['hash']); ?>" target="_blank" rel="noopener"><?php echo htmlspecialchars($m['name']); ?></a><?php
-							echo ($m['chosen'] && $m['overlaps'] === false) ? ' <span class="fc-small">(outside the study area)</span>' : ''; ?></div>
+							echo ($m['chosen'] && $m['overlaps'] === false) ? ' <span class="fc-small">(outside ' . $theArea . ')</span>' : ''; ?></div>
 						<div class="fc-unit-text"><?php echo htmlspecialchars($m['uploaded']); ?></div>
 					</div>
 <?php		}
@@ -800,7 +945,7 @@ if($step === 'tiles'){
 
 				<div class="fc-maphead">Preview</div>
 				<div class="fc-small" style="margin-bottom:0.5em;">The closest view students will have without a connection, on
-					<strong id="fcTilePreviewName"></strong>. The outline is the study area; tiles are saved for everything inside it.</div>
+					<strong id="fcTilePreviewName"></strong>. <?php echo count($campAreaList) > 1 ? "The outlines are the study areas; tiles are saved for everything inside them." : "The outline is the study area; tiles are saved for everything inside it."; ?></div>
 				<div id="fcTileMap" class="fc-map" style="height:420px;"></div>
 
 				<div class="fc-small" style="margin-top:0.75em;">The sizes are estimates from typical tiles; the real size shows
@@ -822,6 +967,7 @@ if($step === 'tiles'){
 		(function(){
 			var cfg = <?php echo json_encode(array(
 				'area' => FieldCampUnits::campBbox($camp),
+				'areas' => FieldCampUnits::campAreas($camp),
 				'options' => $tileOptions,
 				'layers' => array_values($tileLayers),
 				'maxPerMap' => FieldCampTiles::MAX_TILES_PER_MAP,
@@ -857,7 +1003,12 @@ if($step === 'tiles'){
 			var a = cfg.area, bounds = [[a.south, a.west], [a.north, a.east]];
 			var map = L.map('fcTileMap', {minZoom: 2, zoomControl: false, scrollWheelZoom: false, doubleClickZoom: false,
 				touchZoom: false, boxZoom: false, keyboard: false});
-			L.rectangle(bounds, {color: '#e44c65', weight: 2, fill: false, interactive: false}).addTo(map);
+			// Every study area; a zoom is shown at the first one (the whole map would not load at a deep zoom).
+			cfg.areas.forEach(function(ar){
+				L.rectangle([[ar.south, ar.west], [ar.north, ar.east]], {color: '#e44c65', weight: 2, fill: false, interactive: false}).addTo(map)
+					.bindTooltip(ar.name, {permanent: cfg.areas.length > 1, direction: 'center', className: 'fc-area-label'});
+			});
+			var first = cfg.areas[0];
 			L.control.scale().addTo(map);
 			var tileLayer = null, previewId = null;
 			function tileUrl(l){
@@ -874,7 +1025,7 @@ if($step === 'tiles'){
 			function showZoom(){
 				var z = selectedZoom();
 				if(z === null) map.fitBounds(bounds);
-				else map.setView([(a.south + a.north) / 2, (a.west + a.east) / 2], z);
+				else map.setView([(first.south + first.north) / 2, (first.west + first.east) / 2], z);
 			}
 
 			// --- numbers --------------------------------------------------------
@@ -1234,17 +1385,18 @@ if($step === 'units'){
 			</div>
 <?php }else{ ?>
 			<div class="fc-mapnote">
-				The rock units that geologic maps show inside the study area, from
+				The rock units that geologic maps show inside <?php echo $theArea; ?>, from
 				<a href="https://macrostrat.org" target="_blank" rel="noopener">Macrostrat</a>.
 				Each unit you select becomes a geologic unit tag in the students' project, with its age,
 				rock type, description and map color filled in.
 			</div>
 <?php if($areaChanged){ ?>
-			<div class="fc-flash-err">The study area has changed since these units were looked up. Look them up again to match the new area.</div>
+			<div class="fc-flash-err"><?php echo count($campAreaList) > 1 ? "The study areas have changed" : "The study area has changed"; ?> since these units were looked up. Look them up again to match.</div>
 <?php } ?>
 <?php if($fetched && (int)$camp->units_zoom < FieldCampUnits::DETAIL_ZOOM){ ?>
 			<div class="fc-small" style="margin-bottom:0.75em;">
-				The study area is too large for Macrostrat's most detailed maps, so these units come from a
+				<?php echo count($campAreaList) > 1 ? "At least one study area is too large for Macrostrat's most detailed maps, so some of these units come"
+					: "The study area is too large for Macrostrat's most detailed maps, so these units come"; ?> from a
 				less detailed map. A smaller study area gives more detailed units.
 			</div>
 <?php } ?>
@@ -1252,7 +1404,7 @@ if($step === 'units'){
 				<?php echo fc_hidden($csrf, 'units_fetch', $camp); ?>
 				<input type="hidden" name="units_json" id="fcUnitsJsonFetch" value="">
 				<div class="fc-buttons">
-					<button type="submit" class="button <?php echo $fetched ? '' : 'primary '; ?>small" id="fcUnitFetchBtn"><?php echo $fetched ? 'Look up the units again' : 'Find the rock units of the study area'; ?></button>
+					<button type="submit" class="button <?php echo $fetched ? '' : 'primary '; ?>small" id="fcUnitFetchBtn"><?php echo $fetched ? 'Look up the units again' : 'Find the rock units of ' . $theArea; ?></button>
 <?php if($fetched){ ?>
 					<span class="fc-small">Last looked up <?php echo htmlspecialchars(substr((string)$camp->units_fetched_date, 0, 10)); ?>.
 						Looking up again keeps your selection, names and labels.</span>
@@ -1264,7 +1416,7 @@ if($step === 'units'){
 
 <?php if($hasArea && $fetched && !$units){ ?>
 		<div class="fc-panel">
-			<div class="fc-mapnote" style="margin:0;">Macrostrat has no mapped rock units in this study area.
+			<div class="fc-mapnote" style="margin:0;">Macrostrat has no mapped rock units in <?php echo $theArea; ?>.
 				Geologic unit tags can still be added by hand in StraboField.</div>
 		</div>
 <?php } ?>

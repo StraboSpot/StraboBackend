@@ -125,28 +125,70 @@ class FieldCampTiles
 	 */
 	public static function tileCount($bbox, $zoom)
 	{
+		return self::tileCountAreas(array($bbox), $zoom);
+	}
+
+	/**
+	 * tileCount() for several study areas built into one map: a tile two areas
+	 * share is fetched twice but kept once, so it is counted once, at every level.
+	 */
+	public static function tileCountAreas($areas, $zoom)
+	{
 		$zoom = (int)$zoom;
+		$rects = array();
+		foreach ($areas as $a) $rects[] = self::tileRect($a, $zoom);
+		if (!$rects) return 0;
+		$total = 1;   // 0/0/0
+		for ($level = 1; $level <= $zoom - 1; $level++) {
+			$shift = $zoom - $level;
+			$last = (1 << $level) - 1;
+			$at = array();
+			foreach ($rects as $r) {
+				$at[] = array(min($r[0] >> $shift, $last), min($r[1] >> $shift, $last), min($r[2] >> $shift, $last), min($r[3] >> $shift, $last));
+			}
+			$total += self::unionCount($at);
+		}
+		return $total + ($zoom > 0 ? self::unionCount($rects) : 0);
+	}
+
+	/** The tiles of an area at a zoom as [x0, x1, y0, y1], inclusive (the tile server's arithmetic). */
+	private static function tileRect($bbox, $zoom)
+	{
 		$west = (float)$bbox['west']; $south = (float)$bbox['south'];
 		$east = (float)$bbox['east']; $north = (float)$bbox['north'];
 		if ($west == -180) $west = -179.9;
 		if ($south == -90) $south = -89.9;
 		if ($east == 180) $east = 179.9;
 		if ($north == 90) $north = 89.9;
-
 		$xa = self::lonToTile($west, $zoom); $xb = self::lonToTile($east, $zoom);
 		$ya = self::latToTile($south, $zoom); $yb = self::latToTile($north, $zoom);
-		$x0 = min($xa, $xb); $x1 = max($xa, $xb);
-		$y0 = max(min($ya, $yb), 0); $y1 = max($ya, $yb);
+		return array(min($xa, $xb), max($xa, $xb), max(min($ya, $yb), 0), max($ya, $yb));
+	}
 
-		$atZoom = ($x1 - $x0 + 1) * ($y1 - $y0 + 1);
-		$above = 1;   // 0/0/0
-		for ($level = 1; $level <= $zoom - 1; $level++) {
-			$shift = $zoom - $level;
-			$last = (1 << $level) - 1;
-			$above += (min($x1 >> $shift, $last) - min($x0 >> $shift, $last) + 1)
-				* (min($y1 >> $shift, $last) - min($y0 >> $shift, $last) + 1);
+	/** How many tiles a set of tile rectangles [x0, x1, y0, y1] covers, overlaps counted once. */
+	private static function unionCount($rects)
+	{
+		if (count($rects) === 1) { $r = $rects[0]; return ($r[1] - $r[0] + 1) * ($r[3] - $r[2] + 1); }
+		// Columns between the rectangles' x edges; in each, the rows its rectangles cover.
+		$xs = array();
+		foreach ($rects as $r) { $xs[] = $r[0]; $xs[] = $r[1] + 1; }
+		$xs = array_values(array_unique($xs)); sort($xs);
+		$total = 0;
+		for ($i = 0; $i + 1 < count($xs); $i++) {
+			$x = $xs[$i]; $w = $xs[$i + 1] - $x;
+			$spans = array();
+			foreach ($rects as $r) { if ($r[0] <= $x && $x <= $r[1]) $spans[] = array($r[2], $r[3]); }
+			if (!$spans) continue;
+			usort($spans, function ($a, $b) { return $a[0] <=> $b[0]; });
+			$rows = 0; $cur = $spans[0];
+			foreach (array_slice($spans, 1) as $sp) {
+				if ($sp[0] <= $cur[1] + 1) { $cur[1] = max($cur[1], $sp[1]); continue; }
+				$rows += $cur[1] - $cur[0] + 1; $cur = $sp;
+			}
+			$rows += $cur[1] - $cur[0] + 1;
+			$total += $rows * $w;
 		}
-		return $above + ($zoom > 0 ? $atZoom : 0);
+		return $total;
 	}
 
 	private static function lonToTile($lon, $zoom)
@@ -210,18 +252,21 @@ class FieldCampTiles
 	/**
 	 * The zoom choices for an area: one row per zoom, deepest last.
 	 *
-	 * @param array $bbox      the study area
+	 * @param array $areas     the study areas (campAreas()), or one area as west/south/east/north
 	 * @param array $layers    the selected maps (values of layers())
 	 * @return array of ['zoom', 'scale', 'per_map', 'total', 'bytes', 'allowed' (bool), 'why' (string)]
 	 */
-	public static function options($bbox, $layers)
+	public static function options($areas, $layers)
 	{
-		$lat = ($bbox['south'] + $bbox['north']) / 2;
+		if (isset($areas['west'])) $areas = array($areas);
+		$south = 90; $north = -90;
+		foreach ($areas as $a) { $south = min($south, $a['south']); $north = max($north, $a['north']); }
+		$lat = ($south + $north) / 2;
 		$kb = 0;
 		foreach ($layers as $l) $kb += $l['kb'];
 		$out = array();
 		for ($zoom = self::MAX_ZOOM - self::ZOOM_CHOICES + 1; $zoom <= self::MAX_ZOOM; $zoom++) {
-			$perMap = self::tileCount($bbox, $zoom);
+			$perMap = self::tileCountAreas($areas, $zoom);
 			$total = $perMap * count($layers);
 			$why = '';
 			if ($perMap > self::MAX_TILES_PER_MAP) {
@@ -255,8 +300,8 @@ class FieldCampTiles
 	public static function validateChoice($camp, $layers, $zoom, $layerIds)
 	{
 		$errors = array();
-		$bbox = FieldCampUnits::campBbox($camp);
-		if ($bbox === null) return array(0, array(), array("Choose the study area first."));
+		$areas = FieldCampUnits::campAreas($camp);
+		if (!$areas) return array(0, array(), array("Choose the study area first."));
 		$ids = array();
 		foreach ((array)$layerIds as $id) { if (is_string($id) && isset($layers[$id]) && !in_array($id, $ids, true)) $ids[] = $id; }
 		if (!$ids) $errors[] = "Select at least one map, or switch the offline maps off.";
@@ -264,7 +309,7 @@ class FieldCampTiles
 		$picked = array();
 		foreach ($ids as $id) $picked[] = $layers[$id];
 		$row = null;
-		foreach (self::options($bbox, $picked ? $picked : array_values($layers)) as $o) { if ($o['zoom'] === $zoom) $row = $o; }
+		foreach (self::options($areas, $picked ? $picked : array_values($layers)) as $o) { if ($o['zoom'] === $zoom) $row = $o; }
 		if ($row === null) $errors[] = "Choose one of the zoom levels listed.";
 		elseif (!$row['allowed'] && $ids) $errors[] = "Zoom $zoom is not available for this study area: " . $row['why'];
 		return array($zoom, $ids, $errors);
@@ -331,8 +376,8 @@ class FieldCampTiles
 	public static function outdated($camp, $manifest, $layers)
 	{
 		if (!$manifest) return '';
-		$bbox = FieldCampUnits::campBbox($camp);
-		if ($bbox !== null && FieldCampUnits::bboxString($bbox) !== (string)$manifest['bbox']) {
+		$areas = FieldCampUnits::campAreas($camp);
+		if ($areas && FieldCampUnits::areasString($areas) !== (string)$manifest['bbox']) {
 			return "The study area has changed since the tiles were built.";
 		}
 		if ((int)$camp->tiles_zoom !== (int)$manifest['zoom']) return "The zoom has changed since the tiles were built.";
@@ -472,11 +517,11 @@ class FieldCampTiles
 		$out = array('error' => '', 'tiles' => 0, 'maps' => 0, 'skipped' => array());
 		$camp = self::ensureDir($db, $camp);
 		$dir = self::dir($camp);
-		$bbox = FieldCampUnits::campBbox($camp);
+		$areas = FieldCampUnits::campAreas($camp);
 		$zoom = (int)$camp->tiles_zoom;
 		$ids = self::chosenLayerIds($camp, $layers);
-		if ($bbox === null || $zoom <= 0 || !$ids) return self::finish($db, $camp, $out, "Nothing to build: choose the study area, the maps and the zoom first.");
-		$extent = FieldCampUnits::bboxString($bbox);
+		if (!$areas || $zoom <= 0 || !$ids) return self::finish($db, $camp, $out, "Nothing to build: choose the study area, the maps and the zoom first.");
+		$extent = FieldCampUnits::areasString($areas);
 
 		$work = $dir . '/work_' . getmypid() . '_' . bin2hex(random_bytes(4));
 		if (!@mkdir($work, 0775, true)) return self::finish($db, $camp, $out, "The server could not make room for the tiles.");
@@ -487,8 +532,25 @@ class FieldCampTiles
 			$n++;
 			$layer = $layers[$id];
 			$label = $layer['name'] . " ($n of " . count($ids) . ")";
-			$span = array(self::FETCH_SHARE * ($n - 1) / count($ids), self::FETCH_SHARE * $n / count($ids));
-			$result = self::fetchLayer($db, $camp, $layer, $extent, $zoom, $work, $label, $span);
+			// One request per study area, all into the map's one folder: a tile two areas share is kept once.
+			$result = array('error' => '', 'count' => 0, 'bytes' => 0);
+			$k = 0; $empty = 0;
+			foreach ($areas as $a) {
+				$k++;
+				$part = count($areas) > 1 ? "$label, " . $a['name'] : $label;
+				$span = array(self::FETCH_SHARE * ($n - 1 + ($k - 1) / count($areas)) / count($ids), self::FETCH_SHARE * ($n - 1 + $k / count($areas)) / count($ids));
+				$one = self::fetchLayer($db, $camp, $layer, FieldCampUnits::bboxString($a), $zoom, $work, $part, $span);
+				// A custom map may cover only some of the areas: no tiles for one of them is not a failure.
+				if ($one['error'] === "the map server sent no tiles" && count($areas) > 1) { $empty++; continue; }
+				if ($one['error'] !== '') { $result['error'] = count($areas) > 1 ? $a['name'] . ": " . $one['error'] : $one['error']; break; }
+			}
+			if ($result['error'] === '' && $empty === count($areas)) $result['error'] = "the map server sent no tiles";
+			if ($result['error'] === '') {
+				foreach (scandir("$work/$id/tiles") as $f) {
+					if ($f === '.' || $f === '..') continue;
+					$result['count']++; $result['bytes'] += (int)filesize("$work/$id/tiles/$f");
+				}
+			}
 			if ($result['error'] !== '') {
 				error_log("FieldCampTiles::build camp " . (int)$camp->pkey . " map $id: " . $result['error']);
 				$out['skipped'][] = array('id' => $id, 'name' => $layer['name'], 'reason' => $result['error']);

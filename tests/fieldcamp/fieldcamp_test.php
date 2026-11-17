@@ -374,7 +374,7 @@ check('a new camp: the project name follows the camp name and year until it is c
 list($code, $oldBody) = http('GET', "/field_camp?id=" . (int)$http->pkey . "&step=basics", $sInstr);
 check('an existing camp: the project name is left alone', strpos($oldBody, 'function suggested()') === false && strpos($oldBody, 'It follows the camp name') === false);
 $hid = $http ? (int)$http->pkey : 0;
-check('the study area is drawn as a box, and Next saves it (no separate save)', strpos($body, 'id="fcDrawBtn"') !== false && strpos($body, 'not drawn yet') !== false
+check('the study area is drawn as a box, and Next saves it (no separate save)', strpos($body, 'id="fcDrawBtn"') !== false && strpos($body, 'No study area yet.') !== false
 	&& strpos($body, 'id="fcAreaForm" data-fc-save="area"') !== false && strpos($body, 'data-fc-next="maps">Next: Maps') !== false && strpos($body, 'this view') === false);
 
 post_follow($sInstr, array('action' => 'basics', 'id' => $hid, 'camp_name' => 'HTTP Camp 2', 'camp_year' => '2028', 'project_name' => 'HTTP Project'));

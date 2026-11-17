@@ -230,6 +230,17 @@ ALTER TABLE fieldcamp_account ADD COLUMN IF NOT EXISTS package_version VARCHAR(4
 ALTER TABLE fieldcamp_account ADD COLUMN IF NOT EXISTS package_installed_date TIMESTAMP WITH TIME ZONE;
 
 -- ---------------------------------------------------------------------------
+-- Several study areas per camp (2026-11-17). study_areas is a JSON list of up to
+-- 10 boxes, [{"name": "Area 1", "west": .., "south": .., "east": .., "north": ..}];
+-- bbox_west/south/east/north keep the extent around all of them. A camp saved
+-- before this has no study_areas and reads as one box, "Area 1", from bbox_*.
+-- units_bbox holds every box the lookup used ("w,s,e,n;w,s,e,n"), so it can no
+-- longer fit 120 characters.
+-- ---------------------------------------------------------------------------
+ALTER TABLE fieldcamp ADD COLUMN IF NOT EXISTS study_areas TEXT;
+ALTER TABLE fieldcamp ALTER COLUMN units_bbox TYPE TEXT;
+
+-- ---------------------------------------------------------------------------
 -- Privileges. Tables are created by the superuser (postgres) but the web app
 -- connects as strabodbuser, with a readonly role for reporting.
 -- (GRANT is idempotent, so this is safe to re-run.)

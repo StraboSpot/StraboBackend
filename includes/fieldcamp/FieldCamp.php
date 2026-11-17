@@ -32,6 +32,10 @@ class FieldCamp
 	/** Most accounts one camp may hold. */
 	const MAX_ACCOUNTS = 100;
 
+	/** Study areas per camp (Jason and his boss, 2026-11-17) and the length of an area's name. */
+	const MAX_AREAS = 10;
+	const AREA_NAME_MAX = 60;
+
 	const MIN_PASSWORD_LENGTH = 4;   // 6 until 2026-11-10 (Jason: camps want short passwords)
 
 	/** Shortest fixed part of a username template (what comes before {n}). */
@@ -428,13 +432,59 @@ class FieldCamp
 		return array($v, $errors);
 	}
 
-	public static function saveArea($db, $camppkey, $v)
+	/**
+	 * Check the study areas the Area step sends (areas_json: a list of
+	 * {name, west, south, east, north}). A post with west/south/east/north
+	 * and no areas_json is one area, as the step sent before 2026-11-17.
+	 * @return array [clean areas, list of problems]
+	 */
+	public static function validateAreas($in)
 	{
+		if (!isset($in['areas_json'])) {
+			list($v, $errors) = self::validateArea($in);
+			return array($v === null ? array() : array(array('name' => 'Area 1') + $v), $errors);
+		}
+		$list = json_decode((string)$in['areas_json'], true);
+		if (!is_array($list) || !array_is_list($list)) return array(array(), array("The study areas could not be read. Please try again."));
+		if (!$list) return array(array(), array("Draw at least one study area on the map."));
+		if (count($list) > self::MAX_AREAS) return array(array(), array("A camp can have at most " . self::MAX_AREAS . " study areas."));
+		$out = array(); $errors = array();
+		foreach ($list as $i => $a) {
+			if (!is_array($a)) return array(array(), array("The study areas could not be read. Please try again."));
+			$name = trim(preg_replace('/\s+/u', ' ', (string)($a['name'] ?? '')));
+			if ($name === '') $name = 'Area ' . ($i + 1);
+			if (mb_strlen($name) > self::AREA_NAME_MAX) $name = mb_substr($name, 0, self::AREA_NAME_MAX);
+			list($v, $e) = self::validateArea($a);
+			foreach ($e as $msg) $errors[] = "$name: $msg";
+			if ($v !== null) $out[] = array('name' => $name) + $v;
+		}
+		return array($out, $errors);
+	}
+
+	/** Keep a camp's study areas, and the extent around all of them in bbox_*. */
+	public static function saveAreas($db, $camppkey, $areas)
+	{
+		$ext = array('west' => 180, 'south' => 90, 'east' => -180, 'north' => -90);
+		$list = array();
+		foreach ($areas as $a) {
+			$ext['west'] = min($ext['west'], $a['west']); $ext['south'] = min($ext['south'], $a['south']);
+			$ext['east'] = max($ext['east'], $a['east']); $ext['north'] = max($ext['north'], $a['north']);
+			$list[] = array('name' => (string)$a['name'], 'west' => (float)$a['west'], 'south' => (float)$a['south'],
+				'east' => (float)$a['east'], 'north' => (float)$a['north']);
+		}
+		if (!$list) return;
 		$db->prepare_query("
-			update fieldcamp set bbox_west = $2, bbox_south = $3, bbox_east = $4, bbox_north = $5,
+			update fieldcamp set bbox_west = $2, bbox_south = $3, bbox_east = $4, bbox_north = $5, study_areas = $6,
 				modified_date = now()
 			where pkey = $1
-			", array((int)$camppkey, $v['west'], $v['south'], $v['east'], $v['north']));
+			", array((int)$camppkey, $ext['west'], $ext['south'], $ext['east'], $ext['north'],
+				json_encode($list, JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)));
+	}
+
+	/** One study area (what the step saved before 2026-11-17; the tests still use it). */
+	public static function saveArea($db, $camppkey, $v)
+	{
+		self::saveAreas($db, $camppkey, array(array('name' => 'Area 1') + $v));
 	}
 
 	/** Width and height of a camp's area in km (at its middle latitude), or null when no area is saved. */
