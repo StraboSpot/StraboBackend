@@ -917,7 +917,7 @@ if($step === 'tiles'){
 				<style>
 				.fc-zoomall { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5em 1em; }
 				.fc-zoomall select { width: auto; min-width: 14em; height: 2.6em; margin: 0; }
-				.fc-tilerow { display: grid; grid-template-columns: 2.2em minmax(10em, 1fr) 12em 6.5em 6.5em 9em; gap: 0.25em 0.75em;
+				.fc-tilerow { display: grid; grid-template-columns: 2.2em minmax(10em, 1fr) 14em 6.5em 6.5em 9em; gap: 0.25em 0.75em;
 					align-items: center; padding: 0.45em 0; border-top: 1px solid rgba(255,255,255,0.08); }
 				.fc-tilerow input[type=checkbox] + label { margin: 0; padding-left: 1.6em; height: 1.4em; }
 				.fc-tilerow select { width: 100%; height: 2.4em; margin: 0; padding-top: 0; padding-bottom: 0; }
@@ -926,10 +926,16 @@ if($step === 'tiles'){
 				.fc-tilerow.fc-unit-off .fc-tile-count, .fc-tilerow.fc-unit-off .fc-tile-size, .fc-tilerow.fc-unit-off select { opacity: 0.45; }
 				.fc-tilerow.fc-unit-head { border-top: none; padding-bottom: 0.2em; }
 				@media (max-width: 900px) {
-					.fc-tilerow { grid-template-columns: 2.2em 1fr 1fr; }
-					.fc-tilerow > :nth-child(3) { grid-column: 2 / 3; }
+					/* narrow: name, then the zoom, then tiles and size, then the preview link, all beside the checkbox */
+					.fc-tilerow { grid-template-columns: 2.2em 1fr 1fr; grid-template-areas: "on name name" "on zoom zoom" "on count size" "on show show"; }
+					.fc-tilerow > :nth-child(1) { grid-area: on; align-self: start; }
+					.fc-tilerow > :nth-child(2) { grid-area: name; }
+					.fc-tilerow > :nth-child(3) { grid-area: zoom; max-width: 18em; }
+					.fc-tilerow > :nth-child(4) { grid-area: count; }
+					.fc-tilerow > :nth-child(5) { grid-area: size; }
+					.fc-tilerow > :nth-child(6) { grid-area: show; }
 					.fc-tilerow.fc-unit-head { display: none; }
-					.fc-tilerow .fc-tile-count:before { content: "Tiles: "; } .fc-tilerow .fc-tile-size:before { content: "About "; }
+					.fc-tilerow .fc-tile-count:before { content: "Tiles: "; } .fc-tilerow .fc-tile-size:not(:empty):before { content: "About "; }
 				}
 				</style>
 				<div class="fc-maphead" style="margin-top:0.75em;">Zoom for all maps</div>
