@@ -1,0 +1,8 @@
+RewriteEngine On
+
+# The publish API reads the Bearer token from Authorization.
+RewriteRule .* - [E=HTTP_AUTHORIZATION:%{HTTP:Authorization}]
+
+# Everything under /ota/ goes to the front controller.
+RewriteCond %{REQUEST_URI} !/ota/index\.php
+RewriteRule ^(.*)$ index.php [L,QSA]
