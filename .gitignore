@@ -62,6 +62,8 @@ exportjobs_data
 microsync_data
 # Voice Stations audio + logs (no trailing slash: a symlink to the 20 TB volume on prod)
 voicestations_data
+# StraboField over-the-air update files + dev keys (no trailing slash: a symlink to the 20 TB volume on prod)
+ota_data
 
 # StraboField choice map, kept current by includes/fieldvocab/sync.php (no trailing slash: may be a symlink on prod)
 fieldvocab_data

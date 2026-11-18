@@ -31,6 +31,8 @@ RewriteRule ^(straboMicroFiles|microview/smzFiles)/_archive(/|$) - [F,L]
 RewriteRule ^(straboMicroFiles|microview/smzFiles)/_deleted(/|$) - [F,L]
 RewriteRule ^(straboMicroFiles|microview/smzFiles)/[0-9]+/blobs(/|$) - [F,L]
 RewriteRule ^microsync_data(/|$) - [F,L]
+# StraboField over-the-air update files (ota_data/, gitignored): never served directly; /ota/assets/ streams them
+RewriteRule ^ota_data(/|$) - [F,L]
 # Voice Stations audio (voicestations_data/, gitignored): never served; streamed only by the /db/ voice endpoints
 RewriteRule ^voicestations_data(/|$) - [F,L]
 # Synced StraboMicro projects have no static project.zip; the app still asks for that URL
