@@ -144,7 +144,7 @@ section('Publish API: token');
 list($s, $j) = pub('GET', 'ping', null, 'wrong-token');
 check('wrong token is 401', $s === 401, $s);
 list($s, $j) = pub('GET', 'ping');
-check('ping with the token', $s === 200 && $j['signingRequired'] === true && $j['assetUrlPrefix'] === $BASE . '/ota/assets/', $j);
+check('ping with the token', $s === 200 && $j['certificateInstalled'] === true && $j['assetUrlPrefix'] === $BASE . '/ota/assets/', $j);
 list($s) = http('GET', '/ota/publish/releases');
 check('no Authorization header is 401', $s === 401, $s);
 

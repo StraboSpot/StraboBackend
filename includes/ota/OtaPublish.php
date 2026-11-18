@@ -55,7 +55,7 @@ class OtaPublish {
 			'ok' => true,
 			'publicBase' => Ota::publicBase(),
 			'assetUrlPrefix' => Ota::publicBase() . '/ota/assets/',
-			'signingRequired' => Ota::signingKey() !== null,
+			'certificateInstalled' => Ota::signingKey() !== null,
 			'keyid' => Ota::keyId(),
 		));
 	}
@@ -161,7 +161,11 @@ class OtaPublish {
 	private static function verifySignature($body, $sig) {
 		$key = Ota::signingKey();
 		if ($key === null) {
-			return; // signing not set up here; any signature is stored as given
+			if (defined('OTA_ALLOW_UNSIGNED') && OTA_ALLOW_UNSIGNED === true) {
+				return; // local tests only: any signature is stored as given
+			}
+			throw new OtaError(503, 'signing_not_set_up',
+				'No code signing certificate is set up on this server, so nothing can be published');
 		}
 		if (!is_string($sig) || $sig === '') {
 			throw new OtaError(400, 'signature_required', 'This server requires a signature on every release');

@@ -17,9 +17,11 @@
  *                                         SHA-256 of the publish token (the token
  *                                         itself is never stored on the server).
  *                OTA_CODE_SIGNING_CERT    path to the PEM certificate built into the
- *                                         app. When set, every release must carry a
- *                                         signature that verifies against it. The
- *                                         private key never comes to this server.
+ *                                         app. Every release must carry a signature
+ *                                         that verifies against it. The private key
+ *                                         never comes to this server. Not set: all
+ *                                         publishing is refused (fails closed) ...
+ *                OTA_ALLOW_UNSIGNED       ... unless this is true (local tests only).
  *                OTA_CODE_SIGNING_KEYID   keyid in expo-signature (default 'main').
  *                OTA_DATA_DIR             where files are kept (default <web root>/ota_data).
  *
