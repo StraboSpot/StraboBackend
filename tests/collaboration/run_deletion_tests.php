@@ -95,6 +95,17 @@ function ids($body, $key) {
     return array_map('strval', array_column(is_array($body) ? ($body[$key] ?? []) : [], 'id'));
 }
 
+function findTagSpots($body, $tagId) {
+    foreach ((is_array($body) ? ($body['tags'] ?? []) : []) as $t) {
+        if ((string)($t['id'] ?? '') === (string)$tagId) {
+            $s = array_map(fn($x) => is_float($x) ? sprintf('%.0f', $x) : (string)$x, $t['spots'] ?? []);
+            sort($s);
+            return $s;
+        }
+    }
+    return null;
+}
+
 function memo($id, $author, $modified) {
     $m = ['id' => $id, 'subject' => "Memo $id", 'notes' => 'n', 'spots' => [], 'tags' => [], 'images' => [],
           'modified_timestamp' => $modified];
@@ -179,6 +190,39 @@ $r = makeRequest('POST', "$baseUrl/projectDeletions/$projectSoloId", $outsiderEm
 $g = makeRequest('GET', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword);
 test("X7. Someone else's project: 404, nothing deleted",
     $r['code'] == 404 && in_array('5550001', ids($g['body'], 'tags')), $r['raw']);
+
+// X8. A spot taken out of a unit stays out against a stale upload.
+clearDeletes($db, $projectSoloId);
+$unitA = ['id' => 5550011, 'name' => 'Unit A', 'type' => 'geologic_unit', 'spots' => [7770001, 7770002]];
+$unitB = ['id' => 5550012, 'name' => 'Unit B', 'type' => 'geologic_unit', 'spots' => []];
+seed($neodb, $projectSoloId, $ownerPkey, [], [$unitA, $unitB]);
+// The device moved spot 7770002 from A to B: it says so, then uploads.
+$r = makeRequest('POST', "$baseUrl/projectDeletions/$projectSoloId", $ownerEmail, $testPassword,
+    ['deletions' => [['type' => 'tag_spot', 'id' => '5550011/7770002', 'deleted_at' => $t0 + 1000]]]);
+makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    payload($projectSoloId, ['tags' => [array_merge($unitA, ['spots' => [7770001]]), array_merge($unitB, ['spots' => [7770002]])]]));
+// A stale device still has the spot in A.
+makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    payload($projectSoloId, ['tags' => [$unitA, $unitB]]));
+$g = makeRequest('GET', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword);
+$a = findTagSpots($g['body'], 5550011);
+$b = findTagSpots($g['body'], 5550012);
+test("X8. Spot moved from unit A to B stays only in B after a stale upload",
+    ($r['body']['removed'] ?? null) === 1 && $a === ['7770001'] && $b === ['7770002'], json_encode([$a, $b, $r['body']]));
+
+// X9. Put back into A ("restored"): the old delete is forgotten and the upload's spot stays.
+$r = makeRequest('POST', "$baseUrl/projectDeletions/$projectSoloId", $ownerEmail, $testPassword,
+    ['restored' => [['type' => 'tag_spot', 'id' => '5550011/7770002']]]);
+makeRequest('POST', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword,
+    payload($projectSoloId, ['tags' => [$unitA, $unitB]]));
+$g = makeRequest('GET', "$baseUrl/project/$projectSoloId", $ownerEmail, $testPassword);
+$a = findTagSpots($g['body'], 5550011);
+test("X9. Restored membership: the spot is back in unit A",
+    $r['code'] == 200 && ($r['body']['restored'] ?? null) === 1 && $a === ['7770001', '7770002'], json_encode([$a, $r['body']]));
+
+$r = makeRequest('POST', "$baseUrl/projectDeletions/$projectSoloId", $ownerEmail, $testPassword,
+    ['deletions' => [['type' => 'tag_spot', 'id' => '5550011']]]);
+test("X10. tag_spot id without a spot: 400", $r['code'] == 400, $r['raw']);
 
 // ===========================================================================
 section("Y. Project with collaborators");

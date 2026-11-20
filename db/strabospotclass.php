@@ -4421,10 +4421,10 @@ public function getSpotName($id){
 	// The merges above keep every item an upload leaves out, so an omission
 	// never deletes; a client that deleted an item records it through
 	// POST /db/projectDeletions/{id}. Returns ['report' => [id => deleted_at],
-	// 'tag' => [id => deleted_at]] with string ids. Without the table there are
-	// no known deletes (the query only warns).
+	// 'tag' => [...], 'tag_spot' => ["tagid/spotid" => ...]] with string ids.
+	// Without the table there are no known deletes (the query only warns).
 	public function getFieldDeletions($project_id, $owner_pkey){
-		$out = ['report' => [], 'tag' => []];
+		$out = ['report' => [], 'tag' => [], 'tag_spot' => []];
 		$rows = $this->db->get_results_prepared(
 			"SELECT item_type, item_id, deleted_at FROM field_deletions WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2",
 			array((string)$project_id, (int)$owner_pkey));
@@ -4436,8 +4436,18 @@ public function getSpotName($id){
 		return $out;
 	}
 
+	// Forgets deletes the client has undone (a spot put back into a unit, say).
+	// $items: list of ['type' => ..., 'id' => ...].
+	public function clearFieldDeletions($project_id, $owner_pkey, $items){
+		foreach($items as $item){
+			$this->db->prepare_query(
+				"DELETE FROM field_deletions WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND item_type = $3 AND item_id = $4",
+				array((string)$project_id, (int)$owner_pkey, $item['type'], (string)$item['id']));
+		}
+	}
+
 	// Records deletes for a project and returns how many were new or changed.
-	// $items: list of ['type' => 'report'|'tag', 'id' => ..., 'deleted_at' => ms].
+	// $items: list of ['type' => 'report'|'tag'|'tag_spot', 'id' => ..., 'deleted_at' => ms].
 	public function recordFieldDeletions($project_id, $owner_pkey, $deleted_by_pkey, $items){
 		$count = 0;
 		foreach($items as $item){
@@ -4459,7 +4469,7 @@ public function getSpotName($id){
 	public function dropDeletedItems($project, $owner_pkey){
 		if(!isset($project->id)) return;
 		$del = $this->getFieldDeletions($project->id, $owner_pkey);
-		if(empty($del['report']) && empty($del['tag'])) return;
+		if(empty($del['report']) && empty($del['tag']) && empty($del['tag_spot'])) return;
 
 		if(!empty($del['report']) && isset($project->reports) && is_array($project->reports)){
 			$kept = [];
@@ -4480,11 +4490,20 @@ public function getSpotName($id){
 			$project->reports = $kept;
 		}
 
-		if(!empty($del['tag']) && isset($project->tags) && is_array($project->tags)){
+		if((!empty($del['tag']) || !empty($del['tag_spot'])) && isset($project->tags) && is_array($project->tags)){
 			$kept = [];
 			foreach($project->tags as $t){
 				$tid = isset($t->id) ? (string)$t->id : '';
-				if($tid === '' || !isset($del['tag'][$tid])) $kept[] = $t;
+				if($tid !== '' && isset($del['tag'][$tid])) continue;
+				// A spot taken out of a tag stays out (the merge unions spots).
+				if($tid !== '' && !empty($del['tag_spot']) && isset($t->spots) && is_array($t->spots)){
+					$spots = [];
+					foreach($t->spots as $sp){
+						if(!isset($del['tag_spot'][$tid.'/'.(is_float($sp) ? sprintf('%.0f', $sp) : (string)$sp)])) $spots[] = $sp;
+					}
+					$t->spots = $spots;
+				}
+				$kept[] = $t;
 			}
 			$project->tags = $kept;
 		}

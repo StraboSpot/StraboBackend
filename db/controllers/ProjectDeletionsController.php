@@ -10,7 +10,14 @@
  *
  *   POST /db/projectDeletions/{project id}
  *   {"deletions": [{"type": "report", "id": "...", "deleted_at": 1763673000000},
- *                  {"type": "tag", "id": 17636..., "deleted_at": ...}]}
+ *                  {"type": "tag", "id": 17636..., "deleted_at": ...},
+ *                  {"type": "tag_spot", "id": "<tag id>/<spot id>", "deleted_at": ...}],
+ *    "restored":  [{"type": "tag_spot", "id": "<tag id>/<spot id>"}]}
+ *
+ * tag_spot is a spot taken out of a tag or geologic unit (the upload merge
+ * unions a tag's spots, so that never sticks either). "restored" forgets
+ * earlier deletes the client has undone, such as a spot put back into a unit;
+ * it is applied before the deletions. Either list may be empty, not both.
  *
  * The items are recorded (sql/field_deletions.sql) and taken out of the project
  * at once (a version is saved first, as for any project upload). From then on
@@ -59,12 +66,13 @@ class ProjectDeletionsController extends MyController
 		}
 
 		$upload = $request->parameters;
-		$raw = isset($upload['deletions']) ? $upload['deletions'] : null;
-		if(!is_array($raw) || count($raw) == 0){
+		$raw = isset($upload['deletions']) && is_array($upload['deletions']) ? $upload['deletions'] : [];
+		$rawRestored = isset($upload['restored']) && is_array($upload['restored']) ? $upload['restored'] : [];
+		if(count($raw) == 0 && count($rawRestored) == 0){
 			header("Bad Request", true, 400);
 			return ["Error" => "No deletions sent."];
 		}
-		if(count($raw) > self::MAX_ITEMS){
+		if(count($raw) + count($rawRestored) > self::MAX_ITEMS){
 			header("Bad Request", true, 400);
 			return ["Error" => "Too many deletions in one request (".self::MAX_ITEMS." at most)."];
 		}
@@ -81,20 +89,19 @@ class ProjectDeletionsController extends MyController
 		$ownerPkey = (int)$context->effectiveOwner;
 		$now = (int)round(microtime(true) * 1000);
 
-		// Clean the list: known types, ids as text, a delete time in ms.
+		// Clean the lists: known types, ids as text, a delete time in ms.
 		$items = [];
-		foreach($raw as $d){
-			$d = (array)$d;
-			$type = isset($d['type']) ? (string)$d['type'] : '';
-			$id = isset($d['id']) && (is_string($d['id']) || is_int($d['id']) || is_float($d['id'])) ? (string)$d['id'] : '';
-			if(is_float($d['id'] ?? null)) $id = sprintf('%.0f', $d['id']);
-			if(($type !== 'report' && $type !== 'tag') || $id === '' || strlen($id) > 64){
-				header("Bad Request", true, 400);
-				return ["Error" => "Each deletion needs a type (report or tag) and an id."];
+		$restored = [];
+		foreach([[$raw, true], [$rawRestored, false]] as [$list, $isDelete]){
+			foreach($list as $d){
+				$item = $this->cleanItem($d, $now);
+				if($item === null){
+					header("Bad Request", true, 400);
+					return ["Error" => "Each item needs a type (report, tag or tag_spot) and an id (tag_spot: \"<tag id>/<spot id>\")."];
+				}
+				if($isDelete) $items[] = $item;
+				else $restored[] = $item;
 			}
-			$at = isset($d['deleted_at']) && is_numeric($d['deleted_at']) ? (int)$d['deleted_at'] : 0;
-			if($at <= 0) $at = $now;
-			$items[] = ['type' => $type, 'id' => $id, 'deleted_at' => $at];
 		}
 
 		// The project as stored (under its owner).
@@ -117,17 +124,24 @@ class ProjectDeletionsController extends MyController
 			$accepted[] = $item;
 		}
 
+		$this->strabo->clearFieldDeletions($projectid, $ownerPkey, $restored);
 		$this->strabo->recordFieldDeletions($projectid, $ownerPkey, $uploaderPkey, $accepted);
 
 		// Take them out now, through the normal project save (version first),
 		// so the website and the next download no longer show them.
 		$removed = 0;
 		if(count($accepted) > 0 && isset($project->id)){
-			$ids = ['report' => [], 'tag' => []];
+			$ids = ['report' => [], 'tag' => [], 'tag_spot' => []];
 			foreach($accepted as $a) $ids[$a['type']][$a['id']] = true;
 			foreach(['reports' => 'report', 'tags' => 'tag'] as $key => $type){
 				foreach((isset($project->$key) && is_array($project->$key) ? $project->$key : []) as $x){
-					if(isset($x->id) && isset($ids[$type][(string)$x->id])) $removed++;
+					if(!isset($x->id)) continue;
+					if(isset($ids[$type][(string)$x->id])){ $removed++; continue; }
+					if($type === 'tag' && isset($x->spots) && is_array($x->spots)){
+						foreach($x->spots as $sp){
+							if(isset($ids['tag_spot'][(string)$x->id.'/'.(is_float($sp) ? sprintf('%.0f', $sp) : (string)$sp)])) $removed++;
+						}
+					}
 				}
 			}
 			if($removed > 0){
@@ -142,9 +156,25 @@ class ProjectDeletionsController extends MyController
 
 		return [
 			'recorded' => count($accepted),
+			'restored' => count($restored),
 			'removed' => $removed,
 			'refused' => $refused,
 		];
+	}
+
+	/** One list entry as ['type', 'id', 'deleted_at'], or null when it is not valid. */
+	private function cleanItem($d, $now){
+		$d = (array)$d;
+		$type = isset($d['type']) ? (string)$d['type'] : '';
+		$raw = $d['id'] ?? null;
+		if(is_float($raw)) $id = sprintf('%.0f', $raw);
+		else if(is_string($raw) || is_int($raw)) $id = (string)$raw;
+		else $id = '';
+		if(!in_array($type, ['report', 'tag', 'tag_spot'], true) || $id === '' || strlen($id) > 64) return null;
+		if($type === 'tag_spot' && !preg_match('#^[^/]+/[^/]+$#', $id)) return null;
+		$at = isset($d['deleted_at']) && is_numeric($d['deleted_at']) ? (int)$d['deleted_at'] : 0;
+		if($at <= 0) $at = $now;
+		return ['type' => $type, 'id' => $id, 'deleted_at' => $at];
 	}
 
 	public function deleteAction($request) {

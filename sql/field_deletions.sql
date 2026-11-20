@@ -12,7 +12,11 @@
 --              and every later upload that still carries it drops it, unless
 --              that copy of a memo was edited after the delete.
 --
---              field_deletions  one row per deleted item per project
+--              field_deletions  one row per deleted item per project:
+--                               report    a memo (item_id = memo id)
+--                               tag       a tag or geologic unit (item_id = tag id)
+--                               tag_spot  a spot taken out of a tag or unit
+--                                         (item_id = "<tag id>/<spot id>")
 --
 -- Apply (dev or prod), idempotent / safe to re-run:
 --   cat sql/field_deletions.sql | docker exec -i strabo-postgres psql -U postgres -d strabospot
@@ -25,7 +29,7 @@
 CREATE TABLE IF NOT EXISTS field_deletions (
     strabo_project_id        VARCHAR(64)  NOT NULL,
     project_owner_user_pkey  INTEGER      NOT NULL,
-    item_type                VARCHAR(16)  NOT NULL CHECK (item_type IN ('report','tag')),
+    item_type                VARCHAR(16)  NOT NULL CHECK (item_type IN ('report','tag','tag_spot')),
     item_id                  VARCHAR(64)  NOT NULL,
     deleted_at               BIGINT       NOT NULL,   -- ms, the deleting device's clock
     deleted_by_user_pkey     INTEGER      NOT NULL,
