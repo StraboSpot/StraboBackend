@@ -4255,6 +4255,9 @@ public function getSpotName($id){
 			}
 		}
 
+		// Memos and tags deleted on purpose stay deleted (field_deletions).
+		$this->dropDeletedItems($injson, $this->userpkey);
+
 		$outproject = json_encode($injson, JSON_PRETTY_PRINT);
 
 		return $outproject;
@@ -4405,10 +4408,86 @@ public function getSpotName($id){
 			}
 		}
 
+		// Memos and tags deleted on purpose stay deleted (field_deletions).
+		$this->dropDeletedItems($injson, $collabuserpkey);
+
 		$outproject = json_encode($injson, JSON_PRETTY_PRINT);
 
 		return $outproject;
 
+	}
+
+	// Explicit deletes of memos (reports) and tags (sql/field_deletions.sql).
+	// The merges above keep every item an upload leaves out, so an omission
+	// never deletes; a client that deleted an item records it through
+	// POST /db/projectDeletions/{id}. Returns ['report' => [id => deleted_at],
+	// 'tag' => [id => deleted_at]] with string ids. Without the table there are
+	// no known deletes (the query only warns).
+	public function getFieldDeletions($project_id, $owner_pkey){
+		$out = ['report' => [], 'tag' => []];
+		$rows = $this->db->get_results_prepared(
+			"SELECT item_type, item_id, deleted_at FROM field_deletions WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2",
+			array((string)$project_id, (int)$owner_pkey));
+		foreach(($rows ?: []) as $row){
+			if(isset($out[$row->item_type])){
+				$out[$row->item_type][(string)$row->item_id] = (int)$row->deleted_at;
+			}
+		}
+		return $out;
+	}
+
+	// Records deletes for a project and returns how many were new or changed.
+	// $items: list of ['type' => 'report'|'tag', 'id' => ..., 'deleted_at' => ms].
+	public function recordFieldDeletions($project_id, $owner_pkey, $deleted_by_pkey, $items){
+		$count = 0;
+		foreach($items as $item){
+			$this->db->prepare_query(
+				"INSERT INTO field_deletions (strabo_project_id, project_owner_user_pkey, item_type, item_id, deleted_at, deleted_by_user_pkey)
+				 VALUES ($1, $2, $3, $4, $5, $6)
+				 ON CONFLICT (strabo_project_id, project_owner_user_pkey, item_type, item_id)
+				 DO UPDATE SET deleted_at = GREATEST(field_deletions.deleted_at, EXCLUDED.deleted_at), deleted_by_user_pkey = EXCLUDED.deleted_by_user_pkey, recorded_at = now()",
+				array((string)$project_id, (int)$owner_pkey, $item['type'], (string)$item['id'], (int)$item['deleted_at'], (int)$deleted_by_pkey));
+			$count++;
+		}
+		return $count;
+	}
+
+	// Takes deleted memos and tags out of a merged project (an object, changed
+	// in place). A memo whose copy was edited after its delete (newer
+	// modified_timestamp) stays, and its delete record is dropped: someone
+	// wrote in it since, and an edit must never be lost.
+	public function dropDeletedItems($project, $owner_pkey){
+		if(!isset($project->id)) return;
+		$del = $this->getFieldDeletions($project->id, $owner_pkey);
+		if(empty($del['report']) && empty($del['tag'])) return;
+
+		if(!empty($del['report']) && isset($project->reports) && is_array($project->reports)){
+			$kept = [];
+			foreach($project->reports as $r){
+				$rid = isset($r->id) ? (string)$r->id : '';
+				if($rid === '' || !isset($del['report'][$rid])){
+					$kept[] = $r;
+					continue;
+				}
+				$modified = isset($r->modified_timestamp) ? (int)$r->modified_timestamp : 0;
+				if($modified > $del['report'][$rid]){
+					$kept[] = $r;
+					$this->db->prepare_query(
+						"DELETE FROM field_deletions WHERE strabo_project_id = $1 AND project_owner_user_pkey = $2 AND item_type = 'report' AND item_id = $3",
+						array((string)$project->id, (int)$owner_pkey, $rid));
+				}
+			}
+			$project->reports = $kept;
+		}
+
+		if(!empty($del['tag']) && isset($project->tags) && is_array($project->tags)){
+			$kept = [];
+			foreach($project->tags as $t){
+				$tid = isset($t->id) ? (string)$t->id : '';
+				if($tid === '' || !isset($del['tag'][$tid])) $kept[] = $t;
+			}
+			$project->tags = $kept;
+		}
 	}
 
 	// Per-report merge with per-section ownership rules:
