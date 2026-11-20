@@ -47,7 +47,7 @@ include("includes/mheader.php");
 			
 			
 			<div style="text-align: center; margin-bottom: 1em;">
-				<iframe src="https://scheduler.zoom.us/martin-claire-tzug8y/strabospot-office-hours?embed=true" frameborder="0" style="width: 100%; max-width: 1000px; height: 760px; border: 0;"></iframe>
+				<iframe src="https://scheduler.zoom.us/martin-claire-tzug8y/strabospot-help-session?embed=true" frameborder="0" style="width: 100%; max-width: 1000px; height: 760px; border: 0;"></iframe>
 			</div>
 			<div style="display: flex; justify-content: center; align-items: center; ">
 				<p style="text-align: center; margin-bottom: 2em; width: 100%; max-width: 1000px;">
